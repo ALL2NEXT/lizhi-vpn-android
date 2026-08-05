@@ -34,7 +34,9 @@ class SingBoxConfigGenerator {
         bypassLan: Boolean = true,
         ipv6Mode: IPv6RoutingMode = IPv6RoutingMode.DISABLED,
         mtu: Int = AppConfig.VPN_MTU,
-        internalSocksPort: Int? = null
+        internalSocksPort: Int? = null,
+        hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
         if (nodes.isEmpty()) {
@@ -54,7 +56,10 @@ class SingBoxConfigGenerator {
             add("log", createLogConfig())
             add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode))
             add("inbounds", createInbounds(ipv6Mode, mtu, internalSocksPort))
-            add("outbounds", createOutbounds(nodes, selectedNodeId))
+            add(
+                "outbounds",
+                createOutbounds(nodes, selectedNodeId, hysteriaUpMbps, hysteriaDownMbps)
+            )
             add("route", createRoute(proxyMode, nodeDomains, nodeIPs, bypassLan))
             add("experimental", createExperimental())
         }
@@ -86,7 +91,12 @@ class SingBoxConfigGenerator {
      * 生成用于延迟测试的配置
      * 仍然支持单节点测试（用于Socket测试无法连接时的回退）
      */
-    fun generateTestConfig(node: Node, localPort: Int = 10808): String {
+    fun generateTestConfig(
+        node: Node,
+        localPort: Int = 10808,
+        hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
+    ): String {
         val ipRegex = Regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
         val isDomainServer = !node.server.matches(ipRegex) && !node.server.contains(":")
         val config = JsonObject().apply {
@@ -127,7 +137,9 @@ class SingBoxConfigGenerator {
                 })
             })
             add("outbounds", JsonArray().apply {
-                add(createNodeOutbound(node, "proxy")) // 单节点测试直接用proxy tag
+                add(
+                    createNodeOutbound(node, "proxy", hysteriaUpMbps, hysteriaDownMbps)
+                ) // 单节点测试直接用proxy tag
                 add(JsonObject().apply {
                     addProperty("type", "direct")
                     addProperty("tag", "direct")
@@ -160,7 +172,14 @@ class SingBoxConfigGenerator {
      * 生成用于 URL Test 的轻量配置
      * 包含所有节点 + ClashAPI (无 TUN，不需要 VPN 权限)
      */
-    fun generateUrlTestConfig(nodes: List<Node>, clashApiPort: Int = 19090, defaultInterface: String? = null, logFile: String? = null): String {
+    fun generateUrlTestConfig(
+        nodes: List<Node>,
+        clashApiPort: Int = 19090,
+        defaultInterface: String? = null,
+        logFile: String? = null,
+        hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
+    ): String {
         val config = JsonObject().apply {
             add("log", JsonObject().apply {
                 addProperty("level", "debug")
@@ -209,7 +228,7 @@ class SingBoxConfigGenerator {
                 })
                 
                 nodes.forEach { node ->
-                    add(createNodeOutbound(node, node.id))
+                    add(createNodeOutbound(node, node.id, hysteriaUpMbps, hysteriaDownMbps))
                 }
                 
                 add(JsonObject().apply {
@@ -345,7 +364,12 @@ class SingBoxConfigGenerator {
         }
     }
 
-    private fun createOutbounds(nodes: List<Node>, selectedNodeId: String?): JsonArray {
+    private fun createOutbounds(
+        nodes: List<Node>,
+        selectedNodeId: String?,
+        hysteriaUpMbps: Int,
+        hysteriaDownMbps: Int
+    ): JsonArray {
         val outbounds = JsonArray()
         
         // 1. Selector Group (手动选择组)
@@ -364,7 +388,7 @@ class SingBoxConfigGenerator {
         
         // 2. Individual Node Outbounds (具体节点)
         nodes.forEach { node ->
-            outbounds.add(createNodeOutbound(node, node.id))
+            outbounds.add(createNodeOutbound(node, node.id, hysteriaUpMbps, hysteriaDownMbps))
         }
         
         // 3. Other Outbounds (Direct, Block, DNS)
@@ -386,12 +410,17 @@ class SingBoxConfigGenerator {
         return outbounds
     }
     
-    private fun createNodeOutbound(node: Node, tag: String): JsonObject {
+    private fun createNodeOutbound(
+        node: Node,
+        tag: String,
+        hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
+    ): JsonObject {
         val outbound = when (node.type) {
             NodeType.VLESS -> createVlessOutbound(node)
             NodeType.VMESS -> createVmessOutbound(node)
             NodeType.TROJAN -> createTrojanOutbound(node)
-            NodeType.HYSTERIA2 -> createHysteria2Outbound(node)
+            NodeType.HYSTERIA2 -> createHysteria2Outbound(node, hysteriaUpMbps, hysteriaDownMbps)
             NodeType.ANYTLS -> createAnyTlsOutbound(node)
             NodeType.TUIC -> createTuicOutbound(node)
             NodeType.NAIVE -> createNaiveOutbound(node)
@@ -548,7 +577,11 @@ class SingBoxConfigGenerator {
         }
     }
     
-    private fun createHysteria2Outbound(node: Node): JsonObject {
+    private fun createHysteria2Outbound(
+        node: Node,
+        hysteriaUpMbps: Int,
+        hysteriaDownMbps: Int
+    ): JsonObject {
         val rawLink = node.getRawLinkPlain()
         val normalizedLink = rawLink.replace("hy2://", "hysteria2://")
         val uri = Uri.parse(normalizedLink)
@@ -565,8 +598,12 @@ class SingBoxConfigGenerator {
             }
             addProperty("password", uri.userInfo ?: "")
             queryParamFirst(uri, "hopInterval", "hop_interval")?.let { addProperty("hop_interval", it) }
-            queryParamFirst(uri, "upmbps", "up_mbps", "upMbps")?.toIntOrNull()?.let { addProperty("up_mbps", it) }
-            queryParamFirst(uri, "downmbps", "down_mbps", "downMbps")?.toIntOrNull()?.let { addProperty("down_mbps", it) }
+            if (hysteriaUpMbps > 0) {
+                addProperty("up_mbps", hysteriaUpMbps)
+            }
+            if (hysteriaDownMbps > 0) {
+                addProperty("down_mbps", hysteriaDownMbps)
+            }
             queryParamFirst(uri, "network")?.let { addProperty("network", it) }
             
             add("tls", JsonObject().apply {

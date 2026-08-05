@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.util.Log
 import io.nekohasekai.libbox.Libbox
+import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.service.HeadlessPlatformInterface
 import xyz.a202132.app.util.SingBoxConfigGenerator
@@ -43,7 +44,12 @@ object UrlTestManager {
      * 启动临时 sing-box 实例用于 URL 测试
      */
     @Synchronized
-    fun start(context: Context, nodes: List<Node>): Boolean {
+    fun start(
+        context: Context,
+        nodes: List<Node>,
+        hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
+    ): Boolean {
         if (isRunning) {
             Log.w(TAG, "URL Test instance already running")
             return true
@@ -73,7 +79,14 @@ object UrlTestManager {
             
             // 生成测试配置 (无 TUN，有 ClashAPI，指定网络接口)
             val configGenerator = SingBoxConfigGenerator()
-            val configContent = configGenerator.generateUrlTestConfig(nodes, CLASH_API_PORT, activeInterface, logFile.absolutePath)
+            val configContent = configGenerator.generateUrlTestConfig(
+                nodes = nodes,
+                clashApiPort = CLASH_API_PORT,
+                defaultInterface = activeInterface,
+                logFile = logFile.absolutePath,
+                hysteriaUpMbps = hysteriaUpMbps,
+                hysteriaDownMbps = hysteriaDownMbps
+            )
             Log.d(TAG, "Test config generated, length: ${configContent.length}")
             
             // 创建 CommandServerHandler

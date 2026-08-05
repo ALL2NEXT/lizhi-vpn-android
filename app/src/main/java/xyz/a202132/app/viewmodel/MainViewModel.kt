@@ -265,6 +265,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_TCPING_PERCENT)
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
+    val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_UP_MBPS)
+    val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_DOWN_MBPS)
     val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.VPN_MTU)
     val vpnState = ServiceManager.vpnState
     
@@ -998,6 +1000,18 @@ observeScheduledNodeUpdates()
         }
     }
 
+    fun setHysteriaUpMbps(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setHysteriaUpMbps(value)
+        }
+    }
+
+    fun setHysteriaDownMbps(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setHysteriaDownMbps(value)
+        }
+    }
+
     fun setVpnMtu(value: Int) {
         viewModelScope.launch {
             settingsRepository.setVpnMtu(value)
@@ -1036,7 +1050,12 @@ observeScheduledNodeUpdates()
                 _testingLabel.value = "$labelPrefix：启动测试引擎..."
 
                 val started = withContext(Dispatchers.IO) {
-                    xyz.a202132.app.network.UrlTestManager.start(getApplication(), nodes)
+                    xyz.a202132.app.network.UrlTestManager.start(
+                        getApplication(),
+                        nodes,
+                        hysteriaUpMbps.value,
+                        hysteriaDownMbps.value
+                    )
                 }
                 if (!started) {
                     _error.value = "启动测试引擎失败"
@@ -1694,7 +1713,13 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
 
     suspend fun fetchNodeIpInfo(node: Node): Result<NodeIpInfo> = withContext(Dispatchers.IO) {
         val port = pickFreePort()
-        val session = NodeTestProxyManager.createSession(getApplication(), node, port)
+        val session = NodeTestProxyManager.createSession(
+            getApplication(),
+            node,
+            port,
+            hysteriaUpMbps.value,
+            hysteriaDownMbps.value
+        )
         val started = session.start()
         if (!started) return@withContext Result.failure(IllegalStateException("启动节点测试代理失败"))
 
@@ -1781,7 +1806,13 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
 
     private suspend fun testNodeDownloadBandwidthMbps(node: Node, sizeMb: Int): Float = withContext(Dispatchers.IO) {
         val port = pickFreePort()
-        val session = NodeTestProxyManager.createSession(getApplication(), node, port)
+        val session = NodeTestProxyManager.createSession(
+            getApplication(),
+            node,
+            port,
+            hysteriaUpMbps.value,
+            hysteriaDownMbps.value
+        )
         val started = session.start()
         if (!started) return@withContext 0f
 
@@ -1823,7 +1854,13 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
 
     private suspend fun testNodeUploadBandwidthMbps(node: Node, sizeMb: Int): Float = withContext(Dispatchers.IO) {
         val port = pickFreePort()
-        val session = NodeTestProxyManager.createSession(getApplication(), node, port)
+        val session = NodeTestProxyManager.createSession(
+            getApplication(),
+            node,
+            port,
+            hysteriaUpMbps.value,
+            hysteriaDownMbps.value
+        )
         val started = session.start()
         if (!started) return@withContext 0f
 

@@ -77,7 +77,7 @@
 - ⏳ **节流保护**：刷新、切换备用节点、检查更新等操作 5 秒内防重复触发
 - 🔔 **公告系统**：支持远程推送公告通知
 - ℹ️ **关于页面**：展示应用版本信息、开源协议、GitHub 仓库链接和免责声明
-- ⚙️ **其他配置**：侧边栏可进入“其他配置”页面，集中管理 IPv6 路由、绕过局域网、自动执行、智能连接比例、超时时间、并发数、VPN MTU 等参数
+- ⚙️ **其他配置**：侧边栏可进入“其他配置”页面，集中管理 IPv6 路由、绕过局域网、智能连接比例、超时时间、并发数、VPN MTU 等参数
 - 🚀 **启动画面**：可配置启动倒计时时长（支持跳过），可在 `AppConfig.kt` 中设置 `STARTUP_SPLASH_DURATION_SECONDS`
 - 💾 **记住上次选择节点**：默认开启，退出 APP 前选择的节点会在下次启动后恢复
 - 🎨 **现代 UI**：基于 Jetpack Compose，Material Design 3 风格，页面使用 NavHost + NavController 路由管理
@@ -305,7 +305,7 @@ app/src/main/java/xyz/a202132/app/
 │   ├── screens/                  # 页面（通过 NavHost + NavController 管理）
 │   │   ├── MainScreen.kt        # 主界面
 │   │   ├── RuntimeLogScreen.kt  # 运行日志页面
-│   │   ├── OtherConfigScreen.kt # 其他配置页面（网络/自动执行/智能连接/超时/并发/MTU）
+│   │   ├── OtherConfigScreen.kt # 其他配置页面（网络/智能连接/超时/并发/MTU）
 │   │   ├── PerAppProxyScreen.kt # 分应用代理设置界面
 │   │   └── QrScannerScreen.kt   # 二维码扫描导入页面
 │   └── theme/                    # 主题配置
@@ -422,7 +422,7 @@ app/src/main/
 
 ### 其他配置
 
-"其他配置"页面集中管理网络开关、自动执行、智能连接比例、测试超时、并发数和 VPN 参数。顶部网络区（IPv6 路由、绕过局域网）点击后立即生效；其余输入型参数修改后点击"保存"生效。
+"其他配置"页面集中管理网络开关、智能连接比例、Hysteria2 带宽、测试超时、并发数和 VPN 参数。顶部网络区（IPv6 路由、绕过局域网）点击后立即生效；其余输入型参数修改后点击"保存"生效。
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
@@ -436,6 +436,7 @@ app/src/main/
 | TCPing 节点比例 | 100% | 智能连接第一阶段候选比例，默认测试全部节点 |
 | URL Test 候选比例 | 50% | 智能连接第二阶段从 TCPing 结果中选取的比例 |
 | 5MB 测速候选比例 | 50% | 智能连接第三阶段从 URL Test 结果中选取的比例 |
+| Hysteria 最大带宽 (Up/Dw) | 1000/1000 Mbps | 仅对 Hysteria2 节点生效；输入 0 表示不设置，修改后下次连接生效 |
 | TCPing 超时 | 3000ms | 最低 500ms |
 | URL Test 超时 | 3000ms | 最低 500ms |
 | 节点IP信息超时 | 12000ms | 最低 1000ms |
@@ -558,6 +559,8 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 - `smartConnectTcpingPercent` — 智能连接第一阶段 TCPing 节点比例（1~100，默认 100）
 - `smartConnectUrlTestPercent` — 智能连接第二阶段 URL Test 候选比例（1~100，默认 50）
 - `smartConnectSpeedTestPercent` — 智能连接第三阶段 5MB 测速候选比例（1~100，默认 50）
+- `hysteriaUpMbps` — Hysteria2 上行最大带宽（Mbps，默认 1000，设为 0 表示不设置）
+- `hysteriaDownMbps` — Hysteria2 下行最大带宽（Mbps，默认 1000，设为 0 表示不设置）
 - `vpnMtu` — VPN MTU 值（修改后需断开重连）
 - `nodeIpInfoTestOnVpnStart` — VPN 连接后是否自动获取节点 IP 信息
 - `scheduledNodeUpdateEnabled` — 是否定时更新节点信息

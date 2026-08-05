@@ -208,9 +208,19 @@ class BoxVpnService : VpnService() {
                 } catch (e: Exception) {
                     AppConfig.VPN_MTU
                 }
+                val hysteriaUpMbps = try {
+                    settingsRepo.hysteriaUpMbps.first()
+                } catch (e: Exception) {
+                    AppConfig.HYSTERIA_UP_MBPS
+                }
+                val hysteriaDownMbps = try {
+                    settingsRepo.hysteriaDownMbps.first()
+                } catch (e: Exception) {
+                    AppConfig.HYSTERIA_DOWN_MBPS
+                }
                 val internalSocksPort = pickFreeInternalSocksPort()
                 
-                Log.d(TAG, "Generating config with ${allNodes.size} nodes, selected: $selectedNodeId, bypassLan: $bypassLan, ipv6Mode: $ipv6Mode, mtu: $vpnMtu, internalSocks=$internalSocksPort")
+                Log.d(TAG, "Generating config with ${allNodes.size} nodes, selected: $selectedNodeId, bypassLan: $bypassLan, ipv6Mode: $ipv6Mode, mtu: $vpnMtu, hysteria=${hysteriaUpMbps}/${hysteriaDownMbps}Mbps, internalSocks=$internalSocksPort")
 
                 // 3. 确保规则集文件存在（从 assets 拷贝兜底）
                 RuleManager.ensureRuleSets(application)
@@ -223,7 +233,9 @@ class BoxVpnService : VpnService() {
                     bypassLan,
                     ipv6Mode,
                     vpnMtu,
-                    internalSocksPort
+                    internalSocksPort,
+                    hysteriaUpMbps,
+                    hysteriaDownMbps
                 )
                 Libbox.checkConfig(config)
                 deleteLegacyConfigFile()
@@ -814,6 +826,16 @@ class BoxVpnService : VpnService() {
                     } catch (e: Exception) {
                         AppConfig.VPN_MTU
                     }
+                    val hysteriaUpMbps = try {
+                        settingsRepo.hysteriaUpMbps.first()
+                    } catch (e: Exception) {
+                        AppConfig.HYSTERIA_UP_MBPS
+                    }
+                    val hysteriaDownMbps = try {
+                        settingsRepo.hysteriaDownMbps.first()
+                    } catch (e: Exception) {
+                        AppConfig.HYSTERIA_DOWN_MBPS
+                    }
                     val internalSocksPort = pickFreeInternalSocksPort()
 
                     // 获取选中的节点
@@ -854,7 +876,9 @@ class BoxVpnService : VpnService() {
                         bypassLan,
                         ipv6Mode,
                         vpnMtu,
-                        internalSocksPort
+                        internalSocksPort,
+                        hysteriaUpMbps,
+                        hysteriaDownMbps
                     )
                     Libbox.checkConfig(config)
                     deleteLegacyConfigFile()

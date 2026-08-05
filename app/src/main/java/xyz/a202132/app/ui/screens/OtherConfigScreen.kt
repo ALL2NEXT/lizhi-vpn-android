@@ -61,6 +61,8 @@ fun OtherConfigScreen(
     val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsState()
     val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsState()
     val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsState()
+    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsState()
+    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsState()
     val vpnMtu by viewModel.vpnMtu.collectAsState()
     val vpnState by viewModel.vpnState.collectAsState()
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsState()
@@ -84,6 +86,8 @@ fun OtherConfigScreen(
     var smartConnectTcpingPercentInput by remember(smartConnectTcpingPercent) { mutableStateOf(smartConnectTcpingPercent.toString()) }
     var smartConnectUrlTestPercentInput by remember(smartConnectUrlTestPercent) { mutableStateOf(smartConnectUrlTestPercent.toString()) }
     var smartConnectSpeedTestPercentInput by remember(smartConnectSpeedTestPercent) { mutableStateOf(smartConnectSpeedTestPercent.toString()) }
+    var hysteriaUpMbpsInput by remember(hysteriaUpMbps) { mutableStateOf(hysteriaUpMbps.toString()) }
+    var hysteriaDownMbpsInput by remember(hysteriaDownMbps) { mutableStateOf(hysteriaDownMbps.toString()) }
     var mtuInput by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
 
     LaunchedEffect(
@@ -104,6 +108,8 @@ fun OtherConfigScreen(
         smartConnectTcpingPercent,
         smartConnectUrlTestPercent,
         smartConnectSpeedTestPercent,
+        hysteriaUpMbps,
+        hysteriaDownMbps,
         vpnMtu
     ) {
         rememberLastSelectedNodeDraft = rememberLastSelectedNodeEnabled
@@ -123,6 +129,8 @@ fun OtherConfigScreen(
         smartConnectTcpingPercentInput = smartConnectTcpingPercent.toString()
         smartConnectUrlTestPercentInput = smartConnectUrlTestPercent.toString()
         smartConnectSpeedTestPercentInput = smartConnectSpeedTestPercent.toString()
+        hysteriaUpMbpsInput = hysteriaUpMbps.toString()
+        hysteriaDownMbpsInput = hysteriaDownMbps.toString()
         mtuInput = vpnMtu.toString()
     }
 
@@ -165,6 +173,8 @@ fun OtherConfigScreen(
                     viewModel.setSmartConnectTcpingPercent(smartConnectTcpingPercentInput.toIntOrNull()?.coerceIn(1, 100) ?: smartConnectTcpingPercent)
                     viewModel.setSmartConnectUrlTestPercent(smartConnectUrlTestPercentInput.toIntOrNull()?.coerceIn(1, 100) ?: smartConnectUrlTestPercent)
                     viewModel.setSmartConnectSpeedTestPercent(smartConnectSpeedTestPercentInput.toIntOrNull()?.coerceIn(1, 100) ?: smartConnectSpeedTestPercent)
+                    viewModel.setHysteriaUpMbps(hysteriaUpMbpsInput.toIntOrNull()?.coerceIn(0, 100_000) ?: hysteriaUpMbps)
+                    viewModel.setHysteriaDownMbps(hysteriaDownMbpsInput.toIntOrNull()?.coerceIn(0, 100_000) ?: hysteriaDownMbps)
                     viewModel.setVpnMtu(savedMtu)
                     Toast.makeText(
                         context,
@@ -243,10 +253,7 @@ fun OtherConfigScreen(
                 }
             }
 
-            OtherConfigSection(
-                title = "自动执行",
-                description = "修改配置后会立即生效。"
-            ) {
+            OtherConfigSection {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -459,6 +466,29 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
+                title = "Hysteria 最大带宽 (Up/Dw)",
+                description = "单位 Mbps，仅对 Hysteria2 节点生效；修改后下次连接生效，输入 0 表示不设置。"
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OtherConfigNumberField(
+                        label = "Up",
+                        value = hysteriaUpMbpsInput,
+                        onValueChange = { hysteriaUpMbpsInput = it.filter(Char::isDigit) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    OtherConfigNumberField(
+                        label = "Dw",
+                        value = hysteriaDownMbpsInput,
+                        onValueChange = { hysteriaDownMbpsInput = it.filter(Char::isDigit) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            OtherConfigSection(
                 title = "测试超时",
                 description = "单位均为毫秒。下载测速超时设为 0 表示不限制。"
             ) {
@@ -522,21 +552,23 @@ fun OtherConfigScreen(
 
 @Composable
 private fun OtherConfigSection(
-    title: String,
-    description: String,
+    title: String? = null,
+    description: String? = null,
     content: @Composable () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            text = title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        if (description.isNotBlank()) {
+        if (!title.isNullOrBlank()) {
+            Text(
+                text = title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        if (!description.isNullOrBlank()) {
             Text(
                 text = description,
                 fontSize = 12.sp,

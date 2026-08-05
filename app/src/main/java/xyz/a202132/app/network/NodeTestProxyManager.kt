@@ -3,6 +3,7 @@ package xyz.a202132.app.network
 import android.content.Context
 import android.util.Log
 import io.nekohasekai.libbox.Libbox
+import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.service.HeadlessPlatformInterface
 import xyz.a202132.app.util.SingBoxConfigGenerator
@@ -22,7 +23,9 @@ object NodeTestProxyManager {
     class Session(
         private val context: Context,
         private val node: Node,
-        private val socksPort: Int
+        private val socksPort: Int,
+        private val hysteriaUpMbps: Int,
+        private val hysteriaDownMbps: Int
     ) {
         private var commandServer: io.nekohasekai.libbox.CommandServer? = null
         private var isRunning = false
@@ -48,7 +51,12 @@ object NodeTestProxyManager {
                     Libbox.setup(options)
                 }
 
-                val config = SingBoxConfigGenerator().generateTestConfig(node, socksPort)
+                val config = SingBoxConfigGenerator().generateTestConfig(
+                    node = node,
+                    localPort = socksPort,
+                    hysteriaUpMbps = hysteriaUpMbps,
+                    hysteriaDownMbps = hysteriaDownMbps
+                )
                 val serverHandler = object : io.nekohasekai.libbox.CommandServerHandler {
                     override fun serviceStop() {}
                     override fun serviceReload() {}
@@ -103,19 +111,43 @@ object NodeTestProxyManager {
         }
     }
 
-    fun createSession(context: Context, node: Node, socksPort: Int): Session {
-        return Session(context.applicationContext, node, socksPort)
+    fun createSession(
+        context: Context,
+        node: Node,
+        socksPort: Int,
+        hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
+    ): Session {
+        return Session(
+            context.applicationContext,
+            node,
+            socksPort,
+            hysteriaUpMbps,
+            hysteriaDownMbps
+        )
     }
 
     private var legacySession: Session? = null
 
     @Synchronized
-    fun start(context: Context, node: Node, socksPort: Int): Boolean {
+    fun start(
+        context: Context,
+        node: Node,
+        socksPort: Int,
+        hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
+    ): Boolean {
         if (legacySession != null) {
             Log.w(TAG, "Node test instance already running")
             return false
         }
-        val session = createSession(context, node, socksPort)
+        val session = createSession(
+            context,
+            node,
+            socksPort,
+            hysteriaUpMbps,
+            hysteriaDownMbps
+        )
         val started = session.start()
         if (started) {
             legacySession = session

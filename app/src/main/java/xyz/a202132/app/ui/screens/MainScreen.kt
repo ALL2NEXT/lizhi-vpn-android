@@ -72,6 +72,8 @@ fun MainScreen(
     // 自动化测试设置/状态
     val nodeIpInfoTestOnVpnStart by viewModel.nodeIpInfoTestOnVpnStart.collectAsState()
     val speedTestDownloadTimeoutMs by viewModel.speedTestDownloadTimeoutMs.collectAsState()
+    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsState()
+    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsState()
     // val showBackupFailedDialog by viewModel.showBackupFailedDialog.collectAsState() // Removed
     
     // 显示错误Toast
@@ -385,6 +387,8 @@ fun MainScreen(
             node = currentNode,
             useNodeBandwidth = currentNode != null && vpnState == VpnState.CONNECTED,
             downloadTimeoutMs = speedTestDownloadTimeoutMs,
+            hysteriaUpMbps = hysteriaUpMbps,
+            hysteriaDownMbps = hysteriaDownMbps,
             onDismiss = { showSpeedTestDialog = false }
         )
     }

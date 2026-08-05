@@ -92,7 +92,7 @@ fun ConnectButton(
                 VpnState.DISCONNECTED -> "点击连接"
             },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 14.sp,
+            fontSize = if (customLabel != null) 18.sp else 14.sp,
             fontWeight = FontWeight.Medium
         )
     }

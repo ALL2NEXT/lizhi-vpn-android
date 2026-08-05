@@ -59,6 +59,8 @@ class SettingsRepository(private val context: Context) {
         private val SMART_CONNECT_TCPING_PERCENT = intPreferencesKey("smart_connect_tcping_percent")
         private val SMART_CONNECT_URL_TEST_PERCENT = intPreferencesKey("smart_connect_url_test_percent")
         private val SMART_CONNECT_SPEED_TEST_PERCENT = intPreferencesKey("smart_connect_speed_test_percent")
+        private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
+        private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
 
     }
     
@@ -426,6 +428,26 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSmartConnectSpeedTestPercent(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[SMART_CONNECT_SPEED_TEST_PERCENT] = value.coerceIn(1, 100)
+        }
+    }
+
+    val hysteriaUpMbps: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[HYSTERIA_UP_MBPS] ?: xyz.a202132.app.AppConfig.HYSTERIA_UP_MBPS).coerceIn(0, 100_000)
+    }
+
+    suspend fun setHysteriaUpMbps(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[HYSTERIA_UP_MBPS] = value.coerceIn(0, 100_000)
+        }
+    }
+
+    val hysteriaDownMbps: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[HYSTERIA_DOWN_MBPS] ?: xyz.a202132.app.AppConfig.HYSTERIA_DOWN_MBPS).coerceIn(0, 100_000)
+    }
+
+    suspend fun setHysteriaDownMbps(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[HYSTERIA_DOWN_MBPS] = value.coerceIn(0, 100_000)
         }
     }
 

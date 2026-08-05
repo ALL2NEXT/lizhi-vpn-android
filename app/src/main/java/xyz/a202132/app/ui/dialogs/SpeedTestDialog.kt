@@ -90,6 +90,8 @@ fun SpeedTestDialog(
     node: Node? = null,
     useNodeBandwidth: Boolean = false,
     downloadTimeoutMs: Long = AppConfig.AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS,
+    hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
+    hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current.applicationContext
@@ -142,7 +144,13 @@ fun SpeedTestDialog(
                     }
                     val port = currentVpnProxyPort ?: run {
                         pickFreePort().also { temporaryPort ->
-                            if (!NodeTestProxyManager.start(context, targetNode, temporaryPort)) {
+                            if (!NodeTestProxyManager.start(
+                                    context,
+                                    targetNode,
+                                    temporaryPort,
+                                    hysteriaUpMbps,
+                                    hysteriaDownMbps
+                                )) {
                                 throw IllegalStateException("启动节点测速代理失败")
                             }
                             sessionStarted = true
