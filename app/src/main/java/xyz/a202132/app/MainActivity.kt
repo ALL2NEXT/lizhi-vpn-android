@@ -34,7 +34,6 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import xyz.a202132.app.ui.components.StartupSplashOverlay
 import xyz.a202132.app.ui.components.NodeListScreen
-import xyz.a202132.app.ui.dialogs.NetworkToolboxScreen
 import xyz.a202132.app.ui.navigation.AppRoute
 import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.LanProxyScreen
@@ -42,7 +41,6 @@ import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.PerAppProxyScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.RuntimeLogScreen
-import xyz.a202132.app.ui.screens.UnlockTestScreen
 import xyz.a202132.app.ui.theme.FireflyVPNTheme
 import xyz.a202132.app.viewmodel.MainViewModel
 import xyz.a202132.app.viewmodel.NodeImportResult
@@ -155,8 +153,6 @@ class MainActivity : ComponentActivity() {
                                     onStartVpn = { action -> requestVpnPermission(action) },
                                     onOpenPerAppProxy = { navigateTo(AppRoute.PER_APP_PROXY) },
                                     onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
-                                    onOpenNetworkToolbox = { navigateTo(AppRoute.NETWORK_TOOLBOX) },
-                                    onOpenUnlockTest = { navigateTo(AppRoute.UNLOCK_TEST) },
                                     onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
                                     onOpenLanProxy = { navigateTo(AppRoute.LAN_PROXY) },
                                     onOpenRuntimeLog = { navigateTo(AppRoute.RUNTIME_LOG) }
@@ -223,19 +219,6 @@ class MainActivity : ComponentActivity() {
                                     onQrCodeScanned = { text, onComplete ->
                                         importNodesToFavorites(text, true, onComplete)
                                     }
-                                )
-                            }
-
-                            composable(AppRoute.NETWORK_TOOLBOX) {
-                                NetworkToolboxScreen(
-                                    onBack = { navController.popBackStack() }
-                                )
-                            }
-
-                            composable(AppRoute.UNLOCK_TEST) {
-                                UnlockTestScreen(
-                                    visibleNodes = nodes,
-                                    onBack = { navController.popBackStack() }
                                 )
                             }
 

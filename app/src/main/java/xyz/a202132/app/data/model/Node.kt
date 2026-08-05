@@ -27,8 +27,6 @@ data class Node(
     val sortOrder: Int = 0,               // 排序顺序
     val downloadMbps: Float = 0f,         // 下载带宽(Mbps)
     val uploadMbps: Float = 0f,           // 上传带宽(Mbps)
-    val unlockSummary: String = "",       // 流媒体解锁摘要
-    val unlockPassed: Boolean = false,    // 是否通过解锁阈值
     val autoTestStatus: String = "",      // 自动化测试状态
     val autoTestedAt: Long = 0,           // 自动化测试时间戳
     // Node source metadata.

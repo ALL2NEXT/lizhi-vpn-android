@@ -60,7 +60,6 @@ class SettingsRepository(private val context: Context) {
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val URL_TEST_CONCURRENCY = intPreferencesKey("url_test_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
-        private val UNLOCK_TEST_CONCURRENCY = intPreferencesKey("unlock_test_concurrency")
         private val VPN_MTU = intPreferencesKey("vpn_mtu")
 
         private val LAN_PROXY_ENABLED = booleanPreferencesKey("lan_proxy_enabled")
@@ -500,16 +499,6 @@ val startupDefaultTestMode: Flow<StartupDefaultTestMode> = context.dataStore.dat
     suspend fun setBandwidthTestConcurrency(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[BANDWIDTH_TEST_CONCURRENCY] = value.coerceIn(1, 3)
-        }
-    }
-
-    val unlockTestConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[UNLOCK_TEST_CONCURRENCY] ?: xyz.a202132.app.AppConfig.AUTO_TEST_UNLOCK_CONCURRENCY).coerceIn(1, 32)
-    }
-
-    suspend fun setUnlockTestConcurrency(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[UNLOCK_TEST_CONCURRENCY] = value.coerceIn(1, 32)
         }
     }
 

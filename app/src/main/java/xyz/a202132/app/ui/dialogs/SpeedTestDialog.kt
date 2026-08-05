@@ -60,7 +60,7 @@ import xyz.a202132.app.SpeedTestSize
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.network.SpeedTestResult
 import xyz.a202132.app.network.SpeedTestService
-import xyz.a202132.app.network.UnlockTestManager
+import xyz.a202132.app.network.NodeTestProxyManager
 import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.ui.theme.Primary
@@ -118,7 +118,7 @@ fun SpeedTestDialog(
 
     fun dismissDialog() {
         activeService?.cancel()
-        UnlockTestManager.stop()
+        NodeTestProxyManager.stop()
         onDismiss()
     }
 
@@ -142,7 +142,7 @@ fun SpeedTestDialog(
                     }
                     val port = currentVpnProxyPort ?: run {
                         pickFreePort().also { temporaryPort ->
-                            if (!UnlockTestManager.start(context, targetNode, temporaryPort)) {
+                            if (!NodeTestProxyManager.start(context, targetNode, temporaryPort)) {
                                 throw IllegalStateException("启动节点测速代理失败")
                             }
                             sessionStarted = true
@@ -206,7 +206,7 @@ fun SpeedTestDialog(
             } finally {
                 service?.cancel()
                 if (sessionStarted) {
-                    UnlockTestManager.stop()
+                    NodeTestProxyManager.stop()
                 }
                 withContext(Dispatchers.Main) {
                     if (activeService === service) {

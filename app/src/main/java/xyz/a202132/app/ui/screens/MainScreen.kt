@@ -35,8 +35,6 @@ fun MainScreen(
     onStartVpn: (action: () -> Unit) -> Unit,
     onOpenPerAppProxy: () -> Unit = {},
     onOpenNodeList: () -> Unit = {},
-    onOpenNetworkToolbox: () -> Unit = {},
-    onOpenUnlockTest: () -> Unit = {},
     onOpenOtherConfig: () -> Unit = {},
     onOpenLanProxy: () -> Unit = {},
     onOpenRuntimeLog: () -> Unit = {}
@@ -207,27 +205,12 @@ fun MainScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("\uD83E\uDDF0 网络工具箱") },
-                                    onClick = {
-                                        showToolsMenu = false
-                                        onOpenNetworkToolbox()
-                                    }
-                                )
-                                DropdownMenuItem(
                                     text = { Text("\uD83E\uDDF9 隐藏不合格节点") },
                                     onClick = {
                                         showToolsMenu = false
                                         viewModel.cleanUnavailableNodes()
                                     }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text("\uD83C\uDFAC 流媒体解锁测试") },
-                                    onClick = {
-                                        showToolsMenu = false
-                                        onOpenUnlockTest()
-                                    }
-                                )
-
                             }
                         }
                         

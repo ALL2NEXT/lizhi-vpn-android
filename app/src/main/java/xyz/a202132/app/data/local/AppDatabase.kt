@@ -6,6 +6,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeTypeConverter
@@ -15,7 +17,7 @@ import java.io.RandomAccessFile
 
 @Database(
     entities = [Node::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -26,6 +28,52 @@ abstract class AppDatabase : RoomDatabase() {
         private const val TAG = "AppDatabase"
         private const val DB_NAME = "firefly_vpn.db"
         private val SQLITE_PLAIN_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `nodes_new` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `server` TEXT NOT NULL,
+                        `port` INTEGER NOT NULL,
+                        `rawLink` TEXT NOT NULL,
+                        `country` TEXT,
+                        `countryName` TEXT,
+                        `latency` INTEGER NOT NULL,
+                        `isAvailable` INTEGER NOT NULL,
+                        `lastTestedAt` INTEGER NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        `downloadMbps` REAL NOT NULL,
+                        `uploadMbps` REAL NOT NULL,
+                        `autoTestStatus` TEXT NOT NULL,
+                        `autoTestedAt` INTEGER NOT NULL,
+                        `source` TEXT NOT NULL,
+                        `favoriteSourceNodeId` TEXT,
+                        `favoriteCreatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `nodes_new` (
+                        `id`, `name`, `type`, `server`, `port`, `rawLink`, `country`, `countryName`,
+                        `latency`, `isAvailable`, `lastTestedAt`, `sortOrder`, `downloadMbps`, `uploadMbps`,
+                        `autoTestStatus`, `autoTestedAt`, `source`, `favoriteSourceNodeId`, `favoriteCreatedAt`
+                    )
+                    SELECT
+                        `id`, `name`, `type`, `server`, `port`, `rawLink`, `country`, `countryName`,
+                        `latency`, `isAvailable`, `lastTestedAt`, `sortOrder`, `downloadMbps`, `uploadMbps`,
+                        `autoTestStatus`, `autoTestedAt`, `source`, `favoriteSourceNodeId`, `favoriteCreatedAt`
+                    FROM `nodes`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `nodes`")
+                db.execSQL("ALTER TABLE `nodes_new` RENAME TO `nodes`")
+            }
+        }
         @Volatile
         private var sqlCipherLibLoaded = false
 
@@ -63,6 +111,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .build()
         }

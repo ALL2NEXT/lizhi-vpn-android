@@ -61,18 +61,15 @@
 
 ### 测试与诊断
 
-- 🔧 **三点工具菜单**：主界面右上角“三点”菜单提供 TCPing、URL Test、网速测试、流媒体解锁测试、节点IP信息、隐藏超时/不可用节点、网络工具箱等功能
+- 🔧 **三点工具菜单**：主界面右上角“三点”菜单提供 TCPing、URL Test、网速测试、节点IP信息、隐藏超时/不可用节点等功能
 - 🌐 **URL Test 测试**：通过启动临时无头 sing-box 实例进行 HTTP 握手延迟测试，无需连接 VPN 即可测试所有节点真实连通性
 - 🧩 **测试模式系统**：内置 `日常模式`（URL Test 延迟优先）与 `下载模式`（下行带宽优先，默认 10MB），支持自定义模式保存/删除
-- 🤖 **自动化测试流程**：支持配置后自动执行“拉节点 → 延迟测试 → 延迟筛选 → 带宽测试 → 带宽筛选 → 解锁测试”，并弹出结果总览与节点详情
-- 🎯 **智能择优规则**：支持延迟优先 / 上行优先 / 下行优先 / 解锁情况优先（解锁数或指定网站多选优先）
-- 🎬 **流媒体解锁测试**：集成 UnlockTests，可逐节点测试国外主流网站解锁情况并展示可滚动结果明细，支持“当前节点”一键勾选与“随机测试节点数”勾选
+- 🤖 **自动化测试流程**：支持配置后自动执行节点拉取、延迟测试等基础测试流程
 - ⚡ **Cloudflare 网速测试**：集成 Cloudflare Speed Test，支持下载/上传测速，实时显示速率
 - 📡 **TCPing 测试**：直接 TCP 连接测试节点可达性和延迟
 - 🔍 **节点出口 IP 信息查询**：在三点菜单中可基于“当前选择节点”查询出口 IP 详细信息（地区、ASN、欺诈评分、是否住宅/原生IP等），无需先连接主 VPN（通过临时本地 SOCKS 代理走所选节点出口发起查询）
 - 🗑️ **清理不合格节点**：一键隐藏超时/不可用/不达标节点（UI 过滤，不删除数据库数据）
 - 🧾 **运行日志**：侧边栏可查看、刷新、分享、清空 APP 内部运行日志；日志仅记录脱敏后的关键 Info / Warn / Error，不导出节点链接和配置内容
-- 🛠️ **网络工具箱**：内置 10 种常用网络检测工具（出口检测、IP查询、WebRTC泄漏、DNS泄漏、速度测试等），一键跳转浏览器使用
 
 ### 界面与体验
 
@@ -138,13 +135,6 @@
 ### 核心依赖
 
 项目依赖 `libbox.aar`（sing-box Android 库），需放置于 `app/libs/` 目录。
-
-项目还包含 [UnlockTests](https://github.com/oneclickvirt/UnlockTests) Android so库（用于流媒体解锁测试）：
-
-这两个so库是由`ut-android-arm64`和`ut-android-armv7`两个二进制文件（[UnlockTests](https://github.com/oneclickvirt/UnlockTests) 项目编译得到，建议放到`app/src/main/assest/bin`目录下）复制到 jniLibs 对应 ABI 目录，然后挂到 preBuild，最后 build 自动迁移生成的！
-
-- `app/src/main/jniLibs/arm64-v8a/libut.so`
-- `app/src/main/jniLibs/armeabi-v7a/libut.so`
 
 > **获取 libbox.aar**：
 >
@@ -212,7 +202,6 @@ object AppConfig {
     // 延迟测试并发数
     const val TCPING_CONCURRENCY = 16
     const val URL_TEST_CONCURRENCY = 10
-    const val AUTO_TEST_UNLOCK_CONCURRENCY = 3 // 流媒体解锁测试并发建议2~3
 
     // VPN 核心参数
     const val VPN_MTU = 9000
@@ -270,7 +259,7 @@ private val retrofit = Retrofit.Builder()
 
 ```
 app/src/main/java/xyz/a202132/app/
-├── AppConfig.kt                  # 全局配置常量（API地址、网络工具箱等）
+├── AppConfig.kt                  # 全局配置常量（API地址、测试参数等）
 ├── MainActivity.kt               # 主 Activity
 ├── VpnApplication.kt             # Application 类
 ├── data/
@@ -293,7 +282,7 @@ app/src/main/java/xyz/a202132/app/
 │   ├── NetworkClient.kt          # 网络客户端配置
 │   ├── SpeedTestService.kt       # Cloudflare 网速测试服务
 │   ├── SubscriptionParser.kt     # 订阅链接解析器
-│   ├── UnlockTestManager.kt      # 流媒体解锁测试临时代理管理器
+│   ├── NodeTestProxyManager.kt   # 节点 IP/带宽测试临时代理管理器
 │   └── UrlTestManager.kt         # 无头 sing-box URL Test 管理器
 ├── service/
 │   ├── BoxPlatformInterface.kt   # sing-box 平台接口（TUN 管理、分应用代理）
@@ -312,10 +301,8 @@ app/src/main/java/xyz/a202132/app/
 │   ├── dialogs/                  # 对话框
 │   │   ├── AboutDialog.kt       # 关于页面弹窗
 │   │   ├── Dialogs.kt           # 通用对话框（公告、更新等）
-│   │   ├── NetworkToolboxDialog.kt  # 网络工具箱页面（文件名沿用旧命名，主入口已改为 NetworkToolboxScreen）
 │   │   ├── NodeIpInfoDialog.kt      # 节点出口 IP 信息弹窗
 │   │   ├── SpeedTestDialog.kt       # 网速测试弹窗
-│   │   ├── UnlockTestDialog.kt      # 流媒体解锁测试弹窗（旧入口，新入口见 UnlockTestScreen）
 │   │   └── UserAgreementDialog.kt   # 用户协议弹窗
 │   ├── navigation/               # 页面路由
 │   │   └── AppRoute.kt          # 路由常量定义（NavHost 目的地）
@@ -325,8 +312,7 @@ app/src/main/java/xyz/a202132/app/
 │   │   ├── RuntimeLogScreen.kt  # 运行日志页面
 │   │   ├── OtherConfigScreen.kt # 其他配置页面（网络/主题/自动执行/超时/并发/MTU）
 │   │   ├── PerAppProxyScreen.kt # 分应用代理设置界面
-│   │   ├── QrScannerScreen.kt   # 二维码扫描导入页面
-│   │   └── UnlockTestScreen.kt  # 流媒体解锁测试页面
+│   │   └── QrScannerScreen.kt   # 二维码扫描导入页面
 │   └── theme/                    # 主题配置
 │       ├── Color.kt             # 颜色定义
 │       ├── Theme.kt             # 主题配置
@@ -338,13 +324,11 @@ app/src/main/java/xyz/a202132/app/
 │   ├── RuleManager.kt           # 智能分流规则管理
 │   ├── RuntimeLog.kt            # 应用内运行日志（脱敏、滚动保留、导出）
 │   ├── SignatureVerifier.kt     # APK 签名验证（JNI 桥接）
-│   ├── SingBoxConfigGenerator.kt # sing-box 配置生成器
-│   └── UnlockTestsRunner.kt      # UnlockTests 二进制执行器
+│   └── SingBoxConfigGenerator.kt # sing-box 配置生成器
 └── viewmodel/
     ├── GlobalTestExecution.kt    # 全局测试互斥锁
     ├── MainViewModel.kt          # 主界面 ViewModel
-    ├── PerAppProxyViewModel.kt   # 分应用代理 ViewModel
-    └── UnlockTestViewModel.kt    # 流媒体解锁测试 ViewModel
+    └── PerAppProxyViewModel.kt   # 分应用代理 ViewModel
 ```
 
 ### 资源文件结构
@@ -359,9 +343,6 @@ app/src/main/
 ├── cpp/
 │   ├── CMakeLists.txt            # NDK 构建配置
 │   └── native-lib.cpp            # Native 层（AES 密钥 + 签名校验）
-├── jniLibs/
-│   ├── arm64-v8a/libut.so        # UnlockTests (ARM64)
-│   └── armeabi-v7a/libut.so      # UnlockTests (ARMv7)
 ├── res/
 │   ├── drawable/                 # 图标和图片资源
 │   ├── mipmap-*/                 # 应用图标
@@ -406,9 +387,7 @@ app/src/main/
 | **URL Test** | 通过 ClashAPI 发起 HTTP 握手延迟测试，结果更准确 (默认/推荐) |
 | **网速测试** | 使用 Cloudflare 节点进行真实宽带测速 |
 | **隐藏不合格节点** | 一键隐藏超时/不可用/不达标节点（UI 过滤） |
-| **流媒体解锁测试** | 调用 UnlockTests 逐节点测试解锁能力，支持“当前节点”一键勾选与随机节点数勾选 |
 | **节点 IP 信息** | 查询当前选择节点的出口 IP 详情（地区、ASN、风控评分等，选中即可，无需连接） |
-| **网络工具箱** | 打开内置网络工具站点集合 |
 
 **URL Test 工作原理**：
 
@@ -416,39 +395,6 @@ app/src/main/
 - **VPN 未连接时**：自动启动临时无头 sing-box 实例 (端口 19090)，无需 VPN 权限即可测试
 
 > 💡 无头实例不使用 TUN，仅创建本地 HTTP 代理和 ClashAPI，通过操作系统默认路由直接连接代理节点。
-
----
-
-### 网络工具箱
-
-内置 10 种常用网络检测工具，可在 `AppConfig.kt` 的 `NETWORK_TOOLS_JSON` 中自定义配置：
-
-| 工具 | 用途 | 网站 |
-|------|------|------|
-| 出口检测 | 检测 VPN 出口 IP | ippure.com |
-| IP信息查询 | 查询 IP 详细信息 | ippure.com |
-| WebRTC泄漏 | 检测 WebRTC 是否泄漏真实 IP | ippure.com |
-| DNS泄漏 | 检测 DNS 请求是否走代理 | ippure.com |
-| IP检测 | 综合 IP 检测 | ipcheck.ing |
-| 高精度IP查询 | 高精度 IP 地理位置 | ping0.cc |
-| IP定位 | IP 地理定位 | iplark.com |
-| 伪装度查询 | 代理伪装度检测 | whoer.net |
-| BGP查询 | BGP 路由信息 | bgp.tools |
-| 速度测试 | 网络速度测试 | speedtest.net |
-
-**自定义工具列表**：
-
-修改 `AppConfig.kt` 中的 JSON 数组即可添加、删除或修改工具项：
-
-```kotlin
-const val NETWORK_TOOLS_JSON = """
-[
-  {"name": "工具名称", "url": "https://example.com", "icon": "speed"}
-]
-"""
-```
-
-支持的图标标识：`outbound`、`ip`、`webrtc`、`dns`、`check`、`precision`、`location`、`disguise`、`bgp`、`speed`
 
 ---
 
@@ -501,7 +447,6 @@ const val NETWORK_TOOLS_JSON = """
 | TCPing 并发数 | 16 | 范围 1~128 |
 | URL Test 并发数 | 10 | 范围 1~128 |
 | 带宽测试并发数 | 1 | 范围 1~3，默认保持串行；提高并发可加快粗筛但会增加测速竞争 |
-| 流媒体测试并发数 | 3 | 范围 1~32 |
 | VPN MTU | 9000 | 范围 576~9000，修改后需断开重连 |
 
 **设置位置**：侧边栏 → 其他配置
@@ -626,8 +571,6 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 
 - `downloadMbps`：下载带宽（Mbps）
 - `uploadMbps`：上传带宽（Mbps，预留）
-- `unlockSummary`：流媒体测试结果（可展示全量关键结果）
-- `unlockPassed`：解锁筛选是否通过
 - `autoTestStatus`：历史自动化测试状态（兼容字段）
 - `autoTestedAt`：历史自动化测试时间戳（兼容字段）
 - `source`：节点来源（`SUBSCRIPTION` / `FAVORITE`）
@@ -649,7 +592,6 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 - `tcpingConcurrency` — TCPing 并发数
 - `urlTestConcurrency` — URL Test 并发数
 - `bandwidthTestConcurrency` — 带宽测试并发数（1~3，默认 1）
-- `unlockTestConcurrency` — 流媒体测试并发数
 - `vpnMtu` — VPN MTU 值（修改后需断开重连）
 - `nodeIpInfoTestOnVpnStart` — VPN 连接后是否自动获取节点 IP 信息
 - `scheduledNodeUpdateEnabled` — 是否定时更新节点信息
@@ -1183,20 +1125,6 @@ versionName — 字符串，格式通常为 主版本.次版本.修订号（如 
 
 ------
 
-### 自定义网络工具箱
-
-**文件**: `app/src/main/java/xyz/a202132/app/AppConfig.kt`
-
-修改 `NETWORK_TOOLS_JSON` 数组，按照以下格式添加或修改工具项：
-
-```json
-{"name": "工具名称", "url": "https://example.com", "icon": "icon_key"}
-```
-
-如需添加新的图标类型，需同时修改 `NetworkToolboxDialog.kt` 中的 `getToolIcon()` 函数。
-
----
-
 ## 构建发布
 
 ### Debug 构建
@@ -1342,13 +1270,11 @@ target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 **依赖项目**:
 
 - [sing-box](https://github.com/SagerNet/sing-box) - GPLv3
-- [UnlockTests](https://github.com/oneclickvirt/UnlockTests) - Apache-2.0
 
 ---
 
 ## 致谢
 
 - [SagerNet/sing-box](https://github.com/SagerNet/sing-box) - VPN 核心
-- [UnlockTests](https://github.com/oneclickvirt/UnlockTests) - 流媒体解锁测试
 - [JetBrains/Kotlin](https://github.com/JetBrains/kotlin) - Kotlin 语言
 - [Google/Jetpack Compose](https://developer.android.com/jetpack/compose) - UI 框架

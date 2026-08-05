@@ -61,7 +61,6 @@ fun OtherConfigScreen(
     val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsState()
     val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsState()
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsState()
-    val unlockTestConcurrency by viewModel.unlockTestConcurrency.collectAsState()
     val vpnMtu by viewModel.vpnMtu.collectAsState()
     val vpnState by viewModel.vpnState.collectAsState()
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsState()
@@ -85,7 +84,6 @@ fun OtherConfigScreen(
     var tcpingConcurrencyInput by remember(tcpingConcurrency) { mutableStateOf(tcpingConcurrency.toString()) }
     var urlTestConcurrencyInput by remember(urlTestConcurrency) { mutableStateOf(urlTestConcurrency.toString()) }
     var bandwidthTestConcurrencyInput by remember(bandwidthTestConcurrency) { mutableStateOf(bandwidthTestConcurrency.toString()) }
-    var unlockTestConcurrencyInput by remember(unlockTestConcurrency) { mutableStateOf(unlockTestConcurrency.toString()) }
     var mtuInput by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
 
     LaunchedEffect(
@@ -105,7 +103,6 @@ fun OtherConfigScreen(
         tcpingConcurrency,
         urlTestConcurrency,
         bandwidthTestConcurrency,
-        unlockTestConcurrency,
         vpnMtu
     ) {
         appThemeModeDraft = appThemeMode
@@ -124,7 +121,6 @@ fun OtherConfigScreen(
         tcpingConcurrencyInput = tcpingConcurrency.toString()
         urlTestConcurrencyInput = urlTestConcurrency.toString()
         bandwidthTestConcurrencyInput = bandwidthTestConcurrency.toString()
-        unlockTestConcurrencyInput = unlockTestConcurrency.toString()
         mtuInput = vpnMtu.toString()
     }
 
@@ -166,7 +162,6 @@ fun OtherConfigScreen(
                     viewModel.setTcpingConcurrency(tcpingConcurrencyInput.toIntOrNull()?.coerceIn(1, 128) ?: tcpingConcurrency)
                     viewModel.setUrlTestConcurrency(urlTestConcurrencyInput.toIntOrNull()?.coerceIn(1, 128) ?: urlTestConcurrency)
                     viewModel.setBandwidthTestConcurrency(bandwidthTestConcurrencyInput.toIntOrNull()?.coerceIn(1, 3) ?: bandwidthTestConcurrency)
-                    viewModel.setUnlockTestConcurrency(unlockTestConcurrencyInput.toIntOrNull()?.coerceIn(1, 32) ?: unlockTestConcurrency)
                     viewModel.setVpnMtu(savedMtu)
                     Toast.makeText(
                         context,
@@ -537,11 +532,6 @@ fun OtherConfigScreen(
                     label = "带宽测试并发数",
                     value = bandwidthTestConcurrencyInput,
                     onValueChange = { bandwidthTestConcurrencyInput = it.filter(Char::isDigit) }
-                )
-                OtherConfigNumberField(
-                    label = "流媒体测试并发数",
-                    value = unlockTestConcurrencyInput,
-                    onValueChange = { unlockTestConcurrencyInput = it.filter(Char::isDigit) }
                 )
                 OtherConfigNumberField(
                     label = "VPN MTU",

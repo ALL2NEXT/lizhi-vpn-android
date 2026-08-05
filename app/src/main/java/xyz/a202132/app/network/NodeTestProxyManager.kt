@@ -11,11 +11,11 @@ import java.net.Socket
 import java.util.UUID
 
 /**
- * 流媒体解锁测试专用的临时无头 sing-box 管理器（单例串行）。
+ * 为节点 IP 和带宽测试提供临时的无头 sing-box 代理会话。
  */
-object UnlockTestManager {
+object NodeTestProxyManager {
 
-    private const val TAG = "UnlockTestManager"
+    private const val TAG = "NodeTestProxyManager"
 
     private val setupLock = Any()
 
@@ -31,12 +31,12 @@ object UnlockTestManager {
         @Synchronized
         fun start(): Boolean {
             if (isRunning) {
-                Log.w(TAG, "Unlock test session already running")
+                Log.w(TAG, "Node test session already running")
                 return false
             }
 
             return try {
-                val workDir = File(context.filesDir, "sing-box-unlock-$sessionId")
+                val workDir = File(context.filesDir, "sing-box-node-test-$sessionId")
                 if (!workDir.exists()) workDir.mkdirs()
 
                 synchronized(setupLock) {
@@ -75,7 +75,7 @@ object UnlockTestManager {
                 }
                 true
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to start unlock test session", e)
+                Log.e(TAG, "Failed to start node test session", e)
                 cleanup()
                 false
             }
@@ -91,12 +91,12 @@ object UnlockTestManager {
             try {
                 commandServer?.closeService()
             } catch (e: Exception) {
-                Log.e(TAG, "Error closing unlock test service", e)
+                Log.e(TAG, "Error closing node test service", e)
             }
             try {
                 commandServer?.close()
             } catch (e: Exception) {
-                Log.e(TAG, "Error closing unlock test command server", e)
+                Log.e(TAG, "Error closing node test command server", e)
             }
             commandServer = null
             isRunning = false
@@ -107,13 +107,12 @@ object UnlockTestManager {
         return Session(context.applicationContext, node, socksPort)
     }
 
-    // 对现有调用点保持向后兼容的单例行为
     private var legacySession: Session? = null
 
     @Synchronized
     fun start(context: Context, node: Node, socksPort: Int): Boolean {
         if (legacySession != null) {
-            Log.w(TAG, "Unlock test instance already running")
+            Log.w(TAG, "Node test instance already running")
             return false
         }
         val session = createSession(context, node, socksPort)
@@ -142,5 +141,4 @@ object UnlockTestManager {
         }
         return false
     }
-
 }

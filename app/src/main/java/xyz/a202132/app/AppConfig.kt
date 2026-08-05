@@ -3,15 +3,6 @@ package xyz.a202132.app
 import org.json.JSONArray
 
 /**
- * 网络工具数据类
- */
-data class NetworkTool(
-    val name: String,
-    val url: String,
-    val icon: String
-)
-
-/**
  * 测速大小选项
  */
 data class SpeedTestSize(
@@ -54,7 +45,6 @@ object AppConfig {
     // Concurrency
     const val TCPING_CONCURRENCY = 16 // TCPing并发数
     const val URL_TEST_CONCURRENCY = 10 // URL Test并发数
-    const val AUTO_TEST_UNLOCK_CONCURRENCY = 3 // 流媒体解锁测试并发数
     
     // VPN
     const val VPN_MTU = 9000
@@ -77,22 +67,6 @@ object AppConfig {
     const val NODE_IP_INFO_TIMEOUT_MS = 12000L // 单次节点IP信息查询超时（毫秒）
     const val NODE_IP_INFO_RETRY_COUNT = 1 // 节点IP信息自动重试次数，仅对超时、网络异常或服务端临时错误生效
 
-    // Network Toolbox - 网络工具箱
-    const val NETWORK_TOOLS_JSON = """
-[
-  {"name": "出口检测", "url": "https://ippure.com/IP-Outbound-Detect.html", "icon": "outbound"},
-  {"name": "IP信息查询", "url": "https://ippure.com", "icon": "ip"},
-  {"name": "WebRTC泄漏", "url": "https://ippure.com/Browser-WebRTC-Leak-Detect.html", "icon": "webrtc"},
-  {"name": "DNS泄漏", "url": "https://ippure.com/DNS-Leak-Detect.html", "icon": "dns"},
-  {"name": "IP检测", "url": "https://ipcheck.ing/#/", "icon": "check"},
-  {"name": "高精度IP查询", "url": "https://ping0.cc/", "icon": "precision"},
-  {"name": "IP定位", "url": "https://iplark.com/", "icon": "location"},
-  {"name": "伪装度查询", "url": "https://whoer.net/zh", "icon": "disguise"},
-  {"name": "BGP查询", "url": "https://bgp.tools/", "icon": "bgp"},
-  {"name": "速度测试", "url": "https://www.speedtest.net/", "icon": "speed"}
-]
-"""
-
     // Speed Test - Cloudflare 网速测试
     const val SPEED_TEST_DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
     const val SPEED_TEST_UPLOAD_URL = "https://speed.cloudflare.com/__up"
@@ -106,29 +80,6 @@ object AppConfig {
   {"label": "50MB", "bytes": 50000000}
 ]
 """
-
-    /**
-     * 解析网络工具箱 JSON 数据
-     */
-    fun getNetworkTools(): List<NetworkTool> {
-        val tools = mutableListOf<NetworkTool>()
-        try {
-            val jsonArray = JSONArray(NETWORK_TOOLS_JSON)
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                tools.add(
-                    NetworkTool(
-                        name = obj.getString("name"),
-                        url = obj.getString("url"),
-                        icon = obj.getString("icon")
-                    )
-                )
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return tools
-    }
 
     /**
      * 解析测速大小 JSON 数据

@@ -27,13 +27,12 @@ import xyz.a202132.app.network.LatencyTester
 import xyz.a202132.app.network.NetworkClient
 import xyz.a202132.app.network.SubscriptionParser
 import xyz.a202132.app.network.DownloadManager
-import xyz.a202132.app.network.UnlockTestManager
+import xyz.a202132.app.network.NodeTestProxyManager
 import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.RuntimeLog
 import xyz.a202132.app.util.SingBoxConfigGenerator
-import xyz.a202132.app.util.UnlockTestsRunner
 import xyz.a202132.app.util.CryptoUtils
 import java.io.File
 import java.io.IOException
@@ -274,7 +273,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.TCPING_CONCURRENCY)
     val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_CONCURRENCY)
     val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, 1)
-    val unlockTestConcurrency = settingsRepository.unlockTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.AUTO_TEST_UNLOCK_CONCURRENCY)
     val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.VPN_MTU)
     val lanProxyEnabled = settingsRepository.lanProxyEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val lanProxyAutoPort = settingsRepository.lanProxyAutoPort.stateIn(viewModelScope, SharingStarted.Lazily, true)
@@ -1044,12 +1042,6 @@ observeScheduledNodeUpdates()
         }
     }
 
-    fun setUnlockTestConcurrency(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setUnlockTestConcurrency(value)
-        }
-    }
-
     fun setVpnMtu(value: Int) {
         viewModelScope.launch {
             settingsRepository.setVpnMtu(value)
@@ -1240,8 +1232,6 @@ fun autoSelectBestNode() {
                         lastTestedAt = 0L,
                         downloadMbps = 0f,
                         uploadMbps = 0f,
-                        unlockSummary = "",
-                        unlockPassed = false,
                     )
                 }
                 nodeDao.insertNodes(favorites)
@@ -1749,7 +1739,7 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
 
     suspend fun fetchNodeIpInfo(node: Node): Result<NodeIpInfo> = withContext(Dispatchers.IO) {
         val port = pickFreePort()
-        val session = UnlockTestManager.createSession(getApplication(), node, port)
+        val session = NodeTestProxyManager.createSession(getApplication(), node, port)
         val started = session.start()
         if (!started) return@withContext Result.failure(IllegalStateException("启动节点测试代理失败"))
 
@@ -1836,7 +1826,7 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
 
     private suspend fun testNodeDownloadBandwidthMbps(node: Node, sizeMb: Int): Float = withContext(Dispatchers.IO) {
         val port = pickFreePort()
-        val session = UnlockTestManager.createSession(getApplication(), node, port)
+        val session = NodeTestProxyManager.createSession(getApplication(), node, port)
         val started = session.start()
         if (!started) return@withContext 0f
 
@@ -1878,7 +1868,7 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
 
     private suspend fun testNodeUploadBandwidthMbps(node: Node, sizeMb: Int): Float = withContext(Dispatchers.IO) {
         val port = pickFreePort()
-        val session = UnlockTestManager.createSession(getApplication(), node, port)
+        val session = NodeTestProxyManager.createSession(getApplication(), node, port)
         val started = session.start()
         if (!started) return@withContext 0f
 
@@ -1930,62 +1920,6 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
         } finally {
             session.stop()
         }
-    }
-
-    private suspend fun testNodeUnlock(node: Node): Pair<String, Boolean> = withContext(Dispatchers.IO) {
-        val port = pickFreePort()
-        val session = UnlockTestManager.createSession(getApplication(), node, port)
-        val started = session.start()
-        if (!started) return@withContext "启动测试代理失败" to false
-
-        try {
-            val result = UnlockTestsRunner.run(
-                context = getApplication(),
-                args = listOf(
-                    "-socks-proxy", "socks5://127.0.0.1:$port",
-                    "-f", "0",
-                    "-L", "zh",
-                    "-b=false",
-                    "-s=false"
-                ),
-                timeoutSeconds = 120
-            )
-            val lines = result.stdout.lineSequence()
-                .map { cleanLogLine(it) }
-                .filter { it.isNotEmpty() }
-                .filter { it.contains("YES", true) || it.contains("NO", true) || it.contains("Available", true) || it.contains("Region", true) }
-                .filterNot { it.contains(Regex("""\bYES\s*=\s*\d+""", RegexOption.IGNORE_CASE)) || it.contains(Regex("""\bNO\s*=\s*\d+""", RegexOption.IGNORE_CASE)) }
-                .distinct()
-                .take(200)
-                .toList()
-
-            val yes = lines.count {
-                (it.contains(Regex("""\bYES\b""", RegexOption.IGNORE_CASE)) || it.contains("Available", true)) &&
-                    !it.contains(Regex("""\bNO\b""", RegexOption.IGNORE_CASE))
-            }
-            val no = lines.count { it.contains(Regex("""\bNO\b""", RegexOption.IGNORE_CASE)) }
-            val pass = yes >= 3 && yes >= no
-            val fullResult = if (lines.isEmpty()) {
-                if (result.stdout.isBlank()) "未识别到解锁结果" else "未识别关键结果（可在流媒体工具里查看完整输出）"
-            } else {
-                "YES=$yes, NO=$no\n" + lines.joinToString("\n")
-            }
-            fullResult to pass
-        } catch (e: Exception) {
-            Log.e(tag, "Unlock test failed for ${node.getDisplayName()}: ${e.message}")
-            ("解锁测试失败: ${e.message}") to false
-        } finally {
-            session.stop()
-        }
-    }
-
-private fun cleanLogLine(input: String): String {
-        return input
-            .replace(Regex("\\u001B\\[[;\\d]*[ -/]*[@-~]"), "")
-            .replace(Regex("\\[[0-9;]*m"), "")
-            .replace("[0m", "")
-            .replace(Regex("\\s+"), " ")
-            .trim()
     }
 
     private fun pickFreePort(): Int {
