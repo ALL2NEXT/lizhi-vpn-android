@@ -58,6 +58,9 @@ fun OtherConfigScreen(
     val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsState()
     val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsState()
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsState()
+    val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsState()
+    val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsState()
+    val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsState()
     val vpnMtu by viewModel.vpnMtu.collectAsState()
     val vpnState by viewModel.vpnState.collectAsState()
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsState()
@@ -78,6 +81,9 @@ fun OtherConfigScreen(
     var tcpingConcurrencyInput by remember(tcpingConcurrency) { mutableStateOf(tcpingConcurrency.toString()) }
     var urlTestConcurrencyInput by remember(urlTestConcurrency) { mutableStateOf(urlTestConcurrency.toString()) }
     var bandwidthTestConcurrencyInput by remember(bandwidthTestConcurrency) { mutableStateOf(bandwidthTestConcurrency.toString()) }
+    var smartConnectTcpingPercentInput by remember(smartConnectTcpingPercent) { mutableStateOf(smartConnectTcpingPercent.toString()) }
+    var smartConnectUrlTestPercentInput by remember(smartConnectUrlTestPercent) { mutableStateOf(smartConnectUrlTestPercent.toString()) }
+    var smartConnectSpeedTestPercentInput by remember(smartConnectSpeedTestPercent) { mutableStateOf(smartConnectSpeedTestPercent.toString()) }
     var mtuInput by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
 
     LaunchedEffect(
@@ -95,6 +101,9 @@ fun OtherConfigScreen(
         tcpingConcurrency,
         urlTestConcurrency,
         bandwidthTestConcurrency,
+        smartConnectTcpingPercent,
+        smartConnectUrlTestPercent,
+        smartConnectSpeedTestPercent,
         vpnMtu
     ) {
         rememberLastSelectedNodeDraft = rememberLastSelectedNodeEnabled
@@ -111,6 +120,9 @@ fun OtherConfigScreen(
         tcpingConcurrencyInput = tcpingConcurrency.toString()
         urlTestConcurrencyInput = urlTestConcurrency.toString()
         bandwidthTestConcurrencyInput = bandwidthTestConcurrency.toString()
+        smartConnectTcpingPercentInput = smartConnectTcpingPercent.toString()
+        smartConnectUrlTestPercentInput = smartConnectUrlTestPercent.toString()
+        smartConnectSpeedTestPercentInput = smartConnectSpeedTestPercent.toString()
         mtuInput = vpnMtu.toString()
     }
 
@@ -150,6 +162,9 @@ fun OtherConfigScreen(
                     viewModel.setTcpingConcurrency(tcpingConcurrencyInput.toIntOrNull()?.coerceIn(1, 128) ?: tcpingConcurrency)
                     viewModel.setUrlTestConcurrency(urlTestConcurrencyInput.toIntOrNull()?.coerceIn(1, 128) ?: urlTestConcurrency)
                     viewModel.setBandwidthTestConcurrency(bandwidthTestConcurrencyInput.toIntOrNull()?.coerceIn(1, 3) ?: bandwidthTestConcurrency)
+                    viewModel.setSmartConnectTcpingPercent(smartConnectTcpingPercentInput.toIntOrNull()?.coerceIn(1, 100) ?: smartConnectTcpingPercent)
+                    viewModel.setSmartConnectUrlTestPercent(smartConnectUrlTestPercentInput.toIntOrNull()?.coerceIn(1, 100) ?: smartConnectUrlTestPercent)
+                    viewModel.setSmartConnectSpeedTestPercent(smartConnectSpeedTestPercentInput.toIntOrNull()?.coerceIn(1, 100) ?: smartConnectSpeedTestPercent)
                     viewModel.setVpnMtu(savedMtu)
                     Toast.makeText(
                         context,
@@ -420,6 +435,27 @@ fun OtherConfigScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+
+            OtherConfigSection(
+                title = "智能连接",
+                description = "按 TCPing → URL Test 204 → 5MB 下载测速逐步筛选，默认比例为 100% / 50% / 50%。"
+            ) {
+                OtherConfigNumberField(
+                    label = "TCPing 节点比例 (%)",
+                    value = smartConnectTcpingPercentInput,
+                    onValueChange = { smartConnectTcpingPercentInput = it.filter(Char::isDigit) }
+                )
+                OtherConfigNumberField(
+                    label = "URL Test 候选比例 (%)",
+                    value = smartConnectUrlTestPercentInput,
+                    onValueChange = { smartConnectUrlTestPercentInput = it.filter(Char::isDigit) }
+                )
+                OtherConfigNumberField(
+                    label = "5MB 测速候选比例 (%)",
+                    value = smartConnectSpeedTestPercentInput,
+                    onValueChange = { smartConnectSpeedTestPercentInput = it.filter(Char::isDigit) }
+                )
             }
 
             OtherConfigSection(

@@ -56,6 +56,9 @@ class SettingsRepository(private val context: Context) {
         private val URL_TEST_CONCURRENCY = intPreferencesKey("url_test_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
         private val VPN_MTU = intPreferencesKey("vpn_mtu")
+        private val SMART_CONNECT_TCPING_PERCENT = intPreferencesKey("smart_connect_tcping_percent")
+        private val SMART_CONNECT_URL_TEST_PERCENT = intPreferencesKey("smart_connect_url_test_percent")
+        private val SMART_CONNECT_SPEED_TEST_PERCENT = intPreferencesKey("smart_connect_speed_test_percent")
 
     }
     
@@ -390,6 +393,39 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBandwidthTestConcurrency(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[BANDWIDTH_TEST_CONCURRENCY] = value.coerceIn(1, 3)
+        }
+    }
+
+    val smartConnectTcpingPercent: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[SMART_CONNECT_TCPING_PERCENT] ?: xyz.a202132.app.AppConfig.SMART_CONNECT_TCPING_PERCENT)
+            .coerceIn(1, 100)
+    }
+
+    suspend fun setSmartConnectTcpingPercent(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[SMART_CONNECT_TCPING_PERCENT] = value.coerceIn(1, 100)
+        }
+    }
+
+    val smartConnectUrlTestPercent: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[SMART_CONNECT_URL_TEST_PERCENT] ?: xyz.a202132.app.AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
+            .coerceIn(1, 100)
+    }
+
+    suspend fun setSmartConnectUrlTestPercent(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[SMART_CONNECT_URL_TEST_PERCENT] = value.coerceIn(1, 100)
+        }
+    }
+
+    val smartConnectSpeedTestPercent: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[SMART_CONNECT_SPEED_TEST_PERCENT] ?: xyz.a202132.app.AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
+            .coerceIn(1, 100)
+    }
+
+    suspend fun setSmartConnectSpeedTestPercent(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[SMART_CONNECT_SPEED_TEST_PERCENT] = value.coerceIn(1, 100)
         }
     }
 

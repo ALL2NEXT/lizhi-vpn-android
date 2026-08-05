@@ -41,6 +41,12 @@ object AppConfig {
     const val URL_TEST_URL = "https://www.google.com/generate_204" // URL Test测试URL
     const val URL_TEST_TIMEOUT = 3000L // URL Test 超时（毫秒）
     const val URL_TEST_RETRY_COUNT = 1 // URL Test 自动重试次数，仅对503/504或异常生效
+
+    // 智能连接候选比例
+    const val SMART_CONNECT_TCPING_PERCENT = 100
+    const val SMART_CONNECT_URL_TEST_PERCENT = 50
+    const val SMART_CONNECT_SPEED_TEST_PERCENT = 50
+    const val SMART_CONNECT_SPEED_TEST_SIZE_MB = 5
     
     // Concurrency
     const val TCPING_CONCURRENCY = 16 // TCPing并发数

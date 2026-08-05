@@ -42,15 +42,12 @@ fun MainScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     
     // Collect状态
-    val nodes by viewModel.nodes.collectAsState()
     val currentNode by viewModel.currentNode.collectAsState()
-    val selectedNodeId by viewModel.selectedNodeId.collectAsState()
     val proxyMode by viewModel.proxyMode.collectAsState()
     val vpnState by viewModel.vpnState.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isTesting by viewModel.isTesting.collectAsState()
     val testingLabel by viewModel.testingLabel.collectAsState()
-    val filterUnavailable by viewModel.filterUnavailable.collectAsState()
     val notice by viewModel.notice.collectAsState()
     val noticeConfig by viewModel.noticeConfig.collectAsState()
     val updateInfo by viewModel.updateInfo.collectAsState()
@@ -292,9 +289,12 @@ fun MainScreen(
                 // 连接按钮
                 ConnectButton(
                     vpnState = vpnState,
+                    enabled = !isTesting,
                     onClick = {
                         if (currentNode == null) {
-                            onOpenNodeList()
+                            onStartVpn {
+                                viewModel.startSmartConnection()
+                            }
                         } else {
                             // 手动连接 (需授权)
                             onStartVpn {
@@ -302,7 +302,11 @@ fun MainScreen(
                             }
                         }
                     },
-                    customLabel = if (currentNode == null && vpnState == VpnState.DISCONNECTED) "点击中间按钮进行自动择优连接" else null
+                    customLabel = if (currentNode == null && vpnState == VpnState.DISCONNECTED) {
+                        if (isTesting) testingLabel ?: "智能连接中..." else "点击上方按钮进行智能连接"
+                    } else {
+                        null
+                    }
                 )
                 
                 // 流量统计 (仅在连接时显示)

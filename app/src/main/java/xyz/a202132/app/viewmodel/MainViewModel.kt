@@ -262,6 +262,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.TCPING_CONCURRENCY)
     val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_CONCURRENCY)
     val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, 1)
+    val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_TCPING_PERCENT)
+    val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
+    val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
     val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.VPN_MTU)
     val vpnState = ServiceManager.vpnState
     
@@ -732,7 +735,97 @@ observeScheduledNodeUpdates()
             }
         }
     }
-    
+
+    /**
+     * 智能连接：TCPing 全量筛选 → 204 URL Test → 5MB 下载测速，最后连接测速结果第一名。
+     */
+    fun startSmartConnection() {
+        viewModelScope.launch {
+            if (GlobalTestExecution.isFetching()) {
+                _error.value = GlobalTestExecution.fetchingHint()
+                return@launch
+            }
+            if (!GlobalTestExecution.tryStart("智能连接")) {
+                _error.value = GlobalTestExecution.busyHint()
+                return@launch
+            }
+
+            _isTesting.value = true
+            try {
+                val allNodes = currentSmartConnectNodes()
+                if (allNodes.isEmpty()) {
+                    _error.value = "没有可用节点"
+                    return@launch
+                }
+
+                val tcpingNodes = takeTopPercent(allNodes, smartConnectTcpingPercent.value)
+                _testingLabel.value = "智能连接：TCPing 测试中..."
+                val tcpingResults = internalTestNodes(tcpingNodes) { completed, total ->
+                    _testingLabel.value = "智能连接：TCPing ($completed/$total)"
+                }
+                val nodesById = allNodes.associateBy { it.id }
+                val tcpingCandidates = tcpingResults
+                    .filter { it.isAvailable && it.latency > 0 }
+                    .sortedBy { it.latency }
+                    .mapNotNull { nodesById[it.nodeId] }
+                if (tcpingCandidates.isEmpty()) {
+                    _error.value = "TCPing 未找到可用节点"
+                    return@launch
+                }
+
+                val urlTestNodes = takeTopPercent(tcpingCandidates, smartConnectUrlTestPercent.value)
+                val urlTestResults = runUrlTestNodes(
+                    nodes = urlTestNodes,
+                    labelPrefix = "智能连接：URL Test 204"
+                )
+                applyUrlTestResults(urlTestResults)
+                val urlTestCandidates = urlTestResults
+                    .filter { it.isAvailable && it.latency > 0 }
+                    .sortedBy { it.latency }
+                    .mapNotNull { nodesById[it.nodeId] }
+                if (urlTestCandidates.isEmpty()) {
+                    _error.value = "URL Test 未找到可用节点"
+                    return@launch
+                }
+
+                val speedTestNodes = takeTopPercent(urlTestCandidates, smartConnectSpeedTestPercent.value)
+                val speedResults = mutableListOf<Pair<Node, Float>>()
+                speedTestNodes.forEachIndexed { index, node ->
+                    _testingLabel.value = "智能连接：5MB 测速 (${index + 1}/${speedTestNodes.size})"
+                    val speedMbps = testNodeDownloadBandwidthMbps(
+                        node,
+                        AppConfig.SMART_CONNECT_SPEED_TEST_SIZE_MB
+                    )
+                    nodeDao.updateDownloadMbps(node.id, speedMbps)
+                    speedResults += node to speedMbps
+                }
+
+                val bestNode = speedResults
+                    .sortedWith(
+                        compareByDescending<Pair<Node, Float>> { it.second }
+                            .thenBy { it.first.latency }
+                    )
+                    .firstOrNull()?.first
+                    ?: speedTestNodes.firstOrNull()
+                if (bestNode == null) {
+                    _error.value = "测速未找到可连接节点"
+                    return@launch
+                }
+
+                settingsRepository.setSelectedNodeId(bestNode.id)
+                RuntimeLog.info(tag, "Smart connection selected node: ${bestNode.getDisplayName()}")
+                ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
+            } catch (e: Exception) {
+                Log.e(tag, "Smart connection failed", e)
+                _error.value = "智能连接失败: ${e.message ?: "未知错误"}"
+            } finally {
+                _isTesting.value = false
+                _testingLabel.value = null
+                GlobalTestExecution.finish()
+            }
+        }
+    }
+
     /**
      * URL Test 所有节点延迟 (通过 ClashAPI)
      * VPN 运行中 → 用现有 ClashAPI (port 9090)
@@ -765,124 +858,19 @@ observeScheduledNodeUpdates()
             }
             _isTesting.value = true
             _testingLabel.value = "URL Test 测试中..."
-            
-            val isVpnRunning = vpnState.value == VpnState.CONNECTED
-            val clashApiPort: Int
-            var startedHeadless = false
-            
             try {
                 val currentNodes = targetNodes ?: currentNodeListSnapshot()
                 if (currentNodes.isEmpty()) {
                     _error.value = "没有可用节点"
                     return@launch
                 }
-                
-                if (isVpnRunning) {
-                    // VPN 已连接，直接使用现有 ClashAPI
-                    clashApiPort = 9090
-                    Log.d(tag, "URL Test via existing VPN ClashAPI (port $clashApiPort)")
-                } else {
-                    // VPN 未连接，启动临时无头 sing-box 实例
-                    clashApiPort = xyz.a202132.app.network.UrlTestManager.CLASH_API_PORT
-                    Log.d(tag, "URL Test via headless instance (port $clashApiPort)")
-                    _testingLabel.value = "启动测试引擎..."
-                    
-                    val started = withContext(Dispatchers.IO) {
-                        xyz.a202132.app.network.UrlTestManager.start(getApplication(), currentNodes)
-                    }
-                    if (!started) {
-                        _error.value = "启动测试引擎失败"
-                        return@launch
-                    }
-                    startedHeadless = true
-                    
-                    // 等待 sing-box 初始化 + ClashAPI 就绪
-                    delay(2000)
-                    
-                    // 健康检查：等待 ClashAPI 可用 (必须在 IO 线程)
-                    val clashReady = withContext(Dispatchers.IO) {
-                        var ready = false
-                        for (retry in 1..6) {
-                            try {
-                                val checkUrl = java.net.URL("http://127.0.0.1:$clashApiPort/proxies")
-                                val conn = checkUrl.openConnection() as java.net.HttpURLConnection
-                                conn.connectTimeout = 2000
-                                conn.readTimeout = 2000
-                                if (conn.responseCode == 200) {
-                                    ready = true
-                                    conn.disconnect()
-                                    break
-                                }
-                                conn.disconnect()
-                            } catch (e: Exception) {
-                                Log.d(tag, "ClashAPI not ready yet (attempt $retry/6): ${e.message}")
-                            }
-                            delay(1000)
-                        }
-                        ready
-                    }
-                    
-                    if (!clashReady) {
-                        _error.value = "测试引擎启动超时"
-                        return@launch
-                    }
-                    
-                    _testingLabel.value = "URL Test 测试中..."
-                }
-                
-                // 诊断：查询 ClashAPI 注册的代理
-                if (startedHeadless) {
-                    withContext(Dispatchers.IO) {
-                        val proxiesResponse = xyz.a202132.app.network.UrlTestManager.diagnoseProxies()
-                        Log.d(tag, "ClashAPI proxies: ${proxiesResponse?.take(500)}")
-                    }
-                }
-                
-                Log.d(tag, "URL Testing ${currentNodes.size} nodes via ClashAPI (port=$clashApiPort)")
-                
-                val results = latencyTester.urlTestAllNodes(
+                val results = runUrlTestNodes(
                     nodes = currentNodes,
-                    clashApiPort = clashApiPort,
-                    targetUrl = AppConfig.URL_TEST_URL,
-                    timeoutMs = urlTestTimeoutMs.value,
-                    concurrency = urlTestConcurrency.value
-                ) { completed, total ->
-                    _testingLabel.value = "URL Test 测试中 ($completed/$total)"
-                    onProgress?.invoke(completed, total)
-                }
-                Log.d(tag, "Got ${results.size} URL test results")
-                
-                // 更新数据库
-                results.forEach { result ->
-                    val updatedRows = nodeDao.updateLatency(
-                        nodeId = result.nodeId,
-                        latency = result.latency,
-                        isAvailable = result.isAvailable,
-                        testedAt = System.currentTimeMillis()
-                    )
-                    if (updatedRows == 0) {
-                        Log.w(tag, "URL Test result not applied, node not found in DB: ${result.nodeId}")
-                    }
-                }
+                    labelPrefix = "URL Test",
+                    onProgress = onProgress
+                )
+                applyUrlTestResults(results)
             } finally {
-                // 读取 sing-box 核心日志
-                if (startedHeadless) {
-                    withContext(Dispatchers.IO) {
-                        val coreLog = xyz.a202132.app.network.UrlTestManager.readLogFile(getApplication())
-                        if (coreLog != null) {
-                            // 分段输出日志（logcat 单条消息有长度限制）
-                            coreLog.lines().forEach { line ->
-                                Log.d("SingBoxCoreLog", line)
-                            }
-                        } else {
-                            Log.w(tag, "No sing-box core log available")
-                        }
-                    }
-                }
-                // 如果启动了临时实例，关闭它
-                if (startedHeadless) {
-                    xyz.a202132.app.network.UrlTestManager.stop()
-                }
                 _isTesting.value = false
                 _testingLabel.value = null
                 if (locked) {
@@ -992,6 +980,24 @@ observeScheduledNodeUpdates()
         }
     }
 
+    fun setSmartConnectTcpingPercent(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setSmartConnectTcpingPercent(value)
+        }
+    }
+
+    fun setSmartConnectUrlTestPercent(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setSmartConnectUrlTestPercent(value)
+        }
+    }
+
+    fun setSmartConnectSpeedTestPercent(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setSmartConnectSpeedTestPercent(value)
+        }
+    }
+
     fun setVpnMtu(value: Int) {
         viewModelScope.launch {
             settingsRepository.setVpnMtu(value)
@@ -1008,6 +1014,114 @@ observeScheduledNodeUpdates()
             "已隐藏${hiddenCount}个不可用或超时节点"
         } else {
             "没有可隐藏的不可用节点"
+        }
+    }
+
+    private suspend fun runUrlTestNodes(
+        nodes: List<Node>,
+        labelPrefix: String,
+        onProgress: ((completed: Int, total: Int) -> Unit)? = null
+    ): List<LatencyTester.LatencyResult> {
+        val isVpnRunning = vpnState.value == VpnState.CONNECTED
+        val clashApiPort: Int
+        var startedHeadless = false
+
+        try {
+            if (isVpnRunning) {
+                clashApiPort = 9090
+                Log.d(tag, "URL Test via existing VPN ClashAPI (port $clashApiPort)")
+            } else {
+                clashApiPort = xyz.a202132.app.network.UrlTestManager.CLASH_API_PORT
+                Log.d(tag, "URL Test via headless instance (port $clashApiPort)")
+                _testingLabel.value = "$labelPrefix：启动测试引擎..."
+
+                val started = withContext(Dispatchers.IO) {
+                    xyz.a202132.app.network.UrlTestManager.start(getApplication(), nodes)
+                }
+                if (!started) {
+                    _error.value = "启动测试引擎失败"
+                    return emptyList()
+                }
+                startedHeadless = true
+
+                delay(2000)
+                val clashReady = withContext(Dispatchers.IO) {
+                    var ready = false
+                    for (retry in 1..6) {
+                        try {
+                            val checkUrl = java.net.URL("http://127.0.0.1:$clashApiPort/proxies")
+                            val conn = checkUrl.openConnection() as java.net.HttpURLConnection
+                            conn.connectTimeout = 2000
+                            conn.readTimeout = 2000
+                            if (conn.responseCode == 200) {
+                                ready = true
+                                conn.disconnect()
+                                break
+                            }
+                            conn.disconnect()
+                        } catch (e: Exception) {
+                            Log.d(tag, "ClashAPI not ready yet (attempt $retry/6): ${e.message}")
+                        }
+                        delay(1000)
+                    }
+                    ready
+                }
+
+                if (!clashReady) {
+                    _error.value = "测试引擎启动超时"
+                    return emptyList()
+                }
+                _testingLabel.value = "$labelPrefix 测试中..."
+            }
+
+            if (startedHeadless) {
+                withContext(Dispatchers.IO) {
+                    val proxiesResponse = xyz.a202132.app.network.UrlTestManager.diagnoseProxies()
+                    Log.d(tag, "ClashAPI proxies: ${proxiesResponse?.take(500)}")
+                }
+            }
+
+            Log.d(tag, "URL Testing ${nodes.size} nodes via ClashAPI (port=$clashApiPort)")
+            val results = latencyTester.urlTestAllNodes(
+                nodes = nodes,
+                clashApiPort = clashApiPort,
+                targetUrl = AppConfig.URL_TEST_URL,
+                timeoutMs = urlTestTimeoutMs.value,
+                concurrency = urlTestConcurrency.value
+            ) { completed, total ->
+                _testingLabel.value = "$labelPrefix 测试中 ($completed/$total)"
+                onProgress?.invoke(completed, total)
+            }
+            Log.d(tag, "Got ${results.size} URL test results")
+            return results
+        } finally {
+            if (startedHeadless) {
+                withContext(Dispatchers.IO) {
+                    val coreLog = xyz.a202132.app.network.UrlTestManager.readLogFile(getApplication())
+                    if (coreLog != null) {
+                        coreLog.lines().forEach { line ->
+                            Log.d("SingBoxCoreLog", line)
+                        }
+                    } else {
+                        Log.w(tag, "No sing-box core log available")
+                    }
+                }
+                xyz.a202132.app.network.UrlTestManager.stop()
+            }
+        }
+    }
+
+    private suspend fun applyUrlTestResults(results: List<LatencyTester.LatencyResult>) {
+        results.forEach { result ->
+            val updatedRows = nodeDao.updateLatency(
+                nodeId = result.nodeId,
+                latency = result.latency,
+                isAvailable = result.isAvailable,
+                testedAt = System.currentTimeMillis()
+            )
+            if (updatedRows == 0) {
+                Log.w(tag, "URL Test result not applied, node not found in DB: ${result.nodeId}")
+            }
         }
     }
 
@@ -1031,8 +1145,8 @@ observeScheduledNodeUpdates()
     private suspend fun internalTestNodes(
         currentNodes: List<Node>,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
-    ) {
-        if (currentNodes.isEmpty()) return
+    ): List<LatencyTester.LatencyResult> {
+        if (currentNodes.isEmpty()) return emptyList()
         
         Log.d(tag, "Testing ${currentNodes.size} nodes")
         
@@ -1055,6 +1169,7 @@ observeScheduledNodeUpdates()
                 testedAt = System.currentTimeMillis()
             )
         }
+        return results
     }
 
     /**
@@ -1516,6 +1631,23 @@ private suspend fun currentNodeListSnapshot(): List<Node> {
             NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
         }
         return sortNodesForList(snapshot, _filterUnavailable.value)
+    }
+
+private suspend fun currentSmartConnectNodes(): List<Node> {
+        val snapshot = when (nodeListCategory.value) {
+            NodeListCategory.PRIMARY -> nodeDao.getSubscriptionNodes().first()
+            NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
+        }
+        return sortNodesForList(snapshot, filterOut = false)
+    }
+
+private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {
+        if (nodes.isEmpty()) return emptyList()
+        val normalizedPercent = percent.coerceIn(1, 100)
+        val count = ((nodes.size.toLong() * normalizedPercent + 99L) / 100L)
+            .toInt()
+            .coerceIn(1, nodes.size)
+        return nodes.take(count)
     }
 
 private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<Node>? = null) {

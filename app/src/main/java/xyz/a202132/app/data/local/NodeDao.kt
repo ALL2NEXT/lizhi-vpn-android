@@ -66,6 +66,9 @@ interface NodeDao {
     @Query("UPDATE nodes SET latency = :latency, isAvailable = :isAvailable, lastTestedAt = :testedAt WHERE id = :nodeId")
     suspend fun updateLatency(nodeId: String, latency: Int, isAvailable: Boolean, testedAt: Long): Int
 
+    @Query("UPDATE nodes SET downloadMbps = :downloadMbps WHERE id = :nodeId")
+    suspend fun updateDownloadMbps(nodeId: String, downloadMbps: Float): Int
+
     @Query("SELECT COUNT(*) FROM nodes")
     suspend fun getNodeCount(): Int
 }

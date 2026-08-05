@@ -23,7 +23,8 @@ fun ConnectButton(
     vpnState: VpnState,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    customLabel: String? = null
+    customLabel: String? = null,
+    enabled: Boolean = true
 ) {
     val isConnecting = vpnState == VpnState.CONNECTING || vpnState == VpnState.DISCONNECTING
 
@@ -73,7 +74,7 @@ fun ConnectButton(
                 modifier = Modifier
                     .size((buttonSize * scale).dp)
                     .clickable(
-                        enabled = !isConnecting,
+                        enabled = enabled && !isConnecting,
                         indication = null,
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                     ) { onClick() }

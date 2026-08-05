@@ -63,7 +63,7 @@
 - 🔧 **三点工具菜单**：主界面右上角“三点”菜单提供 TCPing、URL Test、网速测试、节点IP信息、隐藏超时/不可用节点等功能
 - 🌐 **URL Test 测试**：通过启动临时无头 sing-box 实例进行 HTTP 握手延迟测试，无需连接 VPN 即可测试所有节点真实连通性
 - 🧩 **测试模式系统**：内置 `日常模式`（URL Test 延迟优先）与 `下载模式`（下行带宽优先，默认 10MB），支持自定义模式保存/删除
-- 🤖 **自动化测试流程**：支持配置后自动执行节点拉取、延迟测试等基础测试流程
+- 🤖 **智能连接**：依次执行 TCPing、204 URL Test 和 5MB 下载测速，按测试结果自动连接最佳节点
 - ⚡ **Cloudflare 网速测试**：集成 Cloudflare Speed Test，支持下载/上传测速，实时显示速率
 - 📡 **TCPing 测试**：直接 TCP 连接测试节点可达性和延迟
 - 🔍 **节点出口 IP 信息查询**：在三点菜单中可基于“当前选择节点”查询出口 IP 详细信息（地区、ASN、欺诈评分、是否住宅/原生IP等），无需先连接主 VPN（通过临时本地 SOCKS 代理走所选节点出口发起查询）
@@ -77,7 +77,7 @@
 - ⏳ **节流保护**：刷新、切换备用节点、检查更新等操作 5 秒内防重复触发
 - 🔔 **公告系统**：支持远程推送公告通知
 - ℹ️ **关于页面**：展示应用版本信息、开源协议、GitHub 仓库链接和免责声明
-- ⚙️ **其他配置**：侧边栏可进入“其他配置”页面，集中管理 IPv6 路由、绕过局域网、自动执行、超时时间、并发数、VPN MTU 等参数
+- ⚙️ **其他配置**：侧边栏可进入“其他配置”页面，集中管理 IPv6 路由、绕过局域网、自动执行、智能连接比例、超时时间、并发数、VPN MTU 等参数
 - 🚀 **启动画面**：可配置启动倒计时时长（支持跳过），可在 `AppConfig.kt` 中设置 `STARTUP_SPLASH_DURATION_SECONDS`
 - 💾 **记住上次选择节点**：默认开启，退出 APP 前选择的节点会在下次启动后恢复
 - 🎨 **现代 UI**：基于 Jetpack Compose，Material Design 3 风格，页面使用 NavHost + NavController 路由管理
@@ -305,7 +305,7 @@ app/src/main/java/xyz/a202132/app/
 │   ├── screens/                  # 页面（通过 NavHost + NavController 管理）
 │   │   ├── MainScreen.kt        # 主界面
 │   │   ├── RuntimeLogScreen.kt  # 运行日志页面
-│   │   ├── OtherConfigScreen.kt # 其他配置页面（网络/主题/自动执行/超时/并发/MTU）
+│   │   ├── OtherConfigScreen.kt # 其他配置页面（网络/自动执行/智能连接/超时/并发/MTU）
 │   │   ├── PerAppProxyScreen.kt # 分应用代理设置界面
 │   │   └── QrScannerScreen.kt   # 二维码扫描导入页面
 │   └── theme/                    # 主题配置
@@ -422,7 +422,7 @@ app/src/main/
 
 ### 其他配置
 
-"其他配置"页面集中管理网络开关、显示主题、自动执行、测试超时、并发数和 VPN 参数。顶部网络区（IPv6 路由、绕过局域网）点击后立即生效；其余输入型参数修改后点击"保存"生效。
+"其他配置"页面集中管理网络开关、自动执行、智能连接比例、测试超时、并发数和 VPN 参数。顶部网络区（IPv6 路由、绕过局域网）点击后立即生效；其余输入型参数修改后点击"保存"生效。
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
@@ -433,6 +433,9 @@ app/src/main/
 | 定时更新节点信息 | 关闭 | 可设置每隔 X 小时 Y 分钟自动请求节点；从上次请求节点完成后开始计时，并沿用上次使用的主/备用节点来源 |
 | 节点自动重连 | 关闭 | 定时更新后，如当前连接节点的 `server + port` 仍存在，则自动重连到新列表中的对应节点；不存在则保持原连接 |
 | 节点更新通知 | 开启 | 仅控制定时更新节点信息产生的 Toast 提示，不影响手动刷新节点提示 |
+| TCPing 节点比例 | 100% | 智能连接第一阶段候选比例，默认测试全部节点 |
+| URL Test 候选比例 | 50% | 智能连接第二阶段从 TCPing 结果中选取的比例 |
+| 5MB 测速候选比例 | 50% | 智能连接第三阶段从 URL Test 结果中选取的比例 |
 | TCPing 超时 | 3000ms | 最低 500ms |
 | URL Test 超时 | 3000ms | 最低 500ms |
 | 节点IP信息超时 | 12000ms | 最低 1000ms |
@@ -552,6 +555,9 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 - `tcpingConcurrency` — TCPing 并发数
 - `urlTestConcurrency` — URL Test 并发数
 - `bandwidthTestConcurrency` — 带宽测试并发数（1~3，默认 1）
+- `smartConnectTcpingPercent` — 智能连接第一阶段 TCPing 节点比例（1~100，默认 100）
+- `smartConnectUrlTestPercent` — 智能连接第二阶段 URL Test 候选比例（1~100，默认 50）
+- `smartConnectSpeedTestPercent` — 智能连接第三阶段 5MB 测速候选比例（1~100，默认 50）
 - `vpnMtu` — VPN MTU 值（修改后需断开重连）
 - `nodeIpInfoTestOnVpnStart` — VPN 连接后是否自动获取节点 IP 信息
 - `scheduledNodeUpdateEnabled` — 是否定时更新节点信息
