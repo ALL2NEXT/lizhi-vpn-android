@@ -297,7 +297,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (accepted) {
                     val fetchOk = fetchNodesInternal(
                         bypassThrottle = true,
-                        runUrlTest = false,
                         fetchingLabel = "请求节点中"
                     )
                     if (!fetchOk) return@collect
@@ -358,7 +357,6 @@ observeScheduledNodeUpdates()
         val fetchOk = fetchNodesInternal(
             skipBackupMode = lastSuccessfulNodeFetchUsedBackup == false,
             bypassThrottle = true,
-            runUrlTest = false,
             fetchingLabel = "定时更新节点中",
             allowBackupFallback = false,
             showToast = settings.toastEnabled
@@ -426,7 +424,6 @@ observeScheduledNodeUpdates()
     fun fetchNodes(
         skipBackupMode: Boolean = false,
         bypassThrottle: Boolean = false,
-        runUrlTest: Boolean = true,
         allowWhenTestRunning: Boolean = false,
         allowWhenFetchingInProgress: Boolean = false,
         fetchingLabel: String = "请求节点中"
@@ -435,7 +432,6 @@ observeScheduledNodeUpdates()
             fetchNodesInternal(
                 skipBackupMode = skipBackupMode,
                 bypassThrottle = bypassThrottle,
-                runUrlTest = runUrlTest,
                 allowWhenTestRunning = allowWhenTestRunning,
                 allowWhenFetchingInProgress = allowWhenFetchingInProgress,
                 fetchingLabel = fetchingLabel
@@ -446,7 +442,6 @@ observeScheduledNodeUpdates()
     private suspend fun fetchNodesInternal(
         skipBackupMode: Boolean = false,
         bypassThrottle: Boolean = false,
-        runUrlTest: Boolean = true,
         allowWhenTestRunning: Boolean = false,
         allowWhenFetchingInProgress: Boolean = false,
         fetchingLabel: String = "请求节点中",
@@ -561,7 +556,7 @@ observeScheduledNodeUpdates()
 
                 // 保存到数据库
                 nodeDao.replaceSubscriptionNodes(fetchedNodes)
-                // 缓存最新节点，供后续自动测试使用（避免 Room Flow 延迟导致测旧节点）
+                // 缓存最新节点，避免 Room Flow 延迟导致后续操作使用旧节点
                 lastFetchedNodes = fetchedNodes
                 lastSuccessfulNodeFetchUsedBackup = targetUrl != null
 
@@ -569,12 +564,6 @@ observeScheduledNodeUpdates()
                     viewModelScope.launch(Dispatchers.IO) {
                         logRawLinkEncryptionStats("after_fetch_insert")
                     }
-                }
-
-                // 自动测试延迟 (直接传入节点列表，避免等待 Flow 更新)
-                // 用户更关心连通性与真实延迟，改用 URL Test
-                if (runUrlTest) {
-                    urlTestAllNodes(fetchedNodes)
                 }
 
                 Log.d(tag, "Fetched ${fetchedNodes.size} nodes")
@@ -640,7 +629,6 @@ observeScheduledNodeUpdates()
         val fetchOk = fetchNodesInternal(
             skipBackupMode = true,
             bypassThrottle = true,
-            runUrlTest = false,
             allowWhenFetchingInProgress = true,
             fetchingLabel = "请求节点中"
         )
@@ -715,7 +703,6 @@ observeScheduledNodeUpdates()
             // 获取新的节点列表 (跳过节流检查，因为这是内部调用；测试行为跟随 APP 默认设置)
             val fetchOk = fetchNodesInternal(
                 bypassThrottle = true,
-                runUrlTest = false,
                 fetchingLabel = "请求节点中"
             )
             if (!fetchOk) return@launch
@@ -1557,7 +1544,6 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
             }
             val fetchOk = fetchNodesInternal(
                 bypassThrottle = true,
-                runUrlTest = false,
                 fetchingLabel = "请求节点中"
             )
             if (!fetchOk) return@launch

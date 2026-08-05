@@ -353,40 +353,21 @@ class SingBoxConfigGenerator {
             addProperty("type", "selector")
             addProperty("tag", "proxy")
             val outboundTags = JsonArray()
-            outboundTags.add("auto") // 添加自动选择组
             nodes.forEach { outboundTags.add(it.id) } // 添加所有节点ID
             add("outbounds", outboundTags)
             
-            // 如果只有当前选中的节点ID，且该节点存在，则默认选中它
-            // 否则默认选中 auto
-            if (selectedNodeId != null && nodes.any { it.id == selectedNodeId }) {
-                addProperty("default", selectedNodeId)
-            } else {
-                addProperty("default", "auto")
-            }
+            // 连接指定节点时默认使用该节点；没有指定节点时回退到列表第一个节点。
+            val defaultNodeId = selectedNodeId?.takeIf { id -> nodes.any { it.id == id } } ?: nodes.first().id
+            addProperty("default", defaultNodeId)
         }
         outbounds.add(selectorGroup)
         
-        // 2. URLTest Group (自动选择组)
-        val urlTestGroup = JsonObject().apply {
-            addProperty("type", "urltest")
-            addProperty("tag", "auto")
-            val outboundTags = JsonArray()
-            nodes.forEach { outboundTags.add(it.id) }
-            add("outbounds", outboundTags)
-            addProperty("url", AppConfig.URL_TEST_URL)
-            addProperty("interval", "10m") 
-            addProperty("tolerance", 50)
-            addProperty("interrupt_exist_connections", false)
-        }
-        outbounds.add(urlTestGroup)
-        
-        // 3. Individual Node Outbounds (具体节点)
+        // 2. Individual Node Outbounds (具体节点)
         nodes.forEach { node ->
             outbounds.add(createNodeOutbound(node, node.id))
         }
         
-        // 4. Other Outbounds (Direct, Block, DNS)
+        // 3. Other Outbounds (Direct, Block, DNS)
         outbounds.add(JsonObject().apply {
             addProperty("type", "direct")
             addProperty("tag", "direct")

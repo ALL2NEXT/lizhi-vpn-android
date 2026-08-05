@@ -346,7 +346,6 @@ class BoxVpnService : VpnService() {
                 
                 val options = io.nekohasekai.libbox.CommandClientOptions().apply {
                     addCommand(Libbox.CommandLog)
-                    addCommand(Libbox.CommandGroup) // 监听组变化（延迟测试结果）
                     addCommand(Libbox.CommandStatus)
                     statusInterval = 1_000_000_000L // 1秒，用于流量状态更新
                 }
@@ -363,42 +362,7 @@ class BoxVpnService : VpnService() {
                         handleSingBoxTrafficStatus(message)
                     }
                     
-                    override fun writeGroups(message: io.nekohasekai.libbox.OutboundGroupIterator?) {
-                        if (message == null) return
-                        try {
-                            // 遍历组信息，获取延迟数据
-                            while (message.hasNext()) {
-                                val group = message.next()
-                                if (group.type == "urltest" || group.type == "selector") {
-                                    // 打印当前选中的节点
-                                    Log.i(TAG, "Group ${group.tag} selected: ${group.selected}")
-                                    
-                                    val items = group.items
-                                    while (items.hasNext()) {
-                                        val item = items.next()
-                                        // item.tag 是节点ID
-                                        // item.urlTestDelay 是延迟 (ms)
-                                        
-                                        if (item.urlTestDelay > 0) {
-                                            Log.d(TAG, "Got latency for ${item.tag}: ${item.urlTestDelay}ms")
-                                            // 更新数据库 (异步)
-                                            val nodeDao = xyz.a202132.app.data.local.AppDatabase.getInstance(application).nodeDao()
-                                            serviceScope.launch {
-                                                 nodeDao.updateLatency(
-                                                    nodeId = item.tag,
-                                                    latency = item.urlTestDelay,
-                                                    isAvailable = true,
-                                                    testedAt = System.currentTimeMillis()
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error parsing groups", e)
-                        }
-                    }
+                    override fun writeGroups(message: io.nekohasekai.libbox.OutboundGroupIterator?) {}
                     
                     override fun clearLogs() {}
                     override fun setDefaultLogLevel(level: Int) {}
