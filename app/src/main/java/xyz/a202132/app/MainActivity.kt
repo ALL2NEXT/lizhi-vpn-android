@@ -70,8 +70,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val viewModel: MainViewModel = viewModel()
-            val appThemeMode by viewModel.appThemeMode.collectAsState()
-            FireflyVPNTheme(themeMode = appThemeMode) {
+            FireflyVPNTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

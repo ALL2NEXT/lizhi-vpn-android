@@ -77,9 +77,8 @@
 - ⏳ **节流保护**：刷新、切换备用节点、检查更新等操作 5 秒内防重复触发
 - 🔔 **公告系统**：支持远程推送公告通知
 - ℹ️ **关于页面**：展示应用版本信息、开源协议、GitHub 仓库链接和免责声明
-- ⚙️ **其他配置**：侧边栏可进入“其他配置”页面，集中管理 IPv6 路由、绕过局域网、夜间模式、自动执行、超时时间、并发数、VPN MTU 等参数
+- ⚙️ **其他配置**：侧边栏可进入“其他配置”页面，集中管理 IPv6 路由、绕过局域网、自动执行、超时时间、并发数、VPN MTU 等参数
 - 🚀 **启动画面**：可配置启动倒计时时长（支持跳过），可在 `AppConfig.kt` 中设置 `STARTUP_SPLASH_DURATION_SECONDS`
-- 🌙 **夜间模式**：其他配置中可选择跟随系统、浅色或深色主题
 - 💾 **记住上次选择节点**：默认开启，退出 APP 前选择的节点会在下次启动后恢复
 - 🎨 **现代 UI**：基于 Jetpack Compose，Material Design 3 风格，页面使用 NavHost + NavController 路由管理
 - 🔧 **开源可定制**：易于修改 API、品牌和配置
@@ -265,7 +264,6 @@ app/src/main/java/xyz/a202132/app/
 │   │   ├── AppDatabase.kt       # Room 数据库定义
 │   │   └── NodeDao.kt           # 节点数据访问对象
 │   ├── model/                    # 数据模型
-│   │   ├── AppThemeMode.kt       # APP 显示主题模式枚举
 │   │   ├── ApiModels.kt         # API 响应模型
 │   │   ├── Node.kt              # 节点数据模型
 │   │   ├── NodeType.kt          # 代理协议类型枚举
@@ -430,7 +428,6 @@ app/src/main/
 |--------|--------|------|
 | IPv6 路由 | 禁用 | 可选仅 / 优先 / 启用 / 禁用，位于其他配置顶部 |
 | 绕过局域网 | 开启 | 局域网流量直连，位于其他配置顶部 |
-| 夜间模式 | 跟随系统 | 可选跟随系统 / 浅色 / 深色 |
 | 记住上次选择的节点 | 开启 | 退出 APP 前选择的节点会在下次启动后恢复 |
 | VPN连接后获取IP信息 | 关闭 | 仅影响后续新的连接动作 |
 | 定时更新节点信息 | 关闭 | 可设置每隔 X 小时 Y 分钟自动请求节点；从上次请求节点完成后开始计时，并沿用上次使用的主/备用节点来源 |
@@ -564,7 +561,6 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 - `scheduledNodeUpdateToastEnabled` — 定时更新节点信息后是否显示 Toast 提示
 - `rememberLastSelectedNodeEnabled` — 是否记住上次选择的节点（默认开启）
 - `lastSelectedNodeId` — 上次选择节点 ID
-- `appThemeMode` — APP 主题模式（跟随系统 / 浅色 / 深色）
 
 > ⚠️ 当前数据库使用 SQLCipher 加密存储（version 3），并配置了 `fallbackToDestructiveMigration()`。当 Room 版本升级时，会清空本地节点数据后重建。旧版明文数据库会在升级时自动检测并删除重建。
 

@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import xyz.a202132.app.data.model.AppThemeMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.PerAppProxyMode
@@ -18,7 +17,6 @@ class SettingsRepository(private val context: Context) {
     
     companion object {
         private val SELECTED_NODE_ID = stringPreferencesKey("selected_node_id")
-        private val APP_THEME_MODE = stringPreferencesKey("app_theme_mode")
         private val PROXY_MODE = stringPreferencesKey("proxy_mode")
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
@@ -63,12 +61,6 @@ class SettingsRepository(private val context: Context) {
     
     val selectedNodeId: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[SELECTED_NODE_ID]
-    }
-
-    val appThemeMode: Flow<AppThemeMode> = context.dataStore.data.map { preferences ->
-        runCatching {
-            AppThemeMode.valueOf(preferences[APP_THEME_MODE] ?: AppThemeMode.SYSTEM.name)
-        }.getOrDefault(AppThemeMode.SYSTEM)
     }
 
     val nodeListCategory: Flow<NodeListCategory> = context.dataStore.data.map { preferences ->
@@ -132,12 +124,6 @@ class SettingsRepository(private val context: Context) {
                     preferences[LAST_SELECTED_NODE_ID] = nodeId
                 }
             }
-        }
-    }
-
-    suspend fun setAppThemeMode(mode: AppThemeMode) {
-        context.dataStore.edit { preferences ->
-            preferences[APP_THEME_MODE] = mode.name
         }
     }
 

@@ -212,7 +212,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     // 自动化测试设置
-    val appThemeMode = settingsRepository.appThemeMode.stateIn(viewModelScope, SharingStarted.Lazily, AppThemeMode.SYSTEM)
     val rememberLastSelectedNodeEnabled = settingsRepository.rememberLastSelectedNodeEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
     val nodeIpInfoTestOnVpnStart = settingsRepository.nodeIpInfoTestOnVpnStart.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val scheduledNodeUpdateEnabled = settingsRepository.scheduledNodeUpdateEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
@@ -1508,10 +1507,6 @@ fun autoSelectBestNode() {
         viewModelScope.launch {
             settingsRepository.setUserAgreementAccepted(true)
         }
-    }
-
-    fun setAppThemeMode(mode: AppThemeMode) {
-        viewModelScope.launch { settingsRepository.setAppThemeMode(mode) }
     }
 
 private suspend fun currentNodeListSnapshot(): List<Node> {

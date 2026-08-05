@@ -31,7 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import xyz.a202132.app.data.model.AppThemeMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.ui.components.AppScreenScaffold
@@ -62,11 +61,9 @@ fun OtherConfigScreen(
     val vpnMtu by viewModel.vpnMtu.collectAsState()
     val vpnState by viewModel.vpnState.collectAsState()
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsState()
-    val appThemeMode by viewModel.appThemeMode.collectAsState()
     val bypassLan by viewModel.bypassLan.collectAsState()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsState()
 
-    var appThemeModeDraft by remember(appThemeMode) { mutableStateOf(appThemeMode) }
     var rememberLastSelectedNodeDraft by remember(rememberLastSelectedNodeEnabled) { mutableStateOf(rememberLastSelectedNodeEnabled) }
     var nodeIpInfoAutoRunDraft by remember(nodeIpInfoTestOnVpnStart) { mutableStateOf(nodeIpInfoTestOnVpnStart) }
     var scheduledNodeUpdateEnabledDraft by remember(scheduledNodeUpdateEnabled) { mutableStateOf(scheduledNodeUpdateEnabled) }
@@ -84,7 +81,6 @@ fun OtherConfigScreen(
     var mtuInput by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
 
     LaunchedEffect(
-        appThemeMode,
         rememberLastSelectedNodeEnabled,
         nodeIpInfoTestOnVpnStart,
         scheduledNodeUpdateEnabled,
@@ -101,7 +97,6 @@ fun OtherConfigScreen(
         bandwidthTestConcurrency,
         vpnMtu
     ) {
-        appThemeModeDraft = appThemeMode
         rememberLastSelectedNodeDraft = rememberLastSelectedNodeEnabled
         nodeIpInfoAutoRunDraft = nodeIpInfoTestOnVpnStart
         scheduledNodeUpdateEnabledDraft = scheduledNodeUpdateEnabled
@@ -139,7 +134,6 @@ fun OtherConfigScreen(
                     } else {
                         rawScheduledMinutes
                     }
-                    viewModel.setAppThemeMode(appThemeModeDraft)
                     viewModel.setRememberLastSelectedNodeEnabled(rememberLastSelectedNodeDraft)
                     viewModel.setNodeIpInfoTestOnVpnStart(nodeIpInfoAutoRunDraft)
                     viewModel.setScheduledNodeUpdateSettings(
@@ -230,32 +224,6 @@ fun OtherConfigScreen(
                         checked = bypassLan,
                         onCheckedChange = { viewModel.setBypassLan(it) },
                         colors = visibleSwitchColors()
-                    )
-                }
-            }
-
-            OtherConfigSection(
-                title = "\u591c\u95f4\u6a21\u5f0f",
-                description = ""
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = appThemeModeDraft == AppThemeMode.SYSTEM,
-                        onClick = { appThemeModeDraft = AppThemeMode.SYSTEM },
-                        label = { Text("\u8ddf\u968f\u7cfb\u7edf") }
-                    )
-                    FilterChip(
-                        selected = appThemeModeDraft == AppThemeMode.LIGHT,
-                        onClick = { appThemeModeDraft = AppThemeMode.LIGHT },
-                        label = { Text("\u6d45\u8272") }
-                    )
-                    FilterChip(
-                        selected = appThemeModeDraft == AppThemeMode.DARK,
-                        onClick = { appThemeModeDraft = AppThemeMode.DARK },
-                        label = { Text("\u6df1\u8272") }
                     )
                 }
             }
