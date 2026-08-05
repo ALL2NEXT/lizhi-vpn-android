@@ -63,7 +63,6 @@
 
 - 🔧 **三点工具菜单**：主界面右上角“三点”菜单提供 TCPing、URL Test、网速测试、流媒体解锁测试、节点IP信息、隐藏超时/不可用节点、网络工具箱等功能
 - 🌐 **URL Test 测试**：通过启动临时无头 sing-box 实例进行 HTTP 握手延迟测试，无需连接 VPN 即可测试所有节点真实连通性
-- 🧠 **择优面板（全屏横屏）**：升级版自动化测试入口，支持横屏沉浸式配置、更多参数同屏展示、模式化测试与一键择优
 - 🧩 **测试模式系统**：内置 `日常模式`（URL Test 延迟优先）与 `下载模式`（下行带宽优先，默认 10MB），支持自定义模式保存/删除
 - 🤖 **自动化测试流程**：支持配置后自动执行“拉节点 → 延迟测试 → 延迟筛选 → 带宽测试 → 带宽筛选 → 解锁测试”，并弹出结果总览与节点详情
 - 🎯 **智能择优规则**：支持延迟优先 / 上行优先 / 下行优先 / 解锁情况优先（解锁数或指定网站多选优先）
@@ -72,7 +71,6 @@
 - 📡 **TCPing 测试**：直接 TCP 连接测试节点可达性和延迟
 - 🔍 **节点出口 IP 信息查询**：在三点菜单中可基于“当前选择节点”查询出口 IP 详细信息（地区、ASN、欺诈评分、是否住宅/原生IP等），无需先连接主 VPN（通过临时本地 SOCKS 代理走所选节点出口发起查询）
 - 🗑️ **清理不合格节点**：一键隐藏超时/不可用/不达标节点（UI 过滤，不删除数据库数据）
-- 📂 **按节点来源测试**：TCPing、URL Test、流媒体测试、网速测试和择优面板会按当前选择的主/备用节点或收藏节点执行
 - 🧾 **运行日志**：侧边栏可查看、刷新、分享、清空 APP 内部运行日志；日志仅记录脱敏后的关键 Info / Warn / Error，不导出节点链接和配置内容
 - 🛠️ **网络工具箱**：内置 10 种常用网络检测工具（出口检测、IP查询、WebRTC泄漏、DNS泄漏、速度测试等），一键跳转浏览器使用
 
@@ -307,14 +305,12 @@ app/src/main/java/xyz/a202132/app/
 │   │   ├── AppScreenScaffold.kt # 通用页面脚手架（统一 TopAppBar + 返回键）
 │   │   ├── ConnectButton.kt     # 连接按钮
 │   │   ├── DrawerContent.kt     # 侧边栏内容
-│   │   ├── TestPreferPanelDialog.kt # 择优面板（全屏横屏）
 │   │   ├── NodeListDialog.kt    # 节点列表页面（文件名沿用旧命名，主入口已改为 NodeListScreen）
 │   │   ├── NodeSelector.kt      # 节点选择器
 │   │   ├── StartupSplashOverlay.kt  # 启动画面覆盖层（可配置倒计时）
 │   │   └── TrafficStatsRow.kt   # 流量统计展示
 │   ├── dialogs/                  # 对话框
 │   │   ├── AboutDialog.kt       # 关于页面弹窗
-│   │   ├── AutoTestResultDialog.kt  # 自动化测试结果与详情弹窗
 │   │   ├── Dialogs.kt           # 通用对话框（公告、更新等）
 │   │   ├── NetworkToolboxDialog.kt  # 网络工具箱页面（文件名沿用旧命名，主入口已改为 NetworkToolboxScreen）
 │   │   ├── NodeIpInfoDialog.kt      # 节点出口 IP 信息弹窗
@@ -345,7 +341,6 @@ app/src/main/java/xyz/a202132/app/
 │   ├── SingBoxConfigGenerator.kt # sing-box 配置生成器
 │   └── UnlockTestsRunner.kt      # UnlockTests 二进制执行器
 └── viewmodel/
-    ├── AutoTestState.kt          # 自动化测试状态模型
     ├── GlobalTestExecution.kt    # 全局测试互斥锁
     ├── MainViewModel.kt          # 主界面 ViewModel
     ├── PerAppProxyViewModel.kt   # 分应用代理 ViewModel
@@ -454,50 +449,6 @@ const val NETWORK_TOOLS_JSON = """
 ```
 
 支持的图标标识：`outbound`、`ip`、`webrtc`、`dns`、`check`、`precision`、`location`、`disguise`、`bgp`、`speed`
-
----
-
-### 择优面板（兼容自动化测试） 🚀
-
-“择优面板”是在原自动化测试基础上的增强入口，适合需要频繁调整筛选条件、快速换策略的场景。面板为**全屏横屏沉浸式**，参数更多、视野更大，调起来更顺手 ✨
-
-**核心能力**：
-
-- 🧩 **测试模式**：支持保存/删除当前面板配置，内置 `日常模式`、`下载模式`
-- 🎛️ **模式化执行**：首页中间按钮可先选模式，再执行测试并自动连接最优节点
-- 🔄 **启动自动执行**：开启后会执行“当前模式”测试（并 Toast 提示当前模式名）
-- 🗑️ **移除未达标**：快速隐藏不可用/超时/筛选失败节点（UI 过滤）
-- 🎯 **自动连接最优**：按当前模式的默认择优规则一键连接
-
-**自动化测试链路（按启用项执行）**：
-
-1. 拉取节点
-2. 延迟测试（可选TCPing或URL Test）
-3. 按延迟阈值筛选（可选）
-4. 逐节点带宽测试（下载/上传，支持下载测试流量大小 1/10/25/50MB）
-5. 按带宽阈值筛选（可选）
-6. 逐节点流媒体解锁测试（UnlockTests，可选）
-7. 弹出“自动化测试结果”弹窗（支持关键词搜索、节点详情、自动连接最优、手动选择节点连接）
-
-**择优规则（模式默认规则 + 手动选择）**：
-
-- `延迟优先`：延迟越低越优（仅在当前模式启用了延迟测试且已有对应结果时生效）
-- `上行优先`：上传越高越优（仅在启用了上传测速且有结果时生效）
-- `下行优先`：下载越高越优（仅在启用了下载测速且有结果时生效）
-- `解锁情况优先`：支持两种子策略（仅在启用了解锁测试且有结果时生效）
-  - `按解锁数`：按总解锁数量排序
-  - `按指定网站（多选）`：按目标网站命中数优先，适合只关心少数站点的场景
-
-> 💡 当你只“保存了规则”但还没做对应测试时，APP 会提示先测试，不会拿无关历史数据“乱选节点”。
-
-**解锁优先（按指定网站）预设站点**
-
-预设站点来自 UnlockTests 实测输出整理（如 `ChatGPT`、`Claude`、`Gemini`、`Netflix`、`Disney+`、`TikTok`、`YouTube Region`、`Amazon Prime Video`、`MetaAI`、`SonyLiv` 等），统一维护在 `AppConfig.kt` 的 `UNLOCK_PRIORITY_PRESET_SITES` 中，方便后续扩展。
-
-**入口位置**：
-
-- 侧边栏 → `择优面板`
-- 首页中间按钮（弹模式选择后执行）
 
 ---
 
@@ -671,38 +622,20 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 
 ### 数据模型与本地存储变更
 
-`Node` 模型新增了自动化测试相关字段：
+`Node` 模型保留了节点测速结果字段；其中历史自动化测试字段仅用于兼容已有本地数据库：
 
 - `downloadMbps`：下载带宽（Mbps）
 - `uploadMbps`：上传带宽（Mbps，预留）
 - `unlockSummary`：流媒体测试结果（可展示全量关键结果）
 - `unlockPassed`：解锁筛选是否通过
-- `autoTestStatus`：自动化阶段状态（如 `LATENCY_PASSED` / `BANDWIDTH_FILTERED` / `UNLOCK_PASSED`）
-- `autoTestedAt`：自动化测试时间戳
+- `autoTestStatus`：历史自动化测试状态（兼容字段）
+- `autoTestedAt`：历史自动化测试时间戳（兼容字段）
 - `source`：节点来源（`SUBSCRIPTION` / `FAVORITE`）
 - `favoriteSourceNodeId`：从订阅节点收藏而来的来源节点 ID
 - `favoriteCreatedAt`：收藏节点创建时间，用于收藏列表排序
 
-`SettingsRepository` 自动化测试配置项：
+`SettingsRepository` 启动测试配置项：
 
-- `autoTestEnabled`
-- `autoTestFilterUnavailable`
-- `autoTestLatencyEnabled`
-- `autoTestLatencyMode`（URL Test / TCPing）
-- `autoTestLatencyThresholdMs`
-- `autoTestBandwidthEnabled`
-- `autoTestBandwidthDownloadEnabled`
-- `autoTestBandwidthUploadEnabled`
-- `autoTestBandwidthDownloadThresholdMbps`
-- `autoTestBandwidthUploadThresholdMbps`
-- `autoTestBandwidthWifiOnly`
-- `autoTestBandwidthDownloadSizeMb`
-- `autoTestBandwidthUploadSizeMb`
-- `autoTestUnlockEnabled`
-- `autoTestByRegion`
-- `autoTestNodeLimit`
-- `preferTestModes`（测试偏好模式列表，JSON）
-- `preferTestSelectedModeId`
 - `startupDefaultTestMode`
 - `startupDefaultTestChoiceDone`
 - `nodeListCategory`（当前节点列表视图：主/备用节点或收藏节点）
@@ -1339,7 +1272,7 @@ target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 ### 节点来源与核心配置校验
 
 - 主/备用节点与收藏节点按 `NodeSource` 独立存储，收藏节点不会被订阅刷新覆盖
-- 节点列表当前视图由 `nodeListCategory` 记录，三点菜单测试、择优面板和 VPN 启动都会按当前来源取节点
+- 节点列表当前视图由 `nodeListCategory` 记录，三点菜单测试和 VPN 启动都会按当前来源取节点
 - 收藏导入时会先做解析、去重和 sing-box 单节点配置校验；不兼容核心的节点会被跳过
 - VPN 启动/重启前会再次按当前来源过滤核心不支持的节点，并对最终完整配置执行 `Libbox.checkConfig()`
 - 若当前选中的节点不被核心支持，APP 会提示错误并停止启动，不会自动切换到其他节点
@@ -1379,13 +1312,6 @@ target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 | `UPDATE_REQUEST_TIMEOUT_MS` | 25000 | 更新请求超时（毫秒） |
 | `URL_TEST_RETRY_COUNT` | 1 | URL Test 重试次数（仅 503/504/异常） |
 | `NODE_IP_INFO_RETRY_COUNT` | 1 | 节点 IP 信息重试次数（仅超时/网络异常/服务端错误） |
-
----
-
-### 择优面板补充
-
-- 自动化测试结果使用快照（`autoTestResultSnapshot`），避免后续刷新节点导致结果视图被"旧/新数据混合"污染
-- "自动连接最优"按快照和当前优选规则执行（延迟优先/下行优先/解锁优先）
 
 ---
 

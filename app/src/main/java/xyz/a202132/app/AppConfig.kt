@@ -19,12 +19,6 @@ data class SpeedTestSize(
     val bytes: Long
 )
 
-data class UnlockPrioritySite(
-    val id: String,
-    val label: String,
-    val keywords: List<String>
-)
-
 /**
  * 应用配置常量
  */
@@ -158,34 +152,4 @@ object AppConfig {
         return sizes
     }
 
-    // 流媒体解锁大概测试的网站名（不懂的话不要改）
-    val UNLOCK_PRIORITY_PRESET_SITES: List<UnlockPrioritySite> = listOf(
-        UnlockPrioritySite("apple", "Apple", listOf("Apple")),
-        UnlockPrioritySite("bing_search", "BingSearch", listOf("BingSearch")),
-        UnlockPrioritySite("claude", "Claude", listOf("Claude")),
-        UnlockPrioritySite("dazn", "Dazn", listOf("Dazn", "DAZN")),
-        UnlockPrioritySite("disney_plus", "Disney+", listOf("Disney+")),
-        UnlockPrioritySite("gemini", "Gemini", listOf("Gemini")),
-        UnlockPrioritySite("google_search", "GoogleSearch", listOf("GoogleSearch")),
-        UnlockPrioritySite("google_play_store", "Google Play Store", listOf("Google Play Store")),
-        UnlockPrioritySite("iqiyi", "IQiYi", listOf("IQiYi")),
-        UnlockPrioritySite("instagram_audio", "Instagram Licensed Audio", listOf("Instagram Licensed Audio")),
-        UnlockPrioritySite("kocowa", "KOCOWA", listOf("KOCOWA")),
-        UnlockPrioritySite("meta_ai", "MetaAI", listOf("MetaAI")),
-        UnlockPrioritySite("netflix", "Netflix", listOf("Netflix", "Netflix CDN")),
-        UnlockPrioritySite("onetrust", "OneTrust", listOf("OneTrust")),
-        UnlockPrioritySite("chatgpt", "ChatGPT", listOf("ChatGPT", "OpenAI")),
-        UnlockPrioritySite("paramount_plus", "Paramount+", listOf("Paramount+")),
-        UnlockPrioritySite("prime_video", "Amazon Prime Video", listOf("Amazon Prime Video", "Prime")),
-        UnlockPrioritySite("reddit", "Reddit", listOf("Reddit")),
-        UnlockPrioritySite("sony_liv", "SonyLiv", listOf("SonyLiv")),
-        UnlockPrioritySite("sora", "Sora", listOf("Sora")),
-        UnlockPrioritySite("spotify", "Spotify Registration", listOf("Spotify Registration", "Spotify")),
-        UnlockPrioritySite("steam_store", "Steam Store", listOf("Steam Store", "Steam")),
-        UnlockPrioritySite("tvbanywhere", "TVBAnywhere+", listOf("TVBAnywhere+", "TVB")),
-        UnlockPrioritySite("tiktok", "TikTok", listOf("TikTok")),
-        UnlockPrioritySite("viu", "Viu.com", listOf("Viu.com")),
-        UnlockPrioritySite("wikipedia_edit", "Wikipedia Editability", listOf("Wikipedia Editability")),
-        UnlockPrioritySite("youtube", "YouTube Region", listOf("YouTube Region", "YouTube CDN", "YouTube"))
-    )
 }

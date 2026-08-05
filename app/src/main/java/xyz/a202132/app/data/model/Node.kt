@@ -118,7 +118,6 @@ data class Node(
         return when {
             latency == -1 -> "未测试"
             latency == -2 -> "超时"
-            !isAvailable && autoTestStatus.contains("FILTERED", ignoreCase = true) -> "不达标"
             !isAvailable -> "不可用"
             else -> "${latency}ms"
         }
