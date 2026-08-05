@@ -274,13 +274,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_CONCURRENCY)
     val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, 1)
     val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.VPN_MTU)
-    val lanProxyEnabled = settingsRepository.lanProxyEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
-    val lanProxyAutoPort = settingsRepository.lanProxyAutoPort.stateIn(viewModelScope, SharingStarted.Lazily, true)
-    val lanProxyPort = settingsRepository.lanProxyPort.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.LAN_PROXY_DEFAULT_PORT)
-    val lanProxyAuthEnabled = settingsRepository.lanProxyAuthEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
-    val lanProxyUsername = settingsRepository.lanProxyUsername.stateIn(viewModelScope, SharingStarted.Lazily, "firefly")
-    val lanProxyPassword = settingsRepository.lanProxyPassword.stateIn(viewModelScope, SharingStarted.Lazily, "firefly")
-    
     val vpnState = ServiceManager.vpnState
     
     // 流量统计
@@ -1351,28 +1344,6 @@ fun autoSelectBestNode() {
         viewModelScope.launch {
             settingsRepository.setIPv6RoutingMode(mode)
             // 如果 VPN 正在运行，重启以应用新设置
-            restartVpnIfNeeded()
-        }
-    }
-
-    /**
-     * 检查通知公告
-     */
-    fun saveLanProxySettings(
-        enabled: Boolean,
-        autoPort: Boolean,
-        port: Int,
-        authEnabled: Boolean,
-        username: String,
-        password: String
-    ) {
-        viewModelScope.launch {
-            settingsRepository.setLanProxyEnabled(enabled)
-            settingsRepository.setLanProxyAutoPort(autoPort)
-            settingsRepository.setLanProxyPort(port)
-            settingsRepository.setLanProxyAuthEnabled(authEnabled)
-            settingsRepository.setLanProxyUsername(username)
-            settingsRepository.setLanProxyPassword(password)
             restartVpnIfNeeded()
         }
     }

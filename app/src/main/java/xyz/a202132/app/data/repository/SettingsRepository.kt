@@ -62,12 +62,6 @@ class SettingsRepository(private val context: Context) {
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
         private val VPN_MTU = intPreferencesKey("vpn_mtu")
 
-        private val LAN_PROXY_ENABLED = booleanPreferencesKey("lan_proxy_enabled")
-        private val LAN_PROXY_AUTO_PORT = booleanPreferencesKey("lan_proxy_auto_port")
-        private val LAN_PROXY_PORT = intPreferencesKey("lan_proxy_port")
-        private val LAN_PROXY_AUTH_ENABLED = booleanPreferencesKey("lan_proxy_auth_enabled")
-        private val LAN_PROXY_USERNAME = stringPreferencesKey("lan_proxy_username")
-        private val LAN_PROXY_PASSWORD = stringPreferencesKey("lan_proxy_password")
     }
     
     val selectedNodeId: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -253,70 +247,6 @@ class SettingsRepository(private val context: Context) {
             } else {
                 preferences[BACKUP_NODE_URL] = url
             }
-        }
-    }
-
-    val lanProxyEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[LAN_PROXY_ENABLED] ?: false
-    }
-
-    suspend fun setLanProxyEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[LAN_PROXY_ENABLED] = enabled
-        }
-    }
-
-    val lanProxyAutoPort: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[LAN_PROXY_AUTO_PORT] ?: true
-    }
-
-    suspend fun setLanProxyAutoPort(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[LAN_PROXY_AUTO_PORT] = enabled
-        }
-    }
-
-    val lanProxyPort: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[LAN_PROXY_PORT] ?: xyz.a202132.app.AppConfig.LAN_PROXY_DEFAULT_PORT)
-            .coerceIn(xyz.a202132.app.AppConfig.LAN_PROXY_MIN_PORT, xyz.a202132.app.AppConfig.LAN_PROXY_MAX_PORT)
-    }
-
-    suspend fun setLanProxyPort(port: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[LAN_PROXY_PORT] = port.coerceIn(
-                xyz.a202132.app.AppConfig.LAN_PROXY_MIN_PORT,
-                xyz.a202132.app.AppConfig.LAN_PROXY_MAX_PORT
-            )
-        }
-    }
-
-    val lanProxyAuthEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[LAN_PROXY_AUTH_ENABLED] ?: false
-    }
-
-    suspend fun setLanProxyAuthEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[LAN_PROXY_AUTH_ENABLED] = enabled
-        }
-    }
-
-    val lanProxyUsername: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[LAN_PROXY_USERNAME]?.takeIf { it.isNotBlank() } ?: "firefly"
-    }
-
-    suspend fun setLanProxyUsername(username: String) {
-        context.dataStore.edit { preferences ->
-            preferences[LAN_PROXY_USERNAME] = username.trim().ifBlank { "firefly" }
-        }
-    }
-
-    val lanProxyPassword: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[LAN_PROXY_PASSWORD]?.takeIf { it.isNotBlank() } ?: "firefly"
-    }
-
-    suspend fun setLanProxyPassword(password: String) {
-        context.dataStore.edit { preferences ->
-            preferences[LAN_PROXY_PASSWORD] = password.trim().ifBlank { "firefly" }
         }
     }
 

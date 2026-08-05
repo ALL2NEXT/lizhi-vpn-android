@@ -13,15 +13,6 @@ import xyz.a202132.app.data.model.IPv6RoutingMode
 import android.net.Uri
 import android.util.Base64
 
-data class LanProxyConfig(
-    val enabled: Boolean = false,
-    val port: Int = AppConfig.LAN_PROXY_DEFAULT_PORT,
-    val socksPort: Int = AppConfig.LAN_PROXY_DEFAULT_PORT + 1,
-    val authEnabled: Boolean = false,
-    val username: String = "firefly",
-    val password: String = "firefly"
-)
-
 /**
  * sing-box 配置生成器
  */
@@ -43,7 +34,6 @@ class SingBoxConfigGenerator {
         bypassLan: Boolean = true,
         ipv6Mode: IPv6RoutingMode = IPv6RoutingMode.DISABLED,
         mtu: Int = AppConfig.VPN_MTU,
-        lanProxy: LanProxyConfig = LanProxyConfig(),
         internalSocksPort: Int? = null
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
@@ -63,7 +53,7 @@ class SingBoxConfigGenerator {
                 
             add("log", createLogConfig())
             add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode))
-            add("inbounds", createInbounds(ipv6Mode, mtu, lanProxy, internalSocksPort))
+            add("inbounds", createInbounds(ipv6Mode, mtu, internalSocksPort))
             add("outbounds", createOutbounds(nodes, selectedNodeId))
             add("route", createRoute(proxyMode, nodeDomains, nodeIPs, bypassLan))
             add("experimental", createExperimental())
@@ -79,7 +69,6 @@ class SingBoxConfigGenerator {
                 createInbounds(
                     IPv6RoutingMode.DISABLED,
                     AppConfig.VPN_MTU,
-                    LanProxyConfig(),
                     null
                 )
             )
@@ -305,7 +294,6 @@ class SingBoxConfigGenerator {
     private fun createInbounds(
         ipv6Mode: IPv6RoutingMode,
         mtu: Int,
-        lanProxy: LanProxyConfig,
         internalSocksPort: Int?
     ): JsonArray {
         return JsonArray().apply {
@@ -343,11 +331,6 @@ class SingBoxConfigGenerator {
                 addProperty("sniff_override_destination", true)
             })
 
-            if (lanProxy.enabled) {
-                add(createLanProxyInbound("http", "lan-http-in", lanProxy.port, lanProxy))
-                add(createLanProxyInbound("socks", "lan-socks-in", lanProxy.socksPort, lanProxy))
-            }
-
             // 本应用被排除在 Android VPN TUN 之外。提供一个仅监听回环地址的
             // SOCKS 入站，让“当前已连接节点”的测速流量进入同一个 sing-box
             // 实例，从而由核心 TrafficManager 准确统计，且不会暴露到局域网。
@@ -357,34 +340,6 @@ class SingBoxConfigGenerator {
                     addProperty("tag", "internal-socks-in")
                     addProperty("listen", "127.0.0.1")
                     addProperty("listen_port", port)
-                })
-            }
-        }
-    }
-
-    private fun createLanProxyInbound(
-        type: String,
-        tag: String,
-        port: Int,
-        lanProxy: LanProxyConfig
-    ): JsonObject {
-        return JsonObject().apply {
-            addProperty("type", type)
-            addProperty("tag", tag)
-            addProperty("listen", "0.0.0.0")
-            addProperty(
-                "listen_port",
-                port.coerceIn(AppConfig.LAN_PROXY_MIN_PORT, AppConfig.LAN_PROXY_MAX_PORT)
-            )
-            if (type == "http") {
-                addProperty("set_system_proxy", false)
-            }
-            if (lanProxy.authEnabled) {
-                add("users", JsonArray().apply {
-                    add(JsonObject().apply {
-                        addProperty("username", lanProxy.username.ifBlank { "firefly" })
-                        addProperty("password", lanProxy.password.ifBlank { "firefly" })
-                    })
                 })
             }
         }

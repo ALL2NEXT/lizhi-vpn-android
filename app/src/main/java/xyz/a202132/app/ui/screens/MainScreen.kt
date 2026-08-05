@@ -36,7 +36,6 @@ fun MainScreen(
     onOpenPerAppProxy: () -> Unit = {},
     onOpenNodeList: () -> Unit = {},
     onOpenOtherConfig: () -> Unit = {},
-    onOpenLanProxy: () -> Unit = {},
     onOpenRuntimeLog: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -124,7 +123,6 @@ fun MainScreen(
                     onCheckUpdate = { viewModel.checkUpdate() },
                     onOpenPerAppProxy = onOpenPerAppProxy,
                     onOpenOtherConfig = onOpenOtherConfig,
-                    onOpenLanProxy = onOpenLanProxy,
                     onOpenRuntimeLog = onOpenRuntimeLog,
                     notice = noticeConfig, // Use noticeConfig for Drawer (Backup Node visibility)
                     backupNodeEnabled = backupNodeEnabled,

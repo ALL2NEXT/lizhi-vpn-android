@@ -41,7 +41,6 @@ fun DrawerContent(
     onCheckUpdate: () -> Unit,
     onOpenPerAppProxy: () -> Unit,
     onOpenOtherConfig: () -> Unit,
-    onOpenLanProxy: () -> Unit,
     onOpenRuntimeLog: () -> Unit,
     notice: xyz.a202132.app.data.model.NoticeInfo?,
     backupNodeEnabled: Boolean,
@@ -128,16 +127,6 @@ fun DrawerContent(
                 subtitle = "选择代理应用",
                 onClick = {
                     onOpenPerAppProxy()
-                    onClose()
-                }
-            )
-
-            DrawerMenuItem(
-                icon = Icons.Outlined.WifiTethering,
-                title = "局域网代理",
-                subtitle = "代理其他设备",
-                onClick = {
-                    onOpenLanProxy()
                     onClose()
                 }
             )

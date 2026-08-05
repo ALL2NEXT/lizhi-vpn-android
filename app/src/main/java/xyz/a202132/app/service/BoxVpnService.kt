@@ -20,12 +20,10 @@ import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.repository.SettingsRepository
-import xyz.a202132.app.util.LanProxyConfig
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.RuleManager
 import xyz.a202132.app.util.RuntimeLog
 import java.io.File
-import java.net.InetSocketAddress
 import java.net.ServerSocket
 import kotlinx.coroutines.flow.first
 
@@ -69,8 +67,6 @@ class BoxVpnService : VpnService() {
 
         // 静态引用方便外部调用 (注意内存泄漏风险，但在单进程VPN服务中通常可控，或者在onDestroy置空)
         private var instance: BoxVpnService? = null
-        @Volatile private var currentLanProxyHttpPort: Int? = null
-        @Volatile private var currentLanProxySocksPort: Int? = null
         @Volatile private var currentInternalSocksPort: Int? = null
         
         fun selectNode(nodeId: String) {
@@ -140,8 +136,7 @@ class BoxVpnService : VpnService() {
         RuntimeLog.info(TAG, "VPN start requested")
         
         serviceScope.launch {
-            val keepLanProxyPort = isRunning
-            if (keepLanProxyPort) {
+            if (isRunning) {
                 Log.w(TAG, "VPN is already running, stopping first")
                 RuntimeLog.warn(TAG, "VPN was already running; stopping previous instance first")
                 stopVpnInternal()
@@ -213,10 +208,9 @@ class BoxVpnService : VpnService() {
                 } catch (e: Exception) {
                     AppConfig.VPN_MTU
                 }
-                val lanProxy = readLanProxyConfig(settingsRepo, keepConfiguredPort = keepLanProxyPort)
-                val internalSocksPort = pickFreeInternalSocksPort(lanProxy)
+                val internalSocksPort = pickFreeInternalSocksPort()
                 
-                Log.d(TAG, "Generating config with ${allNodes.size} nodes, selected: $selectedNodeId, bypassLan: $bypassLan, ipv6Mode: $ipv6Mode, mtu: $vpnMtu, lanProxy: ${lanProxy.enabled}:http=${lanProxy.port},socks=${lanProxy.socksPort}, internalSocks=$internalSocksPort")
+                Log.d(TAG, "Generating config with ${allNodes.size} nodes, selected: $selectedNodeId, bypassLan: $bypassLan, ipv6Mode: $ipv6Mode, mtu: $vpnMtu, internalSocks=$internalSocksPort")
 
                 // 3. 确保规则集文件存在（从 assets 拷贝兜底）
                 RuleManager.ensureRuleSets(application)
@@ -229,7 +223,6 @@ class BoxVpnService : VpnService() {
                     bypassLan,
                     ipv6Mode,
                     vpnMtu,
-                    lanProxy,
                     internalSocksPort
                 )
                 Libbox.checkConfig(config)
@@ -857,8 +850,7 @@ class BoxVpnService : VpnService() {
                     } catch (e: Exception) {
                         AppConfig.VPN_MTU
                     }
-                    val lanProxy = readLanProxyConfig(settingsRepo, keepConfiguredPort = true)
-                    val internalSocksPort = pickFreeInternalSocksPort(lanProxy)
+                    val internalSocksPort = pickFreeInternalSocksPort()
 
                     // 获取选中的节点
                     val selectedNodeId = try {
@@ -898,7 +890,6 @@ class BoxVpnService : VpnService() {
                         bypassLan,
                         ipv6Mode,
                         vpnMtu,
-                        lanProxy,
                         internalSocksPort
                     )
                     Libbox.checkConfig(config)
@@ -911,90 +902,8 @@ class BoxVpnService : VpnService() {
         }
     }
 
-    private fun pickFreeInternalSocksPort(lanProxy: LanProxyConfig): Int {
-        repeat(20) {
-            val port = ServerSocket(0).use { it.localPort }
-            val conflictsWithLanProxy = lanProxy.enabled &&
-                (port == lanProxy.port || port == lanProxy.socksPort)
-            if (!conflictsWithLanProxy) {
-                return port
-            }
-        }
-        throw IllegalStateException("无法分配内部测速代理端口")
-    }
-
-    private suspend fun readLanProxyConfig(
-        settingsRepo: SettingsRepository,
-        keepConfiguredPort: Boolean = false
-    ): LanProxyConfig {
-        val enabled = runCatching { settingsRepo.lanProxyEnabled.first() }.getOrDefault(false)
-        if (!enabled) {
-            currentLanProxyHttpPort = null
-            currentLanProxySocksPort = null
-            return LanProxyConfig()
-        }
-
-        val configuredPort = runCatching { settingsRepo.lanProxyPort.first() }
-            .getOrDefault(AppConfig.LAN_PROXY_DEFAULT_PORT)
-            .coerceIn(AppConfig.LAN_PROXY_MIN_PORT, AppConfig.LAN_PROXY_MAX_PORT)
-        val autoPort = runCatching { settingsRepo.lanProxyAutoPort.first() }.getOrDefault(true)
-        val configuredSocksPort = lanProxySocksPortFor(configuredPort)
-        val keepExistingPorts = keepConfiguredPort &&
-            currentLanProxyHttpPort == configuredPort &&
-            currentLanProxySocksPort == configuredSocksPort
-        val actualPort = if (autoPort && !keepExistingPorts && !canBindLanProxyPorts(configuredPort)) {
-            findAvailableLanProxyPort(configuredPort)
-        } else {
-            configuredPort
-        }
-        if (autoPort && actualPort != configuredPort) {
-            runCatching { settingsRepo.setLanProxyPort(actualPort) }
-        }
-        val socksPort = lanProxySocksPortFor(actualPort)
-        currentLanProxyHttpPort = actualPort
-        currentLanProxySocksPort = socksPort
-
-        return LanProxyConfig(
-            enabled = true,
-            port = actualPort,
-            socksPort = socksPort,
-            authEnabled = runCatching { settingsRepo.lanProxyAuthEnabled.first() }.getOrDefault(false),
-            username = runCatching { settingsRepo.lanProxyUsername.first() }.getOrDefault("firefly"),
-            password = runCatching { settingsRepo.lanProxyPassword.first() }.getOrDefault("firefly")
-        )
-    }
-
-    private fun findAvailableLanProxyPort(startPort: Int): Int {
-        val start = startPort.coerceIn(AppConfig.LAN_PROXY_MIN_PORT, AppConfig.LAN_PROXY_MAX_PORT)
-        for (port in start..AppConfig.LAN_PROXY_MAX_PORT) {
-            if (canBindLanProxyPorts(port)) return port
-        }
-        for (port in AppConfig.LAN_PROXY_MIN_PORT until start) {
-            if (canBindLanProxyPorts(port)) return port
-        }
-        return start
-    }
-
-    private fun canBindLanProxyPorts(httpPort: Int): Boolean {
-        val socksPort = lanProxySocksPortFor(httpPort)
-        return httpPort != socksPort && canBindPort(httpPort) && canBindPort(socksPort)
-    }
-
-    private fun lanProxySocksPortFor(httpPort: Int): Int {
-        return if (httpPort < AppConfig.LAN_PROXY_MAX_PORT) {
-            httpPort + 1
-        } else {
-            AppConfig.LAN_PROXY_MIN_PORT
-        }
-    }
-
-    private fun canBindPort(port: Int): Boolean {
-        return runCatching {
-            ServerSocket().use { socket ->
-                socket.reuseAddress = false
-                socket.bind(InetSocketAddress("0.0.0.0", port))
-            }
-        }.isSuccess
+    private fun pickFreeInternalSocksPort(): Int {
+        return ServerSocket(0).use { it.localPort }
     }
     
     private fun cleanupResources() {

@@ -5,7 +5,6 @@ object AppRoute {
     const val PER_APP_PROXY = "per_app_proxy"
     const val NODE_LIST = "node_list"
     const val OTHER_CONFIG = "other_config"
-    const val LAN_PROXY = "lan_proxy"
     const val QR_SCANNER = "qr_scanner"
     const val RUNTIME_LOG = "runtime_log"
 }
