@@ -11,7 +11,6 @@ import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.PerAppProxyMode
 import xyz.a202132.app.data.model.ProxyMode
-import xyz.a202132.app.viewmodel.StartupDefaultTestMode
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -42,8 +41,6 @@ class SettingsRepository(private val context: Context) {
         private val BACKUP_NODE_URL = stringPreferencesKey("backup_node_url")
 
         // 自动化测试设置
-        private val STARTUP_DEFAULT_TEST_MODE = stringPreferencesKey("startup_default_test_mode")
-        private val STARTUP_DEFAULT_TEST_CHOICE_DONE = booleanPreferencesKey("startup_default_test_choice_done")
         private val REMEMBER_LAST_SELECTED_NODE_ENABLED = booleanPreferencesKey("remember_last_selected_node_enabled")
         private val LAST_SELECTED_NODE_ID = stringPreferencesKey("last_selected_node_id")
         private val NODE_LIST_CATEGORY = stringPreferencesKey("node_list_category")
@@ -247,28 +244,6 @@ class SettingsRepository(private val context: Context) {
             } else {
                 preferences[BACKUP_NODE_URL] = url
             }
-        }
-    }
-
-    // 自动化测试设置
-val startupDefaultTestMode: Flow<StartupDefaultTestMode> = context.dataStore.data.map { preferences ->
-        val value = preferences[STARTUP_DEFAULT_TEST_MODE] ?: StartupDefaultTestMode.NONE.name
-        runCatching { StartupDefaultTestMode.valueOf(value) }.getOrDefault(StartupDefaultTestMode.NONE)
-    }
-
-    suspend fun setStartupDefaultTestMode(mode: StartupDefaultTestMode) {
-        context.dataStore.edit { preferences ->
-            preferences[STARTUP_DEFAULT_TEST_MODE] = mode.name
-        }
-    }
-
-    val startupDefaultTestChoiceDone: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[STARTUP_DEFAULT_TEST_CHOICE_DONE] ?: false
-    }
-
-    suspend fun setStartupDefaultTestChoiceDone(done: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[STARTUP_DEFAULT_TEST_CHOICE_DONE] = done
         }
     }
 

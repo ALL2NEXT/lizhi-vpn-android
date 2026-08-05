@@ -37,7 +37,6 @@ import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.ui.theme.Primary
 import xyz.a202132.app.viewmodel.MainViewModel
-import xyz.a202132.app.viewmodel.StartupDefaultTestMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +45,6 @@ fun OtherConfigScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val startupDefaultTestMode by viewModel.startupDefaultTestMode.collectAsState()
     val nodeIpInfoTestOnVpnStart by viewModel.nodeIpInfoTestOnVpnStart.collectAsState()
     val scheduledNodeUpdateEnabled by viewModel.scheduledNodeUpdateEnabled.collectAsState()
     val scheduledNodeUpdateHours by viewModel.scheduledNodeUpdateHours.collectAsState()
@@ -69,7 +67,6 @@ fun OtherConfigScreen(
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsState()
 
     var appThemeModeDraft by remember(appThemeMode) { mutableStateOf(appThemeMode) }
-    var startupModeDraft by remember(startupDefaultTestMode) { mutableStateOf(startupDefaultTestMode) }
     var rememberLastSelectedNodeDraft by remember(rememberLastSelectedNodeEnabled) { mutableStateOf(rememberLastSelectedNodeEnabled) }
     var nodeIpInfoAutoRunDraft by remember(nodeIpInfoTestOnVpnStart) { mutableStateOf(nodeIpInfoTestOnVpnStart) }
     var scheduledNodeUpdateEnabledDraft by remember(scheduledNodeUpdateEnabled) { mutableStateOf(scheduledNodeUpdateEnabled) }
@@ -88,7 +85,6 @@ fun OtherConfigScreen(
 
     LaunchedEffect(
         appThemeMode,
-        startupDefaultTestMode,
         rememberLastSelectedNodeEnabled,
         nodeIpInfoTestOnVpnStart,
         scheduledNodeUpdateEnabled,
@@ -106,7 +102,6 @@ fun OtherConfigScreen(
         vpnMtu
     ) {
         appThemeModeDraft = appThemeMode
-        startupModeDraft = startupDefaultTestMode
         rememberLastSelectedNodeDraft = rememberLastSelectedNodeEnabled
         nodeIpInfoAutoRunDraft = nodeIpInfoTestOnVpnStart
         scheduledNodeUpdateEnabledDraft = scheduledNodeUpdateEnabled
@@ -145,7 +140,6 @@ fun OtherConfigScreen(
                         rawScheduledMinutes
                     }
                     viewModel.setAppThemeMode(appThemeModeDraft)
-                    viewModel.setStartupDefaultTestMode(startupModeDraft)
                     viewModel.setRememberLastSelectedNodeEnabled(rememberLastSelectedNodeDraft)
                     viewModel.setNodeIpInfoTestOnVpnStart(nodeIpInfoAutoRunDraft)
                     viewModel.setScheduledNodeUpdateSettings(
@@ -270,34 +264,6 @@ fun OtherConfigScreen(
                 title = "自动执行",
                 description = "修改配置后会立即生效。"
             ) {
-                Text(
-                    text = "APP启动后默认执行哪项延迟测试",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = startupModeDraft == StartupDefaultTestMode.NONE,
-                        onClick = { startupModeDraft = StartupDefaultTestMode.NONE },
-                        label = { Text("不执行") }
-                    )
-                    FilterChip(
-                        selected = startupModeDraft == StartupDefaultTestMode.TCPING,
-                        onClick = { startupModeDraft = StartupDefaultTestMode.TCPING },
-                        label = { Text("TCPing") }
-                    )
-                    FilterChip(
-                        selected = startupModeDraft == StartupDefaultTestMode.URL_TEST,
-                        onClick = { startupModeDraft = StartupDefaultTestMode.URL_TEST },
-                        label = { Text("URL Test") }
-                    )
-                }
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -310,7 +276,7 @@ fun OtherConfigScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "APP 启动后自动恢复上次选择的节点；若节点已不存在则不恢复。启用自动择优测试时，自动测试优先。",
+                            text = "APP 启动后自动恢复上次选择的节点；若节点已不存在则不恢复。",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

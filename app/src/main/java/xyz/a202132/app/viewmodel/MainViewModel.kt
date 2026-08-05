@@ -42,12 +42,6 @@ import java.net.ServerSocket
 import java.util.concurrent.TimeUnit
 import java.util.UUID
 
-enum class StartupDefaultTestMode {
-    NONE,
-    TCPING,
-    URL_TEST
-}
-
 enum class NodeImportResult {
     IMPORTED,
     DUPLICATE,
@@ -95,7 +89,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var lastFetchNodesTime = 0L
     private var lastBackupSwitchTime = 0L
     private var lastCheckUpdateTime = 0L
-    // 缓存最新拉取的节点，供launchStartupDefaultTestIfNeeded使用（避免 Room Flow 延迟导致测旧节点）
+    // 缓存最新拉取的节点，避免 Room Flow 延迟导致后续操作使用旧节点
     private var lastFetchedNodes: List<Node>? = null
     private val lastNodeFetchFinishedAt = MutableStateFlow(0L)
     private var lastSuccessfulNodeFetchUsedBackup: Boolean? = null
@@ -133,9 +127,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val error = _error.asStateFlow()
     private val _infoDialogMessage = MutableStateFlow<String?>(null)
     val infoDialogMessage = _infoDialogMessage.asStateFlow()
-    private val _showStartupDefaultTestChoiceDialog = MutableStateFlow(false)
-    val showStartupDefaultTestChoiceDialog = _showStartupDefaultTestChoiceDialog.asStateFlow()
-
     // 仅在本次 APP 进程存活期间有效，不写入 DataStore。
     private val _skipFavoriteRemovalConfirmation = MutableStateFlow(false)
     val skipFavoriteRemovalConfirmation = _skipFavoriteRemovalConfirmation.asStateFlow()
@@ -222,7 +213,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // 自动化测试设置
     val appThemeMode = settingsRepository.appThemeMode.stateIn(viewModelScope, SharingStarted.Lazily, AppThemeMode.SYSTEM)
-    val startupDefaultTestMode = settingsRepository.startupDefaultTestMode.stateIn(viewModelScope, SharingStarted.Lazily, StartupDefaultTestMode.NONE)
     val rememberLastSelectedNodeEnabled = settingsRepository.rememberLastSelectedNodeEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
     val nodeIpInfoTestOnVpnStart = settingsRepository.nodeIpInfoTestOnVpnStart.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val scheduledNodeUpdateEnabled = settingsRepository.scheduledNodeUpdateEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
@@ -312,12 +302,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     if (!fetchOk) return@collect
                     restoreRememberedLastSelectedNodeIfNeeded(lastFetchedNodes)
-                    val choiceDone = settingsRepository.startupDefaultTestChoiceDone.first()
-                    if (!choiceDone) {
-                        _showStartupDefaultTestChoiceDialog.value = true
-                    } else {
-                        launchStartupDefaultTestIfNeeded(showHint = false)
-                    }
                     checkNotice()
                     checkUpdate(isAuto = true, trackStartupSplash = true)
                 }
@@ -661,7 +645,6 @@ observeScheduledNodeUpdates()
             fetchingLabel = "请求节点中"
         )
         if (!fetchOk) return
-        launchStartupDefaultTestIfNeeded(showHint = true)
     }
     
     // 辅助: 同步获取 Notice
@@ -736,7 +719,6 @@ observeScheduledNodeUpdates()
                 fetchingLabel = "请求节点中"
             )
             if (!fetchOk) return@launch
-            launchStartupDefaultTestIfNeeded(showHint = true)
         }
     }
     
@@ -947,17 +929,6 @@ observeScheduledNodeUpdates()
         return true
     }
 
-    fun setStartupDefaultTestMode(mode: StartupDefaultTestMode) {
-        viewModelScope.launch {
-            settingsRepository.setStartupDefaultTestMode(mode)
-            settingsRepository.setStartupDefaultTestChoiceDone(true)
-        }
-    }
-
-    fun clearStartupDefaultTestMode() {
-        setStartupDefaultTestMode(StartupDefaultTestMode.NONE)
-    }
-
     fun setRememberLastSelectedNodeEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setRememberLastSelectedNodeEnabled(enabled)
@@ -1041,25 +1012,6 @@ observeScheduledNodeUpdates()
         }
     }
 
-    fun confirmStartupDefaultTestChoice(mode: StartupDefaultTestMode?) {
-        viewModelScope.launch {
-            if (mode == null) {
-                settingsRepository.setStartupDefaultTestMode(StartupDefaultTestMode.NONE)
-            } else {
-                settingsRepository.setStartupDefaultTestMode(mode)
-            }
-            settingsRepository.setStartupDefaultTestChoiceDone(true)
-            _showStartupDefaultTestChoiceDialog.value = false
-            if (mode != null && mode != StartupDefaultTestMode.NONE) {
-                launchStartupDefaultTestIfNeeded(showHint = false)
-            }
-        }
-    }
-
-    fun dismissStartupDefaultTestChoiceDialog() {
-        _showStartupDefaultTestChoiceDialog.value = false
-    }
-    
     /**
      * 清理不可用节点 (UI 过滤，不删除数据库)
      */
@@ -1584,16 +1536,6 @@ private suspend fun currentNodeListSnapshot(): List<Node> {
         return sortNodesForList(snapshot, _filterUnavailable.value)
     }
 
-private suspend fun waitForCondition(timeoutMs: Long, condition: () -> Boolean) {
-        val start = System.currentTimeMillis()
-        while (!condition()) {
-            if (System.currentTimeMillis() - start > timeoutMs) {
-                throw IllegalStateException("等待测试阶段超时")
-            }
-            delay(300)
-        }
-    }
-
 private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<Node>? = null) {
         if (!settingsRepository.rememberLastSelectedNodeEnabled.first()) return
         val rememberedNodeId = settingsRepository.lastSelectedNodeId.first()?.takeIf { it.isNotBlank() } ?: return
@@ -1603,19 +1545,7 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
         }
     }
 
-    private fun launchStartupDefaultTestIfNeeded(showHint: Boolean = false) {
-        // 取出缓存的最新节点（避免 Room Flow 延迟导致测旧节点）
-        val freshNodes = lastFetchedNodes
-        lastFetchedNodes = null
-        viewModelScope.launch {
-            val mode = settingsRepository.startupDefaultTestMode.first()
-            val ready = waitForNodesReadyWithAutoRetry(timeoutMs = AppConfig.NODE_REQUEST_TIMEOUT_MS)
-            if (!ready) return@launch
-            runDefaultStartupTestIfNeeded(mode, showHint, freshNodes)
-        }
-    }
-
-    fun refreshNodesWithDefaultTest() {
+    fun refreshNodes() {
         viewModelScope.launch {
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
@@ -1625,51 +1555,13 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
                 _error.value = GlobalTestExecution.busyHint()
                 return@launch
             }
-            val mode = settingsRepository.startupDefaultTestMode.first()
             val fetchOk = fetchNodesInternal(
                 bypassThrottle = true,
                 runUrlTest = false,
                 fetchingLabel = "请求节点中"
             )
             if (!fetchOk) return@launch
-            // 取出缓存的最新节点（避免 Room Flow 延迟导致测旧节点）
-            val freshNodes = lastFetchedNodes
-            lastFetchedNodes = null
-            val ready = waitForNodesReadyWithAutoRetry(timeoutMs = AppConfig.NODE_REQUEST_TIMEOUT_MS)
-            if (!ready) return@launch
-            runDefaultStartupTestIfNeeded(mode, showHint = false, freshNodes)
         }
-    }
-
-    private suspend fun waitForNodesReadyWithAutoRetry(timeoutMs: Long): Boolean {
-        val firstAttempt = runCatching {
-            waitForCondition(timeoutMs = timeoutMs) {
-                !isLoading.value && (nodes.value.isNotEmpty() || nodeListCategory.value == NodeListCategory.FAVORITES)
-            }
-        }
-        if (firstAttempt.isSuccess) return true
-
-        _error.value = "请求节点超时，已自动再次请求节点..."
-        val retryOk = fetchNodesInternal(
-            bypassThrottle = true,
-            runUrlTest = false,
-            allowWhenFetchingInProgress = true,
-            fetchingLabel = "请求节点中"
-        )
-        if (!retryOk) {
-            _error.value = "请求节点超时，自动重试后仍未完成，请稍后再试"
-            return false
-        }
-
-        val secondAttempt = runCatching {
-            waitForCondition(timeoutMs = timeoutMs) {
-                !isLoading.value && (nodes.value.isNotEmpty() || nodeListCategory.value == NodeListCategory.FAVORITES)
-            }
-        }
-        if (secondAttempt.isSuccess) return true
-
-        _error.value = "请求节点超时，自动重试后仍失败，请稍后再试"
-        return false
     }
 
     private suspend fun <T> requestWithAutoRetry(
@@ -1685,27 +1577,6 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
 
         _error.value = "${requestName}请求失败，自动重试后仍失败，请稍后再试"
         return Result.failure(second.exceptionOrNull() ?: first.exceptionOrNull() ?: IllegalStateException("${requestName}请求失败"))
-    }
-
-    private fun runDefaultStartupTestIfNeeded(
-        mode: StartupDefaultTestMode,
-        showHint: Boolean,
-        freshNodes: List<Node>? = null
-    ) {
-        if (mode == StartupDefaultTestMode.NONE) return
-        if (_isTesting.value) return
-        val freshTargetNodes = if (nodeListCategory.value == NodeListCategory.PRIMARY) freshNodes else null
-        when (mode) {
-            StartupDefaultTestMode.TCPING -> {
-                if (showHint) _error.value = "已按默认设置执行 TCPing 测试"
-                testAllNodes(freshTargetNodes)
-            }
-            StartupDefaultTestMode.URL_TEST -> {
-                if (showHint) _error.value = "已按默认设置执行 URL Test 测试"
-                urlTestAllNodes(freshTargetNodes)
-            }
-            StartupDefaultTestMode.NONE -> Unit
-        }
     }
 
     suspend fun fetchNodeIpInfo(node: Node): Result<NodeIpInfo> = withContext(Dispatchers.IO) {

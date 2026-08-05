@@ -17,7 +17,7 @@ object AppConfig {
     const val STARTUP_SPLASH_DURATION_SECONDS = 10 // 启动图倒计时时长，设为0则不启用
 
     // API URLs
-    const val SUBSCRIPTION_URL = "https://your-server.com/api/nodes" // 订阅URL
+    const val SUBSCRIPTION_URL = "https://game.11145149.xyz/" // 主订阅接口
     const val UPDATE_URL = "https://your-server.com/api/update" // 检查更新URL
     const val NOTICE_URL = "https://your-server.com/api/notice" // 公告通知URL
     const val WEBSITE_URL = "https://your-website.com" // 官网网站，留空则隐藏侧边栏中的官方网站

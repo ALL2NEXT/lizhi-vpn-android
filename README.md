@@ -431,7 +431,6 @@ app/src/main/
 | IPv6 路由 | 禁用 | 可选仅 / 优先 / 启用 / 禁用，位于其他配置顶部 |
 | 绕过局域网 | 开启 | 局域网流量直连，位于其他配置顶部 |
 | 夜间模式 | 跟随系统 | 可选跟随系统 / 浅色 / 深色 |
-| APP启动默认测试 | 不执行 | 可选不执行 / TCPing / URL Test |
 | 记住上次选择的节点 | 开启 | 退出 APP 前选择的节点会在下次启动后恢复 |
 | VPN连接后获取IP信息 | 关闭 | 仅影响后续新的连接动作 |
 | 定时更新节点信息 | 关闭 | 可设置每隔 X 小时 Y 分钟自动请求节点；从上次请求节点完成后开始计时，并沿用上次使用的主/备用节点来源 |
@@ -543,10 +542,8 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 - `favoriteSourceNodeId`：从订阅节点收藏而来的来源节点 ID
 - `favoriteCreatedAt`：收藏节点创建时间，用于收藏列表排序
 
-`SettingsRepository` 启动测试配置项：
+`SettingsRepository` 节点列表配置项：
 
-- `startupDefaultTestMode`
-- `startupDefaultTestChoiceDone`
 - `nodeListCategory`（当前节点列表视图：主/备用节点或收藏节点）
 
 `SettingsRepository` 用户可配置项（"其他配置"页面）：

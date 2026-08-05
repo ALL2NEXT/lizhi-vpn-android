@@ -347,36 +347,6 @@ private class UrlDrawable : Drawable() {
 }
 
 @Composable
-fun LoadingDialog(
-    message: String = "加载中..."
-) {
-    Dialog(onDismissRequest = {}) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Row(
-                modifier = Modifier.padding(24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = Primary,
-                    strokeWidth = 2.dp
-                )
-                
-                Text(
-                    text = message,
-                    fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun DownloadDialog(
     progress: Int,
     speed: String,

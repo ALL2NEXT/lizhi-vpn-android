@@ -26,7 +26,6 @@ import xyz.a202132.app.ui.dialogs.*
 import xyz.a202132.app.ui.dialogs.SpeedTestDialog
 import xyz.a202132.app.ui.theme.*
 import xyz.a202132.app.viewmodel.MainViewModel
-import xyz.a202132.app.viewmodel.StartupDefaultTestMode
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -58,7 +57,6 @@ fun MainScreen(
     val error by viewModel.error.collectAsState()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsState()
     val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsState()
-    val showStartupDefaultTestChoiceDialog by viewModel.showStartupDefaultTestChoiceDialog.collectAsState()
     
     // UI状态
     var showSpeedTestDialog by remember { mutableStateOf(false) }
@@ -400,11 +398,6 @@ fun MainScreen(
         }
     }
     
-    // 加载弹窗
-    if (isLoading && nodes.isEmpty()) {
-        LoadingDialog(message = "获取节点中...")
-    }
-    
     // 下载状态监听
     val downloadState by viewModel.downloadState.collectAsState()
     var showPermissionDialog by remember { mutableStateOf(false) }
@@ -544,55 +537,4 @@ fun MainScreen(
         )
     }
 
-    if (showStartupDefaultTestChoiceDialog && isUserAgreementAccepted) {
-        StartupDefaultTestChoiceDialog(
-            onDismiss = { viewModel.dismissStartupDefaultTestChoiceDialog() },
-            onSelectTcping = {
-                viewModel.confirmStartupDefaultTestChoice(StartupDefaultTestMode.TCPING)
-                Toast.makeText(context, "已设置APP启动默认执行TCPing测试", Toast.LENGTH_SHORT).show()
-            },
-            onSelectUrlTest = {
-                viewModel.confirmStartupDefaultTestChoice(StartupDefaultTestMode.URL_TEST)
-                Toast.makeText(context, "已设置APP启动默认执行URL Test测试", Toast.LENGTH_SHORT).show()
-            },
-            onSkip = {
-                viewModel.confirmStartupDefaultTestChoice(StartupDefaultTestMode.NONE)
-                Toast.makeText(context, "已跳过启动默认测试设置", Toast.LENGTH_SHORT).show()
-            }
-        )
-    }
-
-}
-
-@Composable
-private fun StartupDefaultTestChoiceDialog(
-    onDismiss: () -> Unit,
-    onSelectTcping: () -> Unit,
-    onSelectUrlTest: () -> Unit,
-    onSkip: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("选择启动默认测试") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "APP 启动默认只拉取节点。你可以选择默认执行一种测试，也可以跳过。",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedButton(onClick = onSelectTcping, modifier = Modifier.fillMaxWidth()) {
-                    Text("默认执行 TCPing")
-                }
-                OutlinedButton(onClick = onSelectUrlTest, modifier = Modifier.fillMaxWidth()) {
-                    Text("默认执行 URL Test")
-                }
-                TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
-                    Text("跳过")
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {}
-    )
 }
