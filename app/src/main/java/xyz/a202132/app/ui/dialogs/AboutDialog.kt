@@ -28,15 +28,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import xyz.a202132.app.BuildConfig
-import xyz.a202132.app.AppConfig
 import xyz.a202132.app.ui.theme.Primary
 
 @Composable
 fun AboutDialog(
+    githubUrl: String = "",
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val githubUrl = AppConfig.GITHUB_URL
     val releasesUrl = if (githubUrl.isNotBlank()) "$githubUrl/releases" else ""
 
     Dialog(

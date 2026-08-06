@@ -3,6 +3,8 @@ package xyz.a202132.app.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.JsonParser
 import io.nekohasekai.libbox.Libbox
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,6 +14,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.awaitAll
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -24,6 +29,7 @@ import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.LatencyTester
 import xyz.a202132.app.network.NetworkClient
+import xyz.a202132.app.network.SubscriptionListParser
 import xyz.a202132.app.network.SubscriptionParser
 import xyz.a202132.app.network.DownloadManager
 import xyz.a202132.app.network.NodeTestProxyManager
@@ -73,17 +79,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val nodeDao = database.nodeDao()
     private val settingsRepository = SettingsRepository(application)
     private val subscriptionParser = SubscriptionParser()
+    private val subscriptionListParser = SubscriptionListParser()
     private val configGenerator = SingBoxConfigGenerator()
     private val latencyTester = LatencyTester()
     // 节流控制
     private val THROTTLE_INTERVAL = 5000L // 5秒节流间隔
     private var lastFetchNodesTime = 0L
-    private var lastBackupSwitchTime = 0L
     private var lastCheckUpdateTime = 0L
     // 缓存最新拉取的节点，避免 Room Flow 延迟导致后续操作使用旧节点
     private var lastFetchedNodes: List<Node>? = null
     private val lastNodeFetchFinishedAt = MutableStateFlow(0L)
-    private var lastSuccessfulNodeFetchUsedBackup: Boolean? = null
+    private var cachedSubscriptionList: SubscriptionList? = null
+    private val gson = Gson()
+    private var backendUpdateInfo: UpdateInfo? = null
     
     // UI状态
     private val _isLoading = MutableStateFlow(false)
@@ -106,6 +114,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // 持久通知配置（与对话框可见性无关）
     private val _noticeConfig = MutableStateFlow<NoticeInfo?>(null)
     val noticeConfig = _noticeConfig.asStateFlow()
+
+    private val _backendSettings = MutableStateFlow(BackendAppSettings())
+    val backendSettings = _backendSettings.asStateFlow()
     
     private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
     val updateInfo = _updateInfo.asStateFlow()
@@ -203,6 +214,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val scheduledNodeUpdateMinutes = settingsRepository.scheduledNodeUpdateMinutes.stateIn(viewModelScope, SharingStarted.Lazily, 30)
     val nodeAutoReconnect = settingsRepository.nodeAutoReconnect.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val scheduledNodeUpdateToastEnabled = settingsRepository.scheduledNodeUpdateToastEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
+    val subscriptionAutoUpdate = settingsRepository.subscriptionAutoUpdate.stateIn(viewModelScope, SharingStarted.Lazily, false)
     private val localScheduledNodeUpdateSettings = combine(
         scheduledNodeUpdateEnabled,
         scheduledNodeUpdateHours,
@@ -282,10 +294,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // 监听用户协议状态，只有同意后才初始化网络请求
             isUserAgreementAccepted.collect { accepted ->
                 if (accepted) {
-                    val fetchOk = fetchNodesInternal(
-                        bypassThrottle = true,
-                        fetchingLabel = "请求节点中"
-                    )
+                    val fetchOk = initializeSubscriptionListAndMaybeFetchNodes()
                     if (!fetchOk) return@collect
                     restoreRememberedLastSelectedNodeIfNeeded(lastFetchedNodes)
                     checkNotice()
@@ -309,9 +318,10 @@ observeScheduledNodeUpdates()
 
     private fun observeScheduledNodeUpdates() {
         viewModelScope.launch {
-            effectiveScheduledNodeUpdateSettings
-                .collectLatest { settings ->
-                    if (!settings.enabled) return@collectLatest
+            combine(effectiveScheduledNodeUpdateSettings, subscriptionAutoUpdate) { settings, autoUpdate ->
+                settings to autoUpdate
+            }.collectLatest { (settings, autoUpdate) ->
+                    if (!settings.enabled || !autoUpdate) return@collectLatest
 
                     while (true) {
                         val anchor = lastNodeFetchFinishedAt.value.takeIf { it > 0L }
@@ -321,7 +331,7 @@ observeScheduledNodeUpdates()
                         delay(delayMs)
 
                         val latestSettings = effectiveScheduledNodeUpdateSettings.value
-                        if (!latestSettings.enabled) continue
+                        if (!latestSettings.enabled || !subscriptionAutoUpdate.value) continue
 
                         val latestAnchor = lastNodeFetchFinishedAt.value
                         val remainingMs = latestAnchor + latestSettings.intervalMillis - System.currentTimeMillis()
@@ -342,11 +352,10 @@ observeScheduledNodeUpdates()
             null
         }
         val fetchOk = fetchNodesInternal(
-            skipBackupMode = lastSuccessfulNodeFetchUsedBackup == false,
             bypassThrottle = true,
             fetchingLabel = "定时更新节点中",
-            allowBackupFallback = false,
-            showToast = settings.toastEnabled
+            showToast = settings.toastEnabled,
+            forceBackendRefresh = true
         )
         if (!fetchOk) {
             lastNodeFetchFinishedAt.value = System.currentTimeMillis()
@@ -383,33 +392,7 @@ observeScheduledNodeUpdates()
     }
 
     
-    /**
-     * 获取节点列表
-     */
-    val backupNodeEnabled = settingsRepository.backupNodeEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Lazily,
-        false
-    )
-    
-    /**
-     * 获取节点列表
-     */
-    // 备用节点 URL (本地存储)
-    val backupNodeUrl = settingsRepository.backupNodeUrl.stateIn(
-        viewModelScope,
-        SharingStarted.Lazily,
-        null
-    )
-    
-    /**
-     * 获取节点列表
-     */
-    /**
-     * @param skipBackupMode 强制跳过备用模式逻辑 (用于回退场景，避免 DataStore 异步更新导致重复触发)
-     */
     fun fetchNodes(
-        skipBackupMode: Boolean = false,
         bypassThrottle: Boolean = false,
         allowWhenTestRunning: Boolean = false,
         allowWhenFetchingInProgress: Boolean = false,
@@ -417,23 +400,163 @@ observeScheduledNodeUpdates()
     ) {
         viewModelScope.launch {
             fetchNodesInternal(
-                skipBackupMode = skipBackupMode,
                 bypassThrottle = bypassThrottle,
                 allowWhenTestRunning = allowWhenTestRunning,
                 allowWhenFetchingInProgress = allowWhenFetchingInProgress,
-                fetchingLabel = fetchingLabel
+                fetchingLabel = fetchingLabel,
+                forceBackendRefresh = true
             )
         }
     }
 
+    private suspend fun initializeSubscriptionListAndMaybeFetchNodes(): Boolean {
+        val initializedBefore = settingsRepository.subscriptionListInitialized.first()
+        val listResult = fetchSubscriptionList(forceRefresh = false)
+        val subscriptionList = listResult.getOrNull() ?: loadCachedSubscriptionList()
+
+        if (subscriptionList == null) {
+            showNodeFetchToast(true, "获取订阅列表失败: ${listResult.exceptionOrNull()?.message ?: "未知错误"}")
+            return false
+        }
+
+        val hasSubscriptionNodes = nodeDao.getSubscriptionNodes().first().isNotEmpty()
+        val shouldFetchNodes = !initializedBefore || subscriptionList.autoUpdate || !hasSubscriptionNodes
+        if (!shouldFetchNodes) {
+            Log.i(tag, "Subscription list update=0; keeping cached nodes until manual refresh")
+            return true
+        }
+
+        return fetchNodesInternal(
+            bypassThrottle = true,
+            fetchingLabel = "请求节点中",
+            subscriptionList = subscriptionList
+        )
+    }
+
+    private suspend fun fetchSubscriptionList(forceRefresh: Boolean = false): Result<SubscriptionList> {
+        if (AppConfig.BACKEND_URL.isBlank()) {
+            return Result.failure(IllegalStateException("未配置订阅列表接口"))
+        }
+
+        return try {
+            var response = runCatching {
+                withTimeout(backendSettings.value.nodeRequestTimeoutMs.coerceIn(5000L, 60000L)) {
+                    NetworkClient.apiService.getBackendConfig(backendClientUrl(forceRefresh))
+                }
+            }
+            if (response.isFailure) {
+                response = runCatching {
+                    withTimeout(backendSettings.value.nodeRequestTimeoutMs.coerceIn(5000L, 60000L)) {
+                        NetworkClient.apiService.getBackendConfig(backendClientUrl(forceRefresh))
+                    }
+                }
+            }
+
+            val raw = response.getOrThrow()
+            applyBackendConfig(raw)
+            val parsed = subscriptionListParser.parse(raw).getOrThrow()
+            settingsRepository.setSubscriptionList(raw, parsed.autoUpdate)
+            cachedSubscriptionList = parsed
+            Result.success(parsed)
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to fetch subscription list", e)
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun loadCachedSubscriptionList(): SubscriptionList? {
+        cachedSubscriptionList?.let { return it }
+        val cachedJson = settingsRepository.subscriptionListJson.first() ?: return null
+        applyBackendConfig(cachedJson)
+        return subscriptionListParser.parse(cachedJson).getOrNull()?.also {
+            cachedSubscriptionList = it
+        }
+    }
+
+    private fun backendClientUrl(forceRefresh: Boolean): String {
+        val endpoint = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/client"
+        return if (forceRefresh) "$endpoint?refresh=1" else endpoint
+    }
+
+    private fun applyBackendConfig(raw: String) {
+        runCatching {
+            val root = JsonParser.parseString(raw).asJsonObject
+            _noticeConfig.value = root.get("notice")
+                ?.takeIf { !it.isJsonNull && it.isJsonObject }
+                ?.let { gson.fromJson(it, NoticeInfo::class.java) }
+            _backendSettings.value = root.get("settings")
+                ?.takeIf { !it.isJsonNull && it.isJsonObject }
+                ?.let { gson.fromJson(it, BackendAppSettings::class.java) }
+                ?: BackendAppSettings()
+            backendUpdateInfo = root.get("appUpdate")
+                ?.takeIf { !it.isJsonNull && it.isJsonObject }
+                ?.let { gson.fromJson(it, UpdateInfo::class.java) }
+        }.onFailure { error ->
+            Log.w(tag, "Backend config does not contain valid notice/update metadata", error)
+        }
+    }
+
+    private suspend fun fetchNodesFromSubscriptions(
+        sources: List<SubscriptionSource>
+    ): Result<List<Node>> = coroutineScope {
+        val results = sources.map { subscription ->
+            async {
+                val result = runCatching { subscriptionParser.parseSubscription(subscription.content) }
+                subscription to result
+            }
+        }.awaitAll()
+
+        val mergedNodes = LinkedHashMap<String, Node>()
+        var failedCount = 0
+        var firstFailure: Throwable? = null
+
+        results.forEach { (subscription, result) ->
+            if (result.isFailure) {
+                failedCount++
+                firstFailure = firstFailure ?: result.exceptionOrNull()
+                return@forEach
+            }
+
+            result.getOrThrow().forEach { node ->
+                val taggedNode = node.copy(
+                    source = NodeSource.SUBSCRIPTION,
+                    favoriteSourceNodeId = null,
+                    favoriteCreatedAt = 0L,
+                    subscriptionSourceId = subscription.id,
+                    subscriptionSourceName = subscription.name
+                )
+                val existing = mergedNodes[taggedNode.id]
+                mergedNodes[taggedNode.id] = if (existing == null) {
+                    taggedNode
+                } else {
+                    existing.copy(
+                        subscriptionSourceName = listOfNotNull(
+                            existing.subscriptionSourceName,
+                            subscription.name
+                        ).distinct().joinToString("、")
+                    )
+                }
+            }
+        }
+
+        if (mergedNodes.isEmpty()) {
+            Result.failure(firstFailure ?: IllegalStateException("订阅列表未返回节点"))
+        } else {
+            if (failedCount > 0) {
+                Log.w(tag, "$failedCount subscription source(s) failed; using successful sources")
+            }
+            Result.success(mergedNodes.values.toList())
+        }
+    }
+
     private suspend fun fetchNodesInternal(
-        skipBackupMode: Boolean = false,
         bypassThrottle: Boolean = false,
         allowWhenTestRunning: Boolean = false,
         allowWhenFetchingInProgress: Boolean = false,
         fetchingLabel: String = "请求节点中",
-        allowBackupFallback: Boolean = true,
-        showToast: Boolean = true
+        showToast: Boolean = true,
+        subscriptionList: SubscriptionList? = null,
+        forceBackendRefresh: Boolean = false
     ): Boolean {
         if (!allowWhenTestRunning && GlobalTestExecution.mutex.isLocked) {
             showNodeFetchToast(showToast, GlobalTestExecution.busyHint())
@@ -465,87 +588,18 @@ observeScheduledNodeUpdates()
                 return false
             }
 
-            // 2. 检查是否开启备用节点 (skipBackupMode 时强制为 false)
-            val isBackupEnabled = if (skipBackupMode) false else settingsRepository.backupNodeEnabled.first()
-            var targetUrl: String? = null
-
-            if (isBackupEnabled) {
-                // 每次刷新都获取最新 Notice 配置，确保能检测到远程配置变化
-                Log.d(tag, "Backup mode enabled, fetching latest notice config...")
-                val notice = fetchNoticeSync()
-
-                if (notice == null) {
-                    // Notice 请求失败 (服务器错误等)，触发回退
-                    Log.e(tag, "Failed to fetch notice for backup node")
-                    if (allowBackupFallback) {
-                        showNodeFetchToast(showToast, "备用节点当前不可用，已退回默认节点！")
-                        handleBackupFallback()
-                    } else {
-                        showNodeFetchToast(showToast, "备用节点当前不可用，已保持原连接")
-                    }
-                    return false
+            val activeSubscriptionList = subscriptionList
+                ?: fetchSubscriptionList(forceRefresh = forceBackendRefresh).getOrElse {
+                    loadCachedSubscriptionList()
+                        ?: throw IllegalStateException("无法获取订阅列表", it)
                 }
-
-                // 验证备用节点配置有效性
-                val backupUrl = notice.backupNodes?.url
-                val isValidUrl = backupUrl != null &&
-                    backupUrl.isNotBlank() &&
-                    (backupUrl.startsWith("http://") || backupUrl.startsWith("https://"))
-
-                if (isValidUrl) {
-                    targetUrl = backupUrl
-                    Log.d(tag, "Using backup node URL: $targetUrl")
-                } else {
-                    // 配置无效 (无 backupNodes / 无 url / url 为空 / url 格式错误)
-                    // 触发完整回退
-                    Log.w(tag, "Backup node config invalid: backupNodes=$${notice.backupNodes}, url=$backupUrl")
-                    if (allowBackupFallback) {
-                        showNodeFetchToast(showToast, "备用节点当前不可用，已退回默认节点！")
-                        handleBackupFallback()
-                    } else {
-                        showNodeFetchToast(showToast, "备用节点当前不可用，已保持原连接")
-                    }
-                    return false
-                }
-            }
-
-            // 请求节点（失败自动重试一次）
-            var result = if (targetUrl != null) {
-                subscriptionParser.fetchAndParse(targetUrl)
-            } else {
-                subscriptionParser.fetchAndParse()
-            }
-            if (result.isFailure) {
-                Log.w(tag, "First fetch attempt failed, retrying...", result.exceptionOrNull())
-                showNodeFetchToast(showToast, "请求节点失败，已自动重试...")
-                result = if (targetUrl != null) {
-                    subscriptionParser.fetchAndParse(targetUrl)
-                } else {
-                    subscriptionParser.fetchAndParse()
-                }
-            }
+            val result = fetchNodesFromSubscriptions(activeSubscriptionList.sources)
 
             if (result.isSuccess) {
-                val fetchedNodes = result.getOrThrow().map {
-                    it.copy(source = NodeSource.SUBSCRIPTION, favoriteSourceNodeId = null, favoriteCreatedAt = 0L)
-                }
-                // 检查由备用节点返回的空列表
-                if (isBackupEnabled && fetchedNodes.isEmpty()) {
-                    Log.w(tag, "Backup node returned empty list, treating as failure")
-                    if (allowBackupFallback) {
-                        showNodeFetchToast(showToast, "备用节点当前不可用，已退回默认节点！")
-                        handleBackupFallback()
-                    } else {
-                        showNodeFetchToast(showToast, "备用节点当前不可用，已保持原连接")
-                    }
-                    return false
-                }
-
-                // 保存到数据库
+                val fetchedNodes = result.getOrThrow()
                 nodeDao.replaceSubscriptionNodes(fetchedNodes)
                 // 缓存最新节点，避免 Room Flow 延迟导致后续操作使用旧节点
                 lastFetchedNodes = fetchedNodes
-                lastSuccessfulNodeFetchUsedBackup = targetUrl != null
 
                 if (BuildConfig.DEBUG) {
                     viewModelScope.launch(Dispatchers.IO) {
@@ -558,17 +612,7 @@ observeScheduledNodeUpdates()
             } else {
                 val e = result.exceptionOrNull()
                 Log.e(tag, "Failed to fetch nodes", e)
-                if (isBackupEnabled) {
-                    if (allowBackupFallback) {
-                        showNodeFetchToast(showToast, "备用节点当前不可用，已退回默认节点！")
-                        // 执行回退操作 (关闭，清除URL，重试默认)
-                        handleBackupFallback()
-                    } else {
-                        showNodeFetchToast(showToast, "备用节点当前不可用，已保持原连接")
-                    }
-                } else {
-                    showNodeFetchToast(showToast, "获取节点失败: ${e?.message ?: "未知错误"}")
-                }
+                showNodeFetchToast(showToast, "获取节点失败: ${e?.message ?: "未知错误"}")
                 return false
             }
         } catch (e: Exception) {
@@ -587,112 +631,6 @@ observeScheduledNodeUpdates()
     private fun showNodeFetchToast(showToast: Boolean, message: String) {
         if (showToast) {
             _error.value = message
-        }
-    }
-    
-    // 处理备用节点回退逻辑
-    private suspend fun handleBackupFallback() {
-        // 0. 如果 VPN 正在运行，先停止（因为节点来源已失效）
-        if (vpnState.value != VpnState.DISCONNECTED) {
-            Log.d(tag, "Stopping VPN before backup fallback")
-            ServiceManager.stopVpn(getApplication())
-            delay(500) // 等待 VPN 停止
-        }
-        
-        // 1. 关闭备用节点开关
-        settingsRepository.setBackupNodeEnabled(false)
-        // 2. 清除备用节点 URL
-        settingsRepository.setBackupNodeUrl(null)
-        // 3. 清除当前选中的节点（备用节点 ID 在默认列表中不存在）
-        settingsRepository.setSelectedNodeId(null)
-        
-        // 4. 更新 Notice Config 以隐藏按钮
-        val currentConfig = _noticeConfig.value
-        if (currentConfig != null) {
-            _noticeConfig.value = currentConfig.copy(backupNodes = null)
-        }
-        
-        // 5. 重新请求，强制跳过备用模式 (避免 DataStore 异步更新导致重复触发)
-        val fetchOk = fetchNodesInternal(
-            skipBackupMode = true,
-            bypassThrottle = true,
-            allowWhenFetchingInProgress = true,
-            fetchingLabel = "请求节点中"
-        )
-        if (!fetchOk) return
-    }
-    
-    // 辅助: 同步获取 Notice
-    private suspend fun fetchNoticeSync(): NoticeInfo? {
-        return try {
-            val info = withTimeout(AppConfig.NOTICE_REQUEST_TIMEOUT_MS) {
-                NetworkClient.apiService.getNoticeInfo(AppConfig.NOTICE_URL)
-            }
-            updateNoticeConfig(info)
-            info
-        } catch (e: Exception) {
-            null
-        }
-    }
-    
-    private suspend fun updateNoticeConfig(info: NoticeInfo) {
-        _noticeConfig.value = info
-        
-        val backupInfo = info.backupNodes
-        val isValid = backupInfo?.url?.let { 
-             it.startsWith("http://") || it.startsWith("https://") 
-        } == true
-        
-        if (isValid) {
-            settingsRepository.setBackupNodeUrl(backupInfo!!.url)
-        } else {
-            // 无效配置，清除本地记录
-            settingsRepository.setBackupNodeUrl(null)
-            // 注意: 不在这里触发 handleBackupFallback，让 fetchNodes 的调用者统一处理
-            // 避免重复触发 Toast
-        }
-    }
-    
-    fun setBackupNodeEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            if (GlobalTestExecution.isFetching()) {
-                _error.value = GlobalTestExecution.fetchingHint()
-                return@launch
-            }
-            if (_isTesting.value || GlobalTestExecution.mutex.isLocked) {
-                _error.value = GlobalTestExecution.busyHint()
-                return@launch
-            }
-
-            // 节流检查
-            val now = System.currentTimeMillis()
-            if (now - lastBackupSwitchTime < THROTTLE_INTERVAL) {
-                _error.value = "切换过于频繁，请稍后再试"
-                return@launch
-            }
-            lastBackupSwitchTime = now
-            
-            // 如果 VPN 正在运行，先停止（因为节点来源将改变）
-            if (vpnState.value != VpnState.DISCONNECTED) {
-                Log.d(tag, "Stopping VPN before switching node source")
-                ServiceManager.stopVpn(getApplication())
-                // 等待 VPN 停止
-                delay(500)
-            }
-            
-            // 清除当前选中的节点（因为它可能不在新列表中）
-            settingsRepository.setSelectedNodeId(null)
-            
-            // 切换设置
-            settingsRepository.setBackupNodeEnabled(enabled)
-            delay(100)
-            
-            // 获取新的节点列表 (跳过节流检查，因为这是内部调用；测试行为跟随 APP 默认设置)
-            val fetchOk = fetchNodesInternal(
-                bypassThrottle = true,
-                fetchingLabel = "请求节点中"
-            )
-            if (!fetchOk) return@launch
         }
     }
     
@@ -1381,11 +1319,8 @@ fun autoSelectBestNode() {
     }
 
     private suspend fun checkNotice() {
-        val result = requestWithAutoRetry("公告通知") {
-            withTimeout(AppConfig.NOTICE_REQUEST_TIMEOUT_MS) {
-                NetworkClient.apiService.getNoticeInfo(AppConfig.NOTICE_URL)
-            }
-        }
+        val result = _noticeConfig.value?.let { Result.success(it) }
+            ?: Result.failure<NoticeInfo>(IllegalStateException("backend config unavailable"))
         result.onSuccess { noticeInfo ->
             _noticeConfig.value = noticeInfo
 
@@ -1420,7 +1355,7 @@ fun autoSelectBestNode() {
             if (trackStartupSplash) {
                 _startupUpdateCheckCompleted.value = false
             }
-            if (AppConfig.UPDATE_URL.isBlank()) {
+            if (backendUpdateInfo == null) {
                 if (trackStartupSplash) {
                     _startupUpdateCheckCompleted.value = true
                 }
@@ -1436,11 +1371,8 @@ fun autoSelectBestNode() {
                 lastCheckUpdateTime = now
             }
             
-            val result = requestWithAutoRetry("版本更新") {
-                withTimeout(AppConfig.UPDATE_REQUEST_TIMEOUT_MS) {
-                    NetworkClient.apiService.getUpdateInfo(AppConfig.UPDATE_URL)
-                }
-            }
+            val result = backendUpdateInfo?.let { Result.success(it) }
+                ?: Result.failure<UpdateInfo>(IllegalStateException("backend update metadata unavailable"))
             result.onSuccess { info ->
                 val currentVersionCode = getApplication<Application>().packageManager
                     .getPackageInfo(getApplication<Application>().packageName, 0)
@@ -1650,7 +1582,8 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
             }
             val fetchOk = fetchNodesInternal(
                 bypassThrottle = true,
-                fetchingLabel = "请求节点中"
+                fetchingLabel = "请求节点中",
+                forceBackendRefresh = true
             )
             if (!fetchOk) return@launch
         }

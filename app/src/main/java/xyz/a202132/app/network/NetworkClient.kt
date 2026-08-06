@@ -22,9 +22,9 @@ object NetworkClient {
     }
     
     private val okHttpClient = withUserAgent(OkHttpClient.Builder())
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
     
     private val gson = GsonBuilder()
@@ -47,7 +47,7 @@ object NetworkClient {
     }
     
     private val retrofit = Retrofit.Builder()
-        .baseUrl("https://your-server.com/")
+        .baseUrl("${AppConfig.BACKEND_URL.trimEnd('/')}/")
         .client(okHttpClient)
         .addConverterFactory(stringConverterFactory)
         .addConverterFactory(GsonConverterFactory.create(gson))

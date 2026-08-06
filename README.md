@@ -53,8 +53,8 @@
 - 📦 **分应用代理**：精细控制哪些应用走代理或绕过 VPN
 - 🌐 **绕过局域网**：局域网流量始终直连，不受 VPN 影响
 - 🌍 **IPv6 路由**：支持 IPv6 网络访问，可选禁用/启用/优先/仅 IPv6 模式
-- 🔄 **备用节点**：支持配置备用订阅源，主节点不可用时可快速切换
-- ⭐ **收藏节点**：收藏节点与主/备用订阅节点独立存储，订阅刷新不会覆盖收藏内容
+- 🔄 **多订阅源**：先获取远程订阅列表，再并发拉取并合并所有线路
+- ⭐ **收藏节点**：收藏节点与订阅节点独立存储，订阅刷新不会覆盖收藏内容
 - ➕ **节点导入**：节点列表支持从剪切板导入和扫码导入，导入结果自动去重并写入收藏节点
 - 🛡️ **核心配置校验**：收藏导入与 VPN 启动前会使用 sing-box `checkConfig` 校验节点配置，避免单个不兼容节点拖垮整组配置
 
@@ -66,7 +66,6 @@
 - 🤖 **智能连接**：依次执行 TCPing、204 URL Test 和 5MB 下载测速，按测试结果自动连接最佳节点
 - ⚡ **Cloudflare 网速测试**：集成 Cloudflare Speed Test，支持下载/上传测速，实时显示速率
 - 📡 **TCPing 测试**：直接 TCP 连接测试节点可达性和延迟
-- 🔍 **节点出口 IP 信息查询**：在三点菜单中可基于“当前选择节点”查询出口 IP 详细信息（地区、ASN、欺诈评分、是否住宅/原生IP等），无需先连接主 VPN（通过临时本地 SOCKS 代理走所选节点出口发起查询）
 - 🗑️ **清理不合格节点**：一键隐藏超时/不可用/不达标节点（UI 过滤，不删除数据库数据）
 - 🧾 **运行日志**：侧边栏可查看、刷新、分享、清空 APP 内部运行日志；日志仅记录脱敏后的关键 Info / Warn / Error，不导出节点链接和配置内容
 
@@ -74,7 +73,7 @@
 
 - 🚩 **智能国旗**：自动识别节点名称中的国旗 Emoji（如 🇫🇮），优雅展示
 - 🔔 **VPN 通知**：实时显示上传/下载速度、累计流量，支持断开/重置连接
-- ⏳ **节流保护**：刷新、切换备用节点、检查更新等操作 5 秒内防重复触发
+- ⏳ **节流保护**：刷新订阅列表、检查更新等操作 5 秒内防重复触发
 - 🔔 **公告系统**：支持远程推送公告通知
 - ℹ️ **关于页面**：展示应用版本信息、开源协议、GitHub 仓库链接和免责声明
 - ⚙️ **其他配置**：侧边栏可进入“其他配置”页面，集中管理 IPv6 路由、智能连接比例、超时时间、并发数、VPN MTU 等参数
@@ -169,26 +168,10 @@ app/
 object AppConfig {
     const val STARTUP_SPLASH_DURATION_SECONDS = 10 // 启动图倒计时时长，设为0则不启用
 
-    // 节点订阅 API
-    const val SUBSCRIPTION_URL = "https://your-server.com/api/nodes"
-    // 版本更新 API
-    const val UPDATE_URL = "https://your-server.com/api/update" // 留空则不检查更新且隐藏入口
-    // 公告通知 API
-    const val NOTICE_URL = "https://your-server.com/api/notice"
+    // Cloudflare Worker 统一后台入口
+    const val BACKEND_URL = "https://your-worker.workers.dev"
     // 官网地址
-    const val WEBSITE_URL = "https://your-server.com" // 留空则隐藏“官方网站”
-
-    // API 请求超时（毫秒）
-    const val NODE_REQUEST_TIMEOUT_MS = 25000L    // 节点请求超时
-    const val NOTICE_REQUEST_TIMEOUT_MS = 25000L  // 公告请求超时
-    const val UPDATE_REQUEST_TIMEOUT_MS = 25000L  // 更新请求超时
-
-    // 联系方式
-    const val FEEDBACK_EMAIL = ""  // 反馈邮箱，留空则不显示邮箱复制
-    // 反馈链接（GitHub Issues）
-    const val FEEDBACK_URL = "https://github.com/your-username/your-repo/issues" // 与邮箱均留空则隐藏“问题反馈”
-    // 项目源码地址（留空则隐藏关于页相关按钮）
-    const val GITHUB_URL = "https://github.com/your-username/your-repo"
+    // 官网、反馈联系方式、GitHub、请求超时均在 Worker 管理后台配置
 
     // 延迟测试 (TCPing & URL Test)
     const val TCPING_TEST_TIMEOUT = 3000L // 超时默认3秒
@@ -351,18 +334,18 @@ app/src/main/
 
 ### 节点列表、收藏与导入
 
-节点列表支持在 `主节点/备用节点` 与 `收藏节点` 两个视图之间切换。收藏节点是独立数据，不会在主/备用订阅刷新后被自动覆盖。
+节点列表支持在 `订阅节点` 与 `收藏节点` 两个视图之间切换。收藏节点是独立数据，不会在订阅刷新后被自动覆盖。
 
 **功能特点**：
 
 - ⭐ 节点卡片延迟标签前的星标可用于收藏或取消收藏
-- 📌 APP 会记录退出前停留的是主/备用节点还是收藏节点
+- 📌 APP 会记录退出前停留的是订阅节点还是收藏节点
 - ➕ 节点列表搜索按钮左侧提供导入入口，支持从剪切板导入和扫描二维码
 - 🔁 导入到收藏节点前会自动去重，成功后提示实际导入数量
 - 🛡️ 导入收藏节点前会生成单节点 sing-box 测试配置并执行 `Libbox.checkConfig()`，不兼容核心的节点不会写入收藏
 - 🚦 VPN 启动时只会使用当前节点来源生成配置，并在启动前跳过核心不支持的非选中节点；如果所选节点本身不被核心支持，会直接提示错误
 
-> 💡 收藏节点适合长期保留少量手动维护的节点；主/备用节点适合由订阅接口统一刷新。
+> 💡 收藏节点适合长期保留少量手动维护的节点；订阅节点由远程订阅列表统一刷新。
 
 ---
 
@@ -392,8 +375,8 @@ app/src/main/
 
 **配置位置**：  
 - 版本号：`app/build.gradle.kts` → `versionName` / `versionCode`  
-- GitHub 链接：`AppConfig.kt` → `GITHUB_URL`（留空则隐藏相关按钮）  
-- 反馈链接：`AppConfig.kt` → `FEEDBACK_URL`
+- GitHub 链接：Worker 管理后台 → 应用基础设置（留空则隐藏相关按钮）
+- 反馈链接：Worker 管理后台 → 应用基础设置
 
 **设置位置**：侧边栏 → 关于
 
@@ -409,7 +392,7 @@ app/src/main/
 - 🔍 **搜索过滤**：支持按应用名称或包名搜索
 - 📂 **系统应用筛选**：可选择显示/隐藏系统应用
 
-**设置位置**：侧边栏 → 分应用代理
+**设置位置**：侧边栏 → 代理作用域
 
 ---
 
@@ -421,8 +404,7 @@ app/src/main/
 |--------|--------|------|
 | IPv6 路由 | 禁用 | 可选仅 / 优先 / 启用 / 禁用，位于其他配置顶部 |
 | 记住上次选择的节点 | 开启 | 退出 APP 前选择的节点会在下次启动后恢复 |
-| VPN连接后获取IP信息 | 关闭 | 仅影响后续新的连接动作 |
-| 定时更新节点信息 | 关闭 | 可设置每隔 X 小时 Y 分钟自动请求节点；从上次请求节点完成后开始计时，并沿用上次使用的主/备用节点来源 |
+| 定时更新节点信息 | 关闭 | 可设置每隔 X 小时 Y 分钟自动请求节点；只有订阅列表 `update=1` 时自动更新生效 |
 | 节点自动重连 | 关闭 | 定时更新后，如当前连接节点的 `server + port` 仍存在，则自动重连到新列表中的对应节点；不存在则保持原连接 |
 | 节点更新通知 | 开启 | 仅控制定时更新节点信息产生的 Toast 提示，不影响手动刷新节点提示 |
 | TCPing 节点比例 | 100% | 智能连接第一阶段候选比例，默认测试全部节点 |
@@ -480,28 +462,29 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 
 ---
 
-### 备用节点
+### 订阅列表与多线路
 
-备用节点功能允许运营者配置备用订阅源，当主订阅不可用或被封锁时，用户可以快速切换到备用源获取节点。
+APP 只请求 Cloudflare Worker 的 `/api/client`，Worker 在服务端拉取并缓存所有上游订阅，APP 不再直接访问任何线路地址。
 
-**功能特点**：
-- 🔄 **一键切换**：侧边栏开关，快速切换主/备用订阅源
-- 🛡️ **自动回退**：备用源请求失败时，自动关闭备用模式并恢复默认订阅
-- 💾 **本地缓存**：备用节点 URL 会缓存到本地，确保下次启动时可用
-- 🔔 **状态提示**：切换时自动断开现有连接，并 Toast 提示当前状态
+订阅列表示例：
 
-**回退机制**：
+```json
+{
+  "update": 1,
+  "subscriptions": [
+    {"id": "line1", "name": "线路1", "content": "vless://...", "enabled": true},
+    {"id": "line2", "name": "线路2", "content": "base64或加密订阅内容", "enabled": true}
+  ],
+  "notice": null,
+  "appUpdate": null
+}
+```
 
-以下情况会自动触发回退（关闭备用节点 → 清除缓存 → 恢复默认）：
-- 备用订阅 URL 返回空响应或 HTTP 错误
-- 备用订阅 URL 格式无效（非 http/https 开头）
-- 公告配置中无 `backupNodes` 对象或无 `url` 属性
-
-> ⚠️ **注意**：切换备用节点开关时，如果 VPN 正在运行，会自动断开连接并清除当前选中的节点。
-
-**设置位置**：侧边栏 → 备用节点（仅在公告配置中包含有效 `backupNodes.url` 时显示）
-
-**服务端配置**：参见下方 [公告通知接口](#3-公告通知接口) 中的 `backupNodes` 字段。
+- `update=1`：Worker 在 APP 请求 `/api/client` 时自动刷新上游订阅
+- `update=0`：Worker 使用缓存内容，APP 手动刷新时请求 `/api/client?refresh=1`
+- 首次没有缓存内容时，Worker 会自动完成第一次拉取
+- 每条线路返回的内容可以是明文、Base64 或项目支持的加密节点列表
+- 重复节点会自动去重，节点卡片会显示其所属线路名称
 
 ---
 
@@ -514,12 +497,14 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 - `autoTestStatus`：历史自动化测试状态（兼容字段）
 - `autoTestedAt`：历史自动化测试时间戳（兼容字段）
 - `source`：节点来源（`SUBSCRIPTION` / `FAVORITE`）
+- `subscriptionSourceId`：远程订阅线路 ID
+- `subscriptionSourceName`：远程订阅线路名称
 - `favoriteSourceNodeId`：从订阅节点收藏而来的来源节点 ID
 - `favoriteCreatedAt`：收藏节点创建时间，用于收藏列表排序
 
 `SettingsRepository` 节点列表配置项：
 
-- `nodeListCategory`（当前节点列表视图：主/备用节点或收藏节点）
+- `nodeListCategory`（当前节点列表视图：订阅节点或收藏节点）
 
 `SettingsRepository` 用户可配置项（"其他配置"页面）：
 
@@ -811,13 +796,82 @@ Release 版本默认移除所有 `android.util.Log` 调用（包括 `Log.d`、`L
 
 ---
 
-## API 接口
+## Cloudflare Worker 后端
 
-### 1. 节点订阅接口
+项目根目录的 `cloudflare-worker.js` 是可直接粘贴到 Cloudflare Workers 的单文件后台。
 
-**端点**: `GET /api/nodes`
+部署步骤：
 
-**响应格式**: Base64 编码的节点链接列表（每行一个）
+1. 在 Cloudflare 创建一个 KV Namespace，并在 Worker 设置中绑定变量名 `CONFIG`。
+2. 创建 Worker Secret `ADMIN_TOKEN`，不要把它写入 App 或提交到 Git。
+3. 将 `cloudflare-worker.js` 粘贴并部署，打开 `https://你的域名/admin`。
+4. 打开管理后台，用表单添加订阅线路、设置自动更新、网站、反馈联系方式、GitHub、公告和版本更新；不需要手写 JSON。
+5. 将 `AppConfig.kt` 中唯一的后端配置改成 Worker 地址：`AppConfig.BACKEND_URL`。
+
+App 使用的唯一公开接口是 `GET /api/client`：
+
+```json
+{
+  "update": 1,
+  "subscriptions": [
+    {"id": "line1", "name": "线路1", "enabled": true, "content": "..."}
+  ],
+  "settings": {
+    "websiteUrl": "https://example.com",
+    "feedbackEmail": "support@example.com",
+    "feedbackUrl": "https://github.com/example/issues",
+    "githubUrl": "https://github.com/example/project",
+    "nodeRequestTimeoutMs": 25000
+  },
+  "notice": null,
+  "appUpdate": null
+}
+```
+
+手动刷新使用 `GET /api/client?refresh=1`。公告配置放在 `notice`，版本更新配置放在 `appUpdate`，格式沿用项目现有 `NoticeInfo` 和 `UpdateInfo` 字段。
+
+后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /api/admin/state` 读取，`PUT /api/admin/state` 保存，`POST /api/admin/refresh` 立即刷新所有订阅源。
+
+这样 App 只内置一个 Worker 地址；更换线路、公告、更新信息和上游订阅地址都在 Worker 管理后台完成。
+
+## API 接口（历史格式说明，当前不使用）
+
+> 以下旧版接口文档仅供迁移旧服务参考。当前 App 不会请求 `/api/subscriptions`、`/api/update` 或 `/api/notice`，统一使用上面的 Cloudflare Worker `/api/client`。
+
+### 1. 订阅列表接口
+
+**旧端点**: `GET /api/subscriptions`（已废弃）
+
+**响应格式**: JSON。该接口只返回订阅线路，不直接返回节点。
+
+```json
+{
+    "update": 1,
+    "subscriptions": [
+        {
+            "id": "line1",
+            "name": "线路1",
+            "url": "https://your-server.com/api/line1",
+            "enabled": true
+        }
+    ]
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `update` | Int / Boolean | ❌ | `1`/`true` 允许自动更新；`0`/`false` 仅手动更新；首次获取始终更新 |
+| `subscriptions` | Array | ✅ | 订阅线路列表 |
+| `subscriptions[].id` | String | ❌ | 线路唯一 ID；缺省时由 URL 计算 |
+| `subscriptions[].name` | String | ❌ | 线路显示名称，缺省时使用“线路N” |
+| `subscriptions[].url` | String | ✅ | 实际节点订阅地址 |
+| `subscriptions[].enabled` | Boolean / Int | ❌ | 是否启用该线路，默认启用 |
+
+APP 会并发获取所有启用线路，合并并去重节点；节点卡片显示线路名称。`subscriptions` 也兼容 `sources`、`list`、`data` 字段名。
+
+### 2. 节点订阅内容接口
+
+每个 `subscriptions[].url` 返回节点链接列表，每行一个。响应可以是明文、Base64 或项目支持的加密内容。
 
 **支持的协议**:
 - `vless://` - VLESS
@@ -842,13 +896,13 @@ trojan://password@server:443?sni=example.com#Trojan节点
 ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
 ```
 
-**配置位置**: `AppConfig.kt` → `SUBSCRIPTION_URL`
+**当前配置位置**: `AppConfig.kt` → `BACKEND_URL`
 
 ---
 
-### 2. 版本更新接口
+### 3. 版本更新接口
 
-**端点**: `GET /api/update`
+**旧端点**: `GET /api/update`（已废弃）
 
 **响应格式**: JSON
 
@@ -871,13 +925,13 @@ ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
 | `downloadUrl` | String | ❌ | APK 下载地址 |
 | `changelog` | String | ❌ | 更新日志 |
 
-**配置位置**: `AppConfig.kt` → `UPDATE_URL`
+**当前配置位置**: Worker 管理后台的 `appUpdate`
 
 ---
 
-### 3. 公告通知接口
+### 4. 公告通知接口
 
-**端点**: `GET /api/notice`
+**旧端点**: `GET /api/notice`（已废弃）
 
 **响应格式**: JSON
 
@@ -888,10 +942,6 @@ ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
     "content": "服务器将于今晚 22:00 进行维护，届时可能无法连接。",
     "noticeId": "notice_20240117",
     "showOnce": true,
-    "backupNodes": {
-        "msg": "主节点不可用时，请开启备用节点",
-        "url": "https://your-server.com/api/backup-nodes"
-    },
     "scheduledNodeUpdate": {
         "enabled": true,
         "hours": 6,
@@ -910,9 +960,6 @@ ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
 | `content` | String | ❌ | 公告内容，支持常见 HTML 标签（如 h1-h6、p、b、a、br、img 等），纯文本会自动按换行显示 |
 | `noticeId` | String | ❌ | 公告唯一ID（用于去重） |
 | `showOnce` | Boolean | ❌ | 是否只显示一次（默认 `true`） |
-| `backupNodes` | Object | ❌ | 备用节点配置（可选） |
-| `backupNodes.msg` | String | ❌ | 备用节点提示信息 |
-| `backupNodes.url` | String | ❌ | 备用订阅 URL（必须以 `http://` 或 `https://` 开头） |
 | `scheduledNodeUpdate` | Object | ❌ | 定时更新节点信息配置；存在时优先级高于本地设置 |
 | `scheduledNodeUpdate.enabled` | Boolean | ❌ | 是否开启定时更新节点信息 |
 | `scheduledNodeUpdate.hours` | Number | ❌ | 定时更新间隔小时数，范围 `0~168` |
@@ -921,18 +968,13 @@ ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
 | `scheduledNodeUpdate.toastEnabled` | Boolean | ❌ | 是否显示定时更新节点信息产生的 Toast；存在时优先级高于本地设置 |
 | `nodeAutoReconnect` | Boolean | ❌ | 旧版兼容字段，推荐改用 `scheduledNodeUpdate.nodeAutoReconnect` |
 
-> 💡 **备用节点说明**：
-> - 当 `backupNodes.url` 存在且格式有效时，侧边栏会显示「备用节点」开关
-> - 备用订阅的响应格式与主订阅相同（Base64 编码的节点链接列表）
-> - 如果不需要备用节点功能，可省略整个 `backupNodes` 字段
-
 > 💡 **定时更新说明**：
-> - 计时从上次请求节点完成后开始；上次请求主节点则继续请求主节点，上次请求备用节点则继续请求备用节点
+> - 只有订阅列表的 `update=1` 时，定时更新才会自动请求所有订阅线路
 > - `scheduledNodeUpdate.nodeAutoReconnect` 开启后，仅当当前连接节点在新列表中存在相同 `server + port` 时才自动重连，否则保持原连接
 > - `scheduledNodeUpdate.toastEnabled` 只控制定时更新节点信息产生的 Toast，不影响手动刷新节点提示
 > - notice 接口下发的 `scheduledNodeUpdate` 只覆盖运行时有效设置，不会改写用户本地保存值
 
-**配置位置**: `AppConfig.kt` → `NOTICE_URL`
+**当前配置位置**: Worker 管理后台的 `notice`
 
 ---
 
@@ -1139,7 +1181,7 @@ target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 
 ### 节点来源与核心配置校验
 
-- 主/备用节点与收藏节点按 `NodeSource` 独立存储，收藏节点不会被订阅刷新覆盖
+- 订阅节点与收藏节点按 `NodeSource` 独立存储，收藏节点不会被订阅刷新覆盖
 - 节点列表当前视图由 `nodeListCategory` 记录，三点菜单测试和 VPN 启动都会按当前来源取节点
 - 收藏导入时会先做解析、去重和 sing-box 单节点配置校验；不兼容核心的节点会被跳过
 - VPN 启动/重启前会再次按当前来源过滤核心不支持的节点，并对最终完整配置执行 `Libbox.checkConfig()`
@@ -1159,12 +1201,11 @@ target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 
 ### 请求容错与自动重试
 
-节点请求、公告通知、版本更新三类网络请求均具备统一的容错策略：
+订阅列表、线路节点、公告通知、版本更新四类网络请求均具备统一的容错策略：
 
 - 第一次请求失败/超时 → 自动重试一次（Toast 提示"请求失败，已自动重试..."）
 - 第二次仍失败：
-  - **节点请求（备用模式）**→ 关闭备用节点 → 清除缓存 → 恢复默认订阅
-  - **节点请求（默认模式）**→ Toast 显示错误信息
+  - **订阅列表/线路请求**→ Toast 显示错误信息；已有缓存仍可继续使用
   - **公告/更新请求** → Toast进行提示，不影响 APP 使用
 
 **URL Test 自动重试**：仅对 HTTP 503 / 504 或请求异常自动重试 1 次（`URL_TEST_RETRY_COUNT`），200 但 delay 非法不会重试。
@@ -1173,9 +1214,6 @@ target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `NODE_REQUEST_TIMEOUT_MS` | 25000 | 节点请求超时（毫秒） |
-| `NOTICE_REQUEST_TIMEOUT_MS` | 25000 | 公告请求超时（毫秒） |
-| `UPDATE_REQUEST_TIMEOUT_MS` | 25000 | 更新请求超时（毫秒） |
 | `URL_TEST_RETRY_COUNT` | 1 | URL Test 重试次数（仅 503/504/异常） |
 
 ---

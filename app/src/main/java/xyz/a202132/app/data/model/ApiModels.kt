@@ -38,15 +38,30 @@ data class NoticeInfo(
     @SerializedName("showOnce")
     val showOnce: Boolean = true,
     
-    @SerializedName("backupNodes")
-    val backupNodes: BackupNodeInfo? = null,
-
     @SerializedName("scheduledNodeUpdate")
     val scheduledNodeUpdate: ScheduledNodeUpdateInfo? = null,
 
     // 兼容旧 notice 配置；新配置推荐放到 scheduledNodeUpdate.nodeAutoReconnect。
     @SerializedName("nodeAutoReconnect")
     val nodeAutoReconnect: Boolean? = null
+)
+
+/** App-facing settings delivered by the unified Worker backend. */
+data class BackendAppSettings(
+    @SerializedName("websiteUrl")
+    val websiteUrl: String = "",
+
+    @SerializedName("feedbackEmail")
+    val feedbackEmail: String = "",
+
+    @SerializedName("feedbackUrl")
+    val feedbackUrl: String = "",
+
+    @SerializedName("githubUrl")
+    val githubUrl: String = "",
+
+    @SerializedName("nodeRequestTimeoutMs")
+    val nodeRequestTimeoutMs: Long = 25000L
 )
 
 /**
@@ -68,17 +83,6 @@ data class ScheduledNodeUpdateInfo(
 
     @SerializedName("toastEnabled")
     val toastEnabled: Boolean? = null
-)
-
-/**
- * 备用节点信息
- */
-data class BackupNodeInfo(
-    @SerializedName("msg")
-    val msg: String? = null,
-    
-    @SerializedName("url")
-    val url: String? = null
 )
 
 /**

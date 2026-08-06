@@ -82,7 +82,6 @@ class MainActivity : ComponentActivity() {
                     val favoriteSourceNodeIds by viewModel.favoriteSourceNodeIds.collectAsState()
                     val skipFavoriteRemovalConfirmation by
                         viewModel.skipFavoriteRemovalConfirmation.collectAsState()
-                    val backupNodeEnabled by viewModel.backupNodeEnabled.collectAsState()
                     val isTesting by viewModel.isTesting.collectAsState()
                     val testingLabel by viewModel.testingLabel.collectAsState()
                     val startupUpdateCheckCompleted by viewModel.startupUpdateCheckCompleted.collectAsState()
@@ -190,7 +189,6 @@ class MainActivity : ComponentActivity() {
                                     nodes = nodes,
                                     selectedNodeId = selectedNodeId,
                                     category = nodeListCategory,
-                                    backupNodeEnabled = backupNodeEnabled,
                                     favoriteSourceNodeIds = favoriteSourceNodeIds,
                                     skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
                                     isTesting = isTesting,

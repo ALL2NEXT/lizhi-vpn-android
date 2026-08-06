@@ -299,7 +299,7 @@ private class HtmlImageGetter(
     private fun loadDrawable(source: String): Drawable? {
         val resolvedSource = when {
             source.startsWith("//") -> "https:$source"
-            source.startsWith("/") -> AppConfig.NOTICE_URL.substringBefore("/apis/") + source
+            source.startsWith("/") -> AppConfig.BACKEND_URL.trimEnd('/') + source
             else -> source
         }
         return if (source.startsWith("data:image", ignoreCase = true)) {

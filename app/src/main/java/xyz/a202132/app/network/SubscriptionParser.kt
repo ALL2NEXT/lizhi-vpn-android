@@ -4,11 +4,9 @@ import android.util.Base64
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonObject
-import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import android.net.Uri
-import kotlinx.coroutines.withTimeout
 import java.net.URLDecoder
 import java.security.MessageDigest
 
@@ -19,22 +17,6 @@ class SubscriptionParser {
     
     private val gson = Gson()
     private val tag = "SubscriptionParser"
-    
-    /**
-     * 从订阅URL获取并解析节点列表
-     */
-    suspend fun fetchAndParse(url: String = AppConfig.SUBSCRIPTION_URL): Result<List<Node>> {
-        return try {
-            val response = withTimeout(AppConfig.NODE_REQUEST_TIMEOUT_MS) {
-                NetworkClient.apiService.getSubscription(url)
-            }
-            val nodes = parseSubscription(response)
-            Result.success(nodes)
-        } catch (e: Exception) {
-            Log.e(tag, "Failed to fetch subscription", e)
-            Result.failure(e)
-        }
-    }
     
     /**
      * 解析订阅内容

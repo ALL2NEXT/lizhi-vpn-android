@@ -211,7 +211,7 @@ fun OtherConfigScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "从上次请求节点完成后开始计时，自动请求上次使用的主节点或备用节点",
+                            text = "从上次请求节点完成后开始计时，自动请求订阅列表中的所有线路",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -349,7 +349,7 @@ fun OtherConfigScreen(
                     effectiveScheduledNodeUpdateSettings.toastOverriddenByNotice
                 ) {
                     Text(
-                        text = "当前设置由 notice 接口覆盖，本地保存只在接口字段移除后生效。",
+                        text = "当前设置由 Worker 的 notice 配置覆盖，本地保存只在对应字段移除后生效。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

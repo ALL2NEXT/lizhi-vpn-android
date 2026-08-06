@@ -9,7 +9,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
-import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,8 +24,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import xyz.a202132.app.AppConfig
 import xyz.a202132.app.BuildConfig
+import xyz.a202132.app.AppConfig
 import xyz.a202132.app.R
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -42,20 +41,14 @@ fun DrawerContent(
     onOpenProxyScope: () -> Unit,
     onOpenOtherConfig: () -> Unit,
     onOpenRuntimeLog: () -> Unit,
-    notice: xyz.a202132.app.data.model.NoticeInfo?,
-    backupNodeEnabled: Boolean,
-    onToggleBackupNode: (Boolean) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    websiteUrl: String = "",
+    feedbackEmail: String = "",
+    feedbackUrl: String = "",
+    githubUrl: String = ""
 ) {
     val context = LocalContext.current
-    var showBackupNodeConfirmDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
-    
-    // 检查备用节点是否可用
-    val backupNodeInfo = notice?.backupNodes
-    val isBackupNodeVisible = backupNodeInfo?.url?.let { 
-        it.startsWith("http://") || it.startsWith("https://") 
-    } == true
     
     Column(
         modifier = Modifier
@@ -82,32 +75,13 @@ fun DrawerContent(
         ) {
             // 菜单项
 
-            if (AppConfig.UPDATE_URL.isNotBlank()) {
+            if (AppConfig.BACKEND_URL.isNotBlank()) {
                 DrawerMenuItem(
                     icon = Icons.Outlined.SystemUpdate,
                     title = "检查更新",
                     onClick = {
                         onCheckUpdate()
                         onClose()
-                    }
-                )
-            }
-
-            // 备用节点 (仅在有效时显示)
-            if (isBackupNodeVisible) {
-                DrawerMenuToggle(
-                    icon = Icons.Outlined.Backup,
-                    title = "备用节点",
-                    subtitle = if (backupNodeEnabled) "已开启" else "已关闭",
-                    checked = backupNodeEnabled,
-                    onCheckedChange = { isChecked ->
-                        if (isChecked) {
-                            // 开启时显示确认对话框
-                            showBackupNodeConfirmDialog = true
-                        } else {
-                            // 关闭直接执行
-                            onToggleBackupNode(false)
-                        }
                     }
                 )
             }
@@ -139,12 +113,12 @@ fun DrawerContent(
                 }
             )
             
-            if (AppConfig.WEBSITE_URL.isNotBlank()) {
+            if (websiteUrl.isNotBlank()) {
                 DrawerMenuItem(
                     icon = Icons.Outlined.Language,
                     title = "官方网站",
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AppConfig.WEBSITE_URL))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
                         context.startActivity(intent)
                         onClose()
                     }
@@ -152,8 +126,8 @@ fun DrawerContent(
             }
             
             // 问题反馈 - 支持邮箱复制 + 链接跳转
-            val hasEmail = AppConfig.FEEDBACK_EMAIL.isNotBlank()
-            val hasFeedbackUrl = AppConfig.FEEDBACK_URL.isNotBlank()
+            val hasEmail = feedbackEmail.isNotBlank()
+            val hasFeedbackUrl = feedbackUrl.isNotBlank()
             
             if (hasEmail || hasFeedbackUrl) {
                 DrawerMenuItem(
@@ -162,12 +136,12 @@ fun DrawerContent(
                     onClick = {
                         if (hasEmail) {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("email", AppConfig.FEEDBACK_EMAIL)
+                            val clip = ClipData.newPlainText("email", feedbackEmail)
                             clipboard.setPrimaryClip(clip)
                             Toast.makeText(context, "邮箱已复制", Toast.LENGTH_SHORT).show()
                         }
                         if (hasFeedbackUrl) {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AppConfig.FEEDBACK_URL))
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(feedbackUrl))
                             context.startActivity(intent)
                             onClose()
                         }
@@ -195,41 +169,12 @@ fun DrawerContent(
         )
     }
     
-    // 备用节点开启确认弹窗
-    if (showBackupNodeConfirmDialog && backupNodeInfo != null) {
-        AlertDialog(
-            onDismissRequest = { showBackupNodeConfirmDialog = false },
-            title = { Text("开启备用节点") },
-            text = { 
-                Text(
-                    text = if (!backupNodeInfo.msg.isNullOrBlank()) {
-                        backupNodeInfo.msg
-                    } else {
-                        "开启后，节点列表只会显示备用节点信息！"
-                    }
-                ) 
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onToggleBackupNode(true)
-                        showBackupNodeConfirmDialog = false
-                    }
-                ) {
-                    Text("是")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBackupNodeConfirmDialog = false }) {
-                    Text("否")
-                }
-            }
-        )
-    }
-    
     // 关于弹窗
     if (showAboutDialog) {
-        AboutDialog(onDismiss = { showAboutDialog = false })
+        AboutDialog(
+            githubUrl = githubUrl,
+            onDismiss = { showAboutDialog = false }
+        )
     }
 
 }

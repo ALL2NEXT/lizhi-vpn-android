@@ -27,14 +27,15 @@ class SettingsRepository(private val context: Context) {
         private val PER_APP_PROXY_ENABLED = booleanPreferencesKey("per_app_proxy_enabled")
         private val PER_APP_PROXY_MODE = stringPreferencesKey("per_app_proxy_mode")
         private val SELECTED_PACKAGES = stringSetPreferencesKey("selected_packages")
+
+        // 订阅列表缓存
+        private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
+        private val SUBSCRIPTION_LIST_INITIALIZED = booleanPreferencesKey("subscription_list_initialized")
+        private val SUBSCRIPTION_AUTO_UPDATE = booleanPreferencesKey("subscription_auto_update")
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
         
-        // 备用节点
-        private val BACKUP_NODE_ENABLED = booleanPreferencesKey("backup_node_enabled")
-        private val BACKUP_NODE_URL = stringPreferencesKey("backup_node_url")
-
         // 自动化测试设置
         private val REMEMBER_LAST_SELECTED_NODE_ENABLED = booleanPreferencesKey("remember_last_selected_node_enabled")
         private val LAST_SELECTED_NODE_ID = stringPreferencesKey("last_selected_node_id")
@@ -107,6 +108,26 @@ class SettingsRepository(private val context: Context) {
     // 分应用代理 - 选中的应用包名列表
     val selectedPackages: Flow<Set<String>> = context.dataStore.data.map { preferences ->
         preferences[SELECTED_PACKAGES] ?: emptySet()
+    }
+
+    val subscriptionListJson: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[SUBSCRIPTION_LIST_JSON]
+    }
+
+    val subscriptionListInitialized: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SUBSCRIPTION_LIST_INITIALIZED] ?: false
+    }
+
+    val subscriptionAutoUpdate: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SUBSCRIPTION_AUTO_UPDATE] ?: false
+    }
+
+    suspend fun setSubscriptionList(json: String, autoUpdate: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SUBSCRIPTION_LIST_JSON] = json
+            preferences[SUBSCRIPTION_LIST_INITIALIZED] = true
+            preferences[SUBSCRIPTION_AUTO_UPDATE] = autoUpdate
+        }
     }
     
     suspend fun setSelectedNodeId(nodeId: String?) {
@@ -197,31 +218,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
     
-    // 备用节点
-    val backupNodeEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[BACKUP_NODE_ENABLED] ?: false
-    }
-    
-    suspend fun setBackupNodeEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[BACKUP_NODE_ENABLED] = enabled
-        }
-    }
-    
-    val backupNodeUrl: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[BACKUP_NODE_URL]
-    }
-    
-    suspend fun setBackupNodeUrl(url: String?) {
-        context.dataStore.edit { preferences ->
-            if (url == null) {
-                preferences.remove(BACKUP_NODE_URL)
-            } else {
-                preferences[BACKUP_NODE_URL] = url
-            }
-        }
-    }
-
     val rememberLastSelectedNodeEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[REMEMBER_LAST_SELECTED_NODE_ENABLED] ?: true
     }

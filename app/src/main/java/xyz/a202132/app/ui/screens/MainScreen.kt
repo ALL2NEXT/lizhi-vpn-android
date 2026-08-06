@@ -46,8 +46,8 @@ fun MainScreen(
     val isTesting by viewModel.isTesting.collectAsState()
     val testingLabel by viewModel.testingLabel.collectAsState()
     val notice by viewModel.notice.collectAsState()
-    val noticeConfig by viewModel.noticeConfig.collectAsState()
     val updateInfo by viewModel.updateInfo.collectAsState()
+    val backendSettings by viewModel.backendSettings.collectAsState()
     val error by viewModel.error.collectAsState()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsState()
     val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsState()
@@ -61,9 +61,6 @@ fun MainScreen(
     val uploadTotal by viewModel.uploadTotal.collectAsState()
     val downloadTotal by viewModel.downloadTotal.collectAsState()
     
-    // 备用节点设置
-    val backupNodeEnabled by viewModel.backupNodeEnabled.collectAsState()
-
     // 自动化测试设置/状态
     val speedTestDownloadTimeoutMs by viewModel.speedTestDownloadTimeoutMs.collectAsState()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsState()
@@ -100,10 +97,11 @@ fun MainScreen(
                     onOpenProxyScope = onOpenProxyScope,
                     onOpenOtherConfig = onOpenOtherConfig,
                     onOpenRuntimeLog = onOpenRuntimeLog,
-                    notice = noticeConfig, // Use noticeConfig for Drawer (Backup Node visibility)
-                    backupNodeEnabled = backupNodeEnabled,
-                    onToggleBackupNode = { viewModel.setBackupNodeEnabled(it) },
-                    onClose = { scope.launch { drawerState.close() } }
+                    onClose = { scope.launch { drawerState.close() } },
+                    websiteUrl = backendSettings.websiteUrl,
+                    feedbackEmail = backendSettings.feedbackEmail,
+                    feedbackUrl = backendSettings.feedbackUrl,
+                    githubUrl = backendSettings.githubUrl
                 )
             }
         },
@@ -325,8 +323,6 @@ fun MainScreen(
         )
     }
     
-    // 备用节点请求失败弹窗 (已移除，改为 Toast)
-    
     // 更新弹窗
     if (updateInfo != null) {
         UpdateDialog(
@@ -411,7 +407,7 @@ fun MainScreen(
     
     // 连续下载失败后提示从官网下载
     var showWebsiteFallback by remember { mutableStateOf(false) }
-    val websiteUrl = xyz.a202132.app.AppConfig.WEBSITE_URL
+    val websiteUrl = backendSettings.websiteUrl
     
     LaunchedEffect(downloadState.consecutiveFailures) {
         if (downloadState.consecutiveFailures >= 3 && websiteUrl.isNotBlank()) {

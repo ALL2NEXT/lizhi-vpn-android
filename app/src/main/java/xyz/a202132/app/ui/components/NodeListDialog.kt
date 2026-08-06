@@ -71,7 +71,6 @@ fun NodeListScreen(
     nodes: List<Node>,
     selectedNodeId: String?,
     category: NodeListCategory,
-    backupNodeEnabled: Boolean,
     favoriteSourceNodeIds: Set<String>,
     skipFavoriteRemovalConfirmation: Boolean,
     isTesting: Boolean,
@@ -159,7 +158,6 @@ fun NodeListScreen(
             nodes = nodes,
             selectedNodeId = selectedNodeId,
             category = category,
-            backupNodeEnabled = backupNodeEnabled,
             favoriteSourceNodeIds = favoriteSourceNodeIds,
             isTesting = isTesting,
             showSearch = showSearch,
@@ -311,7 +309,6 @@ private fun NodeListContent(
     nodes: List<Node>,
     selectedNodeId: String?,
     category: NodeListCategory,
-    backupNodeEnabled: Boolean,
     favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
     showSearch: Boolean,
@@ -384,7 +381,7 @@ private fun NodeListContent(
 
         NodeListCategorySwitch(
             category = category,
-            primaryLabel = if (backupNodeEnabled) "\u5907\u7528\u8282\u70b9" else "\u4e3b\u8282\u70b9",
+            primaryLabel = "订阅节点",
             enabled = interactionEnabled && !isTesting,
             onCategoryChange = onCategoryChange
         )
@@ -598,9 +595,14 @@ private fun NodeListItem(
                         )
 
                         Text(
-                            text = node.type.protocol.uppercase(),
+                            text = listOfNotNull(
+                                node.type.protocol.uppercase(),
+                                node.subscriptionSourceName
+                            ).joinToString(" · "),
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

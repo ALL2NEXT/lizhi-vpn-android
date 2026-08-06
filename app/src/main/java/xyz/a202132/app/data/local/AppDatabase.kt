@@ -17,7 +17,7 @@ import java.io.RandomAccessFile
 
 @Database(
     entities = [Node::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -80,6 +80,12 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `nodes` ADD COLUMN `urlTestLatency` INTEGER NOT NULL DEFAULT -1")
             }
         }
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `nodes` ADD COLUMN `subscriptionSourceId` TEXT")
+                db.execSQL("ALTER TABLE `nodes` ADD COLUMN `subscriptionSourceName` TEXT")
+            }
+        }
         @Volatile
         private var sqlCipherLibLoaded = false
 
@@ -117,7 +123,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigration()
                 .build()
         }
