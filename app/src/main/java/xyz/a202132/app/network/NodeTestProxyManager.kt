@@ -12,7 +12,7 @@ import java.net.Socket
 import java.util.UUID
 
 /**
- * 为节点 IP 和带宽测试提供临时的无头 sing-box 代理会话。
+ * 为节点带宽测试提供临时的无头 sing-box 代理会话。
  */
 object NodeTestProxyManager {
 

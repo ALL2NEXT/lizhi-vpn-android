@@ -60,7 +60,7 @@
 
 ### 测试与诊断
 
-- 🔧 **三点工具菜单**：主界面右上角“三点”菜单提供 TCPing、URL Test、网速测试、节点IP信息、隐藏超时/不可用节点等功能
+- 🔧 **三点工具菜单**：主界面右上角“三点”菜单提供 TCPing、URL Test、网速测试、隐藏超时/不可用节点等功能
 - 🌐 **URL Test 测试**：通过启动临时无头 sing-box 实例进行 HTTP 握手延迟测试，无需连接 VPN 即可测试所有节点真实连通性
 - 🧩 **测试模式系统**：内置 `日常模式`（URL Test 延迟优先）与 `下载模式`（下行带宽优先，默认 10MB），支持自定义模式保存/删除
 - 🤖 **智能连接**：依次执行 TCPing、204 URL Test 和 5MB 下载测速，按测试结果自动连接最佳节点
@@ -212,11 +212,6 @@ object AppConfig {
     const val NOTIFICATION_CHANNEL_ID = "vpn_service"
     const val NOTIFICATION_ID = 1
 
-    // 节点出口 IP 信息查询
-    const val NODE_IP_INFO_URL = "https://my.ippure.com/v1/info"
-    const val NODE_IP_INFO_TIMEOUT_MS = 12000L
-    const val NODE_IP_INFO_RETRY_COUNT = 1 // 节点IP信息自动重试次数
-
     // 速度测试 (Cloudflare)
     const val SPEED_TEST_DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
     const val SPEED_TEST_UPLOAD_URL = "https://speed.cloudflare.com/__up"
@@ -278,7 +273,7 @@ app/src/main/java/xyz/a202132/app/
 │   ├── NetworkClient.kt          # 网络客户端配置
 │   ├── SpeedTestService.kt       # Cloudflare 网速测试服务
 │   ├── SubscriptionParser.kt     # 订阅链接解析器
-│   ├── NodeTestProxyManager.kt   # 节点 IP/带宽测试临时代理管理器
+│   ├── NodeTestProxyManager.kt   # 节点带宽测试临时代理管理器
 │   └── UrlTestManager.kt         # 无头 sing-box URL Test 管理器
 ├── service/
 │   ├── BoxPlatformInterface.kt   # sing-box 平台接口（TUN 管理、分应用代理）
@@ -297,7 +292,6 @@ app/src/main/java/xyz/a202132/app/
 │   ├── dialogs/                  # 对话框
 │   │   ├── AboutDialog.kt       # 关于页面弹窗
 │   │   ├── Dialogs.kt           # 通用对话框（公告、更新等）
-│   │   ├── NodeIpInfoDialog.kt      # 节点出口 IP 信息弹窗
 │   │   ├── SpeedTestDialog.kt       # 网速测试弹窗
 │   │   └── UserAgreementDialog.kt   # 用户协议弹窗
 │   ├── navigation/               # 页面路由
@@ -382,7 +376,6 @@ app/src/main/
 | **URL Test** | 通过 ClashAPI 发起 HTTP 握手延迟测试，结果更准确 (默认/推荐) |
 | **网速测试** | 使用 Cloudflare 节点进行真实宽带测速 |
 | **隐藏不合格节点** | 一键隐藏超时/不可用/不达标节点（UI 过滤） |
-| **节点 IP 信息** | 查询当前选择节点的出口 IP 详情（地区、ASN、风控评分等，选中即可，无需连接） |
 
 **URL Test 工作原理**：
 
@@ -438,7 +431,6 @@ app/src/main/
 | Hysteria 最大带宽 (Up/Dw) | 1000/1000 Mbps | 仅对 Hysteria2 节点生效；输入 0 表示不设置，修改后下次连接生效 |
 | TCPing 超时 | 3000ms | 最低 500ms |
 | URL Test 超时 | 3000ms | 最低 500ms |
-| 节点IP信息超时 | 12000ms | 最低 1000ms |
 | 单次下载测速超时 | 25000ms | 设为 0 则不限制 |
 | TCPing 并发数 | 16 | 范围 1~128 |
 | URL Test 并发数 | 10 | 范围 1~128 |
@@ -533,7 +525,6 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 
 - `tcpingTestTimeoutMs` — TCPing 超时（毫秒）
 - `urlTestTimeoutMs` — URL Test 超时（毫秒）
-- `nodeIpInfoTimeoutMs` — 节点 IP 信息查询超时（毫秒）
 - `speedTestDownloadTimeoutMs` — 单次下载测速超时（毫秒）
 - `tcpingConcurrency` — TCPing 并发数
 - `urlTestConcurrency` — URL Test 并发数
@@ -544,7 +535,6 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 - `hysteriaUpMbps` — Hysteria2 上行最大带宽（Mbps，默认 1000，设为 0 表示不设置）
 - `hysteriaDownMbps` — Hysteria2 下行最大带宽（Mbps，默认 1000，设为 0 表示不设置）
 - `vpnMtu` — VPN MTU 值（修改后需断开重连）
-- `nodeIpInfoTestOnVpnStart` — VPN 连接后是否自动获取节点 IP 信息
 - `scheduledNodeUpdateEnabled` — 是否定时更新节点信息
 - `scheduledNodeUpdateHours` — 定时更新间隔小时数（0~168）
 - `scheduledNodeUpdateMinutes` — 定时更新间隔分钟数（0~59）
@@ -1179,8 +1169,6 @@ target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 
 **URL Test 自动重试**：仅对 HTTP 503 / 504 或请求异常自动重试 1 次（`URL_TEST_RETRY_COUNT`），200 但 delay 非法不会重试。
 
-**节点 IP 信息自动重试**：仅对超时、网络异常（IOException）或 HTTP 429 / 500 / 502 / 503 / 504 自动重试 1 次（`NODE_IP_INFO_RETRY_COUNT`），重试间隔 300ms。
-
 超时时间统一在 `AppConfig.kt` 配置：
 
 | 配置项 | 默认值 | 说明 |
@@ -1189,7 +1177,6 @@ target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 | `NOTICE_REQUEST_TIMEOUT_MS` | 25000 | 公告请求超时（毫秒） |
 | `UPDATE_REQUEST_TIMEOUT_MS` | 25000 | 更新请求超时（毫秒） |
 | `URL_TEST_RETRY_COUNT` | 1 | URL Test 重试次数（仅 503/504/异常） |
-| `NODE_IP_INFO_RETRY_COUNT` | 1 | 节点 IP 信息重试次数（仅超时/网络异常/服务端错误） |
 
 ---
 

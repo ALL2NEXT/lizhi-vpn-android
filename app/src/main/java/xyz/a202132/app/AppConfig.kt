@@ -69,11 +69,6 @@ object AppConfig {
     const val NOTIFICATION_CHANNEL_ID = "vpn_service"
     const val NOTIFICATION_ID = 1
 
-    // 节点IP信息
-    const val NODE_IP_INFO_URL = "https://my.ippure.com/v1/info"
-    const val NODE_IP_INFO_TIMEOUT_MS = 12000L // 单次节点IP信息查询超时（毫秒）
-    const val NODE_IP_INFO_RETRY_COUNT = 1 // 节点IP信息自动重试次数，仅对超时、网络异常或服务端临时错误生效
-
     // Speed Test - Cloudflare 网速测试
     const val SPEED_TEST_DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
     const val SPEED_TEST_UPLOAD_URL = "https://speed.cloudflare.com/__up"

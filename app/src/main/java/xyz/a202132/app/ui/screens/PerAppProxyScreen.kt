@@ -30,8 +30,11 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import xyz.a202132.app.data.model.PerAppProxyMode
+import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.ui.components.ProxyModeSelector
 import xyz.a202132.app.ui.theme.Primary
 import xyz.a202132.app.viewmodel.AppInfo
+import xyz.a202132.app.viewmodel.MainViewModel
 import xyz.a202132.app.viewmodel.PerAppProxyViewModel
 
 import androidx.activity.compose.BackHandler
@@ -41,8 +44,9 @@ import androidx.activity.compose.BackHandler
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PerAppProxyScreen(
+fun ProxyScopeScreen(
     onBack: (Boolean) -> Unit,
+    mainViewModel: MainViewModel,
     viewModel: PerAppProxyViewModel = viewModel()
 ) {
     // 监听系统返回键 (包括手势返回)
@@ -58,6 +62,7 @@ fun PerAppProxyScreen(
     val selectedCount by viewModel.selectedCount.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val showSystemApps by viewModel.showSystemApps.collectAsState()
+    val proxyMode by mainViewModel.proxyMode.collectAsState()
     
     // 监听生命周期，在 onResume 时刷新应用列表 (解决用户授权后返回不刷新问题)
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
@@ -82,7 +87,7 @@ fun PerAppProxyScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("分应用代理") },
+                title = { Text("代理作用域") },
                 navigationIcon = {
                     IconButton(onClick = { onBack(viewModel.hasChanges.value) }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
@@ -109,6 +114,33 @@ fun PerAppProxyScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "代理模式",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ProxyModeSelector(
+                        isGlobalMode = proxyMode == ProxyMode.GLOBAL,
+                        onModeChange = { isGlobal ->
+                            mainViewModel.setProxyMode(
+                                if (isGlobal) ProxyMode.GLOBAL else ProxyMode.SMART
+                            )
+                        }
+                    )
+                }
+            }
+
             
             // 权限提示卡片 (仅当检测到权限受限时显示)
             if (isPermissionDenied) {

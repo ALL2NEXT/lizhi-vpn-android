@@ -39,7 +39,7 @@ import xyz.a202132.app.ui.dialogs.AboutDialog
 @Composable
 fun DrawerContent(
     onCheckUpdate: () -> Unit,
-    onOpenPerAppProxy: () -> Unit,
+    onOpenProxyScope: () -> Unit,
     onOpenOtherConfig: () -> Unit,
     onOpenRuntimeLog: () -> Unit,
     notice: xyz.a202132.app.data.model.NoticeInfo?,
@@ -123,10 +123,10 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Apps,
-                title = "分应用代理",
-                subtitle = "选择代理应用",
+                title = "代理作用域",
+                subtitle = "全局、智能分流与分应用代理",
                 onClick = {
-                    onOpenPerAppProxy()
+                    onOpenProxyScope()
                     onClose()
                 }
             )

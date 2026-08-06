@@ -40,7 +40,6 @@ fun OtherConfigScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val nodeIpInfoTestOnVpnStart by viewModel.nodeIpInfoTestOnVpnStart.collectAsState()
     val scheduledNodeUpdateEnabled by viewModel.scheduledNodeUpdateEnabled.collectAsState()
     val scheduledNodeUpdateHours by viewModel.scheduledNodeUpdateHours.collectAsState()
     val scheduledNodeUpdateMinutes by viewModel.scheduledNodeUpdateMinutes.collectAsState()
@@ -49,7 +48,6 @@ fun OtherConfigScreen(
     val effectiveScheduledNodeUpdateSettings by viewModel.effectiveScheduledNodeUpdateSettings.collectAsState()
     val tcpingTestTimeoutMs by viewModel.tcpingTestTimeoutMs.collectAsState()
     val urlTestTimeoutMs by viewModel.urlTestTimeoutMs.collectAsState()
-    val nodeIpInfoTimeoutMs by viewModel.nodeIpInfoTimeoutMs.collectAsState()
     val speedTestDownloadTimeoutMs by viewModel.speedTestDownloadTimeoutMs.collectAsState()
     val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsState()
     val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsState()
@@ -68,7 +66,6 @@ fun OtherConfigScreen(
     var scheduledNodeUpdateMinutesInput by remember(scheduledNodeUpdateMinutes) { mutableStateOf(scheduledNodeUpdateMinutes.toString()) }
     var tcpingTimeoutInput by remember(tcpingTestTimeoutMs) { mutableStateOf(tcpingTestTimeoutMs.toString()) }
     var urlTestTimeoutInput by remember(urlTestTimeoutMs) { mutableStateOf(urlTestTimeoutMs.toString()) }
-    var nodeIpInfoTimeoutInput by remember(nodeIpInfoTimeoutMs) { mutableStateOf(nodeIpInfoTimeoutMs.toString()) }
     var speedTestDownloadTimeoutInput by remember(speedTestDownloadTimeoutMs) { mutableStateOf(speedTestDownloadTimeoutMs.toString()) }
     var tcpingConcurrencyInput by remember(tcpingConcurrency) { mutableStateOf(tcpingConcurrency.toString()) }
     var urlTestConcurrencyInput by remember(urlTestConcurrency) { mutableStateOf(urlTestConcurrency.toString()) }
@@ -85,7 +82,6 @@ fun OtherConfigScreen(
         scheduledNodeUpdateMinutes,
         tcpingTestTimeoutMs,
         urlTestTimeoutMs,
-        nodeIpInfoTimeoutMs,
         speedTestDownloadTimeoutMs,
         tcpingConcurrency,
         urlTestConcurrency,
@@ -101,7 +97,6 @@ fun OtherConfigScreen(
         scheduledNodeUpdateMinutesInput = scheduledNodeUpdateMinutes.toString()
         tcpingTimeoutInput = tcpingTestTimeoutMs.toString()
         urlTestTimeoutInput = urlTestTimeoutMs.toString()
-        nodeIpInfoTimeoutInput = nodeIpInfoTimeoutMs.toString()
         speedTestDownloadTimeoutInput = speedTestDownloadTimeoutMs.toString()
         tcpingConcurrencyInput = tcpingConcurrency.toString()
         urlTestConcurrencyInput = urlTestConcurrency.toString()
@@ -200,25 +195,6 @@ fun OtherConfigScreen(
                     Switch(
                         checked = rememberLastSelectedNodeEnabled,
                         onCheckedChange = { viewModel.setRememberLastSelectedNodeEnabled(it) },
-                        colors = visibleSwitchColors()
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "VPN连接后自动获取节点IP信息",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Switch(
-                        checked = nodeIpInfoTestOnVpnStart,
-                        onCheckedChange = { viewModel.setNodeIpInfoTestOnVpnStart(it) },
                         colors = visibleSwitchColors()
                     )
                 }
@@ -470,16 +446,6 @@ fun OtherConfigScreen(
                         urlTestTimeoutInput = it.filter(Char::isDigit)
                         it.toLongOrNull()?.let { value ->
                             viewModel.setUrlTestTimeoutMs(value.coerceAtLeast(500L))
-                        }
-                    }
-                )
-                OtherConfigNumberField(
-                    label = "节点IP信息超时",
-                    value = nodeIpInfoTimeoutInput,
-                    onValueChange = {
-                        nodeIpInfoTimeoutInput = it.filter(Char::isDigit)
-                        it.toLongOrNull()?.let { value ->
-                            viewModel.setNodeIpInfoTimeoutMs(value.coerceAtLeast(1000L))
                         }
                     }
                 )

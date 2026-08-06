@@ -39,7 +39,6 @@ class SettingsRepository(private val context: Context) {
         private val REMEMBER_LAST_SELECTED_NODE_ENABLED = booleanPreferencesKey("remember_last_selected_node_enabled")
         private val LAST_SELECTED_NODE_ID = stringPreferencesKey("last_selected_node_id")
         private val NODE_LIST_CATEGORY = stringPreferencesKey("node_list_category")
-        private val NODE_IP_INFO_TEST_ON_VPN_START = booleanPreferencesKey("node_ip_info_test_on_vpn_start")
         private val SCHEDULED_NODE_UPDATE_ENABLED = booleanPreferencesKey("scheduled_node_update_enabled")
         private val SCHEDULED_NODE_UPDATE_HOURS = intPreferencesKey("scheduled_node_update_hours")
         private val SCHEDULED_NODE_UPDATE_MINUTES = intPreferencesKey("scheduled_node_update_minutes")
@@ -47,7 +46,6 @@ class SettingsRepository(private val context: Context) {
         private val SCHEDULED_NODE_UPDATE_TOAST_ENABLED = booleanPreferencesKey("scheduled_node_update_toast_enabled")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         private val URL_TEST_TIMEOUT_MS = longPreferencesKey("url_test_timeout_ms")
-        private val NODE_IP_INFO_TIMEOUT_MS = longPreferencesKey("node_ip_info_timeout_ms")
         private val SPEED_TEST_DOWNLOAD_TIMEOUT_MS = longPreferencesKey("speed_test_download_timeout_ms")
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val URL_TEST_CONCURRENCY = intPreferencesKey("url_test_concurrency")
@@ -253,16 +251,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val nodeIpInfoTestOnVpnStart: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[NODE_IP_INFO_TEST_ON_VPN_START] ?: false
-    }
-
-    suspend fun setNodeIpInfoTestOnVpnStart(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[NODE_IP_INFO_TEST_ON_VPN_START] = enabled
-        }
-    }
-
     val scheduledNodeUpdateEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[SCHEDULED_NODE_UPDATE_ENABLED] ?: false
     }
@@ -330,16 +318,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setUrlTestTimeoutMs(value: Long) {
         context.dataStore.edit { preferences ->
             preferences[URL_TEST_TIMEOUT_MS] = value.coerceAtLeast(500L)
-        }
-    }
-
-    val nodeIpInfoTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
-        (preferences[NODE_IP_INFO_TIMEOUT_MS] ?: xyz.a202132.app.AppConfig.NODE_IP_INFO_TIMEOUT_MS).coerceAtLeast(1000L)
-    }
-
-    suspend fun setNodeIpInfoTimeoutMs(value: Long) {
-        context.dataStore.edit { preferences ->
-            preferences[NODE_IP_INFO_TIMEOUT_MS] = value.coerceAtLeast(1000L)
         }
     }
 

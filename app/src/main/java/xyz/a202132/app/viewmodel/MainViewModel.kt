@@ -3,7 +3,6 @@ package xyz.a202132.app.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.util.Log
-import com.google.gson.Gson
 import io.nekohasekai.libbox.Libbox
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -35,7 +34,6 @@ import xyz.a202132.app.util.RuntimeLog
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.CryptoUtils
 import java.io.File
-import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.ServerSocket
@@ -77,13 +75,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val subscriptionParser = SubscriptionParser()
     private val configGenerator = SingBoxConfigGenerator()
     private val latencyTester = LatencyTester()
-    private val gson = Gson()
-
-    private data class NodeIpInfoAttemptResult(
-        val result: Result<NodeIpInfo>,
-        val shouldRetry: Boolean
-    )
-    
     // 节流控制
     private val THROTTLE_INTERVAL = 5000L // 5秒节流间隔
     private var lastFetchNodesTime = 0L
@@ -207,7 +198,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // 自动化测试设置
     val rememberLastSelectedNodeEnabled = settingsRepository.rememberLastSelectedNodeEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
-    val nodeIpInfoTestOnVpnStart = settingsRepository.nodeIpInfoTestOnVpnStart.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val scheduledNodeUpdateEnabled = settingsRepository.scheduledNodeUpdateEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val scheduledNodeUpdateHours = settingsRepository.scheduledNodeUpdateHours.stateIn(viewModelScope, SharingStarted.Lazily, 0)
     val scheduledNodeUpdateMinutes = settingsRepository.scheduledNodeUpdateMinutes.stateIn(viewModelScope, SharingStarted.Lazily, 30)
@@ -251,7 +241,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Lazily, ScheduledNodeUpdateSettings())
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.TCPING_TEST_TIMEOUT)
     val urlTestTimeoutMs = settingsRepository.urlTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_TIMEOUT)
-    val nodeIpInfoTimeoutMs = settingsRepository.nodeIpInfoTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.NODE_IP_INFO_TIMEOUT_MS)
     val speedTestDownloadTimeoutMs = settingsRepository.speedTestDownloadTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS)
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.TCPING_CONCURRENCY)
     val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_CONCURRENCY)
@@ -905,12 +894,6 @@ observeScheduledNodeUpdates()
         }
     }
 
-    fun setNodeIpInfoTestOnVpnStart(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setNodeIpInfoTestOnVpnStart(enabled)
-        }
-    }
-
     fun setScheduledNodeUpdateSettings(
         enabled: Boolean,
         hours: Int,
@@ -943,12 +926,6 @@ observeScheduledNodeUpdates()
     fun setUrlTestTimeoutMs(value: Long) {
         viewModelScope.launch {
             settingsRepository.setUrlTestTimeoutMs(value)
-        }
-    }
-
-    fun setNodeIpInfoTimeoutMs(value: Long) {
-        viewModelScope.launch {
-            settingsRepository.setNodeIpInfoTimeoutMs(value)
         }
     }
 
@@ -1692,99 +1669,6 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
 
         _error.value = "${requestName}请求失败，自动重试后仍失败，请稍后再试"
         return Result.failure(second.exceptionOrNull() ?: first.exceptionOrNull() ?: IllegalStateException("${requestName}请求失败"))
-    }
-
-    suspend fun fetchNodeIpInfo(node: Node): Result<NodeIpInfo> = withContext(Dispatchers.IO) {
-        val port = pickFreePort()
-        val session = NodeTestProxyManager.createSession(
-            getApplication(),
-            node,
-            port,
-            hysteriaUpMbps.value,
-            hysteriaDownMbps.value
-        )
-        val started = session.start()
-        if (!started) return@withContext Result.failure(IllegalStateException("启动节点测试代理失败"))
-
-        try {
-            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
-            val timeoutMs = nodeIpInfoTimeoutMs.value.coerceAtLeast(1000L)
-            val client = NetworkClient.withUserAgent(OkHttpClient.Builder())
-                .proxy(proxy)
-                .connectTimeout(timeoutMs, TimeUnit.MILLISECONDS)
-                .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
-                .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
-                .callTimeout(timeoutMs, TimeUnit.MILLISECONDS)
-                .build()
-
-            var lastResult: Result<NodeIpInfo> = Result.failure(IllegalStateException("节点 IP 信息请求失败"))
-            repeat(AppConfig.NODE_IP_INFO_RETRY_COUNT.coerceAtLeast(0) + 1) { attempt ->
-                val attemptResult = fetchNodeIpInfoOnce(node, client)
-                lastResult = attemptResult.result
-                if (lastResult.isSuccess || !attemptResult.shouldRetry || attempt >= AppConfig.NODE_IP_INFO_RETRY_COUNT) {
-                    return@withContext lastResult
-                }
-                Log.w(
-                    tag,
-                    "Node IP info retry ${attempt + 1}/${AppConfig.NODE_IP_INFO_RETRY_COUNT}: ${node.getDisplayName()} (${node.id})"
-                )
-                delay(300)
-            }
-
-            lastResult
-        } catch (e: Exception) {
-            Log.e(tag, "Fetch node IP info failed for ${node.getDisplayName()}: ${e.message}")
-            Result.failure(e)
-        } finally {
-            session.stop()
-        }
-    }
-
-    private fun fetchNodeIpInfoOnce(
-        node: Node,
-        client: OkHttpClient
-    ): NodeIpInfoAttemptResult {
-        return try {
-            val request = Request.Builder()
-                .url(AppConfig.NODE_IP_INFO_URL)
-                .header("Accept", "application/json")
-                .header("Cache-Control", "no-cache")
-                .get()
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val retryable = response.code in listOf(429, 500, 502, 503, 504)
-                    val error = IllegalStateException("请求失败: HTTP ${response.code}")
-                    NodeIpInfoAttemptResult(Result.failure(error), retryable)
-                } else {
-                    val body = response.body?.string().orEmpty()
-                    if (body.isBlank()) {
-                        NodeIpInfoAttemptResult(
-                            Result.failure(IllegalStateException("接口返回为空")),
-                            shouldRetry = false
-                        )
-                    } else {
-                        val parsed = gson.fromJson(body, NodeIpInfo::class.java)
-                        if (parsed == null || parsed.ip.isBlank()) {
-                            NodeIpInfoAttemptResult(
-                                Result.failure(IllegalStateException("解析 IP 信息失败")),
-                                shouldRetry = false
-                            )
-                        } else {
-                            NodeIpInfoAttemptResult(Result.success(parsed), shouldRetry = false)
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(tag, "Fetch node IP info attempt failed for ${node.getDisplayName()}: ${e.message}")
-            NodeIpInfoAttemptResult(Result.failure(e), shouldRetry = shouldRetryNodeIpInfo(e))
-        }
-    }
-
-    private fun shouldRetryNodeIpInfo(error: Exception): Boolean {
-        return error is IOException // 涵盖 SocketTimeoutException、InterruptedIOException 等
     }
 
     private suspend fun testNodeDownloadBandwidthMbps(node: Node, sizeMb: Int): Float = withContext(Dispatchers.IO) {

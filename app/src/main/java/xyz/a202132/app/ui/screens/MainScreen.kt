@@ -18,8 +18,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
-import xyz.a202132.app.data.model.ProxyMode
-import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.ui.components.*
 import xyz.a202132.app.ui.dialogs.*
@@ -32,7 +30,7 @@ import xyz.a202132.app.viewmodel.MainViewModel
 fun MainScreen(
     viewModel: MainViewModel = viewModel(),
     onStartVpn: (action: () -> Unit) -> Unit,
-    onOpenPerAppProxy: () -> Unit = {},
+    onOpenProxyScope: () -> Unit = {},
     onOpenNodeList: () -> Unit = {},
     onOpenOtherConfig: () -> Unit = {},
     onOpenRuntimeLog: () -> Unit = {}
@@ -43,7 +41,6 @@ fun MainScreen(
     
     // Collect状态
     val currentNode by viewModel.currentNode.collectAsState()
-    val proxyMode by viewModel.proxyMode.collectAsState()
     val vpnState by viewModel.vpnState.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isTesting by viewModel.isTesting.collectAsState()
@@ -57,8 +54,6 @@ fun MainScreen(
     
     // UI状态
     var showSpeedTestDialog by remember { mutableStateOf(false) }
-    var showNodeIpInfoDialog by remember { mutableStateOf(false) }
-    var nodeForIpInfo by remember { mutableStateOf<Node?>(null) }
     
     // 流量统计
     val uploadSpeed by viewModel.uploadSpeed.collectAsState()
@@ -70,7 +65,6 @@ fun MainScreen(
     val backupNodeEnabled by viewModel.backupNodeEnabled.collectAsState()
 
     // 自动化测试设置/状态
-    val nodeIpInfoTestOnVpnStart by viewModel.nodeIpInfoTestOnVpnStart.collectAsState()
     val speedTestDownloadTimeoutMs by viewModel.speedTestDownloadTimeoutMs.collectAsState()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsState()
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsState()
@@ -93,21 +87,6 @@ fun MainScreen(
         }
     }
 
-    var lastVpnState by remember { mutableStateOf(vpnState) }
-    LaunchedEffect(vpnState, nodeIpInfoTestOnVpnStart) {
-        val justConnected = lastVpnState != VpnState.CONNECTED && vpnState == VpnState.CONNECTED
-        if (justConnected && nodeIpInfoTestOnVpnStart) {
-            val selectedNode = currentNode
-            if (selectedNode == null) {
-                Toast.makeText(context, "当前无已选节点，无法执行节点IP信息测试", Toast.LENGTH_SHORT).show()
-            } else {
-                nodeForIpInfo = selectedNode
-                showNodeIpInfoDialog = true
-            }
-        }
-        lastVpnState = vpnState
-    }
-
     // Drawer
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -118,7 +97,7 @@ fun MainScreen(
             ) {
                 DrawerContent(
                     onCheckUpdate = { viewModel.checkUpdate() },
-                    onOpenPerAppProxy = onOpenPerAppProxy,
+                    onOpenProxyScope = onOpenProxyScope,
                     onOpenOtherConfig = onOpenOtherConfig,
                     onOpenRuntimeLog = onOpenRuntimeLog,
                     notice = noticeConfig, // Use noticeConfig for Drawer (Backup Node visibility)
@@ -183,19 +162,6 @@ fun MainScreen(
                                         showToolsMenu = false
                                         if (viewModel.showNodeListForTest("urltest")) {
                                             onOpenNodeList()
-                                        }
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("\uD83D\uDCE1 节点IP信息") },
-                                    onClick = {
-                                        showToolsMenu = false
-                                        val selectedNode = currentNode
-                                        if (selectedNode == null) {
-                                            Toast.makeText(context, "请先选择节点", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            nodeForIpInfo = selectedNode
-                                            showNodeIpInfoDialog = true
                                         }
                                     }
                                 )
@@ -332,14 +298,6 @@ fun MainScreen(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // 代理模式选择
-                ProxyModeSelector(
-                    isGlobalMode = proxyMode == ProxyMode.GLOBAL,
-                    onModeChange = { isGlobal ->
-                        viewModel.setProxyMode(if (isGlobal) ProxyMode.GLOBAL else ProxyMode.SMART)
-                    }
-                )
-                
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
@@ -393,19 +351,6 @@ fun MainScreen(
         )
     }
 
-    if (showNodeIpInfoDialog) {
-        nodeForIpInfo?.let { node ->
-            NodeIpInfoDialog(
-                node = node,
-                onDismiss = {
-                    showNodeIpInfoDialog = false
-                    nodeForIpInfo = null
-                },
-                fetchIpInfo = { targetNode -> viewModel.fetchNodeIpInfo(targetNode) }
-            )
-        }
-    }
-    
     // 下载状态监听
     val downloadState by viewModel.downloadState.collectAsState()
     var showPermissionDialog by remember { mutableStateOf(false) }

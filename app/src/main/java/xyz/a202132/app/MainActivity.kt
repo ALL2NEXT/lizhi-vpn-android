@@ -37,7 +37,7 @@ import xyz.a202132.app.ui.components.NodeListScreen
 import xyz.a202132.app.ui.navigation.AppRoute
 import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
-import xyz.a202132.app.ui.screens.PerAppProxyScreen
+import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.RuntimeLogScreen
 import xyz.a202132.app.ui.theme.FireflyVPNTheme
@@ -149,21 +149,22 @@ class MainActivity : ComponentActivity() {
                                 MainScreen(
                                     viewModel = viewModel,
                                     onStartVpn = { action -> requestVpnPermission(action) },
-                                    onOpenPerAppProxy = { navigateTo(AppRoute.PER_APP_PROXY) },
+                                    onOpenProxyScope = { navigateTo(AppRoute.PROXY_SCOPE) },
                                     onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
                                     onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
                                     onOpenRuntimeLog = { navigateTo(AppRoute.RUNTIME_LOG) }
                                 )
                             }
 
-                            composable(AppRoute.PER_APP_PROXY) {
-                                var isLeavingPerAppProxy by remember { mutableStateOf(false) }
+                            composable(AppRoute.PROXY_SCOPE) {
+                                var isLeavingProxyScope by remember { mutableStateOf(false) }
 
                                 Box(modifier = Modifier.fillMaxSize()) {
-                                    PerAppProxyScreen(
+                                    ProxyScopeScreen(
+                                        mainViewModel = viewModel,
                                         onBack = { hasChanges ->
-                                            if (isLeavingPerAppProxy) return@PerAppProxyScreen
-                                            isLeavingPerAppProxy = true
+                                            if (isLeavingProxyScope) return@ProxyScopeScreen
+                                            isLeavingProxyScope = true
                                             navController.popBackStack()
                                             if (hasChanges) {
                                                 viewModel.restartVpnIfNeeded()
@@ -171,7 +172,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
 
-                                    if (isLeavingPerAppProxy) {
+                                    if (isLeavingProxyScope) {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
