@@ -14,7 +14,7 @@ import xyz.a202132.app.data.model.SubscriptionSource
  * {
  *   "update": 1,
  *   "subscriptions": [
- *     {"name": "线路1", "url": "https://example.com/sub", "encrypted": false}
+ *     {"name": "线路1", "url": "https://example.com/sub", "encrypted": false, "updateIntervalMinutes": 60}
  *   ]
  * }
  *
@@ -65,12 +65,19 @@ class SubscriptionListParser {
         val encrypted = source.get("encrypted")?.let { readBoolean(it) }
             ?: source.get("isEncrypted")?.let { readBoolean(it) }
             ?: false
+        val updateIntervalMinutes = readInt(
+            source,
+            "updateIntervalMinutes",
+            "autoUpdateMinutes",
+            "updateInterval"
+        )?.coerceIn(0, 10_080) ?: 0
         return SubscriptionSource(
             id = "",
             name = name,
             url = url,
             enabled = enabled,
-            encrypted = encrypted
+            encrypted = encrypted,
+            updateIntervalMinutes = updateIntervalMinutes
         )
     }
 
@@ -85,6 +92,16 @@ class SubscriptionListParser {
         val primitive = element.asJsonPrimitive
         if (primitive.isBoolean) return primitive.asBoolean
         return primitive.asString.trim().lowercase() !in setOf("0", "false", "off", "no")
+    }
+
+    private fun readInt(objectValue: JsonObject, vararg keys: String): Int? {
+        return keys.asSequence()
+            .mapNotNull { key ->
+                objectValue.get(key)
+                    ?.takeIf { it.isJsonPrimitive }
+                    ?.let { element -> runCatching { element.asInt }.getOrNull() }
+            }
+            .firstOrNull()
     }
 
 }

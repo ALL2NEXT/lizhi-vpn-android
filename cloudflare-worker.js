@@ -85,7 +85,14 @@ async function handleClient(request, env) {
   return json({
     subscriptions: state.subscriptions
       .filter((source) => source.enabled)
-      .map(({ id, name, enabled, url, encrypted }) => ({ id, name, enabled, url, encrypted })),
+      .map(({ id, name, enabled, url, encrypted, updateIntervalMinutes }) => ({
+        id,
+        name,
+        enabled,
+        url,
+        encrypted,
+        updateIntervalMinutes,
+      })),
     notice: state.notice,
     appUpdate: state.appUpdate,
     settings: state.settings,
@@ -389,6 +396,11 @@ function normalizeState(input) {
         item.encrypted !== undefined ? item.encrypted : item.isEncrypted,
         false,
       ),
+      updateIntervalMinutes: normalizeUpdateInterval(
+        item.updateIntervalMinutes !== undefined
+          ? item.updateIntervalMinutes
+          : item.autoUpdateMinutes,
+      ),
     }))
     .filter((item) => item.url)
     .map((item, index) => ({
@@ -397,15 +409,33 @@ function normalizeState(input) {
       url: item.url,
       enabled: item.enabled,
       encrypted: item.encrypted,
+      updateIntervalMinutes: item.updateIntervalMinutes,
     }));
 
   return {
     version: 1,
     subscriptions,
-    notice: plainObject(value.notice) ? value.notice : null,
+    notice: normalizeNotice(value.notice),
     appUpdate: plainObject(value.appUpdate) ? value.appUpdate : null,
     settings: normalizeSettings(value.settings),
     ...(value.updatedAt ? { updatedAt: String(value.updatedAt) } : {}),
+  };
+}
+
+function normalizeUpdateInterval(value) {
+  const interval = Number(value);
+  if (!Number.isFinite(interval)) return 0;
+  return Math.round(Math.min(Math.max(interval, 0), 10080));
+}
+
+function normalizeNotice(value) {
+  if (!plainObject(value)) return null;
+  return {
+    hasNotice: parseFlag(value.hasNotice, false),
+    title: cleanText(value.title),
+    content: cleanText(value.content),
+    noticeId: cleanText(value.noticeId),
+    showOnce: parseFlag(value.showOnce, true),
   };
 }
 
@@ -582,13 +612,6 @@ function adminHtml() {
     </div>
     <div class="field"><label>公告内容<textarea id="noticeContent" placeholder="支持普通文本和 HTML"></textarea></label></div>
     <label class="check"><input id="noticeShowOnce" type="checkbox">每个公告 ID 只显示一次</label>
-    <label class="check"><input id="scheduleEnabled" type="checkbox">用公告覆盖定时更新设置</label>
-    <div class="grid">
-      <div class="field"><label>更新间隔小时<input id="scheduleHours" type="number" min="0" max="168"></label></div>
-      <div class="field"><label>更新间隔分钟<input id="scheduleMinutes" type="number" min="0" max="59"></label></div>
-     </div>
-     <label class="check"><input id="scheduleReconnect" type="checkbox">节点更新后自动重连</label>
-     <label class="check"><input id="scheduleToast" type="checkbox">显示定时更新提示</label>
      <button type="button" onclick="pushSection('notice')">推送</button>
    </section>
 
@@ -716,9 +739,10 @@ function addSource(source) {
   row.innerHTML = '<div class="grid">' +
     '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
     '<div class="field"><label>订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '"></label></div>' +
+    '<div class="field"><label>自动更新周期（分钟）<input data-field="updateIntervalMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.updateIntervalMinutes == null ? 0 : source.updateIntervalMinutes) + '"></label></div>' +
     '</div><label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
     '<label class="check"><input data-field="encrypted" type="checkbox" ' + (source.encrypted ? 'checked' : '') + '>接口内容已加密（AES-GCM）</label>' +
-    '<div class="row-actions"><small>App 将直接请求此地址</small><button class="danger" type="button">删除</button></div>';
+    '<div class="row-actions"><small>0 表示不自动更新；最大 10080 分钟（7 天）</small><button class="danger" type="button">删除</button></div>';
   row.querySelector('.danger').onclick = function() { row.remove(); };
   el('subscriptionRows').appendChild(row);
 }
@@ -739,12 +763,6 @@ function fillState(state) {
   setValue('noticeId', notice.noticeId);
   setValue('noticeContent', notice.content);
   checked('noticeShowOnce', notice.showOnce !== false);
-  const schedule = notice.scheduledNodeUpdate || {};
-  checked('scheduleEnabled', Boolean(notice.scheduledNodeUpdate));
-  setValue('scheduleHours', schedule.hours == null ? 0 : schedule.hours);
-  setValue('scheduleMinutes', schedule.minutes == null ? 30 : schedule.minutes);
-  checked('scheduleReconnect', schedule.nodeAutoReconnect);
-  checked('scheduleToast', schedule.toastEnabled !== false);
   const update = currentState.appUpdate || {};
   checked('appUpdateEnabled', Boolean(currentState.appUpdate));
   setValue('appVersion', update.version);
@@ -759,7 +777,8 @@ function formState() {
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: row.querySelector('[data-field="url"]').value.trim(),
       enabled: row.querySelector('[data-field="enabled"]').checked,
-      encrypted: row.querySelector('[data-field="encrypted"]').checked
+      encrypted: row.querySelector('[data-field="encrypted"]').checked,
+      updateIntervalMinutes: Math.min(10080, Math.max(0, Number(row.querySelector('[data-field="updateIntervalMinutes"]').value || 0)))
     };
   }).filter(function(item) { return item.url; });
   const notice = el('noticeEnabled').checked ? {
@@ -767,14 +786,7 @@ function formState() {
     title: value('noticeTitle'),
     content: value('noticeContent'),
     noticeId: value('noticeId'),
-    showOnce: el('noticeShowOnce').checked,
-    scheduledNodeUpdate: el('scheduleEnabled').checked ? {
-      enabled: true,
-      hours: Number(value('scheduleHours') || 0),
-      minutes: Number(value('scheduleMinutes') || 30),
-      nodeAutoReconnect: el('scheduleReconnect').checked,
-      toastEnabled: el('scheduleToast').checked
-    } : null
+    showOnce: el('noticeShowOnce').checked
   } : null;
   const appUpdate = el('appUpdateEnabled').checked ? {
     version: value('appVersion'),

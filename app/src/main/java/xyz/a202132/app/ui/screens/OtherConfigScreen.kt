@@ -41,12 +41,6 @@ fun OtherConfigScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val scheduledNodeUpdateEnabled by viewModel.scheduledNodeUpdateEnabled.collectAsState()
-    val scheduledNodeUpdateHours by viewModel.scheduledNodeUpdateHours.collectAsState()
-    val scheduledNodeUpdateMinutes by viewModel.scheduledNodeUpdateMinutes.collectAsState()
-    val nodeAutoReconnect by viewModel.nodeAutoReconnect.collectAsState()
-    val scheduledNodeUpdateToastEnabled by viewModel.scheduledNodeUpdateToastEnabled.collectAsState()
-    val effectiveScheduledNodeUpdateSettings by viewModel.effectiveScheduledNodeUpdateSettings.collectAsState()
     val tcpingTestTimeoutMs by viewModel.tcpingTestTimeoutMs.collectAsState()
     val urlTestTimeoutMs by viewModel.urlTestTimeoutMs.collectAsState()
     val speedTestDownloadTimeoutMs by viewModel.speedTestDownloadTimeoutMs.collectAsState()
@@ -65,8 +59,6 @@ fun OtherConfigScreen(
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsState()
     val tunStack by viewModel.tunStack.collectAsState()
 
-    var scheduledNodeUpdateHoursInput by remember(scheduledNodeUpdateHours) { mutableStateOf(scheduledNodeUpdateHours.toString()) }
-    var scheduledNodeUpdateMinutesInput by remember(scheduledNodeUpdateMinutes) { mutableStateOf(scheduledNodeUpdateMinutes.toString()) }
     var tcpingTimeoutInput by remember(tcpingTestTimeoutMs) { mutableStateOf(tcpingTestTimeoutMs.toString()) }
     var urlTestTimeoutInput by remember(urlTestTimeoutMs) { mutableStateOf(urlTestTimeoutMs.toString()) }
     var speedTestDownloadTimeoutInput by remember(speedTestDownloadTimeoutMs) { mutableStateOf(speedTestDownloadTimeoutMs.toString()) }
@@ -81,8 +73,6 @@ fun OtherConfigScreen(
     var mtuInput by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
 
     LaunchedEffect(
-        scheduledNodeUpdateHours,
-        scheduledNodeUpdateMinutes,
         tcpingTestTimeoutMs,
         urlTestTimeoutMs,
         speedTestDownloadTimeoutMs,
@@ -96,8 +86,6 @@ fun OtherConfigScreen(
         hysteriaDownMbps,
         vpnMtu
     ) {
-        scheduledNodeUpdateHoursInput = scheduledNodeUpdateHours.toString()
-        scheduledNodeUpdateMinutesInput = scheduledNodeUpdateMinutes.toString()
         tcpingTimeoutInput = tcpingTestTimeoutMs.toString()
         urlTestTimeoutInput = urlTestTimeoutMs.toString()
         speedTestDownloadTimeoutInput = speedTestDownloadTimeoutMs.toString()
@@ -110,22 +98,6 @@ fun OtherConfigScreen(
         hysteriaUpMbpsInput = hysteriaUpMbps.toString()
         hysteriaDownMbpsInput = hysteriaDownMbps.toString()
         mtuInput = vpnMtu.toString()
-    }
-
-    fun applyScheduledNodeUpdateSettings(
-        enabledValue: Boolean = scheduledNodeUpdateEnabled,
-        hoursValue: Int = scheduledNodeUpdateHoursInput.toIntOrNull() ?: scheduledNodeUpdateHours,
-        minutesValue: Int = scheduledNodeUpdateMinutesInput.toIntOrNull() ?: scheduledNodeUpdateMinutes,
-        autoReconnectValue: Boolean = nodeAutoReconnect,
-        toastEnabledValue: Boolean = scheduledNodeUpdateToastEnabled
-    ) {
-        viewModel.setScheduledNodeUpdateSettings(
-            enabled = enabledValue,
-            hours = hoursValue.coerceIn(0, 168),
-            minutes = minutesValue.coerceIn(0, 59),
-            nodeAutoReconnect = autoReconnectValue,
-            toastEnabled = toastEnabledValue
-        )
     }
 
     AppScreenScaffold(
@@ -225,161 +197,6 @@ fun OtherConfigScreen(
                     )
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "定时更新节点信息",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "从上次请求节点完成后开始计时，自动请求订阅列表中的所有线路",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = if (effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice) {
-                            effectiveScheduledNodeUpdateSettings.enabled
-                        } else {
-                            scheduledNodeUpdateEnabled
-                        },
-                        onCheckedChange = { applyScheduledNodeUpdateSettings(enabledValue = it) },
-                        enabled = !effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice,
-                        colors = visibleSwitchColors()
-                    )
-                }
-
-                if (effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice) {
-                    Text(
-                        text = "notice 已覆盖定时更新：每隔 ${effectiveScheduledNodeUpdateSettings.intervalLabel}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OtherConfigNumberField(
-                        label = "间隔小时",
-                        value = if (effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice) {
-                            effectiveScheduledNodeUpdateSettings.hours.toString()
-                        } else {
-                            scheduledNodeUpdateHoursInput
-                        },
-                        onValueChange = {
-                            scheduledNodeUpdateHoursInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { hours ->
-                                applyScheduledNodeUpdateSettings(hoursValue = hours)
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = !effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice
-                    )
-                    OtherConfigNumberField(
-                        label = "间隔分钟",
-                        value = if (effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice) {
-                            effectiveScheduledNodeUpdateSettings.minutes.toString()
-                        } else {
-                            scheduledNodeUpdateMinutesInput
-                        },
-                        onValueChange = {
-                            scheduledNodeUpdateMinutesInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { minutes ->
-                                applyScheduledNodeUpdateSettings(minutesValue = minutes)
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = !effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "节点自动重连",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "节点更新后，如当前连接节点的 server + port 仍存在，则自动重连到新列表中的对应节点；不存在则保持原连接",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = if (effectiveScheduledNodeUpdateSettings.reconnectOverriddenByNotice) {
-                            effectiveScheduledNodeUpdateSettings.nodeAutoReconnect
-                        } else {
-                            nodeAutoReconnect
-                        },
-                        onCheckedChange = { applyScheduledNodeUpdateSettings(autoReconnectValue = it) },
-                        enabled = !effectiveScheduledNodeUpdateSettings.reconnectOverriddenByNotice,
-                        colors = visibleSwitchColors()
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "节点更新通知",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Switch(
-                        checked = if (effectiveScheduledNodeUpdateSettings.toastOverriddenByNotice) {
-                            effectiveScheduledNodeUpdateSettings.toastEnabled
-                        } else {
-                            scheduledNodeUpdateToastEnabled
-                        },
-                        onCheckedChange = { applyScheduledNodeUpdateSettings(toastEnabledValue = it) },
-                        enabled = !effectiveScheduledNodeUpdateSettings.toastOverriddenByNotice,
-                        colors = visibleSwitchColors()
-                    )
-                }
-
-                if (effectiveScheduledNodeUpdateSettings.reconnectOverriddenByNotice) {
-                    Text(
-                        text = "notice 已覆盖节点自动重连：${if (effectiveScheduledNodeUpdateSettings.nodeAutoReconnect) "开启" else "关闭"}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                if (effectiveScheduledNodeUpdateSettings.toastOverriddenByNotice) {
-                    Text(
-                        text = "notice 已覆盖节点更新通知：${if (effectiveScheduledNodeUpdateSettings.toastEnabled) "开启" else "关闭"}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                if (
-                    effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice ||
-                    effectiveScheduledNodeUpdateSettings.reconnectOverriddenByNotice ||
-                    effectiveScheduledNodeUpdateSettings.toastOverriddenByNotice
-                ) {
-                    Text(
-                        text = "当前设置由 Worker 的 notice 配置覆盖，本地保存只在对应字段移除后生效。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
 
             OtherConfigSection(

@@ -42,11 +42,6 @@ class SettingsRepository(private val context: Context) {
         private val LAST_SELECTED_NODE_ID = stringPreferencesKey("last_selected_node_id")
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
         private val NODE_LIST_CATEGORY = stringPreferencesKey("node_list_category")
-        private val SCHEDULED_NODE_UPDATE_ENABLED = booleanPreferencesKey("scheduled_node_update_enabled")
-        private val SCHEDULED_NODE_UPDATE_HOURS = intPreferencesKey("scheduled_node_update_hours")
-        private val SCHEDULED_NODE_UPDATE_MINUTES = intPreferencesKey("scheduled_node_update_minutes")
-        private val NODE_AUTO_RECONNECT = booleanPreferencesKey("node_auto_reconnect")
-        private val SCHEDULED_NODE_UPDATE_TOAST_ENABLED = booleanPreferencesKey("scheduled_node_update_toast_enabled")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         private val URL_TEST_TIMEOUT_MS = longPreferencesKey("url_test_timeout_ms")
         private val SPEED_TEST_DOWNLOAD_TIMEOUT_MS = longPreferencesKey("speed_test_download_timeout_ms")
@@ -258,56 +253,6 @@ class SettingsRepository(private val context: Context) {
             } else {
                 preferences[LAST_SELECTED_NODE_ID] = nodeId
             }
-        }
-    }
-
-    val scheduledNodeUpdateEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SCHEDULED_NODE_UPDATE_ENABLED] ?: false
-    }
-
-    suspend fun setScheduledNodeUpdateEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[SCHEDULED_NODE_UPDATE_ENABLED] = enabled
-        }
-    }
-
-    val scheduledNodeUpdateHours: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[SCHEDULED_NODE_UPDATE_HOURS] ?: 0).coerceIn(0, 168)
-    }
-
-    suspend fun setScheduledNodeUpdateHours(hours: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[SCHEDULED_NODE_UPDATE_HOURS] = hours.coerceIn(0, 168)
-        }
-    }
-
-    val scheduledNodeUpdateMinutes: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[SCHEDULED_NODE_UPDATE_MINUTES] ?: 30).coerceIn(0, 59)
-    }
-
-    suspend fun setScheduledNodeUpdateMinutes(minutes: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[SCHEDULED_NODE_UPDATE_MINUTES] = minutes.coerceIn(0, 59)
-        }
-    }
-
-    val nodeAutoReconnect: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[NODE_AUTO_RECONNECT] ?: false
-    }
-
-    suspend fun setNodeAutoReconnect(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[NODE_AUTO_RECONNECT] = enabled
-        }
-    }
-
-    val scheduledNodeUpdateToastEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SCHEDULED_NODE_UPDATE_TOAST_ENABLED] ?: true
-    }
-
-    suspend fun setScheduledNodeUpdateToastEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[SCHEDULED_NODE_UPDATE_TOAST_ENABLED] = enabled
         }
     }
 

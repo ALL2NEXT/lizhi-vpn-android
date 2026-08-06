@@ -8,7 +8,9 @@ data class SubscriptionSource(
     val name: String,
     val url: String,
     val enabled: Boolean = true,
-    val encrypted: Boolean = false
+    val encrypted: Boolean = false,
+    /** Automatic refresh interval in minutes; 0 disables automatic refresh. */
+    val updateIntervalMinutes: Int = 0
 )
 
 data class SubscriptionList(

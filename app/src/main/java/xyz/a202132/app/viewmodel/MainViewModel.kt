@@ -53,26 +53,6 @@ enum class NodeImportResult {
     INVALID
 }
 
-data class ScheduledNodeUpdateSettings(
-    val enabled: Boolean = false,
-    val hours: Int = 0,
-    val minutes: Int = 30,
-    val nodeAutoReconnect: Boolean = false,
-    val toastEnabled: Boolean = true,
-    val scheduledOverriddenByNotice: Boolean = false,
-    val reconnectOverriddenByNotice: Boolean = false,
-    val toastOverriddenByNotice: Boolean = false
-) {
-    val intervalMillis: Long
-        get() = ((hours * 60L) + minutes).coerceAtLeast(1L) * 60_000L
-
-    val intervalLabel: String
-        get() = buildList {
-            if (hours > 0) add("${hours}小时")
-            if (minutes > 0) add("${minutes}分钟")
-        }.ifEmpty { listOf("1分钟") }.joinToString("")
-}
-
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val tag = "MainViewModel"
@@ -90,7 +70,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var lastCheckUpdateTime = 0L
     // 缓存最新拉取的节点，避免 Room Flow 延迟导致后续操作使用旧节点
     private var lastFetchedNodes: List<Node>? = null
-    private val lastNodeFetchFinishedAt = MutableStateFlow(0L)
     private var cachedSubscriptionList: SubscriptionList? = null
     private var trafficSessionId: String? = null
     private val gson = Gson()
@@ -234,47 +213,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // 自动化测试设置
     val rememberLastSelectedNodeEnabled = settingsRepository.rememberLastSelectedNodeEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
-    val scheduledNodeUpdateEnabled = settingsRepository.scheduledNodeUpdateEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
-    val scheduledNodeUpdateHours = settingsRepository.scheduledNodeUpdateHours.stateIn(viewModelScope, SharingStarted.Lazily, 0)
-    val scheduledNodeUpdateMinutes = settingsRepository.scheduledNodeUpdateMinutes.stateIn(viewModelScope, SharingStarted.Lazily, 30)
-    val nodeAutoReconnect = settingsRepository.nodeAutoReconnect.stateIn(viewModelScope, SharingStarted.Lazily, false)
-    val scheduledNodeUpdateToastEnabled = settingsRepository.scheduledNodeUpdateToastEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
-    private val localScheduledNodeUpdateSettings = combine(
-        scheduledNodeUpdateEnabled,
-        scheduledNodeUpdateHours,
-        scheduledNodeUpdateMinutes,
-        nodeAutoReconnect,
-        scheduledNodeUpdateToastEnabled
-    ) { enabled, hours, minutes, reconnect, toast ->
-        ScheduledNodeUpdateSettings(
-            enabled = enabled,
-            hours = hours.coerceIn(0, 168),
-            minutes = minutes.coerceIn(0, 59),
-            nodeAutoReconnect = reconnect,
-            toastEnabled = toast
-        )
-    }
-    val effectiveScheduledNodeUpdateSettings = combine(
-        localScheduledNodeUpdateSettings,
-        noticeConfig
-    ) { local, notice ->
-        val remoteSchedule = notice?.scheduledNodeUpdate
-        val enabled = remoteSchedule?.enabled ?: local.enabled
-        val hours = (remoteSchedule?.hours ?: local.hours).coerceIn(0, 168)
-        val minutes = (remoteSchedule?.minutes ?: local.minutes).coerceIn(0, 59)
-        val normalizedMinutes = if (enabled && hours == 0 && minutes == 0) 1 else minutes
-        val remoteReconnect = remoteSchedule?.nodeAutoReconnect ?: notice?.nodeAutoReconnect
-        ScheduledNodeUpdateSettings(
-            enabled = enabled,
-            hours = hours,
-            minutes = normalizedMinutes,
-            nodeAutoReconnect = remoteReconnect ?: local.nodeAutoReconnect,
-            toastEnabled = remoteSchedule?.toastEnabled ?: local.toastEnabled,
-            scheduledOverriddenByNotice = remoteSchedule != null,
-            reconnectOverriddenByNotice = remoteSchedule?.nodeAutoReconnect != null || notice?.nodeAutoReconnect != null,
-            toastOverriddenByNotice = remoteSchedule?.toastEnabled != null
-        )
-    }.stateIn(viewModelScope, SharingStarted.Lazily, ScheduledNodeUpdateSettings())
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.TCPING_TEST_TIMEOUT)
     val urlTestTimeoutMs = settingsRepository.urlTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_TIMEOUT)
     val speedTestDownloadTimeoutMs = settingsRepository.speedTestDownloadTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS)
@@ -341,7 +279,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         observeTrafficDisconnects()
-        observeScheduledNodeUpdates()
+        observeSubscriptionAutoUpdates()
     }
 
     private suspend fun ensureAccountRegistered(): Boolean {
@@ -392,80 +330,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun observeScheduledNodeUpdates() {
+    private fun observeSubscriptionAutoUpdates() {
         viewModelScope.launch {
-            effectiveScheduledNodeUpdateSettings.collectLatest { settings ->
-                if (!settings.enabled) return@collectLatest
-
-                while (true) {
-                    val anchor = lastNodeFetchFinishedAt.value.takeIf { it > 0L }
-                        ?: lastNodeFetchFinishedAt.first { it > 0L }
-                    val delayMs = (anchor + settings.intervalMillis - System.currentTimeMillis())
-                        .coerceAtLeast(0L)
-                    delay(delayMs)
-
-                    val latestSettings = effectiveScheduledNodeUpdateSettings.value
-                    if (!latestSettings.enabled) continue
-
-                    val latestAnchor = lastNodeFetchFinishedAt.value
-                    val remainingMs = latestAnchor + latestSettings.intervalMillis - System.currentTimeMillis()
-                    if (latestAnchor > anchor && remainingMs > 0L) {
-                        continue
-                    }
-
-                    runScheduledNodeUpdate(latestSettings)
+            settingsRepository.subscriptionListJson
+                .mapNotNull { json ->
+                    json?.let { subscriptionListParser.parse(it).getOrNull() }
                 }
-            }
+                .map { list: SubscriptionList ->
+                    list.sources.filter { source ->
+                        source.enabled && source.updateIntervalMinutes > 0
+                    }
+                }
+                .distinctUntilChanged { previous, current ->
+                    previous.map { source ->
+                        "${source.id}|${source.url}|${source.encrypted}|${source.updateIntervalMinutes}"
+                    } == current.map { source ->
+                        "${source.id}|${source.url}|${source.encrypted}|${source.updateIntervalMinutes}"
+                    }
+                }
+                .collectLatest { sources ->
+                    if (sources.isEmpty()) return@collectLatest
+
+                    val nextRuns = sources.associate { source ->
+                        source.id to System.currentTimeMillis() + source.updateIntervalMinutes * 60_000L
+                    }.toMutableMap()
+
+                    while (true) {
+                        val now = System.currentTimeMillis()
+                        val dueSources = sources.filter { source ->
+                            nextRuns[source.id]?.let { nextRun -> nextRun <= now } == true
+                        }
+                        if (dueSources.isEmpty()) {
+                            val nextRun = nextRuns.values.minOrNull() ?: break
+                            delay((nextRun - now).coerceAtLeast(1_000L))
+                            continue
+                        }
+
+                        dueSources.forEach { source ->
+                            runScheduledSubscriptionUpdate(source)
+                            nextRuns[source.id] = System.currentTimeMillis() + source.updateIntervalMinutes * 60_000L
+                        }
+                    }
+                }
         }
     }
 
-    private suspend fun runScheduledNodeUpdate(settings: ScheduledNodeUpdateSettings) {
-        val connectedNodeBeforeUpdate = if (vpnState.value == VpnState.CONNECTED) {
-            ServiceManager.currentNode.value ?: currentNode.value
-        } else {
-            null
-        }
+    private suspend fun runScheduledSubscriptionUpdate(source: SubscriptionSource) {
         val fetchOk = fetchNodesInternal(
             bypassThrottle = true,
-            fetchingLabel = "定时更新节点中",
-            showToast = settings.toastEnabled,
-            forceBackendRefresh = true
+            fetchingLabel = "自动更新：${source.name}",
+            showToast = false,
+            subscriptionList = SubscriptionList(listOf(source)),
+            replaceSubscriptionSourceId = source.id
         )
-        if (!fetchOk) {
-            lastNodeFetchFinishedAt.value = System.currentTimeMillis()
-            return
-        }
-
-        val freshNodes = lastFetchedNodes ?: nodes.value
-        if (
-            settings.nodeAutoReconnect &&
-            connectedNodeBeforeUpdate != null &&
-            vpnState.value == VpnState.CONNECTED
-        ) {
-            val matchedNode = freshNodes.firstOrNull { hasSameEndpoint(it, connectedNodeBeforeUpdate) }
-            if (matchedNode != null) {
-                settingsRepository.setSelectedNodeId(matchedNode.id)
-                ServiceManager.startVpn(getApplication(), matchedNode, proxyMode.value)
-                showScheduledNodeUpdateToast(settings, "节点已定时更新并自动重连: ${matchedNode.name}")
-            } else {
-                showScheduledNodeUpdateToast(settings, "节点已定时更新，当前连接节点已不存在，保持原连接")
-            }
-        } else {
-            showScheduledNodeUpdateToast(settings, "节点已定时更新")
+        if (fetchOk) {
+            RuntimeLog.info(tag, "Automatically updated subscription: ${source.name}")
         }
     }
 
-    private fun showScheduledNodeUpdateToast(settings: ScheduledNodeUpdateSettings, message: String) {
-        if (settings.toastEnabled) {
-            _error.value = message
-        }
-    }
-
-    private fun hasSameEndpoint(first: Node, second: Node): Boolean {
-        return first.server == second.server && first.port == second.port
-    }
-
-    
     fun fetchNodes(
         bypassThrottle: Boolean = false,
         allowWhenTestRunning: Boolean = false,
@@ -646,7 +568,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         fetchingLabel: String = "请求节点中",
         showToast: Boolean = true,
         subscriptionList: SubscriptionList? = null,
-        forceBackendRefresh: Boolean = false
+        forceBackendRefresh: Boolean = false,
+        replaceSubscriptionSourceId: String? = null
     ): Boolean {
         if (!allowWhenTestRunning && GlobalTestExecution.mutex.isLocked) {
             showNodeFetchToast(showToast, GlobalTestExecution.busyHint())
@@ -670,7 +593,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         GlobalTestExecution.beginFetching(fetchingLabel)
         _isLoading.value = true
         _filterUnavailable.value = false // 刷新时重置过滤
-        val shouldUpdateFetchAnchor = true
         try {
             // 1. 检查网络状态
             if (!NetworkUtils.isNetworkAvailable(getApplication())) {
@@ -687,9 +609,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             if (result.isSuccess) {
                 val fetchedNodes = result.getOrThrow()
-                nodeDao.replaceSubscriptionNodes(fetchedNodes)
+                if (replaceSubscriptionSourceId.isNullOrBlank()) {
+                    nodeDao.replaceSubscriptionNodes(fetchedNodes)
+                } else {
+                    nodeDao.replaceSubscriptionNodesBySource(replaceSubscriptionSourceId, fetchedNodes)
+                }
                 // 缓存最新节点，避免 Room Flow 延迟导致后续操作使用旧节点
-                lastFetchedNodes = fetchedNodes
+                lastFetchedNodes = if (replaceSubscriptionSourceId.isNullOrBlank()) {
+                    fetchedNodes
+                } else {
+                    nodeDao.getSubscriptionNodes().first()
+                }
 
                 if (BuildConfig.DEBUG) {
                     viewModelScope.launch(Dispatchers.IO) {
@@ -712,9 +642,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } finally {
             _isLoading.value = false
             GlobalTestExecution.endFetching()
-            if (shouldUpdateFetchAnchor) {
-                lastNodeFetchFinishedAt.value = System.currentTimeMillis()
-            }
         }
     }
 
@@ -941,29 +868,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setRememberLastSelectedNodeEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setRememberLastSelectedNodeEnabled(enabled)
-        }
-    }
-
-    fun setScheduledNodeUpdateSettings(
-        enabled: Boolean,
-        hours: Int,
-        minutes: Int,
-        nodeAutoReconnect: Boolean,
-        toastEnabled: Boolean
-    ) {
-        viewModelScope.launch {
-            val savedHours = hours.coerceIn(0, 168)
-            val savedMinutes = minutes.coerceIn(0, 59)
-            val normalizedMinutes = if (enabled && savedHours == 0 && savedMinutes == 0) {
-                1
-            } else {
-                savedMinutes
-            }
-            settingsRepository.setScheduledNodeUpdateEnabled(enabled)
-            settingsRepository.setScheduledNodeUpdateHours(savedHours)
-            settingsRepository.setScheduledNodeUpdateMinutes(normalizedMinutes)
-            settingsRepository.setNodeAutoReconnect(nodeAutoReconnect)
-            settingsRepository.setScheduledNodeUpdateToastEnabled(toastEnabled)
         }
     }
 

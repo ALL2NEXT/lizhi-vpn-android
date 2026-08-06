@@ -52,6 +52,9 @@ interface NodeDao {
     @Query("DELETE FROM nodes WHERE source = 'SUBSCRIPTION'")
     suspend fun deleteSubscriptionNodes()
 
+    @Query("DELETE FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId = :sourceId")
+    suspend fun deleteSubscriptionNodesBySource(sourceId: String)
+
     @Query("DELETE FROM nodes WHERE id = :nodeId")
     suspend fun deleteNodeById(nodeId: String)
 
@@ -64,6 +67,12 @@ interface NodeDao {
     @Transaction
     suspend fun replaceSubscriptionNodes(nodes: List<Node>) {
         deleteSubscriptionNodes()
+        insertNodes(nodes)
+    }
+
+    @Transaction
+    suspend fun replaceSubscriptionNodesBySource(sourceId: String, nodes: List<Node>) {
+        deleteSubscriptionNodesBySource(sourceId)
         insertNodes(nodes)
     }
     
