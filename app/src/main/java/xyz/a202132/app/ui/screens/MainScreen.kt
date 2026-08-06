@@ -257,22 +257,13 @@ fun MainScreen(
                     vpnState = vpnState,
                     enabled = !isTesting,
                     onClick = {
-                        if (vpnState == VpnState.CONNECTED) {
-                            onStartVpn {
-                                viewModel.toggleVpn()
-                            }
-                        } else if (currentNode == null) {
-                            onStartVpn {
-                                viewModel.startSmartConnection()
-                            }
-                        } else {
-                            // 手动连接 (需授权)
-                            onStartVpn {
-                                viewModel.toggleVpn()
-                            }
+                        when (vpnState) {
+                            VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
+                            VpnState.DISCONNECTED -> onStartVpn { viewModel.startSmartConnection() }
+                            else -> Unit
                         }
                     },
-                    customLabel = if (currentNode == null && vpnState == VpnState.DISCONNECTED) {
+                    customLabel = if (vpnState == VpnState.DISCONNECTED) {
                         if (isTesting) testingLabel ?: "智能连接中..." else "点击上方按钮进行智能连接"
                     } else {
                         null

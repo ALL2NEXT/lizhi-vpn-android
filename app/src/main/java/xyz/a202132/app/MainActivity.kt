@@ -198,12 +198,10 @@ class MainActivity : ComponentActivity() {
                                     isTesting = isTesting,
                                     testingLabel = testingLabel,
                                     onNodeSelected = { node ->
-                                        viewModel.selectNode(node)
                                         navController.popBackStack(AppRoute.MAIN, false)
-                                    },
-                                    onSmartNodeSelected = {
-                                        viewModel.selectSmartNode()
-                                        navController.popBackStack(AppRoute.MAIN, false)
+                                        requestVpnPermission {
+                                            viewModel.selectAndConnectNode(node)
+                                        }
                                     },
                                     onCategoryChange = { viewModel.setNodeListCategory(it) },
                                     onSubscriptionSourceChange = { viewModel.setSubscriptionSource(it) },

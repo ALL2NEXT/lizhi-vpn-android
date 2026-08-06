@@ -1231,16 +1231,35 @@ fun autoSelectBestNode() {
         }
     }
 
-    fun setSubscriptionSource(sourceId: String) {
+    /** Select a node from the node list and connect to it immediately. */
+    fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
-            settingsRepository.setSelectedSubscriptionSourceId(sourceId)
-            settingsRepository.setSelectedNodeId(null)
-            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+            if (!ensureAccountRegistered()) return@launch
+
+            settingsRepository.setSelectedNodeId(node.id)
+            RuntimeLog.info(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
+
+            when (vpnState.value) {
+                VpnState.DISCONNECTED -> {
+                    if (!NetworkUtils.isNetworkAvailable(getApplication())) {
+                        RuntimeLog.warn(tag, "Direct VPN start requested while network is unavailable")
+                        _error.value = "当前无网络连接节点！"
+                    }
+                    ServiceManager.startVpn(getApplication(), node, proxyMode.value)
+                }
+                VpnState.CONNECTED -> {
+                    ServiceManager.startVpn(getApplication(), node, proxyMode.value)
+                }
+                else -> {
+                    RuntimeLog.info(tag, "Direct node connection ignored while VPN is transitioning")
+                }
+            }
         }
     }
 
-    fun selectSmartNode() {
+    fun setSubscriptionSource(sourceId: String) {
         viewModelScope.launch {
+            settingsRepository.setSelectedSubscriptionSourceId(sourceId)
             settingsRepository.setSelectedNodeId(null)
             settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
         }

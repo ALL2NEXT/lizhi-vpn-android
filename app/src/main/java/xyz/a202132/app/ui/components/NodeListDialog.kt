@@ -83,7 +83,6 @@ fun NodeListScreen(
     isTesting: Boolean,
     testingLabel: String? = null,
     onNodeSelected: (Node) -> Unit,
-    onSmartNodeSelected: () -> Unit,
     onCategoryChange: (NodeListCategory) -> Unit,
     onSubscriptionSourceChange: (String) -> Unit,
     onToggleFavorite: (Node) -> Unit,
@@ -111,13 +110,6 @@ fun NodeListScreen(
         if (!isClosing) {
             isClosing = true
             onNodeSelected(node)
-        }
-    }
-
-    val handleSmartNodeSelected = {
-        if (!isClosing) {
-            isClosing = true
-            onSmartNodeSelected()
         }
     }
 
@@ -182,7 +174,6 @@ fun NodeListScreen(
             keyword = keyword,
             onKeywordChange = { keyword = it },
             onNodeSelected = handleNodeSelected,
-            onSmartNodeSelected = handleSmartNodeSelected,
             onCategoryChange = onCategoryChange,
             onSubscriptionSourceChange = onSubscriptionSourceChange,
             onToggleFavorite = handleToggleFavorite,
@@ -337,7 +328,6 @@ private fun NodeListContent(
     keyword: String,
     onKeywordChange: (String) -> Unit,
     onNodeSelected: (Node) -> Unit,
-    onSmartNodeSelected: () -> Unit,
     onCategoryChange: (NodeListCategory) -> Unit,
     onSubscriptionSourceChange: (String) -> Unit,
     onToggleFavorite: (Node, Boolean) -> Unit,
@@ -385,10 +375,6 @@ private fun NodeListContent(
             }
         }
     }
-
-    val showSmartNode = category == NodeListCategory.PRIMARY &&
-        !selectedSubscriptionSourceId.isNullOrBlank() &&
-        (keyword.isBlank() || "智能节点".contains(keyword.trim(), ignoreCase = true))
 
     LaunchedEffect(pendingScrollToTop, isTesting, frozenNodeOrderIds, filteredNodes.size) {
         if (pendingScrollToTop && !isTesting && frozenNodeOrderIds == null && filteredNodes.isNotEmpty()) {
@@ -439,7 +425,7 @@ private fun NodeListContent(
         }
 
         when {
-            !showSmartNode && nodes.isEmpty() -> {
+            nodes.isEmpty() -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -454,7 +440,7 @@ private fun NodeListContent(
                 }
             }
 
-            !showSmartNode && filteredNodes.isEmpty() -> {
+            filteredNodes.isEmpty() -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -476,15 +462,6 @@ private fun NodeListContent(
                     contentPadding = PaddingValues(vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (showSmartNode) {
-                        item(key = "smart-node-card") {
-                            SmartNodeCard(
-                                isSelected = selectedNodeId == null,
-                                enabled = interactionEnabled,
-                                onClick = onSmartNodeSelected
-                            )
-                        }
-                    }
                     items(
                         items = filteredNodes,
                         key = { it.id }
@@ -514,84 +491,6 @@ private fun NodeListContent(
                         indication = null
                     ) { }
             )
-        }
-    }
-}
-
-@Composable
-private fun SmartNodeCard(
-    isSelected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    val backgroundColor =
-        if (isSelected) Primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled) { onClick() },
-        color = backgroundColor,
-        shape = RoundedCornerShape(12.dp),
-        border = if (isSelected) BorderStroke(2.dp, Primary) else null
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "⚡",
-                    fontSize = 24.sp,
-                    modifier = Modifier.padding(end = 12.dp)
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "智能节点",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "连接时自动测速并选择最佳节点",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                NodeMetric(
-                    label = "TCPing",
-                    value = "自动",
-                    valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
-                )
-                NodeMetric(
-                    label = "204 URLTest",
-                    value = "自动",
-                    valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
-                )
-                NodeMetric(
-                    label = "带宽",
-                    value = "自动",
-                    valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
-                )
-            }
         }
     }
 }
