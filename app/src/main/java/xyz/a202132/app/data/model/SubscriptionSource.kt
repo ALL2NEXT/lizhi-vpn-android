@@ -12,6 +12,5 @@ data class SubscriptionSource(
 )
 
 data class SubscriptionList(
-    val autoUpdate: Boolean,
     val sources: List<SubscriptionSource>
 )

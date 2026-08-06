@@ -25,7 +25,6 @@ const ADMIN_BASE_PATH = `/${ADMIN_UUID}`;
 
 const DEFAULT_STATE = {
   version: 1,
-  update: 1,
   subscriptions: [],
   notice: null,
   appUpdate: null,
@@ -84,7 +83,6 @@ async function handleClient(request, env) {
   const state = await readState(env);
 
   return json({
-    update: state.update,
     subscriptions: state.subscriptions
       .filter((source) => source.enabled)
       .map(({ id, name, enabled, url, encrypted }) => ({ id, name, enabled, url, encrypted })),
@@ -403,7 +401,6 @@ function normalizeState(input) {
 
   return {
     version: 1,
-    update: parseFlag(value.update, true) ? 1 : 0,
     subscriptions,
     notice: plainObject(value.notice) ? value.notice : null,
     appUpdate: plainObject(value.appUpdate) ? value.appUpdate : null,
@@ -540,7 +537,6 @@ function adminHtml() {
 
      <nav class="tab-nav" aria-label="后台模块">
      <button class="tab-button" type="button" data-tab="users">用户统计</button>
-     <button class="tab-button" type="button" data-tab="subscription-update">订阅更新</button>
      <button class="tab-button" type="button" data-tab="subscriptions">订阅线路</button>
      <button class="tab-button" type="button" data-tab="app-settings">应用设置</button>
      <button class="tab-button" type="button" data-tab="notice">公告</button>
@@ -554,13 +550,6 @@ function adminHtml() {
      <div id="usersTable" class="table-wrap"></div>
      <small class="hint">App 仅在 VPN 断开时上报本次会话累计流量。用户标识为设备标识的 SHA-256，不保存原始 MAC 或 Android ID。</small>
      <button type="button" onclick="pushSection('users')">推送</button>
-   </section>
-
-  <section class="card tab-panel" data-panel="subscription-update">
-     <h2>订阅更新</h2>
-     <label class="check"><input id="autoUpdate" type="checkbox">允许 App 自动更新订阅</label>
-     <small class="hint">开启后，App 获取配置时自动请求这些线路；关闭后仅在首次获取或用户手动刷新时更新节点。</small>
-     <button type="button" onclick="pushSection('subscription-update')">推送</button>
    </section>
 
   <section class="card tab-panel" data-panel="subscriptions">
@@ -735,7 +724,6 @@ function addSource(source) {
 }
 function fillState(state) {
   currentState = state || {};
-  checked('autoUpdate', currentState.update !== 0);
   el('subscriptionRows').innerHTML = '';
   (currentState.subscriptions || []).forEach(addSource);
   if (!currentState.subscriptions || currentState.subscriptions.length === 0) addSource();
@@ -796,7 +784,6 @@ function formState() {
     is_force: el('appForce').checked ? 1 : 0
   } : null;
   return {
-    update: el('autoUpdate').checked ? 1 : 0,
     subscriptions: subscriptions,
     settings: {
       websiteUrl: value('websiteUrl'),
@@ -818,7 +805,6 @@ async function pushSection(section) {
 
   const form = formState();
   const state = {
-    update: section === 'subscription-update' ? form.update : currentState.update,
     subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,
     settings: section === 'app-settings' ? form.settings : currentState.settings,
     notice: section === 'notice' ? form.notice : currentState.notice,

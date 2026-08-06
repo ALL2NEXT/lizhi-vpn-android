@@ -239,7 +239,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val scheduledNodeUpdateMinutes = settingsRepository.scheduledNodeUpdateMinutes.stateIn(viewModelScope, SharingStarted.Lazily, 30)
     val nodeAutoReconnect = settingsRepository.nodeAutoReconnect.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val scheduledNodeUpdateToastEnabled = settingsRepository.scheduledNodeUpdateToastEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
-    val subscriptionAutoUpdate = settingsRepository.subscriptionAutoUpdate.stateIn(viewModelScope, SharingStarted.Lazily, false)
     private val localScheduledNodeUpdateSettings = combine(
         scheduledNodeUpdateEnabled,
         scheduledNodeUpdateHours,
@@ -394,30 +393,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun observeScheduledNodeUpdates() {
         viewModelScope.launch {
-            combine(effectiveScheduledNodeUpdateSettings, subscriptionAutoUpdate) { settings, autoUpdate ->
-                settings to autoUpdate
-            }.collectLatest { (settings, autoUpdate) ->
-                    if (!settings.enabled || !autoUpdate) return@collectLatest
+            effectiveScheduledNodeUpdateSettings.collectLatest { settings ->
+                if (!settings.enabled) return@collectLatest
 
-                    while (true) {
-                        val anchor = lastNodeFetchFinishedAt.value.takeIf { it > 0L }
-                            ?: lastNodeFetchFinishedAt.first { it > 0L }
-                        val delayMs = (anchor + settings.intervalMillis - System.currentTimeMillis())
-                            .coerceAtLeast(0L)
-                        delay(delayMs)
+                while (true) {
+                    val anchor = lastNodeFetchFinishedAt.value.takeIf { it > 0L }
+                        ?: lastNodeFetchFinishedAt.first { it > 0L }
+                    val delayMs = (anchor + settings.intervalMillis - System.currentTimeMillis())
+                        .coerceAtLeast(0L)
+                    delay(delayMs)
 
-                        val latestSettings = effectiveScheduledNodeUpdateSettings.value
-                        if (!latestSettings.enabled || !subscriptionAutoUpdate.value) continue
+                    val latestSettings = effectiveScheduledNodeUpdateSettings.value
+                    if (!latestSettings.enabled) continue
 
-                        val latestAnchor = lastNodeFetchFinishedAt.value
-                        val remainingMs = latestAnchor + latestSettings.intervalMillis - System.currentTimeMillis()
-                        if (latestAnchor > anchor && remainingMs > 0L) {
-                            continue
-                        }
-
-                        runScheduledNodeUpdate(latestSettings)
+                    val latestAnchor = lastNodeFetchFinishedAt.value
+                    val remainingMs = latestAnchor + latestSettings.intervalMillis - System.currentTimeMillis()
+                    if (latestAnchor > anchor && remainingMs > 0L) {
+                        continue
                     }
+
+                    runScheduledNodeUpdate(latestSettings)
                 }
+            }
         }
     }
 
@@ -496,7 +493,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val hasSubscriptionNodes = nodeDao.getSubscriptionNodes().first().isNotEmpty()
-        val shouldFetchNodes = !initializedBefore || subscriptionList.autoUpdate || !hasSubscriptionNodes
+        val shouldFetchNodes = !initializedBefore || !hasSubscriptionNodes
         if (!shouldFetchNodes) {
             Log.i(tag, "Subscription list update=0; keeping cached nodes until manual refresh")
             return true
@@ -531,7 +528,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val raw = response.getOrThrow()
             applyBackendConfig(raw)
             val parsed = subscriptionListParser.parse(raw).getOrThrow()
-            settingsRepository.setSubscriptionList(raw, parsed.autoUpdate)
+            settingsRepository.setSubscriptionList(raw)
             cachedSubscriptionList = parsed
             Result.success(parsed)
         } catch (e: Exception) {

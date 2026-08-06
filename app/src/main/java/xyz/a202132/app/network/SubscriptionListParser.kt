@@ -31,7 +31,6 @@ class SubscriptionListParser {
             else -> null
         } ?: throw IllegalArgumentException("订阅列表缺少 subscriptions 数组")
 
-        val autoUpdate = rootObject?.let { readUpdateFlag(it) } ?: true
         val sources = sourceArray.mapNotNull { parseSource(it) }
             .mapIndexed { index, source ->
                 source.copy(
@@ -42,7 +41,7 @@ class SubscriptionListParser {
             .filter { it.enabled }
 
         require(sources.isNotEmpty()) { "订阅列表中没有有效线路" }
-        SubscriptionList(autoUpdate = autoUpdate, sources = sources)
+        SubscriptionList(sources = sources)
     }
 
     private fun findSourceArray(root: JsonObject): JsonArray? {
@@ -50,21 +49,6 @@ class SubscriptionListParser {
             .asSequence()
             .mapNotNull { key -> root.get(key)?.takeIf { it.isJsonArray }?.asJsonArray }
             .firstOrNull()
-    }
-
-    private fun readUpdateFlag(root: JsonObject): Boolean {
-        val element = root.get("update")
-            ?: root.get("autoUpdate")
-            ?: root.get("auto_update")
-            ?: return false
-        return when {
-            element.isJsonPrimitive && element.asJsonPrimitive.isBoolean -> element.asBoolean
-            element.isJsonPrimitive -> when (element.asString.trim().lowercase()) {
-                "1", "true", "yes", "on" -> true
-                else -> false
-            }
-            else -> false
-        }
     }
 
     private fun parseSource(element: JsonElement): SubscriptionSource? {
