@@ -10,15 +10,18 @@
  *   GET /api/client?refresh=1   // refresh is handled by the app; query is tolerated for compatibility
  *
  * Admin endpoints:
- *   GET  /admin
- *   GET  /api/admin/state
- *   PUT  /api/admin/state
- *   GET  /api/admin/users
+ *   GET  /<ADMIN_UUID>
+ *   GET  /<ADMIN_UUID>/api/state
+ *   PUT  /<ADMIN_UUID>/api/state
+ *   GET  /<ADMIN_UUID>/api/users
  */
 
 const STATE_KEY = "fireflyvpn:state:v1";
 const USERS_INDEX_KEY = "fireflyvpn:users:index:v1";
 const USER_KEY_PREFIX = "fireflyvpn:user:v1:";
+// Change this UUID to customize the private management route.
+const ADMIN_UUID = "3e9a0eed-6a29-4d16-91b1-3adae4bd88e6";
+const ADMIN_BASE_PATH = `/${ADMIN_UUID}`;
 
 const DEFAULT_STATE = {
   version: 1,
@@ -49,7 +52,7 @@ export default {
         return json({ ok: true, service: "fireflyvpn-worker" });
       }
 
-      if (path === "/admin" && request.method === "GET") {
+      if (path === ADMIN_BASE_PATH && request.method === "GET") {
         return new Response(adminHtml(), {
           headers: { "content-type": "text/html; charset=utf-8" },
         });
@@ -63,11 +66,11 @@ export default {
         return handleAccount(path, request, env);
       }
 
-      if (path.startsWith("/api/admin/")) {
+      if (path.startsWith(`${ADMIN_BASE_PATH}/api/`)) {
         if (!isAdmin(request, env)) {
           return json({ error: "unauthorized" }, 401);
         }
-        return handleAdmin(path, request, env);
+        return handleAdmin(path.slice(ADMIN_BASE_PATH.length), request, env);
       }
 
       return json({ error: "not_found" }, 404);
@@ -151,7 +154,7 @@ async function handleAccount(path, request, env) {
 }
 
 async function handleAdmin(path, request, env) {
-  if (path === "/api/admin/users" && request.method === "GET") {
+  if (path === "/api/users" && request.method === "GET") {
     const index = await readUserIndex(env);
     const users = (await Promise.all(index.map((id) => readUser(env, id))))
       .filter(Boolean);
@@ -172,11 +175,11 @@ async function handleAdmin(path, request, env) {
     });
   }
 
-  if (path === "/api/admin/state" && request.method === "GET") {
+  if (path === "/api/state" && request.method === "GET") {
     return json(await readState(env));
   }
 
-  if (path === "/api/admin/state" && request.method === "PUT") {
+  if (path === "/api/state" && request.method === "PUT") {
     const incoming = await request.json();
     const next = normalizeState(incoming);
     next.updatedAt = new Date().toISOString();
@@ -471,14 +474,26 @@ function adminHtml() {
   <title>FireflyVPN Worker 管理后台</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, -apple-system, sans-serif; }
-    body { margin: 0; background: #111827; color: #e5e7eb; }
-    main { width: min(980px, calc(100% - 28px)); margin: 24px auto 60px; }
-    h1 { font-size: 24px; margin: 0 0 6px; }
-    h2 { font-size: 18px; margin: 0 0 14px; }
-    p, small, label { color: #aab4c5; line-height: 1.55; }
-    .card { background: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 18px; margin-top: 16px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-    .field { display: flex; flex-direction: column; gap: 6px; }
+     body { margin: 0; background: #111827; color: #e5e7eb; }
+     main { width: min(980px, calc(100% - 28px)); margin: 24px auto 60px; }
+     h1 { font-size: 24px; margin: 0 0 6px; }
+     h2 { font-size: 18px; margin: 0 0 14px; }
+     p, small, label { color: #aab4c5; line-height: 1.55; }
+     .card { background: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 18px; margin-top: 16px; }
+     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+     .tab-nav { display: flex; gap: 8px; overflow-x: auto; padding: 6px; margin-top: 18px; background: #1f2937; border: 1px solid #374151; border-radius: 12px; scrollbar-width: thin; }
+     .tab-button { flex: 0 0 auto; margin: 0; padding: 9px 14px; background: transparent; color: #aab4c5; border: 1px solid transparent; white-space: nowrap; }
+     .tab-button:hover { background: #374151; color: #f9fafb; }
+     .tab-button.active { background: #22c55e; color: #052e16; }
+     .tab-panel { display: none; }
+     .tab-panel.active { display: block; }
+     .login-gate { max-width: 430px; margin: 12vh auto 0; }
+     .login-gate h1 { margin-bottom: 10px; }
+     .login-gate .card { margin-top: 18px; }
+     .dashboard-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+     .dashboard-header button { flex: 0 0 auto; margin-top: 0; }
+     #loginStatus { min-height: 24px; color: #fca5a5; margin-top: 10px; }
+     .field { display: flex; flex-direction: column; gap: 6px; }
     input, textarea { box-sizing: border-box; width: 100%; color: #e5e7eb; background: #111827; border: 1px solid #4b5563; border-radius: 8px; padding: 10px; }
     input[type="checkbox"] { width: auto; accent-color: #22c55e; transform: scale(1.15); margin-right: 8px; }
     textarea { min-height: 110px; resize: vertical; }
@@ -502,40 +517,61 @@ function adminHtml() {
   </style>
 </head>
 <body>
-<main>
-  <h1>FireflyVPN Worker 管理后台</h1>
-  <p>在这里配置订阅线路、网站信息、联系方式、公告和版本更新。App 只访问 Worker，不需要再修改多处接口。</p>
-
-   <section class="card">
-     <h2>登录与保存</h2>
-    <div class="field"><label>管理密钥 ADMIN_TOKEN<input id="token" type="password" placeholder="输入 Worker Secret ADMIN_TOKEN"></label></div>
-    <button class="secondary" onclick="loadState()">读取配置</button>
-    <button onclick="saveState()">保存全部设置</button>
-     <div id="status"></div>
+ <main>
+   <section id="loginGate" class="login-gate">
+     <h1>FireflyVPN 管理后台</h1>
+     <p>请输入管理密码后进入后台。未验证前不会展示任何管理模块。</p>
+     <div class="card">
+       <form id="loginForm">
+         <div class="field"><label>管理密码<input id="adminPassword" type="password" autocomplete="current-password" placeholder="输入 ADMIN_TOKEN"></label></div>
+         <button type="submit">进入后台</button>
+         <div id="loginStatus"></div>
+       </form>
+     </div>
    </section>
 
-   <section class="card">
+   <div id="dashboard" hidden>
+     <div class="dashboard-header">
+       <h1>FireflyVPN Worker 管理后台</h1>
+       <button class="secondary" type="button" onclick="logout()">退出登录</button>
+     </div>
+     <p>在这里配置订阅线路、网站信息、联系方式、公告和版本更新。每个模块可单独推送到 Worker。</p>
+     <div id="status"></div>
+
+     <nav class="tab-nav" aria-label="后台模块">
+     <button class="tab-button" type="button" data-tab="users">用户统计</button>
+     <button class="tab-button" type="button" data-tab="subscription-update">订阅更新</button>
+     <button class="tab-button" type="button" data-tab="subscriptions">订阅线路</button>
+     <button class="tab-button" type="button" data-tab="app-settings">应用设置</button>
+     <button class="tab-button" type="button" data-tab="notice">公告</button>
+     <button class="tab-button" type="button" data-tab="app-update">版本更新</button>
+   </nav>
+
+   <section class="card tab-panel" data-panel="users">
      <h2>用户与流量统计</h2>
      <button class="secondary" onclick="loadUsers()">刷新用户列表</button>
      <div id="userSummary"><small>读取配置后显示用户统计。</small></div>
      <div id="usersTable" class="table-wrap"></div>
      <small class="hint">App 仅在 VPN 断开时上报本次会话累计流量。用户标识为设备标识的 SHA-256，不保存原始 MAC 或 Android ID。</small>
+     <button type="button" onclick="pushSection('users')">推送</button>
    </section>
 
-  <section class="card">
-    <h2>订阅更新</h2>
-    <label class="check"><input id="autoUpdate" type="checkbox">允许 App 自动更新订阅</label>
-    <small class="hint">开启后，App 获取配置时自动请求这些线路；关闭后仅在首次获取或用户手动刷新时更新节点。</small>
-  </section>
+  <section class="card tab-panel" data-panel="subscription-update">
+     <h2>订阅更新</h2>
+     <label class="check"><input id="autoUpdate" type="checkbox">允许 App 自动更新订阅</label>
+     <small class="hint">开启后，App 获取配置时自动请求这些线路；关闭后仅在首次获取或用户手动刷新时更新节点。</small>
+     <button type="button" onclick="pushSection('subscription-update')">推送</button>
+   </section>
 
-  <section class="card">
+  <section class="card tab-panel" data-panel="subscriptions">
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
-    <button class="secondary" onclick="addSource()">添加线路</button>
-    <small class="hint">Worker 只保存线路名称、订阅地址和加密标记，线路序号按有效线路自动生成 1、2、3…；详细节点内容由 App 直接请求并解析。</small>
-  </section>
+     <button class="secondary" onclick="addSource()">添加线路</button>
+     <small class="hint">Worker 只保存线路名称、订阅地址和加密标记，线路序号按有效线路自动生成 1、2、3…；详细节点内容由 App 直接请求并解析。</small>
+     <button type="button" onclick="pushSection('subscriptions')">推送</button>
+   </section>
 
-  <section class="card">
+  <section class="card tab-panel" data-panel="app-settings">
     <h2>应用基础设置</h2>
     <div class="grid">
       <div class="field"><label>官方网站<input id="websiteUrl" type="url" placeholder="https://example.com"></label></div>
@@ -543,11 +579,12 @@ function adminHtml() {
       <div class="field"><label>问题反馈链接<input id="feedbackUrl" type="url" placeholder="https://github.com/.../issues"></label></div>
       <div class="field"><label>项目源码链接<input id="githubUrl" type="url" placeholder="https://github.com/.../.../"></label></div>
       <div class="field"><label>后台请求超时（毫秒）<input id="nodeRequestTimeoutMs" type="number" min="5000" max="60000" step="1000"></label></div>
-    </div>
-    <small class="hint">留空的网站、邮箱或链接会在 App 中自动隐藏对应入口。超时范围为 5000～60000 毫秒。</small>
-  </section>
+     </div>
+     <small class="hint">留空的网站、邮箱或链接会在 App 中自动隐藏对应入口。超时范围为 5000～60000 毫秒。</small>
+     <button type="button" onclick="pushSection('app-settings')">推送</button>
+   </section>
 
-  <section class="card">
+  <section class="card tab-panel" data-panel="notice">
     <h2>公告</h2>
     <label class="check"><input id="noticeEnabled" type="checkbox">显示公告</label>
     <div class="grid">
@@ -560,35 +597,92 @@ function adminHtml() {
     <div class="grid">
       <div class="field"><label>更新间隔小时<input id="scheduleHours" type="number" min="0" max="168"></label></div>
       <div class="field"><label>更新间隔分钟<input id="scheduleMinutes" type="number" min="0" max="59"></label></div>
-    </div>
-    <label class="check"><input id="scheduleReconnect" type="checkbox">节点更新后自动重连</label>
-    <label class="check"><input id="scheduleToast" type="checkbox">显示定时更新提示</label>
-  </section>
+     </div>
+     <label class="check"><input id="scheduleReconnect" type="checkbox">节点更新后自动重连</label>
+     <label class="check"><input id="scheduleToast" type="checkbox">显示定时更新提示</label>
+     <button type="button" onclick="pushSection('notice')">推送</button>
+   </section>
 
-  <section class="card">
+  <section class="card tab-panel" data-panel="app-update">
     <h2>版本更新</h2>
     <label class="check"><input id="appUpdateEnabled" type="checkbox">启用版本更新提示</label>
     <div class="grid">
       <div class="field"><label>版本名称<input id="appVersion" type="text" placeholder="1.1.0"></label></div>
       <div class="field"><label>版本号<input id="appVersionCode" type="number" min="1" step="1"></label></div>
       <div class="field"><label>APK 下载地址<input id="appDownloadUrl" type="url" placeholder="https://example.com/app.apk"></label></div>
-    </div>
-    <div class="field"><label>更新说明<textarea id="appChangelog"></textarea></label></div>
-    <label class="check"><input id="appForce" type="checkbox">强制更新</label>
-  </section>
-</main>
+     </div>
+     <div class="field"><label>更新说明<textarea id="appChangelog"></textarea></label></div>
+     <label class="check"><input id="appForce" type="checkbox">强制更新</label>
+     <button type="button" onclick="pushSection('app-update')">推送</button>
+   </section>
+   </div>
+ </main>
 <script>
-let currentState = null;
-const tokenInput = document.getElementById('token');
-const statusEl = document.getElementById('status');
-tokenInput.value = localStorage.getItem('fireflyvpn_admin_token') || '';
-function el(id) { return document.getElementById(id); }
-function value(id) { return el(id).value.trim(); }
-function setValue(id, data) { el(id).value = data == null ? '' : data; }
-function checked(id, data) { el(id).checked = Boolean(data); }
-function esc(data) { return String(data == null ? '' : data).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-function headers() { return {'content-type':'application/json','authorization':'Bearer ' + tokenInput.value.trim()}; }
-function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#fca5a5' : '#86efac'; }
+ let currentState = null;
+ let adminToken = '';
+ const ADMIN_API_BASE = "${ADMIN_BASE_PATH}/api";
+ const loginGate = document.getElementById('loginGate');
+ const loginForm = document.getElementById('loginForm');
+ const passwordInput = document.getElementById('adminPassword');
+ const loginStatusEl = document.getElementById('loginStatus');
+ const statusEl = document.getElementById('status');
+ function el(id) { return document.getElementById(id); }
+ function value(id) { return el(id).value.trim(); }
+ function setValue(id, data) { el(id).value = data == null ? '' : data; }
+ function checked(id, data) { el(id).checked = Boolean(data); }
+ function esc(data) { return String(data == null ? '' : data).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+ function headers() { return {'content-type':'application/json','authorization':'Bearer ' + adminToken}; }
+ function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#fca5a5' : '#86efac'; }
+ function showLoginError(message) { loginStatusEl.textContent = message || ''; }
+ loginForm.onsubmit = async function(event) {
+   event.preventDefault();
+   const password = passwordInput.value.trim();
+   if (!password) return showLoginError('请输入管理密码');
+   adminToken = password;
+   showLoginError('验证中…');
+   try {
+     const response = await fetch(ADMIN_API_BASE + '/state', {headers: headers()});
+     const data = await response.json();
+     if (!response.ok) {
+       adminToken = '';
+       return showLoginError('密码错误或后台地址无效');
+     }
+     currentState = data;
+     loginGate.hidden = true;
+     el('dashboard').hidden = false;
+     fillState(data);
+     activateTab('users');
+     await loadUsers();
+     show('登录成功');
+     passwordInput.value = '';
+     showLoginError('');
+   } catch (error) {
+     adminToken = '';
+     showLoginError('无法连接后台，请检查网络');
+   }
+ };
+ function logout() {
+   adminToken = '';
+   currentState = null;
+   el('dashboard').hidden = true;
+   loginGate.hidden = false;
+   passwordInput.value = '';
+   showLoginError('');
+   passwordInput.focus();
+ }
+function activateTab(name) {
+  document.querySelectorAll('.tab-button').forEach(function(button) {
+    const active = button.dataset.tab === name;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('.tab-panel').forEach(function(panel) {
+    panel.classList.toggle('active', panel.dataset.panel === name);
+  });
+}
+document.querySelectorAll('.tab-button').forEach(function(button) {
+  button.onclick = function() { activateTab(button.dataset.tab); };
+});
 function formatBytes(bytes) {
   let value = Number(bytes) || 0;
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
@@ -621,7 +715,7 @@ function renderUsers(data) {
     : '<small>暂无注册用户。</small>';
 }
 async function loadUsers() {
-  const response = await fetch('/api/admin/users', {headers: headers()});
+  const response = await fetch(ADMIN_API_BASE + '/users', {headers: headers()});
   const data = await response.json();
   if (!response.ok) return show(data.error || '读取用户失败', true);
   renderUsers(data);
@@ -715,23 +809,31 @@ function formState() {
     appUpdate: appUpdate
   };
 }
-async function loadState() {
-  localStorage.setItem('fireflyvpn_admin_token', tokenInput.value.trim());
-  const response = await fetch('/api/admin/state', {headers: headers()});
+async function pushSection(section) {
+  if (section === 'users') {
+    await loadUsers();
+    show('用户统计已刷新');
+    return;
+  }
+
+  const form = formState();
+  const state = {
+    update: section === 'subscription-update' ? form.update : currentState.update,
+    subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,
+    settings: section === 'app-settings' ? form.settings : currentState.settings,
+    notice: section === 'notice' ? form.notice : currentState.notice,
+    appUpdate: section === 'app-update' ? form.appUpdate : currentState.appUpdate
+  };
+  const response = await fetch(ADMIN_API_BASE + '/state', {
+    method: 'PUT',
+    headers: headers(),
+    body: JSON.stringify(state)
+  });
   const data = await response.json();
-  if (!response.ok) return show(data.error || '读取失败', true);
-  fillState(data);
-  await loadUsers();
-  show('配置与用户统计已读取');
-}
-async function saveState() {
-  localStorage.setItem('fireflyvpn_admin_token', tokenInput.value.trim());
-  const response = await fetch('/api/admin/state', {method:'PUT', headers:headers(), body:JSON.stringify(formState())});
-  const data = await response.json();
-  if (!response.ok) return show(data.error || '保存失败', true);
+  if (!response.ok) return show(data.error || '推送失败', true);
+  currentState = data.state;
   fillState(data.state);
-  await loadUsers();
-  show('全部设置已保存');
+  show('当前模块已推送');
 }
 addSource();
 </script>
