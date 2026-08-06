@@ -1392,14 +1392,14 @@ fun autoSelectBestNode() {
      * 切换VPN连接
      */
     fun toggleVpn() {
-        val node = currentNode.value ?: run {
-            RuntimeLog.warn(tag, "VPN toggle ignored: no selected node")
-            _error.value = "请先选择节点"
-            return
-        }
-        
         when (vpnState.value) {
             VpnState.DISCONNECTED -> {
+                val node = currentNode.value ?: run {
+                    RuntimeLog.warn(tag, "VPN start ignored: no selected node")
+                    _error.value = "请先选择节点"
+                    return
+                }
+
                 viewModelScope.launch {
                     if (!ensureAccountRegistered()) return@launch
                     // 4. 无网络连接节点时给用户发Toast，但不阻止
