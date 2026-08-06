@@ -257,7 +257,11 @@ fun MainScreen(
                     vpnState = vpnState,
                     enabled = !isTesting,
                     onClick = {
-                        if (currentNode == null) {
+                        if (vpnState == VpnState.CONNECTED) {
+                            onStartVpn {
+                                viewModel.toggleVpn()
+                            }
+                        } else if (currentNode == null) {
                             onStartVpn {
                                 viewModel.startSmartConnection()
                             }

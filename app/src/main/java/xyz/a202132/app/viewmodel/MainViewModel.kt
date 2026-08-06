@@ -1180,6 +1180,14 @@ fun autoSelectBestNode() {
     fun setSubscriptionSource(sourceId: String) {
         viewModelScope.launch {
             settingsRepository.setSelectedSubscriptionSourceId(sourceId)
+            settingsRepository.setSelectedNodeId(null)
+            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+        }
+    }
+
+    fun selectSmartNode() {
+        viewModelScope.launch {
+            settingsRepository.setSelectedNodeId(null)
             settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
         }
     }
@@ -1618,7 +1626,9 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
         if (!settingsRepository.rememberLastSelectedNodeEnabled.first()) return
         val rememberedNodeId = settingsRepository.lastSelectedNodeId.first()?.takeIf { it.isNotBlank() } ?: return
         val candidateNodes = freshNodes ?: nodeDao.getAllNodes().first()
-        if (candidateNodes.any { it.id == rememberedNodeId } || nodeDao.getNodeById(rememberedNodeId) != null) {
+        val rememberedNode = candidateNodes.firstOrNull { it.id == rememberedNodeId }
+            ?: nodeDao.getNodeById(rememberedNodeId)
+        if (rememberedNode?.source != NodeSource.SUBSCRIPTION && rememberedNode != null) {
             settingsRepository.setSelectedNodeId(rememberedNodeId)
         }
     }

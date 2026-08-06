@@ -201,6 +201,10 @@ class MainActivity : ComponentActivity() {
                                         viewModel.selectNode(node)
                                         navController.popBackStack(AppRoute.MAIN, false)
                                     },
+                                    onSmartNodeSelected = {
+                                        viewModel.selectSmartNode()
+                                        navController.popBackStack(AppRoute.MAIN, false)
+                                    },
                                     onCategoryChange = { viewModel.setNodeListCategory(it) },
                                     onSubscriptionSourceChange = { viewModel.setSubscriptionSource(it) },
                                     onToggleFavorite = { viewModel.toggleFavoriteNode(it) },
