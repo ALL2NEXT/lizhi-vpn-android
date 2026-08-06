@@ -64,6 +64,52 @@ data class BackendAppSettings(
     val nodeRequestTimeoutMs: Long = 25000L
 )
 
+data class AccountRegisterRequest(
+    @SerializedName("deviceId")
+    val deviceId: String,
+
+    @SerializedName("appVersion")
+    val appVersion: String
+)
+
+data class AccountRegisterResponse(
+    @SerializedName("ok")
+    val ok: Boolean = false,
+
+    @SerializedName("account")
+    val account: AccountInfo? = null,
+
+    @SerializedName("error")
+    val error: String? = null
+)
+
+data class AccountInfo(
+    @SerializedName("id")
+    val id: String
+)
+
+data class TrafficReportRequest(
+    @SerializedName("accountId")
+    val accountId: String,
+
+    @SerializedName("sessionId")
+    val sessionId: String,
+
+    @SerializedName("uploadBytes")
+    val uploadBytes: Long,
+
+    @SerializedName("downloadBytes")
+    val downloadBytes: Long
+)
+
+data class TrafficReportResponse(
+    @SerializedName("ok")
+    val ok: Boolean = false,
+
+    @SerializedName("error")
+    val error: String? = null
+)
+
 /**
  * 服务端下发的定时节点更新配置。
  * 字段为空时不覆盖本地设置，整个对象存在时优先级高于本地定时更新配置。

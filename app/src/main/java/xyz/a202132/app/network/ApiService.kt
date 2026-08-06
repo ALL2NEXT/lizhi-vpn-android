@@ -1,7 +1,13 @@
 package xyz.a202132.app.network
 
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Url
+import xyz.a202132.app.data.model.AccountRegisterRequest
+import xyz.a202132.app.data.model.AccountRegisterResponse
+import xyz.a202132.app.data.model.TrafficReportRequest
+import xyz.a202132.app.data.model.TrafficReportResponse
 
 interface ApiService {
     
@@ -10,4 +16,16 @@ interface ApiService {
 
     @GET
     suspend fun getSubscription(@Url url: String): String
+
+    @POST
+    suspend fun registerAccount(
+        @Url url: String,
+        @Body request: AccountRegisterRequest
+    ): AccountRegisterResponse
+
+    @POST
+    suspend fun reportTraffic(
+        @Url url: String,
+        @Body request: TrafficReportRequest
+    ): TrafficReportResponse
 }

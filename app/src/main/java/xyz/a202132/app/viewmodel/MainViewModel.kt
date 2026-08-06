@@ -33,6 +33,7 @@ import xyz.a202132.app.network.SubscriptionListParser
 import xyz.a202132.app.network.SubscriptionParser
 import xyz.a202132.app.network.DownloadManager
 import xyz.a202132.app.network.NodeTestProxyManager
+import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.util.NetworkUtils
@@ -79,6 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val nodeDao = database.nodeDao()
     private val settingsRepository = SettingsRepository(application)
     private val subscriptionParser = SubscriptionParser()
+    private val accountManager = AccountManager(application)
     private val subscriptionListParser = SubscriptionListParser()
     private val configGenerator = SingBoxConfigGenerator()
     private val latencyTester = LatencyTester()
@@ -90,6 +92,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var lastFetchedNodes: List<Node>? = null
     private val lastNodeFetchFinishedAt = MutableStateFlow(0L)
     private var cachedSubscriptionList: SubscriptionList? = null
+    private var trafficSessionId: String? = null
     private val gson = Gson()
     private var backendUpdateInfo: UpdateInfo? = null
     
@@ -316,6 +319,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // 监听用户协议状态，只有同意后才初始化网络请求
             isUserAgreementAccepted.collect { accepted ->
                 if (accepted) {
+                    if (!ensureAccountRegistered()) return@collect
                     val fetchOk = initializeSubscriptionListAndMaybeFetchNodes()
                     if (!fetchOk) return@collect
                     restoreRememberedLastSelectedNodeIfNeeded(lastFetchedNodes)
@@ -335,7 +339,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         
-observeScheduledNodeUpdates()
+        observeTrafficDisconnects()
+        observeScheduledNodeUpdates()
+    }
+
+    private suspend fun ensureAccountRegistered(): Boolean {
+        val existing = accountManager.currentAccount()
+        if (existing != null) {
+            return true
+        }
+
+        val result = accountManager.register(backendSettings.value.nodeRequestTimeoutMs)
+        val account = result.getOrNull()
+        if (account == null) {
+            Log.e(tag, "Account registration failed", result.exceptionOrNull())
+            _error.value = "账户注册失败，暂时无法连接"
+            return false
+        }
+        return true
+    }
+
+    private fun observeTrafficDisconnects() {
+        viewModelScope.launch {
+            var previousState = VpnState.DISCONNECTED
+            ServiceManager.vpnState.collect { state ->
+                if (state == VpnState.CONNECTED && previousState != VpnState.CONNECTED) {
+                    trafficSessionId = UUID.randomUUID().toString()
+                }
+                if (state == VpnState.DISCONNECTING) {
+                    reportTrafficOnDisconnect()
+                }
+                previousState = state
+            }
+        }
+    }
+
+    private fun reportTrafficOnDisconnect() {
+        val sessionId = trafficSessionId ?: return
+        trafficSessionId = null
+        // Read the service counters directly before the stop routine resets them.
+        val uploadBytes = BoxVpnService.uploadTotal
+        val downloadBytes = BoxVpnService.downloadTotal
+        viewModelScope.launch(Dispatchers.IO) {
+            accountManager.reportTraffic(
+                sessionId = sessionId,
+                uploadBytes = uploadBytes,
+                downloadBytes = downloadBytes
+            ).onFailure { error ->
+                Log.w(tag, "Traffic report failed", error)
+            }
+        }
     }
 
     private fun observeScheduledNodeUpdates() {
@@ -702,6 +755,7 @@ observeScheduledNodeUpdates()
      */
     fun startSmartConnection() {
         viewModelScope.launch {
+            if (!ensureAccountRegistered()) return@launch
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
@@ -1329,13 +1383,16 @@ fun autoSelectBestNode() {
         
         when (vpnState.value) {
             VpnState.DISCONNECTED -> {
-                // 4. 无网络连接节点时给用户发Toast，但不阻止
-                if (!NetworkUtils.isNetworkAvailable(getApplication())) {
-                    RuntimeLog.warn(tag, "VPN start requested while network is unavailable")
-                     _error.value = "当前无网络连接节点！"
+                viewModelScope.launch {
+                    if (!ensureAccountRegistered()) return@launch
+                    // 4. 无网络连接节点时给用户发Toast，但不阻止
+                    if (!NetworkUtils.isNetworkAvailable(getApplication())) {
+                        RuntimeLog.warn(tag, "VPN start requested while network is unavailable")
+                        _error.value = "当前无网络连接节点！"
+                    }
+                    RuntimeLog.info(tag, "VPN start requested from UI")
+                    ServiceManager.startVpn(getApplication(), node, proxyMode.value)
                 }
-                RuntimeLog.info(tag, "VPN start requested from UI")
-                ServiceManager.startVpn(getApplication(), node, proxyMode.value)
             }
             VpnState.CONNECTED -> {
                 RuntimeLog.info(tag, "VPN stop requested from UI")
