@@ -7,4 +7,7 @@ interface ApiService {
     
     @GET
     suspend fun getBackendConfig(@Url url: String): String
+
+    @GET
+    suspend fun getSubscription(@Url url: String): String
 }

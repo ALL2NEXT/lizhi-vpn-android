@@ -66,8 +66,9 @@ class SubscriptionListParser {
     private fun parseSource(element: JsonElement, index: Int): SubscriptionSource? {
         if (!element.isJsonObject) return null
         val source = element.asJsonObject
-        val content = readString(source, "content", "body")
-            ?.takeIf { it.isNotBlank() }
+        val url = readString(source, "url", "subscribeUrl", "subscriptionUrl")
+            ?.trim()
+            ?.takeIf { it.matches(Regex("https?://.+", RegexOption.IGNORE_CASE)) }
             ?: return null
         val name = readString(source, "name", "title", "label")
             ?.trim()
@@ -76,9 +77,9 @@ class SubscriptionListParser {
         val id = readString(source, "id", "key")
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
-            ?: md5(content)
+            ?: md5(url)
         val enabled = source.get("enabled")?.let { readBoolean(it) } ?: true
-        return SubscriptionSource(id = id, name = name, content = content, enabled = enabled)
+        return SubscriptionSource(id = id, name = name, url = url, enabled = enabled)
     }
 
     private fun readString(objectValue: JsonObject, vararg keys: String): String? {

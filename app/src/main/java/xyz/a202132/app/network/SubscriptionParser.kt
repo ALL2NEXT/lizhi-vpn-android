@@ -9,6 +9,7 @@ import xyz.a202132.app.data.model.NodeType
 import android.net.Uri
 import java.net.URLDecoder
 import java.security.MessageDigest
+import kotlinx.coroutines.withTimeout
 
 /**
  * 订阅解析器 - 解析Base64编码的节点列表
@@ -17,6 +18,18 @@ class SubscriptionParser {
     
     private val gson = Gson()
     private val tag = "SubscriptionParser"
+
+    suspend fun fetchAndParse(url: String, timeoutMs: Long = 25000L): Result<List<Node>> {
+        return try {
+            val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
+                NetworkClient.apiService.getSubscription(url)
+            }
+            Result.success(parseSubscription(response))
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to fetch subscription: $url", e)
+            Result.failure(e)
+        }
+    }
     
     /**
      * 解析订阅内容

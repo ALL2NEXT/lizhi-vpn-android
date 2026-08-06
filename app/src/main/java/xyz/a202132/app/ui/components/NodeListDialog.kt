@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -61,6 +63,7 @@ import xyz.a202132.app.data.model.LatencyLevel
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
+import xyz.a202132.app.data.model.SubscriptionGroup
 import xyz.a202132.app.ui.theme.LatencyBad
 import xyz.a202132.app.ui.theme.LatencyGood
 import xyz.a202132.app.ui.theme.LatencyMedium
@@ -71,12 +74,15 @@ fun NodeListScreen(
     nodes: List<Node>,
     selectedNodeId: String?,
     category: NodeListCategory,
+    subscriptionGroups: List<SubscriptionGroup>,
+    selectedSubscriptionSourceId: String?,
     favoriteSourceNodeIds: Set<String>,
     skipFavoriteRemovalConfirmation: Boolean,
     isTesting: Boolean,
     testingLabel: String? = null,
     onNodeSelected: (Node) -> Unit,
     onCategoryChange: (NodeListCategory) -> Unit,
+    onSubscriptionSourceChange: (String) -> Unit,
     onToggleFavorite: (Node) -> Unit,
     onSkipFavoriteRemovalConfirmationForSession: () -> Unit,
     onImportFromText: (String) -> Unit,
@@ -158,6 +164,8 @@ fun NodeListScreen(
             nodes = nodes,
             selectedNodeId = selectedNodeId,
             category = category,
+            subscriptionGroups = subscriptionGroups,
+            selectedSubscriptionSourceId = selectedSubscriptionSourceId,
             favoriteSourceNodeIds = favoriteSourceNodeIds,
             isTesting = isTesting,
             showSearch = showSearch,
@@ -165,6 +173,7 @@ fun NodeListScreen(
             onKeywordChange = { keyword = it },
             onNodeSelected = handleNodeSelected,
             onCategoryChange = onCategoryChange,
+            onSubscriptionSourceChange = onSubscriptionSourceChange,
             onToggleFavorite = handleToggleFavorite,
             interactionEnabled = !isClosing,
         )
@@ -309,6 +318,8 @@ private fun NodeListContent(
     nodes: List<Node>,
     selectedNodeId: String?,
     category: NodeListCategory,
+    subscriptionGroups: List<SubscriptionGroup>,
+    selectedSubscriptionSourceId: String?,
     favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
     showSearch: Boolean,
@@ -316,6 +327,7 @@ private fun NodeListContent(
     onKeywordChange: (String) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onCategoryChange: (NodeListCategory) -> Unit,
+    onSubscriptionSourceChange: (String) -> Unit,
     onToggleFavorite: (Node, Boolean) -> Unit,
     interactionEnabled: Boolean,
 ) {
@@ -381,9 +393,11 @@ private fun NodeListContent(
 
         NodeListCategorySwitch(
             category = category,
-            primaryLabel = "订阅节点",
+            subscriptionGroups = subscriptionGroups,
+            selectedSubscriptionSourceId = selectedSubscriptionSourceId,
             enabled = interactionEnabled && !isTesting,
-            onCategoryChange = onCategoryChange
+            onCategoryChange = onCategoryChange,
+            onSubscriptionSourceChange = onSubscriptionSourceChange
         )
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -482,9 +496,11 @@ private fun NodeListContent(
 @Composable
 private fun NodeListCategorySwitch(
     category: NodeListCategory,
-    primaryLabel: String,
+    subscriptionGroups: List<SubscriptionGroup>,
+    selectedSubscriptionSourceId: String?,
     enabled: Boolean,
-    onCategoryChange: (NodeListCategory) -> Unit
+    onCategoryChange: (NodeListCategory) -> Unit,
+    onSubscriptionSourceChange: (String) -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -492,21 +508,33 @@ private fun NodeListCategorySwitch(
         shape = RoundedCornerShape(10.dp)
     ) {
         Row(
-            modifier = Modifier.padding(4.dp),
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            NodeListCategorySegment(
-                text = primaryLabel,
-                selected = category == NodeListCategory.PRIMARY,
-                enabled = enabled,
-                modifier = Modifier.weight(1f),
-                onClick = { onCategoryChange(NodeListCategory.PRIMARY) }
-            )
+            if (subscriptionGroups.isEmpty()) {
+                NodeListCategorySegment(
+                    text = "订阅节点",
+                    selected = category == NodeListCategory.PRIMARY,
+                    enabled = enabled,
+                    onClick = { onCategoryChange(NodeListCategory.PRIMARY) }
+                )
+            } else {
+                subscriptionGroups.forEach { group ->
+                    NodeListCategorySegment(
+                        text = group.name,
+                        selected = category == NodeListCategory.PRIMARY &&
+                            selectedSubscriptionSourceId == group.sourceId,
+                        enabled = enabled,
+                        onClick = { onSubscriptionSourceChange(group.sourceId) }
+                    )
+                }
+            }
             NodeListCategorySegment(
                 text = "\u6536\u85cf\u8282\u70b9",
                 selected = category == NodeListCategory.FAVORITES,
                 enabled = enabled,
-                modifier = Modifier.weight(1f),
                 onClick = { onCategoryChange(NodeListCategory.FAVORITES) }
             )
         }

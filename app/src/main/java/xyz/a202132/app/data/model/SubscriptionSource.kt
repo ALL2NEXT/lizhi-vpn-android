@@ -6,7 +6,7 @@ package xyz.a202132.app.data.model
 data class SubscriptionSource(
     val id: String,
     val name: String,
-    val content: String,
+    val url: String,
     val enabled: Boolean = true
 )
 

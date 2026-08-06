@@ -53,7 +53,7 @@
 - 📦 **分应用代理**：精细控制哪些应用走代理或绕过 VPN
 - 🌐 **绕过局域网**：局域网流量始终直连，不受 VPN 影响
 - 🌍 **IPv6 路由**：支持 IPv6 网络访问，可选禁用/启用/优先/仅 IPv6 模式
-- 🔄 **多订阅源**：先获取远程订阅列表，再并发拉取并合并所有线路
+- 🔄 **多订阅源**：先获取远程订阅列表，节点按后台线路名称分组展示
 - ⭐ **收藏节点**：收藏节点与订阅节点独立存储，订阅刷新不会覆盖收藏内容
 - ➕ **节点导入**：节点列表支持从剪切板导入和扫码导入，导入结果自动去重并写入收藏节点
 - 🛡️ **核心配置校验**：收藏导入与 VPN 启动前会使用 sing-box `checkConfig` 校验节点配置，避免单个不兼容节点拖垮整组配置
@@ -334,18 +334,18 @@ app/src/main/
 
 ### 节点列表、收藏与导入
 
-节点列表支持在 `订阅节点` 与 `收藏节点` 两个视图之间切换。收藏节点是独立数据，不会在订阅刷新后被自动覆盖。
+节点列表会为每条订阅线路生成独立视图，名称直接使用 Worker 下发的线路名称；另有独立的 `收藏节点` 视图。收藏节点不会在订阅刷新后被自动覆盖。
 
 **功能特点**：
 
 - ⭐ 节点卡片延迟标签前的星标可用于收藏或取消收藏
-- 📌 APP 会记录退出前停留的是订阅节点还是收藏节点
+- 📌 APP 会记录当前订阅线路以及是否停留在收藏节点
 - ➕ 节点列表搜索按钮左侧提供导入入口，支持从剪切板导入和扫描二维码
 - 🔁 导入到收藏节点前会自动去重，成功后提示实际导入数量
 - 🛡️ 导入收藏节点前会生成单节点 sing-box 测试配置并执行 `Libbox.checkConfig()`，不兼容核心的节点不会写入收藏
 - 🚦 VPN 启动时只会使用当前节点来源生成配置，并在启动前跳过核心不支持的非选中节点；如果所选节点本身不被核心支持，会直接提示错误
 
-> 💡 收藏节点适合长期保留少量手动维护的节点；订阅节点由远程订阅列表统一刷新。
+> 💡 收藏节点适合长期保留少量手动维护的节点；切换订阅线路后，列表和测速只针对当前线路。
 
 ---
 
@@ -464,7 +464,7 @@ IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
 
 ### 订阅列表与多线路
 
-APP 只请求 Cloudflare Worker 的 `/api/client`，Worker 在服务端拉取并缓存所有上游订阅，APP 不再直接访问任何线路地址。
+APP 先请求 Cloudflare Worker 的 `/api/client` 获取订阅线路元数据，再由 APP 直接请求每条线路的 `url` 并解析节点。Worker 不拉取、不缓存详细节点内容。
 
 订阅列表示例：
 
@@ -472,18 +472,18 @@ APP 只请求 Cloudflare Worker 的 `/api/client`，Worker 在服务端拉取并
 {
   "update": 1,
   "subscriptions": [
-    {"id": "line1", "name": "线路1", "content": "vless://...", "enabled": true},
-    {"id": "line2", "name": "线路2", "content": "base64或加密订阅内容", "enabled": true}
+    {"id": "line1", "name": "线路1", "url": "https://game.11145149.xyz/", "enabled": true},
+    {"id": "line2", "name": "线路2", "url": "https://example.com/subscription", "enabled": true}
   ],
   "notice": null,
   "appUpdate": null
 }
 ```
 
-- `update=1`：Worker 在 APP 请求 `/api/client` 时自动刷新上游订阅
-- `update=0`：Worker 使用缓存内容，APP 手动刷新时请求 `/api/client?refresh=1`
-- 首次没有缓存内容时，Worker 会自动完成第一次拉取
-- 每条线路返回的内容可以是明文、Base64 或项目支持的加密节点列表
+- `update=1`：APP 获取线路列表后自动请求所有启用线路的 `url`
+- `update=0`：APP 保留本地节点缓存，用户手动刷新时才重新请求线路 URL
+- 首次获取线路列表时，APP 必须拉取一次所有启用线路
+- 每条线路 URL 返回的内容可以是明文、Base64 或项目支持的加密节点列表
 - 重复节点会自动去重，节点卡片会显示其所属线路名称
 
 ---
@@ -504,7 +504,8 @@ APP 只请求 Cloudflare Worker 的 `/api/client`，Worker 在服务端拉取并
 
 `SettingsRepository` 节点列表配置项：
 
-- `nodeListCategory`（当前节点列表视图：订阅节点或收藏节点）
+- `nodeListCategory`（当前节点列表视图：订阅线路或收藏节点）
+- `selectedSubscriptionSourceId`（当前选中的订阅线路）
 
 `SettingsRepository` 用户可配置项（"其他配置"页面）：
 
@@ -814,7 +815,7 @@ App 使用的唯一公开接口是 `GET /api/client`：
 {
   "update": 1,
   "subscriptions": [
-    {"id": "line1", "name": "线路1", "enabled": true, "content": "..."}
+    {"id": "line1", "name": "线路1", "enabled": true, "url": "https://game.11145149.xyz/"}
   ],
   "settings": {
     "websiteUrl": "https://example.com",
@@ -828,9 +829,9 @@ App 使用的唯一公开接口是 `GET /api/client`：
 }
 ```
 
-手动刷新使用 `GET /api/client?refresh=1`。公告配置放在 `notice`，版本更新配置放在 `appUpdate`，格式沿用项目现有 `NoticeInfo` 和 `UpdateInfo` 字段。
+APP 手动刷新时会重新请求 `/api/client`，然后直接请求每条线路 URL。`refresh=1` 参数仅为兼容旧版本保留，Worker 不执行上游刷新。公告配置放在 `notice`，版本更新配置放在 `appUpdate`，格式沿用项目现有 `NoticeInfo` 和 `UpdateInfo` 字段。
 
-后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /api/admin/state` 读取，`PUT /api/admin/state` 保存，`POST /api/admin/refresh` 立即刷新所有订阅源。
+后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /api/admin/state` 读取，`PUT /api/admin/state` 保存订阅 URL 和其他后台配置。详细订阅内容由 APP 直接获取。
 
 这样 App 只内置一个 Worker 地址；更换线路、公告、更新信息和上游订阅地址都在 Worker 管理后台完成。
 
@@ -867,7 +868,7 @@ App 使用的唯一公开接口是 `GET /api/client`：
 | `subscriptions[].url` | String | ✅ | 实际节点订阅地址 |
 | `subscriptions[].enabled` | Boolean / Int | ❌ | 是否启用该线路，默认启用 |
 
-APP 会并发获取所有启用线路，合并并去重节点；节点卡片显示线路名称。`subscriptions` 也兼容 `sources`、`list`、`data` 字段名。
+APP 会并发获取所有启用线路，但会按 `id` 保持每条线路独立；节点列表按 `name` 分组展示，切换线路后测速只作用于当前线路。`subscriptions` 也兼容 `sources`、`list`、`data` 字段名。
 
 ### 2. 节点订阅内容接口
 

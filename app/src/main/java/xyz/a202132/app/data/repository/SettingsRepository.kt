@@ -39,6 +39,7 @@ class SettingsRepository(private val context: Context) {
         // 自动化测试设置
         private val REMEMBER_LAST_SELECTED_NODE_ENABLED = booleanPreferencesKey("remember_last_selected_node_enabled")
         private val LAST_SELECTED_NODE_ID = stringPreferencesKey("last_selected_node_id")
+        private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
         private val NODE_LIST_CATEGORY = stringPreferencesKey("node_list_category")
         private val SCHEDULED_NODE_UPDATE_ENABLED = booleanPreferencesKey("scheduled_node_update_enabled")
         private val SCHEDULED_NODE_UPDATE_HOURS = intPreferencesKey("scheduled_node_update_hours")
@@ -108,6 +109,10 @@ class SettingsRepository(private val context: Context) {
     // 分应用代理 - 选中的应用包名列表
     val selectedPackages: Flow<Set<String>> = context.dataStore.data.map { preferences ->
         preferences[SELECTED_PACKAGES] ?: emptySet()
+    }
+
+    val selectedSubscriptionSourceId: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[SELECTED_SUBSCRIPTION_SOURCE_ID]
     }
 
     val subscriptionListJson: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -355,6 +360,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBandwidthTestConcurrency(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[BANDWIDTH_TEST_CONCURRENCY] = value.coerceIn(1, 3)
+        }
+    }
+
+    suspend fun setSelectedSubscriptionSourceId(sourceId: String?) {
+        context.dataStore.edit { preferences ->
+            if (sourceId.isNullOrBlank()) {
+                preferences.remove(SELECTED_SUBSCRIPTION_SOURCE_ID)
+            } else {
+                preferences[SELECTED_SUBSCRIPTION_SOURCE_ID] = sourceId
+            }
         }
     }
 

@@ -652,7 +652,11 @@ class BoxVpnService : VpnService() {
         val selectedNode = nodeDao.getAllNodes().first().firstOrNull { it.getRawLinkPlain() == rawLink }
             ?: return categoryNodes
         Log.w(TAG, "Selected node $nodeName is outside current category, using source=${selectedNode.source}")
-        return loadNodesForSource(nodeDao, selectedNode.source)
+        return loadNodesForSource(
+            nodeDao,
+            selectedNode.source,
+            selectedNode.subscriptionSourceId
+        )
     }
 
     private suspend fun loadNodesForCurrentCategory(
@@ -660,14 +664,31 @@ class BoxVpnService : VpnService() {
         settingsRepo: SettingsRepository
     ): List<Node> {
         return when (settingsRepo.nodeListCategory.first()) {
-            NodeListCategory.PRIMARY -> nodeDao.getSubscriptionNodes().first()
+            NodeListCategory.PRIMARY -> {
+                val sourceId = settingsRepo.selectedSubscriptionSourceId.first()
+                val nodes = nodeDao.getSubscriptionNodes().first()
+                val filtered = if (sourceId.isNullOrBlank()) {
+                    nodes
+                } else {
+                    nodes.filter { it.subscriptionSourceId == sourceId }
+                }
+                if (filtered.isEmpty() && nodes.isNotEmpty()) nodes else filtered
+            }
             NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
         }
     }
 
-    private suspend fun loadNodesForSource(nodeDao: NodeDao, source: NodeSource): List<Node> {
+    private suspend fun loadNodesForSource(
+        nodeDao: NodeDao,
+        source: NodeSource,
+        subscriptionSourceId: String? = null
+    ): List<Node> {
         return when (source) {
-            NodeSource.SUBSCRIPTION -> nodeDao.getSubscriptionNodes().first()
+            NodeSource.SUBSCRIPTION -> {
+                val nodes = nodeDao.getSubscriptionNodes().first()
+                if (subscriptionSourceId.isNullOrBlank()) nodes
+                else nodes.filter { it.subscriptionSourceId == subscriptionSourceId }
+            }
             NodeSource.FAVORITE -> nodeDao.getFavoriteNodes().first()
         }
     }

@@ -3,6 +3,7 @@ package xyz.a202132.app.data.local
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.SubscriptionGroup
 
 @Dao
 interface NodeDao {
@@ -14,6 +15,9 @@ interface NodeDao {
 
     @Query("SELECT * FROM nodes WHERE source = 'SUBSCRIPTION' ORDER BY sortOrder ASC, latency ASC")
     fun getSubscriptionNodes(): Flow<List<Node>>
+
+    @Query("SELECT DISTINCT subscriptionSourceId AS sourceId, subscriptionSourceName AS name FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId IS NOT NULL ORDER BY subscriptionSourceName ASC")
+    fun getSubscriptionGroups(): Flow<List<SubscriptionGroup>>
 
     @Query("SELECT * FROM nodes WHERE source = 'FAVORITE' ORDER BY favoriteCreatedAt ASC, sortOrder ASC, latency ASC")
     fun getFavoriteNodes(): Flow<List<Node>>

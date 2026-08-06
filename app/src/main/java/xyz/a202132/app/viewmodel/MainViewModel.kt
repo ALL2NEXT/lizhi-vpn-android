@@ -139,6 +139,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         NodeListCategory.PRIMARY
     )
 
+    val subscriptionGroups = nodeDao.getSubscriptionGroups()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    private val storedSubscriptionSourceId = settingsRepository.selectedSubscriptionSourceId
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    private val activeSubscriptionSourceId = combine(
+        subscriptionGroups,
+        storedSubscriptionSourceId
+    ) { groups, storedId ->
+        storedId?.takeIf { id -> groups.any { it.sourceId == id } }
+            ?: groups.firstOrNull()?.sourceId
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    val selectedSubscriptionSourceId = activeSubscriptionSourceId
+
     val favoriteSourceNodeIds = nodeDao.getFavoriteSourceNodeIds()
         .map { it.filterNotNull().toSet() }
         .stateIn(
@@ -149,9 +165,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val subscriptionNodes = combine(
         nodeDao.getSubscriptionNodes(),
-        _filterUnavailable
-    ) { list, filterOut ->
-        sortNodesForList(list, filterOut)
+        _filterUnavailable,
+        activeSubscriptionSourceId
+    ) { list, filterOut, sourceId ->
+        val scopedList = if (sourceId.isNullOrBlank()) {
+            list
+        } else {
+            list.filter { it.subscriptionSourceId == sourceId }
+        }
+        sortNodesForList(scopedList, filterOut)
     }
 
     private val favoriteNodes = combine(
@@ -501,7 +523,17 @@ observeScheduledNodeUpdates()
     ): Result<List<Node>> = coroutineScope {
         val results = sources.map { subscription ->
             async {
-                val result = runCatching { subscriptionParser.parseSubscription(subscription.content) }
+                var result = subscriptionParser.fetchAndParse(
+                    subscription.url,
+                    backendSettings.value.nodeRequestTimeoutMs
+                )
+                if (result.isFailure) {
+                    Log.w(tag, "Subscription fetch failed, retrying: ${subscription.name}", result.exceptionOrNull())
+                    result = subscriptionParser.fetchAndParse(
+                        subscription.url,
+                        backendSettings.value.nodeRequestTimeoutMs
+                    )
+                }
                 subscription to result
             }
         }.awaitAll()
@@ -518,15 +550,19 @@ observeScheduledNodeUpdates()
             }
 
             result.getOrThrow().forEach { node ->
+                // Keep the same raw node separate when it appears in different
+                // subscriptions, so each subscription can be tested independently.
+                val scopedNodeId = "${subscription.id}:${node.id}"
                 val taggedNode = node.copy(
+                    id = scopedNodeId,
                     source = NodeSource.SUBSCRIPTION,
                     favoriteSourceNodeId = null,
                     favoriteCreatedAt = 0L,
                     subscriptionSourceId = subscription.id,
                     subscriptionSourceName = subscription.name
                 )
-                val existing = mergedNodes[taggedNode.id]
-                mergedNodes[taggedNode.id] = if (existing == null) {
+                val existing = mergedNodes[scopedNodeId]
+                mergedNodes[scopedNodeId] = if (existing == null) {
                     taggedNode
                 } else {
                     existing.copy(
@@ -1139,6 +1175,13 @@ fun autoSelectBestNode() {
         }
     }
 
+    fun setSubscriptionSource(sourceId: String) {
+        viewModelScope.launch {
+            settingsRepository.setSelectedSubscriptionSourceId(sourceId)
+            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+        }
+    }
+
     fun skipFavoriteRemovalConfirmationForSession() {
         _skipFavoriteRemovalConfirmation.value = true
     }
@@ -1538,7 +1581,11 @@ fun autoSelectBestNode() {
 private suspend fun currentNodeListSnapshot(): List<Node> {
         val category = settingsRepository.nodeListCategory.first()
         val snapshot = when (category) {
-            NodeListCategory.PRIMARY -> nodeDao.getSubscriptionNodes().first()
+            NodeListCategory.PRIMARY -> {
+                val sourceId = activeSubscriptionSourceId.first()
+                val all = nodeDao.getSubscriptionNodes().first()
+                if (sourceId.isNullOrBlank()) all else all.filter { it.subscriptionSourceId == sourceId }
+            }
             NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
         }
         return sortNodesForList(snapshot, _filterUnavailable.value)
@@ -1546,7 +1593,11 @@ private suspend fun currentNodeListSnapshot(): List<Node> {
 
 private suspend fun currentSmartConnectNodes(): List<Node> {
         val snapshot = when (nodeListCategory.value) {
-            NodeListCategory.PRIMARY -> nodeDao.getSubscriptionNodes().first()
+            NodeListCategory.PRIMARY -> {
+                val sourceId = activeSubscriptionSourceId.value
+                val all = nodeDao.getSubscriptionNodes().first()
+                if (sourceId.isNullOrBlank()) all else all.filter { it.subscriptionSourceId == sourceId }
+            }
             NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
         }
         return sortNodesForList(snapshot, filterOut = false)

@@ -7,17 +7,15 @@
  *
  * Public client endpoint:
  *   GET /api/client
- *   GET /api/client?refresh=1   // force refresh, used by the app's manual refresh
+ *   GET /api/client?refresh=1   // refresh is handled by the app; query is tolerated for compatibility
  *
  * Admin endpoints:
  *   GET  /admin
  *   GET  /api/admin/state
  *   PUT  /api/admin/state
- *   POST /api/admin/refresh
  */
 
 const STATE_KEY = "fireflyvpn:state:v1";
-const UPSTREAM_TIMEOUT_MS = 15000;
 
 const DEFAULT_STATE = {
   version: 1,
@@ -32,8 +30,6 @@ const DEFAULT_STATE = {
     githubUrl: "",
     nodeRequestTimeoutMs: 25000,
   },
-  lastRefreshAt: null,
-  lastErrors: [],
 };
 
 export default {
@@ -76,22 +72,12 @@ export default {
 
 async function handleClient(request, env) {
   const state = await readState(env);
-  const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
-  const firstFetch = state.subscriptions.some(
-    (source) => source.enabled && !String(source.content || "").trim(),
-  );
-
-  // update=1 means every normal client pull may refresh upstream sources.
-  // update=0 keeps the Worker cache until the app explicitly asks for refresh=1.
-  if (forceRefresh || state.update === 1 || firstFetch) {
-    await refreshSources(state, env);
-  }
 
   return json({
     update: state.update,
     subscriptions: state.subscriptions
       .filter((source) => source.enabled)
-      .map(({ id, name, enabled, content }) => ({ id, name, enabled, content })),
+      .map(({ id, name, enabled, url }) => ({ id, name, enabled, url })),
     notice: state.notice,
     appUpdate: state.appUpdate,
     settings: state.settings,
@@ -112,65 +98,7 @@ async function handleAdmin(path, request, env) {
     return json({ ok: true, state: next });
   }
 
-  if (path === "/api/admin/refresh" && request.method === "POST") {
-    const state = await readState(env);
-    await refreshSources(state, env);
-    return json({ ok: true, state });
-  }
-
   return json({ error: "admin_route_not_found" }, 404);
-}
-
-async function refreshSources(state, env) {
-  const errors = [];
-  const refreshed = await Promise.all(
-    state.subscriptions.map(async (source) => {
-      if (!source.enabled || !source.url) return source;
-      try {
-        const content = await fetchUpstream(source.url);
-        return { ...source, content, lastFetchedAt: new Date().toISOString() };
-      } catch (error) {
-        errors.push({
-          id: source.id,
-          name: source.name,
-          message: error instanceof Error ? error.message : String(error),
-        });
-        // Keep the last good content so a temporary upstream failure does not
-        // make every existing node disappear from the app.
-        return source;
-      }
-    }),
-  );
-
-  state.subscriptions = refreshed;
-  state.lastRefreshAt = new Date().toISOString();
-  state.lastErrors = errors;
-  await writeState(env, state);
-  return state;
-}
-
-async function fetchUpstream(sourceUrl) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
-  try {
-    const response = await fetch(sourceUrl, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        accept: "text/plain, text/html, application/json, */*",
-        "user-agent": "FireflyVPN-Worker/1.0",
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`upstream HTTP ${response.status}`);
-    }
-    const content = await response.text();
-    if (!content.trim()) throw new Error("upstream returned empty content");
-    return content;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 async function readState(env) {
@@ -202,14 +130,11 @@ function normalizeState(input) {
       const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
         ? item.url.trim()
         : "";
-      const content = typeof item.content === "string" ? item.content : "";
       return {
         id: cleanText(item.id) || `line${index + 1}`,
         name: cleanText(item.name || item.title) || `线路${index + 1}`,
         url,
         enabled: parseFlag(item.enabled, true),
-        content,
-        ...(item.lastFetchedAt ? { lastFetchedAt: String(item.lastFetchedAt) } : {}),
       };
     });
 
@@ -220,8 +145,6 @@ function normalizeState(input) {
     notice: plainObject(value.notice) ? value.notice : null,
     appUpdate: plainObject(value.appUpdate) ? value.appUpdate : null,
     settings: normalizeSettings(value.settings),
-    lastRefreshAt: value.lastRefreshAt ? String(value.lastRefreshAt) : null,
-    lastErrors: Array.isArray(value.lastErrors) ? value.lastErrors : [],
     ...(value.updatedAt ? { updatedAt: String(value.updatedAt) } : {}),
   };
 }
@@ -320,21 +243,20 @@ function adminHtml() {
     <div class="field"><label>管理密钥 ADMIN_TOKEN<input id="token" type="password" placeholder="输入 Worker Secret ADMIN_TOKEN"></label></div>
     <button class="secondary" onclick="loadState()">读取配置</button>
     <button onclick="saveState()">保存全部设置</button>
-    <button class="secondary" onclick="refreshSources()">立即刷新订阅</button>
     <div id="status"></div>
   </section>
 
   <section class="card">
     <h2>订阅更新</h2>
     <label class="check"><input id="autoUpdate" type="checkbox">允许 App 自动更新订阅</label>
-    <small class="hint">关闭后，App 只使用缓存；用户点击刷新时才拉取上游订阅。</small>
+    <small class="hint">开启后，App 获取配置时自动请求这些线路；关闭后仅在首次获取或用户手动刷新时更新节点。</small>
   </section>
 
   <section class="card">
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
     <button class="secondary" onclick="addSource()">添加线路</button>
-    <small class="hint">订阅地址只保存在 Worker。拉取到的内容会缓存，App 只接收节点内容。</small>
+    <small class="hint">Worker 只保存线路元数据和订阅地址，详细节点内容由 App 直接请求并解析。</small>
   </section>
 
   <section class="card">
@@ -400,7 +322,7 @@ function addSource(source) {
     '<div class="field"><label>线路 ID<input data-field="id" value="' + esc(source.id) + '"></label></div>' +
     '<div class="field"><label>订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '"></label></div>' +
     '</div><label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
-    '<div class="row-actions"><small>已缓存内容：' + (source.content ? '有' : '无') + '</small><button class="danger" type="button">删除</button></div>';
+    '<div class="row-actions"><small>App 将直接请求此地址</small><button class="danger" type="button">删除</button></div>';
   row.querySelector('.danger').onclick = function() { row.remove(); };
   el('subscriptionRows').appendChild(row);
 }
@@ -440,16 +362,13 @@ function formState() {
   const oldSources = currentState && currentState.subscriptions || [];
   const subscriptions = Array.from(document.querySelectorAll('.source-row')).map(function(row, index) {
     const id = row.querySelector('[data-field="id"]').value.trim() || 'line' + (index + 1);
-    const old = oldSources.find(function(item) { return item.id === id; });
     return {
       id: id,
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: row.querySelector('[data-field="url"]').value.trim(),
-      enabled: row.querySelector('[data-field="enabled"]').checked,
-      content: old && old.content || '',
-      lastFetchedAt: old && old.lastFetchedAt || undefined
+      enabled: row.querySelector('[data-field="enabled"]').checked
     };
-  }).filter(function(item) { return item.url || item.content; });
+  }).filter(function(item) { return item.url; });
   const notice = el('noticeEnabled').checked ? {
     hasNotice: true,
     title: value('noticeTitle'),
@@ -500,14 +419,6 @@ async function saveState() {
   if (!response.ok) return show(data.error || '保存失败', true);
   fillState(data.state);
   show('全部设置已保存');
-}
-async function refreshSources() {
-  localStorage.setItem('fireflyvpn_admin_token', tokenInput.value.trim());
-  const response = await fetch('/api/admin/refresh', {method:'POST', headers:headers()});
-  const data = await response.json();
-  if (!response.ok) return show(data.error || '刷新失败', true);
-  fillState(data.state);
-  show('订阅已刷新');
 }
 addSource();
 </script>

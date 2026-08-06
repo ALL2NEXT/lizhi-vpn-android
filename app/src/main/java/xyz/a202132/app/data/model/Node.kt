@@ -152,6 +152,12 @@ enum class NodeListCategory {
     FAVORITES
 }
 
+/** A distinct subscription source currently available in the local node database. */
+data class SubscriptionGroup(
+    val sourceId: String,
+    val name: String
+)
+
 /**
  * 节点类型转换器
  */

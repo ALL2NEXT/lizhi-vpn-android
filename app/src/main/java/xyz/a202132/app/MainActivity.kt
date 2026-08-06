@@ -79,6 +79,8 @@ class MainActivity : ComponentActivity() {
                     val nodes by viewModel.nodes.collectAsState()
                     val selectedNodeId by viewModel.selectedNodeId.collectAsState()
                     val nodeListCategory by viewModel.nodeListCategory.collectAsState()
+                    val subscriptionGroups by viewModel.subscriptionGroups.collectAsState()
+                    val selectedSubscriptionSourceId by viewModel.selectedSubscriptionSourceId.collectAsState()
                     val favoriteSourceNodeIds by viewModel.favoriteSourceNodeIds.collectAsState()
                     val skipFavoriteRemovalConfirmation by
                         viewModel.skipFavoriteRemovalConfirmation.collectAsState()
@@ -189,6 +191,8 @@ class MainActivity : ComponentActivity() {
                                     nodes = nodes,
                                     selectedNodeId = selectedNodeId,
                                     category = nodeListCategory,
+                                    subscriptionGroups = subscriptionGroups,
+                                    selectedSubscriptionSourceId = selectedSubscriptionSourceId,
                                     favoriteSourceNodeIds = favoriteSourceNodeIds,
                                     skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
                                     isTesting = isTesting,
@@ -198,6 +202,7 @@ class MainActivity : ComponentActivity() {
                                         navController.popBackStack(AppRoute.MAIN, false)
                                     },
                                     onCategoryChange = { viewModel.setNodeListCategory(it) },
+                                    onSubscriptionSourceChange = { viewModel.setSubscriptionSource(it) },
                                     onToggleFavorite = { viewModel.toggleFavoriteNode(it) },
                                     onSkipFavoriteRemovalConfirmationForSession = {
                                         viewModel.skipFavoriteRemovalConfirmationForSession()
