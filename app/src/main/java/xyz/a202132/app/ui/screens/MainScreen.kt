@@ -45,6 +45,7 @@ fun MainScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isTesting by viewModel.isTesting.collectAsState()
     val testingLabel by viewModel.testingLabel.collectAsState()
+    val smartConnectEnabled by viewModel.smartConnectEnabled.collectAsState()
     val notice by viewModel.notice.collectAsState()
     val updateInfo by viewModel.updateInfo.collectAsState()
     val backendSettings by viewModel.backendSettings.collectAsState()
@@ -259,12 +260,24 @@ fun MainScreen(
                     onClick = {
                         when (vpnState) {
                             VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
-                            VpnState.DISCONNECTED -> onStartVpn { viewModel.startSmartConnection() }
+                            VpnState.DISCONNECTED -> onStartVpn {
+                                if (smartConnectEnabled) {
+                                    viewModel.startSmartConnection()
+                                } else {
+                                    viewModel.startSelectedOrFirstConnection()
+                                }
+                            }
                             else -> Unit
                         }
                     },
                     customLabel = if (vpnState == VpnState.DISCONNECTED) {
-                        if (isTesting) testingLabel ?: "智能连接中..." else "点击上方按钮进行智能连接"
+                        if (isTesting) {
+                            testingLabel ?: "智能连接中..."
+                        } else if (smartConnectEnabled) {
+                            "点击上方按钮进行智能连接"
+                        } else {
+                            "点击上方按钮进行连接"
+                        }
                     } else {
                         null
                     }

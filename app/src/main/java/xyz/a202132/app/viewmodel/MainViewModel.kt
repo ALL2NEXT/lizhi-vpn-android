@@ -281,6 +281,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.TCPING_CONCURRENCY)
     val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_CONCURRENCY)
     val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, 1)
+    val smartConnectEnabled = settingsRepository.smartConnectEnabled.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_ENABLED)
     val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_TCPING_PERCENT)
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
@@ -839,6 +840,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Connect to the selected node, or to the first node when no node is selected. */
+    fun startSelectedOrFirstConnection() {
+        viewModelScope.launch {
+            if (!ensureAccountRegistered()) return@launch
+
+            val node = currentNode.value ?: currentNodeListSnapshot().firstOrNull()
+            if (node == null) {
+                _error.value = "没有可用节点"
+                return@launch
+            }
+
+            settingsRepository.setSelectedNodeId(node.id)
+            RuntimeLog.info(tag, "Connecting to selected/default node: ${node.getDisplayName()}")
+            if (!NetworkUtils.isNetworkAvailable(getApplication())) {
+                RuntimeLog.warn(tag, "Default VPN start requested while network is unavailable")
+                _error.value = "当前无网络连接节点！"
+            }
+            ServiceManager.startVpn(getApplication(), node, proxyMode.value)
+        }
+    }
+
     /**
      * URL Test 所有节点延迟 (通过 ClashAPI)
      * VPN 运行中 → 用现有 ClashAPI (port 9090)
@@ -984,6 +1006,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSmartConnectTcpingPercent(value: Int) {
         viewModelScope.launch {
             settingsRepository.setSmartConnectTcpingPercent(value)
+        }
+    }
+
+    fun setSmartConnectEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSmartConnectEnabled(enabled)
         }
     }
 

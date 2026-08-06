@@ -53,6 +53,7 @@ fun OtherConfigScreen(
     val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsState()
     val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsState()
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsState()
+    val smartConnectEnabled by viewModel.smartConnectEnabled.collectAsState()
     val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsState()
     val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsState()
     val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsState()
@@ -383,8 +384,31 @@ fun OtherConfigScreen(
 
             OtherConfigSection(
                 title = "智能连接",
-                description = "按 TCPing → URL Test 204 → 5MB 下载测速逐步筛选，默认比例为 100% / 50% / 50%。"
+                description = "关闭后，主页连接会直接使用已选节点；未选择节点时使用当前列表第一个节点。"
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "启用智能连接",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "按 TCPing → URL Test 204 → 5MB 下载测速逐步筛选节点",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = smartConnectEnabled,
+                        onCheckedChange = { viewModel.setSmartConnectEnabled(it) },
+                        colors = visibleSwitchColors()
+                    )
+                }
                 OtherConfigNumberField(
                     label = "TCPing 节点比例 (%)",
                     value = smartConnectTcpingPercentInput,
