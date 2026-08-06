@@ -19,6 +19,7 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.RuleManager
@@ -201,6 +202,11 @@ class BoxVpnService : VpnService() {
                 } catch (e: Exception) {
                     AppConfig.VPN_MTU
                 }
+                val tunStack = try {
+                    settingsRepo.tunStack.first()
+                } catch (e: Exception) {
+                    TunStack.GVISOR
+                }
                 val hysteriaUpMbps = try {
                     settingsRepo.hysteriaUpMbps.first()
                 } catch (e: Exception) {
@@ -213,7 +219,7 @@ class BoxVpnService : VpnService() {
                 }
                 val internalSocksPort = pickFreeInternalSocksPort()
                 
-                Log.d(TAG, "Generating config with ${allNodes.size} nodes, selected: $selectedNodeId, ipv6Mode: $ipv6Mode, mtu: $vpnMtu, hysteria=${hysteriaUpMbps}/${hysteriaDownMbps}Mbps, internalSocks=$internalSocksPort")
+                Log.d(TAG, "Generating config with ${allNodes.size} nodes, selected: $selectedNodeId, ipv6Mode: $ipv6Mode, tunStack=$tunStack, mtu: $vpnMtu, hysteria=${hysteriaUpMbps}/${hysteriaDownMbps}Mbps, internalSocks=$internalSocksPort")
 
                 // 3. 确保规则集文件存在（从 assets 拷贝兜底）
                 RuleManager.ensureRuleSets(application)
@@ -227,7 +233,8 @@ class BoxVpnService : VpnService() {
                     vpnMtu,
                     internalSocksPort,
                     hysteriaUpMbps,
-                    hysteriaDownMbps
+                    hysteriaDownMbps,
+                    tunStack
                 )
                 Libbox.checkConfig(config)
                 deleteLegacyConfigFile()
@@ -832,6 +839,11 @@ class BoxVpnService : VpnService() {
                     } catch (e: Exception) {
                         AppConfig.VPN_MTU
                     }
+                    val tunStack = try {
+                        settingsRepo.tunStack.first()
+                    } catch (e: Exception) {
+                        TunStack.GVISOR
+                    }
                     val hysteriaUpMbps = try {
                         settingsRepo.hysteriaUpMbps.first()
                     } catch (e: Exception) {
@@ -883,7 +895,8 @@ class BoxVpnService : VpnService() {
                         vpnMtu,
                         internalSocksPort,
                         hysteriaUpMbps,
-                        hysteriaDownMbps
+                        hysteriaDownMbps,
+                        tunStack
                     )
                     Libbox.checkConfig(config)
                     deleteLegacyConfigFile()

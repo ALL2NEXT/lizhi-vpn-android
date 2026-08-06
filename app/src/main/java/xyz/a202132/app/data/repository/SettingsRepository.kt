@@ -10,6 +10,7 @@ import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.PerAppProxyMode
 import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.TunStack
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -35,6 +36,7 @@ class SettingsRepository(private val context: Context) {
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
+        private val TUN_STACK = stringPreferencesKey("tun_stack")
         
         // 自动化测试设置
         private val REMEMBER_LAST_SELECTED_NODE_ENABLED = booleanPreferencesKey("remember_last_selected_node_enabled")
@@ -220,6 +222,18 @@ class SettingsRepository(private val context: Context) {
     suspend fun setIPv6RoutingMode(mode: IPv6RoutingMode) {
         context.dataStore.edit { preferences ->
             preferences[IPV6_ROUTING_MODE] = mode.name
+        }
+    }
+
+    val tunStack: Flow<TunStack> = context.dataStore.data.map { preferences ->
+        runCatching {
+            TunStack.valueOf(preferences[TUN_STACK] ?: TunStack.GVISOR.name)
+        }.getOrDefault(TunStack.GVISOR)
+    }
+
+    suspend fun setTunStack(stack: TunStack) {
+        context.dataStore.edit { preferences ->
+            preferences[TUN_STACK] = stack.name
         }
     }
     

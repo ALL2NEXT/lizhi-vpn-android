@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.a202132.app.data.model.IPv6RoutingMode
+import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.ui.theme.Primary
@@ -61,6 +62,7 @@ fun OtherConfigScreen(
     val vpnState by viewModel.vpnState.collectAsState()
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsState()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsState()
+    val tunStack by viewModel.tunStack.collectAsState()
 
     var scheduledNodeUpdateHoursInput by remember(scheduledNodeUpdateHours) { mutableStateOf(scheduledNodeUpdateHours.toString()) }
     var scheduledNodeUpdateMinutesInput by remember(scheduledNodeUpdateMinutes) { mutableStateOf(scheduledNodeUpdateMinutes.toString()) }
@@ -172,6 +174,29 @@ fun OtherConfigScreen(
                     )
                 }
 
+            }
+
+            OtherConfigSection(
+                title = "TUN实现",
+                description = "gvisor兼容性最佳；system更省电；mixed为混合模式。修改后重连VPN生效。"
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TunStack.values().forEach { stack ->
+                        FilterChip(
+                            selected = tunStack == stack,
+                            onClick = { viewModel.setTunStack(stack) },
+                            label = { Text(stack.displayName, maxLines = 1) }
+                        )
+                    }
+                }
+                Text(
+                    text = tunStack.description,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             OtherConfigSection {

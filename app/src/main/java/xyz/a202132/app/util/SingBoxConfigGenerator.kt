@@ -10,6 +10,7 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
+import xyz.a202132.app.data.model.TunStack
 import android.net.Uri
 import android.util.Base64
 
@@ -34,7 +35,8 @@ class SingBoxConfigGenerator {
         mtu: Int = AppConfig.VPN_MTU,
         internalSocksPort: Int? = null,
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
-        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS,
+        tunStack: TunStack = TunStack.GVISOR
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
         if (nodes.isEmpty()) {
@@ -53,7 +55,7 @@ class SingBoxConfigGenerator {
                 
             add("log", createLogConfig())
             add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode))
-            add("inbounds", createInbounds(ipv6Mode, mtu, internalSocksPort))
+            add("inbounds", createInbounds(ipv6Mode, mtu, internalSocksPort, tunStack))
             add(
                 "outbounds",
                 createOutbounds(nodes, selectedNodeId, hysteriaUpMbps, hysteriaDownMbps)
@@ -311,7 +313,8 @@ class SingBoxConfigGenerator {
     private fun createInbounds(
         ipv6Mode: IPv6RoutingMode,
         mtu: Int,
-        internalSocksPort: Int?
+        internalSocksPort: Int?,
+        tunStack: TunStack = TunStack.GVISOR
     ): JsonArray {
         return JsonArray().apply {
             add(JsonObject().apply {
@@ -343,7 +346,7 @@ class SingBoxConfigGenerator {
                     }
                 })
                 
-                addProperty("stack", "gvisor")
+                addProperty("stack", tunStack.configValue)
                 addProperty("sniff", true)
                 addProperty("sniff_override_destination", true)
             })

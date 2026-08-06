@@ -288,6 +288,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_UP_MBPS)
     val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_DOWN_MBPS)
     val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.VPN_MTU)
+    val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Lazily, TunStack.GVISOR)
     val vpnState = ServiceManager.vpnState
     
     // 流量统计
@@ -1443,6 +1444,13 @@ fun autoSelectBestNode() {
         viewModelScope.launch {
             settingsRepository.setIPv6RoutingMode(mode)
             // 如果 VPN 正在运行，重启以应用新设置
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setTunStack(stack: TunStack) {
+        viewModelScope.launch {
+            settingsRepository.setTunStack(stack)
             restartVpnIfNeeded()
         }
     }

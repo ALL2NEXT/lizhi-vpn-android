@@ -24,19 +24,22 @@ android {
             useSupportLibrary = true
         }
 
-        ndk {
-            // sing-box核心默认打包了所有架构（armeabi-v7a, arm64-v8a, x86, x86_64）的动态库（.so 文件）
-            // 仅保留 ARM 架构，x86和x86_64架构被剔除以减小 APK 体积
-            abiFilters.add("armeabi-v7a")
-            abiFilters.add("arm64-v8a")
-        }
-
         externalNativeBuild {
             cmake {
                 cppFlags("")
                 // 限制只打包 ARM 架构的 .so 文件
                 abiFilters("armeabi-v7a", "arm64-v8a")
             }
+        }
+    }
+
+    // 分别输出 armeabi-v7a 与 arm64-v8a APK，不再合并成单个多 ABI APK。
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a")
+            isUniversalApk = false
         }
     }
 
