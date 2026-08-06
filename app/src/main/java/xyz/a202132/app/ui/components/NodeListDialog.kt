@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -608,36 +610,50 @@ private fun NodeListCategorySwitch(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(10.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            if (subscriptionGroups.isEmpty()) {
-                NodeListCategorySegment(
-                    text = "订阅节点",
-                    selected = category == NodeListCategory.PRIMARY,
-                    enabled = enabled,
-                    onClick = { onCategoryChange(NodeListCategory.PRIMARY) }
-                )
+        val segmentCount = (if (subscriptionGroups.isEmpty()) 1 else subscriptionGroups.size) + 1
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val segmentGap = 4.dp
+            val availableWidth = maxWidth - 8.dp - segmentGap * (segmentCount - 1)
+            val segmentWidth = if (segmentCount <= 4) {
+                (availableWidth / segmentCount).coerceAtLeast(88.dp)
             } else {
-                subscriptionGroups.forEach { group ->
-                    NodeListCategorySegment(
-                        text = group.name,
-                        selected = category == NodeListCategory.PRIMARY &&
-                            selectedSubscriptionSourceId == group.sourceId,
-                        enabled = enabled,
-                        onClick = { onSubscriptionSourceChange(group.sourceId) }
-                    )
-                }
+                112.dp
             }
-            NodeListCategorySegment(
-                text = "\u6536\u85cf\u8282\u70b9",
-                selected = category == NodeListCategory.FAVORITES,
-                enabled = enabled,
-                onClick = { onCategoryChange(NodeListCategory.FAVORITES) }
-            )
+
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(segmentGap)
+            ) {
+                if (subscriptionGroups.isEmpty()) {
+                    NodeListCategorySegment(
+                        text = "订阅节点",
+                        selected = category == NodeListCategory.PRIMARY,
+                        enabled = enabled,
+                        modifier = Modifier.width(segmentWidth),
+                        onClick = { onCategoryChange(NodeListCategory.PRIMARY) }
+                    )
+                } else {
+                    subscriptionGroups.forEach { group ->
+                        NodeListCategorySegment(
+                            text = group.name,
+                            selected = category == NodeListCategory.PRIMARY &&
+                                selectedSubscriptionSourceId == group.sourceId,
+                            enabled = enabled,
+                            modifier = Modifier.width(segmentWidth),
+                            onClick = { onSubscriptionSourceChange(group.sourceId) }
+                        )
+                    }
+                }
+                NodeListCategorySegment(
+                    text = "\u6536\u85cf\u8282\u70b9",
+                    selected = category == NodeListCategory.FAVORITES,
+                    enabled = enabled,
+                    modifier = Modifier.width(segmentWidth),
+                    onClick = { onCategoryChange(NodeListCategory.FAVORITES) }
+                )
+            }
         }
     }
 }
@@ -723,16 +739,6 @@ private fun NodeListItem(
                             overflow = TextOverflow.Ellipsis
                         )
 
-                        Text(
-                            text = listOfNotNull(
-                                node.type.protocol.uppercase(),
-                                node.subscriptionSourceName
-                            ).joinToString(" · "),
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
                     }
                 }
 

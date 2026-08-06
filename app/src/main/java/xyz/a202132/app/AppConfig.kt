@@ -34,6 +34,7 @@ object AppConfig {
     const val SMART_CONNECT_URL_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_SIZE_MB = 5
+    const val SMART_CONNECT_SPEED_TEST_TIMEOUT_MS = 5000L
 
     // Hysteria2 最大带宽（Mbps），设为0表示不设置，使用 BBR 拥塞控制
     const val HYSTERIA_UP_MBPS = 1000

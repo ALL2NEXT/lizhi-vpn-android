@@ -1683,11 +1683,9 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
             val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
             val builder = NetworkClient.withUserAgent(OkHttpClient.Builder())
                 .proxy(proxy)
-                .connectTimeout(12, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-            if (speedTestDownloadTimeoutMs.value > 0L) {
-                builder.callTimeout(speedTestDownloadTimeoutMs.value, TimeUnit.MILLISECONDS)
-            }
+                .connectTimeout(AppConfig.SMART_CONNECT_SPEED_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .readTimeout(AppConfig.SMART_CONNECT_SPEED_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .callTimeout(AppConfig.SMART_CONNECT_SPEED_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             val client = builder.build()
 
             val bytes = sizeMb.toLong() * 1_000_000L
