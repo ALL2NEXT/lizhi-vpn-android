@@ -77,7 +77,7 @@ async function handleClient(request, env) {
     update: state.update,
     subscriptions: state.subscriptions
       .filter((source) => source.enabled)
-      .map(({ id, name, enabled, url }) => ({ id, name, enabled, url })),
+      .map(({ id, name, enabled, url, encrypted }) => ({ id, name, enabled, url, encrypted })),
     notice: state.notice,
     appUpdate: state.appUpdate,
     settings: state.settings,
@@ -126,17 +126,25 @@ function normalizeState(input) {
 
   const subscriptions = list
     .filter((item) => item && typeof item === "object")
-    .map((item, index) => {
-      const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
+    .map((item) => ({
+      url: typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
         ? item.url.trim()
-        : "";
-      return {
-        id: cleanText(item.id) || `line${index + 1}`,
-        name: cleanText(item.name || item.title) || `线路${index + 1}`,
-        url,
-        enabled: parseFlag(item.enabled, true),
-      };
-    });
+        : "",
+      name: cleanText(item.name || item.title),
+      enabled: parseFlag(item.enabled, true),
+      encrypted: parseFlag(
+        item.encrypted !== undefined ? item.encrypted : item.isEncrypted,
+        false,
+      ),
+    }))
+    .filter((item) => item.url)
+    .map((item, index) => ({
+      id: String(index + 1),
+      name: item.name || `线路${index + 1}`,
+      url: item.url,
+      enabled: item.enabled,
+      encrypted: item.encrypted,
+    }));
 
   return {
     version: 1,
@@ -256,7 +264,7 @@ function adminHtml() {
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
     <button class="secondary" onclick="addSource()">添加线路</button>
-    <small class="hint">Worker 只保存线路元数据和订阅地址，详细节点内容由 App 直接请求并解析。</small>
+    <small class="hint">Worker 只保存线路名称、订阅地址和加密标记，线路序号按有效线路自动生成 1、2、3…；详细节点内容由 App 直接请求并解析。</small>
   </section>
 
   <section class="card">
@@ -319,9 +327,9 @@ function addSource(source) {
   row.className = 'source-row';
   row.innerHTML = '<div class="grid">' +
     '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
-    '<div class="field"><label>线路 ID<input data-field="id" value="' + esc(source.id) + '"></label></div>' +
     '<div class="field"><label>订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '"></label></div>' +
     '</div><label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
+    '<label class="check"><input data-field="encrypted" type="checkbox" ' + (source.encrypted ? 'checked' : '') + '>接口内容已加密（AES-GCM）</label>' +
     '<div class="row-actions"><small>App 将直接请求此地址</small><button class="danger" type="button">删除</button></div>';
   row.querySelector('.danger').onclick = function() { row.remove(); };
   el('subscriptionRows').appendChild(row);
@@ -359,14 +367,12 @@ function fillState(state) {
   checked('appForce', update.is_force === 1 || update.isForce === 1);
 }
 function formState() {
-  const oldSources = currentState && currentState.subscriptions || [];
   const subscriptions = Array.from(document.querySelectorAll('.source-row')).map(function(row, index) {
-    const id = row.querySelector('[data-field="id"]').value.trim() || 'line' + (index + 1);
     return {
-      id: id,
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: row.querySelector('[data-field="url"]').value.trim(),
-      enabled: row.querySelector('[data-field="enabled"]').checked
+      enabled: row.querySelector('[data-field="enabled"]').checked,
+      encrypted: row.querySelector('[data-field="encrypted"]').checked
     };
   }).filter(function(item) { return item.url; });
   const notice = el('noticeEnabled').checked ? {

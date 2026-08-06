@@ -525,12 +525,14 @@ observeScheduledNodeUpdates()
             async {
                 var result = subscriptionParser.fetchAndParse(
                     subscription.url,
+                    subscription.encrypted,
                     backendSettings.value.nodeRequestTimeoutMs
                 )
                 if (result.isFailure) {
                     Log.w(tag, "Subscription fetch failed, retrying: ${subscription.name}", result.exceptionOrNull())
                     result = subscriptionParser.fetchAndParse(
                         subscription.url,
+                        subscription.encrypted,
                         backendSettings.value.nodeRequestTimeoutMs
                     )
                 }

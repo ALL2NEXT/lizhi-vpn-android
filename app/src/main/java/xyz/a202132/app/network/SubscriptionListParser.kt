@@ -6,7 +6,6 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import xyz.a202132.app.data.model.SubscriptionList
 import xyz.a202132.app.data.model.SubscriptionSource
-import java.security.MessageDigest
 
 /**
  * Parses the subscription contents returned by the unified Worker backend.
@@ -15,7 +14,7 @@ import java.security.MessageDigest
  * {
  *   "update": 1,
  *   "subscriptions": [
- *     {"id": "line1", "name": "线路1", "content": "vless://..."}
+ *     {"name": "线路1", "url": "https://example.com/sub", "encrypted": false}
  *   ]
  * }
  *
@@ -33,9 +32,14 @@ class SubscriptionListParser {
         } ?: throw IllegalArgumentException("订阅列表缺少 subscriptions 数组")
 
         val autoUpdate = rootObject?.let { readUpdateFlag(it) } ?: true
-        val sources = sourceArray.mapIndexedNotNull { index, element ->
-            parseSource(element, index)
-        }.filter { it.enabled }
+        val sources = sourceArray.mapNotNull { parseSource(it) }
+            .mapIndexed { index, source ->
+                source.copy(
+                    id = (index + 1).toString(),
+                    name = source.name.ifBlank { "线路${index + 1}" }
+                )
+            }
+            .filter { it.enabled }
 
         require(sources.isNotEmpty()) { "订阅列表中没有有效线路" }
         SubscriptionList(autoUpdate = autoUpdate, sources = sources)
@@ -63,7 +67,7 @@ class SubscriptionListParser {
         }
     }
 
-    private fun parseSource(element: JsonElement, index: Int): SubscriptionSource? {
+    private fun parseSource(element: JsonElement): SubscriptionSource? {
         if (!element.isJsonObject) return null
         val source = element.asJsonObject
         val url = readString(source, "url", "subscribeUrl", "subscriptionUrl")
@@ -72,14 +76,18 @@ class SubscriptionListParser {
             ?: return null
         val name = readString(source, "name", "title", "label")
             ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: "线路${index + 1}"
-        val id = readString(source, "id", "key")
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: md5(url)
+            ?: ""
         val enabled = source.get("enabled")?.let { readBoolean(it) } ?: true
-        return SubscriptionSource(id = id, name = name, url = url, enabled = enabled)
+        val encrypted = source.get("encrypted")?.let { readBoolean(it) }
+            ?: source.get("isEncrypted")?.let { readBoolean(it) }
+            ?: false
+        return SubscriptionSource(
+            id = "",
+            name = name,
+            url = url,
+            enabled = enabled,
+            encrypted = encrypted
+        )
     }
 
     private fun readString(objectValue: JsonObject, vararg keys: String): String? {
@@ -95,8 +103,4 @@ class SubscriptionListParser {
         return primitive.asString.trim().lowercase() !in setOf("0", "false", "off", "no")
     }
 
-    private fun md5(value: String): String {
-        val digest = MessageDigest.getInstance("MD5").digest(value.toByteArray())
-        return digest.joinToString("") { byte -> "%02x".format(byte) }
-    }
 }

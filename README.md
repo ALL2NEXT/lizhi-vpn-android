@@ -472,8 +472,8 @@ APP 先请求 Cloudflare Worker 的 `/api/client` 获取订阅线路元数据，
 {
   "update": 1,
   "subscriptions": [
-    {"id": "line1", "name": "线路1", "url": "https://game.11145149.xyz/", "enabled": true},
-    {"id": "line2", "name": "线路2", "url": "https://example.com/subscription", "enabled": true}
+    {"id": "1", "name": "线路1", "url": "https://game.11145149.xyz/", "enabled": true, "encrypted": false},
+    {"id": "2", "name": "线路2", "url": "https://example.com/subscription", "enabled": true, "encrypted": true}
   ],
   "notice": null,
   "appUpdate": null
@@ -483,7 +483,8 @@ APP 先请求 Cloudflare Worker 的 `/api/client` 获取订阅线路元数据，
 - `update=1`：APP 获取线路列表后自动请求所有启用线路的 `url`
 - `update=0`：APP 保留本地节点缓存，用户手动刷新时才重新请求线路 URL
 - 首次获取线路列表时，APP 必须拉取一次所有启用线路
-- 每条线路 URL 返回的内容可以是明文、Base64 或项目支持的加密节点列表
+- `encrypted=true` 时，APP 按 AES-128-GCM 解密；`encrypted=false` 时，APP 按明文或普通 Base64 节点列表解析
+- `id` 由 Worker 按有效线路顺序自动生成 `1、2、3…`，管理后台不再配置线路 ID
 - 重复节点会自动去重，节点卡片会显示其所属线路名称
 
 ---
@@ -497,7 +498,7 @@ APP 先请求 Cloudflare Worker 的 `/api/client` 获取订阅线路元数据，
 - `autoTestStatus`：历史自动化测试状态（兼容字段）
 - `autoTestedAt`：历史自动化测试时间戳（兼容字段）
 - `source`：节点来源（`SUBSCRIPTION` / `FAVORITE`）
-- `subscriptionSourceId`：远程订阅线路 ID
+- `subscriptionSourceId`：远程订阅线路自动序号（由 Worker 按 `1、2、3…` 生成）
 - `subscriptionSourceName`：远程订阅线路名称
 - `favoriteSourceNodeId`：从订阅节点收藏而来的来源节点 ID
 - `favoriteCreatedAt`：收藏节点创建时间，用于收藏列表排序
@@ -601,7 +602,7 @@ print(f"constexpr uint8_t kXor = 0x{kXor:02X};")
 
 ### 3. AES 流量加密
 
-节点订阅数据在服务端加密后传输，APP 端使用 Java Crypto API 解密。
+当 Worker 将某条线路标记为 `encrypted=true` 时，节点订阅数据需要按以下方式在服务端加密，APP 端使用 Java Crypto API 解密；未标记加密的线路不执行 AES 解密。
 
 #### 服务端加密要求
 
@@ -815,7 +816,7 @@ App 使用的唯一公开接口是 `GET /api/client`：
 {
   "update": 1,
   "subscriptions": [
-    {"id": "line1", "name": "线路1", "enabled": true, "url": "https://game.11145149.xyz/"}
+    {"id": "1", "name": "线路1", "enabled": true, "url": "https://game.11145149.xyz/", "encrypted": false}
   ],
   "settings": {
     "websiteUrl": "https://example.com",
@@ -831,7 +832,7 @@ App 使用的唯一公开接口是 `GET /api/client`：
 
 APP 手动刷新时会重新请求 `/api/client`，然后直接请求每条线路 URL。`refresh=1` 参数仅为兼容旧版本保留，Worker 不执行上游刷新。公告配置放在 `notice`，版本更新配置放在 `appUpdate`，格式沿用项目现有 `NoticeInfo` 和 `UpdateInfo` 字段。
 
-后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /api/admin/state` 读取，`PUT /api/admin/state` 保存订阅 URL 和其他后台配置。详细订阅内容由 APP 直接获取。
+后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /api/admin/state` 读取，`PUT /api/admin/state` 保存订阅名称、URL、是否加密和其他后台配置。线路序号由 Worker 自动生成，详细订阅内容由 APP 直接获取。
 
 这样 App 只内置一个 Worker 地址；更换线路、公告、更新信息和上游订阅地址都在 Worker 管理后台完成。
 
