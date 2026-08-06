@@ -24,14 +24,12 @@ class SingBoxConfigGenerator {
      * 生成完整的sing-box配置
      * @param nodes 所有可用节点列表
      * @param selectedNodeId 当前选择的节点ID（如果为null则默认选择auto）
-     * @param bypassLan 是否绕过局域网
      * @param ipv6Mode IPv6 路由模式
      */
     fun generateConfig(
         nodes: List<Node>,
         selectedNodeId: String?,
         proxyMode: ProxyMode,
-        bypassLan: Boolean = true,
         ipv6Mode: IPv6RoutingMode = IPv6RoutingMode.DISABLED,
         mtu: Int = AppConfig.VPN_MTU,
         internalSocksPort: Int? = null,
@@ -60,7 +58,7 @@ class SingBoxConfigGenerator {
                 "outbounds",
                 createOutbounds(nodes, selectedNodeId, hysteriaUpMbps, hysteriaDownMbps)
             )
-            add("route", createRoute(proxyMode, nodeDomains, nodeIPs, bypassLan))
+            add("route", createRoute(proxyMode, nodeDomains, nodeIPs))
             add("experimental", createExperimental())
         }
         return gson.toJson(config)
@@ -1141,7 +1139,7 @@ class SingBoxConfigGenerator {
         }
     }
     
-    private fun createRoute(proxyMode: ProxyMode, nodeDomains: List<String>, nodeIPs: List<String>, bypassLan: Boolean = true): JsonObject {
+    private fun createRoute(proxyMode: ProxyMode, nodeDomains: List<String>, nodeIPs: List<String>): JsonObject {
         val rules = JsonArray()
         
         // 1. 劫持 DNS 流量
@@ -1150,13 +1148,11 @@ class SingBoxConfigGenerator {
             addProperty("outbound", "dns-out")
         })
         
-        // 2. 环回/私有 IP 地址 -> 直接连接 (仅当 bypassLan 开启时)
-        if (bypassLan) {
-            rules.add(JsonObject().apply {
-                addProperty("ip_is_private", true)
-                addProperty("outbound", "direct")
-            })
-        }
+        // 2. 环回/私有 IP 地址 -> 始终直接连接，绕过局域网
+        rules.add(JsonObject().apply {
+            addProperty("ip_is_private", true)
+            addProperty("outbound", "direct")
+        })
 
         // 3. 代理服务器域名 -> 直接连接（避免循环）
         if (nodeDomains.isNotEmpty()) {

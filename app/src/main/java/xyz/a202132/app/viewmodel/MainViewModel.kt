@@ -193,12 +193,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ProxyMode.SMART
     )
     
-    val bypassLan = settingsRepository.bypassLan.stateIn(
-        viewModelScope,
-        SharingStarted.Lazily,
-        true // 默认开启绕过局域网
-    )
-    
     val ipv6RoutingMode = settingsRepository.ipv6RoutingMode.stateIn(
         viewModelScope,
         SharingStarted.Lazily,
@@ -1395,17 +1389,6 @@ fun autoSelectBestNode() {
                 RuntimeLog.info(tag, "Restarting VPN after settings change")
                 ServiceManager.startVpn(getApplication(), node, proxyMode.value)
             }
-        }
-    }
-    
-    /**
-     * 设置绕过局域网
-     */
-    fun setBypassLan(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setBypassLan(enabled)
-            // 如果 VPN 正在运行，重启以应用新设置
-            restartVpnIfNeeded()
         }
     }
     

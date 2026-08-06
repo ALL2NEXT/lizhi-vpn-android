@@ -190,13 +190,6 @@ class BoxVpnService : VpnService() {
                     return@launch
                 }
 
-                // 读取绕过局域网设置
-                val bypassLan = try {
-                    settingsRepo.bypassLan.first()
-                } catch (e: Exception) {
-                    true // 默认开启
-                }
-
                 // 读取 IPv6 路由模式
                 val ipv6Mode = try {
                     settingsRepo.ipv6RoutingMode.first()
@@ -220,7 +213,7 @@ class BoxVpnService : VpnService() {
                 }
                 val internalSocksPort = pickFreeInternalSocksPort()
                 
-                Log.d(TAG, "Generating config with ${allNodes.size} nodes, selected: $selectedNodeId, bypassLan: $bypassLan, ipv6Mode: $ipv6Mode, mtu: $vpnMtu, hysteria=${hysteriaUpMbps}/${hysteriaDownMbps}Mbps, internalSocks=$internalSocksPort")
+                Log.d(TAG, "Generating config with ${allNodes.size} nodes, selected: $selectedNodeId, ipv6Mode: $ipv6Mode, mtu: $vpnMtu, hysteria=${hysteriaUpMbps}/${hysteriaDownMbps}Mbps, internalSocks=$internalSocksPort")
 
                 // 3. 确保规则集文件存在（从 assets 拷贝兜底）
                 RuleManager.ensureRuleSets(application)
@@ -230,7 +223,6 @@ class BoxVpnService : VpnService() {
                     allNodes,
                     selectedNodeId,
                     proxyMode,
-                    bypassLan,
                     ipv6Mode,
                     vpnMtu,
                     internalSocksPort,
@@ -808,13 +800,6 @@ class BoxVpnService : VpnService() {
                         ProxyMode.SMART
                     }
 
-                    // 读取绕过局域网设置
-                    val bypassLan = try {
-                        settingsRepo.bypassLan.first()
-                    } catch (e: Exception) {
-                        true
-                    }
-
                     // 读取 IPv6 路由模式
                     val ipv6Mode = try {
                         settingsRepo.ipv6RoutingMode.first()
@@ -873,7 +858,6 @@ class BoxVpnService : VpnService() {
                         allNodes,
                         selectedNodeId,
                         proxyMode,
-                        bypassLan,
                         ipv6Mode,
                         vpnMtu,
                         internalSocksPort,

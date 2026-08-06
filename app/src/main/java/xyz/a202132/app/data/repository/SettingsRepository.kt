@@ -28,9 +28,6 @@ class SettingsRepository(private val context: Context) {
         private val PER_APP_PROXY_MODE = stringPreferencesKey("per_app_proxy_mode")
         private val SELECTED_PACKAGES = stringSetPreferencesKey("selected_packages")
         
-        // 绕过局域网设置
-        private val BYPASS_LAN = booleanPreferencesKey("bypass_lan")
-        
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
         
@@ -114,11 +111,6 @@ class SettingsRepository(private val context: Context) {
         preferences[SELECTED_PACKAGES] ?: emptySet()
     }
     
-    // 绕过局域网
-    val bypassLan: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[BYPASS_LAN] ?: true // 默认开启
-    }
-    
     suspend fun setSelectedNodeId(nodeId: String?) {
         context.dataStore.edit { preferences ->
             if (nodeId == null) {
@@ -188,12 +180,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSelectedPackages(packages: Set<String>) {
         context.dataStore.edit { preferences ->
             preferences[SELECTED_PACKAGES] = packages
-        }
-    }
-    
-    suspend fun setBypassLan(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[BYPASS_LAN] = enabled
         }
     }
     

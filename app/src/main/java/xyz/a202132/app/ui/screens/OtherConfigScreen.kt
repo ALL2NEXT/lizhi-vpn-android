@@ -1,6 +1,5 @@
 package xyz.a202132.app.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,7 +14,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -43,7 +40,6 @@ fun OtherConfigScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
     val nodeIpInfoTestOnVpnStart by viewModel.nodeIpInfoTestOnVpnStart.collectAsState()
     val scheduledNodeUpdateEnabled by viewModel.scheduledNodeUpdateEnabled.collectAsState()
     val scheduledNodeUpdateHours by viewModel.scheduledNodeUpdateHours.collectAsState()
@@ -66,16 +62,10 @@ fun OtherConfigScreen(
     val vpnMtu by viewModel.vpnMtu.collectAsState()
     val vpnState by viewModel.vpnState.collectAsState()
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsState()
-    val bypassLan by viewModel.bypassLan.collectAsState()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsState()
 
-    var rememberLastSelectedNodeDraft by remember(rememberLastSelectedNodeEnabled) { mutableStateOf(rememberLastSelectedNodeEnabled) }
-    var nodeIpInfoAutoRunDraft by remember(nodeIpInfoTestOnVpnStart) { mutableStateOf(nodeIpInfoTestOnVpnStart) }
-    var scheduledNodeUpdateEnabledDraft by remember(scheduledNodeUpdateEnabled) { mutableStateOf(scheduledNodeUpdateEnabled) }
     var scheduledNodeUpdateHoursInput by remember(scheduledNodeUpdateHours) { mutableStateOf(scheduledNodeUpdateHours.toString()) }
     var scheduledNodeUpdateMinutesInput by remember(scheduledNodeUpdateMinutes) { mutableStateOf(scheduledNodeUpdateMinutes.toString()) }
-    var nodeAutoReconnectDraft by remember(nodeAutoReconnect) { mutableStateOf(nodeAutoReconnect) }
-    var scheduledNodeUpdateToastDraft by remember(scheduledNodeUpdateToastEnabled) { mutableStateOf(scheduledNodeUpdateToastEnabled) }
     var tcpingTimeoutInput by remember(tcpingTestTimeoutMs) { mutableStateOf(tcpingTestTimeoutMs.toString()) }
     var urlTestTimeoutInput by remember(urlTestTimeoutMs) { mutableStateOf(urlTestTimeoutMs.toString()) }
     var nodeIpInfoTimeoutInput by remember(nodeIpInfoTimeoutMs) { mutableStateOf(nodeIpInfoTimeoutMs.toString()) }
@@ -91,13 +81,8 @@ fun OtherConfigScreen(
     var mtuInput by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
 
     LaunchedEffect(
-        rememberLastSelectedNodeEnabled,
-        nodeIpInfoTestOnVpnStart,
-        scheduledNodeUpdateEnabled,
         scheduledNodeUpdateHours,
         scheduledNodeUpdateMinutes,
-        nodeAutoReconnect,
-        scheduledNodeUpdateToastEnabled,
         tcpingTestTimeoutMs,
         urlTestTimeoutMs,
         nodeIpInfoTimeoutMs,
@@ -112,13 +97,8 @@ fun OtherConfigScreen(
         hysteriaDownMbps,
         vpnMtu
     ) {
-        rememberLastSelectedNodeDraft = rememberLastSelectedNodeEnabled
-        nodeIpInfoAutoRunDraft = nodeIpInfoTestOnVpnStart
-        scheduledNodeUpdateEnabledDraft = scheduledNodeUpdateEnabled
         scheduledNodeUpdateHoursInput = scheduledNodeUpdateHours.toString()
         scheduledNodeUpdateMinutesInput = scheduledNodeUpdateMinutes.toString()
-        nodeAutoReconnectDraft = nodeAutoReconnect
-        scheduledNodeUpdateToastDraft = scheduledNodeUpdateToastEnabled
         tcpingTimeoutInput = tcpingTestTimeoutMs.toString()
         urlTestTimeoutInput = urlTestTimeoutMs.toString()
         nodeIpInfoTimeoutInput = nodeIpInfoTimeoutMs.toString()
@@ -134,62 +114,25 @@ fun OtherConfigScreen(
         mtuInput = vpnMtu.toString()
     }
 
+    fun applyScheduledNodeUpdateSettings(
+        enabledValue: Boolean = scheduledNodeUpdateEnabled,
+        hoursValue: Int = scheduledNodeUpdateHoursInput.toIntOrNull() ?: scheduledNodeUpdateHours,
+        minutesValue: Int = scheduledNodeUpdateMinutesInput.toIntOrNull() ?: scheduledNodeUpdateMinutes,
+        autoReconnectValue: Boolean = nodeAutoReconnect,
+        toastEnabledValue: Boolean = scheduledNodeUpdateToastEnabled
+    ) {
+        viewModel.setScheduledNodeUpdateSettings(
+            enabled = enabledValue,
+            hours = hoursValue.coerceIn(0, 168),
+            minutes = minutesValue.coerceIn(0, 59),
+            nodeAutoReconnect = autoReconnectValue,
+            toastEnabled = toastEnabledValue
+        )
+    }
+
     AppScreenScaffold(
         title = "其他配置",
-        onBack = onBack,
-        actions = {
-            TextButton(
-                onClick = {
-                    val savedMtu = mtuInput.toIntOrNull()?.coerceIn(576, 9000) ?: vpnMtu
-                    val savedScheduledHours = scheduledNodeUpdateHoursInput.toIntOrNull()?.coerceIn(0, 168)
-                        ?: scheduledNodeUpdateHours
-                    val rawScheduledMinutes = scheduledNodeUpdateMinutesInput.toIntOrNull()?.coerceIn(0, 59)
-                        ?: scheduledNodeUpdateMinutes
-                    val savedScheduledMinutes = if (
-                        scheduledNodeUpdateEnabledDraft &&
-                        savedScheduledHours == 0 &&
-                        rawScheduledMinutes == 0
-                    ) {
-                        1
-                    } else {
-                        rawScheduledMinutes
-                    }
-                    viewModel.setRememberLastSelectedNodeEnabled(rememberLastSelectedNodeDraft)
-                    viewModel.setNodeIpInfoTestOnVpnStart(nodeIpInfoAutoRunDraft)
-                    viewModel.setScheduledNodeUpdateSettings(
-                        enabled = scheduledNodeUpdateEnabledDraft,
-                        hours = savedScheduledHours,
-                        minutes = savedScheduledMinutes,
-                        nodeAutoReconnect = nodeAutoReconnectDraft,
-                        toastEnabled = scheduledNodeUpdateToastDraft
-                    )
-                    viewModel.setTcpingTestTimeoutMs(tcpingTimeoutInput.toLongOrNull()?.coerceAtLeast(500L) ?: tcpingTestTimeoutMs)
-                    viewModel.setUrlTestTimeoutMs(urlTestTimeoutInput.toLongOrNull()?.coerceAtLeast(500L) ?: urlTestTimeoutMs)
-                    viewModel.setNodeIpInfoTimeoutMs(nodeIpInfoTimeoutInput.toLongOrNull()?.coerceAtLeast(1000L) ?: nodeIpInfoTimeoutMs)
-                    viewModel.setSpeedTestDownloadTimeoutMs(speedTestDownloadTimeoutInput.toLongOrNull()?.coerceAtLeast(0L) ?: speedTestDownloadTimeoutMs)
-                    viewModel.setTcpingConcurrency(tcpingConcurrencyInput.toIntOrNull()?.coerceIn(1, 128) ?: tcpingConcurrency)
-                    viewModel.setUrlTestConcurrency(urlTestConcurrencyInput.toIntOrNull()?.coerceIn(1, 128) ?: urlTestConcurrency)
-                    viewModel.setBandwidthTestConcurrency(bandwidthTestConcurrencyInput.toIntOrNull()?.coerceIn(1, 3) ?: bandwidthTestConcurrency)
-                    viewModel.setSmartConnectTcpingPercent(smartConnectTcpingPercentInput.toIntOrNull()?.coerceIn(1, 100) ?: smartConnectTcpingPercent)
-                    viewModel.setSmartConnectUrlTestPercent(smartConnectUrlTestPercentInput.toIntOrNull()?.coerceIn(1, 100) ?: smartConnectUrlTestPercent)
-                    viewModel.setSmartConnectSpeedTestPercent(smartConnectSpeedTestPercentInput.toIntOrNull()?.coerceIn(1, 100) ?: smartConnectSpeedTestPercent)
-                    viewModel.setHysteriaUpMbps(hysteriaUpMbpsInput.toIntOrNull()?.coerceIn(0, 100_000) ?: hysteriaUpMbps)
-                    viewModel.setHysteriaDownMbps(hysteriaDownMbpsInput.toIntOrNull()?.coerceIn(0, 100_000) ?: hysteriaDownMbps)
-                    viewModel.setVpnMtu(savedMtu)
-                    Toast.makeText(
-                        context,
-                        if (savedMtu != vpnMtu && vpnState == VpnState.CONNECTED) {
-                            "设置已保存，MTU需断开并重连VPN后生效"
-                        } else {
-                            "设置已保存"
-                        },
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            ) {
-                Text("保存")
-            }
-        }
+        onBack = onBack
     ) {
         Column(
             modifier = Modifier
@@ -234,23 +177,6 @@ fun OtherConfigScreen(
                     )
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "绕过局域网",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = bypassLan,
-                        onCheckedChange = { viewModel.setBypassLan(it) },
-                        colors = visibleSwitchColors()
-                    )
-                }
             }
 
             OtherConfigSection {
@@ -272,8 +198,8 @@ fun OtherConfigScreen(
                         )
                     }
                     Switch(
-                        checked = rememberLastSelectedNodeDraft,
-                        onCheckedChange = { rememberLastSelectedNodeDraft = it },
+                        checked = rememberLastSelectedNodeEnabled,
+                        onCheckedChange = { viewModel.setRememberLastSelectedNodeEnabled(it) },
                         colors = visibleSwitchColors()
                     )
                 }
@@ -291,8 +217,8 @@ fun OtherConfigScreen(
                         )
                     }
                     Switch(
-                        checked = nodeIpInfoAutoRunDraft,
-                        onCheckedChange = { nodeIpInfoAutoRunDraft = it },
+                        checked = nodeIpInfoTestOnVpnStart,
+                        onCheckedChange = { viewModel.setNodeIpInfoTestOnVpnStart(it) },
                         colors = visibleSwitchColors()
                     )
                 }
@@ -318,9 +244,9 @@ fun OtherConfigScreen(
                         checked = if (effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice) {
                             effectiveScheduledNodeUpdateSettings.enabled
                         } else {
-                            scheduledNodeUpdateEnabledDraft
+                            scheduledNodeUpdateEnabled
                         },
-                        onCheckedChange = { scheduledNodeUpdateEnabledDraft = it },
+                        onCheckedChange = { applyScheduledNodeUpdateSettings(enabledValue = it) },
                         enabled = !effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice,
                         colors = visibleSwitchColors()
                     )
@@ -345,7 +271,12 @@ fun OtherConfigScreen(
                         } else {
                             scheduledNodeUpdateHoursInput
                         },
-                        onValueChange = { scheduledNodeUpdateHoursInput = it.filter(Char::isDigit) },
+                        onValueChange = {
+                            scheduledNodeUpdateHoursInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { hours ->
+                                applyScheduledNodeUpdateSettings(hoursValue = hours)
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                         enabled = !effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice
                     )
@@ -356,7 +287,12 @@ fun OtherConfigScreen(
                         } else {
                             scheduledNodeUpdateMinutesInput
                         },
-                        onValueChange = { scheduledNodeUpdateMinutesInput = it.filter(Char::isDigit) },
+                        onValueChange = {
+                            scheduledNodeUpdateMinutesInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { minutes ->
+                                applyScheduledNodeUpdateSettings(minutesValue = minutes)
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                         enabled = !effectiveScheduledNodeUpdateSettings.scheduledOverriddenByNotice
                     )
@@ -383,9 +319,9 @@ fun OtherConfigScreen(
                         checked = if (effectiveScheduledNodeUpdateSettings.reconnectOverriddenByNotice) {
                             effectiveScheduledNodeUpdateSettings.nodeAutoReconnect
                         } else {
-                            nodeAutoReconnectDraft
+                            nodeAutoReconnect
                         },
-                        onCheckedChange = { nodeAutoReconnectDraft = it },
+                        onCheckedChange = { applyScheduledNodeUpdateSettings(autoReconnectValue = it) },
                         enabled = !effectiveScheduledNodeUpdateSettings.reconnectOverriddenByNotice,
                         colors = visibleSwitchColors()
                     )
@@ -407,9 +343,9 @@ fun OtherConfigScreen(
                         checked = if (effectiveScheduledNodeUpdateSettings.toastOverriddenByNotice) {
                             effectiveScheduledNodeUpdateSettings.toastEnabled
                         } else {
-                            scheduledNodeUpdateToastDraft
+                            scheduledNodeUpdateToastEnabled
                         },
-                        onCheckedChange = { scheduledNodeUpdateToastDraft = it },
+                        onCheckedChange = { applyScheduledNodeUpdateSettings(toastEnabledValue = it) },
                         enabled = !effectiveScheduledNodeUpdateSettings.toastOverriddenByNotice,
                         colors = visibleSwitchColors()
                     )
@@ -451,17 +387,32 @@ fun OtherConfigScreen(
                 OtherConfigNumberField(
                     label = "TCPing 节点比例 (%)",
                     value = smartConnectTcpingPercentInput,
-                    onValueChange = { smartConnectTcpingPercentInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        smartConnectTcpingPercentInput = it.filter(Char::isDigit)
+                        it.toIntOrNull()?.let { value ->
+                            viewModel.setSmartConnectTcpingPercent(value.coerceIn(1, 100))
+                        }
+                    }
                 )
                 OtherConfigNumberField(
                     label = "URL Test 候选比例 (%)",
                     value = smartConnectUrlTestPercentInput,
-                    onValueChange = { smartConnectUrlTestPercentInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        smartConnectUrlTestPercentInput = it.filter(Char::isDigit)
+                        it.toIntOrNull()?.let { value ->
+                            viewModel.setSmartConnectUrlTestPercent(value.coerceIn(1, 100))
+                        }
+                    }
                 )
                 OtherConfigNumberField(
                     label = "5MB 测速候选比例 (%)",
                     value = smartConnectSpeedTestPercentInput,
-                    onValueChange = { smartConnectSpeedTestPercentInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        smartConnectSpeedTestPercentInput = it.filter(Char::isDigit)
+                        it.toIntOrNull()?.let { value ->
+                            viewModel.setSmartConnectSpeedTestPercent(value.coerceIn(1, 100))
+                        }
+                    }
                 )
             }
 
@@ -476,13 +427,23 @@ fun OtherConfigScreen(
                     OtherConfigNumberField(
                         label = "Up",
                         value = hysteriaUpMbpsInput,
-                        onValueChange = { hysteriaUpMbpsInput = it.filter(Char::isDigit) },
+                        onValueChange = {
+                            hysteriaUpMbpsInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setHysteriaUpMbps(value.coerceIn(0, 100_000))
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     )
                     OtherConfigNumberField(
                         label = "Dw",
                         value = hysteriaDownMbpsInput,
-                        onValueChange = { hysteriaDownMbpsInput = it.filter(Char::isDigit) },
+                        onValueChange = {
+                            hysteriaDownMbpsInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setHysteriaDownMbps(value.coerceIn(0, 100_000))
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -495,22 +456,42 @@ fun OtherConfigScreen(
                 OtherConfigNumberField(
                     label = "TCPing 超时",
                     value = tcpingTimeoutInput,
-                    onValueChange = { tcpingTimeoutInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        tcpingTimeoutInput = it.filter(Char::isDigit)
+                        it.toLongOrNull()?.let { value ->
+                            viewModel.setTcpingTestTimeoutMs(value.coerceAtLeast(500L))
+                        }
+                    }
                 )
                 OtherConfigNumberField(
                     label = "URL Test 超时",
                     value = urlTestTimeoutInput,
-                    onValueChange = { urlTestTimeoutInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        urlTestTimeoutInput = it.filter(Char::isDigit)
+                        it.toLongOrNull()?.let { value ->
+                            viewModel.setUrlTestTimeoutMs(value.coerceAtLeast(500L))
+                        }
+                    }
                 )
                 OtherConfigNumberField(
                     label = "节点IP信息超时",
                     value = nodeIpInfoTimeoutInput,
-                    onValueChange = { nodeIpInfoTimeoutInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        nodeIpInfoTimeoutInput = it.filter(Char::isDigit)
+                        it.toLongOrNull()?.let { value ->
+                            viewModel.setNodeIpInfoTimeoutMs(value.coerceAtLeast(1000L))
+                        }
+                    }
                 )
                 OtherConfigNumberField(
                     label = "单次下载测速超时",
                     value = speedTestDownloadTimeoutInput,
-                    onValueChange = { speedTestDownloadTimeoutInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        speedTestDownloadTimeoutInput = it.filter(Char::isDigit)
+                        it.toLongOrNull()?.let { value ->
+                            viewModel.setSpeedTestDownloadTimeoutMs(value.coerceAtLeast(0L))
+                        }
+                    }
                 )
             }
 
@@ -521,22 +502,42 @@ fun OtherConfigScreen(
                 OtherConfigNumberField(
                     label = "TCPing 并发数",
                     value = tcpingConcurrencyInput,
-                    onValueChange = { tcpingConcurrencyInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        tcpingConcurrencyInput = it.filter(Char::isDigit)
+                        it.toIntOrNull()?.let { value ->
+                            viewModel.setTcpingConcurrency(value.coerceIn(1, 128))
+                        }
+                    }
                 )
                 OtherConfigNumberField(
                     label = "URL Test 并发数",
                     value = urlTestConcurrencyInput,
-                    onValueChange = { urlTestConcurrencyInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        urlTestConcurrencyInput = it.filter(Char::isDigit)
+                        it.toIntOrNull()?.let { value ->
+                            viewModel.setUrlTestConcurrency(value.coerceIn(1, 128))
+                        }
+                    }
                 )
                 OtherConfigNumberField(
                     label = "带宽测试并发数",
                     value = bandwidthTestConcurrencyInput,
-                    onValueChange = { bandwidthTestConcurrencyInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        bandwidthTestConcurrencyInput = it.filter(Char::isDigit)
+                        it.toIntOrNull()?.let { value ->
+                            viewModel.setBandwidthTestConcurrency(value.coerceIn(1, 3))
+                        }
+                    }
                 )
                 OtherConfigNumberField(
                     label = "VPN MTU",
                     value = mtuInput,
-                    onValueChange = { mtuInput = it.filter(Char::isDigit) }
+                    onValueChange = {
+                        mtuInput = it.filter(Char::isDigit)
+                        it.toIntOrNull()?.let { value ->
+                            viewModel.setVpnMtu(value.coerceIn(576, 9000))
+                        }
+                    }
                 )
                 if (vpnState == VpnState.CONNECTED) {
                     Text(
