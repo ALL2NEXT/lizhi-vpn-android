@@ -22,6 +22,8 @@ data class Node(
     val country: String? = null,          // 国家代码 (如 "JP", "US")
     val countryName: String? = null,      // 国家名称 (如 "日本", "美国")
     val latency: Int = -1,                // 延迟(ms), -1表示未测试
+    val tcpingLatency: Int = -1,          // TCPing延迟(ms), -1表示未测试
+    val urlTestLatency: Int = -1,         // 204 URLTest延迟(ms), -1表示未测试
     val isAvailable: Boolean = true,      // 是否可用
     val lastTestedAt: Long = 0,           // 上次测试时间戳
     val sortOrder: Int = 0,               // 排序顺序

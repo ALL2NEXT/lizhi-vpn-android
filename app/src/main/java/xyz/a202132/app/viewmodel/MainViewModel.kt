@@ -1103,7 +1103,7 @@ observeScheduledNodeUpdates()
 
     private suspend fun applyUrlTestResults(results: List<LatencyTester.LatencyResult>) {
         results.forEach { result ->
-            val updatedRows = nodeDao.updateLatency(
+            val updatedRows = nodeDao.updateUrlTestResult(
                 nodeId = result.nodeId,
                 latency = result.latency,
                 isAvailable = result.isAvailable,
@@ -1152,7 +1152,7 @@ observeScheduledNodeUpdates()
         
         // 更新数据库
         results.forEach { result ->
-            nodeDao.updateLatency(
+            nodeDao.updateTcpingResult(
                 nodeId = result.nodeId,
                 latency = result.latency,
                 isAvailable = result.isAvailable,

@@ -124,7 +124,6 @@ fun DrawerContent(
             DrawerMenuItem(
                 icon = Icons.Outlined.Apps,
                 title = "代理作用域",
-                subtitle = "全局、智能分流与分应用代理",
                 onClick = {
                     onOpenProxyScope()
                     onClose()
@@ -160,7 +159,6 @@ fun DrawerContent(
                 DrawerMenuItem(
                     icon = Icons.Outlined.Email,
                     title = "问题反馈",
-                    subtitle = if (hasEmail) AppConfig.FEEDBACK_EMAIL else null,
                     onClick = {
                         if (hasEmail) {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
+import java.util.Locale
 import xyz.a202132.app.data.model.LatencyLevel
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
@@ -459,7 +460,6 @@ private fun NodeListContent(
                             node = node,
                             isSelected = node.id == selectedNodeId,
                             isFavorite = isFavorite,
-                            isTesting = isTesting,
                             enabled = interactionEnabled,
                             onClick = { onNodeSelected(node) },
                             onToggleFavorite = { onToggleFavorite(node, isFavorite) }
@@ -547,7 +547,6 @@ private fun NodeListItem(
     node: Node,
     isSelected: Boolean,
     isFavorite: Boolean,
-    isTesting: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
@@ -565,49 +564,47 @@ private fun NodeListItem(
         shape = RoundedCornerShape(12.dp),
         border = if (isSelected) BorderStroke(2.dp, borderColor) else null
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = node.getFlagEmoji(),
-                    fontSize = 24.sp,
-                    modifier = Modifier.padding(end = 12.dp)
-                )
-
-                Column {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = node.getDisplayName(),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (node.isAvailable) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = node.getFlagEmoji(),
+                        fontSize = 24.sp,
+                        modifier = Modifier.padding(end = 12.dp)
                     )
 
-                    Text(
-                        text = node.type.protocol.uppercase(),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column {
+                        Text(
+                            text = node.getDisplayName(),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (node.isAvailable) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Text(
+                            text = node.type.protocol.uppercase(),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
                 IconButton(
                     onClick = onToggleFavorite,
                     enabled = enabled,
@@ -620,10 +617,91 @@ private fun NodeListItem(
                         modifier = Modifier.size(20.dp)
                     )
                 }
+            }
 
-                LatencyBadge(node = node, isTesting = isTesting)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                NodeMetric(
+                    label = "TCPing",
+                    value = formatNodeLatency(node.tcpingLatency),
+                    valueColor = nodeMetricColor(node.tcpingLatency),
+                    modifier = Modifier.weight(1f)
+                )
+                NodeMetric(
+                    label = "204 URLTest",
+                    value = formatNodeLatency(node.urlTestLatency),
+                    valueColor = nodeMetricColor(node.urlTestLatency),
+                    modifier = Modifier.weight(1f)
+                )
+                NodeMetric(
+                    label = "带宽",
+                    value = formatBandwidth(node.downloadMbps),
+                    valueColor = if (node.downloadMbps > 0f) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun NodeMetric(
+    label: String,
+    value: String,
+    valueColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = value,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = valueColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun formatNodeLatency(latency: Int): String = when {
+    latency > 0 -> "${latency}ms"
+    latency == -2 -> "失败"
+    else -> "未测试"
+}
+
+private fun formatBandwidth(downloadMbps: Float): String {
+    return if (downloadMbps > 0f) {
+        String.format(Locale.US, "%.1f Mbps", downloadMbps)
+    } else {
+        "未测试"
+    }
+}
+
+@Composable
+private fun nodeMetricColor(latency: Int): Color {
+    return when {
+        latency <= 0 -> MaterialTheme.colorScheme.onSurfaceVariant
+        latency < 100 -> LatencyGood
+        latency < 300 -> LatencyMedium
+        else -> LatencyBad
     }
 }
 
