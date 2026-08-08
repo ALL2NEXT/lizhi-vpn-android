@@ -735,9 +735,9 @@ private fun formatBandwidth(downloadMbps: Float): String {
 @Composable
 private fun nodeMetricColor(latency: Int): Color {
     return when {
-        latency <= 0 -> MaterialTheme.colorScheme.onSurfaceVariant
-        latency < 100 -> LatencyGood
-        latency < 300 -> LatencyMedium
+        latency < 0 -> MaterialTheme.colorScheme.onSurfaceVariant
+        latency <= 200 -> LatencyGood
+        latency <= 400 -> LatencyMedium
         else -> LatencyBad
     }
 }

@@ -131,8 +131,8 @@ data class Node(
     fun getLatencyLevel(): LatencyLevel {
         return when {
             latency < 0 || !isAvailable -> LatencyLevel.BAD
-            latency < 100 -> LatencyLevel.GOOD
-            latency < 300 -> LatencyLevel.MEDIUM
+            latency <= 200 -> LatencyLevel.GOOD
+            latency <= 400 -> LatencyLevel.MEDIUM
             else -> LatencyLevel.BAD
         }
     }
