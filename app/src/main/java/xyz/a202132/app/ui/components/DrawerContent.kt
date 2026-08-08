@@ -40,7 +40,6 @@ fun DrawerContent(
     onCheckUpdate: () -> Unit,
     onOpenProxyScope: () -> Unit,
     onOpenOtherConfig: () -> Unit,
-    onOpenRuntimeLog: () -> Unit,
     onClose: () -> Unit,
     websiteUrl: String = "",
     feedbackEmail: String = "",
@@ -104,15 +103,6 @@ fun DrawerContent(
                 }
             )
 
-            DrawerMenuItem(
-                icon = Icons.Outlined.Article,
-                title = "运行日志",
-                onClick = {
-                    onOpenRuntimeLog()
-                    onClose()
-                }
-            )
-            
             if (websiteUrl.isNotBlank()) {
                 DrawerMenuItem(
                     icon = Icons.Outlined.Language,

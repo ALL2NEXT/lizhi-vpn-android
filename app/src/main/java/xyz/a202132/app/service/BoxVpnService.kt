@@ -23,7 +23,6 @@ import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.RuleManager
-import xyz.a202132.app.util.RuntimeLog
 import java.io.File
 import java.net.ServerSocket
 import kotlinx.coroutines.flow.first
@@ -134,12 +133,12 @@ class BoxVpnService : VpnService() {
     
     private fun startVpn(rawLink: String, nodeName: String, proxyMode: ProxyMode) {
         Log.d(TAG, "Starting VPN for node: $nodeName")
-        RuntimeLog.info(TAG, "VPN start requested")
+        Log.i(TAG, "VPN start requested")
         
         serviceScope.launch {
             if (isRunning) {
                 Log.w(TAG, "VPN is already running, stopping first")
-                RuntimeLog.warn(TAG, "VPN was already running; stopping previous instance first")
+                Log.w(TAG, "VPN was already running; stopping previous instance first")
                 stopVpnInternal()
             }
             
@@ -156,7 +155,7 @@ class BoxVpnService : VpnService() {
                 
                 if (rawNodes.isEmpty()) {
                     Log.e(TAG, "No nodes available")
-                    RuntimeLog.error(TAG, "VPN start failed: no nodes available")
+                    Log.e(TAG, "VPN start failed: no nodes available")
                      withContext(Dispatchers.Main) {
                         ServiceManager.notifyError("娌℃湁鍙敤鑺傜偣")
                     }
@@ -176,7 +175,7 @@ class BoxVpnService : VpnService() {
                 val allNodes = filterCoreCompatibleNodes(rawNodes)
                 if (allNodes.isEmpty()) {
                     Log.e(TAG, "No core compatible nodes available")
-                    RuntimeLog.error(TAG, "VPN start failed: no core compatible nodes available")
+                    Log.e(TAG, "VPN start failed: no core compatible nodes available")
                     withContext(Dispatchers.Main) {
                         ServiceManager.notifyError("\u5f53\u524d\u8282\u70b9\u5217\u8868\u6ca1\u6709\u6838\u5fc3\u652f\u6301\u7684\u8282\u70b9")
                     }
@@ -184,7 +183,7 @@ class BoxVpnService : VpnService() {
                 }
                 if (selectedNodeId != null && allNodes.none { it.id == selectedNodeId }) {
                     Log.e(TAG, "Selected node is not core compatible: $selectedNodeId")
-                    RuntimeLog.error(TAG, "VPN start failed: selected node is not core compatible")
+                    Log.e(TAG, "VPN start failed: selected node is not core compatible")
                     withContext(Dispatchers.Main) {
                         ServiceManager.notifyError("\u6240\u9009\u8282\u70b9\u914d\u7f6e\u4e0d\u88ab\u6838\u5fc3\u652f\u6301")
                     }
@@ -245,7 +244,7 @@ class BoxVpnService : VpnService() {
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start VPN", e)
-                RuntimeLog.error(TAG, "VPN start failed", e)
+                Log.e(TAG, "VPN start failed", e)
                 withContext(Dispatchers.Main) {
                     ServiceManager.notifyError("VPN启动失败: ${e.message}")
                 }
@@ -324,11 +323,11 @@ class BoxVpnService : VpnService() {
                 }
                 
                 Log.d(TAG, "VPN started successfully with libbox")
-                RuntimeLog.info(TAG, "VPN started successfully")
+                Log.i(TAG, "VPN started successfully")
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to initialize libbox", e)
-                RuntimeLog.error(TAG, "Failed to initialize libbox", e)
+                Log.e(TAG, "Failed to initialize libbox", e)
                 throw e
             }
         }
@@ -356,7 +355,6 @@ class BoxVpnService : VpnService() {
                 }
                 
                 val options = io.nekohasekai.libbox.CommandClientOptions().apply {
-                    addCommand(Libbox.CommandLog)
                     addCommand(Libbox.CommandStatus)
                     statusInterval = 1_000_000_000L // 1秒，用于流量状态更新
                 }
@@ -377,23 +375,7 @@ class BoxVpnService : VpnService() {
                     
                     override fun clearLogs() {}
                     override fun setDefaultLogLevel(level: Int) {}
-                    override fun writeLogs(messageList: io.nekohasekai.libbox.LogIterator?) {
-                        if (messageList == null) return
-                        try {
-                            while (messageList.hasNext()) {
-                                val message = messageList.next()?.toString().orEmpty()
-                                val lower = message.lowercase()
-                                when {
-                                    lower.contains("error") ||
-                                        lower.contains("fatal") ||
-                                        lower.contains("panic") -> RuntimeLog.error("sing-box", message)
-                                    lower.contains("warn") -> RuntimeLog.warn("sing-box", message)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            RuntimeLog.warn(TAG, "Failed to collect sing-box logs", e)
-                        }
-                    }
+                    override fun writeLogs(messageList: io.nekohasekai.libbox.LogIterator?) {}
                     override fun initializeClashMode(modeList: io.nekohasekai.libbox.StringIterator?, currentMode: String?) {}
                     override fun updateClashMode(newMode: String?) {}
                     override fun writeConnectionEvents(events: io.nekohasekai.libbox.ConnectionEvents?) {}
@@ -413,7 +395,7 @@ class BoxVpnService : VpnService() {
                 // 只在服务仍在运行时记录错误，否则静默忽略
                 if (isRunning) {
                     Log.e(TAG, "Error starting command client", e)
-                    RuntimeLog.warn(TAG, "Command client failed to start", e)
+                    Log.w(TAG, "Command client failed to start", e)
                 }
             }
         }
@@ -442,7 +424,7 @@ class BoxVpnService : VpnService() {
                 // 也可以在这里查询数据库获取名称，但为了性能暂略
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to select node", e)
-                RuntimeLog.error(TAG, "Failed to select outbound node", e)
+                Log.e(TAG, "Failed to select outbound node", e)
             }
         }
     }
@@ -622,7 +604,7 @@ class BoxVpnService : VpnService() {
         if (currentTrafficSource == source) return
         currentTrafficSource = source
         Log.i(TAG, "Traffic source -> ${source.name} ($reason)")
-        RuntimeLog.info(TAG, "Traffic statistics source changed: source=${source.name}, reason=$reason")
+        Log.i(TAG, "Traffic statistics source changed: source=${source.name}, reason=$reason")
     }
 
     private fun logConfigForDebug(config: String) {
@@ -718,7 +700,7 @@ class BoxVpnService : VpnService() {
         val skippedCount = nodes.size - compatibleNodes.size
         if (skippedCount > 0) {
             Log.w(TAG, "Skipped $skippedCount core-incompatible nodes before VPN start")
-            RuntimeLog.warn(TAG, "Skipped $skippedCount core-incompatible nodes before VPN start")
+            Log.w(TAG, "Skipped $skippedCount core-incompatible nodes before VPN start")
         }
         return compatibleNodes
     }
@@ -729,14 +711,14 @@ class BoxVpnService : VpnService() {
             Libbox.checkConfig(config)
         }.onFailure { error ->
             Log.w(TAG, "Core-incompatible node skipped: id=${node.id}, type=${node.type}, server=${node.server}, error=${error.message}")
-            RuntimeLog.warn(TAG, "Core-incompatible node skipped: type=${node.type}", error)
+            Log.w(TAG, "Core-incompatible node skipped: type=${node.type}", error)
         }.isSuccess
     }
 
     private fun stopVpn() {
         val stopStartTime = System.currentTimeMillis()
         Log.d(TAG, "Stopping VPN - start")
-        RuntimeLog.info(TAG, "VPN stop requested")
+        Log.i(TAG, "VPN stop requested")
 
         // 立即关闭 TUN，确保状态栏 VPN 图标尽快消失
         try {
@@ -785,7 +767,7 @@ class BoxVpnService : VpnService() {
     
     private fun restartVpn() {
         Log.d(TAG, "Restarting VPN")
-        RuntimeLog.info(TAG, "VPN restart requested")
+        Log.i(TAG, "VPN restart requested")
         
         serviceScope.launch {
             // 保存当前配置
@@ -870,7 +852,7 @@ class BoxVpnService : VpnService() {
                     val allNodes = filterCoreCompatibleNodes(rawNodes)
                     if (allNodes.isEmpty()) {
                         Log.e(TAG, "No core compatible nodes available during restart")
-                        RuntimeLog.error(TAG, "VPN restart failed: no core compatible nodes available")
+                        Log.e(TAG, "VPN restart failed: no core compatible nodes available")
                         withContext(Dispatchers.Main) {
                             ServiceManager.notifyError("\u5f53\u524d\u8282\u70b9\u5217\u8868\u6ca1\u6709\u6838\u5fc3\u652f\u6301\u7684\u8282\u70b9")
                         }
@@ -878,7 +860,7 @@ class BoxVpnService : VpnService() {
                     }
                     if (selectedNodeId != null && allNodes.none { it.id == selectedNodeId }) {
                         Log.e(TAG, "Selected node is not core compatible during restart: $selectedNodeId")
-                        RuntimeLog.error(TAG, "VPN restart failed: selected node is not core compatible")
+                        Log.e(TAG, "VPN restart failed: selected node is not core compatible")
                         withContext(Dispatchers.Main) {
                             ServiceManager.notifyError("\u6240\u9009\u8282\u70b9\u914d\u7f6e\u4e0d\u88ab\u6838\u5fc3\u652f\u6301")
                         }
@@ -975,11 +957,11 @@ class BoxVpnService : VpnService() {
             }
             
             Log.d(TAG, "VPN stopped")
-            RuntimeLog.info(TAG, "VPN stopped")
+            Log.i(TAG, "VPN stopped")
             
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping VPN", e)
-            RuntimeLog.error(TAG, "Error stopping VPN", e)
+            Log.e(TAG, "Error stopping VPN", e)
             withContext(Dispatchers.Main) {
                 isStopping = false
             }

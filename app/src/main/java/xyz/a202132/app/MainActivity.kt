@@ -39,7 +39,6 @@ import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
-import xyz.a202132.app.ui.screens.RuntimeLogScreen
 import xyz.a202132.app.ui.theme.FireflyVPNTheme
 import xyz.a202132.app.viewmodel.MainViewModel
 import xyz.a202132.app.viewmodel.NodeImportResult
@@ -152,8 +151,7 @@ class MainActivity : ComponentActivity() {
                                     onStartVpn = { action -> requestVpnPermission(action) },
                                     onOpenProxyScope = { navigateTo(AppRoute.PROXY_SCOPE) },
                                     onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
-                                    onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
-                                    onOpenRuntimeLog = { navigateTo(AppRoute.RUNTIME_LOG) }
+                                    onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) }
                                 )
                             }
 
@@ -232,11 +230,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            composable(AppRoute.RUNTIME_LOG) {
-                                RuntimeLogScreen(
-                                    onBack = { navController.popBackStack() }
-                                )
-                            }
                         }
                     }
                 }

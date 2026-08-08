@@ -6,5 +6,4 @@ object AppRoute {
     const val NODE_LIST = "node_list"
     const val OTHER_CONFIG = "other_config"
     const val QR_SCANNER = "qr_scanner"
-    const val RUNTIME_LOG = "runtime_log"
 }

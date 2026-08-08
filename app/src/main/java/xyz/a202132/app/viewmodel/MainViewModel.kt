@@ -37,7 +37,6 @@ import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.util.NetworkUtils
-import xyz.a202132.app.util.RuntimeLog
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.CryptoUtils
 import java.io.File
@@ -384,7 +383,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             replaceSubscriptionSourceId = source.id
         )
         if (fetchOk) {
-            RuntimeLog.info(tag, "Automatically updated subscription: ${source.name}")
+            Log.i(tag, "Automatically updated subscription: ${source.name}")
         }
     }
 
@@ -754,7 +753,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 settingsRepository.setSelectedNodeId(bestNode.id)
-                RuntimeLog.info(tag, "Smart connection selected node: ${bestNode.getDisplayName()}")
+                Log.i(tag, "Smart connection selected node: ${bestNode.getDisplayName()}")
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
             } catch (e: Exception) {
                 Log.e(tag, "Smart connection failed", e)
@@ -779,9 +778,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             settingsRepository.setSelectedNodeId(node.id)
-            RuntimeLog.info(tag, "Connecting to selected/default node: ${node.getDisplayName()}")
+            Log.i(tag, "Connecting to selected/default node: ${node.getDisplayName()}")
             if (!NetworkUtils.isNetworkAvailable(getApplication())) {
-                RuntimeLog.warn(tag, "Default VPN start requested while network is unavailable")
+                Log.w(tag, "Default VPN start requested while network is unavailable")
                 _error.value = "当前无网络连接节点！"
             }
             ServiceManager.startVpn(getApplication(), node, proxyMode.value)
@@ -1143,13 +1142,13 @@ fun autoSelectBestNode() {
     fun selectNode(node: Node) {
         viewModelScope.launch {
             settingsRepository.setSelectedNodeId(node.id)
-            RuntimeLog.info(tag, "Selected node changed: source=${node.source}, type=${node.type}")
+            Log.i(tag, "Selected node changed: source=${node.source}, type=${node.type}")
             
             // If VPN is connected, restart to switch to new node
             if (vpnState.value == VpnState.CONNECTED) {
                 // Notify user (Optional)
                 Log.i(tag, "Restarting VPN to apply new Node: ${node.name}")
-                RuntimeLog.info(tag, "Restarting VPN after node selection")
+                Log.i(tag, "Restarting VPN after node selection")
                 ServiceManager.startVpn(getApplication(), node, proxyMode.value)
             }
         }
@@ -1167,12 +1166,12 @@ fun autoSelectBestNode() {
             if (!ensureAccountRegistered()) return@launch
 
             settingsRepository.setSelectedNodeId(node.id)
-            RuntimeLog.info(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
+            Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
 
             when (vpnState.value) {
                 VpnState.DISCONNECTED -> {
                     if (!NetworkUtils.isNetworkAvailable(getApplication())) {
-                        RuntimeLog.warn(tag, "Direct VPN start requested while network is unavailable")
+                        Log.w(tag, "Direct VPN start requested while network is unavailable")
                         _error.value = "当前无网络连接节点！"
                     }
                     ServiceManager.startVpn(getApplication(), node, proxyMode.value)
@@ -1181,7 +1180,7 @@ fun autoSelectBestNode() {
                     ServiceManager.startVpn(getApplication(), node, proxyMode.value)
                 }
                 else -> {
-                    RuntimeLog.info(tag, "Direct node connection ignored while VPN is transitioning")
+                    Log.i(tag, "Direct node connection ignored while VPN is transitioning")
                 }
             }
         }
@@ -1272,9 +1271,9 @@ fun autoSelectBestNode() {
 
             if (result == NodeImportResult.IMPORTED) {
                 settingsRepository.setNodeListCategory(NodeListCategory.FAVORITES)
-                RuntimeLog.info(tag, "Imported $importedCount nodes to favorites")
+                Log.i(tag, "Imported $importedCount nodes to favorites")
             } else {
-                RuntimeLog.warn(tag, "Node import finished without new nodes: result=$result")
+                Log.w(tag, "Node import finished without new nodes: result=$result")
             }
             onResult(result, importedCount)
         }
@@ -1298,7 +1297,7 @@ fun autoSelectBestNode() {
             Libbox.checkConfig(config)
         }.onFailure { error ->
             Log.w(tag, "Skip incompatible imported node: type=${node.type}, server=${node.server}, error=${error.message}")
-            RuntimeLog.warn(tag, "Skip incompatible imported node: type=${node.type}", error)
+            Log.w(tag, "Skip incompatible imported node: type=${node.type}", error)
         }.isSuccess
     }
     
@@ -1327,7 +1326,7 @@ fun autoSelectBestNode() {
         when (vpnState.value) {
             VpnState.DISCONNECTED -> {
                 val node = currentNode.value ?: run {
-                    RuntimeLog.warn(tag, "VPN start ignored: no selected node")
+                    Log.w(tag, "VPN start ignored: no selected node")
                     _error.value = "请先选择节点"
                     return
                 }
@@ -1336,15 +1335,15 @@ fun autoSelectBestNode() {
                     if (!ensureAccountRegistered()) return@launch
                     // 4. 无网络连接节点时给用户发Toast，但不阻止
                     if (!NetworkUtils.isNetworkAvailable(getApplication())) {
-                        RuntimeLog.warn(tag, "VPN start requested while network is unavailable")
+                        Log.w(tag, "VPN start requested while network is unavailable")
                         _error.value = "当前无网络连接节点！"
                     }
-                    RuntimeLog.info(tag, "VPN start requested from UI")
+                    Log.i(tag, "VPN start requested from UI")
                     ServiceManager.startVpn(getApplication(), node, proxyMode.value)
                 }
             }
             VpnState.CONNECTED -> {
-                RuntimeLog.info(tag, "VPN stop requested from UI")
+                Log.i(tag, "VPN stop requested from UI")
                 ServiceManager.stopVpn(getApplication())
             }
             else -> {
@@ -1360,7 +1359,7 @@ fun autoSelectBestNode() {
         if (vpnState.value == VpnState.CONNECTED) {
             currentNode.value?.let { node ->
                 Log.i(tag, "Settings changed, restarting VPN to apply...")
-                RuntimeLog.info(tag, "Restarting VPN after settings change")
+                Log.i(tag, "Restarting VPN after settings change")
                 ServiceManager.startVpn(getApplication(), node, proxyMode.value)
             }
         }
@@ -1407,7 +1406,7 @@ fun autoSelectBestNode() {
             }
         }.onFailure { e ->
             Log.e(tag, "Failed to check notice", e)
-            RuntimeLog.warn(tag, "Failed to check notice", e)
+            Log.w(tag, "Failed to check notice", e)
         }
     }
     
@@ -1472,7 +1471,7 @@ fun autoSelectBestNode() {
                 }
             }.onFailure { e ->
                 Log.e(tag, "Failed to check update", e)
-                RuntimeLog.warn(tag, "Failed to check update", e)
+                Log.w(tag, "Failed to check update", e)
             }.also {
                 if (trackStartupSplash) {
                     _startupUpdateCheckCompleted.value = true
@@ -1583,7 +1582,7 @@ fun autoSelectBestNode() {
         _updateInfo.value = null
         viewModelScope.launch {
             settingsRepository.setIgnoredUpdateVersionCode(info.versionCode)
-            RuntimeLog.info(tag, "Ignored optional update: versionCode=${info.versionCode}")
+            Log.i(tag, "Ignored optional update: versionCode=${info.versionCode}")
         }
     }
     
