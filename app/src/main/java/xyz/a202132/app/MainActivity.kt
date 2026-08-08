@@ -35,6 +35,7 @@ import kotlinx.coroutines.delay
 import xyz.a202132.app.ui.components.StartupSplashOverlay
 import xyz.a202132.app.ui.components.NodeListScreen
 import xyz.a202132.app.ui.navigation.AppRoute
+import xyz.a202132.app.ui.screens.FeatureScreen
 import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
@@ -151,7 +152,8 @@ class MainActivity : ComponentActivity() {
                                     onStartVpn = { action -> requestVpnPermission(action) },
                                     onOpenProxyScope = { navigateTo(AppRoute.PROXY_SCOPE) },
                                     onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
-                                    onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) }
+                                    onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
+                                    onOpenFeatures = { navigateTo(AppRoute.FEATURES) }
                                 )
                             }
 
@@ -227,6 +229,13 @@ class MainActivity : ComponentActivity() {
 
                             composable(AppRoute.OTHER_CONFIG) {
                                 OtherConfigScreen(
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.FEATURES) {
+                                FeatureScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() }
                                 )

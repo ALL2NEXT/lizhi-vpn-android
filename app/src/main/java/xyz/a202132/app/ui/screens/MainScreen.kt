@@ -32,7 +32,8 @@ fun MainScreen(
     onStartVpn: (action: () -> Unit) -> Unit,
     onOpenProxyScope: () -> Unit = {},
     onOpenNodeList: () -> Unit = {},
-    onOpenOtherConfig: () -> Unit = {}
+    onOpenOtherConfig: () -> Unit = {},
+    onOpenFeatures: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -96,6 +97,7 @@ fun MainScreen(
                     onCheckUpdate = { viewModel.checkUpdate() },
                     onOpenProxyScope = onOpenProxyScope,
                     onOpenOtherConfig = onOpenOtherConfig,
+                    onOpenFeatures = onOpenFeatures,
                     onClose = { scope.launch { drawerState.close() } },
                     websiteUrl = backendSettings.websiteUrl,
                     feedbackEmail = backendSettings.feedbackEmail,

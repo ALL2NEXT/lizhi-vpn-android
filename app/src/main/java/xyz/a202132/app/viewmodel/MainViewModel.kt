@@ -29,6 +29,7 @@ import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.LatencyTester
 import xyz.a202132.app.network.NetworkClient
+import xyz.a202132.app.network.SpeedTestService
 import xyz.a202132.app.network.SubscriptionListParser
 import xyz.a202132.app.network.SubscriptionParser
 import xyz.a202132.app.network.DownloadManager
@@ -44,6 +45,7 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.ServerSocket
+import kotlin.math.ceil
 import java.util.concurrent.TimeUnit
 import java.util.UUID
 
@@ -81,6 +83,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
+
+    private val _isHysteriaBandwidthAdapting = MutableStateFlow(false)
+    val isHysteriaBandwidthAdapting = _isHysteriaBandwidthAdapting.asStateFlow()
+
+    private val _hysteriaBandwidthAdaptiveStatus = MutableStateFlow<String?>(null)
+    val hysteriaBandwidthAdaptiveStatus = _hysteriaBandwidthAdaptiveStatus.asStateFlow()
     
     // 测试类型标签 (用于 UI 显示)
     private val _testingLabel = MutableStateFlow<String?>(null)
@@ -223,6 +231,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_TCPING_PERCENT)
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
+    val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
     val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_UP_MBPS)
     val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_DOWN_MBPS)
     val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.VPN_MTU)
@@ -944,10 +953,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setHysteriaBandwidthEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHysteriaBandwidthEnabled(enabled)
+        }
+    }
+
     fun setHysteriaDownMbps(value: Int) {
         viewModelScope.launch {
             settingsRepository.setHysteriaDownMbps(value)
         }
+    }
+
+    /**
+     * 使用直连网络分别测试下行和上行带宽，并按 10 Mbps 档位向上取整后写入 Hy2 设置。
+     */
+    fun adaptHysteriaBandwidth() {
+        if (_isHysteriaBandwidthAdapting.value) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _isHysteriaBandwidthAdapting.value = true
+            _hysteriaBandwidthAdaptiveStatus.value = "正在测试直连网络上下行..."
+
+            try {
+                val service = SpeedTestService(
+                    downloadTimeoutMs = 25_000L,
+                    uploadTimeoutMs = 25_000L
+                )
+                val testSize = 10_000_000L
+                val downloadResult = service.startDownloadTest(testSize) { _, _ -> }
+                val uploadResult = service.startUploadTest(testSize) { _, _ -> }
+                val downMbps = roundUpHysteriaBandwidth(downloadResult.avgSpeedMbps)
+                val upMbps = roundUpHysteriaBandwidth(uploadResult.avgSpeedMbps)
+
+                if (downMbps <= 0 || upMbps <= 0) {
+                    throw IllegalStateException("测速结果无效")
+                }
+
+                settingsRepository.setHysteriaDownMbps(downMbps)
+                settingsRepository.setHysteriaUpMbps(upMbps)
+                _hysteriaBandwidthAdaptiveStatus.value =
+                    "下行 ${formatMbps(downloadResult.avgSpeedMbps)} → ${downMbps} Mbps；" +
+                        "上行 ${formatMbps(uploadResult.avgSpeedMbps)} → ${upMbps} Mbps"
+            } catch (e: Exception) {
+                Log.e(tag, "Hy2 bandwidth adaptation failed", e)
+                _hysteriaBandwidthAdaptiveStatus.value = "自适应失败：${e.message ?: "测速不可用"}"
+            } finally {
+                _isHysteriaBandwidthAdapting.value = false
+            }
+        }
+    }
+
+    private fun roundUpHysteriaBandwidth(speedMbps: Float): Int {
+        if (!speedMbps.isFinite() || speedMbps <= 0f) return 0
+        return (ceil(speedMbps / 10f).toInt() * 10).coerceIn(10, 100_000)
+    }
+
+    private fun formatMbps(speedMbps: Float): String {
+        return "%.1f".format(java.util.Locale.US, speedMbps)
     }
 
     fun setVpnMtu(value: Int) {

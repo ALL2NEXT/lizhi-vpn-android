@@ -40,6 +40,7 @@ fun DrawerContent(
     onCheckUpdate: () -> Unit,
     onOpenProxyScope: () -> Unit,
     onOpenOtherConfig: () -> Unit,
+    onOpenFeatures: () -> Unit,
     onClose: () -> Unit,
     websiteUrl: String = "",
     feedbackEmail: String = "",
@@ -99,6 +100,15 @@ fun DrawerContent(
                 title = "代理作用域",
                 onClick = {
                     onOpenProxyScope()
+                    onClose()
+                }
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.Star,
+                title = "特色功能",
+                onClick = {
+                    onOpenFeatures()
                     onClose()
                 }
             )

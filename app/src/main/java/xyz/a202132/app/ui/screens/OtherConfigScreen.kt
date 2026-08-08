@@ -47,12 +47,6 @@ fun OtherConfigScreen(
     val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsState()
     val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsState()
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsState()
-    val smartConnectEnabled by viewModel.smartConnectEnabled.collectAsState()
-    val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsState()
-    val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsState()
-    val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsState()
-    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsState()
-    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsState()
     val vpnMtu by viewModel.vpnMtu.collectAsState()
     val vpnState by viewModel.vpnState.collectAsState()
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsState()
@@ -65,11 +59,6 @@ fun OtherConfigScreen(
     var tcpingConcurrencyInput by remember(tcpingConcurrency) { mutableStateOf(tcpingConcurrency.toString()) }
     var urlTestConcurrencyInput by remember(urlTestConcurrency) { mutableStateOf(urlTestConcurrency.toString()) }
     var bandwidthTestConcurrencyInput by remember(bandwidthTestConcurrency) { mutableStateOf(bandwidthTestConcurrency.toString()) }
-    var smartConnectTcpingPercentInput by remember(smartConnectTcpingPercent) { mutableStateOf(smartConnectTcpingPercent.toString()) }
-    var smartConnectUrlTestPercentInput by remember(smartConnectUrlTestPercent) { mutableStateOf(smartConnectUrlTestPercent.toString()) }
-    var smartConnectSpeedTestPercentInput by remember(smartConnectSpeedTestPercent) { mutableStateOf(smartConnectSpeedTestPercent.toString()) }
-    var hysteriaUpMbpsInput by remember(hysteriaUpMbps) { mutableStateOf(hysteriaUpMbps.toString()) }
-    var hysteriaDownMbpsInput by remember(hysteriaDownMbps) { mutableStateOf(hysteriaDownMbps.toString()) }
     var mtuInput by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
 
     LaunchedEffect(
@@ -79,11 +68,6 @@ fun OtherConfigScreen(
         tcpingConcurrency,
         urlTestConcurrency,
         bandwidthTestConcurrency,
-        smartConnectTcpingPercent,
-        smartConnectUrlTestPercent,
-        smartConnectSpeedTestPercent,
-        hysteriaUpMbps,
-        hysteriaDownMbps,
         vpnMtu
     ) {
         tcpingTimeoutInput = tcpingTestTimeoutMs.toString()
@@ -92,11 +76,6 @@ fun OtherConfigScreen(
         tcpingConcurrencyInput = tcpingConcurrency.toString()
         urlTestConcurrencyInput = urlTestConcurrency.toString()
         bandwidthTestConcurrencyInput = bandwidthTestConcurrency.toString()
-        smartConnectTcpingPercentInput = smartConnectTcpingPercent.toString()
-        smartConnectUrlTestPercentInput = smartConnectUrlTestPercent.toString()
-        smartConnectSpeedTestPercentInput = smartConnectSpeedTestPercent.toString()
-        hysteriaUpMbpsInput = hysteriaUpMbps.toString()
-        hysteriaDownMbpsInput = hysteriaDownMbps.toString()
         mtuInput = vpnMtu.toString()
     }
 
@@ -197,98 +176,6 @@ fun OtherConfigScreen(
                     )
                 }
 
-            }
-
-            OtherConfigSection(
-                title = "智能连接",
-                description = "关闭后，主页连接会直接使用已选节点；未选择节点时使用当前列表第一个节点。"
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "启用智能连接",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "按 TCPing → URL Test 204 → 5MB 下载测速逐步筛选节点",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = smartConnectEnabled,
-                        onCheckedChange = { viewModel.setSmartConnectEnabled(it) },
-                        colors = visibleSwitchColors()
-                    )
-                }
-                OtherConfigNumberField(
-                    label = "TCPing 节点比例 (%)",
-                    value = smartConnectTcpingPercentInput,
-                    onValueChange = {
-                        smartConnectTcpingPercentInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setSmartConnectTcpingPercent(value.coerceIn(1, 100))
-                        }
-                    }
-                )
-                OtherConfigNumberField(
-                    label = "URL Test 候选比例 (%)",
-                    value = smartConnectUrlTestPercentInput,
-                    onValueChange = {
-                        smartConnectUrlTestPercentInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setSmartConnectUrlTestPercent(value.coerceIn(1, 100))
-                        }
-                    }
-                )
-                OtherConfigNumberField(
-                    label = "5MB 测速候选比例 (%)",
-                    value = smartConnectSpeedTestPercentInput,
-                    onValueChange = {
-                        smartConnectSpeedTestPercentInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setSmartConnectSpeedTestPercent(value.coerceIn(1, 100))
-                        }
-                    }
-                )
-            }
-
-            OtherConfigSection(
-                title = "Hysteria 最大带宽 (Up/Dw)",
-                description = "单位 Mbps，仅对 Hysteria2 节点生效；修改后下次连接生效，输入 0 表示不设置。"
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OtherConfigNumberField(
-                        label = "Up",
-                        value = hysteriaUpMbpsInput,
-                        onValueChange = {
-                            hysteriaUpMbpsInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setHysteriaUpMbps(value.coerceIn(0, 100_000))
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    OtherConfigNumberField(
-                        label = "Dw",
-                        value = hysteriaDownMbpsInput,
-                        onValueChange = {
-                            hysteriaDownMbpsInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setHysteriaDownMbps(value.coerceIn(0, 100_000))
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
             }
 
             OtherConfigSection(
