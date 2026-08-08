@@ -27,9 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -39,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -93,8 +90,6 @@ fun NodeListScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    var showSearch by remember { mutableStateOf(false) }
-    var keyword by remember { mutableStateOf("") }
     var isClosing by remember { mutableStateOf(false) }
     var favoriteRemovalCandidate by remember { mutableStateOf<Node?>(null) }
     var skipConfirmationForSessionChecked by remember { mutableStateOf(false) }
@@ -130,7 +125,6 @@ fun NodeListScreen(
         backEnabled = !isClosing,
         actions = {
             NodeListTopActions(
-                showSearch = showSearch,
                 enabled = !isClosing,
                 onImportFromClipboard = {
                     if (isClosing) return@NodeListTopActions
@@ -151,13 +145,6 @@ fun NodeListScreen(
                     if (isClosing) return@NodeListTopActions
                     onScanQrCode()
                 },
-                onToggleSearch = {
-                    if (isClosing) return@NodeListTopActions
-                    showSearch = !showSearch
-                    if (!showSearch) {
-                        keyword = ""
-                    }
-                },
                 onRefresh = onRefresh
             )
         }
@@ -170,9 +157,6 @@ fun NodeListScreen(
             selectedSubscriptionSourceId = selectedSubscriptionSourceId,
             favoriteSourceNodeIds = favoriteSourceNodeIds,
             isTesting = isTesting,
-            showSearch = showSearch,
-            keyword = keyword,
-            onKeywordChange = { keyword = it },
             onNodeSelected = handleNodeSelected,
             onCategoryChange = onCategoryChange,
             onSubscriptionSourceChange = onSubscriptionSourceChange,
@@ -248,11 +232,9 @@ fun NodeListScreen(
 
 @Composable
 private fun NodeListTopActions(
-    showSearch: Boolean,
     enabled: Boolean,
     onImportFromClipboard: () -> Unit,
     onScanQrCode: () -> Unit,
-    onToggleSearch: () -> Unit,
     onRefresh: () -> Unit
 ) {
     var showImportMenu by remember { mutableStateOf(false) }
@@ -290,20 +272,6 @@ private fun NodeListTopActions(
     }
 
     IconButton(
-        onClick = onToggleSearch,
-        enabled = enabled
-    ) {
-        Icon(
-            imageVector = Icons.Default.Search,
-            contentDescription = "搜索",
-            tint = if (showSearch) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
-        )
-    }
-    IconButton(
         onClick = onRefresh,
         enabled = enabled
     ) {
@@ -324,9 +292,6 @@ private fun NodeListContent(
     selectedSubscriptionSourceId: String?,
     favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
-    showSearch: Boolean,
-    keyword: String,
-    onKeywordChange: (String) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onCategoryChange: (NodeListCategory) -> Unit,
     onSubscriptionSourceChange: (String) -> Unit,
@@ -363,21 +328,8 @@ private fun NodeListContent(
         }
     }
 
-    val filteredNodes = remember(displayNodes, keyword) {
-        val query = keyword.trim()
-        if (query.isBlank()) {
-            displayNodes
-        } else {
-            displayNodes.filter { node ->
-                node.getDisplayName().contains(query, ignoreCase = true) ||
-                    node.name.contains(query, ignoreCase = true) ||
-                    node.country?.contains(query, ignoreCase = true) == true
-            }
-        }
-    }
-
-    LaunchedEffect(pendingScrollToTop, isTesting, frozenNodeOrderIds, filteredNodes.size) {
-        if (pendingScrollToTop && !isTesting && frozenNodeOrderIds == null && filteredNodes.isNotEmpty()) {
+    LaunchedEffect(pendingScrollToTop, isTesting, frozenNodeOrderIds, displayNodes.size) {
+        if (pendingScrollToTop && !isTesting && frozenNodeOrderIds == null && displayNodes.isNotEmpty()) {
             withFrameNanos { }
             listState.scrollToItem(0)
             pendingScrollToTop = false
@@ -403,29 +355,8 @@ private fun NodeListContent(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (showSearch) {
-            OutlinedTextField(
-                value = keyword,
-                onValueChange = onKeywordChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text("输入关键词搜索节点") },
-                trailingIcon = {
-                    if (keyword.isNotEmpty()) {
-                        IconButton(
-                            onClick = { onKeywordChange("") },
-                            enabled = interactionEnabled
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "清空")
-                        }
-                    }
-                }
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-
         when {
-            nodes.isEmpty() -> {
+            displayNodes.isEmpty() -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -440,21 +371,6 @@ private fun NodeListContent(
                 }
             }
 
-            filteredNodes.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "未找到匹配节点",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 16.sp
-                    )
-                }
-            }
-
             else -> {
                 LazyColumn(
                     state = listState,
@@ -463,7 +379,7 @@ private fun NodeListContent(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(
-                        items = filteredNodes,
+                        items = displayNodes,
                         key = { it.id }
                     ) { node ->
                         val isFavorite =
