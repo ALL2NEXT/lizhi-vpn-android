@@ -221,6 +221,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_TCPING_PERCENT)
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
+    val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
     val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
     val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_UP_MBPS)
@@ -851,6 +852,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSmartConnectEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setSmartConnectEnabled(enabled)
+        }
+    }
+
+    fun setDisconnectRecoveryEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDisconnectRecoveryEnabled(enabled)
         }
     }
 

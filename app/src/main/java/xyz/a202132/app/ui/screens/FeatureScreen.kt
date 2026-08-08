@@ -40,6 +40,7 @@ fun FeatureScreen(
     val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsState()
     val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsState()
     val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsState()
+    val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsState()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsState()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsState()
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsState()
@@ -142,6 +143,24 @@ fun FeatureScreen(
                             viewModel.setSmartConnectSpeedTestPercent(value.coerceIn(1, 100))
                         }
                     }
+                )
+            }
+
+            FeatureSection(
+                title = "断线恢复",
+                description = "VPN 连接后每 5 秒检测一次 204；连续三次失败时刷新当前订阅，并按 IP、名称的顺序匹配原节点后自动重连（忽略端口）。",
+                titleAction = {
+                    Switch(
+                        checked = disconnectRecoveryEnabled,
+                        onCheckedChange = { viewModel.setDisconnectRecoveryEnabled(it) },
+                        colors = featureSwitchColors()
+                    )
+                }
+            ) {
+                Text(
+                    text = "首次失败后会每隔 1 秒再确认两次，避免网络抖动触发重连。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 

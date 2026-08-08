@@ -86,11 +86,23 @@ class BoxVpnService : VpnService() {
     private var platformInterface: BoxPlatformInterface? = null
     private val configGenerator = SingBoxConfigGenerator()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private lateinit var disconnectRecoveryManager: DisconnectRecoveryManager
     @Volatile private var isStopping = false
     
     override fun onCreate() {
         super.onCreate()
         instance = this
+        disconnectRecoveryManager = DisconnectRecoveryManager(
+            context = applicationContext,
+            scope = serviceScope,
+            socksPortProvider = { getInternalSocksPort() },
+            isVpnRunning = { isRunning && !isStopping },
+            reconnect = { node, mode ->
+                withContext(Dispatchers.Main) {
+                    ServiceManager.startVpn(applicationContext, node, mode)
+                }
+            }
+        )
         createNotificationChannel()
     }
     
@@ -321,6 +333,7 @@ class BoxVpnService : VpnService() {
                     // 通知UI更新
                     ServiceManager.notifyStateChange()
                 }
+                disconnectRecoveryManager.start()
                 
                 Log.d(TAG, "VPN started successfully with libbox")
                 Log.i(TAG, "VPN started successfully")
@@ -896,6 +909,9 @@ class BoxVpnService : VpnService() {
     
     private fun cleanupResources() {
         try {
+            if (::disconnectRecoveryManager.isInitialized) {
+                disconnectRecoveryManager.stop()
+            }
             currentInternalSocksPort = null
             // 保存引用以便后续清理
             val pi = platformInterface

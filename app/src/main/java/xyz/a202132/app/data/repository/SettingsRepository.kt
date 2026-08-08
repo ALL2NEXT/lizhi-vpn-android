@@ -53,6 +53,7 @@ class SettingsRepository(private val context: Context) {
         private val SMART_CONNECT_ENABLED = booleanPreferencesKey("smart_connect_enabled")
         private val SMART_CONNECT_URL_TEST_PERCENT = intPreferencesKey("smart_connect_url_test_percent")
         private val SMART_CONNECT_SPEED_TEST_PERCENT = intPreferencesKey("smart_connect_speed_test_percent")
+        private val DISCONNECT_RECOVERY_ENABLED = booleanPreferencesKey("disconnect_recovery_enabled")
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
@@ -369,6 +370,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSmartConnectSpeedTestPercent(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[SMART_CONNECT_SPEED_TEST_PERCENT] = value.coerceIn(1, 100)
+        }
+    }
+
+    val disconnectRecoveryEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[DISCONNECT_RECOVERY_ENABLED] ?: xyz.a202132.app.AppConfig.DISCONNECT_RECOVERY_ENABLED
+    }
+
+    suspend fun setDisconnectRecoveryEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[DISCONNECT_RECOVERY_ENABLED] = enabled
         }
     }
 

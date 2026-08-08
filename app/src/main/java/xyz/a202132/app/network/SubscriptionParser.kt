@@ -4,6 +4,10 @@ import android.util.Base64
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import android.net.Uri
@@ -44,6 +48,35 @@ class SubscriptionParser {
             Result.success(parseSubscription(content))
         } catch (e: Exception) {
             Log.e(tag, "Failed to fetch subscription: $url", e)
+            Result.failure(e)
+        }
+    }
+
+    /** 使用指定网络客户端拉取订阅，供 VPN 断线后通过物理网络刷新当前订阅。 */
+    suspend fun fetchAndParseWithClient(
+        url: String,
+        client: OkHttpClient,
+        encrypted: Boolean = false
+    ): Result<List<Node>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder().url(url).get().build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("订阅接口返回 HTTP ${response.code}")
+                }
+                val raw = response.body?.string()
+                    ?: throw IllegalStateException("订阅接口返回空内容")
+                val content = if (encrypted) {
+                    val route = response.header(CLIENT_IP_HEADER)
+                        ?: throw IllegalStateException("加密订阅缺少 $CLIENT_IP_HEADER 响应头")
+                    RuntimeTuner.c1(raw, route)
+                } else {
+                    raw
+                }
+                Result.success(parseSubscription(content))
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to fetch subscription with custom client: $url", e)
             Result.failure(e)
         }
     }
