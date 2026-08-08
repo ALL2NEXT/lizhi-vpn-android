@@ -145,24 +145,6 @@ fun MainScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("\uD83D\uDD0C TCPing") },
-                                    onClick = {
-                                        showToolsMenu = false
-                                        if (viewModel.showNodeListForTest("tcping")) {
-                                            onOpenNodeList()
-                                        }
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("\uD83C\uDF10 URL Test") },
-                                    onClick = {
-                                        showToolsMenu = false
-                                        if (viewModel.showNodeListForTest("urltest")) {
-                                            onOpenNodeList()
-                                        }
-                                    }
-                                )
-                                DropdownMenuItem(
                                     text = { Text("\uD83E\uDDF9 隐藏不合格节点") },
                                     onClick = {
                                         showToolsMenu = false

@@ -209,6 +209,8 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onImportFromText = { importNodesToFavorites(it, false, null) },
                                     onScanQrCode = { navigateTo(AppRoute.QR_SCANNER) },
+                                    onTcpingTest = { viewModel.testAllNodes() },
+                                    onUrlTest = { viewModel.urlTestAllNodes() },
                                     onRefresh = { viewModel.refreshNodes() },
                                     onBack = { navController.popBackStack() }
                                 )

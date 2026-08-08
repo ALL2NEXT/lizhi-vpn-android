@@ -26,13 +26,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -86,6 +87,8 @@ fun NodeListScreen(
     onSkipFavoriteRemovalConfirmationForSession: () -> Unit,
     onImportFromText: (String) -> Unit,
     onScanQrCode: () -> Unit,
+    onTcpingTest: () -> Unit,
+    onUrlTest: () -> Unit,
     onRefresh: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -118,6 +121,29 @@ fun NodeListScreen(
         }
     }
 
+    val handleImportFromClipboard = {
+        if (!isClosing) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clipText = clipboard.primaryClip
+                ?.takeIf { it.itemCount > 0 }
+                ?.getItemAt(0)
+                ?.coerceToText(context)
+                ?.toString()
+                ?.trim()
+            if (clipText.isNullOrBlank()) {
+                Toast.makeText(context, "\u526a\u5207\u677f\u4e3a\u7a7a", Toast.LENGTH_SHORT).show()
+            } else {
+                onImportFromText(clipText)
+            }
+        }
+    }
+
+    val handleScanQrCode = {
+        if (!isClosing) {
+            onScanQrCode()
+        }
+    }
+
     AppScreenScaffold(
         title = "节点列表",
         subtitle = testingLabel,
@@ -126,25 +152,8 @@ fun NodeListScreen(
         actions = {
             NodeListTopActions(
                 enabled = !isClosing,
-                onImportFromClipboard = {
-                    if (isClosing) return@NodeListTopActions
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clipText = clipboard.primaryClip
-                        ?.takeIf { it.itemCount > 0 }
-                        ?.getItemAt(0)
-                        ?.coerceToText(context)
-                        ?.toString()
-                        ?.trim()
-                    if (clipText.isNullOrBlank()) {
-                        Toast.makeText(context, "\u526a\u5207\u677f\u4e3a\u7a7a", Toast.LENGTH_SHORT).show()
-                    } else {
-                        onImportFromText(clipText)
-                    }
-                },
-                onScanQrCode = {
-                    if (isClosing) return@NodeListTopActions
-                    onScanQrCode()
-                },
+                onTcpingTest = onTcpingTest,
+                onUrlTest = onUrlTest,
                 onRefresh = onRefresh
             )
         }
@@ -157,6 +166,8 @@ fun NodeListScreen(
             selectedSubscriptionSourceId = selectedSubscriptionSourceId,
             favoriteSourceNodeIds = favoriteSourceNodeIds,
             isTesting = isTesting,
+            onImportFromClipboard = handleImportFromClipboard,
+            onScanQrCode = handleScanQrCode,
             onNodeSelected = handleNodeSelected,
             onCategoryChange = onCategoryChange,
             onSubscriptionSourceChange = onSubscriptionSourceChange,
@@ -233,42 +244,30 @@ fun NodeListScreen(
 @Composable
 private fun NodeListTopActions(
     enabled: Boolean,
-    onImportFromClipboard: () -> Unit,
-    onScanQrCode: () -> Unit,
+    onTcpingTest: () -> Unit,
+    onUrlTest: () -> Unit,
     onRefresh: () -> Unit
 ) {
-    var showImportMenu by remember { mutableStateOf(false) }
+    IconButton(
+        onClick = onTcpingTest,
+        enabled = enabled
+    ) {
+        Icon(
+            imageVector = Icons.Default.NetworkCheck,
+            contentDescription = "TCPing",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 
-    Box {
-        IconButton(
-            onClick = { showImportMenu = true },
-            enabled = enabled
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "\u5bfc\u5165\u8282\u70b9",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        DropdownMenu(
-            expanded = showImportMenu,
-            onDismissRequest = { showImportMenu = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text("\u4ece\u526a\u5207\u677f\u5bfc\u5165") },
-                onClick = {
-                    showImportMenu = false
-                    onImportFromClipboard()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("\u626b\u63cf\u4e8c\u7ef4\u7801") },
-                onClick = {
-                    showImportMenu = false
-                    onScanQrCode()
-                }
-            )
-        }
+    IconButton(
+        onClick = onUrlTest,
+        enabled = enabled
+    ) {
+        Icon(
+            imageVector = Icons.Default.Language,
+            contentDescription = "URL Test",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 
     IconButton(
@@ -292,6 +291,8 @@ private fun NodeListContent(
     selectedSubscriptionSourceId: String?,
     favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
+    onImportFromClipboard: () -> Unit,
+    onScanQrCode: () -> Unit,
     onNodeSelected: (Node) -> Unit,
     onCategoryChange: (NodeListCategory) -> Unit,
     onSubscriptionSourceChange: (String) -> Unit,
@@ -355,6 +356,29 @@ private fun NodeListContent(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
+        if (category == NodeListCategory.FAVORITES) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                NodeListImportAction(
+                    icon = Icons.Default.ContentPaste,
+                    text = "\u526a\u5207\u677f\u5bfc\u5165",
+                    enabled = interactionEnabled && !isTesting,
+                    onClick = onImportFromClipboard,
+                    modifier = Modifier.weight(1f)
+                )
+                NodeListImportAction(
+                    icon = Icons.Default.QrCodeScanner,
+                    text = "\u4e8c\u7ef4\u7801\u5bfc\u5165",
+                    enabled = interactionEnabled && !isTesting,
+                    onClick = onScanQrCode,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
         when {
             displayNodes.isEmpty() -> {
                 Box(
@@ -406,6 +430,53 @@ private fun NodeListContent(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) { }
+            )
+        }
+    }
+}
+
+@Composable
+private fun NodeListImportAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = text,
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
             )
         }
     }

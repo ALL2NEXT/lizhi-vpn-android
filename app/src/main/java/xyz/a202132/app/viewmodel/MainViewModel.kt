@@ -872,29 +872,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    /**
-     * 打开节点列表并开始指定类型的测试
-     */
-    fun showNodeListForTest(testType: String): Boolean {
-        if (GlobalTestExecution.isFetching()) {
-            _error.value = GlobalTestExecution.fetchingHint()
-            return false
-        }
-        if (_isTesting.value || GlobalTestExecution.mutex.isLocked) {
-            _error.value = GlobalTestExecution.busyHint()
-            return false
-        }
-        if (testType != "tcping" && testType != "urltest") {
-            return false
-        }
-
-        when (testType) {
-            "tcping" -> testAllNodes()
-            "urltest" -> urlTestAllNodes()
-        }
-        return true
-    }
-
     fun setRememberLastSelectedNodeEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setRememberLastSelectedNodeEnabled(enabled)
