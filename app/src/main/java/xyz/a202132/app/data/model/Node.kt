@@ -5,6 +5,7 @@ import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import xyz.a202132.app.util.CryptoUtils
+import xyz.a202132.app.util.CountryCodeResolver
 
 /**
  * 代理节点数据模型
@@ -70,13 +71,16 @@ data class Node(
             i += Character.charCount(codePoint)
         }
 
-        // 2. 回退至根据国家代码生成
-        if (country.isNullOrEmpty() || country.length != 2) {
+        // 2. 优先使用显式国家代码，其次从节点名称识别国家名或代码
+        val resolvedCountry = CountryCodeResolver.fromNodeName(name)
+            ?: CountryCodeResolver.normalizeCountryCode(country)
+            ?: CountryCodeResolver.fromNodeName(countryName)
+        if (resolvedCountry == null) {
             return "🌐"
         }
         return try {
-            val firstChar = Character.codePointAt(country.uppercase(), 0) - 0x41 + 0x1F1E6
-            val secondChar = Character.codePointAt(country.uppercase(), 1) - 0x41 + 0x1F1E6
+            val firstChar = resolvedCountry[0].code - 'A'.code + 0x1F1E6
+            val secondChar = resolvedCountry[1].code - 'A'.code + 0x1F1E6
             String(Character.toChars(firstChar)) + String(Character.toChars(secondChar))
         } catch (e: Exception) {
             "🌐"

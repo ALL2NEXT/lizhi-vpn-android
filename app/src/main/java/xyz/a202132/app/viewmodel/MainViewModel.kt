@@ -33,6 +33,7 @@ import xyz.a202132.app.network.SubscriptionListParser
 import xyz.a202132.app.network.SubscriptionParser
 import xyz.a202132.app.network.DownloadManager
 import xyz.a202132.app.network.NodeTestProxyManager
+import xyz.a202132.app.network.NodeLocationResolver
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.service.ServiceManager
@@ -243,6 +244,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             migrateRawLinksToEncrypted()
             logRawLinkEncryptionStats("startup_migration")
+        }
+
+        // 为历史缓存节点补充地区信息；名称识别优先，IP 查询在后台执行。
+        viewModelScope.launch(Dispatchers.IO) {
+            enrichAndPersistNodeLocations(nodeDao.getAllNodes().first())
         }
 
         // 启动时加载数据
@@ -619,6 +625,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     nodeDao.getSubscriptionNodes().first()
                 }
+                scheduleNodeLocationEnrichment(fetchedNodes)
 
                 if (BuildConfig.DEBUG) {
                     viewModelScope.launch(Dispatchers.IO) {
@@ -641,6 +648,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } finally {
             _isLoading.value = false
             GlobalTestExecution.endFetching()
+        }
+    }
+
+    private fun scheduleNodeLocationEnrichment(nodes: List<Node>) {
+        if (nodes.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            enrichAndPersistNodeLocations(nodes)
+        }
+    }
+
+    private suspend fun enrichAndPersistNodeLocations(nodes: List<Node>) {
+        NodeLocationResolver.enrichNodes(nodes).forEach { enrichedNode ->
+            val currentNode = nodeDao.getNodeById(enrichedNode.id) ?: return@forEach
+            if (
+                currentNode.country != enrichedNode.country ||
+                currentNode.countryName != enrichedNode.countryName
+            ) {
+                nodeDao.updateNode(
+                    currentNode.copy(
+                        country = enrichedNode.country,
+                        countryName = enrichedNode.countryName
+                    )
+                )
+            }
         }
     }
 
