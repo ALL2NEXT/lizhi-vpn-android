@@ -61,11 +61,15 @@ class SubscriptionListParser {
             ?.trim()
             ?: ""
         val enabled = source.get("enabled")?.let { readBoolean(it) } ?: true
+        val encrypted = source.get("encrypted")?.let { readBoolean(it) }
+            ?: source.get("isEncrypted")?.let { readBoolean(it) }
+            ?: false
         return SubscriptionSource(
             id = "",
             name = name,
             url = url,
-            enabled = enabled
+            enabled = enabled,
+            encrypted = encrypted
         )
     }
 

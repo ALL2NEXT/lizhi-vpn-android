@@ -8,6 +8,7 @@
  * Public client endpoint:
  *   GET /api/client
  *   GET /api/client?refresh=1   // refresh is handled by the app; query is tolerated for compatibility
+ *   GET /api/subscription/<id>  // encrypted Worker-managed plaintext nodes
  *
  * Admin endpoints:
  *   GET  /<ADMIN_UUID>
@@ -19,6 +20,11 @@
 const STATE_KEY = "fireflyvpn:state:v1";
 const USERS_INDEX_KEY = "fireflyvpn:users:index:v1";
 const USER_KEY_PREFIX = "fireflyvpn:user:v1:";
+const CLIENT_IP_HEADER = "X-Firefly-Client-IP";
+const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
+const PRIVATE_B64_ALPHABET =
+  "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
+const TEXT_ENCODER = new TextEncoder();
 // Change this UUID to customize the private management route.
 const ADMIN_UUID = "3e9a0eed-6a29-4d16-91b1-3adae4bd88e6";
 const ADMIN_BASE_PATH = `/${ADMIN_UUID}`;
@@ -61,6 +67,10 @@ export default {
         return handleClient(request, env);
       }
 
+      if (path.startsWith("/api/subscription/") && request.method === "GET") {
+        return handleManagedSubscription(path, request, env);
+      }
+
       if (path.startsWith("/api/account/")) {
         return handleAccount(path, request, env);
       }
@@ -81,20 +91,48 @@ export default {
 
 async function handleClient(request, env) {
   const state = await readState(env);
+  const origin = new URL(request.url).origin;
 
   return json({
     subscriptions: state.subscriptions
       .filter((source) => source.enabled)
-      .map(({ id, name, enabled, url }) => ({
-        id,
-        name,
-        enabled,
-        url,
+      .map((source) => ({
+        id: source.id,
+        name: source.name,
+        enabled: source.enabled,
+        encrypted: source.content ? true : source.encrypted,
+        url: source.content
+          ? `${origin}/api/subscription/${encodeURIComponent(source.id)}`
+          : source.url,
       })),
     notice: state.notice,
     appUpdate: state.appUpdate,
     settings: state.settings,
     generatedAt: new Date().toISOString(),
+  });
+}
+
+async function handleManagedSubscription(path, request, env) {
+  const id = path.slice("/api/subscription/".length);
+  if (!/^\d+$/.test(id)) {
+    return json({ error: "subscription_not_found" }, 404);
+  }
+
+  const state = await readState(env);
+  const source = state.subscriptions.find((item) => item.id === id);
+  if (!source || !source.enabled || !source.content) {
+    return json({ error: "subscription_not_found" }, 404);
+  }
+
+  const clientIp = getClientIp(request);
+  const protectedContent = protectSubscription(source.content, clientIp);
+  return new Response(protectedContent, {
+    headers: {
+      ...corsHeaders(),
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      [CLIENT_IP_HEADER]: clientIp,
+    },
   });
 }
 
@@ -359,6 +397,112 @@ function boundedBytes(value) {
     : 0;
 }
 
+function normalizeManagedContent(value) {
+  if (typeof value !== "string") return "";
+  const content = value.replace(/\r\n?/g, "\n").trim();
+  if (TEXT_ENCODER.encode(content).length > MAX_MANAGED_SUBSCRIPTION_BYTES) {
+    throw new Error("managed_subscription_too_large");
+  }
+  return content;
+}
+
+function privateBase64Encode(value) {
+  const bytes = TEXT_ENCODER.encode(value);
+  let result = "";
+  let chunk = "";
+
+  for (let i = 0; i < bytes.length; i += 3) {
+    const remaining = bytes.length - i;
+    const a = bytes[i];
+    const b = remaining > 1 ? bytes[i + 1] : 0;
+    const c = remaining > 2 ? bytes[i + 2] : 0;
+    const block = (a << 16) | (b << 8) | c;
+
+    chunk += PRIVATE_B64_ALPHABET[(block >>> 18) & 0x3f];
+    chunk += PRIVATE_B64_ALPHABET[(block >>> 12) & 0x3f];
+    chunk += remaining > 1
+      ? PRIVATE_B64_ALPHABET[(block >>> 6) & 0x3f]
+      : "=";
+    chunk += remaining > 2
+      ? PRIVATE_B64_ALPHABET[block & 0x3f]
+      : "=";
+    if (chunk.length >= 0x8000) {
+      result += chunk;
+      chunk = "";
+    }
+  }
+
+  return result + chunk;
+}
+
+function parseIpv4Tail(value) {
+  let address = value;
+  if (address.includes(":") && address.includes(".")) {
+    address = address.slice(address.lastIndexOf(":") + 1);
+  }
+
+  const parts = address.split(".");
+  if (parts.length !== 4) return null;
+  const numbers = parts.map((part) => {
+    if (!/^\d{1,3}$/.test(part)) return NaN;
+    return Number(part);
+  });
+  if (numbers.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return null;
+  }
+  return numbers[3];
+}
+
+function shiftFromClientIp(clientIp) {
+  let address = String(clientIp || "").split(",", 1)[0].trim();
+  if (address.startsWith("[") && address.includes("]")) {
+    address = address.slice(1, address.indexOf("]"));
+  }
+
+  const ipv4Tail = parseIpv4Tail(address);
+  if (ipv4Tail !== null) return ipv4Tail % 64;
+
+  if (address.includes(":")) {
+    const lastGroup = address.slice(address.lastIndexOf(":") + 1);
+    if (lastGroup === "") return 0;
+    if (/^[a-f\d]{1,4}$/i.test(lastGroup)) {
+      return parseInt(lastGroup, 16) % 64;
+    }
+  }
+
+  throw new Error("invalid_cf_connecting_ip");
+}
+
+function protectSubscription(value, clientIp) {
+  const shift = shiftFromClientIp(clientIp);
+  const encoded = privateBase64Encode(value);
+  if (shift === 0) return encoded;
+
+  let result = "";
+  let chunk = "";
+  for (const character of encoded) {
+    if (character === "=") {
+      chunk += character;
+      continue;
+    }
+    const index = PRIVATE_B64_ALPHABET.indexOf(character);
+    if (index < 0) throw new Error("private_base64_encoding_failed");
+    chunk += PRIVATE_B64_ALPHABET[(index + shift) % 64];
+    if (chunk.length >= 0x8000) {
+      result += chunk;
+      chunk = "";
+    }
+  }
+  return result + chunk;
+}
+
+function getClientIp(request) {
+  const clientIp = request.headers.get("CF-Connecting-IP");
+  if (!clientIp) throw new Error("missing_cf_connecting_ip");
+  shiftFromClientIp(clientIp);
+  return clientIp.trim();
+}
+
 async function readState(env) {
   if (!env.CONFIG) {
     throw new Error("Missing KV binding CONFIG");
@@ -384,20 +528,31 @@ function normalizeState(input) {
 
   const subscriptions = list
     .filter((item) => item && typeof item === "object")
-    .map((item) => ({
-      url: typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
-        ? item.url.trim()
-        : "",
-      name: cleanText(item.name || item.title),
-      enabled: parseFlag(item.enabled, true),
-      remark: cleanText(item.remark || item.note).slice(0, 500),
-    }))
-    .filter((item) => item.url)
+    .map((item) => {
+      const content = normalizeManagedContent(
+        item.content ?? item.managedContent ?? item.nodesText,
+      );
+      return {
+        url: typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
+          ? item.url.trim()
+          : "",
+        name: cleanText(item.name || item.title),
+        enabled: parseFlag(item.enabled, true),
+        encrypted: content
+          ? true
+          : parseFlag(item.encrypted ?? item.isEncrypted, false),
+        content,
+        remark: cleanText(item.remark || item.note).slice(0, 500),
+      };
+    })
+    .filter((item) => item.url || item.content)
     .map((item, index) => ({
       id: String(index + 1),
       name: item.name || `线路${index + 1}`,
       url: item.url,
       enabled: item.enabled,
+      encrypted: item.encrypted,
+      content: item.content,
       remark: item.remark,
     }));
 
@@ -461,6 +616,7 @@ function corsHeaders() {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
     "access-control-allow-headers": "Content-Type, Authorization",
+    "access-control-expose-headers": CLIENT_IP_HEADER,
   };
 }
 
@@ -569,7 +725,7 @@ function adminHtml() {
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
      <button class="secondary" onclick="addSource()">添加线路</button>
-     <small class="hint">Worker 保存线路名称、订阅地址和后台备注；备注仅供后台记忆，不会下发给 App。线路序号按有效线路自动生成 1、2、3…；详细节点内容由 App 直接请求并解析。</small>
+     <small class="hint">每条线路可填写外部订阅地址，或直接粘贴纯文本节点。填写纯文本后会优先使用 Worker 托管内容：明文保存在 CONFIG KV，客户端请求时由 Worker 按访问 IP 自动加密，且无需填写订阅地址。后台备注不会下发给 App。</small>
      <button type="button" onclick="pushSection('subscriptions')">推送</button>
    </section>
 
@@ -721,11 +877,29 @@ function addSource(source) {
   row.className = 'source-row';
   row.innerHTML = '<div class="grid">' +
     '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
-    '<div class="field"><label>订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '"></label></div>' +
+    '<div class="field"><label>外部订阅地址（与纯文本二选一）<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/sub"></label></div>' +
     '<div class="field"><label>后台备注（仅后台保存）<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="例如：备用线路、长期稳定"></label></div>' +
-    '</div><label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
+    '</div><div class="field"><label>纯文本节点（每行一个，填写后由 Worker 自动加密）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div>' +
+    '<label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
+    '<label class="check"><input data-field="encrypted" type="checkbox" ' + (source.encrypted === true ? 'checked' : '') + '>此接口已加密（客户端使用 Native 解码）</label>' +
     '<div class="row-actions"><button class="danger" type="button">删除</button></div>';
   row.querySelector('.danger').onclick = function() { row.remove(); };
+  const contentInput = row.querySelector('[data-field="content"]');
+  const encryptedInput = row.querySelector('[data-field="encrypted"]');
+  let manualEncrypted = source.content ? false : source.encrypted === true;
+  let wasManaged = Boolean(source.content);
+  function syncEncryptionField() {
+    const managed = Boolean(contentInput.value.trim());
+    if (!wasManaged && managed) manualEncrypted = encryptedInput.checked;
+    encryptedInput.checked = managed ? true : manualEncrypted;
+    encryptedInput.disabled = managed;
+    wasManaged = managed;
+  }
+  encryptedInput.onchange = function() {
+    if (!encryptedInput.disabled) manualEncrypted = encryptedInput.checked;
+  };
+  contentInput.oninput = syncEncryptionField;
+  syncEncryptionField();
   el('subscriptionRows').appendChild(row);
 }
 function fillState(state) {
@@ -755,13 +929,16 @@ function fillState(state) {
 }
 function formState() {
   const subscriptions = Array.from(document.querySelectorAll('.source-row')).map(function(row, index) {
+    const content = row.querySelector('[data-field="content"]').value.trim();
     return {
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: row.querySelector('[data-field="url"]').value.trim(),
       enabled: row.querySelector('[data-field="enabled"]').checked,
+      encrypted: Boolean(content) || row.querySelector('[data-field="encrypted"]').checked,
+      content: content,
       remark: row.querySelector('[data-field="remark"]').value.trim()
     };
-  }).filter(function(item) { return item.url; });
+  }).filter(function(item) { return item.url || item.content; });
   const notice = el('noticeEnabled').checked ? {
     hasNotice: true,
     title: value('noticeTitle'),

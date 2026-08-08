@@ -699,7 +699,7 @@ App 使用的唯一公开接口是 `GET /api/client`：
 ```json
 {
   "subscriptions": [
-    {"id": "1", "name": "线路1", "enabled": true, "url": "https://game.11145149.xyz/"}
+    {"id": "1", "name": "线路1", "enabled": true, "encrypted": false, "url": "https://game.11145149.xyz/"}
   ],
   "settings": {
     "websiteUrl": "https://example.com",
@@ -713,7 +713,9 @@ App 使用的唯一公开接口是 `GET /api/client`：
 }
 ```
 
-APP 手动刷新时会重新请求 `/api/client`，然后直接请求每条线路 URL。`refresh=1` 参数仅为兼容旧版本保留，Worker 不执行上游刷新。公告配置放在 `notice`，版本更新配置放在 `appUpdate`，格式沿用项目现有 `NoticeInfo` 和 `UpdateInfo` 字段。
+APP 手动刷新时会重新请求 `/api/client`，然后直接请求每条线路 URL。`refresh=1` 参数仅为兼容旧版本保留，Worker 不执行上游刷新。`encrypted` 标记该线路正文是否需要客户端 Native 解码；外部订阅仍由 App 直接获取，Worker 只会自动加密后台导入并由其自身托管的纯文本节点。公告配置放在 `notice`，版本更新配置放在 `appUpdate`，格式沿用项目现有 `NoticeInfo` 和 `UpdateInfo` 字段。
+
+管理后台的每条线路也支持直接粘贴纯文本节点（每行一个）。填写纯文本后，该内容会随后台状态保存在 `CONFIG` KV 中，单条线路最多 2 MiB；Worker 会忽略该线路填写的外部 URL，并在 `/api/client` 中自动下发自身的 `/api/subscription/<id>` 地址及 `encrypted: true`。App 请求这个地址时，Worker 才按照当前请求 IP 动态编码返回，公开的 `/api/client` 不包含节点明文。清空纯文本后，线路恢复使用外部订阅地址和手动加密标记。
 
 后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /api/admin/state` 读取，`PUT /api/admin/state` 保存订阅名称、URL 和其他后台配置。线路序号由 Worker 自动生成，详细订阅内容由 APP 直接获取。
 
@@ -736,7 +738,8 @@ APP 手动刷新时会重新请求 `/api/client`，然后直接请求每条线�
             "id": "line1",
             "name": "线路1",
             "url": "https://your-server.com/api/line1",
-            "enabled": true
+            "enabled": true,
+            "encrypted": false
         }
     ]
 }
@@ -749,12 +752,21 @@ APP 手动刷新时会重新请求 `/api/client`，然后直接请求每条线�
 | `subscriptions[].name` | String | ❌ | 线路显示名称，缺省时使用“线路N” |
 | `subscriptions[].url` | String | ✅ | 实际节点订阅地址 |
 | `subscriptions[].enabled` | Boolean / Int | ❌ | 是否启用该线路，默认启用 |
+| `subscriptions[].encrypted` | Boolean / Int | ❌ | 是否按 Native 私有格式解码，默认关闭 |
 
 APP 会并发获取所有启用线路，但会按 `id` 保持每条线路独立；节点列表按 `name` 分组展示，切换线路后测速只作用于当前线路。`subscriptions` 也兼容 `sources`、`list`、`data` 字段名。
 
 ### 2. 节点订阅内容接口
 
 每个 `subscriptions[].url` 返回节点链接列表，每行一个。响应可以是明文或 Base64 编码内容。
+
+当线路的 `encrypted` 为 `true` 时，订阅接口须遵循以下约定：
+
+1. 将节点正文 UTF-8 字节按客户端 Native 中的私有 Base64 表编码。
+2. 取本次请求者 IP 的最后一个 IPv4 段（IPv6 取最后一个十六进制段），对私有表中的字符向前循环位移 `段值 % 64` 位。例如 `1.2.3.4` 位移 4 位；`=` 填充不位移。
+3. 在同一响应中返回 `X-Firefly-Client-IP: <本次用于位移的请求者 IP>`。客户端不会自行猜测公网 IP，以避免 VPN、代理和 NAT 导致解码不一致。
+
+客户端的自定义表、字符位移和双向变换均位于 Native 层，Kotlin 只负责读取标记和传递响应正文/IP；Worker 内置与 Native 一致的服务端编码实现。对于外部订阅地址，Worker 只保存及下发 `encrypted` 标记，不会改写外部响应；对于后台直接导入的纯文本节点，Worker 会作为订阅接口自动执行上述编码响应。
 
 **支持的协议**:
 - `vless://` - VLESS

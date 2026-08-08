@@ -6,6 +6,7 @@
 
 # JNI_OnLoad resolves these classes by their original names in Release builds.
 -keep class xyz.a202132.app.util.SignatureVerifier { *; }
+-keep class xyz.a202132.app.util.RuntimeTuner { *; }
 
 # Keep data models for Gson
 -keep class xyz.a202132.app.data.model.** { *; }

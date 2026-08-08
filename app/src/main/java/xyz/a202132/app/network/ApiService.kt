@@ -1,5 +1,7 @@
 package xyz.a202132.app.network
 
+import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -15,7 +17,7 @@ interface ApiService {
     suspend fun getBackendConfig(@Url url: String): String
 
     @GET
-    suspend fun getSubscription(@Url url: String): String
+    suspend fun getSubscription(@Url url: String): Response<ResponseBody>
 
     @POST
     suspend fun registerAccount(

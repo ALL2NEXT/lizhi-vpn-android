@@ -439,13 +439,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             async {
                 var result = subscriptionParser.fetchAndParse(
                     subscription.url,
-                    backendSettings.value.nodeRequestTimeoutMs
+                    backendSettings.value.nodeRequestTimeoutMs,
+                    subscription.encrypted
                 )
                 if (result.isFailure) {
                     Log.w(tag, "Subscription fetch failed, retrying: ${subscription.name}", result.exceptionOrNull())
                     result = subscriptionParser.fetchAndParse(
                         subscription.url,
-                        backendSettings.value.nodeRequestTimeoutMs
+                        backendSettings.value.nodeRequestTimeoutMs,
+                        subscription.encrypted
                     )
                 }
                 subscription to result

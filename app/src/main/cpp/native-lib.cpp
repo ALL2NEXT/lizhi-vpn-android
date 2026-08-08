@@ -1,9 +1,12 @@
 #include <jni.h>
 #include <android/log.h>
+#include "runtime-tuner.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
 #include <cstdlib>
+#include <stdexcept>
+#include <string>
 
 #define TAG "NativeSecurity"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
@@ -231,6 +234,72 @@ static void nativeVerifySignature(JNIEnv* env, jclass /* clazz */, jobject conte
     }
 }
 
+static jobject utf8Charset(JNIEnv* env) {
+    jclass standardCharsets = env->FindClass("java/nio/charset/StandardCharsets");
+    if (standardCharsets == nullptr) return nullptr;
+    jfieldID utf8Field = env->GetStaticFieldID(
+            standardCharsets, "UTF_8", "Ljava/nio/charset/Charset;");
+    if (utf8Field == nullptr) return nullptr;
+    return env->GetStaticObjectField(standardCharsets, utf8Field);
+}
+
+static std::string toUtf8(JNIEnv* env, jstring value) {
+    if (value == nullptr) throw std::invalid_argument("missing transform input");
+    jobject utf8 = utf8Charset(env);
+    if (utf8 == nullptr) throw std::runtime_error("UTF-8 charset unavailable");
+    jclass stringClass = env->FindClass("java/lang/String");
+    jmethodID getBytes = env->GetMethodID(
+            stringClass, "getBytes", "(Ljava/nio/charset/Charset;)[B");
+    auto* bytes = static_cast<jbyteArray>(env->CallObjectMethod(value, getBytes, utf8));
+    if (bytes == nullptr || env->ExceptionCheck()) {
+        throw std::runtime_error("failed to read transform input");
+    }
+
+    const jsize length = env->GetArrayLength(bytes);
+    std::string result(static_cast<size_t>(length), '\0');
+    if (length > 0) {
+        env->GetByteArrayRegion(bytes, 0, length, reinterpret_cast<jbyte*>(&result[0]));
+    }
+    return result;
+}
+
+static jstring fromUtf8(JNIEnv* env, const std::string& value) {
+    jobject utf8 = utf8Charset(env);
+    if (utf8 == nullptr) return nullptr;
+    jbyteArray bytes = env->NewByteArray(static_cast<jsize>(value.size()));
+    if (bytes == nullptr) return nullptr;
+    if (!value.empty()) {
+        env->SetByteArrayRegion(
+                bytes, 0, static_cast<jsize>(value.size()),
+                reinterpret_cast<const jbyte*>(value.data()));
+    }
+    jclass stringClass = env->FindClass("java/lang/String");
+    jmethodID constructor = env->GetMethodID(
+            stringClass, "<init>", "([BLjava/nio/charset/Charset;)V");
+    return static_cast<jstring>(env->NewObject(stringClass, constructor, bytes, utf8));
+}
+
+static jstring runTransform(JNIEnv* env, jstring value, jstring route, bool reverse) {
+    try {
+        const std::string input = toUtf8(env, value);
+        const std::string routeValue = toUtf8(env, route);
+        return fromUtf8(env, reverse ? rt::b(input, routeValue) : rt::a(input, routeValue));
+    } catch (const std::exception& error) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        jclass exceptionClass = env->FindClass("java/lang/IllegalArgumentException");
+        if (exceptionClass != nullptr) env->ThrowNew(exceptionClass, error.what());
+        return nullptr;
+    }
+}
+
+static jstring nativeC0(JNIEnv* env, jclass, jstring value, jstring route) {
+    return runTransform(env, value, route, false);
+}
+
+static jstring nativeC1(JNIEnv* env, jclass, jstring value, jstring route) {
+    return runTransform(env, value, route, true);
+}
+
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     JNIEnv* env = nullptr;
     if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK || env == nullptr) {
@@ -246,6 +315,20 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
              reinterpret_cast<void*>(nativeVerifySignature)}
     };
     if (env->RegisterNatives(signatureCls, signatureMethods, 1) != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    jclass tunerCls = env->FindClass("xyz/a202132/app/util/RuntimeTuner");
+    if (tunerCls == nullptr) {
+        return JNI_ERR;
+    }
+    JNINativeMethod tunerMethods[] = {
+            {"c0", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+             reinterpret_cast<void*>(nativeC0)},
+            {"c1", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+             reinterpret_cast<void*>(nativeC1)},
+    };
+    if (env->RegisterNatives(tunerCls, tunerMethods, 2) != JNI_OK) {
         return JNI_ERR;
     }
 

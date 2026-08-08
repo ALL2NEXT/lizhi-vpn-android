@@ -10,6 +10,7 @@ import android.net.Uri
 import java.net.URLDecoder
 import java.security.MessageDigest
 import kotlinx.coroutines.withTimeout
+import xyz.a202132.app.util.RuntimeTuner
 
 /**
  * 订阅解析器 - 解析Base64编码的节点列表
@@ -21,13 +22,26 @@ class SubscriptionParser {
 
     suspend fun fetchAndParse(
         url: String,
-        timeoutMs: Long = 25000L
+        timeoutMs: Long = 25000L,
+        encrypted: Boolean = false
     ): Result<List<Node>> {
         return try {
             val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
                 NetworkClient.apiService.getSubscription(url)
             }
-            Result.success(parseSubscription(response))
+            if (!response.isSuccessful) {
+                throw IllegalStateException("订阅接口返回 HTTP ${response.code()}")
+            }
+            val raw = response.body()?.string()
+                ?: throw IllegalStateException("订阅接口返回空内容")
+            val content = if (encrypted) {
+                val route = response.headers()[CLIENT_IP_HEADER]
+                    ?: throw IllegalStateException("加密订阅缺少 $CLIENT_IP_HEADER 响应头")
+                RuntimeTuner.c1(raw, route)
+            } else {
+                raw
+            }
+            Result.success(parseSubscription(content))
         } catch (e: Exception) {
             Log.e(tag, "Failed to fetch subscription: $url", e)
             Result.failure(e)
@@ -375,5 +389,9 @@ class SubscriptionParser {
             .substringBefore("-")
             .trim()
             .toIntOrNull()
+    }
+
+    private companion object {
+        const val CLIENT_IP_HEADER = "X-Firefly-Client-IP"
     }
 }
