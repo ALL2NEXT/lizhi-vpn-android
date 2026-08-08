@@ -1,5 +1,9 @@
 package xyz.a202132.app.ui.screens
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -18,12 +22,19 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
+import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.ui.components.*
 import xyz.a202132.app.ui.dialogs.*
-import xyz.a202132.app.ui.dialogs.SpeedTestDialog
 import xyz.a202132.app.ui.theme.*
 import xyz.a202132.app.viewmodel.MainViewModel
+
+private val WEB_SPEED_TESTS = listOf(
+    "中科大测速（墙内测速）" to AppConfig.USTC_SPEED_TEST_URL,
+    "南大测速（墙内测速）" to AppConfig.NJU_SPEED_TEST_URL,
+    "奈飞测速（墙外测速）" to AppConfig.NETFLIX_SPEED_TEST_URL,
+    "Google测速（墙外测速）" to AppConfig.GOOGLE_SPEED_TEST_URL
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -54,8 +65,6 @@ fun MainScreen(
     val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsState()
     
     // UI状态
-    var showSpeedTestDialog by remember { mutableStateOf(false) }
-    
     // 流量统计
     val uploadSpeed by viewModel.uploadSpeed.collectAsState()
     val downloadSpeed by viewModel.downloadSpeed.collectAsState()
@@ -63,9 +72,6 @@ fun MainScreen(
     val downloadTotal by viewModel.downloadTotal.collectAsState()
     
     // 自动化测试设置/状态
-    val speedTestDownloadTimeoutMs by viewModel.speedTestDownloadTimeoutMs.collectAsState()
-    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsState()
-    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsState()
     // val showBackupFailedDialog by viewModel.showBackupFailedDialog.collectAsState() // Removed
     
     // 显示错误Toast
@@ -139,13 +145,15 @@ fun MainScreen(
                                 expanded = showToolsMenu,
                                 onDismissRequest = { showToolsMenu = false }
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("⚡ 网速测试") },
-                                    onClick = {
-                                        showToolsMenu = false
-                                        showSpeedTestDialog = true
-                                    }
-                                )
+                                WEB_SPEED_TESTS.forEach { (label, url) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            showToolsMenu = false
+                                            openWebSpeedTest(context, url)
+                                        }
+                                    )
+                                }
                             }
                         }
                         
@@ -318,18 +326,6 @@ fun MainScreen(
         )
     }
     
-    // 网速测试弹窗
-    if (showSpeedTestDialog) {
-        SpeedTestDialog(
-            node = currentNode,
-            useNodeBandwidth = currentNode != null && vpnState == VpnState.CONNECTED,
-            downloadTimeoutMs = speedTestDownloadTimeoutMs,
-            hysteriaUpMbps = hysteriaUpMbps,
-            hysteriaDownMbps = hysteriaDownMbps,
-            onDismiss = { showSpeedTestDialog = false }
-        )
-    }
-
     // 下载状态监听
     val downloadState by viewModel.downloadState.collectAsState()
     var showPermissionDialog by remember { mutableStateOf(false) }
@@ -469,4 +465,12 @@ fun MainScreen(
         )
     }
 
+}
+
+private fun openWebSpeedTest(context: Context, url: String) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "没有可用的浏览器", Toast.LENGTH_SHORT).show()
+    }
 }

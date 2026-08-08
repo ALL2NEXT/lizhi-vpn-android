@@ -1,15 +1,5 @@
 package xyz.a202132.app
 
-import org.json.JSONArray
-
-/**
- * 测速大小选项
- */
-data class SpeedTestSize(
-    val label: String,
-    val bytes: Long
-)
-
 /**
  * 应用配置常量
  */
@@ -65,37 +55,10 @@ object AppConfig {
     // Speed Test - Cloudflare 网速测试
     const val SPEED_TEST_DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
     const val SPEED_TEST_UPLOAD_URL = "https://speed.cloudflare.com/__up"
+    const val USTC_SPEED_TEST_URL = "https://test.ustc.edu.cn/"
+    const val NJU_SPEED_TEST_URL = "https://test.nju.edu.cn/"
+    const val NETFLIX_SPEED_TEST_URL = "https://fast.com/"
+    const val GOOGLE_SPEED_TEST_URL = "https://fiber.google.com/speedtest/"
     const val AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS = 25000L // 单次下载带宽测试超时（毫秒），设为0则无限制
     const val AUTO_TEST_BANDWIDTH_UPLOAD_TIMEOUT_MS = 30000L // 单次上传带宽测试超时（毫秒），设为0则无限制
-    const val SPEED_TEST_JSON = """
-[
-  {"label": "1MB", "bytes": 1000000},
-  {"label": "10MB", "bytes": 10000000},
-  {"label": "25MB", "bytes": 25000000},
-  {"label": "50MB", "bytes": 50000000}
-]
-"""
-
-    /**
-     * 解析测速大小 JSON 数据
-     */
-    fun getSpeedTestSizes(): List<SpeedTestSize> {
-        val sizes = mutableListOf<SpeedTestSize>()
-        try {
-            val jsonArray = JSONArray(SPEED_TEST_JSON)
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                sizes.add(
-                    SpeedTestSize(
-                        label = obj.getString("label"),
-                        bytes = obj.getLong("bytes")
-                    )
-                )
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return sizes
-    }
-
 }
