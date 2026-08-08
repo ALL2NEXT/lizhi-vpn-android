@@ -21,14 +21,13 @@ class SubscriptionParser {
 
     suspend fun fetchAndParse(
         url: String,
-        encrypted: Boolean,
         timeoutMs: Long = 25000L
     ): Result<List<Node>> {
         return try {
             val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
                 NetworkClient.apiService.getSubscription(url)
             }
-            Result.success(parseSubscription(response, encrypted))
+            Result.success(parseSubscription(response))
         } catch (e: Exception) {
             Log.e(tag, "Failed to fetch subscription: $url", e)
             Result.failure(e)
@@ -38,14 +37,10 @@ class SubscriptionParser {
     /**
      * 解析订阅内容
      */
-    fun parseSubscription(content: String, encrypted: Boolean = false): List<Node> {
+    fun parseSubscription(content: String): List<Node> {
         Log.d(tag, "Original content length: ${content.length}")
 
-        val finalContent = if (encrypted) {
-            decodeEncryptedContent(content)
-        } else {
-            decodeUnencryptedContent(content)
-        }
+        val finalContent = decodeSubscriptionContent(content)
         
         val lines = finalContent.split("\n", "\r\n")
             .map { it.trim() }
@@ -56,19 +51,7 @@ class SubscriptionParser {
         return lines.mapNotNull { parseNodeLink(it) }
     }
 
-    private fun decodeEncryptedContent(content: String): String {
-        var decrypted = xyz.a202132.app.util.CryptoUtils.decryptNodes(content.trim())
-        if (decrypted.startsWith("Error")) {
-            throw IllegalArgumentException("AES subscription decryption failed")
-        }
-        if (!decrypted.contains("://")) {
-            decrypted = decodeBase64Compat(decrypted.trim())
-        }
-        require(decrypted.contains("://")) { "Decrypted subscription contains no node links" }
-        return decrypted
-    }
-
-    private fun decodeUnencryptedContent(content: String): String {
+    private fun decodeSubscriptionContent(content: String): String {
         val raw = content.trim()
         if (raw.contains("://")) return raw
 
@@ -119,7 +102,7 @@ class SubscriptionParser {
             type = NodeType.VLESS,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
     
@@ -142,7 +125,7 @@ class SubscriptionParser {
             type = NodeType.VMESS,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
     
@@ -162,7 +145,7 @@ class SubscriptionParser {
             type = NodeType.TROJAN,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
     
@@ -184,7 +167,7 @@ class SubscriptionParser {
             type = NodeType.HYSTERIA2,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
 
@@ -204,7 +187,7 @@ class SubscriptionParser {
             type = NodeType.ANYTLS,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
 
@@ -224,7 +207,7 @@ class SubscriptionParser {
             type = NodeType.TUIC,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
 
@@ -244,7 +227,7 @@ class SubscriptionParser {
             type = NodeType.NAIVE,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
 
@@ -264,7 +247,7 @@ class SubscriptionParser {
             type = NodeType.WIREGUARD,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
     
@@ -296,7 +279,7 @@ class SubscriptionParser {
             type = NodeType.SHADOWSOCKS,
             server = server ?: "",
             port = if (port == -1) 443 else port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
 
@@ -317,7 +300,7 @@ class SubscriptionParser {
             type = NodeType.SOCKS,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
     
@@ -339,7 +322,7 @@ class SubscriptionParser {
             type = NodeType.HTTP,
             server = server,
             port = port,
-            rawLink = xyz.a202132.app.util.CryptoUtils.encryptForStorage(link)
+            rawLink = link
         )
     }
     

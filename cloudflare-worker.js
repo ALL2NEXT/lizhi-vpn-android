@@ -85,13 +85,11 @@ async function handleClient(request, env) {
   return json({
     subscriptions: state.subscriptions
       .filter((source) => source.enabled)
-      .map(({ id, name, enabled, url, encrypted, updateIntervalMinutes }) => ({
+      .map(({ id, name, enabled, url }) => ({
         id,
         name,
         enabled,
         url,
-        encrypted,
-        updateIntervalMinutes,
       })),
     notice: state.notice,
     appUpdate: state.appUpdate,
@@ -392,15 +390,6 @@ function normalizeState(input) {
         : "",
       name: cleanText(item.name || item.title),
       enabled: parseFlag(item.enabled, true),
-      encrypted: parseFlag(
-        item.encrypted !== undefined ? item.encrypted : item.isEncrypted,
-        false,
-      ),
-      updateIntervalMinutes: normalizeUpdateInterval(
-        item.updateIntervalMinutes !== undefined
-          ? item.updateIntervalMinutes
-          : item.autoUpdateMinutes,
-      ),
     }))
     .filter((item) => item.url)
     .map((item, index) => ({
@@ -408,8 +397,6 @@ function normalizeState(input) {
       name: item.name || `线路${index + 1}`,
       url: item.url,
       enabled: item.enabled,
-      encrypted: item.encrypted,
-      updateIntervalMinutes: item.updateIntervalMinutes,
     }));
 
   return {
@@ -420,12 +407,6 @@ function normalizeState(input) {
     settings: normalizeSettings(value.settings),
     ...(value.updatedAt ? { updatedAt: String(value.updatedAt) } : {}),
   };
-}
-
-function normalizeUpdateInterval(value) {
-  const interval = Number(value);
-  if (!Number.isFinite(interval)) return 0;
-  return Math.round(Math.min(Math.max(interval, 0), 10080));
 }
 
 function normalizeNotice(value) {
@@ -586,7 +567,7 @@ function adminHtml() {
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
      <button class="secondary" onclick="addSource()">添加线路</button>
-     <small class="hint">Worker 只保存线路名称、订阅地址和加密标记，线路序号按有效线路自动生成 1、2、3…；详细节点内容由 App 直接请求并解析。</small>
+     <small class="hint">Worker 只保存线路名称和订阅地址，线路序号按有效线路自动生成 1、2、3…；详细节点内容由 App 直接请求并解析。</small>
      <button type="button" onclick="pushSection('subscriptions')">推送</button>
    </section>
 
@@ -739,10 +720,8 @@ function addSource(source) {
   row.innerHTML = '<div class="grid">' +
     '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
     '<div class="field"><label>订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '"></label></div>' +
-    '<div class="field"><label>自动更新周期（分钟）<input data-field="updateIntervalMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.updateIntervalMinutes == null ? 0 : source.updateIntervalMinutes) + '"></label></div>' +
     '</div><label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
-    '<label class="check"><input data-field="encrypted" type="checkbox" ' + (source.encrypted ? 'checked' : '') + '>接口内容已加密（AES-GCM）</label>' +
-    '<div class="row-actions"><small>0 表示不自动更新；最大 10080 分钟（7 天）</small><button class="danger" type="button">删除</button></div>';
+    '<div class="row-actions"><button class="danger" type="button">删除</button></div>';
   row.querySelector('.danger').onclick = function() { row.remove(); };
   el('subscriptionRows').appendChild(row);
 }
@@ -776,9 +755,7 @@ function formState() {
     return {
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: row.querySelector('[data-field="url"]').value.trim(),
-      enabled: row.querySelector('[data-field="enabled"]').checked,
-      encrypted: row.querySelector('[data-field="encrypted"]').checked,
-      updateIntervalMinutes: Math.min(10080, Math.max(0, Number(row.querySelector('[data-field="updateIntervalMinutes"]').value || 0)))
+      enabled: row.querySelector('[data-field="enabled"]').checked
     };
   }).filter(function(item) { return item.url; });
   const notice = el('noticeEnabled').checked ? {

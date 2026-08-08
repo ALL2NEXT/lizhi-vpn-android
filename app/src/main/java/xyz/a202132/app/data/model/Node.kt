@@ -4,7 +4,6 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
-import xyz.a202132.app.util.CryptoUtils
 import xyz.a202132.app.util.CountryCodeResolver
 
 /**
@@ -40,14 +39,9 @@ data class Node(
     val favoriteCreatedAt: Long = 0L
 ) {
     /**
-     * 读取原始链接（自动兼容明文/密文存储）
+     * 读取原始节点链接。
      */
-    fun getRawLinkPlain(): String = CryptoUtils.decryptFromStorage(rawLink)
-
-    /**
-     * 是否为加密存储格式
-     */
-    fun isRawLinkEncrypted(): Boolean = rawLink.startsWith("enc:gcm:")
+    fun getRawLinkPlain(): String = rawLink
 
     /**
      * 获取国旗emoji

@@ -290,7 +290,6 @@ app/src/main/java/xyz/a202132/app/
 │       ├── Theme.kt             # 主题配置
 │       └── Type.kt              # 字体排版
 ├── util/
-│   ├── CryptoUtils.kt           # AES 加解密工具
 │   ├── DatabasePassphraseManager.kt # SQLCipher 数据库密钥管理（Android Keystore）
 │   ├── NetworkUtils.kt          # 网络状态检测工具
 │   ├── RuleManager.kt           # 智能分流规则管理
@@ -314,7 +313,7 @@ app/src/main/
 │       └── geosite-cn.srs
 ├── cpp/
 │   ├── CMakeLists.txt            # NDK 构建配置
-│   └── native-lib.cpp            # Native 层（AES 密钥 + 签名校验）
+│   └── native-lib.cpp            # Native 层签名校验
 ├── res/
 │   ├── drawable/                 # 图标和图片资源
 │   ├── mipmap-*/                 # 应用图标
@@ -404,9 +403,6 @@ app/src/main/
 |--------|--------|------|
 | IPv6 路由 | 禁用 | 可选仅 / 优先 / 启用 / 禁用，位于其他配置顶部 |
 | 记住上次选择的节点 | 开启 | 退出 APP 前选择的节点会在下次启动后恢复 |
-| 定时更新节点信息 | 关闭 | 可设置每隔 X 小时 Y 分钟自动请求节点；只有订阅列表 `update=1` 时自动更新生效 |
-| 节点自动重连 | 关闭 | 定时更新后，如当前连接节点的 `server + port` 仍存在，则自动重连到新列表中的对应节点；不存在则保持原连接 |
-| 节点更新通知 | 开启 | 仅控制定时更新节点信息产生的 Toast 提示，不影响手动刷新节点提示 |
 | TCPing 节点比例 | 100% | 智能连接第一阶段候选比例，默认测试全部节点 |
 | URL Test 候选比例 | 50% | 智能连接第二阶段从 TCPing 结果中选取的比例 |
 | 5MB 测速候选比例 | 50% | 智能连接第三阶段从 URL Test 结果中选取的比例 |
@@ -470,20 +466,17 @@ APP 先请求 Cloudflare Worker 的 `/api/client` 获取订阅线路元数据，
 
 ```json
 {
-  "update": 1,
   "subscriptions": [
-    {"id": "1", "name": "线路1", "url": "https://game.11145149.xyz/", "enabled": true, "encrypted": false},
-    {"id": "2", "name": "线路2", "url": "https://example.com/subscription", "enabled": true, "encrypted": true}
+    {"id": "1", "name": "线路1", "url": "https://game.11145149.xyz/", "enabled": true},
+    {"id": "2", "name": "线路2", "url": "https://example.com/subscription", "enabled": true}
   ],
   "notice": null,
   "appUpdate": null
 }
 ```
 
-- `update=1`：APP 获取线路列表后自动请求所有启用线路的 `url`
-- `update=0`：APP 保留本地节点缓存，用户手动刷新时才重新请求线路 URL
 - 首次获取线路列表时，APP 必须拉取一次所有启用线路
-- `encrypted=true` 时，APP 按 AES-128-GCM 解密；`encrypted=false` 时，APP 按明文或普通 Base64 节点列表解析
+- 订阅内容支持明文或普通 Base64 节点列表解析
 - `id` 由 Worker 按有效线路顺序自动生成 `1、2、3…`，管理后台不再配置线路 ID
 - 重复节点会自动去重，节点卡片会显示其所属线路名称
 
@@ -522,11 +515,6 @@ APP 先请求 Cloudflare Worker 的 `/api/client` 获取订阅线路元数据，
 - `hysteriaUpMbps` — Hysteria2 上行最大带宽（Mbps，默认 1000，设为 0 表示不设置）
 - `hysteriaDownMbps` — Hysteria2 下行最大带宽（Mbps，默认 1000，设为 0 表示不设置）
 - `vpnMtu` — VPN MTU 值（修改后需断开重连）
-- `scheduledNodeUpdateEnabled` — 是否定时更新节点信息
-- `scheduledNodeUpdateHours` — 定时更新间隔小时数（0~168）
-- `scheduledNodeUpdateMinutes` — 定时更新间隔分钟数（0~59）
-- `nodeAutoReconnect` — 节点更新后是否按 `server + port` 自动重连
-- `scheduledNodeUpdateToastEnabled` — 定时更新节点信息后是否显示 Toast 提示
 - `rememberLastSelectedNodeEnabled` — 是否记住上次选择的节点（默认开启）
 - `lastSelectedNodeId` — 上次选择节点 ID
 
@@ -558,111 +546,7 @@ configure<com.github.megatronking.stringfog.plugin.StringFogExtension> {
 
 ---
 
-### 2. NDK 密钥存储
-
-AES 加密密钥存储在 Native (C++) 层，通过双数组 XOR + 运行时噪声混淆防止静态分析。
-
-**密钥文件**：`app/src/main/cpp/native-lib.cpp`
-
-#### 如何修改 AES 密钥
-
-1. 确定你的 16 位密钥（AES-128 要求恰好 16 字节），例如：`MySecretKey12345`
-
-2. 使用以下 Python 脚本生成混淆后的双数组：
-
-```python
-import os
-
-key = "MySecretKey12345"  # 必须 16 字符
-assert len(key) == 16
-
-kXor = 0xA7  # XOR 常量，可自定义
-partB = list(os.urandom(16))  # 随机生成 partB
-
-# 计算 partA: 运行时 decoded[i] = partA[i] ^ partB[i] ^ kXor
-partA = [ord(c) ^ partB[i] ^ kXor for i, c in enumerate(key)]
-
-def fmt(arr, size=8):
-    lines = []
-    for i in range(0, len(arr), size):
-        chunk = ", ".join(f"0x{v:02X}" for v in arr[i:i+size])
-        lines.append(f"        {chunk}" + ("," if i + size < len(arr) else ""))
-    return "\n".join(lines)
-
-print(f"static const uint8_t partA[16] = {{\n{fmt(partA)}\n}};")
-print(f"static const uint8_t partB[16] = {{\n{fmt(partB)}\n}};")
-print(f"constexpr uint8_t kXor = 0x{kXor:02X};")
-```
-
-3. 将输出的 `partA`、`partB`、`kXor` 替换到 `native-lib.cpp` 中 `nativeGetNativeKey` 函数对应位置
-
-4. **同步修改服务端加密密钥**
-
----
-
-### 3. AES 流量加密
-
-当 Worker 将某条线路标记为 `encrypted=true` 时，节点订阅数据需要按以下方式在服务端加密，APP 端使用 Java Crypto API 解密；未标记加密的线路不执行 AES 解密。
-
-#### 服务端加密要求
-
-| 参数 | 值 |
-| :--- | :--- |
-| **算法** | AES-128-GCM |
-| **IV 长度** | 12 字节 (随机生成) |
-| **认证标签** | 128 位 (16 字节) |
-| **密钥** | 与 `native-lib.cpp` 中配置的相同（16 字节） |
-| **输出格式** | Base64(IV + 密文 + AuthTag) |
-
-#### 服务端加密流程
-
-```
-明文节点链接 → AES-GCM加密(生成随机IV) → 拼接(IV + 密文 + AuthTag) → Base64编码 → 返回给APP
-```
-
-#### Python 加密示例
-
-```shell
-pip install cryptography // 安装依赖
-```
-
-```python
-import os
-import base64
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
-# 密钥必须是 16 字节 (对应 AES-128)
-SECRET_KEY = b'MySecretKey12345' 
-
-def encrypt(plaintext):
-    # 1. 初始化 AES-128-GCM 实例
-    aesgcm = AESGCM(SECRET_KEY)
-    
-    # 2. 生成随机 12 字节 IV
-    iv = os.urandom(12)
-    
-    # 3. 加密
-    # cryptography 库的 encrypt 方法会自动生成 16 字节的 authTag 
-    # 并将其附加在密文后面：返回值为 ciphertext + authTag
-    ciphertext_with_tag = aesgcm.encrypt(iv, plaintext.encode('utf-8'), None)
-    
-    # 4. 拼接: IV (12) + 密文 + AuthTag (16)
-    combined = iv + ciphertext_with_tag
-    
-    # 5. 返回 Base64 编码的字符串
-    return base64.b64encode(combined).decode('utf-8')
-
-# --- 使用示例 ---
-nodes = """hysteria2://uuid@server:port?sni=example.com#节点名称
-vless://uuid@server:port?security=tls#另一个节点"""
-
-encrypted_data = encrypt(nodes)
-print(encrypted_data)
-```
-
----
-
-### 4. 签名校验 (Signature Verification)
+### 2. 签名校验 (Signature Verification)
 
 APP 启动时在 Native 层校验 APK 签名。如果签名不匹配（说明被重新签名/篡改），APP 会立即 Crash。
 
@@ -807,16 +691,15 @@ Release 版本默认移除所有 `android.util.Log` 调用（包括 `Log.d`、`L
 1. 在 Cloudflare 创建一个 KV Namespace，并在 Worker 设置中绑定变量名 `CONFIG`。
 2. 创建 Worker Secret `ADMIN_TOKEN`，不要把它写入 App 或提交到 Git。
 3. 将 `cloudflare-worker.js` 粘贴并部署，打开 `https://你的域名/admin`。
-4. 打开管理后台，用表单添加订阅线路、设置自动更新、网站、反馈联系方式、GitHub、公告和版本更新；不需要手写 JSON。
+4. 打开管理后台，用表单添加订阅线路、网站、反馈联系方式、GitHub、公告和版本更新；不需要手写 JSON。
 5. 将 `AppConfig.kt` 中唯一的后端配置改成 Worker 地址：`AppConfig.BACKEND_URL`。
 
 App 使用的唯一公开接口是 `GET /api/client`：
 
 ```json
 {
-  "update": 1,
   "subscriptions": [
-    {"id": "1", "name": "线路1", "enabled": true, "url": "https://game.11145149.xyz/", "encrypted": false}
+    {"id": "1", "name": "线路1", "enabled": true, "url": "https://game.11145149.xyz/"}
   ],
   "settings": {
     "websiteUrl": "https://example.com",
@@ -832,7 +715,7 @@ App 使用的唯一公开接口是 `GET /api/client`：
 
 APP 手动刷新时会重新请求 `/api/client`，然后直接请求每条线路 URL。`refresh=1` 参数仅为兼容旧版本保留，Worker 不执行上游刷新。公告配置放在 `notice`，版本更新配置放在 `appUpdate`，格式沿用项目现有 `NoticeInfo` 和 `UpdateInfo` 字段。
 
-后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /api/admin/state` 读取，`PUT /api/admin/state` 保存订阅名称、URL、是否加密和其他后台配置。线路序号由 Worker 自动生成，详细订阅内容由 APP 直接获取。
+后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /api/admin/state` 读取，`PUT /api/admin/state` 保存订阅名称、URL 和其他后台配置。线路序号由 Worker 自动生成，详细订阅内容由 APP 直接获取。
 
 这样 App 只内置一个 Worker 地址；更换线路、公告、更新信息和上游订阅地址都在 Worker 管理后台完成。
 
@@ -848,7 +731,6 @@ APP 手动刷新时会重新请求 `/api/client`，然后直接请求每条线�
 
 ```json
 {
-    "update": 1,
     "subscriptions": [
         {
             "id": "line1",
@@ -862,7 +744,6 @@ APP 手动刷新时会重新请求 `/api/client`，然后直接请求每条线�
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `update` | Int / Boolean | ❌ | `1`/`true` 允许自动更新；`0`/`false` 仅手动更新；首次获取始终更新 |
 | `subscriptions` | Array | ✅ | 订阅线路列表 |
 | `subscriptions[].id` | String | ❌ | 线路唯一 ID；缺省时由 URL 计算 |
 | `subscriptions[].name` | String | ❌ | 线路显示名称，缺省时使用“线路N” |
@@ -873,7 +754,7 @@ APP 会并发获取所有启用线路，但会按 `id` 保持每条线路独立�
 
 ### 2. 节点订阅内容接口
 
-每个 `subscriptions[].url` 返回节点链接列表，每行一个。响应可以是明文、Base64 或项目支持的加密内容。
+每个 `subscriptions[].url` 返回节点链接列表，每行一个。响应可以是明文或 Base64 编码内容。
 
 **支持的协议**:
 - `vless://` - VLESS
@@ -944,13 +825,6 @@ ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
     "content": "服务器将于今晚 22:00 进行维护，届时可能无法连接。",
     "noticeId": "notice_20240117",
     "showOnce": true,
-    "scheduledNodeUpdate": {
-        "enabled": true,
-        "hours": 6,
-        "minutes": 0,
-        "nodeAutoReconnect": true,
-        "toastEnabled": true
-    }
 }
 ```
 
@@ -962,21 +836,6 @@ ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
 | `content` | String | ❌ | 公告内容，支持常见 HTML 标签（如 h1-h6、p、b、a、br、img 等），纯文本会自动按换行显示 |
 | `noticeId` | String | ❌ | 公告唯一ID（用于去重） |
 | `showOnce` | Boolean | ❌ | 是否只显示一次（默认 `true`） |
-| `scheduledNodeUpdate` | Object | ❌ | 定时更新节点信息配置；存在时优先级高于本地设置 |
-| `scheduledNodeUpdate.enabled` | Boolean | ❌ | 是否开启定时更新节点信息 |
-| `scheduledNodeUpdate.hours` | Number | ❌ | 定时更新间隔小时数，范围 `0~168` |
-| `scheduledNodeUpdate.minutes` | Number | ❌ | 定时更新间隔分钟数，范围 `0~59`；开启且小时/分钟均为 0 时 APP 会按 1 分钟处理 |
-| `scheduledNodeUpdate.nodeAutoReconnect` | Boolean | ❌ | 是否开启节点自动重连；存在时优先级高于本地设置 |
-| `scheduledNodeUpdate.toastEnabled` | Boolean | ❌ | 是否显示定时更新节点信息产生的 Toast；存在时优先级高于本地设置 |
-| `nodeAutoReconnect` | Boolean | ❌ | 旧版兼容字段，推荐改用 `scheduledNodeUpdate.nodeAutoReconnect` |
-
-> 💡 **定时更新说明**：
-> - 只有订阅列表的 `update=1` 时，定时更新才会自动请求所有订阅线路
-> - `scheduledNodeUpdate.nodeAutoReconnect` 开启后，仅当当前连接节点在新列表中存在相同 `server + port` 时才自动重连，否则保持原连接
-> - `scheduledNodeUpdate.toastEnabled` 只控制定时更新节点信息产生的 Toast，不影响手动刷新节点提示
-> - notice 接口下发的 `scheduledNodeUpdate` 只覆盖运行时有效设置，不会改写用户本地保存值
-
-**当前配置位置**: Worker 管理后台的 `notice`
 
 ---
 

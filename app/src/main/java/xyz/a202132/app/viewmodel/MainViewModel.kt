@@ -23,7 +23,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okio.BufferedSink
 import xyz.a202132.app.AppConfig
-import xyz.a202132.app.BuildConfig
 import xyz.a202132.app.data.local.AppDatabase
 import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
@@ -40,7 +39,6 @@ import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
-import xyz.a202132.app.util.CryptoUtils
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -242,12 +240,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
     
     init {
-        // 将历史明文 rawLink 迁移为加密存储（一次性后台处理）
-        viewModelScope.launch(Dispatchers.IO) {
-            migrateRawLinksToEncrypted()
-            logRawLinkEncryptionStats("startup_migration")
-        }
-
         // 为历史缓存节点补充地区信息；名称识别优先，IP 查询在后台执行。
         viewModelScope.launch(Dispatchers.IO) {
             enrichAndPersistNodeLocations(nodeDao.getAllNodes().first())
@@ -286,7 +278,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         observeTrafficDisconnects()
-        observeSubscriptionAutoUpdates()
     }
 
     private suspend fun ensureAccountRegistered(): Boolean {
@@ -337,64 +328,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun observeSubscriptionAutoUpdates() {
-        viewModelScope.launch {
-            settingsRepository.subscriptionListJson
-                .mapNotNull { json ->
-                    json?.let { subscriptionListParser.parse(it).getOrNull() }
-                }
-                .map { list: SubscriptionList ->
-                    list.sources.filter { source ->
-                        source.enabled && source.updateIntervalMinutes > 0
-                    }
-                }
-                .distinctUntilChanged { previous, current ->
-                    previous.map { source ->
-                        "${source.id}|${source.url}|${source.encrypted}|${source.updateIntervalMinutes}"
-                    } == current.map { source ->
-                        "${source.id}|${source.url}|${source.encrypted}|${source.updateIntervalMinutes}"
-                    }
-                }
-                .collectLatest { sources ->
-                    if (sources.isEmpty()) return@collectLatest
-
-                    val nextRuns = sources.associate { source ->
-                        source.id to System.currentTimeMillis() + source.updateIntervalMinutes * 60_000L
-                    }.toMutableMap()
-
-                    while (true) {
-                        val now = System.currentTimeMillis()
-                        val dueSources = sources.filter { source ->
-                            nextRuns[source.id]?.let { nextRun -> nextRun <= now } == true
-                        }
-                        if (dueSources.isEmpty()) {
-                            val nextRun = nextRuns.values.minOrNull() ?: break
-                            delay((nextRun - now).coerceAtLeast(1_000L))
-                            continue
-                        }
-
-                        dueSources.forEach { source ->
-                            runScheduledSubscriptionUpdate(source)
-                            nextRuns[source.id] = System.currentTimeMillis() + source.updateIntervalMinutes * 60_000L
-                        }
-                    }
-                }
-        }
-    }
-
-    private suspend fun runScheduledSubscriptionUpdate(source: SubscriptionSource) {
-        val fetchOk = fetchNodesInternal(
-            bypassThrottle = true,
-            fetchingLabel = "自动更新：${source.name}",
-            showToast = false,
-            subscriptionList = SubscriptionList(listOf(source)),
-            replaceSubscriptionSourceId = source.id
-        )
-        if (fetchOk) {
-            Log.i(tag, "Automatically updated subscription: ${source.name}")
-        }
-    }
-
     fun fetchNodes(
         bypassThrottle: Boolean = false,
         allowWhenTestRunning: Boolean = false,
@@ -425,7 +358,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val hasSubscriptionNodes = nodeDao.getSubscriptionNodes().first().isNotEmpty()
         val shouldFetchNodes = !initializedBefore || !hasSubscriptionNodes
         if (!shouldFetchNodes) {
-            Log.i(tag, "Subscription list update=0; keeping cached nodes until manual refresh")
+            Log.i(tag, "Subscription list already loaded; keeping cached nodes until manual refresh")
             return true
         }
 
@@ -506,14 +439,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             async {
                 var result = subscriptionParser.fetchAndParse(
                     subscription.url,
-                    subscription.encrypted,
                     backendSettings.value.nodeRequestTimeoutMs
                 )
                 if (result.isFailure) {
                     Log.w(tag, "Subscription fetch failed, retrying: ${subscription.name}", result.exceptionOrNull())
                     result = subscriptionParser.fetchAndParse(
                         subscription.url,
-                        subscription.encrypted,
                         backendSettings.value.nodeRequestTimeoutMs
                     )
                 }
@@ -627,12 +558,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     nodeDao.getSubscriptionNodes().first()
                 }
                 scheduleNodeLocationEnrichment(fetchedNodes)
-
-                if (BuildConfig.DEBUG) {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        logRawLinkEncryptionStats("after_fetch_insert")
-                    }
-                }
 
                 Log.d(tag, "Fetched ${fetchedNodes.size} nodes")
                 return true
@@ -1857,37 +1782,4 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
         return ServerSocket(0).use { it.localPort }
     }
 
-    private suspend fun migrateRawLinksToEncrypted() {
-        runCatching {
-            val current = nodeDao.getAllNodes().first()
-            var migrated = 0
-            current.forEach { node ->
-                if (!node.isRawLinkEncrypted()) {
-                    val encrypted = CryptoUtils.encryptForStorage(node.rawLink)
-                    if (encrypted != node.rawLink) {
-                        nodeDao.updateNode(node.copy(rawLink = encrypted))
-                        migrated++
-                    }
-                }
-            }
-            if (migrated > 0) {
-                Log.i(tag, "Migrated $migrated node rawLink entries to encrypted storage")
-            }
-        }.onFailure {
-            Log.w(tag, "RawLink migration skipped: ${it.message}")
-        }
-    }
-
-    private suspend fun logRawLinkEncryptionStats(scene: String) {
-        if (!BuildConfig.DEBUG) return
-        runCatching {
-            val current = nodeDao.getAllNodes().first()
-            val total = current.size
-            val encrypted = current.count { it.isRawLinkEncrypted() }
-            val plain = total - encrypted
-            Log.d("RawLinkCryptoStats", "scene=$scene total=$total encrypted=$encrypted plain=$plain")
-        }.onFailure {
-            Log.w("RawLinkCryptoStats", "scene=$scene stats_failed=${it.message}")
-        }
-    }
 }

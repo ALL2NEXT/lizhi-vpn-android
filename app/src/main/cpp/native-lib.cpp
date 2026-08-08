@@ -231,36 +231,6 @@ static void nativeVerifySignature(JNIEnv* env, jclass /* clazz */, jobject conte
     }
 }
 
-static jstring nativeGetNativeKey(JNIEnv* env, jobject /* this */) {
- // AES密钥示例: "MySecretKey12345" (16 bytes)
-// 以下填写通过对AES密钥执行Python示例脚本生成的混淆双数组
-static const uint8_t partA[16] = {
-        0x7E, 0x7D, 0x20, 0x5E, 0x5A, 0x60, 0x5A, 0x40,
-        0x2A, 0x38, 0x0E, 0x45, 0x00, 0x08, 0x09, 0x03
-};
-static const uint8_t partB[16] = {
-        0x57, 0xE0, 0x0D, 0x1F, 0x2F, 0x71, 0xAA, 0xC0,
-        0xF9, 0xD3, 0x80, 0x15, 0x4D, 0x4B, 0x18, 0xF8
-};
-constexpr uint8_t kXor = 0xA7;
-
-    char decoded[17] = {};
-    const uintptr_t envPtr = reinterpret_cast<uintptr_t>(env);
-    for (int i = 0; i < 16; ++i) {
-        // Two volatile reads avoid easy constant folding of canceling masks.
-        volatile uint8_t noise1 = static_cast<uint8_t>((envPtr >> ((i % 5) + 1)) & 0xFFu);
-        volatile uint8_t noise2 = static_cast<uint8_t>((envPtr >> ((i % 5) + 1)) & 0xFFu);
-        decoded[i] = static_cast<char>(partA[i] ^ partB[i] ^ kXor ^ noise1 ^ noise2);
-    }
-
-    jstring out = env->NewStringUTF(decoded);
-    volatile char* wipe = decoded;
-    for (int i = 0; i < 17; ++i) {
-        wipe[i] = 0;
-    }
-    return out;
-}
-
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     JNIEnv* env = nullptr;
     if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK || env == nullptr) {
@@ -276,18 +246,6 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
              reinterpret_cast<void*>(nativeVerifySignature)}
     };
     if (env->RegisterNatives(signatureCls, signatureMethods, 1) != JNI_OK) {
-        return JNI_ERR;
-    }
-
-    jclass cryptoCls = env->FindClass("xyz/a202132/app/util/CryptoUtils");
-    if (cryptoCls == nullptr) {
-        return JNI_ERR;
-    }
-    JNINativeMethod cryptoMethods[] = {
-            {"getNativeKey", "()Ljava/lang/String;",
-             reinterpret_cast<void*>(nativeGetNativeKey)}
-    };
-    if (env->RegisterNatives(cryptoCls, cryptoMethods, 1) != JNI_OK) {
         return JNI_ERR;
     }
 
