@@ -41,6 +41,9 @@ object AppConfig {
     const val HYSTERIA_BANDWIDTH_ENABLED = true
     const val HYSTERIA_UP_MBPS = 1000
     const val HYSTERIA_DOWN_MBPS = 1000
+
+    // 测试后自动删除超时节点，默认关闭
+    const val AUTO_DELETE_TIMEOUT_NODES = false
     
     // Concurrency
     const val TCPING_CONCURRENCY = 16 // TCPing并发数

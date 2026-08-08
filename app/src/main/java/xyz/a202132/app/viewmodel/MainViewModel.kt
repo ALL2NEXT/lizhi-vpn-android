@@ -94,10 +94,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _testingLabel = MutableStateFlow<String?>(null)
     val testingLabel = _testingLabel.asStateFlow()
     
-    // 过滤不可用节点
-    private val _filterUnavailable = MutableStateFlow(false)
-    val filterUnavailable = _filterUnavailable.asStateFlow()
-    
     private val _notice = MutableStateFlow<NoticeInfo?>(null)
     val notice = _notice.asStateFlow()
     
@@ -155,22 +151,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val subscriptionNodes = combine(
         nodeDao.getSubscriptionNodes(),
-        _filterUnavailable,
         activeSubscriptionSourceId
-    ) { list, filterOut, sourceId ->
+    ) { list, sourceId ->
         val scopedList = if (sourceId.isNullOrBlank()) {
             list
         } else {
             list.filter { it.subscriptionSourceId == sourceId }
         }
-        sortNodesForList(scopedList, filterOut)
+        sortNodesForList(scopedList)
     }
 
-    private val favoriteNodes = combine(
-        nodeDao.getFavoriteNodes(),
-        _filterUnavailable
-    ) { list, filterOut ->
-        sortNodesForList(list, filterOut)
+    private val favoriteNodes = nodeDao.getFavoriteNodes().map { list ->
+        sortNodesForList(list)
     }
 
     // Data
@@ -231,6 +223,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_TCPING_PERCENT)
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
+    val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
     val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
     val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_UP_MBPS)
     val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_DOWN_MBPS)
@@ -606,7 +599,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         GlobalTestExecution.beginFetching(fetchingLabel)
         _isLoading.value = true
-        _filterUnavailable.value = false // 刷新时重置过滤
         try {
             // 1. 检查网络状态
             if (!NetworkUtils.isNetworkAvailable(getApplication())) {
@@ -965,6 +957,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setAutoDeleteTimeoutNodes(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoDeleteTimeoutNodes(enabled)
+        }
+    }
+
     /**
      * 使用直连网络分别测试下行和上行带宽，并按 10 Mbps 档位向上取整后写入 Hy2 设置。
      */
@@ -1016,19 +1014,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setVpnMtu(value: Int) {
         viewModelScope.launch {
             settingsRepository.setVpnMtu(value)
-        }
-    }
-
-    /**
-     * 清理不可用节点 (UI 过滤，不删除数据库)
-     */
-    fun cleanUnavailableNodes() {
-        val hiddenCount = nodes.value.count { shouldHideByQuickCleanup(it) }
-        _filterUnavailable.value = true
-        _error.value = if (hiddenCount > 0) {
-            "已隐藏${hiddenCount}个不可用或超时节点"
-        } else {
-            "没有可隐藏的不可用节点"
         }
     }
 
@@ -1143,20 +1128,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.w(tag, "URL Test result not applied, node not found in DB: ${result.nodeId}")
             }
         }
+        deleteTimedOutNodes(results)
     }
 
-    private fun sortNodesForList(list: List<Node>, filterOut: Boolean): List<Node> {
-        val filtered = if (filterOut) list.filterNot { shouldHideByQuickCleanup(it) } else list
-        return filtered.sortedWith(
+    private suspend fun deleteTimedOutNodes(results: List<LatencyTester.LatencyResult>) {
+        if (!autoDeleteTimeoutNodes.value) return
+
+        val timedOutNodeIds = results
+            .filter { it.latency == -2 }
+            .map { it.nodeId }
+            .distinct()
+        if (timedOutNodeIds.isEmpty()) return
+
+        val selectedNodeId = settingsRepository.selectedNodeId.first()
+        timedOutNodeIds.forEach { nodeId ->
+            nodeDao.deleteNodeById(nodeId)
+        }
+        if (selectedNodeId != null && selectedNodeId in timedOutNodeIds) {
+            settingsRepository.setSelectedNodeId(null)
+        }
+        _error.value = "已自动删除${timedOutNodeIds.size}个超时节点"
+    }
+
+    private fun sortNodesForList(list: List<Node>): List<Node> {
+        return list.sortedWith(
             compareByDescending<Node> { it.isAvailable }
                 .thenBy { it.sortOrder }
                 .thenBy { if (it.latency >= 0) it.latency else Int.MAX_VALUE }
         )
-    }
-
-    private fun shouldHideByQuickCleanup(node: Node): Boolean {
-        return node.latency == -2 ||
-            !node.isAvailable
     }
 
     /**
@@ -1189,6 +1188,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 testedAt = System.currentTimeMillis()
             )
         }
+        deleteTimedOutNodes(results)
         return results
     }
 
@@ -1633,11 +1633,6 @@ fun autoSelectBestNode() {
         }
     }
     
-    // 用户界面操作
-    fun resetFilter() {
-        _filterUnavailable.value = false
-    }
-    
     fun dismissNotice() {
         _notice.value = null
     }
@@ -1681,7 +1676,7 @@ private suspend fun currentNodeListSnapshot(): List<Node> {
             }
             NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
         }
-        return sortNodesForList(snapshot, _filterUnavailable.value)
+        return sortNodesForList(snapshot)
     }
 
 private suspend fun currentSmartConnectNodes(): List<Node> {
@@ -1693,7 +1688,7 @@ private suspend fun currentSmartConnectNodes(): List<Node> {
             }
             NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
         }
-        return sortNodesForList(snapshot, filterOut = false)
+        return sortNodesForList(snapshot)
     }
 
 private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {

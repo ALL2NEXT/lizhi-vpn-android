@@ -146,13 +146,6 @@ fun MainScreen(
                                         showSpeedTestDialog = true
                                     }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text("\uD83E\uDDF9 隐藏不合格节点") },
-                                    onClick = {
-                                        showToolsMenu = false
-                                        viewModel.cleanUnavailableNodes()
-                                    }
-                                )
                             }
                         }
                         

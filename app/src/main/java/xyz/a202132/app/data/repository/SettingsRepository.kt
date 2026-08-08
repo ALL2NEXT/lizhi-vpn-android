@@ -56,6 +56,7 @@ class SettingsRepository(private val context: Context) {
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
+        private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
 
     }
     
@@ -408,6 +409,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHysteriaDownMbps(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[HYSTERIA_DOWN_MBPS] = value.coerceIn(0, 100_000)
+        }
+    }
+
+    val autoDeleteTimeoutNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[AUTO_DELETE_TIMEOUT_NODES] ?: xyz.a202132.app.AppConfig.AUTO_DELETE_TIMEOUT_NODES
+    }
+
+    suspend fun setAutoDeleteTimeoutNodes(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[AUTO_DELETE_TIMEOUT_NODES] = enabled
         }
     }
 

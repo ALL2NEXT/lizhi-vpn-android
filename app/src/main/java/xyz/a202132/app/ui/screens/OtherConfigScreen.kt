@@ -47,6 +47,7 @@ fun OtherConfigScreen(
     val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsState()
     val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsState()
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsState()
+    val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsState()
     val vpnMtu by viewModel.vpnMtu.collectAsState()
     val vpnState by viewModel.vpnState.collectAsState()
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsState()
@@ -176,6 +177,35 @@ fun OtherConfigScreen(
                     )
                 }
 
+            }
+
+            OtherConfigSection(
+                title = "节点清理",
+                description = "开启后，TCPing 或 URL Test 超时的节点会在测试完成后从本地删除；默认关闭。"
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "自动删除超时节点",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "仅处理测试结果为超时的节点，不影响未测试节点。",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = autoDeleteTimeoutNodes,
+                        onCheckedChange = { viewModel.setAutoDeleteTimeoutNodes(it) },
+                        colors = visibleSwitchColors()
+                    )
+                }
             }
 
             OtherConfigSection(
