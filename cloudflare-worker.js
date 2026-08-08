@@ -390,6 +390,7 @@ function normalizeState(input) {
         : "",
       name: cleanText(item.name || item.title),
       enabled: parseFlag(item.enabled, true),
+      remark: cleanText(item.remark || item.note).slice(0, 500),
     }))
     .filter((item) => item.url)
     .map((item, index) => ({
@@ -397,6 +398,7 @@ function normalizeState(input) {
       name: item.name || `线路${index + 1}`,
       url: item.url,
       enabled: item.enabled,
+      remark: item.remark,
     }));
 
   return {
@@ -567,7 +569,7 @@ function adminHtml() {
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
      <button class="secondary" onclick="addSource()">添加线路</button>
-     <small class="hint">Worker 只保存线路名称和订阅地址，线路序号按有效线路自动生成 1、2、3…；详细节点内容由 App 直接请求并解析。</small>
+     <small class="hint">Worker 保存线路名称、订阅地址和后台备注；备注仅供后台记忆，不会下发给 App。线路序号按有效线路自动生成 1、2、3…；详细节点内容由 App 直接请求并解析。</small>
      <button type="button" onclick="pushSection('subscriptions')">推送</button>
    </section>
 
@@ -720,6 +722,7 @@ function addSource(source) {
   row.innerHTML = '<div class="grid">' +
     '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
     '<div class="field"><label>订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '"></label></div>' +
+    '<div class="field"><label>后台备注（仅后台保存）<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="例如：备用线路、长期稳定"></label></div>' +
     '</div><label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
     '<div class="row-actions"><button class="danger" type="button">删除</button></div>';
   row.querySelector('.danger').onclick = function() { row.remove(); };
@@ -755,7 +758,8 @@ function formState() {
     return {
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: row.querySelector('[data-field="url"]').value.trim(),
-      enabled: row.querySelector('[data-field="enabled"]').checked
+      enabled: row.querySelector('[data-field="enabled"]').checked,
+      remark: row.querySelector('[data-field="remark"]').value.trim()
     };
   }).filter(function(item) { return item.url; });
   const notice = el('noticeEnabled').checked ? {
