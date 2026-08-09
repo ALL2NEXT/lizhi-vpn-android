@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -74,10 +75,11 @@ fun MainScreen(
         (nodeSwipeDistancePx / nodeSwipeThresholdPx).coerceIn(0f, 1f)
     val nodeSwipeVisualProgress by animateFloatAsState(
         targetValue = if (isNodeSwipeDragging) nodeSwipeProgress else 0f,
-        animationSpec = tween(
-            durationMillis = if (isNodeSwipeDragging) 45 else 180,
-            easing = FastOutSlowInEasing
-        ),
+        animationSpec = if (isNodeSwipeDragging) {
+            snap()
+        } else {
+            tween(durationMillis = 180, easing = FastOutSlowInEasing)
+        },
         label = "nodeSwipeProgress"
     )
 
@@ -429,7 +431,10 @@ fun MainScreen(
         contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) {
         // 从设置页返回后再次尝试安装
-        if (context.packageManager.canRequestPackageInstalls()) {
+        if (
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+            context.packageManager.canRequestPackageInstalls()
+        ) {
             viewModel.installApk()
         }
     }

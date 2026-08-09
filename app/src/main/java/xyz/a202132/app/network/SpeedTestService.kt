@@ -15,7 +15,6 @@ private const val TAG = "SpeedTestService"
 
 data class SpeedTestResult(
     val avgSpeedMbps: Float,
-    val peakSpeedMbps: Float,
     val totalBytes: Long,
     val durationMs: Long
 )
@@ -76,7 +75,6 @@ class SpeedTestService(
 
         Log.d(TAG, "Starting download test: url=$url, size=$size")
         val startTime = System.currentTimeMillis()
-        var peakSpeed = 0f
         var totalBytesRead = 0L
 
         try {
@@ -102,8 +100,6 @@ class SpeedTestService(
                             val bytesDelta = totalBytesRead - lastBytesRead
                             // 计算瞬时速度
                             val currentSpeedMbps = (bytesDelta * 8f / 1_000_000f) / (timeDelta / 1000f)
-                            if (currentSpeedMbps > peakSpeed) peakSpeed = currentSpeedMbps
-                            
                             val progress = totalBytesRead.toFloat() / size.toFloat()
                             onProgress(currentSpeedMbps, progress.coerceIn(0f, 1f))
                         }
@@ -121,8 +117,8 @@ class SpeedTestService(
         val duration = endTime - startTime
         val avgSpeed = if (duration > 0) (totalBytesRead * 8f / 1_000_000f) / (duration / 1000f) else 0f
         
-        Log.d(TAG, "Download test finished: avg=${avgSpeed}Mbps, peak=${peakSpeed}Mbps, duration=${duration}ms")
-        return SpeedTestResult(avgSpeed, peakSpeed.coerceAtLeast(avgSpeed), totalBytesRead, duration)
+        Log.d(TAG, "Download test finished: avg=${avgSpeed}Mbps, duration=${duration}ms")
+        return SpeedTestResult(avgSpeed, totalBytesRead, duration)
     }
 
     fun startUploadTest(
@@ -131,7 +127,6 @@ class SpeedTestService(
     ): SpeedTestResult {
         isCancelled = false
         val startTime = System.currentTimeMillis()
-        var peakSpeed = 0f
         var finalBytesUploaded = 0L
         
         val requestBody = object : RequestBody() {
@@ -160,8 +155,6 @@ class SpeedTestService(
                         if (timeDelta > 0) {
                             val bytesDelta = uploaded - lastUploadedBytes
                             val currentSpeedMbps = (bytesDelta * 8f / 1_000_000f) / (timeDelta / 1000f)
-                            if (currentSpeedMbps > peakSpeed) peakSpeed = currentSpeedMbps
-
                             val progress = uploaded.toFloat() / size.toFloat()
                             onProgress(currentSpeedMbps, progress.coerceIn(0f, 1f))
                         }
@@ -193,7 +186,7 @@ class SpeedTestService(
         val realBytes = if (finalBytesUploaded > 0) finalBytesUploaded else size // Fallback if writeTo completed
         val avgSpeed = if (duration > 0) (realBytes * 8f / 1_000_000f) / (duration / 1000f) else 0f
 
-        Log.d(TAG, "Upload test finished: avg=${avgSpeed}Mbps, peak=${peakSpeed}Mbps, duration=${duration}ms")
-        return SpeedTestResult(avgSpeed, peakSpeed.coerceAtLeast(avgSpeed), realBytes, duration)
+        Log.d(TAG, "Upload test finished: avg=${avgSpeed}Mbps, duration=${duration}ms")
+        return SpeedTestResult(avgSpeed, realBytes, duration)
     }
 }

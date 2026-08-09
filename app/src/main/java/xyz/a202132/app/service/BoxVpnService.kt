@@ -65,13 +65,7 @@ class BoxVpnService : VpnService() {
         var downloadTotal: Long = 0L
             private set
 
-        // 静态引用方便外部调用 (注意内存泄漏风险，但在单进程VPN服务中通常可控，或者在onDestroy置空)
-        private var instance: BoxVpnService? = null
         @Volatile private var currentInternalSocksPort: Int? = null
-        
-        fun selectNode(nodeId: String) {
-            instance?.selectNodeInternal(nodeId)
-        }
 
         /**
          * 返回主 VPN 核心的本机 SOCKS 端口。
@@ -91,7 +85,6 @@ class BoxVpnService : VpnService() {
     
     override fun onCreate() {
         super.onCreate()
-        instance = this
         disconnectRecoveryManager = DisconnectRecoveryManager(
             context = applicationContext,
             scope = serviceScope,
@@ -425,23 +418,6 @@ class BoxVpnService : VpnService() {
         commandClient = null
     }
 
-    private fun selectNodeInternal(nodeId: String) {
-        serviceScope.launch {
-            try {
-                // 选择 proxy 组的节点
-                commandClient?.selectOutbound("proxy", nodeId)
-                Log.d(TAG, "Selected node: $nodeId")
-
-                // 更新当前节点名称 (尝试从数据库获取或直接更新UI显示)
-                // 这里简单更新 currentNodeName，实际上 MainViewModel 会负责 UI 更新
-                // 也可以在这里查询数据库获取名称，但为了性能暂略
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to select node", e)
-                Log.e(TAG, "Failed to select outbound node", e)
-            }
-        }
-    }
-
     // Traffic Monitor (使用 TrafficStats)
     private var trafficMonitorJob: kotlinx.coroutines.Job? = null
 
@@ -600,9 +576,7 @@ class BoxVpnService : VpnService() {
             uploadTotal = message.uplinkTotal.coerceAtLeast(0L)
             downloadTotal = message.downlinkTotal.coerceAtLeast(0L)
 
-            serviceScope.launch {
-                currentNodeName?.let { updateNotification(it) }
-            }
+            currentNodeName?.let { updateNotification(it) }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse sing-box status traffic, fallback TrafficStats: ${e.message}")
         }
@@ -996,9 +970,6 @@ class BoxVpnService : VpnService() {
         // 更新状态
         isRunning = false
         isStopping = false
-        if (instance == this) {
-            instance = null
-        }
 
         // 通知 UI (防止 UI 停留在已连接状态)
         // 注意：onDestroy 后 ServiceManager可能无法立即通知到已销毁的 Activity，但 StateFlow 会更新

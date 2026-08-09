@@ -1,7 +1,6 @@
 package xyz.a202132.app.network
 
 import android.content.Context
-import android.net.ConnectivityManager
 import android.util.Log
 import io.nekohasekai.libbox.Libbox
 import xyz.a202132.app.AppConfig
@@ -26,21 +25,6 @@ object UrlTestManager {
     private var isRunning = false
     
     /**
-     * 检测当前活动网络接口名称
-     */
-    private fun detectActiveInterface(context: Context): String? {
-        try {
-            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            val activeNetwork = cm.activeNetwork ?: return null
-            val linkProperties = cm.getLinkProperties(activeNetwork) ?: return null
-            return linkProperties.interfaceName
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to detect active interface", e)
-            return null
-        }
-    }
-    
-    /**
      * 启动临时 sing-box 实例用于 URL 测试
      */
     @Synchronized
@@ -57,10 +41,6 @@ object UrlTestManager {
         
         return try {
             Log.i(TAG, "Starting headless sing-box for URL test (${nodes.size} nodes)")
-            
-            // 检测活动网络接口
-            val activeInterface = detectActiveInterface(context)
-            Log.i(TAG, "Active interface: $activeInterface")
             
             // 使用与 VPN 服务相同的工作目录
             val workDir = File(context.filesDir, "sing-box")
@@ -82,7 +62,6 @@ object UrlTestManager {
             val configContent = configGenerator.generateUrlTestConfig(
                 nodes = nodes,
                 clashApiPort = CLASH_API_PORT,
-                defaultInterface = activeInterface,
                 logFile = logFile.absolutePath,
                 hysteriaUpMbps = hysteriaUpMbps,
                 hysteriaDownMbps = hysteriaDownMbps
@@ -190,5 +169,4 @@ object UrlTestManager {
         isRunning = false
     }
     
-    fun isRunning(): Boolean = isRunning
 }

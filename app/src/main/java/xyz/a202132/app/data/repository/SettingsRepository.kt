@@ -21,7 +21,6 @@ class SettingsRepository(private val context: Context) {
         private val PROXY_MODE = stringPreferencesKey("proxy_mode")
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
-        private val AUTO_CONNECT = booleanPreferencesKey("auto_connect")
         private val USER_AGREEMENT_ACCEPTED = booleanPreferencesKey("user_agreement_accepted")
         
         // 分应用代理设置
@@ -85,10 +84,6 @@ class SettingsRepository(private val context: Context) {
 
     val ignoredUpdateVersionCode: Flow<Int?> = context.dataStore.data.map { preferences ->
         preferences[IGNORED_UPDATE_VERSION_CODE]
-    }
-    
-    val autoConnect: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[AUTO_CONNECT] ?: false
     }
     
     // 分应用代理 - 是否启用
@@ -166,12 +161,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
     
-    suspend fun setAutoConnect(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[AUTO_CONNECT] = enabled
-        }
-    }
-    
     val isUserAgreementAccepted: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[USER_AGREEMENT_ACCEPTED] ?: false
     }
@@ -246,16 +235,6 @@ class SettingsRepository(private val context: Context) {
 
     val lastSelectedNodeId: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[LAST_SELECTED_NODE_ID]
-    }
-
-    suspend fun setLastSelectedNodeId(nodeId: String?) {
-        context.dataStore.edit { preferences ->
-            if (nodeId == null) {
-                preferences.remove(LAST_SELECTED_NODE_ID)
-            } else {
-                preferences[LAST_SELECTED_NODE_ID] = nodeId
-            }
-        }
     }
 
     val tcpingTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->

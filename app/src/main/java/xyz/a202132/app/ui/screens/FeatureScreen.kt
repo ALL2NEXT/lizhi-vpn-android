@@ -15,7 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.ui.theme.Primary
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -36,15 +36,15 @@ fun FeatureScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsState()
-    val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsState()
-    val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsState()
-    val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsState()
-    val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsState()
-    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsState()
-    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsState()
-    val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsState()
-    val hysteriaBandwidthAdaptiveStatus by viewModel.hysteriaBandwidthAdaptiveStatus.collectAsState()
+    val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsStateWithLifecycle()
+    val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsStateWithLifecycle()
+    val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsStateWithLifecycle()
+    val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
+    val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
+    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
+    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
+    val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
+    val hysteriaBandwidthAdaptiveStatus by viewModel.hysteriaBandwidthAdaptiveStatus.collectAsStateWithLifecycle()
 
     var tcpingPercentInput by remember(smartConnectTcpingPercent) {
         mutableStateOf(smartConnectTcpingPercent.toString())
@@ -250,13 +250,13 @@ private fun FeatureNumberField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier.fillMaxWidth(),
+    modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         label = { Text(label) },
         enabled = enabled,
         singleLine = true,

@@ -12,8 +12,5 @@ internal object RuntimeTuner {
     }
 
     @JvmStatic
-    external fun c0(value: String, route: String): String
-
-    @JvmStatic
     external fun c1(value: String, route: String): String
 }

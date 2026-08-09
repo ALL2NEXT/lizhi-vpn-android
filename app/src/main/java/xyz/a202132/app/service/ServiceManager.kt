@@ -1,15 +1,14 @@
 package xyz.a202132.app.service
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.net.VpnService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.VpnState
+import java.util.Locale
 
 /**
  * VPN服务管理器 - 单例
@@ -25,29 +24,9 @@ object ServiceManager {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
     
-    // 服务运行状态
-    private val _isServiceRunning = MutableStateFlow(false)
-    val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
-    
     // 移动网络提醒
     private val _cellularWarning = MutableStateFlow<String?>(null)
     val cellularWarning: StateFlow<String?> = _cellularWarning.asStateFlow()
-    
-    const val VPN_PERMISSION_REQUEST_CODE = 1001
-    
-    /**
-     * 准备VPN权限
-     * @return 若需请求权限，则为 true；若已就绪，则为 false
-     */
-    fun prepareVpn(activity: Activity): Boolean {
-        val intent = VpnService.prepare(activity)
-        return if (intent != null) {
-            activity.startActivityForResult(intent, VPN_PERMISSION_REQUEST_CODE)
-            true
-        } else {
-            false
-        }
-    }
     
     /**
      * 启动VPN连接
@@ -91,15 +70,12 @@ object ServiceManager {
     fun notifyStateChange() {
         if (BoxVpnService.isRunning) {
             _vpnState.value = VpnState.CONNECTED
-            _isServiceRunning.value = true
         } else {
             if (_vpnState.value == VpnState.CONNECTING && _currentNode.value != null) {
-                _isServiceRunning.value = false
                 return
             }
             _vpnState.value = VpnState.DISCONNECTED
             _currentNode.value = null
-            _isServiceRunning.value = false
         }
     }
     
@@ -123,7 +99,7 @@ object ServiceManager {
      * 通知切换到移动网络（由 BoxPlatformInterface 调用）
      */
     fun notifyCellularNetwork() {
-        if (_isServiceRunning.value || _vpnState.value == VpnState.CONNECTING) {
+        if (_vpnState.value == VpnState.CONNECTED || _vpnState.value == VpnState.CONNECTING) {
             _cellularWarning.value = "使用移动网络中，请注意流量消耗"
         }
     }
@@ -136,24 +112,14 @@ object ServiceManager {
     }
     
     /**
-     * 检查VPN是否正在运行
-     */
-    fun isRunning(): Boolean = BoxVpnService.isRunning
-    
-    /**
-     * 获取当前连接的节点名称
-     */
-    fun getCurrentNodeName(): String? = BoxVpnService.currentNodeName
-    
-    /**
      * 格式化速度显示
      */
     fun formatSpeed(bytesPerSecond: Long): String {
         return when {
             bytesPerSecond < 1024 -> "${bytesPerSecond} B/s"
-            bytesPerSecond < 1024 * 1024 -> "%.1f KB/s".format(bytesPerSecond / 1024.0)
-            bytesPerSecond < 1024 * 1024 * 1024 -> "%.1f MB/s".format(bytesPerSecond / (1024.0 * 1024))
-            else -> "%.2f GB/s".format(bytesPerSecond / (1024.0 * 1024 * 1024))
+            bytesPerSecond < 1024 * 1024 -> String.format(Locale.US, "%.1f KB/s", bytesPerSecond / 1024.0)
+            bytesPerSecond < 1024 * 1024 * 1024 -> String.format(Locale.US, "%.1f MB/s", bytesPerSecond / (1024.0 * 1024))
+            else -> String.format(Locale.US, "%.2f GB/s", bytesPerSecond / (1024.0 * 1024 * 1024))
         }
     }
     
@@ -163,9 +129,9 @@ object ServiceManager {
     fun formatTraffic(bytes: Long): String {
         return when {
             bytes < 1024 -> "${bytes} B"
-            bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
-            bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
-            else -> "%.2f GB".format(bytes / (1024.0 * 1024 * 1024))
+            bytes < 1024 * 1024 -> String.format(Locale.US, "%.1f KB", bytes / 1024.0)
+            bytes < 1024 * 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024))
+            else -> String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024 * 1024))
         }
     }
 }

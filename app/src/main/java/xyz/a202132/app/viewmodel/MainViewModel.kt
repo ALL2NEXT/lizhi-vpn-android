@@ -17,13 +17,13 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
-import okhttp3.MediaType.Companion.toMediaType
+import kotlinx.coroutines.Job
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
-import okio.BufferedSink
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.local.AppDatabase
+import xyz.a202132.app.data.local.NodeLatencyUpdate
+import xyz.a202132.app.data.local.NodeLocationUpdate
 import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.LatencyTester
@@ -53,6 +53,7 @@ enum class NodeImportResult {
     INVALID
 }
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val tag = "MainViewModel"
@@ -72,6 +73,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var lastFetchedNodes: List<Node>? = null
     private var cachedSubscriptionList: SubscriptionList? = null
     private var trafficSessionId: String? = null
+    private var nodeLocationEnrichmentJob: Job? = null
     private val gson = Gson()
     private var backendUpdateInfo: UpdateInfo? = null
     
@@ -97,7 +99,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     // 持久通知配置（与对话框可见性无关）
     private val _noticeConfig = MutableStateFlow<NoticeInfo?>(null)
-    val noticeConfig = _noticeConfig.asStateFlow()
 
     private val _backendSettings = MutableStateFlow(BackendAppSettings())
     val backendSettings = _backendSettings.asStateFlow()
@@ -147,17 +148,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             emptySet()
         )
 
-    private val subscriptionNodes = combine(
-        nodeDao.getSubscriptionNodes(),
-        activeSubscriptionSourceId
-    ) { list, sourceId ->
-        val scopedList = if (sourceId.isNullOrBlank()) {
-            list
-        } else {
-            list.filter { it.subscriptionSourceId == sourceId }
+    private val subscriptionNodes = activeSubscriptionSourceId
+        .flatMapLatest { sourceId ->
+            if (sourceId.isNullOrBlank()) {
+                nodeDao.getSubscriptionNodes()
+            } else {
+                nodeDao.getSubscriptionNodesBySource(sourceId)
+            }
         }
-        sortNodesForList(scopedList)
-    }
+        .map(::sortNodesForList)
 
     private val favoriteNodes = nodeDao.getFavoriteNodes().map { list ->
         sortNodesForList(list)
@@ -229,13 +228,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Lazily, TunStack.GVISOR)
     val vpnState = ServiceManager.vpnState
     
-    val currentNode = combine(nodeDao.getAllNodes(), selectedNodeId) { nodeList, selectedId ->
-        nodeList.find { it.id == selectedId }
-    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+    val currentNode = selectedNodeId
+        .flatMapLatest { selectedId ->
+            if (selectedId == null) flowOf(null) else nodeDao.observeNodeById(selectedId)
+        }
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
     
     init {
         // 为历史缓存节点补充地区信息；名称识别优先，IP 查询在后台执行。
-        viewModelScope.launch(Dispatchers.IO) {
+        nodeLocationEnrichmentJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(1_500)
             enrichAndPersistNodeLocations(nodeDao.getAllNodes().first())
         }
 
@@ -319,23 +321,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ).onFailure { error ->
                 Log.w(tag, "Traffic report failed", error)
             }
-        }
-    }
-
-    fun fetchNodes(
-        bypassThrottle: Boolean = false,
-        allowWhenTestRunning: Boolean = false,
-        allowWhenFetchingInProgress: Boolean = false,
-        fetchingLabel: String = "请求节点中"
-    ) {
-        viewModelScope.launch {
-            fetchNodesInternal(
-                bypassThrottle = bypassThrottle,
-                allowWhenTestRunning = allowWhenTestRunning,
-                allowWhenFetchingInProgress = allowWhenFetchingInProgress,
-                fetchingLabel = fetchingLabel,
-                forceBackendRefresh = true
-            )
         }
     }
 
@@ -575,26 +560,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun scheduleNodeLocationEnrichment(nodes: List<Node>) {
         if (nodes.isEmpty()) return
-        viewModelScope.launch(Dispatchers.IO) {
+        nodeLocationEnrichmentJob?.cancel()
+        nodeLocationEnrichmentJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(1_500)
             enrichAndPersistNodeLocations(nodes)
         }
     }
 
     private suspend fun enrichAndPersistNodeLocations(nodes: List<Node>) {
-        NodeLocationResolver.enrichNodes(nodes).forEach { enrichedNode ->
-            val currentNode = nodeDao.getNodeById(enrichedNode.id) ?: return@forEach
+        val sourceById = nodes.associateBy(Node::id)
+        val updates = NodeLocationResolver.enrichNodes(nodes).mapNotNull { enrichedNode ->
+            val sourceNode = sourceById[enrichedNode.id] ?: return@mapNotNull null
             if (
-                currentNode.country != enrichedNode.country ||
-                currentNode.countryName != enrichedNode.countryName
+                sourceNode.country == enrichedNode.country &&
+                sourceNode.countryName == enrichedNode.countryName
             ) {
-                nodeDao.updateNode(
-                    currentNode.copy(
-                        country = enrichedNode.country,
-                        countryName = enrichedNode.countryName
-                    )
-                )
+                return@mapNotNull null
             }
+            NodeLocationUpdate(
+                nodeId = enrichedNode.id,
+                country = enrichedNode.country,
+                countryName = enrichedNode.countryName
+            )
         }
+        if (updates.isNotEmpty()) nodeDao.updateNodeLocations(updates)
     }
 
     private fun showNodeFetchToast(showToast: Boolean, message: String) {
@@ -1040,16 +1029,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun applyUrlTestResults(results: List<LatencyTester.LatencyResult>) {
-        results.forEach { result ->
-            val updatedRows = nodeDao.updateUrlTestResult(
-                nodeId = result.nodeId,
-                latency = result.latency,
-                isAvailable = result.isAvailable,
-                testedAt = System.currentTimeMillis()
-            )
-            if (updatedRows == 0) {
-                Log.w(tag, "URL Test result not applied, node not found in DB: ${result.nodeId}")
-            }
+        val updates = results.map { result ->
+            NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
+        }
+        val updatedRows = nodeDao.updateUrlTestResults(updates, System.currentTimeMillis())
+        if (updatedRows != updates.size) {
+            Log.w(tag, "Only $updatedRows/${updates.size} URL test results were applied")
         }
         deleteTimedOutNodes(results)
     }
@@ -1064,9 +1049,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (timedOutNodeIds.isEmpty()) return
 
         val selectedNodeId = settingsRepository.selectedNodeId.first()
-        timedOutNodeIds.forEach { nodeId ->
-            nodeDao.deleteNodeById(nodeId)
-        }
+        nodeDao.deleteNodesByIds(timedOutNodeIds)
         if (selectedNodeId != null && selectedNodeId in timedOutNodeIds) {
             settingsRepository.setSelectedNodeId(null)
         }
@@ -1102,34 +1085,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
         Log.d(tag, "Got ${results.size} test results")
         
-        // 更新数据库
-        results.forEach { result ->
-            nodeDao.updateTcpingResult(
-                nodeId = result.nodeId,
-                latency = result.latency,
-                isAvailable = result.isAvailable,
-                testedAt = System.currentTimeMillis()
-            )
+        val updates = results.map { result ->
+            NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
         }
+        nodeDao.updateTcpingResults(updates, System.currentTimeMillis())
         deleteTimedOutNodes(results)
         return results
     }
 
-    /**
-     * 开始自动选择并连接
-     * (Blocking UI Flow)
-     */
-fun autoSelectBestNode() {
-        viewModelScope.launch {
-            val bestNode = currentNodeListSnapshot()
-                .filter { it.isAvailable }
-                .minWithOrNull(compareBy<Node> { if (it.latency >= 0) it.latency else Int.MAX_VALUE })
-            if (bestNode != null) {
-                selectNode(bestNode)
-            }
-        }
-    }
-    
     /**
      * 选择节点
      */
@@ -1719,68 +1682,6 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
             (total * 8f / 1_000_000f) / (durationMs / 1000f)
         } catch (e: Exception) {
             Log.e(tag, "Download bandwidth test failed for ${node.getDisplayName()}: ${e.message}")
-            0f
-        } finally {
-            session.stop()
-        }
-    }
-
-    private suspend fun testNodeUploadBandwidthMbps(node: Node, sizeMb: Int): Float = withContext(Dispatchers.IO) {
-        val port = pickFreePort()
-        val session = NodeTestProxyManager.createSession(
-            getApplication(),
-            node,
-            port,
-            hysteriaUpMbps.value,
-            hysteriaDownMbps.value
-        )
-        val started = session.start()
-        if (!started) return@withContext 0f
-
-        try {
-            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
-            val builder = NetworkClient.withUserAgent(OkHttpClient.Builder())
-                .proxy(proxy)
-                .connectTimeout(12, TimeUnit.SECONDS)
-                .readTimeout(45, TimeUnit.SECONDS)
-                .writeTimeout(45, TimeUnit.SECONDS)
-            if (AppConfig.AUTO_TEST_BANDWIDTH_UPLOAD_TIMEOUT_MS > 0L) {
-                builder.callTimeout(AppConfig.AUTO_TEST_BANDWIDTH_UPLOAD_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            }
-            val client = builder.build()
-
-            val bytes = sizeMb.toLong() * 1_000_000L
-            val randomBuffer = ByteArray(8192) { 0x5A.toByte() }
-            val requestBody = object : RequestBody() {
-                override fun contentType() = "application/octet-stream".toMediaType()
-
-                override fun contentLength(): Long = bytes
-
-                override fun writeTo(sink: BufferedSink) {
-                    var uploaded = 0L
-                    while (uploaded < bytes) {
-                        val remain = bytes - uploaded
-                        val writeSize = minOf(remain.toInt(), randomBuffer.size)
-                        sink.write(randomBuffer, 0, writeSize)
-                        uploaded += writeSize
-                    }
-                }
-            }
-
-            val request = Request.Builder()
-                .url(AppConfig.SPEED_TEST_UPLOAD_URL)
-                .post(requestBody)
-                .build()
-
-            val start = System.currentTimeMillis()
-            client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext 0f
-                resp.body?.close()
-            }
-            val durationMs = (System.currentTimeMillis() - start).coerceAtLeast(1)
-            (bytes * 8f / 1_000_000f) / (durationMs / 1000f)
-        } catch (e: Exception) {
-            Log.e(tag, "Upload bandwidth test failed for ${node.getDisplayName()}: ${e.message}")
             0f
         } finally {
             session.stop()

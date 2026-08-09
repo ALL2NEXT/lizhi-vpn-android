@@ -16,7 +16,6 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.VpnState
@@ -41,18 +41,18 @@ fun OtherConfigScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val tcpingTestTimeoutMs by viewModel.tcpingTestTimeoutMs.collectAsState()
-    val urlTestTimeoutMs by viewModel.urlTestTimeoutMs.collectAsState()
-    val speedTestDownloadTimeoutMs by viewModel.speedTestDownloadTimeoutMs.collectAsState()
-    val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsState()
-    val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsState()
-    val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsState()
-    val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsState()
-    val vpnMtu by viewModel.vpnMtu.collectAsState()
-    val vpnState by viewModel.vpnState.collectAsState()
-    val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsState()
-    val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsState()
-    val tunStack by viewModel.tunStack.collectAsState()
+    val tcpingTestTimeoutMs by viewModel.tcpingTestTimeoutMs.collectAsStateWithLifecycle()
+    val urlTestTimeoutMs by viewModel.urlTestTimeoutMs.collectAsStateWithLifecycle()
+    val speedTestDownloadTimeoutMs by viewModel.speedTestDownloadTimeoutMs.collectAsStateWithLifecycle()
+    val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsStateWithLifecycle()
+    val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsStateWithLifecycle()
+    val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsStateWithLifecycle()
+    val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
+    val vpnMtu by viewModel.vpnMtu.collectAsStateWithLifecycle()
+    val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
+    val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsStateWithLifecycle()
+    val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
+    val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
 
     var tcpingTimeoutInput by remember(tcpingTestTimeoutMs) { mutableStateOf(tcpingTestTimeoutMs.toString()) }
     var urlTestTimeoutInput by remember(urlTestTimeoutMs) { mutableStateOf(urlTestTimeoutMs.toString()) }
@@ -346,13 +346,13 @@ private fun OtherConfigNumberField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier.fillMaxWidth(),
+    modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         label = { Text(label) },
         enabled = enabled,
         singleLine = true,

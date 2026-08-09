@@ -254,13 +254,4 @@ class PerAppProxyViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
     
-    /**
-     * 清空所有选择
-     */
-    fun clearAll() {
-        viewModelScope.launch {
-            settingsRepository.setSelectedPackages(emptySet())
-            _hasChanges.value = true
-        }
-    }
 }

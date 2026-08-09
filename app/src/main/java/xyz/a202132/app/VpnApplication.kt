@@ -19,8 +19,6 @@ class VpnApplication : Application() {
         // 签名校验 - 如果 APK 被篡改，APP 会立即 Crash
         SignatureVerifier.verifySignature(this)
         
-        instance = this
-        
         // 后台更新规则集（不阻塞启动，失败不影响使用）
         applicationScope.launch(Dispatchers.IO) {
             try {
@@ -29,10 +27,5 @@ class VpnApplication : Application() {
                 Log.w("VpnApplication", "Background rule set update failed", e)
             }
         }
-    }
-    
-    companion object {
-        lateinit var instance: VpnApplication
-            private set
     }
 }

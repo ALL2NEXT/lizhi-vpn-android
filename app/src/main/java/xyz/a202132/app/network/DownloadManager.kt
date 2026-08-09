@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.util.Locale
 import java.io.FileOutputStream
 import java.io.InputStream
 
@@ -286,8 +287,8 @@ object DownloadManager {
         if (timeMs == 0L) return "0 KB/s"
         val bytesPerSec = (bytesDiff * 1000) / timeMs
         return when {
-            bytesPerSec >= 1024 * 1024 -> String.format("%.1f MB/s", bytesPerSec / (1024.0 * 1024.0))
-            bytesPerSec >= 1024 -> String.format("%.1f KB/s", bytesPerSec / 1024.0)
+            bytesPerSec >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB/s", bytesPerSec / (1024.0 * 1024.0))
+            bytesPerSec >= 1024 -> String.format(Locale.US, "%.1f KB/s", bytesPerSec / 1024.0)
             else -> "$bytesPerSec B/s"
         }
     }

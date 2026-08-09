@@ -19,6 +19,9 @@ import java.net.URL
  */
 object RuleManager {
     private const val TAG = "RuleManager"
+    private const val PREFS_NAME = "rule_manager"
+    private const val LAST_SUCCESSFUL_UPDATE = "last_successful_update"
+    private const val UPDATE_INTERVAL_MS = 24L * 60L * 60L * 1000L
 
     // .srs 规则集下载地址 (jsDelivr CDN 加速)
     private const val GEOIP_CN_URL = "https://testingcf.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs"
@@ -67,6 +70,14 @@ object RuleManager {
     suspend fun updateRuleSets(context: Context): Boolean {
         return withContext(Dispatchers.IO) {
             try {
+                val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val now = System.currentTimeMillis()
+                val lastUpdate = preferences.getLong(LAST_SUCCESSFUL_UPDATE, 0L)
+                if (now - lastUpdate in 0 until UPDATE_INTERVAL_MS) {
+                    Log.d(TAG, "Rule sets checked recently; skipping startup download")
+                    return@withContext true
+                }
+
                 val workDir = File(context.filesDir, "sing-box")
                 if (!workDir.exists()) {
                     workDir.mkdirs()
@@ -92,6 +103,7 @@ object RuleManager {
                 }
 
                 if (allSuccess) {
+                    preferences.edit().putLong(LAST_SUCCESSFUL_UPDATE, now).apply()
                     Log.i(TAG, "All rule sets updated successfully")
                 }
                 allSuccess

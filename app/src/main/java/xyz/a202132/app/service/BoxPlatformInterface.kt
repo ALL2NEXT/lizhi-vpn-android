@@ -154,11 +154,9 @@ class BoxPlatformInterface(
      */
     private fun updateUnderlyingNetwork(network: Network?) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                val networks = if (network != null) arrayOf(network) else null
-                service.setUnderlyingNetworks(networks)
-                Log.d(TAG, "Updated underlying network: ${network ?: "null"}")
-            }
+            val networks = if (network != null) arrayOf(network) else null
+            service.setUnderlyingNetworks(networks)
+            Log.d(TAG, "Updated underlying network: ${network ?: "null"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update underlying network", e)
         }
@@ -171,17 +169,13 @@ class BoxPlatformInterface(
         try {
             if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
                 // 防止重复提醒同一网络
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    if (network.networkHandle == lastNotifiedNetworkId) {
-                        return
-                    }
+                if (network.networkHandle == lastNotifiedNetworkId) {
+                    return
                 }
                 
                 Log.d(TAG, "Switched to cellular network, notifying user")
                 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    lastNotifiedNetworkId = network.networkHandle
-                }
+                lastNotifiedNetworkId = network.networkHandle
                 
                 ServiceManager.notifyCellularNetwork()
             } else {
@@ -215,10 +209,8 @@ class BoxPlatformInterface(
      */
     fun prepareForVpnShutdown() {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                service.setUnderlyingNetworks(null)
-                Log.d(TAG, "Underlying networks cleared")
-            }
+            service.setUnderlyingNetworks(null)
+            Log.d(TAG, "Underlying networks cleared")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear underlying networks", e)
         }
@@ -294,20 +286,17 @@ class BoxPlatformInterface(
         val settingsRepo = xyz.a202132.app.data.repository.SettingsRepository(service)
         
         // 使用 runBlocking 读取设置（在 openTun 调用时需要同步获取）
-        val isPerAppEnabled = kotlinx.coroutines.runBlocking { 
-            settingsRepo.perAppProxyEnabled.first() 
+        val (isPerAppEnabled, mode, selectedPackages) = kotlinx.coroutines.runBlocking {
+            Triple(
+                settingsRepo.perAppProxyEnabled.first(),
+                settingsRepo.perAppProxyMode.first(),
+                settingsRepo.selectedPackages.first()
+            )
         }
         
         if (!isPerAppEnabled) {
             Log.d(TAG, "Per-app proxy disabled, all apps will use VPN")
             return false
-        }
-        
-        val mode = kotlinx.coroutines.runBlocking { 
-            settingsRepo.perAppProxyMode.first() 
-        }
-        val selectedPackages = kotlinx.coroutines.runBlocking { 
-            settingsRepo.selectedPackages.first() 
         }
         
         Log.d(TAG, "Per-app proxy enabled, mode: $mode, selected: ${selectedPackages.size} apps")
@@ -341,7 +330,6 @@ class BoxPlatformInterface(
                 return false // 未使用白名单模式
             }
         }
-        return false
     }
     
     override fun useProcFS(): Boolean {

@@ -66,8 +66,8 @@ data class Node(
         }
 
         // 2. 优先使用显式国家代码，其次从节点名称识别国家名或代码
-        val resolvedCountry = CountryCodeResolver.fromNodeName(name)
-            ?: CountryCodeResolver.normalizeCountryCode(country)
+        val resolvedCountry = CountryCodeResolver.normalizeCountryCode(country)
+            ?: CountryCodeResolver.fromNodeName(name)
             ?: CountryCodeResolver.fromNodeName(countryName)
         if (resolvedCountry == null) {
             return "🌐"

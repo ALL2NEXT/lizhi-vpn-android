@@ -146,23 +146,6 @@ int tableIndex(const std::array<char, 64>& alphabet, char value) {
     return -1;
 }
 
-std::string encodeBase64(const std::string& input, const std::array<char, 64>& alphabet) {
-    std::string result;
-    result.reserve(((input.size() + 2) / 3) * 4);
-    for (size_t i = 0; i < input.size(); i += 3) {
-        const size_t remaining = input.size() - i;
-        const uint32_t a = static_cast<uint8_t>(input[i]);
-        const uint32_t b = remaining > 1 ? static_cast<uint8_t>(input[i + 1]) : 0;
-        const uint32_t c = remaining > 2 ? static_cast<uint8_t>(input[i + 2]) : 0;
-        const uint32_t block = (a << 16u) | (b << 8u) | c;
-        result.push_back(alphabet[(block >> 18u) & 0x3Fu]);
-        result.push_back(alphabet[(block >> 12u) & 0x3Fu]);
-        result.push_back(remaining > 1 ? alphabet[(block >> 6u) & 0x3Fu] : '=');
-        result.push_back(remaining > 2 ? alphabet[block & 0x3Fu] : '=');
-    }
-    return result;
-}
-
 std::string decodeBase64(std::string input, const std::array<char, 64>& alphabet, size_t shift) {
     std::string compact;
     compact.reserve(input.size());
@@ -208,18 +191,6 @@ std::string decodeBase64(std::string input, const std::array<char, 64>& alphabet
 }  // namespace
 
 namespace rt {
-
-std::string a(const std::string& value, const std::string& route) {
-    const auto alphabet = table();
-    const size_t shift = shiftFromRoute(route);
-    std::string encoded = encodeBase64(value, alphabet);
-    for (char& ch : encoded) {
-        if (ch == '=') continue;
-        const int index = tableIndex(alphabet, ch);
-        ch = alphabet[(static_cast<size_t>(index) + shift) % alphabet.size()];
-    }
-    return encoded;
-}
 
 std::string b(const std::string& value, const std::string& route) {
     const auto alphabet = table();

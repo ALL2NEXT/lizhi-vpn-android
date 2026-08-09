@@ -279,11 +279,11 @@ static jstring fromUtf8(JNIEnv* env, const std::string& value) {
     return static_cast<jstring>(env->NewObject(stringClass, constructor, bytes, utf8));
 }
 
-static jstring runTransform(JNIEnv* env, jstring value, jstring route, bool reverse) {
+static jstring runTransform(JNIEnv* env, jstring value, jstring route) {
     try {
         const std::string input = toUtf8(env, value);
         const std::string routeValue = toUtf8(env, route);
-        return fromUtf8(env, reverse ? rt::b(input, routeValue) : rt::a(input, routeValue));
+        return fromUtf8(env, rt::b(input, routeValue));
     } catch (const std::exception& error) {
         if (env->ExceptionCheck()) env->ExceptionClear();
         jclass exceptionClass = env->FindClass("java/lang/IllegalArgumentException");
@@ -292,12 +292,8 @@ static jstring runTransform(JNIEnv* env, jstring value, jstring route, bool reve
     }
 }
 
-static jstring nativeC0(JNIEnv* env, jclass, jstring value, jstring route) {
-    return runTransform(env, value, route, false);
-}
-
 static jstring nativeC1(JNIEnv* env, jclass, jstring value, jstring route) {
-    return runTransform(env, value, route, true);
+    return runTransform(env, value, route);
 }
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
@@ -323,12 +319,10 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
         return JNI_ERR;
     }
     JNINativeMethod tunerMethods[] = {
-            {"c0", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
-             reinterpret_cast<void*>(nativeC0)},
             {"c1", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
              reinterpret_cast<void*>(nativeC1)},
     };
-    if (env->RegisterNatives(tunerCls, tunerMethods, 2) != JNI_OK) {
+    if (env->RegisterNatives(tunerCls, tunerMethods, 1) != JNI_OK) {
         return JNI_ERR;
     }
 

@@ -84,16 +84,6 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
-                    val nodes by viewModel.nodes.collectAsStateWithLifecycle()
-                    val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
-                    val nodeListCategory by viewModel.nodeListCategory.collectAsStateWithLifecycle()
-                    val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
-                    val selectedSubscriptionSourceId by viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
-                    val favoriteSourceNodeIds by viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
-                    val skipFavoriteRemovalConfirmation by
-                        viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
-                    val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
-                    val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
                     val startupUpdateCheckCompleted by viewModel.startupUpdateCheckCompleted.collectAsStateWithLifecycle()
                     val splashDurationSeconds = AppConfig.STARTUP_SPLASH_DURATION_SECONDS.coerceAtLeast(0)
                     var splashCountdownSeconds by remember(splashDurationSeconds) {
@@ -266,6 +256,19 @@ class MainActivity : ComponentActivity() {
                                         )
                                 }
                             ) {
+                                val nodes by viewModel.nodes.collectAsStateWithLifecycle()
+                                val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
+                                val nodeListCategory by viewModel.nodeListCategory.collectAsStateWithLifecycle()
+                                val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
+                                val selectedSubscriptionSourceId by
+                                    viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
+                                val favoriteSourceNodeIds by
+                                    viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
+                                val skipFavoriteRemovalConfirmation by
+                                    viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
+                                val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
+                                val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
+
                                 NodeListScreen(
                                     nodes = nodes,
                                     selectedNodeId = selectedNodeId,

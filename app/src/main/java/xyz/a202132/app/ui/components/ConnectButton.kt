@@ -35,8 +35,8 @@ import xyz.a202132.app.data.model.VpnState
 fun ConnectButton(
     vpnState: VpnState,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     customLabel: String? = null,
     enabled: Boolean = true
 ) {

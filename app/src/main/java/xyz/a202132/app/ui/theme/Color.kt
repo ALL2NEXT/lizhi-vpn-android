@@ -9,15 +9,7 @@ val Secondary = Color(0xFF26C6DA)        // 亮青色
 val SecondaryVariant = Color(0xFF0097A7) // 深青色
 
 // 状态颜色
-val ConnectedGreen = Color(0xFF00E676)
-val ConnectedGreenGlow = Color(0xFF69F0AE)
-val DisconnectedGray = Color(0xFF64748B)
-val ConnectingYellow = Color(0xFFFACC15)
 val ErrorRed = Color(0xFFEF4444)
-
-// 按钮颜色
-val ButtonActive = Color(0xFF00BFA5)     // 青绿
-val ButtonInactive = Color(0xFF475569)
 
 // 延迟颜色
 val LatencyGood = Color(0xFF22C55E)
@@ -25,19 +17,11 @@ val LatencyMedium = Color(0xFFFACC15)
 val LatencyBad = Color(0xFFEF4444)
 
 // 杂项
-val Ripple = Color(0x2A00BFA5)           // 青绿涟漪
-val AccentGreen = Color(0xFF10B981)
-val AccentBlue = Color(0xFF26C6DA)       // 亮青色
-
 // 明亮主题颜色
 val BackgroundLight = Color(0xFFFFFFFF)
-val BackgroundLightVariant = Color(0xFFF1F5F9)
 val SurfaceLight = Color(0xFFFFFFFF)
 val CardLight = Color(0xFFF8FAFC)
 
 val TextPrimaryLight = Color(0xFF0F172A)
 val TextSecondaryLight = Color(0xFF475569)
-val TextTertiaryLight = Color(0xFF64748B)
-
 val DividerLight = Color(0xFFE2E8F0)
-val ButtonInactiveLight = Color(0xFFCBD5E1)

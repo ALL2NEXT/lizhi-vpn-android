@@ -39,7 +39,7 @@ import xyz.a202132.app.ui.theme.*
 import xyz.a202132.app.R
 import java.util.concurrent.Executors
 
-private val htmlImageExecutor = Executors.newCachedThreadPool()
+private val htmlImageExecutor = Executors.newFixedThreadPool(2)
 private val htmlImageClient: OkHttpClient by lazy {
     NetworkClient.withUserAgent(OkHttpClient.Builder()).build()
 }
@@ -309,7 +309,7 @@ private class HtmlImageGetter(
             htmlImageClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val bytes = response.body?.bytes() ?: return null
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+                val bitmap = decodeBitmap(bytes) ?: return null
                 BitmapDrawable(textView.resources, bitmap)
             }
         }
@@ -319,8 +319,25 @@ private class HtmlImageGetter(
         val payload = source.substringAfter("base64,", missingDelimiterValue = "")
         if (payload.isBlank()) return null
         val bytes = Base64.decode(payload, Base64.DEFAULT)
-        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        val bitmap = decodeBitmap(bytes) ?: return null
         return BitmapDrawable(textView.resources, bitmap)
+    }
+
+    private fun decodeBitmap(bytes: ByteArray): android.graphics.Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val maxDimension = (textView.resources.displayMetrics.widthPixels * 2).coerceAtLeast(2048)
+        var sampleSize = 1
+        while (
+            bounds.outWidth / (sampleSize * 2) >= maxDimension ||
+            bounds.outHeight / (sampleSize * 2) >= maxDimension
+        ) {
+            sampleSize *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     }
 }
 

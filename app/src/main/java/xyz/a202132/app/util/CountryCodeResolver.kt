@@ -4,6 +4,8 @@ import java.util.Locale
 
 /** Resolves country names and ISO 3166-1 alpha-2 codes found in node names. */
 object CountryCodeResolver {
+    private val whitespacePattern = Regex("\\s+")
+
     private val isoCountryCodes by lazy {
         Locale.getISOCountries().map { it.uppercase(Locale.ROOT) }.toSet()
     }
@@ -161,5 +163,5 @@ object CountryCodeResolver {
     }
 
     private fun normalizeText(value: String): String =
-        value.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
+        value.trim().replace(whitespacePattern, " ").lowercase(Locale.ROOT)
 }

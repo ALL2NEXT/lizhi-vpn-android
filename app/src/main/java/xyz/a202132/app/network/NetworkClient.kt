@@ -54,11 +54,4 @@ object NetworkClient {
         .build()
     
     val apiService: ApiService = retrofit.create(ApiService::class.java)
-
-    // OkHttpClient 用于延迟测试（更短的超时时间）
-    val latencyTestClient = withUserAgent(OkHttpClient.Builder())
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .writeTimeout(5, TimeUnit.SECONDS)
-        .build()
 }

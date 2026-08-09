@@ -104,14 +104,6 @@ class LatencyTester {
         results
     }
     
-    // 保持接口兼容
-    suspend fun testNode(
-        node: Node,
-        timeoutMs: Long = xyz.a202132.app.AppConfig.TCPING_TEST_TIMEOUT
-    ): LatencyResult = withContext(Dispatchers.IO) {
-        testNodeSimple(node, timeoutMs)
-    }
-    
     // ==================== URL Test (ClashAPI) ====================
     
     companion object {

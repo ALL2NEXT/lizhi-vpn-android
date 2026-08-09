@@ -5,6 +5,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -326,10 +327,11 @@ private fun NodeListContent(
             subscriptionGroups.size > 1
     val subscriptionSwipeVisualOffsetPx by animateFloatAsState(
         targetValue = if (isSubscriptionSwiping) subscriptionSwipeOffsetPx else 0f,
-        animationSpec = tween(
-            durationMillis = if (isSubscriptionSwiping) 40 else 180,
-            easing = FastOutSlowInEasing
-        ),
+        animationSpec = if (isSubscriptionSwiping) {
+            snap()
+        } else {
+            tween(durationMillis = 180, easing = FastOutSlowInEasing)
+        },
         label = "subscriptionSwipeOffset"
     )
     val subscriptionSwipeProgress =
@@ -337,7 +339,7 @@ private fun NodeListContent(
             .coerceIn(0f, 1f)
     val subscriptionSwipeModifier = Modifier
         .graphicsLayer {
-            translationX = subscriptionSwipeVisualOffsetPx * 0.55f
+            translationX = subscriptionSwipeVisualOffsetPx
             alpha = 1f - subscriptionSwipeProgress * 0.12f
         }
         .pointerInput(

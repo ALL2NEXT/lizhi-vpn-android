@@ -127,40 +127,6 @@ object NodeTestProxyManager {
         )
     }
 
-    private var legacySession: Session? = null
-
-    @Synchronized
-    fun start(
-        context: Context,
-        node: Node,
-        socksPort: Int,
-        hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
-        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
-    ): Boolean {
-        if (legacySession != null) {
-            Log.w(TAG, "Node test instance already running")
-            return false
-        }
-        val session = createSession(
-            context,
-            node,
-            socksPort,
-            hysteriaUpMbps,
-            hysteriaDownMbps
-        )
-        val started = session.start()
-        if (started) {
-            legacySession = session
-        }
-        return started
-    }
-
-    @Synchronized
-    fun stop() {
-        legacySession?.stop()
-        legacySession = null
-    }
-
     private fun waitSocksReady(port: Int, retries: Int = 8, delayMs: Long = 500): Boolean {
         repeat(retries) {
             try {

@@ -48,8 +48,6 @@ class SingBoxConfigGenerator {
             // 提取唯一域名和 IP 地址
             val uniqueServers = nodes.map { it.server }.distinct()
             val ipRegex = Regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
-            val ipv6Regex = Regex("([0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F]{1,4}") // 用于 IPv6 检测的简单正则表达式
-            
             val nodeIPs = uniqueServers.filter { it.matches(ipRegex) || it.contains(":") } // 将任何包含“:”的内容视为潜在的 IPv6 地址。
             val nodeDomains = uniqueServers.filter { !it.matches(ipRegex) && !it.contains(":") }
                 
@@ -175,7 +173,6 @@ class SingBoxConfigGenerator {
     fun generateUrlTestConfig(
         nodes: List<Node>,
         clashApiPort: Int = 19090,
-        defaultInterface: String? = null,
         logFile: String? = null,
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
