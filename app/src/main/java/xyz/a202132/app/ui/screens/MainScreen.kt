@@ -7,16 +7,26 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,6 +64,22 @@ fun MainScreen(
     val drawerAnimationSpec = remember {
         tween<Float>(durationMillis = 250, easing = FastOutSlowInEasing)
     }
+    val density = LocalDensity.current
+    val nodeSwipeThresholdPx = with(density) { 72.dp.toPx() }
+    val nodeSwipeContentOffsetPx = with(density) { 14.dp.toPx() }
+    val nodeSwipeHintOffsetPx = with(density) { 18.dp.toPx() }
+    var nodeSwipeDistancePx by remember { mutableFloatStateOf(0f) }
+    var isNodeSwipeDragging by remember { mutableStateOf(false) }
+    val nodeSwipeProgress =
+        (nodeSwipeDistancePx / nodeSwipeThresholdPx).coerceIn(0f, 1f)
+    val nodeSwipeVisualProgress by animateFloatAsState(
+        targetValue = if (isNodeSwipeDragging) nodeSwipeProgress else 0f,
+        animationSpec = tween(
+            durationMillis = if (isNodeSwipeDragging) 45 else 180,
+            easing = FastOutSlowInEasing
+        ),
+        label = "nodeSwipeProgress"
+    )
 
     fun closeDrawerThen(action: () -> Unit) {
         scope.launch {
@@ -178,6 +204,36 @@ fun MainScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
+                    .graphicsLayer {
+                        translationY = -nodeSwipeContentOffsetPx * nodeSwipeVisualProgress
+                    }
+                    .pointerInput(onOpenNodeList, nodeSwipeThresholdPx) {
+                        detectVerticalDragGestures(
+                            onDragStart = {
+                                nodeSwipeDistancePx = 0f
+                                isNodeSwipeDragging = true
+                            },
+                            onVerticalDrag = { change, dragAmount ->
+                                nodeSwipeDistancePx =
+                                    (nodeSwipeDistancePx - dragAmount)
+                                        .coerceIn(0f, nodeSwipeThresholdPx * 1.2f)
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                val shouldOpenNodeList =
+                                    nodeSwipeDistancePx >= nodeSwipeThresholdPx
+                                isNodeSwipeDragging = false
+                                nodeSwipeDistancePx = 0f
+                                if (shouldOpenNodeList) {
+                                    onOpenNodeList()
+                                }
+                            },
+                            onDragCancel = {
+                                isNodeSwipeDragging = false
+                                nodeSwipeDistancePx = 0f
+                            }
+                        )
+                    }
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -260,7 +316,7 @@ fun MainScreen(
                         if (isTesting) {
                             testingLabel ?: "智能连接中..."
                         } else {
-                            "点击连接｜长按智能连接"
+                            "点击直接连接\n长按智能连接"
                         }
                     } else {
                         null
@@ -269,11 +325,60 @@ fun MainScreen(
                 
                 Spacer(modifier = Modifier.weight(1f))
                 
-                // 节点选择器
-                NodeSelector(
-                    currentNode = currentNode,
-                    onClick = onOpenNodeList
+                // 节点列表改由主页上划打开；提示跟随手势提供实时反馈。
+                val nodeSwipeHintColor = lerp(
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                    Primary,
+                    nodeSwipeVisualProgress
                 )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.graphicsLayer {
+                        translationY = -nodeSwipeHintOffsetPx * nodeSwipeVisualProgress
+                        val scale = 1f + 0.05f * nodeSwipeVisualProgress
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = null,
+                        tint = nodeSwipeHintColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = if (nodeSwipeProgress >= 1f) {
+                            "松开打开节点列表"
+                        } else {
+                            "向上滑动选择节点"
+                        },
+                        fontSize = 14.sp,
+                        fontWeight = if (nodeSwipeProgress >= 1f) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        },
+                        color = nodeSwipeHintColor
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(96.dp)
+                            .height(3.dp)
+                            .clip(CircleShape)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
+                            )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(nodeSwipeVisualProgress)
+                                .clip(CircleShape)
+                                .background(Primary)
+                        )
+                    }
+                }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 

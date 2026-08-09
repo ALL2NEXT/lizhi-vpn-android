@@ -3,8 +3,12 @@ package xyz.a202132.app.ui.components
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +48,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,13 +57,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import java.util.Locale
+import kotlin.math.abs
 import xyz.a202132.app.data.model.LatencyLevel
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
@@ -303,6 +312,84 @@ private fun NodeListContent(
     var wasTesting by remember { mutableStateOf(isTesting) }
     var pendingScrollToTop by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val subscriptionSwipeThresholdPx = with(density) { 72.dp.toPx() }
+    var subscriptionSwipeOffsetPx by remember { mutableFloatStateOf(0f) }
+    var isSubscriptionSwiping by remember { mutableStateOf(false) }
+    val currentSubscriptionIndex = subscriptionGroups.indexOfFirst {
+        it.sourceId == selectedSubscriptionSourceId
+    }.takeIf { it >= 0 } ?: 0
+    val canSwipeSubscriptions =
+        interactionEnabled &&
+            !isTesting &&
+            category == NodeListCategory.PRIMARY &&
+            subscriptionGroups.size > 1
+    val subscriptionSwipeVisualOffsetPx by animateFloatAsState(
+        targetValue = if (isSubscriptionSwiping) subscriptionSwipeOffsetPx else 0f,
+        animationSpec = tween(
+            durationMillis = if (isSubscriptionSwiping) 40 else 180,
+            easing = FastOutSlowInEasing
+        ),
+        label = "subscriptionSwipeOffset"
+    )
+    val subscriptionSwipeProgress =
+        (abs(subscriptionSwipeVisualOffsetPx) / subscriptionSwipeThresholdPx)
+            .coerceIn(0f, 1f)
+    val subscriptionSwipeModifier = Modifier
+        .graphicsLayer {
+            translationX = subscriptionSwipeVisualOffsetPx * 0.55f
+            alpha = 1f - subscriptionSwipeProgress * 0.12f
+        }
+        .pointerInput(
+            canSwipeSubscriptions,
+            currentSubscriptionIndex,
+            subscriptionGroups,
+            subscriptionSwipeThresholdPx
+        ) {
+            if (!canSwipeSubscriptions) return@pointerInput
+            detectHorizontalDragGestures(
+                onDragStart = {
+                    subscriptionSwipeOffsetPx = 0f
+                    isSubscriptionSwiping = true
+                },
+                onHorizontalDrag = { change, dragAmount ->
+                    val requestedOffset = subscriptionSwipeOffsetPx + dragAmount
+                    val hasTarget = when {
+                        requestedOffset < 0f ->
+                            currentSubscriptionIndex < subscriptionGroups.lastIndex
+                        requestedOffset > 0f -> currentSubscriptionIndex > 0
+                        else -> true
+                    }
+                    val adjustedDrag = if (hasTarget) dragAmount else dragAmount * 0.25f
+                    subscriptionSwipeOffsetPx =
+                        (subscriptionSwipeOffsetPx + adjustedDrag).coerceIn(
+                            -subscriptionSwipeThresholdPx * 1.2f,
+                            subscriptionSwipeThresholdPx * 1.2f
+                        )
+                    change.consume()
+                },
+                onDragEnd = {
+                    val targetIndex = when {
+                        subscriptionSwipeOffsetPx <= -subscriptionSwipeThresholdPx &&
+                            currentSubscriptionIndex < subscriptionGroups.lastIndex ->
+                            currentSubscriptionIndex + 1
+                        subscriptionSwipeOffsetPx >= subscriptionSwipeThresholdPx &&
+                            currentSubscriptionIndex > 0 -> currentSubscriptionIndex - 1
+                        else -> currentSubscriptionIndex
+                    }
+                    isSubscriptionSwiping = false
+                    subscriptionSwipeOffsetPx = 0f
+                    if (targetIndex != currentSubscriptionIndex) {
+                        pendingScrollToTop = true
+                        onSubscriptionSourceChange(subscriptionGroups[targetIndex].sourceId)
+                    }
+                },
+                onDragCancel = {
+                    isSubscriptionSwiping = false
+                    subscriptionSwipeOffsetPx = 0f
+                }
+            )
+        }
 
     LaunchedEffect(isTesting) {
         if (isTesting) {
@@ -384,6 +471,7 @@ private fun NodeListContent(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .then(subscriptionSwipeModifier)
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -398,7 +486,9 @@ private fun NodeListContent(
             else -> {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(subscriptionSwipeModifier),
                     contentPadding = PaddingValues(vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -505,10 +595,31 @@ private fun NodeListCategorySwitch(
             } else {
                 112.dp
             }
+            val categoryScrollState = rememberScrollState()
+            val density = LocalDensity.current
+            val selectedSegmentIndex = when {
+                category == NodeListCategory.FAVORITES -> segmentCount - 1
+                subscriptionGroups.isEmpty() -> 0
+                else -> subscriptionGroups.indexOfFirst {
+                    it.sourceId == selectedSubscriptionSourceId
+                }.coerceAtLeast(0)
+            }
+
+            LaunchedEffect(selectedSegmentIndex, segmentWidth, maxWidth) {
+                withFrameNanos { }
+                val segmentStepPx = with(density) { (segmentWidth + segmentGap).roundToPx() }
+                val centerOffsetPx = with(density) {
+                    ((maxWidth - segmentWidth) / 2).roundToPx()
+                }
+                val targetOffset =
+                    (selectedSegmentIndex * segmentStepPx - centerOffsetPx)
+                        .coerceIn(0, categoryScrollState.maxValue)
+                categoryScrollState.animateScrollTo(targetOffset)
+            }
 
             Row(
                 modifier = Modifier
-                    .horizontalScroll(rememberScrollState())
+                    .horizontalScroll(categoryScrollState)
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(segmentGap)
             ) {

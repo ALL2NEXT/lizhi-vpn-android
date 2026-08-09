@@ -15,7 +15,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
@@ -187,7 +189,17 @@ class MainActivity : ComponentActivity() {
                                     )
                             }
                         ) {
-                            composable(AppRoute.MAIN) {
+                            composable(
+                                route = AppRoute.MAIN,
+                                popEnterTransition = {
+                                    fadeIn(
+                                        animationSpec = tween(
+                                            durationMillis = 220,
+                                            easing = FastOutSlowInEasing
+                                        )
+                                    )
+                                }
+                            ) {
                                 MainScreen(
                                     viewModel = viewModel,
                                     onStartVpn = { action -> requestVpnPermission(action) },
@@ -227,7 +239,33 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            composable(AppRoute.NODE_LIST) {
+                            composable(
+                                route = AppRoute.NODE_LIST,
+                                enterTransition = {
+                                    fadeIn(
+                                        animationSpec = tween(durationMillis = 180, delayMillis = 30)
+                                    ) + slideInVertically(
+                                        animationSpec = tween(
+                                            durationMillis = 300,
+                                            easing = FastOutSlowInEasing
+                                        ),
+                                        initialOffsetY = { height -> height }
+                                    )
+                                },
+                                popEnterTransition = {
+                                    fadeIn(animationSpec = tween(durationMillis = 180))
+                                },
+                                popExitTransition = {
+                                    fadeOut(animationSpec = tween(durationMillis = 160)) +
+                                        slideOutVertically(
+                                            animationSpec = tween(
+                                                durationMillis = 280,
+                                                easing = FastOutSlowInEasing
+                                            ),
+                                            targetOffsetY = { height -> height }
+                                        )
+                                }
+                            ) {
                                 NodeListScreen(
                                     nodes = nodes,
                                     selectedNodeId = selectedNodeId,
