@@ -217,7 +217,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.TCPING_CONCURRENCY)
     val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_CONCURRENCY)
     val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, 1)
-    val smartConnectEnabled = settingsRepository.smartConnectEnabled.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_ENABLED)
     val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_TCPING_PERCENT)
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
@@ -726,12 +725,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Connect to the selected node, or to the first node when no node is selected. */
+    /** Connect to the selected node, or to the first node in the active subscription. */
     fun startSelectedOrFirstConnection() {
         viewModelScope.launch {
             if (!ensureAccountRegistered()) return@launch
 
-            val node = currentNode.value ?: currentNodeListSnapshot().firstOrNull()
+            val selectedId = settingsRepository.selectedNodeId.first()
+            val selectedNode = selectedId?.let { nodeDao.getNodeById(it) }
+            val node = selectedNode ?: currentSubscriptionNodeSnapshot().firstOrNull()
             if (node == null) {
                 _error.value = "没有可用节点"
                 return@launch
@@ -846,12 +847,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSmartConnectTcpingPercent(value: Int) {
         viewModelScope.launch {
             settingsRepository.setSmartConnectTcpingPercent(value)
-        }
-    }
-
-    fun setSmartConnectEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setSmartConnectEnabled(enabled)
         }
     }
 
@@ -1603,14 +1598,25 @@ fun autoSelectBestNode() {
 private suspend fun currentNodeListSnapshot(): List<Node> {
         val category = settingsRepository.nodeListCategory.first()
         val snapshot = when (category) {
-            NodeListCategory.PRIMARY -> {
-                val sourceId = activeSubscriptionSourceId.first()
-                val all = nodeDao.getSubscriptionNodes().first()
-                if (sourceId.isNullOrBlank()) all else all.filter { it.subscriptionSourceId == sourceId }
-            }
+            NodeListCategory.PRIMARY -> currentSubscriptionNodeSnapshot()
             NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
         }
         return sortNodesForList(snapshot)
+    }
+
+private suspend fun currentSubscriptionNodeSnapshot(): List<Node> {
+        val groups = nodeDao.getSubscriptionGroups().first()
+        val storedSourceId = settingsRepository.selectedSubscriptionSourceId.first()
+        val sourceId = storedSourceId
+            ?.takeIf { id -> groups.any { it.sourceId == id } }
+            ?: groups.firstOrNull()?.sourceId
+        val all = nodeDao.getSubscriptionNodes().first()
+        val scoped = if (sourceId.isNullOrBlank()) {
+            all
+        } else {
+            all.filter { it.subscriptionSourceId == sourceId }
+        }
+        return sortNodesForList(scoped)
     }
 
 private suspend fun currentSmartConnectNodes(): List<Node> {

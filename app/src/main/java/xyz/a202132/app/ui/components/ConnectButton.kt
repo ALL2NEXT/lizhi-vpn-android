@@ -8,8 +8,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -28,10 +29,12 @@ import androidx.compose.ui.unit.sp
 import xyz.a202132.app.R
 import xyz.a202132.app.data.model.VpnState
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConnectButton(
     vpnState: VpnState,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     customLabel: String? = null,
     enabled: Boolean = true
@@ -98,11 +101,15 @@ fun ConnectButton(
                         scaleX = scale
                         scaleY = scale
                     }
-                    .clickable(
+                    .combinedClickable(
                         enabled = enabled && !isConnecting,
                         indication = rememberRipple(bounded = true),
-                        interactionSource = interactionSource
-                    ) { onClick() }
+                        interactionSource = interactionSource,
+                        onClickLabel = if (vpnState == VpnState.DISCONNECTED) "普通连接" else null,
+                        onLongClickLabel = if (onLongClick != null) "智能连接" else null,
+                        onLongClick = onLongClick,
+                        onClick = onClick
+                    )
             )
         }
 

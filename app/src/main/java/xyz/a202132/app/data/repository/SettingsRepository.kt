@@ -50,7 +50,6 @@ class SettingsRepository(private val context: Context) {
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
         private val VPN_MTU = intPreferencesKey("vpn_mtu")
         private val SMART_CONNECT_TCPING_PERCENT = intPreferencesKey("smart_connect_tcping_percent")
-        private val SMART_CONNECT_ENABLED = booleanPreferencesKey("smart_connect_enabled")
         private val SMART_CONNECT_URL_TEST_PERCENT = intPreferencesKey("smart_connect_url_test_percent")
         private val SMART_CONNECT_SPEED_TEST_PERCENT = intPreferencesKey("smart_connect_speed_test_percent")
         private val DISCONNECT_RECOVERY_ENABLED = booleanPreferencesKey("disconnect_recovery_enabled")
@@ -333,16 +332,6 @@ class SettingsRepository(private val context: Context) {
     val smartConnectTcpingPercent: Flow<Int> = context.dataStore.data.map { preferences ->
         (preferences[SMART_CONNECT_TCPING_PERCENT] ?: xyz.a202132.app.AppConfig.SMART_CONNECT_TCPING_PERCENT)
             .coerceIn(1, 100)
-    }
-
-    val smartConnectEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SMART_CONNECT_ENABLED] ?: xyz.a202132.app.AppConfig.SMART_CONNECT_ENABLED
-    }
-
-    suspend fun setSmartConnectEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[SMART_CONNECT_ENABLED] = enabled
-        }
     }
 
     suspend fun setSmartConnectTcpingPercent(value: Int) {

@@ -68,7 +68,6 @@ fun MainScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
-    val smartConnectEnabled by viewModel.smartConnectEnabled.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
@@ -243,22 +242,25 @@ fun MainScreen(
                         when (vpnState) {
                             VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
                             VpnState.DISCONNECTED -> onStartVpn {
-                                if (smartConnectEnabled) {
-                                    viewModel.startSmartConnection()
-                                } else {
-                                    viewModel.startSelectedOrFirstConnection()
-                                }
+                                viewModel.startSelectedOrFirstConnection()
                             }
                             else -> Unit
                         }
                     },
+                    onLongClick = if (vpnState == VpnState.DISCONNECTED) {
+                        {
+                            onStartVpn {
+                                viewModel.startSmartConnection()
+                            }
+                        }
+                    } else {
+                        null
+                    },
                     customLabel = if (vpnState == VpnState.DISCONNECTED) {
                         if (isTesting) {
                             testingLabel ?: "智能连接中..."
-                        } else if (smartConnectEnabled) {
-                            "点击上方按钮进行智能连接"
                         } else {
-                            "点击上方按钮进行连接"
+                            "点击连接｜长按智能连接"
                         }
                     } else {
                         null

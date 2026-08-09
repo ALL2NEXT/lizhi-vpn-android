@@ -21,7 +21,6 @@ object AppConfig {
 
     // 智能连接候选比例
     const val SMART_CONNECT_TCPING_PERCENT = 100
-    const val SMART_CONNECT_ENABLED = true
     const val SMART_CONNECT_URL_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_SIZE_MB = 5
