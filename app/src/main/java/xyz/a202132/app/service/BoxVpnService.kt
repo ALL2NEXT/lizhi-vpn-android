@@ -753,7 +753,9 @@ class BoxVpnService : VpnService() {
         
         serviceScope.launch {
             // 保存当前配置
-            val savedNodeName = currentNodeName
+            val savedNode = ServiceManager.currentNode.value
+            val savedNodeName = savedNode?.name ?: currentNodeName
+            ServiceManager.notifyRestarting()
 
             // 立即关闭 TUN，确保状态栏 VPN 图标尽快消失
             try {
@@ -779,9 +781,22 @@ class BoxVpnService : VpnService() {
                 val nodeDao = xyz.a202132.app.data.local.AppDatabase.getInstance(application).nodeDao()
                 val settingsRepo = xyz.a202132.app.data.repository.SettingsRepository(application)
                 val rawNodes = try {
-                    loadNodesForCurrentCategory(nodeDao, settingsRepo)
+                    if (savedNode == null) {
+                        loadNodesForCurrentCategory(nodeDao, settingsRepo)
+                    } else {
+                        val sourceNodes = loadNodesForSource(
+                            nodeDao,
+                            savedNode.source,
+                            savedNode.subscriptionSourceId
+                        )
+                        if (sourceNodes.any { it.id == savedNode.id }) {
+                            sourceNodes
+                        } else {
+                            listOf(savedNode) + sourceNodes
+                        }
+                    }
                 } catch (e: Exception) {
-                    emptyList<Node>()
+                    listOfNotNull(savedNode)
                 }
                 
                 if (rawNodes.isNotEmpty()) {
@@ -822,9 +837,10 @@ class BoxVpnService : VpnService() {
 
                     // 获取选中的节点
                     val selectedNodeId = try {
-                        settingsRepo.selectedNodeId.first()?.takeIf { selectedId ->
-                            rawNodes.any { it.id == selectedId }
-                        }
+                        savedNode?.id?.takeIf { savedId -> rawNodes.any { it.id == savedId } }
+                            ?: settingsRepo.selectedNodeId.first()?.takeIf { selectedId ->
+                                rawNodes.any { it.id == selectedId }
+                            }
                     } catch (e: Exception) {
                         null
                     }

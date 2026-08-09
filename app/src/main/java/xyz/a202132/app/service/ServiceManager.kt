@@ -78,6 +78,13 @@ object ServiceManager {
             _currentNode.value = null
         }
     }
+
+    /** Keep the session node while the service tears down for an internal reload. */
+    fun notifyRestarting() {
+        if (_currentNode.value != null) {
+            _vpnState.value = VpnState.CONNECTING
+        }
+    }
     
     /**
      * 通知错误（由BoxVpnService调用）

@@ -117,6 +117,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // 仅在本次 APP 进程存活期间有效，不写入 DataStore。
     private val _skipFavoriteRemovalConfirmation = MutableStateFlow(false)
     val skipFavoriteRemovalConfirmation = _skipFavoriteRemovalConfirmation.asStateFlow()
+
+    val vpnState = ServiceManager.vpnState
+
+    /** The node owned by the live VPN session, independent of Room refreshes and UI filters. */
+    private val activeConnectionNode = combine(
+        vpnState,
+        ServiceManager.currentNode
+    ) { state, node ->
+        node.takeIf { state != VpnState.DISCONNECTED }
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        ServiceManager.currentNode.value.takeIf {
+            ServiceManager.vpnState.value != VpnState.DISCONNECTED
+        }
+    )
     
     val nodeListCategory = settingsRepository.nodeListCategory.stateIn(
         viewModelScope,
@@ -156,19 +172,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 nodeDao.getSubscriptionNodesBySource(sourceId)
             }
         }
-        .map(::sortNodesForList)
 
-    private val favoriteNodes = nodeDao.getFavoriteNodes().map { list ->
-        sortNodesForList(list)
-    }
+    private val favoriteNodes = nodeDao.getFavoriteNodes()
 
     // Data
-    val nodes = combine(
+    private val visibleNodes = combine(
         subscriptionNodes,
         favoriteNodes,
         nodeListCategory
     ) { subscription, favorites, category ->
         if (category == NodeListCategory.FAVORITES) favorites else subscription
+    }
+
+    val nodes = combine(
+        visibleNodes,
+        activeConnectionNode
+    ) { visibleNodes, connectedNode ->
+        sortNodesForList(visibleNodes, pinnedNodeId = connectedNode?.id)
     }.stateIn(
         viewModelScope,
         SharingStarted.Lazily,
@@ -180,10 +200,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     val selectedNodeId = combine(
         settingsRepository.selectedNodeId,
-        _isInitialized
-    ) { nodeId, initialized ->
+        _isInitialized,
+        activeConnectionNode
+    ) { nodeId, initialized, connectedNode ->
         // 只有在初始化完成后才发出真实值，否则返回 null
-        if (initialized) nodeId else null
+        if (initialized) connectedNode?.id ?: nodeId else null
     }.stateIn(
         viewModelScope,
         SharingStarted.Lazily,
@@ -226,12 +247,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_DOWN_MBPS)
     val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.VPN_MTU)
     val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Lazily, TunStack.GVISOR)
-    val vpnState = ServiceManager.vpnState
-    
-    val currentNode = selectedNodeId
+    private val selectedNodeFromDatabase = selectedNodeId
         .flatMapLatest { selectedId ->
             if (selectedId == null) flowOf(null) else nodeDao.observeNodeById(selectedId)
         }
+
+    val currentNode = combine(
+        selectedNodeFromDatabase,
+        activeConnectionNode
+    ) { databaseNode, connectedNode ->
+        when {
+            connectedNode == null -> databaseNode
+            databaseNode?.id == connectedNode.id -> databaseNode
+            else -> connectedNode
+        }
+    }
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
     
     init {
@@ -243,7 +273,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // 启动时加载数据
         viewModelScope.launch {
-            // 每次启动重置选择状态 (不记住上次选择)
+            // 数据库选择仍按原行为重置；正在连接的节点由 VPN 会话状态独立维护。
             settingsRepository.setSelectedNodeId(null)
             
             // 标记初始化完成，此时 selectedNodeId 才开始发出真实值
@@ -527,20 +557,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             if (result.isSuccess) {
                 val fetchedNodes = result.getOrThrow()
-                if (replaceSubscriptionSourceId.isNullOrBlank()) {
-                    nodeDao.replaceSubscriptionNodes(fetchedNodes)
+                val connectedNode = activeConnectionNode.value
+                    ?.takeIf { node ->
+                        node.source == NodeSource.SUBSCRIPTION &&
+                            (
+                                replaceSubscriptionSourceId.isNullOrBlank() ||
+                                    node.subscriptionSourceId == replaceSubscriptionSourceId
+                            )
+                    }
+                val nodesToPersist = if (
+                    connectedNode != null && fetchedNodes.none { it.id == connectedNode.id }
+                ) {
+                    Log.w(
+                        tag,
+                        "Active node is absent from refreshed subscription; retaining it until disconnect: ${connectedNode.id}"
+                    )
+                    fetchedNodes + connectedNode
                 } else {
-                    nodeDao.replaceSubscriptionNodesBySource(replaceSubscriptionSourceId, fetchedNodes)
+                    fetchedNodes
+                }
+                if (replaceSubscriptionSourceId.isNullOrBlank()) {
+                    nodeDao.replaceSubscriptionNodes(nodesToPersist)
+                } else {
+                    nodeDao.replaceSubscriptionNodesBySource(replaceSubscriptionSourceId, nodesToPersist)
                 }
                 // 缓存最新节点，避免 Room Flow 延迟导致后续操作使用旧节点
                 lastFetchedNodes = if (replaceSubscriptionSourceId.isNullOrBlank()) {
-                    fetchedNodes
+                    nodesToPersist
                 } else {
                     nodeDao.getSubscriptionNodes().first()
                 }
-                scheduleNodeLocationEnrichment(fetchedNodes)
+                scheduleNodeLocationEnrichment(nodesToPersist)
 
-                Log.d(tag, "Fetched ${fetchedNodes.size} nodes")
+                Log.d(tag, "Fetched ${fetchedNodes.size} nodes, persisted ${nodesToPersist.size}")
                 return true
             } else {
                 val e = result.exceptionOrNull()
@@ -1042,10 +1091,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun deleteTimedOutNodes(results: List<LatencyTester.LatencyResult>) {
         if (!autoDeleteTimeoutNodes.value) return
 
+        val connectedNodeId = activeConnectionNode.value?.id
         val timedOutNodeIds = results
             .filter { it.latency == -2 }
             .map { it.nodeId }
             .distinct()
+            .filterNot { it == connectedNodeId }
         if (timedOutNodeIds.isEmpty()) return
 
         val selectedNodeId = settingsRepository.selectedNodeId.first()
@@ -1056,9 +1107,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _error.value = "已自动删除${timedOutNodeIds.size}个超时节点"
     }
 
-    private fun sortNodesForList(list: List<Node>): List<Node> {
+    private fun sortNodesForList(
+        list: List<Node>,
+        pinnedNodeId: String? = null
+    ): List<Node> {
         return list.sortedWith(
-            compareByDescending<Node> { it.isAvailable }
+            compareByDescending<Node> { it.id == pinnedNodeId }
+                .thenByDescending { it.isAvailable }
                 .thenBy { it.sortOrder }
                 .thenBy { if (it.latency >= 0) it.latency else Int.MAX_VALUE }
         )
