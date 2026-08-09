@@ -30,7 +30,6 @@ class SettingsRepository(private val context: Context) {
 
         // 订阅列表缓存
         private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
-        private val SUBSCRIPTION_LIST_INITIALIZED = booleanPreferencesKey("subscription_list_initialized")
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
@@ -113,14 +112,9 @@ class SettingsRepository(private val context: Context) {
         preferences[SUBSCRIPTION_LIST_JSON]
     }
 
-    val subscriptionListInitialized: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SUBSCRIPTION_LIST_INITIALIZED] ?: false
-    }
-
     suspend fun setSubscriptionList(json: String) {
         context.dataStore.edit { preferences ->
             preferences[SUBSCRIPTION_LIST_JSON] = json
-            preferences[SUBSCRIPTION_LIST_INITIALIZED] = true
         }
     }
     

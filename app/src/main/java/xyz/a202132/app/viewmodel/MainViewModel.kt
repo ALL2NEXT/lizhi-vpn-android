@@ -136,15 +136,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     val nodeListCategory = settingsRepository.nodeListCategory.stateIn(
         viewModelScope,
-        SharingStarted.Lazily,
+        SharingStarted.Eagerly,
         NodeListCategory.PRIMARY
     )
 
     val subscriptionGroups = nodeDao.getSubscriptionGroups()
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val storedSubscriptionSourceId = settingsRepository.selectedSubscriptionSourceId
-        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val activeSubscriptionSourceId = combine(
         subscriptionGroups,
@@ -152,7 +152,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) { groups, storedId ->
         storedId?.takeIf { id -> groups.any { it.sourceId == id } }
             ?: groups.firstOrNull()?.sourceId
-    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val selectedSubscriptionSourceId = activeSubscriptionSourceId
 
@@ -230,23 +230,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     // 自动化测试设置
-    val rememberLastSelectedNodeEnabled = settingsRepository.rememberLastSelectedNodeEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
-    val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.TCPING_TEST_TIMEOUT)
-    val urlTestTimeoutMs = settingsRepository.urlTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_TIMEOUT)
-    val speedTestDownloadTimeoutMs = settingsRepository.speedTestDownloadTimeoutMs.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS)
-    val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.TCPING_CONCURRENCY)
-    val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.URL_TEST_CONCURRENCY)
-    val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(viewModelScope, SharingStarted.Lazily, 1)
-    val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_TCPING_PERCENT)
-    val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
-    val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
-    val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.DISCONNECT_RECOVERY_ENABLED)
-    val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
-    val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
-    val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_UP_MBPS)
-    val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.HYSTERIA_DOWN_MBPS)
-    val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Lazily, AppConfig.VPN_MTU)
-    val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Lazily, TunStack.GVISOR)
+    val rememberLastSelectedNodeEnabled = settingsRepository.rememberLastSelectedNodeEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
+    val urlTestTimeoutMs = settingsRepository.urlTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_TIMEOUT)
+    val speedTestDownloadTimeoutMs = settingsRepository.speedTestDownloadTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS)
+    val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_CONCURRENCY)
+    val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_CONCURRENCY)
+    val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, 1)
+    val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_TCPING_PERCENT)
+    val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
+    val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
+    val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
+    val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
+    val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
+    val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_UP_MBPS)
+    val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_DOWN_MBPS)
+    val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.VPN_MTU)
+    val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Eagerly, TunStack.GVISOR)
     private val selectedNodeFromDatabase = selectedNodeId
         .flatMapLatest { selectedId ->
             if (selectedId == null) flowOf(null) else nodeDao.observeNodeById(selectedId)
@@ -271,8 +271,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             enrichAndPersistNodeLocations(nodeDao.getAllNodes().first())
         }
 
-        // 启动时加载数据
+        // Start loading cached/remote node data immediately. Account registration is
+        // intentionally independent so an account-server failure cannot block nodes.
         viewModelScope.launch {
+            val startupData = async { initializeSubscriptionData() }
+
             // 数据库选择仍按原行为重置；正在连接的节点由 VPN 会话状态独立维护。
             settingsRepository.setSelectedNodeId(null)
             
@@ -280,17 +283,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // 这样 UI 不会看到旧的选中状态闪烁
             _isInitialized.value = true
             
-            // 监听用户协议状态，只有同意后才初始化网络请求
-            isUserAgreementAccepted.collect { accepted ->
-                if (accepted) {
-                    if (!ensureAccountRegistered()) return@collect
-                    val fetchOk = initializeSubscriptionListAndMaybeFetchNodes()
-                    if (!fetchOk) return@collect
-                    restoreRememberedLastSelectedNodeIfNeeded(lastFetchedNodes)
-                    checkNotice()
-                    checkUpdate(isAuto = true, trackStartupSplash = true)
-                }
+            if (startupData.await()) {
+                restoreRememberedLastSelectedNodeIfNeeded(lastFetchedNodes)
             }
+            checkNotice()
+            checkUpdate(isAuto = true, trackStartupSplash = true)
+        }
+
+        viewModelScope.launch {
+            settingsRepository.isUserAgreementAccepted
+                .filter { it }
+                .first()
+            registerAccountIfNeeded()
         }
         
         // 监听 ServiceManager 的错误消息
@@ -306,20 +310,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         observeTrafficDisconnects()
     }
 
-    private suspend fun ensureAccountRegistered(): Boolean {
+    private suspend fun registerAccountIfNeeded() {
         val existing = accountManager.currentAccount()
         if (existing != null) {
-            return true
+            return
         }
 
-        val result = accountManager.register(backendSettings.value.nodeRequestTimeoutMs)
-        val account = result.getOrNull()
-        if (account == null) {
-            Log.e(tag, "Account registration failed", result.exceptionOrNull())
-            _error.value = "账户注册失败，暂时无法连接"
+        accountManager.register(backendSettings.value.nodeRequestTimeoutMs)
+            .onFailure { error ->
+                Log.w(tag, "Account registration failed; node features remain available", error)
+            }
+    }
+
+    private suspend fun initializeSubscriptionData(): Boolean {
+        // Apply persisted metadata first, then refresh both backend config and nodes.
+        val cachedSubscriptionList = loadCachedSubscriptionList()
+        val listResult = fetchSubscriptionList(forceRefresh = false)
+        val subscriptionList = listResult.getOrNull() ?: cachedSubscriptionList
+
+        if (subscriptionList == null) {
+            showNodeFetchToast(true, "获取订阅列表失败: ${listResult.exceptionOrNull()?.message ?: "未知错误"}")
             return false
         }
-        return true
+
+        return fetchNodesInternal(
+            bypassThrottle = true,
+            fetchingLabel = "请求节点中",
+            subscriptionList = subscriptionList
+        )
     }
 
     private fun observeTrafficDisconnects() {
@@ -352,30 +370,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.w(tag, "Traffic report failed", error)
             }
         }
-    }
-
-    private suspend fun initializeSubscriptionListAndMaybeFetchNodes(): Boolean {
-        val initializedBefore = settingsRepository.subscriptionListInitialized.first()
-        val listResult = fetchSubscriptionList(forceRefresh = false)
-        val subscriptionList = listResult.getOrNull() ?: loadCachedSubscriptionList()
-
-        if (subscriptionList == null) {
-            showNodeFetchToast(true, "获取订阅列表失败: ${listResult.exceptionOrNull()?.message ?: "未知错误"}")
-            return false
-        }
-
-        val hasSubscriptionNodes = nodeDao.getSubscriptionNodes().first().isNotEmpty()
-        val shouldFetchNodes = !initializedBefore || !hasSubscriptionNodes
-        if (!shouldFetchNodes) {
-            Log.i(tag, "Subscription list already loaded; keeping cached nodes until manual refresh")
-            return true
-        }
-
-        return fetchNodesInternal(
-            bypassThrottle = true,
-            fetchingLabel = "请求节点中",
-            subscriptionList = subscriptionList
-        )
     }
 
     private suspend fun fetchSubscriptionList(forceRefresh: Boolean = false): Result<SubscriptionList> {
@@ -671,7 +665,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun startSmartConnection() {
         viewModelScope.launch {
-            if (!ensureAccountRegistered()) return@launch
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
@@ -760,8 +753,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Connect to the selected node, or to the first node in the active subscription. */
     fun startSelectedOrFirstConnection() {
         viewModelScope.launch {
-            if (!ensureAccountRegistered()) return@launch
-
             val selectedId = settingsRepository.selectedNodeId.first()
             val selectedNode = selectedId?.let { nodeDao.getNodeById(it) }
             val node = selectedNode ?: currentSubscriptionNodeSnapshot().firstOrNull()
@@ -1175,8 +1166,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Select a node from the node list and connect to it immediately. */
     fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
-            if (!ensureAccountRegistered()) return@launch
-
             settingsRepository.setSelectedNodeId(node.id)
             Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
 
@@ -1344,7 +1333,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 viewModelScope.launch {
-                    if (!ensureAccountRegistered()) return@launch
                     // 4. 无网络连接节点时给用户发Toast，但不阻止
                     if (!NetworkUtils.isNetworkAvailable(getApplication())) {
                         Log.w(tag, "VPN start requested while network is unavailable")
@@ -1631,17 +1619,7 @@ private suspend fun currentSubscriptionNodeSnapshot(): List<Node> {
         return sortNodesForList(scoped)
     }
 
-private suspend fun currentSmartConnectNodes(): List<Node> {
-        val snapshot = when (nodeListCategory.value) {
-            NodeListCategory.PRIMARY -> {
-                val sourceId = activeSubscriptionSourceId.value
-                val all = nodeDao.getSubscriptionNodes().first()
-                if (sourceId.isNullOrBlank()) all else all.filter { it.subscriptionSourceId == sourceId }
-            }
-            NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
-        }
-        return sortNodesForList(snapshot)
-    }
+private suspend fun currentSmartConnectNodes(): List<Node> = currentNodeListSnapshot()
 
 private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {
         if (nodes.isEmpty()) return emptyList()
