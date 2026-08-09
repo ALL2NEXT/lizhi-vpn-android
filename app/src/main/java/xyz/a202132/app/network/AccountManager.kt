@@ -19,8 +19,15 @@ import java.util.UUID
  * the device.
  */
 class AccountManager(private val context: Context) {
+    private val preferences = context.getSharedPreferences(
+        "account_identity",
+        Context.MODE_PRIVATE
+    )
+
     @Volatile
-    private var account: AccountInfo? = null
+    private var account: AccountInfo? = preferences.getString(ACCOUNT_ID_KEY, null)
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::AccountInfo)
 
     fun currentAccount(): AccountInfo? = account
 
@@ -43,6 +50,7 @@ class AccountManager(private val context: Context) {
                 response.error ?: "后台未返回账户信息"
             )
             account = registered
+            preferences.edit().putString(ACCOUNT_ID_KEY, registered.id).apply()
             registered
         }
     }
@@ -83,7 +91,6 @@ class AccountManager(private val context: Context) {
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         )
-        val preferences = context.getSharedPreferences("account_identity", Context.MODE_PRIVATE)
         val fallback = preferences.getString("install_id", null)
             ?: UUID.randomUUID().toString().also { generated ->
                 preferences.edit().putString("install_id", generated).apply()
@@ -96,5 +103,9 @@ class AccountManager(private val context: Context) {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(value.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { byte -> "%02x".format(byte) }
+    }
+
+    private companion object {
+        const val ACCOUNT_ID_KEY = "account_id"
     }
 }
