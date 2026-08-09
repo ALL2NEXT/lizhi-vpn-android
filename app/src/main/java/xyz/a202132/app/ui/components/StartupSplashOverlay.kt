@@ -3,7 +3,6 @@ package xyz.a202132.app.ui.components
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -17,7 +16,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,9 +37,7 @@ fun StartupSplashOverlay(
     onSkip: () -> Unit
 ) {
     val context = LocalContext.current
-    val skipButtonStyle = remember(context) {
-        resolveSkipButtonStyle(context)
-    }
+    val skipButtonStyle = DARK_SPLASH_SKIP_BUTTON_STYLE
 
     DisposableEffect(context) {
         val activity = context.findActivity()
@@ -105,58 +101,12 @@ private data class SkipButtonStyle(
     val borderColor: Color
 )
 
-private fun resolveSkipButtonStyle(context: Context): SkipButtonStyle {
-    val luminance = sampleSplashTopEndLuminance(context)
-    return if (luminance >= 0.62f) {
-        SkipButtonStyle(
-            containerColor = Color.Black.copy(alpha = 0.12f),
-            contentColor = Color.Black,
-            borderColor = Color.Black.copy(alpha = 0.20f)
-        )
-    } else {
-        SkipButtonStyle(
-            containerColor = Color.White.copy(alpha = 0.24f),
-            contentColor = Color.White,
-            borderColor = Color.White.copy(alpha = 0.34f)
-        )
-    }
-}
-
-private fun sampleSplashTopEndLuminance(context: Context): Float {
-    val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.splash_firefly)
-        ?: return 1f
-
-    return try {
-        val startX = (bitmap.width * 0.68f).toInt().coerceIn(0, bitmap.width - 1)
-        val endX = (bitmap.width * 0.96f).toInt().coerceIn(startX + 1, bitmap.width)
-        val startY = (bitmap.height * 0.03f).toInt().coerceIn(0, bitmap.height - 1)
-        val endY = (bitmap.height * 0.15f).toInt().coerceIn(startY + 1, bitmap.height)
-
-        var total = 0.0
-        var count = 0
-        val stepX = ((endX - startX) / 24).coerceAtLeast(1)
-        val stepY = ((endY - startY) / 12).coerceAtLeast(1)
-
-        var y = startY
-        while (y < endY) {
-            var x = startX
-            while (x < endX) {
-                val pixel = bitmap.getPixel(x, y)
-                val red = android.graphics.Color.red(pixel) / 255.0
-                val green = android.graphics.Color.green(pixel) / 255.0
-                val blue = android.graphics.Color.blue(pixel) / 255.0
-                total += 0.2126 * red + 0.7152 * green + 0.0722 * blue
-                count++
-                x += stepX
-            }
-            y += stepY
-        }
-
-        if (count == 0) 1f else (total / count).toFloat()
-    } finally {
-        bitmap.recycle()
-    }
-}
+// 启动图右上区域固定为深色，避免为了计算按钮颜色在首帧重复解码整张图片。
+private val DARK_SPLASH_SKIP_BUTTON_STYLE = SkipButtonStyle(
+    containerColor = Color.White.copy(alpha = 0.24f),
+    contentColor = Color.White,
+    borderColor = Color.White.copy(alpha = 0.34f)
+)
 
 private fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this

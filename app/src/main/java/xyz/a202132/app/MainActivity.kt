@@ -10,6 +10,12 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
@@ -17,7 +23,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -76,17 +82,17 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
-                    val nodes by viewModel.nodes.collectAsState()
-                    val selectedNodeId by viewModel.selectedNodeId.collectAsState()
-                    val nodeListCategory by viewModel.nodeListCategory.collectAsState()
-                    val subscriptionGroups by viewModel.subscriptionGroups.collectAsState()
-                    val selectedSubscriptionSourceId by viewModel.selectedSubscriptionSourceId.collectAsState()
-                    val favoriteSourceNodeIds by viewModel.favoriteSourceNodeIds.collectAsState()
+                    val nodes by viewModel.nodes.collectAsStateWithLifecycle()
+                    val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
+                    val nodeListCategory by viewModel.nodeListCategory.collectAsStateWithLifecycle()
+                    val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
+                    val selectedSubscriptionSourceId by viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
+                    val favoriteSourceNodeIds by viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
                     val skipFavoriteRemovalConfirmation by
-                        viewModel.skipFavoriteRemovalConfirmation.collectAsState()
-                    val isTesting by viewModel.isTesting.collectAsState()
-                    val testingLabel by viewModel.testingLabel.collectAsState()
-                    val startupUpdateCheckCompleted by viewModel.startupUpdateCheckCompleted.collectAsState()
+                        viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
+                    val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
+                    val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
+                    val startupUpdateCheckCompleted by viewModel.startupUpdateCheckCompleted.collectAsStateWithLifecycle()
                     val splashDurationSeconds = AppConfig.STARTUP_SPLASH_DURATION_SECONDS.coerceAtLeast(0)
                     var splashCountdownSeconds by remember(splashDurationSeconds) {
                         mutableIntStateOf(splashDurationSeconds)
@@ -144,7 +150,42 @@ class MainActivity : ComponentActivity() {
 
                         NavHost(
                             navController = navController,
-                            startDestination = AppRoute.MAIN
+                            startDestination = AppRoute.MAIN,
+                            enterTransition = {
+                                fadeIn(
+                                    animationSpec = tween(durationMillis = 160, delayMillis = 30)
+                                ) + slideInHorizontally(
+                                    animationSpec = tween(
+                                        durationMillis = 240,
+                                        easing = FastOutSlowInEasing
+                                    ),
+                                    initialOffsetX = { width -> width / 12 }
+                                )
+                            },
+                            exitTransition = {
+                                fadeOut(animationSpec = tween(durationMillis = 140))
+                            },
+                            popEnterTransition = {
+                                fadeIn(
+                                    animationSpec = tween(durationMillis = 160, delayMillis = 30)
+                                ) + slideInHorizontally(
+                                    animationSpec = tween(
+                                        durationMillis = 220,
+                                        easing = FastOutSlowInEasing
+                                    ),
+                                    initialOffsetX = { width -> -width / 12 }
+                                )
+                            },
+                            popExitTransition = {
+                                fadeOut(animationSpec = tween(durationMillis = 140)) +
+                                    slideOutHorizontally(
+                                        animationSpec = tween(
+                                            durationMillis = 220,
+                                            easing = FastOutSlowInEasing
+                                        ),
+                                        targetOffsetX = { width -> width / 12 }
+                                    )
+                            }
                         ) {
                             composable(AppRoute.MAIN) {
                                 MainScreen(

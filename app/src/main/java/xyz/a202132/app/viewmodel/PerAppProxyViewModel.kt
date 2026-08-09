@@ -3,11 +3,11 @@ package xyz.a202132.app.viewmodel
 import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -20,7 +20,6 @@ import xyz.a202132.app.data.repository.SettingsRepository
 data class AppInfo(
     val packageName: String,
     val appName: String,
-    val icon: Drawable?,
     val isSystemApp: Boolean
 )
 
@@ -35,6 +34,7 @@ class PerAppProxyViewModel(application: Application) : AndroidViewModel(applicat
     
     private val settingsRepository = SettingsRepository(application)
     private val packageManager = application.packageManager
+    private var refreshJob: Job? = null
     
     // UI 状态
     private val _isLoading = MutableStateFlow(true)
@@ -81,7 +81,9 @@ class PerAppProxyViewModel(application: Application) : AndroidViewModel(applicat
             
             passSystemFilter && passSearchFilter
         }
-    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     
     // 已选中应用数量
     val selectedCount: StateFlow<Int> = selectedPackages
@@ -104,7 +106,9 @@ class PerAppProxyViewModel(application: Application) : AndroidViewModel(applicat
      * 刷新已安装应用列表
      */
     fun refreshApps() {
-        viewModelScope.launch {
+        if (refreshJob?.isActive == true) return
+
+        refreshJob = viewModelScope.launch {
             _isLoading.value = true
             
             val apps = withContext(Dispatchers.IO) {
@@ -124,12 +128,6 @@ class PerAppProxyViewModel(application: Application) : AndroidViewModel(applicat
                                 appInfo.packageName
                             }
                             
-                            val icon = try {
-                                packageManager.getApplicationIcon(appInfo)
-                            } catch (e: Exception) {
-                                null
-                            }
-                            
                             val isPreinstalled = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                             val isUpdatedPreinstalled = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
                             val isSystemApp = isPreinstalled && !isUpdatedPreinstalled
@@ -137,7 +135,6 @@ class PerAppProxyViewModel(application: Application) : AndroidViewModel(applicat
                             AppInfo(
                                 packageName = appInfo.packageName,
                                 appName = appName,
-                                icon = icon,
                                 isSystemApp = isSystemApp
                             )
                         }

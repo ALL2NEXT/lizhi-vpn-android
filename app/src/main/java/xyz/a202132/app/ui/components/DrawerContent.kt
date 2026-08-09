@@ -81,7 +81,6 @@ fun DrawerContent(
                     title = "检查更新",
                     onClick = {
                         onCheckUpdate()
-                        onClose()
                     }
                 )
             }
@@ -91,7 +90,6 @@ fun DrawerContent(
                 title = "其他配置",
                 onClick = {
                     onOpenOtherConfig()
-                    onClose()
                 }
             )
 
@@ -100,7 +98,6 @@ fun DrawerContent(
                 title = "代理作用域",
                 onClick = {
                     onOpenProxyScope()
-                    onClose()
                 }
             )
 
@@ -109,7 +106,6 @@ fun DrawerContent(
                 title = "特色功能",
                 onClick = {
                     onOpenFeatures()
-                    onClose()
                 }
             )
 

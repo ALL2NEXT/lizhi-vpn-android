@@ -1,15 +1,25 @@
 package xyz.a202132.app.ui.components
 
-import androidx.compose.animation.core.*
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -32,19 +42,29 @@ fun ConnectButton(
     val configuration = LocalConfiguration.current
     val buttonSize = minOf(250, (configuration.screenWidthDp * 0.65).toInt())
 
-    // 连接中的脉冲动画
-    val infiniteTransition = rememberInfiniteTransition(label = "loading")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
+    // 只在连接状态创建循环动画；缩放仅发生在绘制阶段，不触发布局。
+    val pulseScale = if (isConnecting) {
+        val infiniteTransition = rememberInfiniteTransition(label = "connectionPulse")
+        val animatedScale by infiniteTransition.animateFloat(
+            initialValue = 0.99f,
+            targetValue = 1.035f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(560, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseScale"
+        )
+        animatedScale
+    } else {
+        1f
+    }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed && enabled && !isConnecting) 0.97f else 1f,
+        animationSpec = tween(durationMillis = if (isPressed) 90 else 140),
+        label = "pressScale"
     )
-
-    val scale = if (isConnecting) pulseScale else 1f
 
     // 根据状态选择图片
     val imageRes = when (vpnState) {
@@ -60,7 +80,7 @@ fun ConnectButton(
         // 按钮图片 - 使用 Crossfade 实现平滑过渡，去除涟漪效果
         Crossfade(
             targetState = imageRes,
-            animationSpec = tween(400),
+            animationSpec = tween(220),
             label = "buttonImage"
         ) { currentImage ->
             Image(
@@ -72,11 +92,16 @@ fun ConnectButton(
                     VpnState.DISCONNECTED -> "点击连接"
                 },
                 modifier = Modifier
-                    .size((buttonSize * scale).dp)
+                    .size(buttonSize.dp)
+                    .graphicsLayer {
+                        val scale = pulseScale * pressScale
+                        scaleX = scale
+                        scaleY = scale
+                    }
                     .clickable(
                         enabled = enabled && !isConnecting,
-                        indication = null,
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                        indication = rememberRipple(bounded = true),
+                        interactionSource = interactionSource
                     ) { onClick() }
             )
         }

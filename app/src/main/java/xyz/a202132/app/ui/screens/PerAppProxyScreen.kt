@@ -1,5 +1,7 @@
 package xyz.a202132.app.ui.screens
 
+import android.graphics.Bitmap
+import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,12 +25,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import xyz.a202132.app.data.model.PerAppProxyMode
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.ui.components.ProxyModeSelector
@@ -38,6 +44,17 @@ import xyz.a202132.app.viewmodel.MainViewModel
 import xyz.a202132.app.viewmodel.PerAppProxyViewModel
 
 import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+
+private const val APP_ICON_CACHE_SIZE_KB = 4 * 1024
+private val appIconCache = object : LruCache<String, Bitmap>(APP_ICON_CACHE_SIZE_KB) {
+    override fun sizeOf(key: String, value: Bitmap): Int =
+        (value.allocationByteCount / 1024).coerceAtLeast(1)
+}
+private val appIconLoadSemaphore = Semaphore(permits = 2)
 
 /**
  * 分应用代理设置界面
@@ -51,25 +68,31 @@ fun ProxyScopeScreen(
 ) {
     // 监听系统返回键 (包括手势返回)
     // 返回是否发生了更改，以便主界面决定是否重启 VPN
-    val hasChanges by viewModel.hasChanges.collectAsState()
+    val hasChanges by viewModel.hasChanges.collectAsStateWithLifecycle()
     BackHandler { onBack(hasChanges) }
 
-    val isEnabled by viewModel.isEnabled.collectAsState()
-    val mode by viewModel.mode.collectAsState()
-    val selectedPackages by viewModel.selectedPackages.collectAsState()
-    val filteredApps by viewModel.filteredApps.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val selectedCount by viewModel.selectedCount.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val showSystemApps by viewModel.showSystemApps.collectAsState()
-    val proxyMode by mainViewModel.proxyMode.collectAsState()
+    val isEnabled by viewModel.isEnabled.collectAsStateWithLifecycle()
+    val mode by viewModel.mode.collectAsStateWithLifecycle()
+    val selectedPackages by viewModel.selectedPackages.collectAsStateWithLifecycle()
+    val filteredApps by viewModel.filteredApps.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val selectedCount by viewModel.selectedCount.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val showSystemApps by viewModel.showSystemApps.collectAsStateWithLifecycle()
+    val proxyMode by mainViewModel.proxyMode.collectAsStateWithLifecycle()
     
     // 监听生命周期，在 onResume 时刷新应用列表 (解决用户授权后返回不刷新问题)
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    var hasHandledInitialResume by remember(lifecycleOwner) { mutableStateOf(false) }
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshApps()
+                if (hasHandledInitialResume) {
+                    viewModel.refreshApps()
+                } else {
+                    // ViewModel 初始化时已经加载，跳过观察者注册产生的首次 ON_RESUME。
+                    hasHandledInitialResume = true
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -81,7 +104,7 @@ fun ProxyScopeScreen(
     }
     
     // 权限拒绝状态 (针对定制 ROM)
-    val isPermissionDenied by viewModel.isPermissionDenied.collectAsState()
+    val isPermissionDenied by viewModel.isPermissionDenied.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     Scaffold(
@@ -324,6 +347,20 @@ fun ProxyScopeScreen(
             
             // 滚动状态
             val listState = rememberLazyListState()
+            var loadNewIcons by remember { mutableStateOf(true) }
+
+            // 快速滚动时优先保证手势帧；停稳后再补齐新进入视口的图标。
+            LaunchedEffect(listState) {
+                snapshotFlow { listState.isScrollInProgress }
+                    .collectLatest { isScrolling ->
+                        if (isScrolling) {
+                            loadNewIcons = false
+                        } else {
+                            delay(300)
+                            loadNewIcons = true
+                        }
+                    }
+            }
             
             // 监听滚动到顶部事件
             LaunchedEffect(Unit) {
@@ -359,6 +396,7 @@ fun ProxyScopeScreen(
                             app = app,
                             isSelected = app.packageName in selectedPackages,
                             enabled = isEnabled,
+                            loadIcon = loadNewIcons,
                             onToggle = { viewModel.togglePackage(app.packageName) }
                         )
                     }
@@ -450,6 +488,7 @@ private fun AppListItem(
     app: AppInfo,
     isSelected: Boolean,
     enabled: Boolean,
+    loadIcon: Boolean,
     onToggle: () -> Unit
 ) {
     Surface(
@@ -474,29 +513,11 @@ private fun AppListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 应用图标
-            if (app.icon != null) {
-                Image(
-                    bitmap = app.icon.toBitmap(48, 48).asImageBitmap(),
-                    contentDescription = app.appName,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.outline),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = app.appName.take(1).uppercase(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            AppIcon(
+                packageName = app.packageName,
+                appName = app.appName,
+                loadEnabled = loadIcon
+            )
             
             Spacer(modifier = Modifier.width(12.dp))
             
@@ -547,6 +568,66 @@ private fun AppListItem(
                     )
                 )
             }
+        }
+    }
+}
+
+/**
+ * 只为 LazyColumn 当前可见的条目加载图标，并使用有上限的位图缓存。
+ */
+@Composable
+private fun AppIcon(
+    packageName: String,
+    appName: String,
+    loadEnabled: Boolean
+) {
+    val context = LocalContext.current
+    val iconSizePx = with(LocalDensity.current) { 40.dp.roundToPx() }
+    val cacheKey = "$packageName@$iconSizePx"
+    val bitmap by produceState<Bitmap?>(
+        initialValue = appIconCache.get(cacheKey),
+        key1 = cacheKey,
+        key2 = loadEnabled
+    ) {
+        if (value == null && loadEnabled) {
+            value = withContext(Dispatchers.IO) {
+                appIconLoadSemaphore.withPermit {
+                    appIconCache.get(cacheKey) ?: runCatching {
+                        context.packageManager
+                            .getApplicationIcon(packageName)
+                            .toBitmap(
+                                width = iconSizePx,
+                                height = iconSizePx,
+                                config = Bitmap.Config.ARGB_8888
+                            )
+                    }.getOrNull()?.also { appIconCache.put(cacheKey, it) }
+                }
+            }
+        }
+    }
+    val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
+
+    if (imageBitmap != null) {
+        Image(
+            bitmap = imageBitmap,
+            contentDescription = appName,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(8.dp))
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.outline),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = appName.take(1).uppercase(),
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

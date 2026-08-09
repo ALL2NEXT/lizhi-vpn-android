@@ -6,10 +6,11 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.VpnState
@@ -49,27 +51,30 @@ fun MainScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val drawerAnimationSpec = remember {
+        tween<Float>(durationMillis = 250, easing = FastOutSlowInEasing)
+    }
+
+    fun closeDrawerThen(action: () -> Unit) {
+        scope.launch {
+            drawerState.animateTo(DrawerValue.Closed, drawerAnimationSpec)
+            action()
+        }
+    }
     
     // Collect状态
-    val currentNode by viewModel.currentNode.collectAsState()
-    val vpnState by viewModel.vpnState.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val isTesting by viewModel.isTesting.collectAsState()
-    val testingLabel by viewModel.testingLabel.collectAsState()
-    val smartConnectEnabled by viewModel.smartConnectEnabled.collectAsState()
-    val notice by viewModel.notice.collectAsState()
-    val updateInfo by viewModel.updateInfo.collectAsState()
-    val backendSettings by viewModel.backendSettings.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val infoDialogMessage by viewModel.infoDialogMessage.collectAsState()
-    val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsState()
-    
-    // UI状态
-    // 流量统计
-    val uploadSpeed by viewModel.uploadSpeed.collectAsState()
-    val downloadSpeed by viewModel.downloadSpeed.collectAsState()
-    val uploadTotal by viewModel.uploadTotal.collectAsState()
-    val downloadTotal by viewModel.downloadTotal.collectAsState()
+    val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
+    val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
+    val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
+    val smartConnectEnabled by viewModel.smartConnectEnabled.collectAsStateWithLifecycle()
+    val notice by viewModel.notice.collectAsStateWithLifecycle()
+    val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
+    val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
+    val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsStateWithLifecycle()
     
     // 自动化测试设置/状态
     // val showBackupFailedDialog by viewModel.showBackupFailedDialog.collectAsState() // Removed
@@ -83,7 +88,7 @@ fun MainScreen(
     }
     
     // 移动网络提醒
-    val cellularWarning by xyz.a202132.app.service.ServiceManager.cellularWarning.collectAsState()
+    val cellularWarning by xyz.a202132.app.service.ServiceManager.cellularWarning.collectAsStateWithLifecycle()
     LaunchedEffect(cellularWarning) {
         cellularWarning?.let { message ->
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -100,11 +105,15 @@ fun MainScreen(
                 windowInsets = WindowInsets(0, 0, 0, 0)
             ) {
                 DrawerContent(
-                    onCheckUpdate = { viewModel.checkUpdate() },
-                    onOpenProxyScope = onOpenProxyScope,
-                    onOpenOtherConfig = onOpenOtherConfig,
-                    onOpenFeatures = onOpenFeatures,
-                    onClose = { scope.launch { drawerState.close() } },
+                    onCheckUpdate = { closeDrawerThen { viewModel.checkUpdate() } },
+                    onOpenProxyScope = { closeDrawerThen(onOpenProxyScope) },
+                    onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
+                    onOpenFeatures = { closeDrawerThen(onOpenFeatures) },
+                    onClose = {
+                        scope.launch {
+                            drawerState.animateTo(DrawerValue.Closed, drawerAnimationSpec)
+                        }
+                    },
                     websiteUrl = backendSettings.websiteUrl,
                     feedbackEmail = backendSettings.feedbackEmail,
                     feedbackUrl = backendSettings.feedbackUrl,
@@ -112,7 +121,7 @@ fun MainScreen(
                 )
             }
         },
-        gesturesEnabled = drawerState.isOpen
+        gesturesEnabled = true
     ) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -157,16 +166,6 @@ fun MainScreen(
                             }
                         }
                         
-                        // 设置按钮
-                        IconButton(
-                            onClick = { scope.launch { drawerState.open() } }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "设置",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background
@@ -269,12 +268,7 @@ fun MainScreen(
                 // 流量统计 (仅在连接时显示)
                 if (vpnState == VpnState.CONNECTED) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    TrafficStatsRow(
-                        uploadSpeed = uploadSpeed,
-                        downloadSpeed = downloadSpeed,
-                        uploadTotal = uploadTotal,
-                        downloadTotal = downloadTotal
-                    )
+                    TrafficStats(viewModel)
                 }
                 
                 Spacer(modifier = Modifier.weight(1f))
@@ -327,7 +321,7 @@ fun MainScreen(
     }
     
     // 下载状态监听
-    val downloadState by viewModel.downloadState.collectAsState()
+    val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
     var showPermissionDialog by remember { mutableStateOf(false) }
     
     val installLauncher = rememberLauncherForActivityResult(
@@ -465,6 +459,24 @@ fun MainScreen(
         )
     }
 
+}
+
+/**
+ * 将每秒更新的流量状态限制在这一小块组合树中，避免整张主页随统计值重组。
+ */
+@Composable
+private fun TrafficStats(viewModel: MainViewModel) {
+    val uploadSpeed by viewModel.uploadSpeed.collectAsStateWithLifecycle()
+    val downloadSpeed by viewModel.downloadSpeed.collectAsStateWithLifecycle()
+    val uploadTotal by viewModel.uploadTotal.collectAsStateWithLifecycle()
+    val downloadTotal by viewModel.downloadTotal.collectAsStateWithLifecycle()
+
+    TrafficStatsRow(
+        uploadSpeed = uploadSpeed,
+        downloadSpeed = downloadSpeed,
+        uploadTotal = uploadTotal,
+        downloadTotal = downloadTotal
+    )
 }
 
 private fun openWebSpeedTest(context: Context, url: String) {
