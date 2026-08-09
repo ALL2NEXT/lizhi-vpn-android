@@ -53,6 +53,8 @@ enum class NodeImportResult {
     INVALID
 }
 
+private const val BYTES_PER_MEGABYTE = 1024.0 * 1024.0
+
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
@@ -102,6 +104,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _backendSettings = MutableStateFlow(BackendAppSettings())
     val backendSettings = _backendSettings.asStateFlow()
+
+    val accountInfo = accountManager.accountInfo
+    private val _isUpdatingNickname = MutableStateFlow(false)
+    val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
+    private val _isAccountRegisteredForSession = MutableStateFlow(false)
+    private val _isNodeAccessGranted = MutableStateFlow(false)
     
     private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
     val updateInfo = _updateInfo.asStateFlow()
@@ -271,30 +279,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             enrichAndPersistNodeLocations(nodeDao.getAllNodes().first())
         }
 
-        // Start loading cached/remote node data immediately. Account registration is
-        // intentionally independent so an account-server failure cannot block nodes.
         viewModelScope.launch {
-            val startupData = async { initializeSubscriptionData() }
-
             // 数据库选择仍按原行为重置；正在连接的节点由 VPN 会话状态独立维护。
             settingsRepository.setSelectedNodeId(null)
             
             // 标记初始化完成，此时 selectedNodeId 才开始发出真实值
             // 这样 UI 不会看到旧的选中状态闪烁
             _isInitialized.value = true
-            
-            if (startupData.await()) {
+
+            settingsRepository.isUserAgreementAccepted
+                .filter { it }
+                .first()
+
+            // 先应用缓存中的超时等设置，但订阅权限必须以本次在线请求为准。
+            loadCachedSubscriptionList()
+            if (initializeSubscriptionData()) {
                 restoreRememberedLastSelectedNodeIfNeeded(lastFetchedNodes)
             }
             checkNotice()
             checkUpdate(isAuto = true, trackStartupSplash = true)
-        }
-
-        viewModelScope.launch {
-            settingsRepository.isUserAgreementAccepted
-                .filter { it }
-                .first()
-            registerAccountIfNeeded()
         }
         
         // 监听 ServiceManager 的错误消息
@@ -310,34 +313,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         observeTrafficDisconnects()
     }
 
-    private suspend fun registerAccountIfNeeded() {
-        val existing = accountManager.currentAccount()
-        if (existing != null) {
-            return
-        }
-
-        accountManager.register(backendSettings.value.nodeRequestTimeoutMs)
-            .onFailure { error ->
-                Log.w(tag, "Account registration failed; node features remain available", error)
+    private suspend fun registerAccountForSession(): AccountInfo? {
+        return accountManager.register(backendSettings.value.nodeRequestTimeoutMs)
+            .onSuccess { account ->
+                _isAccountRegisteredForSession.value = true
+                if (account.level == 0) {
+                    _error.value = "当前账户已被封禁（Lv0），后台托管订阅不可用"
+                }
             }
+            .onFailure { error ->
+                _isAccountRegisteredForSession.value = false
+                Log.w(tag, "Account registration failed; managed subscriptions unavailable", error)
+                _error.value = "账户注册失败，后台托管订阅不可用"
+            }
+            .getOrNull()
     }
 
-    private suspend fun initializeSubscriptionData(): Boolean {
-        // Apply persisted metadata first, then refresh both backend config and nodes.
-        val cachedSubscriptionList = loadCachedSubscriptionList()
-        val listResult = fetchSubscriptionList(forceRefresh = false)
-        val subscriptionList = listResult.getOrNull() ?: cachedSubscriptionList
+    private suspend fun initializeSubscriptionData(forceRefresh: Boolean = false): Boolean = coroutineScope {
+        _isNodeAccessGranted.value = false
+        val listRequest = async { fetchSubscriptionList(forceRefresh = forceRefresh) }
+        val accountRequest = async { registerAccountForSession() }
+        val listResult = listRequest.await()
+        val account = accountRequest.await()
+        val subscriptionList = listResult.getOrNull()
 
         if (subscriptionList == null) {
             showNodeFetchToast(true, "获取订阅列表失败: ${listResult.exceptionOrNull()?.message ?: "未知错误"}")
-            return false
+            return@coroutineScope false
         }
 
-        return fetchNodesInternal(
+        val canUseManagedSubscriptions =
+            _isAccountRegisteredForSession.value && account != null && account.level > 0
+        val accessibleSources = subscriptionList.sources.filter { source ->
+            !isWorkerManagedSubscription(source.url) || canUseManagedSubscriptions
+        }
+
+        if (accessibleSources.isEmpty()) {
+            nodeDao.replaceSubscriptionNodes(emptyList())
+            lastFetchedNodes = emptyList()
+            _isNodeAccessGranted.value = true
+            return@coroutineScope true
+        }
+
+        val fetched = fetchNodesInternal(
             bypassThrottle = true,
             fetchingLabel = "请求节点中",
-            subscriptionList = subscriptionList
+            subscriptionList = subscriptionList.copy(sources = accessibleSources)
         )
+        _isNodeAccessGranted.value = fetched
+        fetched
     }
 
     private fun observeTrafficDisconnects() {
@@ -359,13 +383,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val sessionId = trafficSessionId ?: return
         trafficSessionId = null
         // Read the service counters directly before the stop routine resets them.
-        val uploadBytes = BoxVpnService.uploadTotal
-        val downloadBytes = BoxVpnService.downloadTotal
+        val uploadMb = BoxVpnService.uploadTotal.coerceAtLeast(0L) / BYTES_PER_MEGABYTE
+        val downloadMb = BoxVpnService.downloadTotal.coerceAtLeast(0L) / BYTES_PER_MEGABYTE
         viewModelScope.launch(Dispatchers.IO) {
             accountManager.reportTraffic(
                 sessionId = sessionId,
-                uploadBytes = uploadBytes,
-                downloadBytes = downloadBytes
+                uploadMb = uploadMb,
+                downloadMb = downloadMb
             ).onFailure { error ->
                 Log.w(tag, "Traffic report failed", error)
             }
@@ -440,15 +464,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ): Result<List<Node>> = coroutineScope {
         val results = sources.map { subscription ->
             async {
+                val requestUrl = subscriptionRequestUrl(subscription.url)
                 var result = subscriptionParser.fetchAndParse(
-                    subscription.url,
+                    requestUrl,
                     backendSettings.value.nodeRequestTimeoutMs,
                     subscription.encrypted
                 )
                 if (result.isFailure) {
                     Log.w(tag, "Subscription fetch failed, retrying: ${subscription.name}", result.exceptionOrNull())
                     result = subscriptionParser.fetchAndParse(
-                        subscription.url,
+                        requestUrl,
                         backendSettings.value.nodeRequestTimeoutMs,
                         subscription.encrypted
                     )
@@ -637,6 +662,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     fun testAllNodes(targetNodes: List<Node>? = null) {
         viewModelScope.launch {
+            if (rejectUnavailableAccount()) return@launch
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
@@ -665,6 +691,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun startSmartConnection() {
         viewModelScope.launch {
+            if (rejectUnavailableAccount()) return@launch
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
@@ -753,6 +780,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Connect to the selected node, or to the first node in the active subscription. */
     fun startSelectedOrFirstConnection() {
         viewModelScope.launch {
+            if (rejectUnavailableAccount()) return@launch
             val selectedId = settingsRepository.selectedNodeId.first()
             val selectedNode = selectedId?.let { nodeDao.getNodeById(it) }
             val node = selectedNode ?: currentSubscriptionNodeSnapshot().firstOrNull()
@@ -777,6 +805,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * VPN 未运行 → 启动临时无头 sing-box 实例 (port 19090)
      */
     fun urlTestAllNodes(targetNodes: List<Node>? = null) {
+        if (rejectUnavailableAccount()) return
         urlTestAllNodesInternal(
             targetNodes = targetNodes,
             requireGlobalLock = true
@@ -920,6 +949,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun adaptHysteriaBandwidth() {
         if (_isHysteriaBandwidthAdapting.value) return
+        if (rejectUnavailableAccount()) return
 
         viewModelScope.launch(Dispatchers.IO) {
             _isHysteriaBandwidthAdapting.value = true
@@ -1144,6 +1174,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun selectNode(node: Node) {
         viewModelScope.launch {
+            if (rejectUnavailableAccount()) return@launch
             settingsRepository.setSelectedNodeId(node.id)
             Log.i(tag, "Selected node changed: source=${node.source}, type=${node.type}")
             
@@ -1166,6 +1197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Select a node from the node list and connect to it immediately. */
     fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
+            if (rejectUnavailableAccount()) return@launch
             settingsRepository.setSelectedNodeId(node.id)
             Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
 
@@ -1326,6 +1358,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleVpn() {
         when (vpnState.value) {
             VpnState.DISCONNECTED -> {
+                if (rejectUnavailableAccount()) return
                 val node = currentNode.value ?: run {
                     Log.w(tag, "VPN start ignored: no selected node")
                     _error.value = "请先选择节点"
@@ -1356,6 +1389,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * 重启 VPN 如果正在运行 (用于应用设置变更)
      */
     fun restartVpnIfNeeded() {
+        if (rejectUnavailableAccount()) return
         if (vpnState.value == VpnState.CONNECTED) {
             currentNode.value?.let { node ->
                 Log.i(tag, "Settings changed, restarting VPN to apply...")
@@ -1588,6 +1622,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearInfoDialogMessage() {
         _infoDialogMessage.value = null
     }
+
+    fun updateNickname(nickname: String) {
+        if (_isUpdatingNickname.value) return
+        viewModelScope.launch {
+            _isUpdatingNickname.value = true
+            try {
+                accountManager.updateNickname(
+                    nickname = nickname,
+                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                ).onFailure { error ->
+                    Log.w(tag, "Failed to update nickname", error)
+                    _error.value = error.message ?: "昵称修改失败"
+                }
+            } finally {
+                _isUpdatingNickname.value = false
+            }
+        }
+    }
+
+    private fun rejectUnavailableAccount(requireNodeAccess: Boolean = true): Boolean {
+        return when {
+            requireNodeAccess && !_isNodeAccessGranted.value -> {
+                _error.value = "订阅权限尚未通过后台验证，请刷新节点"
+                true
+            }
+            else -> false
+        }
+    }
+
+    private fun isWorkerManagedSubscription(url: String): Boolean {
+        val managedPrefix = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/subscription/"
+        return managedPrefix.length > "/api/subscription/".length &&
+            url.startsWith(managedPrefix, ignoreCase = true)
+    }
+
+    private fun subscriptionRequestUrl(url: String): String {
+        if (!isWorkerManagedSubscription(url)) return url
+        val accountId = accountManager.currentAccount()?.id ?: return url
+        val separator = if ('?' in url) '&' else '?'
+        val encodedAccountId = java.net.URLEncoder.encode(accountId, Charsets.UTF_8.name())
+        return "$url${separator}accountId=$encodedAccountId"
+    }
     
     fun acceptUserAgreement() {
         viewModelScope.launch {
@@ -1643,6 +1719,7 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
 
     fun refreshNodes() {
         viewModelScope.launch {
+            if (rejectUnavailableAccount(requireNodeAccess = false)) return@launch
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
@@ -1651,11 +1728,7 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
                 _error.value = GlobalTestExecution.busyHint()
                 return@launch
             }
-            val fetchOk = fetchNodesInternal(
-                bypassThrottle = true,
-                fetchingLabel = "请求节点中",
-                forceBackendRefresh = true
-            )
+            val fetchOk = initializeSubscriptionData(forceRefresh = true)
             if (!fetchOk) return@launch
         }
     }

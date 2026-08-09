@@ -62,7 +62,16 @@ data class AccountRegisterRequest(
     val deviceId: String,
 
     @SerializedName("appVersion")
-    val appVersion: String
+    val appVersion: String,
+
+    @SerializedName("brand")
+    val brand: String,
+
+    @SerializedName("model")
+    val model: String,
+
+    @SerializedName("androidVersion")
+    val androidVersion: String
 )
 
 data class AccountRegisterResponse(
@@ -78,7 +87,33 @@ data class AccountRegisterResponse(
 
 data class AccountInfo(
     @SerializedName("id")
-    val id: String
+    val id: String,
+
+    @SerializedName("nickname")
+    val nickname: String = "流萤用户",
+
+    @SerializedName("level")
+    val level: Int = 1,
+
+    @SerializedName("brand")
+    val brand: String = "",
+
+    @SerializedName("model")
+    val model: String = "",
+
+    @SerializedName("androidVersion")
+    val androidVersion: String = "",
+
+    @SerializedName("appVersion")
+    val appVersion: String = ""
+)
+
+data class AccountProfileUpdateRequest(
+    @SerializedName("accountId")
+    val accountId: String,
+
+    @SerializedName("nickname")
+    val nickname: String
 )
 
 data class TrafficReportRequest(
@@ -88,11 +123,11 @@ data class TrafficReportRequest(
     @SerializedName("sessionId")
     val sessionId: String,
 
-    @SerializedName("uploadBytes")
-    val uploadBytes: Long,
+    @SerializedName("uploadMb")
+    val uploadMb: Double,
 
-    @SerializedName("downloadBytes")
-    val downloadBytes: Long
+    @SerializedName("downloadMb")
+    val downloadMb: Double
 )
 
 data class TrafficReportResponse(

@@ -99,6 +99,8 @@ fun MainScreen(
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
+    val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
+    val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsStateWithLifecycle()
@@ -144,7 +146,10 @@ fun MainScreen(
                     websiteUrl = backendSettings.websiteUrl,
                     feedbackEmail = backendSettings.feedbackEmail,
                     feedbackUrl = backendSettings.feedbackUrl,
-                    githubUrl = backendSettings.githubUrl
+                    githubUrl = backendSettings.githubUrl,
+                    accountInfo = accountInfo,
+                    isUpdatingNickname = isUpdatingNickname,
+                    onUpdateNickname = viewModel::updateNickname
                 )
             }
         },

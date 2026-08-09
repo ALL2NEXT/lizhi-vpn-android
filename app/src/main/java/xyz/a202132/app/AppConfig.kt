@@ -6,7 +6,7 @@ package xyz.a202132.app
 object AppConfig {
     const val STARTUP_SPLASH_DURATION_SECONDS = 10 // 启动图倒计时时长，设为0则不启用
 
-    // Cloudflare Worker unified backend URL. App does not call upstream sources directly.
+    // Cloudflare Worker config/account endpoint and Worker-managed subscription origin.
     const val BACKEND_URL = "https://liuying.11145149.xyz/"
 
     // Contact

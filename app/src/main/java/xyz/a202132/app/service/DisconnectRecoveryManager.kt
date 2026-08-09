@@ -23,6 +23,7 @@ import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SubscriptionSource
 import xyz.a202132.app.data.repository.SettingsRepository
+import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.network.NetworkClient
 import xyz.a202132.app.network.SubscriptionListParser
 import xyz.a202132.app.network.SubscriptionParser
@@ -42,6 +43,7 @@ internal class DisconnectRecoveryManager(
     private val appContext = context.applicationContext
     private val settingsRepository = SettingsRepository(appContext)
     private val nodeDao = AppDatabase.getInstance(appContext).nodeDao()
+    private val accountManager = AccountManager(appContext)
     private val subscriptionParser = SubscriptionParser()
     private val subscriptionListParser = SubscriptionListParser()
 
@@ -135,10 +137,11 @@ internal class DisconnectRecoveryManager(
         }
 
         val directClient = createPhysicalNetworkClient()
-        var result = subscriptionParser.fetchAndParseWithClient(source.url, directClient, source.encrypted)
+        val requestUrl = subscriptionRequestUrl(source.url)
+        var result = subscriptionParser.fetchAndParseWithClient(requestUrl, directClient, source.encrypted)
         if (result.isFailure) {
             Log.w(TAG, "Recovery subscription fetch failed, retrying once", result.exceptionOrNull())
-            result = subscriptionParser.fetchAndParseWithClient(source.url, directClient, source.encrypted)
+            result = subscriptionParser.fetchAndParseWithClient(requestUrl, directClient, source.encrypted)
         }
         val refreshedNodes = result.getOrNull()
             ?.map { node ->
@@ -179,6 +182,19 @@ internal class DisconnectRecoveryManager(
         return subscriptionListParser.parse(cachedList).getOrNull()
             ?.sources
             ?.firstOrNull { it.id == sourceId }
+    }
+
+    private fun subscriptionRequestUrl(url: String): String {
+        val managedPrefix = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/subscription/"
+        if (managedPrefix.length <= "/api/subscription/".length ||
+            !url.startsWith(managedPrefix, ignoreCase = true)
+        ) {
+            return url
+        }
+        val accountId = accountManager.currentAccount()?.id ?: return url
+        val separator = if ('?' in url) '&' else '?'
+        val encodedAccountId = java.net.URLEncoder.encode(accountId, Charsets.UTF_8.name())
+        return "$url${separator}accountId=$encodedAccountId"
     }
 
     @Suppress("DEPRECATION")

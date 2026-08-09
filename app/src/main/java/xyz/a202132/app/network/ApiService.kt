@@ -4,8 +4,10 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Url
+import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.AccountRegisterResponse
 import xyz.a202132.app.data.model.TrafficReportRequest
@@ -23,6 +25,12 @@ interface ApiService {
     suspend fun registerAccount(
         @Url url: String,
         @Body request: AccountRegisterRequest
+    ): AccountRegisterResponse
+
+    @PATCH
+    suspend fun updateAccountProfile(
+        @Url url: String,
+        @Body request: AccountProfileUpdateRequest
     ): AccountRegisterResponse
 
     @POST

@@ -1,11 +1,15 @@
 package xyz.a202132.app.network
 
 import android.content.Context
+import android.os.Build
 import android.provider.Settings
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withTimeout
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.BuildConfig
 import xyz.a202132.app.data.model.AccountInfo
+import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.TrafficReportRequest
 import xyz.a202132.app.data.model.TrafficReportResponse
@@ -24,12 +28,12 @@ class AccountManager(private val context: Context) {
         Context.MODE_PRIVATE
     )
 
-    @Volatile
-    private var account: AccountInfo? = preferences.getString(ACCOUNT_ID_KEY, null)
-        ?.takeIf { it.isNotBlank() }
-        ?.let(::AccountInfo)
+    private val _accountInfo = MutableStateFlow(loadPersistedAccount())
+    val accountInfo = _accountInfo.asStateFlow()
 
-    fun currentAccount(): AccountInfo? = account
+    fun currentAccount(): AccountInfo? = _accountInfo.value
+
+    fun accountId(): String = deviceKey()
 
     suspend fun register(timeoutMs: Long = 25000L): Result<AccountInfo> {
         if (AppConfig.BACKEND_URL.isBlank()) {
@@ -41,28 +45,63 @@ class AccountManager(private val context: Context) {
                 NetworkClient.apiService.registerAccount(
                     accountEndpoint("/api/account/register"),
                     AccountRegisterRequest(
-                        deviceId = deviceKey(),
-                        appVersion = BuildConfig.VERSION_NAME
+                        deviceId = accountId(),
+                        appVersion = BuildConfig.VERSION_NAME,
+                        brand = Build.MANUFACTURER.orEmpty(),
+                        model = Build.MODEL.orEmpty(),
+                        androidVersion = "${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})"
                     )
                 )
             }
             val registered = response.account ?: throw IllegalStateException(
                 response.error ?: "后台未返回账户信息"
             )
-            account = registered
-            preferences.edit().putString(ACCOUNT_ID_KEY, registered.id).apply()
+            persistAccount(registered)
             registered
+        }
+    }
+
+    suspend fun updateNickname(
+        nickname: String,
+        timeoutMs: Long = 10000L
+    ): Result<AccountInfo> {
+        val registered = currentAccount()
+            ?: return Result.failure(IllegalStateException("账户尚未同步"))
+        val normalizedNickname = nickname.trim()
+        if (normalizedNickname.isBlank() || normalizedNickname.length > 24) {
+            return Result.failure(IllegalArgumentException("昵称长度需要在 1～24 个字符之间"))
+        }
+
+        return runCatching {
+            val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.updateAccountProfile(
+                    accountEndpoint("/api/account/profile"),
+                    AccountProfileUpdateRequest(
+                        accountId = registered.id,
+                        nickname = normalizedNickname
+                    )
+                )
+            }
+            val updated = response.account ?: throw IllegalStateException(
+                response.error ?: "后台未返回账户信息"
+            )
+            persistAccount(updated)
+            updated
         }
     }
 
     suspend fun reportTraffic(
         sessionId: String,
-        uploadBytes: Long,
-        downloadBytes: Long,
+        uploadMb: Double,
+        downloadMb: Double,
         timeoutMs: Long = 10000L
     ): Result<TrafficReportResponse> {
-        val registered = account
+        val registered = currentAccount()
             ?: return Result.failure(IllegalStateException("账户尚未注册"))
+
+        if (registered.level == 0) {
+            return Result.failure(IllegalStateException("账户已被封禁"))
+        }
 
         return runCatching {
             val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
@@ -71,8 +110,8 @@ class AccountManager(private val context: Context) {
                     TrafficReportRequest(
                         accountId = registered.id,
                         sessionId = sessionId,
-                        uploadBytes = uploadBytes.coerceAtLeast(0L),
-                        downloadBytes = downloadBytes.coerceAtLeast(0L)
+                        uploadMb = uploadMb.coerceAtLeast(0.0),
+                        downloadMb = downloadMb.coerceAtLeast(0.0)
                     )
                 )
             }
@@ -105,7 +144,44 @@ class AccountManager(private val context: Context) {
         return digest.joinToString("") { byte -> "%02x".format(byte) }
     }
 
+    private fun loadPersistedAccount(): AccountInfo? {
+        val id = preferences.getString(ACCOUNT_ID_KEY, null)
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+        return AccountInfo(
+            id = id,
+            nickname = preferences.getString(ACCOUNT_NICKNAME_KEY, null)
+                ?.takeIf { it.isNotBlank() }
+                ?: "流萤用户",
+            level = preferences.getInt(ACCOUNT_LEVEL_KEY, 1).coerceIn(0, 6),
+            brand = preferences.getString(ACCOUNT_BRAND_KEY, "").orEmpty(),
+            model = preferences.getString(ACCOUNT_MODEL_KEY, "").orEmpty(),
+            androidVersion = preferences.getString(ACCOUNT_ANDROID_VERSION_KEY, "").orEmpty(),
+            appVersion = preferences.getString(ACCOUNT_APP_VERSION_KEY, "").orEmpty()
+        )
+    }
+
+    private fun persistAccount(account: AccountInfo) {
+        val normalized = account.copy(level = account.level.coerceIn(0, 6))
+        _accountInfo.value = normalized
+        preferences.edit()
+            .putString(ACCOUNT_ID_KEY, normalized.id)
+            .putString(ACCOUNT_NICKNAME_KEY, normalized.nickname)
+            .putInt(ACCOUNT_LEVEL_KEY, normalized.level)
+            .putString(ACCOUNT_BRAND_KEY, normalized.brand)
+            .putString(ACCOUNT_MODEL_KEY, normalized.model)
+            .putString(ACCOUNT_ANDROID_VERSION_KEY, normalized.androidVersion)
+            .putString(ACCOUNT_APP_VERSION_KEY, normalized.appVersion)
+            .apply()
+    }
+
     private companion object {
         const val ACCOUNT_ID_KEY = "account_id"
+        const val ACCOUNT_NICKNAME_KEY = "account_nickname"
+        const val ACCOUNT_LEVEL_KEY = "account_level"
+        const val ACCOUNT_BRAND_KEY = "account_brand"
+        const val ACCOUNT_MODEL_KEY = "account_model"
+        const val ACCOUNT_ANDROID_VERSION_KEY = "account_android_version"
+        const val ACCOUNT_APP_VERSION_KEY = "account_app_version"
     }
 }

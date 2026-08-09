@@ -22,11 +22,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.a202132.app.BuildConfig
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.R
+import xyz.a202132.app.data.model.AccountInfo
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -44,10 +46,14 @@ fun DrawerContent(
     websiteUrl: String = "",
     feedbackEmail: String = "",
     feedbackUrl: String = "",
-    githubUrl: String = ""
+    githubUrl: String = "",
+    accountInfo: AccountInfo? = null,
+    isUpdatingNickname: Boolean = false,
+    onUpdateNickname: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showNicknameDialog by remember { mutableStateOf(false) }
     
     Column(
         modifier = Modifier
@@ -154,6 +160,12 @@ fun DrawerContent(
         }
 
         Divider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 8.dp))
+
+        UserAccountCard(
+            accountInfo = accountInfo,
+            isUpdatingNickname = isUpdatingNickname,
+            onClick = { showNicknameDialog = true }
+        )
         
         // 版本信息
         Text(
@@ -172,6 +184,147 @@ fun DrawerContent(
         )
     }
 
+    if (showNicknameDialog && accountInfo != null) {
+        NicknameDialog(
+            currentNickname = accountInfo.nickname,
+            isSaving = isUpdatingNickname,
+            onConfirm = { nickname ->
+                onUpdateNickname(nickname)
+                showNicknameDialog = false
+            },
+            onDismiss = { showNicknameDialog = false }
+        )
+    }
+
+}
+
+@Composable
+private fun UserAccountCard(
+    accountInfo: AccountInfo?,
+    isUpdatingNickname: Boolean,
+    onClick: () -> Unit
+) {
+    val isBanned = accountInfo?.level == 0
+    val levelText = when {
+        accountInfo == null -> "账户同步中"
+        isBanned -> "Lv0 · 已封禁"
+        else -> "Lv${accountInfo.level.coerceIn(1, 6)}"
+    }
+    val deviceText = accountInfo?.let { account ->
+        val device = listOf(account.brand, account.model)
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+            .joinToString(" ")
+        listOf(
+            device,
+            account.androidVersion.takeIf(String::isNotBlank)?.let { "Android $it" }.orEmpty()
+        ).filter(String::isNotBlank).joinToString(" · ")
+    }.orEmpty()
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable(
+                enabled = accountInfo != null && !isUpdatingNickname,
+                onClick = onClick
+            ),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (isBanned) Icons.Outlined.Block else Icons.Outlined.AccountCircle,
+                contentDescription = null,
+                tint = if (isBanned) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(34.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = accountInfo?.nickname ?: "正在同步用户信息…",
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = levelText,
+                    fontSize = 12.sp,
+                    color = if (isBanned) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary
+                )
+                if (deviceText.isNotBlank()) {
+                    Text(
+                        text = deviceText,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (isUpdatingNickname) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else if (accountInfo != null) {
+                Icon(
+                    imageVector = Icons.Outlined.Edit,
+                    contentDescription = "修改昵称",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NicknameDialog(
+    currentNickname: String,
+    isSaving: Boolean,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var nickname by remember(currentNickname) { mutableStateOf(currentNickname) }
+    val normalized = nickname.trim()
+    val isValid = normalized.isNotBlank() && normalized.length <= 24
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = { Text("修改昵称") },
+        text = {
+            OutlinedTextField(
+                value = nickname,
+                onValueChange = { value ->
+                    if (value.length <= 24) nickname = value
+                },
+                label = { Text("昵称") },
+                supportingText = { Text("${nickname.length}/24") },
+                singleLine = true,
+                isError = nickname.isNotEmpty() && normalized.isBlank(),
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(normalized) },
+                enabled = isValid && !isSaving
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isSaving) {
+                Text("取消")
+            }
+        }
+    )
 }
 @Composable
 private fun DrawerMenuItem(
