@@ -25,19 +25,6 @@ object ServiceManager {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
     
-    // 流量统计
-    private val _uploadSpeed = MutableStateFlow(0L)
-    val uploadSpeed: StateFlow<Long> = _uploadSpeed.asStateFlow()
-    
-    private val _downloadSpeed = MutableStateFlow(0L)
-    val downloadSpeed: StateFlow<Long> = _downloadSpeed.asStateFlow()
-    
-    private val _uploadTotal = MutableStateFlow(0L)
-    val uploadTotal: StateFlow<Long> = _uploadTotal.asStateFlow()
-    
-    private val _downloadTotal = MutableStateFlow(0L)
-    val downloadTotal: StateFlow<Long> = _downloadTotal.asStateFlow()
-    
     // 服务运行状态
     private val _isServiceRunning = MutableStateFlow(false)
     val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
@@ -104,23 +91,14 @@ object ServiceManager {
     fun notifyStateChange() {
         if (BoxVpnService.isRunning) {
             _vpnState.value = VpnState.CONNECTED
-            // 更新流量统计
-            _uploadSpeed.value = BoxVpnService.uploadSpeed
-            _downloadSpeed.value = BoxVpnService.downloadSpeed
-            _uploadTotal.value = BoxVpnService.uploadTotal
-            _downloadTotal.value = BoxVpnService.downloadTotal
             _isServiceRunning.value = true
         } else {
             if (_vpnState.value == VpnState.CONNECTING && _currentNode.value != null) {
                 _isServiceRunning.value = false
-                _uploadSpeed.value = 0L
-                _downloadSpeed.value = 0L
                 return
             }
             _vpnState.value = VpnState.DISCONNECTED
             _currentNode.value = null
-            _uploadSpeed.value = 0L
-            _downloadSpeed.value = 0L
             _isServiceRunning.value = false
         }
     }

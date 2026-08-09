@@ -229,12 +229,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Lazily, TunStack.GVISOR)
     val vpnState = ServiceManager.vpnState
     
-    // 流量统计
-    val uploadSpeed = ServiceManager.uploadSpeed
-    val downloadSpeed = ServiceManager.downloadSpeed
-    val uploadTotal = ServiceManager.uploadTotal
-    val downloadTotal = ServiceManager.downloadTotal
-    
     val currentNode = combine(nodeDao.getAllNodes(), selectedNodeId) { nodeList, selectedId ->
         nodeList.find { it.id == selectedId }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)

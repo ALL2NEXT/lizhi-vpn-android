@@ -267,12 +267,6 @@ fun MainScreen(
                     }
                 )
                 
-                // 流量统计 (仅在连接时显示)
-                if (vpnState == VpnState.CONNECTED) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    TrafficStats(viewModel)
-                }
-                
                 Spacer(modifier = Modifier.weight(1f))
                 
                 // 节点选择器
@@ -461,24 +455,6 @@ fun MainScreen(
         )
     }
 
-}
-
-/**
- * 将每秒更新的流量状态限制在这一小块组合树中，避免整张主页随统计值重组。
- */
-@Composable
-private fun TrafficStats(viewModel: MainViewModel) {
-    val uploadSpeed by viewModel.uploadSpeed.collectAsStateWithLifecycle()
-    val downloadSpeed by viewModel.downloadSpeed.collectAsStateWithLifecycle()
-    val uploadTotal by viewModel.uploadTotal.collectAsStateWithLifecycle()
-    val downloadTotal by viewModel.downloadTotal.collectAsStateWithLifecycle()
-
-    TrafficStatsRow(
-        uploadSpeed = uploadSpeed,
-        downloadSpeed = downloadSpeed,
-        uploadTotal = uploadTotal,
-        downloadTotal = downloadTotal
-    )
 }
 
 private fun openWebSpeedTest(context: Context, url: String) {

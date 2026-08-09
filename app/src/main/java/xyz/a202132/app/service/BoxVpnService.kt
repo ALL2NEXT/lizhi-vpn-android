@@ -562,12 +562,8 @@ class BoxVpnService : VpnService() {
                                 // baseRxBytes = currentRxBytes
                             }
 
-                            // 通知 UI 更新
-                            withContext(Dispatchers.Main) {
-                                ServiceManager.notifyStateChange()
-                                // 同时更新通知栏
-                                currentNodeName?.let { updateNotification(it) }
-                            }
+                            // 流量仅展示在通知栏，直接在服务后台更新，避免每秒唤醒主页 UI。
+                            currentNodeName?.let { updateNotification(it) }
                         }
                     }
                 } catch (e: Exception) {
@@ -604,8 +600,7 @@ class BoxVpnService : VpnService() {
             uploadTotal = message.uplinkTotal.coerceAtLeast(0L)
             downloadTotal = message.downlinkTotal.coerceAtLeast(0L)
 
-            serviceScope.launch(Dispatchers.Main) {
-                ServiceManager.notifyStateChange()
+            serviceScope.launch {
                 currentNodeName?.let { updateNotification(it) }
             }
         } catch (e: Exception) {
