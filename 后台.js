@@ -16,6 +16,7 @@
  *   GET  /<ADMIN_UUID>/api/state
  *   PUT  /<ADMIN_UUID>/api/state
  *   GET  /<ADMIN_UUID>/api/users
+ *   DELETE /<ADMIN_UUID>/api/users/<ACCOUNT_ID>
  */
 
 const STATE_KEY = "fireflyvpn:state:v1";
@@ -188,7 +189,7 @@ async function handleClient(request, env) {
     notice: state.notice,
     appUpdate: state.appUpdate,
     settings: state.settings,
-    generatedAt: new Date().toISOString(),
+    generatedAt: beijingTimestamp(),
   });
 }
 
@@ -214,6 +215,14 @@ async function handleManagedSubscription(path, request, env) {
   }
   if (source.minLevel > access.level) {
     return json({ ok: false, error: "insufficient_level" }, 403);
+  }
+  if (source.minAppVersion && !isAppVersionAtLeast(access.appVersion, source.minAppVersion)) {
+    return json({
+      ok: false,
+      error: "app_version_too_low",
+      requiredVersion: source.minAppVersion,
+      currentVersion: access.appVersion || null,
+    }, 403);
   }
 
   const clientIp = getClientIp(request);
@@ -256,7 +265,7 @@ async function handleAccount(path, request, env) {
     const db = await ensureUserSchema(env);
     const result = await db.prepare(
       "UPDATE users_mb SET nickname = ?, updated_at = ? WHERE id = ?",
-    ).bind(nickname, new Date().toISOString(), accountId).run();
+    ).bind(nickname, beijingTimestamp(), accountId).run();
     if (!result.meta || Number(result.meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
@@ -282,7 +291,7 @@ async function handleAccount(path, request, env) {
     }
 
     const now = new Date();
-    const timestamp = now.toISOString();
+    const timestamp = beijingTimestamp(now);
     const db = usersDb(env);
     const uploadMb = boundedMegabytes(body && body.uploadMb);
     const downloadMb = boundedMegabytes(body && body.downloadMb);
@@ -368,18 +377,33 @@ async function handleAdmin(path, request, env) {
         today: publicUsers.filter((user) => user.activeToday).length,
         month: publicUsers.filter((user) => user.activeThisMonth).length,
       },
-      generatedAt: new Date().toISOString(),
+      generatedAt: beijingTimestamp(),
     });
   }
 
   const userMatch = path.match(/^\/api\/users\/([a-f0-9]{64})$/);
+  if (userMatch && request.method === "DELETE") {
+    const accountId = normalizeAccountId(userMatch[1]);
+    const db = await ensureUserSchema(env);
+    const result = await db.batch([
+      db.prepare("DELETE FROM reported_sessions_mb WHERE account_id = ?").bind(accountId),
+      db.prepare("DELETE FROM user_usage_mb WHERE account_id = ?").bind(accountId),
+      db.prepare("DELETE FROM users_mb WHERE id = ?").bind(accountId),
+    ]);
+    const deleteResult = result[result.length - 1];
+    if (!deleteResult || !deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    return json({ ok: true, accountId });
+  }
+
   if (userMatch && request.method === "PATCH") {
     const accountId = normalizeAccountId(userMatch[1]);
     const body = await request.json();
     const assignments = [];
     const values = [];
     const db = await ensureUserSchema(env);
-    const timestamp = new Date().toISOString();
+    const timestamp = beijingTimestamp();
 
     if (Object.prototype.hasOwnProperty.call(body || {}, "nickname")) {
       const nickname = normalizeNickname(body.nickname);
@@ -425,18 +449,18 @@ async function handleAdmin(path, request, env) {
 
   if (path === "/api/state" && request.method === "PUT") {
     const incoming = await request.json();
-    const next = normalizeState(incoming);
     try {
+      const next = normalizeState(incoming);
       await validateAndWarmSubscriptionSources(env, next.subscriptions);
+      next.updatedAt = beijingTimestamp();
+      await writeState(env, next);
+      return json({ ok: true, state: next });
     } catch (error) {
       return json({
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }, 400);
     }
-    next.updatedAt = new Date().toISOString();
-    await writeState(env, next);
-    return json({ ok: true, state: next });
   }
 
   return json({ error: "admin_route_not_found" }, 404);
@@ -523,11 +547,15 @@ async function ensureUserSchema(env) {
 
 async function resolveAccountAccess(env, accountId) {
   const db = await ensureUserSchema(env);
-  const row = await db.prepare("SELECT level FROM users_mb WHERE id = ?")
+  const row = await db.prepare("SELECT level, app_version FROM users_mb WHERE id = ?")
     .bind(accountId).first();
   return row
-    ? { registered: true, level: normalizeLevel(row.level) }
-    : { registered: false, level: 0 };
+    ? {
+      registered: true,
+      level: normalizeLevel(row.level),
+      appVersion: cleanText(row.app_version),
+    }
+    : { registered: false, level: 0, appVersion: "" };
 }
 
 async function readD1User(env, accountId) {
@@ -557,7 +585,7 @@ function rowToUser(row) {
 
 async function registerOrTouchUser(env, accountId, profile, now) {
   const db = usersDb(env);
-  const timestamp = now.toISOString();
+  const timestamp = beijingTimestamp(now);
   const brand = cleanText(profile.brand).slice(0, 80);
   const model = cleanText(profile.model).slice(0, 120);
   const androidVersion = cleanText(profile.androidVersion).slice(0, 80);
@@ -634,6 +662,23 @@ function usagePeriodKeys(date) {
   return { day, month: `${parts.year}-${parts.month}` };
 }
 
+function beijingTimestamp(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(date).reduce((result, part) => {
+    if (part.type !== "literal") result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}+08:00`;
+}
+
 function normalizeAccountId(value) {
   const accountId = cleanText(value).toLowerCase();
   return /^[a-f0-9]{64}$/.test(accountId) ? accountId : "";
@@ -663,6 +708,34 @@ function normalizeSubscriptionCacheMinutes(value) {
   return Number.isFinite(minutes)
     ? Math.min(Math.max(Math.round(minutes), 0), MAX_SUBSCRIPTION_CACHE_MINUTES)
     : DEFAULT_SUBSCRIPTION_CACHE_MINUTES;
+}
+
+function normalizeMinimumAppVersion(value) {
+  const version = cleanText(value).replace(/^v/i, "").slice(0, 40);
+  if (!version) return "";
+  if (!/^\d+(?:\.\d+)*$/.test(version)) {
+    throw new Error("invalid_min_app_version");
+  }
+  return version;
+}
+
+function appVersionParts(value) {
+  const version = cleanText(value).replace(/^v/i, "");
+  if (!/^\d+(?:\.\d+)*$/.test(version)) return null;
+  return version.split(".").map((part) => Number(part));
+}
+
+function isAppVersionAtLeast(currentVersion, minimumVersion) {
+  const current = appVersionParts(currentVersion);
+  const minimum = appVersionParts(minimumVersion);
+  if (!current || !minimum) return false;
+  const length = Math.max(current.length, minimum.length);
+  for (let index = 0; index < length; index += 1) {
+    const currentPart = current[index] || 0;
+    const minimumPart = minimum[index] || 0;
+    if (currentPart !== minimumPart) return currentPart > minimumPart;
+  }
+  return true;
 }
 
 function assertPlainSubscriptionContent(value) {
@@ -874,6 +947,9 @@ function normalizeState(input) {
         name: cleanText(item.name || item.title),
         enabled: parseFlag(item.enabled, true),
         minLevel: normalizeLevel(item.minLevel ?? item.requiredLevel),
+        minAppVersion: normalizeMinimumAppVersion(
+          item.minAppVersion ?? item.minimumAppVersion,
+        ),
         cacheMinutes: normalizeSubscriptionCacheMinutes(item.cacheMinutes),
         content,
         remark: cleanText(item.remark || item.note).slice(0, 500),
@@ -886,6 +962,7 @@ function normalizeState(input) {
       url: item.url,
       enabled: item.enabled,
       minLevel: item.minLevel,
+      minAppVersion: item.minAppVersion,
       cacheMinutes: item.cacheMinutes,
       content: item.content,
       remark: item.remark,
@@ -949,7 +1026,7 @@ function isAdmin(request, env) {
 function corsHeaders() {
   return {
     "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,PUT,PATCH,OPTIONS",
+    "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "access-control-allow-headers": "Content-Type, Authorization",
     "access-control-expose-headers": CLIENT_IP_HEADER,
   };
@@ -1003,6 +1080,9 @@ function adminHtml() {
     button.danger { background: #7f1d1d; color: #fee2e2; }
     .check { display: flex; align-items: center; margin: 8px 0; }
     .source-row { border: 1px solid #4b5563; border-radius: 10px; padding: 12px; margin: 10px 0; }
+    .source-mode { margin-top: 12px; }
+    .source-mode[hidden] { display: none; }
+    .source-type-field { max-width: 280px; }
      .source-row .row-actions { display: flex; align-items: center; justify-content: space-between; }
      .source-row small { display: block; margin-top: 8px; }
      .user-sheet-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -1014,6 +1094,9 @@ function adminHtml() {
      table.user-sheet { width: 100%; min-width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
      .user-sheet th, .user-sheet td { text-align: left; padding: 0; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid #374151; border-bottom: 1px solid #374151; white-space: nowrap; background: #111827; }
      .user-sheet th { position: sticky; top: 0; z-index: 3; padding: 9px 12px 9px 8px; overflow: visible; color: #d1d5db; background: #273244; font-weight: 700; user-select: none; }
+     .user-sheet th[data-sort-column] { cursor: pointer; }
+     .user-sheet th[data-sort-column]:hover { background: #334155; color: #f8fafc; }
+     .sort-indicator { display: inline-block; width: 14px; color: #4ade80; }
      .column-resizer { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; z-index: 6; cursor: col-resize; touch-action: none; }
      .column-resizer::after { content: ''; position: absolute; top: 20%; bottom: 20%; left: 4px; width: 1px; background: #4b5563; }
      .column-resizer:hover::after, .column-resizer:focus::after, body.column-resizing .column-resizer::after { background: #22c55e; width: 2px; }
@@ -1025,7 +1108,7 @@ function adminHtml() {
      .user-sheet td code { color: #c4b5fd; }
      .sheet-input, .sheet-select { width: 100%; min-width: 0; height: 36px; padding: 7px 8px; border: 0; border-radius: 0; background: transparent; }
      .sheet-input:focus, .sheet-select:focus { position: relative; z-index: 1; outline: 2px solid #22c55e; outline-offset: -2px; background: #0f172a; }
-     .sheet-save { margin: 4px; padding: 7px 10px; }
+     .sheet-save, .sheet-delete { margin: 4px 2px; padding: 7px 10px; }
      .user-row.dirty td { background: #312e1f; }
      .user-row.dirty td:first-child { background: #3b321d; }
      .user-row.search-current td { box-shadow: inset 0 0 0 2px #38bdf8; }
@@ -1086,7 +1169,7 @@ function adminHtml() {
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
      <button class="secondary" onclick="addSource()">添加线路</button>
-     <small class="hint">每条线路可设置最低账户等级（Lv0～Lv6）。纯文本节点由 Worker 直接加密；外部地址必须返回明文节点，由 Worker 中转、缓存并加密，已经加密或无法识别的接口会被拒绝。缓存时间为 0 时每次请求都会重新访问上游。</small>
+     <small class="hint">每条线路只能选择一种来源：外部接口或纯文本节点。外部接口可设置缓存时间；纯文本节点不使用缓存。还可以按账户等级和最低应用版本限制下发。</small>
      <button type="button" onclick="pushSection('subscriptions')">推送</button>
    </section>
 
@@ -1137,6 +1220,8 @@ function adminHtml() {
  let savingAllUsers = false;
  let userSearchMatches = [];
  let userSearchIndex = -1;
+ let userSortKey = '';
+ let userSortDirection = 'desc';
  const USER_COLUMN_WIDTHS_KEY = 'firefly:user-sheet-column-widths:v1';
  const USER_SHEET_COLUMNS = [
    {key: 'accountId', label: '账户哈希', width: 135, min: 90},
@@ -1154,7 +1239,7 @@ function adminHtml() {
    {key: 'createdAt', label: '注册时间', width: 140, min: 90},
    {key: 'lastSeenAt', label: '最后活跃', width: 140, min: 90},
    {key: 'lastReportAt', label: '最后上报', width: 140, min: 90},
-   {key: 'actions', label: '操作', width: 70, min: 60}
+   {key: 'actions', label: '操作', width: 130, min: 100}
  ];
  let userColumnWidths = loadUserColumnWidths();
  const ADMIN_API_BASE = "${ADMIN_BASE_PATH}/api";
@@ -1171,9 +1256,10 @@ function adminHtml() {
  function headers() { return {'content-type':'application/json','authorization':'Bearer ' + adminToken}; }
  function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#fca5a5' : '#86efac'; }
  function showLoginError(message) { loginStatusEl.textContent = message || ''; }
- function adminErrorMessage(error, fallback) {
-   if (error === 'subscription_must_be_plaintext_nodes') return '订阅必须返回可识别的明文节点，不能使用已加密接口';
-   if (error === 'external_subscription_unreachable') return '外部明文订阅接口无法访问';
+  function adminErrorMessage(error, fallback) {
+    if (error === 'subscription_must_be_plaintext_nodes') return '订阅必须返回可识别的明文节点，不能使用已加密接口';
+    if (error === 'invalid_min_app_version') return '最低应用版本格式无效，请填写类似 2.40 的数字版本';
+    if (error === 'external_subscription_unreachable') return '外部明文订阅接口无法访问';
    if (error === 'external_subscription_url_required') return '请填写外部明文订阅地址';
    if (String(error || '').indexOf('external_subscription_http_') === 0) {
      return '外部明文订阅接口请求失败（HTTP ' + String(error).slice('external_subscription_http_'.length) + '）';
@@ -1291,10 +1377,102 @@ function userSheetColgroup() {
 }
 function userSheetHeader() {
   return USER_SHEET_COLUMNS.map(function(column) {
-    return '<th data-user-column-header="' + column.key + '">' + esc(column.label) +
+    return '<th data-user-column-header="' + column.key + '" data-sort-column="' + column.key +
+      '" tabindex="0" aria-sort="none" title="Click to sort">' + esc(column.label) +
+      '<span class="sort-indicator" aria-hidden="true"></span>' +
       '<span class="column-resizer" data-resize-column="' + column.key +
       '" role="separator" tabindex="0" title="拖动调整列宽，双击恢复默认宽度"></span></th>';
   }).join('');
+}
+function userSortValue(row, columnKey) {
+  const accountId = row.dataset.userRow || '';
+  const user = currentUsersData && Array.isArray(currentUsersData.users)
+    ? currentUsersData.users.find(function(item) { return item.id === accountId; })
+    : null;
+  if (!user) return accountId;
+  const field = function(name, fallback) {
+    const control = row.querySelector('[data-user-field="' + name + '"]');
+    return control ? control.value.trim() : fallback;
+  };
+  switch (columnKey) {
+    case 'accountId': return user.id;
+    case 'nickname': return field('nickname', user.nickname);
+    case 'level': return Number(field('level', user.level)) || 0;
+    case 'brand': return field('brand', user.brand);
+    case 'model': return field('model', user.model);
+    case 'androidVersion': return field('androidVersion', user.androidVersion);
+    case 'appVersion': return field('appVersion', user.appVersion);
+    case 'activeToday': return user.activeToday ? 1 : 0;
+    case 'activeMonth': return user.activeThisMonth ? 1 : 0;
+    case 'trafficToday': return Number(user.today && user.today.totalMb) || 0;
+    case 'trafficMonth': return Number(user.month && user.month.totalMb) || 0;
+    case 'trafficTotal': return Number(user.totalMb) || 0;
+    case 'createdAt': return user.createdAt || '';
+    case 'lastSeenAt': return user.lastSeenAt || '';
+    case 'lastReportAt': return user.lastReportAt || '';
+    default: return '';
+  }
+}
+function compareUserSortValues(left, right, columnKey) {
+  const numericColumns = ['level', 'activeToday', 'activeMonth', 'trafficToday', 'trafficMonth', 'trafficTotal'];
+  if (numericColumns.includes(columnKey)) return Number(left) - Number(right);
+
+  const leftText = String(left == null ? '' : left);
+  const rightText = String(right == null ? '' : right);
+  if (!leftText && rightText) return 1;
+  if (leftText && !rightText) return -1;
+  if (!leftText && !rightText) return 0;
+
+  const dateColumns = ['createdAt', 'lastSeenAt', 'lastReportAt'];
+  if (dateColumns.includes(columnKey)) {
+    const leftTime = Date.parse(leftText);
+    const rightTime = Date.parse(rightText);
+    if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) return leftTime - rightTime;
+  }
+  return leftText.localeCompare(rightText, 'zh-CN', {numeric: true, sensitivity: 'base'});
+}
+function updateUserSortIndicators(table) {
+  if (!table) return;
+  table.querySelectorAll('[data-sort-column]').forEach(function(header) {
+    const active = header.dataset.sortColumn === userSortKey;
+    const indicator = header.querySelector('.sort-indicator');
+    header.setAttribute('aria-sort', active
+      ? (userSortDirection === 'desc' ? 'descending' : 'ascending')
+      : 'none');
+    header.title = active
+      ? (userSortDirection === 'desc' ? 'Descending; click to switch to ascending' : 'Ascending; click to switch to descending')
+      : 'Click to sort descending';
+    if (indicator) indicator.textContent = active ? (userSortDirection === 'desc' ? '↓' : '↑') : '';
+  });
+}
+function applyUserSort() {
+  const table = el('usersTable').querySelector('table.user-sheet');
+  if (!table || !userSortKey) return;
+  const body = table.querySelector('tbody');
+  if (!body) return;
+  const rows = Array.from(body.querySelectorAll('[data-user-row]'));
+  rows.map(function(row, index) {
+    return {row: row, index: index};
+  }).sort(function(left, right) {
+    const result = compareUserSortValues(
+      userSortValue(left.row, userSortKey),
+      userSortValue(right.row, userSortKey),
+      userSortKey,
+    );
+    return (userSortDirection === 'desc' ? -result : result) || left.index - right.index;
+  }).forEach(function(item) {
+    body.appendChild(item.row);
+  });
+  updateUserSortIndicators(table);
+}
+function toggleUserSort(columnKey) {
+  if (userSortKey === columnKey) {
+    userSortDirection = userSortDirection === 'desc' ? 'asc' : 'desc';
+  } else {
+    userSortKey = columnKey;
+    userSortDirection = 'desc';
+  }
+  applyUserSort();
 }
 function updateUserSheetWidth(table) {
   if (!table) return;
@@ -1331,6 +1509,19 @@ function attachUserColumnResizers() {
   const table = el('usersTable').querySelector('table.user-sheet');
   if (!table) return;
   updateUserSheetWidth(table);
+  updateUserSortIndicators(table);
+  table.querySelectorAll('[data-sort-column]').forEach(function(header) {
+    header.onclick = function(event) {
+      if (event.target.closest('[data-resize-column]')) return;
+      toggleUserSort(header.dataset.sortColumn);
+    };
+    header.onkeydown = function(event) {
+      if (event.target.closest('[data-resize-column]')) return;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      toggleUserSort(header.dataset.sortColumn);
+    };
+  });
   table.querySelectorAll('[data-resize-column]').forEach(function(handle) {
     const columnKey = handle.dataset.resizeColumn;
     handle.onpointerdown = function(event) {
@@ -1370,6 +1561,7 @@ function attachUserColumnResizers() {
       setUserColumnWidth(table, columnKey, currentWidth + (event.key === 'ArrowRight' ? 10 : -10), true);
     };
   });
+  applyUserSort();
 }
 function userRowSearchText(row) {
   const values = [row.dataset.userRow || ''];
@@ -1470,7 +1662,8 @@ function renderUsers(data) {
       '<td class="readonly">' + esc(user.createdAt || '暂无') + '</td>' +
       '<td class="readonly">' + esc(user.lastSeenAt || '暂无') + '</td>' +
       '<td class="readonly">' + esc(user.lastReportAt || '暂无') + '</td>' +
-      '<td><button class="sheet-save" type="button" data-save-user="' + esc(user.id) + '">保存</button></td>' +
+      '<td><button class="sheet-save" type="button" data-save-user="' + esc(user.id) + '">保存</button>' +
+        '<button class="sheet-delete danger" type="button" data-delete-user="' + esc(user.id) + '">删除</button></td>' +
       '</tr>';
   }).join('');
   el('usersTable').innerHTML = rows
@@ -1484,6 +1677,9 @@ function renderUsers(data) {
   });
   el('usersTable').querySelectorAll('[data-save-user]').forEach(function(button) {
     button.onclick = function() { saveUser(button.dataset.saveUser); };
+  });
+  el('usersTable').querySelectorAll('[data-delete-user]').forEach(function(button) {
+    button.onclick = function() { deleteUser(button.dataset.deleteUser); };
   });
   updateUserToolbar();
   applyUserSearch();
@@ -1570,6 +1766,41 @@ async function saveUser(accountId, silent) {
     return false;
   }
 }
+async function deleteUser(accountId) {
+  const row = userRow(accountId);
+  if (!row) return false;
+  const user = currentUsersData && (currentUsersData.users || []).find(function(item) {
+    return item.id === accountId;
+  });
+  if (dirtyUserIds.size > 0 && (dirtyUserIds.size > 1 || !dirtyUserIds.has(accountId))) {
+    show('请先保存其他用户的修改，再删除用户', true);
+    return false;
+  }
+  const displayName = user && user.nickname ? user.nickname : accountId.slice(0, 16) + '…';
+  if (!confirm('确定删除用户“' + displayName + '”及其全部流量统计吗？此操作不可恢复。')) {
+    return false;
+  }
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/users/' + encodeURIComponent(accountId), {
+      method: 'DELETE',
+      headers: headers()
+    });
+    const responseText = await response.text();
+    let data = {};
+    try { data = JSON.parse(responseText); } catch (_) {}
+    if (!response.ok) {
+      show(data.error || ('用户删除失败（HTTP ' + response.status + '）'), true);
+      return false;
+    }
+    dirtyUserIds.delete(accountId);
+    const refreshed = await loadUsers(true);
+    show(refreshed ? '用户及其流量统计已删除' : '用户已删除，但用户列表刷新失败', !refreshed);
+    return true;
+  } catch (error) {
+    show('用户删除失败，请检查网络', true);
+    return false;
+  }
+}
 async function saveAllUsers() {
   const accountIds = Array.from(dirtyUserIds);
   if (accountIds.length === 0) return;
@@ -1650,17 +1881,38 @@ function addSource(source) {
   source = source || {};
   const row = document.createElement('div');
   row.className = 'source-row';
+  const sourceType = source.content ? 'content' : 'url';
   row.innerHTML = '<div class="grid">' +
     '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
-    '<div class="field"><label>外部明文订阅地址（与纯文本二选一）<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/plain-sub"></label></div>' +
-    '<div class="field"><label>外部接口缓存（分钟）<input data-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '"></label></div>' +
+    '<div class="field source-type-field"><label>订阅来源<select data-field="sourceType">' +
+      '<option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>外部接口</option>' +
+      '<option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>纯文本节点</option>' +
+      '</select></label></div>' +
     '<div class="field"><label>最低账户等级<select data-field="minLevel">' + levelOptions(source.minLevel == null ? 1 : source.minLevel) + '</select></label></div>' +
+    '<div class="field"><label>最低应用版本<input data-field="minAppVersion" type="text" value="' + esc(source.minAppVersion) + '" placeholder="例如 2.40（留空不限制）"></label></div>' +
     '<div class="field"><label>后台备注（仅后台保存）<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="例如：备用线路、长期稳定"></label></div>' +
-    '</div><div class="field"><label>纯文本节点（每行一个，填写后由 Worker 自动加密）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div>' +
+    '</div>' +
+    '<div class="source-mode" data-source-mode="url"><div class="grid">' +
+      '<div class="field"><label>外部明文订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/plain-sub"></label></div>' +
+      '<div class="field"><label>接口缓存时间（分钟）<input data-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '"></label></div>' +
+    '</div><small>接口必须返回可识别的明文节点，由 Worker 中转并加密；缓存时间设为 0 会每次请求上游。</small></div>' +
+    '<div class="source-mode" data-source-mode="content"><div class="field"><label>纯文本节点（每行一个）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div><small>保存后由 Worker 直接加密下发，不经过外部接口缓存。</small></div>' +
     '<label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
     '<div class="row-actions"><button class="danger" type="button">删除</button></div>';
   row.querySelector('.danger').onclick = function() { row.remove(); };
+  row.querySelector('[data-field="sourceType"]').onchange = function() { updateSourceMode(row); };
+  updateSourceMode(row);
   el('subscriptionRows').appendChild(row);
+}
+function updateSourceMode(row) {
+  const type = row.querySelector('[data-field="sourceType"]').value;
+  row.querySelectorAll('[data-source-mode]').forEach(function(panel) {
+    const active = panel.dataset.sourceMode === type;
+    panel.hidden = !active;
+    panel.querySelectorAll('input, textarea, select').forEach(function(control) {
+      control.disabled = !active;
+    });
+  });
 }
 function fillState(state) {
   currentState = state || {};
@@ -1689,14 +1941,19 @@ function fillState(state) {
 }
 function formState() {
   const subscriptions = Array.from(document.querySelectorAll('.source-row')).map(function(row, index) {
+    const sourceType = row.querySelector('[data-field="sourceType"]').value;
+    const url = row.querySelector('[data-field="url"]').value.trim();
     const content = row.querySelector('[data-field="content"]').value.trim();
     return {
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
-      url: row.querySelector('[data-field="url"]').value.trim(),
+      url: sourceType === 'url' ? url : '',
       enabled: row.querySelector('[data-field="enabled"]').checked,
       minLevel: Number(row.querySelector('[data-field="minLevel"]').value || 1),
-      cacheMinutes: Number(row.querySelector('[data-field="cacheMinutes"]').value || 0),
-      content: content,
+      minAppVersion: row.querySelector('[data-field="minAppVersion"]').value.trim(),
+      cacheMinutes: sourceType === 'url'
+        ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 0)
+        : 0,
+      content: sourceType === 'content' ? content : '',
       remark: row.querySelector('[data-field="remark"]').value.trim()
     };
   }).filter(function(item) { return item.url || item.content; });
