@@ -17,11 +17,14 @@
  *   PUT  /<ADMIN_UUID>/api/state
  *   GET  /<ADMIN_UUID>/api/users
  *   DELETE /<ADMIN_UUID>/api/users/<ACCOUNT_ID>
+ *   PATCH /<ADMIN_UUID>/api/users/batch       // batch level changes
+ *   DELETE /<ADMIN_UUID>/api/users/batch      // batch user deletion
  */
 
 const STATE_KEY = "fireflyvpn:state:v1";
 const CLIENT_IP_HEADER = "X-Firefly-Client-IP";
 const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
+const MAX_BATCH_USER_COUNT = 100;
 const SUBSCRIPTION_CACHE_KEY_PREFIX = "fireflyvpn:subscription-cache:v1:";
 const DEFAULT_SUBSCRIPTION_CACHE_MINUTES = 30;
 const MAX_SUBSCRIPTION_CACHE_MINUTES = 7 * 24 * 60;
@@ -381,6 +384,60 @@ async function handleAdmin(path, request, env) {
     });
   }
 
+  if (path === "/api/users/batch" && request.method === "PATCH") {
+    const body = await request.json();
+    const accountIds = normalizeBatchAccountIds(body && body.accountIds);
+    const level = Number(body && body.level);
+    if (
+      accountIds.length === 0 ||
+      accountIds.length > MAX_BATCH_USER_COUNT ||
+      !Number.isInteger(level) ||
+      level < 0 ||
+      level > 6
+    ) {
+      return json({ ok: false, error: "invalid_batch_user_update" }, 400);
+    }
+
+    const db = await ensureUserSchema(env);
+    const timestamp = beijingTimestamp();
+    const result = await db.batch(accountIds.map((accountId) => db.prepare(
+      "UPDATE users_mb SET level = ?, updated_at = ? WHERE id = ?",
+    ).bind(level, timestamp, accountId)));
+    const changed = result.reduce(
+      (total, item) => total + Number(item && item.meta && item.meta.changes || 0),
+      0,
+    );
+    return json({ ok: true, accountIds, level, changed });
+  }
+
+  if (path === "/api/users/batch" && request.method === "DELETE") {
+    const body = await request.json();
+    const accountIds = normalizeBatchAccountIds(body && body.accountIds);
+    if (accountIds.length === 0 || accountIds.length > MAX_BATCH_USER_COUNT) {
+      return json({ ok: false, error: "invalid_batch_user_delete" }, 400);
+    }
+
+    const db = await ensureUserSchema(env);
+    const statements = [];
+    for (const accountId of accountIds) {
+      statements.push(
+        db.prepare("DELETE FROM reported_sessions_mb WHERE account_id = ?").bind(accountId),
+        db.prepare("DELETE FROM user_usage_mb WHERE account_id = ?").bind(accountId),
+        db.prepare("DELETE FROM users_mb WHERE id = ?").bind(accountId),
+      );
+    }
+    const result = await db.batch(statements);
+    const changed = accountIds.reduce(
+      (total, _accountId, index) => total + Number(
+        result[index * 3 + 2] && result[index * 3 + 2].meta
+          ? result[index * 3 + 2].meta.changes
+          : 0,
+      ),
+      0,
+    );
+    return json({ ok: true, accountIds, changed });
+  }
+
   const userMatch = path.match(/^\/api\/users\/([a-f0-9]{64})$/);
   if (userMatch && request.method === "DELETE") {
     const accountId = normalizeAccountId(userMatch[1]);
@@ -682,6 +739,11 @@ function beijingTimestamp(date = new Date()) {
 function normalizeAccountId(value) {
   const accountId = cleanText(value).toLowerCase();
   return /^[a-f0-9]{64}$/.test(accountId) ? accountId : "";
+}
+
+function normalizeBatchAccountIds(value) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map(normalizeAccountId).filter(Boolean)));
 }
 
 function boundedMegabytes(value) {
@@ -1049,7 +1111,7 @@ function adminHtml() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FireflyVPN Worker 管理后台</title>
+  <title>管理后台</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, -apple-system, sans-serif; }
      body { margin: 0; background: #111827; color: #e5e7eb; }
@@ -1088,6 +1150,7 @@ function adminHtml() {
      .user-sheet-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
      .user-sheet-toolbar button { margin: 0; }
      .user-sheet-toolbar small { margin-left: auto; }
+     .batch-level-select { width: auto; min-width: 105px; margin: 0; padding: 9px 10px; }
      .user-search { flex: 1 1 220px; width: min(300px, 100%); min-width: 180px; padding: 9px 10px; }
      .sheet-summary { display: block; margin: -4px 0 10px; }
      .table-wrap { max-height: 70vh; overflow: auto; border: 1px solid #4b5563; border-radius: 10px; background: #111827; }
@@ -1104,6 +1167,8 @@ function adminHtml() {
      .user-sheet th:first-child, .user-sheet td:first-child { position: sticky; left: 0; z-index: 2; }
      .user-sheet th:first-child { z-index: 4; }
      .user-sheet td:first-child { padding: 8px; background: #172033; }
+     .user-sheet .selection-cell { text-align: center; padding: 8px !important; }
+     .user-sheet .selection-cell input { margin: 0; }
      .user-sheet td.readonly { padding: 8px; color: #cbd5e1; }
      .user-sheet td code { color: #c4b5fd; }
      .sheet-input, .sheet-select { width: 100%; min-width: 0; height: 36px; padding: 7px 8px; border: 0; border-radius: 0; background: transparent; }
@@ -1134,10 +1199,8 @@ function adminHtml() {
 
    <div id="dashboard" hidden>
      <div class="dashboard-header">
-       <h1>FireflyVPN Worker 管理后台</h1>
        <button class="secondary" type="button" onclick="logout()">退出登录</button>
      </div>
-     <p>在这里配置订阅线路、网站信息、联系方式、公告和版本更新。每个模块可单独推送到 Worker。</p>
      <div id="status"></div>
 
      <nav class="tab-nav" aria-label="后台模块">
@@ -1158,7 +1221,21 @@ function adminHtml() {
        <input id="userSearch" class="user-search" type="search" placeholder="搜索账户、昵称、设备或版本" oninput="applyUserSearch()" onkeydown="handleUserSearchKey(event)">
        <button class="secondary" type="button" onclick="locateUserSearch(1)">定位下一个</button>
        <button class="secondary" type="button" onclick="clearUserSearch()">清除</button>
+       <select id="batchLevel" class="batch-level-select" title="批量修改等级">
+         <option value="">批量等级</option>
+         <option value="0">Lv0（封禁）</option>
+         <option value="1">Lv1</option>
+         <option value="2">Lv2</option>
+         <option value="3">Lv3</option>
+         <option value="4">Lv4</option>
+         <option value="5">Lv5</option>
+         <option value="6">Lv6</option>
+       </select>
+       <button id="batchSetLevelButton" type="button" onclick="batchSetLevel()" disabled>批量改等级</button>
+       <button id="batchBanUsersButton" class="danger" type="button" onclick="batchBanUsers()" disabled>批量封禁</button>
+       <button id="batchDeleteUsersButton" class="danger" type="button" onclick="batchDeleteUsers()" disabled>批量删除</button>
        <small id="userSearchStatus"></small>
+       <small id="userSelectionStatus"></small>
      </div>
      <small id="userSummary" class="sheet-summary">登录后自动读取用户数据。</small>
      <div id="usersTable" class="table-wrap"></div>
@@ -1217,6 +1294,7 @@ function adminHtml() {
  let adminToken = '';
  let currentUsersData = null;
  const dirtyUserIds = new Set();
+ const selectedUserIds = new Set();
  let savingAllUsers = false;
  let userSearchMatches = [];
  let userSearchIndex = -1;
@@ -1224,6 +1302,7 @@ function adminHtml() {
  let userSortDirection = 'desc';
  const USER_COLUMN_WIDTHS_KEY = 'firefly:user-sheet-column-widths:v1';
  const USER_SHEET_COLUMNS = [
+   {key: 'select', label: '选择', width: 48, min: 44},
    {key: 'accountId', label: '账户哈希', width: 135, min: 90},
    {key: 'nickname', label: '昵称', width: 110, min: 70},
    {key: 'level', label: '等级', width: 80, min: 65},
@@ -1233,9 +1312,15 @@ function adminHtml() {
    {key: 'appVersion', label: 'App 版本', width: 85, min: 65},
    {key: 'activeToday', label: '今日活跃', width: 70, min: 60},
    {key: 'activeMonth', label: '本月活跃', width: 70, min: 60},
-   {key: 'trafficToday', label: '今日流量', width: 90, min: 65},
-   {key: 'trafficMonth', label: '本月流量', width: 90, min: 65},
-   {key: 'trafficTotal', label: '累计流量', width: 90, min: 65},
+   {key: 'trafficTodayUpload', label: '今日上传', width: 90, min: 65},
+   {key: 'trafficTodayDownload', label: '今日下载', width: 90, min: 65},
+   {key: 'trafficToday', label: '今日总流量', width: 90, min: 65},
+   {key: 'trafficMonthUpload', label: '本月上传', width: 90, min: 65},
+   {key: 'trafficMonthDownload', label: '本月下载', width: 90, min: 65},
+   {key: 'trafficMonth', label: '本月总流量', width: 90, min: 65},
+   {key: 'trafficTotalUpload', label: '累计上传', width: 90, min: 65},
+   {key: 'trafficTotalDownload', label: '累计下载', width: 90, min: 65},
+   {key: 'trafficTotal', label: '累计总流量', width: 90, min: 65},
    {key: 'createdAt', label: '注册时间', width: 140, min: 90},
    {key: 'lastSeenAt', label: '最后活跃', width: 140, min: 90},
    {key: 'lastReportAt', label: '最后上报', width: 140, min: 90},
@@ -1257,6 +1342,8 @@ function adminHtml() {
  function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#fca5a5' : '#86efac'; }
  function showLoginError(message) { loginStatusEl.textContent = message || ''; }
   function adminErrorMessage(error, fallback) {
+    if (error === 'invalid_batch_user_update') return '批量修改参数无效，最多选择 100 个用户，等级范围为 Lv0～Lv6';
+    if (error === 'invalid_batch_user_delete') return '批量删除参数无效，最多选择 100 个用户';
     if (error === 'subscription_must_be_plaintext_nodes') return '订阅必须返回可识别的明文节点，不能使用已加密接口';
     if (error === 'invalid_min_app_version') return '最低应用版本格式无效，请填写类似 2.40 的数字版本';
     if (error === 'external_subscription_unreachable') return '外部明文订阅接口无法访问';
@@ -1377,9 +1464,15 @@ function userSheetColgroup() {
 }
 function userSheetHeader() {
   return USER_SHEET_COLUMNS.map(function(column) {
-    return '<th data-user-column-header="' + column.key + '" data-sort-column="' + column.key +
-      '" tabindex="0" aria-sort="none" title="Click to sort">' + esc(column.label) +
-      '<span class="sort-indicator" aria-hidden="true"></span>' +
+    const sortable = column.key !== 'select' && column.key !== 'actions';
+    const sortAttributes = sortable
+      ? ' data-sort-column="' + column.key + '" tabindex="0" aria-sort="none" title="Click to sort"'
+      : '';
+    const heading = column.key === 'select'
+      ? '<input type="checkbox" data-select-all-users title="全选当前用户" aria-label="全选当前用户">'
+      : esc(column.label);
+    return '<th data-user-column-header="' + column.key + '"' + sortAttributes + '>' + heading +
+      (sortable ? '<span class="sort-indicator" aria-hidden="true"></span>' : '') +
       '<span class="column-resizer" data-resize-column="' + column.key +
       '" role="separator" tabindex="0" title="拖动调整列宽，双击恢复默认宽度"></span></th>';
   }).join('');
@@ -1404,8 +1497,14 @@ function userSortValue(row, columnKey) {
     case 'appVersion': return field('appVersion', user.appVersion);
     case 'activeToday': return user.activeToday ? 1 : 0;
     case 'activeMonth': return user.activeThisMonth ? 1 : 0;
+    case 'trafficTodayUpload': return Number(user.today && user.today.uploadMb) || 0;
+    case 'trafficTodayDownload': return Number(user.today && user.today.downloadMb) || 0;
     case 'trafficToday': return Number(user.today && user.today.totalMb) || 0;
+    case 'trafficMonthUpload': return Number(user.month && user.month.uploadMb) || 0;
+    case 'trafficMonthDownload': return Number(user.month && user.month.downloadMb) || 0;
     case 'trafficMonth': return Number(user.month && user.month.totalMb) || 0;
+    case 'trafficTotalUpload': return Number(user.totalUploadMb) || 0;
+    case 'trafficTotalDownload': return Number(user.totalDownloadMb) || 0;
     case 'trafficTotal': return Number(user.totalMb) || 0;
     case 'createdAt': return user.createdAt || '';
     case 'lastSeenAt': return user.lastSeenAt || '';
@@ -1414,7 +1513,12 @@ function userSortValue(row, columnKey) {
   }
 }
 function compareUserSortValues(left, right, columnKey) {
-  const numericColumns = ['level', 'activeToday', 'activeMonth', 'trafficToday', 'trafficMonth', 'trafficTotal'];
+  const numericColumns = [
+    'level', 'activeToday', 'activeMonth',
+    'trafficTodayUpload', 'trafficTodayDownload', 'trafficToday',
+    'trafficMonthUpload', 'trafficMonthDownload', 'trafficMonth',
+    'trafficTotalUpload', 'trafficTotalDownload', 'trafficTotal',
+  ];
   if (numericColumns.includes(columnKey)) return Number(left) - Number(right);
 
   const leftText = String(left == null ? '' : left);
@@ -1505,6 +1609,39 @@ function resetUserColumnWidths() {
   }
   show('列宽已恢复为紧凑默认值');
 }
+function updateUserSelectionUi() {
+  const rows = Array.from(el('usersTable').querySelectorAll('[data-user-row]'));
+  const visibleRows = rows.filter(function(row) { return !row.hidden; });
+  const selectedVisible = visibleRows.filter(function(row) {
+    return selectedUserIds.has(row.dataset.userRow);
+  });
+  const selectAll = el('usersTable').querySelector('[data-select-all-users]');
+  if (selectAll) {
+    selectAll.checked = visibleRows.length > 0 && selectedVisible.length === visibleRows.length;
+    selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleRows.length;
+  }
+  el('usersTable').querySelectorAll('[data-user-select]').forEach(function(control) {
+    control.checked = selectedUserIds.has(control.dataset.userSelect);
+  });
+  const status = el('userSelectionStatus');
+  if (status) status.textContent = selectedUserIds.size ? '已选 ' + selectedUserIds.size + ' 个用户' : '';
+  updateUserToolbar();
+}
+function toggleUserSelection(accountId, isSelected) {
+  if (isSelected) selectedUserIds.add(accountId);
+  else selectedUserIds.delete(accountId);
+  updateUserSelectionUi();
+}
+function toggleSelectAllUsers() {
+  const rows = Array.from(el('usersTable').querySelectorAll('[data-user-row]'))
+    .filter(function(row) { return !row.hidden; });
+  const shouldSelect = rows.some(function(row) { return !selectedUserIds.has(row.dataset.userRow); });
+  rows.forEach(function(row) {
+    if (shouldSelect) selectedUserIds.add(row.dataset.userRow);
+    else selectedUserIds.delete(row.dataset.userRow);
+  });
+  updateUserSelectionUi();
+}
 function attachUserColumnResizers() {
   const table = el('usersTable').querySelector('table.user-sheet');
   if (!table) return;
@@ -1522,6 +1659,8 @@ function attachUserColumnResizers() {
       toggleUserSort(header.dataset.sortColumn);
     };
   });
+  const selectAll = table.querySelector('[data-select-all-users]');
+  if (selectAll) selectAll.onchange = toggleSelectAllUsers;
   table.querySelectorAll('[data-resize-column]').forEach(function(handle) {
     const columnKey = handle.dataset.resizeColumn;
     handle.onpointerdown = function(event) {
@@ -1597,6 +1736,7 @@ function applyUserSearch(resetPosition) {
       ? '匹配 ' + userSearchMatches.length + ' / ' + rows.length
       : '';
   }
+  updateUserSelectionUi();
 }
 function locateUserSearch(direction) {
   const input = el('userSearch');
@@ -1631,9 +1771,18 @@ function clearUserSearch() {
   applyUserSearch();
   input.focus();
 }
+function usageSummary(usage) {
+  const value = usage || {};
+  return '上传 ' + formatMegabytes(value.uploadMb) +
+    ' / 下载 ' + formatMegabytes(value.downloadMb) +
+    ' / 合计 ' + usageTotal(value);
+}
 function renderUsers(data) {
   currentUsersData = data || {users: []};
   dirtyUserIds.clear();
+  selectedUserIds.clear();
+  const batchLevel = el('batchLevel');
+  if (batchLevel) batchLevel.value = '';
   const totals = data.totals || {};
   const activeUsers = data.activeUsers || {};
   const today = totals.today || {};
@@ -1642,11 +1791,13 @@ function renderUsers(data) {
     '账户 ' + ((data.users || []).length) +
     ' · 日活 ' + (Number(activeUsers.today) || 0) +
     ' · 月活 ' + (Number(activeUsers.month) || 0) +
-    ' · 今日 ' + usageTotal(today) +
-    ' · 本月 ' + usageTotal(month) +
-    ' · 累计 ' + usageTotal(totals.allTime);
+    ' · 今日［' + usageSummary(today) + '］' +
+    ' · 本月［' + usageSummary(month) + '］' +
+    ' · 累计［' + usageSummary(totals.allTime) + '］';
   const rows = (data.users || []).map(function(user) {
     return '<tr class="user-row" data-user-row="' + esc(user.id) + '">' +
+      '<td class="selection-cell"><input type="checkbox" data-user-select="' + esc(user.id) +
+        '" aria-label="选择用户"></td>' +
       '<td><code title="' + esc(user.id) + '">' + esc(user.id.slice(0, 16) + '…') + '</code></td>' +
       '<td><input class="sheet-input" data-user-field="nickname" maxlength="24" value="' + esc(user.nickname) + '"></td>' +
       '<td><select class="sheet-select" data-user-field="level">' + userLevelOptions(user.level) + '</select></td>' +
@@ -1656,8 +1807,14 @@ function renderUsers(data) {
       '<td><input class="sheet-input" data-user-field="appVersion" maxlength="40" value="' + esc(user.appVersion) + '"></td>' +
       '<td class="readonly">' + (user.activeToday ? '是' : '否') + '</td>' +
       '<td class="readonly">' + (user.activeThisMonth ? '是' : '否') + '</td>' +
+      '<td class="readonly">' + formatMegabytes(user.today && user.today.uploadMb) + '</td>' +
+      '<td class="readonly">' + formatMegabytes(user.today && user.today.downloadMb) + '</td>' +
       '<td class="readonly">' + usageTotal(user.today) + '</td>' +
+      '<td class="readonly">' + formatMegabytes(user.month && user.month.uploadMb) + '</td>' +
+      '<td class="readonly">' + formatMegabytes(user.month && user.month.downloadMb) + '</td>' +
       '<td class="readonly">' + usageTotal(user.month) + '</td>' +
+      '<td class="readonly">' + formatMegabytes(user.totalUploadMb) + '</td>' +
+      '<td class="readonly">' + formatMegabytes(user.totalDownloadMb) + '</td>' +
       '<td class="readonly">' + usageTotal(user) + '</td>' +
       '<td class="readonly">' + esc(user.createdAt || '暂无') + '</td>' +
       '<td class="readonly">' + esc(user.lastSeenAt || '暂无') + '</td>' +
@@ -1674,6 +1831,11 @@ function renderUsers(data) {
   el('usersTable').querySelectorAll('[data-user-field]').forEach(function(control) {
     control.oninput = function() { markUserDirty(control); applyUserSearch(false); };
     control.onchange = function() { markUserDirty(control); applyUserSearch(false); };
+  });
+  el('usersTable').querySelectorAll('[data-user-select]').forEach(function(control) {
+    control.onchange = function() {
+      toggleUserSelection(control.dataset.userSelect, control.checked);
+    };
   });
   el('usersTable').querySelectorAll('[data-save-user]').forEach(function(button) {
     button.onclick = function() { saveUser(button.dataset.saveUser); };
@@ -1700,6 +1862,15 @@ function updateUserToolbar() {
     : dirtyUserIds.size
     ? '保存全部修改（' + dirtyUserIds.size + '）'
     : '保存全部修改';
+  const hasSelection = selectedUserIds.size > 0;
+  const batchLevel = el('batchLevel');
+  const batchSetLevelButton = el('batchSetLevelButton');
+  const batchBanUsersButton = el('batchBanUsersButton');
+  const batchDeleteUsersButton = el('batchDeleteUsersButton');
+  if (batchLevel) batchLevel.disabled = savingAllUsers || !hasSelection;
+  if (batchSetLevelButton) batchSetLevelButton.disabled = savingAllUsers || !hasSelection;
+  if (batchBanUsersButton) batchBanUsersButton.disabled = savingAllUsers || !hasSelection;
+  if (batchDeleteUsersButton) batchDeleteUsersButton.disabled = savingAllUsers || !hasSelection;
 }
 function userRow(accountId) {
   return el('usersTable').querySelector('[data-user-row="' + accountId + '"]');
@@ -1799,6 +1970,87 @@ async function deleteUser(accountId) {
   } catch (error) {
     show('用户删除失败，请检查网络', true);
     return false;
+  }
+}
+function selectedUserAccountIds() {
+  const accountIds = Array.from(selectedUserIds);
+  if (accountIds.length === 0) {
+    show('请先选择用户', true);
+    return null;
+  }
+  if (accountIds.length > 100) {
+    show('单次最多选择 100 个用户', true);
+    return null;
+  }
+  return accountIds;
+}
+async function batchSetUserLevel(level, successMessage) {
+  const accountIds = selectedUserAccountIds();
+  if (!accountIds) return false;
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/users/batch', {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({accountIds: accountIds, level: level})
+    });
+    const responseText = await response.text();
+    let data = {};
+    try { data = JSON.parse(responseText); } catch (_) {}
+    if (!response.ok) {
+      show(adminErrorMessage(data.error, '批量修改失败（HTTP ' + response.status + '）'), true);
+      return false;
+    }
+    const refreshed = await loadUsers(true);
+    show(refreshed ? successMessage : '批量修改成功，但用户列表刷新失败', !refreshed);
+    return true;
+  } catch (error) {
+    show('批量修改失败，请检查网络', true);
+    return false;
+  }
+}
+async function batchSetLevel() {
+  const rawLevel = el('batchLevel').value;
+  const level = Number(rawLevel);
+  if (rawLevel === '' || !Number.isInteger(level) || level < 0 || level > 6) {
+    show('请选择要设置的等级', true);
+    return;
+  }
+  if (level === 0 && !confirm('确定将选中的用户全部封禁吗？')) return;
+  await batchSetUserLevel(level, '已批量修改用户等级');
+}
+async function batchBanUsers() {
+  const accountIds = selectedUserAccountIds();
+  if (!accountIds) return;
+  if (!confirm('确定封禁选中的 ' + accountIds.length + ' 个用户吗？')) return;
+  await batchSetUserLevel(0, '已批量封禁 ' + accountIds.length + ' 个用户');
+}
+async function batchDeleteUsers() {
+  const accountIds = selectedUserAccountIds();
+  if (!accountIds) return;
+  if (dirtyUserIds.size > 0) {
+    show('请先保存未保存的用户修改，再批量删除', true);
+    return;
+  }
+  if (!confirm('确定永久删除选中的 ' + accountIds.length + ' 个用户及其全部流量统计吗？此操作不可恢复。')) {
+    return;
+  }
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/users/batch', {
+      method: 'DELETE',
+      headers: headers(),
+      body: JSON.stringify({accountIds: accountIds})
+    });
+    const responseText = await response.text();
+    let data = {};
+    try { data = JSON.parse(responseText); } catch (_) {}
+    if (!response.ok) {
+      show(adminErrorMessage(data.error, '批量删除失败（HTTP ' + response.status + '）'), true);
+      return;
+    }
+    const refreshed = await loadUsers(true);
+    show(refreshed ? '已批量删除 ' + (Number(data.changed) || 0) + ' 个用户' : '批量删除成功，但用户列表刷新失败', !refreshed);
+  } catch (error) {
+    show('批量删除失败，请检查网络', true);
   }
 }
 async function saveAllUsers() {
