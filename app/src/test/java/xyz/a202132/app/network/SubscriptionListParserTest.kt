@@ -1,5 +1,6 @@
 package xyz.a202132.app.network
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -47,5 +48,24 @@ class SubscriptionListParserTest {
 
         assertTrue(result.sources.single().encrypted)
         assertTrue(result.sources.single().url.endsWith("/api/subscription/1"))
+    }
+
+    @Test
+    fun parseReadsOnlyMinimumLevelField() {
+        val result = parser.parse(
+            """
+            {
+              "subscriptions": [
+                {"name":"A","url":"https://example.com/a","minLevel":6},
+                {"name":"B","url":"https://example.com/b","requiredLevel":"3"},
+                {"name":"C","url":"https://example.com/c","min_level":2},
+                {"name":"D","url":"https://example.com/d","minLevel":99},
+                {"name":"E","url":"https://example.com/e"}
+              ]
+            }
+            """.trimIndent()
+        ).getOrThrow()
+
+        assertEquals(listOf(6, 1, 1, 1, 1), result.sources.map { it.minLevel })
     }
 }

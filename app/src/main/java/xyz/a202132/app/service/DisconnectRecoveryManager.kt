@@ -22,6 +22,7 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SubscriptionSource
+import xyz.a202132.app.data.model.canBeRequestedBy
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.network.NetworkClient
@@ -135,6 +136,15 @@ internal class DisconnectRecoveryManager(
             Log.w(TAG, "Disconnect recovery skipped: subscription source $sourceId is unavailable")
             return false
         }
+        val accountLevel = accountManager.currentAccount()?.level ?: UNKNOWN_ACCOUNT_LEVEL
+        if (!source.canBeRequestedBy(accountLevel)) {
+            Log.w(
+                TAG,
+                "Disconnect recovery skipped: account level $accountLevel " +
+                    "is below source minimum ${source.minLevel}"
+            )
+            return false
+        }
 
         val directClient = createPhysicalNetworkClient()
         val requestUrl = subscriptionRequestUrl(source.url)
@@ -185,16 +195,17 @@ internal class DisconnectRecoveryManager(
     }
 
     private fun subscriptionRequestUrl(url: String): String {
-        val managedPrefix = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/subscription/"
-        if (managedPrefix.length <= "/api/subscription/".length ||
-            !url.startsWith(managedPrefix, ignoreCase = true)
-        ) {
-            return url
-        }
-        val accountId = accountManager.currentAccount()?.id ?: return url
+        if (!isWorkerManagedSubscription(url)) return url
+        val accountId = accountManager.currentAccount()?.id ?: accountManager.accountId()
         val separator = if ('?' in url) '&' else '?'
         val encodedAccountId = java.net.URLEncoder.encode(accountId, Charsets.UTF_8.name())
         return "$url${separator}accountId=$encodedAccountId"
+    }
+
+    private fun isWorkerManagedSubscription(url: String): Boolean {
+        val managedPrefix = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/subscription/"
+        return managedPrefix.length > "/api/subscription/".length &&
+            url.startsWith(managedPrefix, ignoreCase = true)
     }
 
     @Suppress("DEPRECATION")
@@ -226,5 +237,6 @@ internal class DisconnectRecoveryManager(
 
     private companion object {
         const val TAG = "DisconnectRecovery"
+        const val UNKNOWN_ACCOUNT_LEVEL = 0
     }
 }

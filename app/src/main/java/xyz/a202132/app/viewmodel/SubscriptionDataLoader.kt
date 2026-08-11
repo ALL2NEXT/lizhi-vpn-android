@@ -23,6 +23,7 @@ import xyz.a202132.app.data.model.NoticeInfo
 import xyz.a202132.app.data.model.SubscriptionList
 import xyz.a202132.app.data.model.SubscriptionSource
 import xyz.a202132.app.data.model.UpdateInfo
+import xyz.a202132.app.data.model.canBeRequestedBy
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.network.NetworkClient
@@ -83,14 +84,27 @@ internal class SubscriptionDataLoader(
             return@coroutineScope false
         }
 
-        val canUseManagedSubscriptions = account != null && account.level > 0
+        val accountLevel = account?.level
+            ?: accountManager.currentAccount()?.level
+            ?: UNKNOWN_ACCOUNT_LEVEL
         val accessibleSources = subscriptionList.sources.filter { source ->
-            !isWorkerManagedSubscription(source.url) || canUseManagedSubscriptions
+            source.canBeRequestedBy(accountLevel)
+        }
+        val skippedSources = subscriptionList.sources - accessibleSources.toSet()
+        if (skippedSources.isNotEmpty()) {
+            Log.i(
+                TAG,
+                "Skipped ${skippedSources.size} inaccessible subscription source(s): " +
+                    skippedSources.joinToString { "${it.name}(minLevel=${it.minLevel})" }
+            )
         }
         if (accessibleSources.isEmpty()) {
             nodeDao().replaceSubscriptionNodes(emptyList())
             lastFetchedNodes = emptyList()
             isNodeAccessGranted = true
+            if (subscriptionList.sources.isNotEmpty()) {
+                onMessage("当前账户 Lv$accountLevel 未达到可用订阅线路的最低等级")
+            }
             return@coroutineScope true
         }
 
@@ -101,14 +115,9 @@ internal class SubscriptionDataLoader(
 
     private suspend fun registerAccountForSession() =
         accountManager.register(backendSettings.value.nodeRequestTimeoutMs)
-            .onSuccess { account ->
-                if (account.level == 0) {
-                    onMessage("当前账户已被封禁（Lv0），后台托管订阅不可用")
-                }
-            }
             .onFailure { error ->
-                Log.w(TAG, "Account registration failed; managed subscriptions unavailable", error)
-                onMessage("账户注册失败，后台托管订阅不可用")
+                Log.w(TAG, "Account registration failed; applying Lv0 subscription access", error)
+                onMessage("账户同步失败，将按 Lv0 订阅权限获取线路")
             }
             .getOrNull()
 
@@ -288,7 +297,7 @@ internal class SubscriptionDataLoader(
 
     private fun subscriptionRequestUrl(url: String): String {
         if (!isWorkerManagedSubscription(url)) return url
-        val accountId = accountManager.currentAccount()?.id ?: return url
+        val accountId = accountManager.currentAccount()?.id ?: accountManager.accountId()
         val separator = if ('?' in url) '&' else '?'
         val encodedAccountId = URLEncoder.encode(accountId, Charsets.UTF_8.name())
         return "$url${separator}accountId=$encodedAccountId"
@@ -296,5 +305,6 @@ internal class SubscriptionDataLoader(
 
     private companion object {
         const val TAG = "SubscriptionDataLoader"
+        const val UNKNOWN_ACCOUNT_LEVEL = 0
     }
 }

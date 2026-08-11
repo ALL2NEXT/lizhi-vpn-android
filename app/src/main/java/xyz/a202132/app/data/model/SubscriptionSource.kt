@@ -8,7 +8,8 @@ data class SubscriptionSource(
     val name: String,
     val url: String,
     val enabled: Boolean = true,
-    val encrypted: Boolean = false
+    val encrypted: Boolean = false,
+    val minLevel: Int = 1
 )
 
 data class SubscriptionList(
