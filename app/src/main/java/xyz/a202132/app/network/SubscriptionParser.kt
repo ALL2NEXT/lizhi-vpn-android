@@ -36,16 +36,21 @@ class SubscriptionParser {
             if (!response.isSuccessful) {
                 throw IllegalStateException("订阅接口返回 HTTP ${response.code()}")
             }
-            val raw = response.body()?.string()
-                ?: throw IllegalStateException("订阅接口返回空内容")
-            val content = if (encrypted) {
-                val route = response.headers()[CLIENT_IP_HEADER]
-                    ?: throw IllegalStateException("加密订阅缺少 $CLIENT_IP_HEADER 响应头")
-                RuntimeTuner.c1(raw, route)
-            } else {
-                raw
+            val raw = withContext(Dispatchers.IO) {
+                response.body()?.use { it.string() }
+                    ?: throw IllegalStateException("订阅接口返回空内容")
             }
-            Result.success(parseSubscription(content))
+            val nodes = withContext(Dispatchers.Default) {
+                val content = if (encrypted) {
+                    val route = response.headers()[CLIENT_IP_HEADER]
+                        ?: throw IllegalStateException("加密订阅缺少 $CLIENT_IP_HEADER 响应头")
+                    RuntimeTuner.c1(raw, route)
+                } else {
+                    raw
+                }
+                parseSubscription(content)
+            }
+            Result.success(nodes)
         } catch (e: Exception) {
             Log.e(tag, "Failed to fetch subscription: $url", e)
             Result.failure(e)
@@ -324,7 +329,7 @@ class SubscriptionParser {
             id = generateId(link),
             name = name,
             type = NodeType.SHADOWSOCKS,
-            server = server ?: "",
+            server = server.orEmpty(),
             port = if (port == -1) 443 else port,
             rawLink = link
         )

@@ -2,7 +2,9 @@ package xyz.a202132.app.network
 
 import android.util.Log
 import kotlinx.coroutines.*
+import xyz.a202132.app.BuildConfig
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.util.parallelMapOrdered
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -13,6 +15,32 @@ import java.net.URL
 class LatencyTester {
     
     private val tag = "LatencyTester"
+
+    private inline fun debugNode(message: () -> String) {
+        if (BuildConfig.DEBUG) Log.d(tag, message())
+    }
+
+    private fun reportProgress(
+        completed: Int,
+        total: Int,
+        lastReportedAtNanos: java.util.concurrent.atomic.AtomicLong,
+        callback: ((completed: Int, total: Int) -> Unit)?
+    ) {
+        if (callback == null) return
+        val now = System.nanoTime()
+        if (completed == total) {
+            lastReportedAtNanos.set(now)
+            callback(completed, total)
+            return
+        }
+        val previous = lastReportedAtNanos.get()
+        if (
+            now - previous >= PROGRESS_INTERVAL_NANOS &&
+            lastReportedAtNanos.compareAndSet(previous, now)
+        ) {
+            callback(completed, total)
+        }
+    }
 
     private data class UrlTestAttemptResult(
         val result: LatencyResult,
@@ -33,7 +61,7 @@ class LatencyTester {
      */
     private suspend fun testNodeSimple(node: Node, timeoutMs: Long): LatencyResult {
         return try {
-            Log.d(tag, ">>> TCPing: ${node.name} (${node.server}:${node.port})")
+            debugNode { ">>> TCPing: ${node.name} (${node.server}:${node.port})" }
             
             val start = System.currentTimeMillis()
             val socket = java.net.Socket()
@@ -44,7 +72,7 @@ class LatencyTester {
                 val elapsed = (System.currentTimeMillis() - start).toInt() 
                 val finalLatency = if (elapsed < 1) 1 else elapsed
                 
-                Log.d(tag, "<<< TCPing OK: ${node.name}, ${finalLatency}ms")
+                debugNode { "<<< TCPing OK: ${node.name}, ${finalLatency}ms" }
                 LatencyResult(node.id, finalLatency, true)
                 
             } catch (e: java.net.ConnectException) {
@@ -52,7 +80,7 @@ class LatencyTester {
                 val finalLatency = if (elapsed < 1) 1 else elapsed
                 
                 if (e.message?.contains("refused") == true) {
-                    Log.d(tag, "<<< TCPing REFUSED (Available): ${node.name}, ${finalLatency}ms")
+                    debugNode { "<<< TCPing REFUSED (Available): ${node.name}, ${finalLatency}ms" }
                     LatencyResult(node.id, finalLatency, true)
                 } else {
                     throw e
@@ -62,10 +90,10 @@ class LatencyTester {
             }
             
         } catch (e: java.net.SocketTimeoutException) {
-            Log.w(tag, "<<< TCPing TIMEOUT: ${node.name}")
+            debugNode { "<<< TCPing TIMEOUT: ${node.name}" }
             LatencyResult(node.id, -2, false)
         } catch (e: Exception) {
-            Log.e(tag, "<<< TCPing FAILED: ${node.name}, error=${e.message}")
+            debugNode { "<<< TCPing FAILED: ${node.name}, error=${e.message}" }
             LatencyResult(node.id, -2, false)
         }
     }
@@ -81,25 +109,16 @@ class LatencyTester {
     ): List<LatencyResult> = withContext(Dispatchers.IO) {
         Log.d(tag, "========== TCPing START: ${nodes.size} nodes ==========")
         
-        val semaphore = kotlinx.coroutines.sync.Semaphore(concurrency.coerceAtLeast(1))
         val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val lastProgressAt = java.util.concurrent.atomic.AtomicLong(0L)
         val totalCount = nodes.size
-        
-        val deferredResults = nodes.map { node ->
-            async {
-                semaphore.acquire()
-                try {
-                    val result = testNodeSimple(node, timeoutMs.coerceAtLeast(500L))
-                    val current = completedCount.incrementAndGet()
-                    onProgress?.invoke(current, totalCount)
-                    result
-                } finally {
-                    semaphore.release()
-                }
-            }
+
+        val results = parallelMapOrdered(nodes, concurrency) { node ->
+            val result = testNodeSimple(node, timeoutMs.coerceAtLeast(500L))
+            val current = completedCount.incrementAndGet()
+            reportProgress(current, totalCount, lastProgressAt, onProgress)
+            result
         }
-        
-        val results = deferredResults.awaitAll()
         Log.d(tag, "========== TCPing END: ${results.size} results ==========")
         results
     }
@@ -107,7 +126,7 @@ class LatencyTester {
     // ==================== URL Test (ClashAPI) ====================
     
     companion object {
-        // 已移至 AppConfig
+        private const val PROGRESS_INTERVAL_NANOS = 100_000_000L
     }
     
     /**
@@ -121,7 +140,7 @@ class LatencyTester {
         timeoutMs: Long
     ): UrlTestAttemptResult = withContext(Dispatchers.IO) {
         try {
-            Log.d(tag, ">>> URL Test: ${node.name} (${node.id})")
+            debugNode { ">>> URL Test: ${node.name} (${node.id})" }
             
             val encodedId = java.net.URLEncoder.encode(node.id, "UTF-8")
             val encodedTargetUrl = java.net.URLEncoder.encode(targetUrl, "UTF-8")
@@ -144,13 +163,13 @@ class LatencyTester {
                     val delay = delayMatch?.groupValues?.get(1)?.toIntOrNull()
                     
                     if (delay != null && delay > 0) {
-                        Log.d(tag, "<<< URL Test OK: ${node.name}, ${delay}ms")
+                        debugNode { "<<< URL Test OK: ${node.name}, ${delay}ms" }
                         UrlTestAttemptResult(
                             result = LatencyResult(node.id, delay, true),
                             shouldRetry = false
                         )
                     } else {
-                        Log.w(tag, "<<< URL Test invalid delay: ${node.name}, response=$responseBody")
+                        debugNode { "<<< URL Test invalid delay: ${node.name}, response=$responseBody" }
                         UrlTestAttemptResult(
                             result = LatencyResult(node.id, -2, false),
                             shouldRetry = false
@@ -158,7 +177,7 @@ class LatencyTester {
                     }
                 } else {
                     val errorBody = try { connection.errorStream?.bufferedReader()?.readText() } catch (e: Exception) { null }
-                    Log.w(tag, "<<< URL Test HTTP $responseCode: ${node.name}, error=$errorBody")
+                    debugNode { "<<< URL Test HTTP $responseCode: ${node.name}, error=$errorBody" }
                     UrlTestAttemptResult(
                         result = LatencyResult(node.id, -2, false),
                         shouldRetry = responseCode == 503 || responseCode == 504
@@ -168,7 +187,7 @@ class LatencyTester {
                 connection.disconnect()
             }
         } catch (e: Exception) {
-            Log.e(tag, "<<< URL Test FAILED: ${node.name}, error=${e.message}")
+            debugNode { "<<< URL Test FAILED: ${node.name}, error=${e.message}" }
             UrlTestAttemptResult(
                 result = LatencyResult(node.id, -2, false),
                 shouldRetry = true
@@ -190,7 +209,7 @@ class LatencyTester {
             if (lastResult.isAvailable || !attemptResult.shouldRetry || attempt >= retryCount) {
                 return@withContext lastResult
             }
-            Log.w(tag, "URL Test retry ${attempt + 1}/$retryCount: ${node.name} (${node.id})")
+            debugNode { "URL Test retry ${attempt + 1}/$retryCount: ${node.name} (${node.id})" }
         }
         lastResult
     }
@@ -210,25 +229,16 @@ class LatencyTester {
     ): List<LatencyResult> = withContext(Dispatchers.IO) {
         Log.d(tag, "========== URL Test START: ${nodes.size} nodes (port=$clashApiPort) ==========")
         
-        val semaphore = kotlinx.coroutines.sync.Semaphore(concurrency.coerceAtLeast(1))
         val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val lastProgressAt = java.util.concurrent.atomic.AtomicLong(0L)
         val totalCount = nodes.size
-        
-        val deferredResults = nodes.map { node ->
-            async {
-                semaphore.acquire()
-                try {
-                    val result = urlTestNode(node, clashApiPort, targetUrl, timeoutMs, retryCount)
-                    val current = completedCount.incrementAndGet()
-                    onProgress?.invoke(current, totalCount)
-                    result
-                } finally {
-                    semaphore.release()
-                }
-            }
+
+        val results = parallelMapOrdered(nodes, concurrency) { node ->
+            val result = urlTestNode(node, clashApiPort, targetUrl, timeoutMs, retryCount)
+            val current = completedCount.incrementAndGet()
+            reportProgress(current, totalCount, lastProgressAt, onProgress)
+            result
         }
-        
-        val results = deferredResults.awaitAll()
         Log.d(tag, "========== URL Test END: ${results.size} results ==========")
         results
     }

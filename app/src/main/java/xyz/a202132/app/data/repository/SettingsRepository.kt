@@ -5,12 +5,29 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.PerAppProxyMode
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.TunStack
+
+data class PerAppProxySettings(
+    val enabled: Boolean,
+    val mode: PerAppProxyMode,
+    val selectedPackages: Set<String>
+)
+
+data class VpnRuntimeSettings(
+    val proxyMode: ProxyMode,
+    val ipv6RoutingMode: IPv6RoutingMode,
+    val vpnMtu: Int,
+    val tunStack: TunStack,
+    val hysteriaUpMbps: Int,
+    val hysteriaDownMbps: Int,
+    val perAppProxy: PerAppProxySettings
+)
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -117,6 +134,38 @@ class SettingsRepository(private val context: Context) {
             preferences[SUBSCRIPTION_LIST_JSON] = json
         }
     }
+
+    /** Reads all settings needed for one VPN start from a single DataStore snapshot. */
+    suspend fun getVpnRuntimeSettings(): VpnRuntimeSettings {
+        val preferences = context.dataStore.data.first()
+        return VpnRuntimeSettings(
+            proxyMode = enumValueOrDefault(preferences[PROXY_MODE], ProxyMode.SMART),
+            ipv6RoutingMode = enumValueOrDefault(
+                preferences[IPV6_ROUTING_MODE],
+                IPv6RoutingMode.DISABLED
+            ),
+            vpnMtu = (preferences[VPN_MTU] ?: xyz.a202132.app.AppConfig.VPN_MTU)
+                .coerceIn(1280, 65_535),
+            tunStack = enumValueOrDefault(preferences[TUN_STACK], TunStack.GVISOR),
+            hysteriaUpMbps = (preferences[HYSTERIA_UP_MBPS]
+                ?: xyz.a202132.app.AppConfig.HYSTERIA_UP_MBPS).coerceAtLeast(0),
+            hysteriaDownMbps = (preferences[HYSTERIA_DOWN_MBPS]
+                ?: xyz.a202132.app.AppConfig.HYSTERIA_DOWN_MBPS).coerceAtLeast(0),
+            perAppProxy = PerAppProxySettings(
+                enabled = preferences[PER_APP_PROXY_ENABLED] ?: false,
+                mode = enumValueOrDefault(
+                    preferences[PER_APP_PROXY_MODE],
+                    PerAppProxyMode.WHITELIST
+                ),
+                selectedPackages = preferences[SELECTED_PACKAGES] ?: emptySet()
+            )
+        )
+    }
+
+    private inline fun <reified T : Enum<T>> enumValueOrDefault(
+        value: String?,
+        default: T
+    ): T = runCatching { enumValueOf<T>(value ?: default.name) }.getOrDefault(default)
     
     suspend fun setSelectedNodeId(nodeId: String?) {
         context.dataStore.edit { preferences ->

@@ -5,7 +5,6 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
-    id("stringfog")
 }
 
 android {
@@ -172,15 +171,4 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
-    // StringFog Runtime
-    implementation("com.github.megatronking.stringfog:xor:5.0.0")
-}
-
-// StringFog 字符串混淆
-configure<com.github.megatronking.stringfog.plugin.StringFogExtension> {
-    implementation = "com.github.megatronking.stringfog.xor.StringFogImpl"
-    enable = true
-    fogPackages = arrayOf("xyz.a202132.app") // 只加密我们自己的代码
-    kg = com.github.megatronking.stringfog.plugin.kg.RandomKeyGenerator()
-    mode = com.github.megatronking.stringfog.plugin.StringFogMode.base64
 }

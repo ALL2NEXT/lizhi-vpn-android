@@ -69,12 +69,11 @@ class MainActivity : ComponentActivity() {
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { _ -> }
+    ) { _ -> continueVpnPermission() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureEdgeToEdge()
-        requestNotificationPermission()
 
         setContent {
             val viewModel: MainViewModel = viewModel()
@@ -331,25 +330,28 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestVpnPermission(action: () -> Unit) {
+        pendingVpnAction = action
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        continueVpnPermission()
+    }
+
+    private fun continueVpnPermission() {
+        val action = pendingVpnAction ?: return
         val intent = android.net.VpnService.prepare(this)
         if (intent != null) {
-            pendingVpnAction = action
             vpnPermissionLauncher.launch(intent)
         } else {
             action()
-        }
-    }
-
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (
-                ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+            pendingVpnAction = null
         }
     }
 

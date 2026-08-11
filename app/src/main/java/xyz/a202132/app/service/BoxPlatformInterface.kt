@@ -14,7 +14,7 @@ import io.nekohasekai.libbox.NetworkInterfaceIterator
 import io.nekohasekai.libbox.PlatformInterface
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.TunOptions
-import kotlinx.coroutines.flow.first
+import xyz.a202132.app.data.repository.PerAppProxySettings
 import java.net.Inet6Address
 import java.net.InetSocketAddress
 import java.net.InterfaceAddress
@@ -26,7 +26,8 @@ import io.nekohasekai.libbox.NetworkInterface as LibboxNetworkInterface
  * 适配 libbox 1.13.0-rc.3 API
  */
 class BoxPlatformInterface(
-    private val service: BoxVpnService
+    private val service: BoxVpnService,
+    private val perAppProxySettings: PerAppProxySettings
 ) : PlatformInterface {
     
     companion object {
@@ -283,16 +284,9 @@ class BoxPlatformInterface(
      * @return 是否使用了白名单模式（addAllowedApplication）
      */
     private fun applyPerAppProxy(builder: android.net.VpnService.Builder): Boolean {
-        val settingsRepo = xyz.a202132.app.data.repository.SettingsRepository(service)
-        
-        // 使用 runBlocking 读取设置（在 openTun 调用时需要同步获取）
-        val (isPerAppEnabled, mode, selectedPackages) = kotlinx.coroutines.runBlocking {
-            Triple(
-                settingsRepo.perAppProxyEnabled.first(),
-                settingsRepo.perAppProxyMode.first(),
-                settingsRepo.selectedPackages.first()
-            )
-        }
+        val isPerAppEnabled = perAppProxySettings.enabled
+        val mode = perAppProxySettings.mode
+        val selectedPackages = perAppProxySettings.selectedPackages
         
         if (!isPerAppEnabled) {
             Log.d(TAG, "Per-app proxy disabled, all apps will use VPN")

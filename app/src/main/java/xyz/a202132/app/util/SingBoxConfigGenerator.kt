@@ -1,9 +1,7 @@
 package xyz.a202132.app.util
 
 import com.google.gson.Gson
-import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
-import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.Node
@@ -12,14 +10,21 @@ import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.TunStack
 import android.net.Uri
-import android.util.Base64
 
 /**
  * sing-box 配置生成器
  */
 class SingBoxConfigGenerator {
-    
-    private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
+    private companion object {
+        val IPV4_ADDRESS = Regex(
+            "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}" +
+                "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+        )
+    }
+
+    // Compact JSON reduces allocations and libbox parsing work. The config is
+    // already truncated before debug logging, so pretty printing has no value.
+    private val gson: Gson = Gson()
     
     /**
      * 生成完整的sing-box配置
@@ -47,9 +52,9 @@ class SingBoxConfigGenerator {
             // 从节点中提取唯一域名（忽略 IP 地址），以防止路由环路/DNS 死锁
             // 提取唯一域名和 IP 地址
             val uniqueServers = nodes.map { it.server }.distinct()
-            val ipRegex = Regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
-            val nodeIPs = uniqueServers.filter { it.matches(ipRegex) || it.contains(":") } // 将任何包含“:”的内容视为潜在的 IPv6 地址。
-            val nodeDomains = uniqueServers.filter { !it.matches(ipRegex) && !it.contains(":") }
+            val (nodeIPs, nodeDomains) = uniqueServers.partition {
+                IPV4_ADDRESS.matches(it) || it.contains(":")
+            }
                 
             add("log", createLogConfig())
             add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode))
@@ -95,8 +100,7 @@ class SingBoxConfigGenerator {
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
     ): String {
-        val ipRegex = Regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
-        val isDomainServer = !node.server.matches(ipRegex) && !node.server.contains(":")
+        val isDomainServer = !IPV4_ADDRESS.matches(node.server) && !node.server.contains(":")
         val config = JsonObject().apply {
             add("log", JsonObject().apply {
                 addProperty("level", "error")
@@ -884,261 +888,6 @@ class SingBoxConfigGenerator {
         }
     }
 
-    private fun queryParamEnabled(uri: Uri, vararg names: String): Boolean {
-        return names.any { name ->
-            when (uri.getQueryParameter(name)?.trim()?.lowercase()) {
-                "1", "true", "yes", "on" -> true
-                else -> false
-            }
-        }
-    }
-
-    private fun queryParamFirst(uri: Uri, vararg names: String): String? {
-        return names.asSequence()
-            .mapNotNull { name -> uri.getQueryParameter(name)?.trim() }
-            .firstOrNull { it.isNotEmpty() }
-    }
-
-    private fun parseCsvParams(raw: String?): List<String> {
-        if (raw.isNullOrBlank()) return emptyList()
-        return raw.split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-    }
-
-    private fun parseJsonString(element: com.google.gson.JsonElement?): String? {
-        if (element == null || element.isJsonNull) return null
-        return runCatching {
-            if (element.isJsonPrimitive) {
-                element.asString.trim().takeIf { it.isNotEmpty() }
-            } else {
-                null
-            }
-        }.getOrNull()
-    }
-
-    private fun parseJsonStringList(element: com.google.gson.JsonElement?): List<String> {
-        if (element == null || element.isJsonNull) return emptyList()
-        return runCatching {
-            when {
-                element.isJsonArray -> {
-                    buildList {
-                        element.asJsonArray.forEach { item ->
-                            parseJsonString(item)?.let(::add)
-                        }
-                    }
-                }
-                element.isJsonPrimitive -> parseCsvParams(element.asString)
-                else -> emptyList()
-            }
-        }.getOrDefault(emptyList())
-    }
-
-    private fun parseJsonBoolean(element: JsonElement?): Boolean? {
-        if (element == null || element.isJsonNull) return null
-        return runCatching {
-            when {
-                element.isJsonPrimitive && element.asJsonPrimitive.isBoolean -> element.asBoolean
-                element.isJsonPrimitive -> when (element.asString.trim().lowercase()) {
-                    "1", "true", "yes", "on" -> true
-                    "0", "false", "no", "off" -> false
-                    else -> null
-                }
-                else -> null
-            }
-        }.getOrNull()
-    }
-
-    private fun parseJsonInt(element: JsonElement?): Int? {
-        if (element == null || element.isJsonNull) return null
-        return runCatching {
-            when {
-                element.isJsonPrimitive && element.asJsonPrimitive.isNumber -> element.asInt
-                element.isJsonPrimitive -> element.asString.trim().toIntOrNull()
-                else -> null
-            }
-        }.getOrNull()
-    }
-
-    private fun parseWireGuardReserved(rawValue: String?): List<Int>? {
-        if (rawValue.isNullOrBlank()) {
-            return null
-        }
-        val values = rawValue.split(",")
-            .mapNotNull { it.trim().toIntOrNull() }
-        return if (values.size == 3) values else null
-    }
-
-    private fun parseHysteria2ServerPorts(link: String): List<String> {
-        val authority = link.substringAfter("@", "").substringBefore("?").substringBefore("#").trim()
-        if (authority.isEmpty()) return emptyList()
-
-        val portSpec = if (authority.startsWith("[")) {
-            authority.substringAfter("]", "").removePrefix(":")
-        } else {
-            authority.substringAfterLast(":", "")
-        }.trim()
-
-        if (portSpec.isEmpty()) return emptyList()
-
-        return portSpec.split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .map { token ->
-                if ('-' in token) {
-                    token.replace("-", ":")
-                } else {
-                    token
-                }
-            }
-    }
-
-    private fun decodeBase64Compat(rawValue: String): String {
-        val normalized = rawValue.trim()
-            .replace('-', '+')
-            .replace('_', '/')
-        val padding = (4 - normalized.length % 4) % 4
-        val padded = normalized + "=".repeat(padding)
-        return String(Base64.decode(padded, Base64.DEFAULT), Charsets.UTF_8)
-    }
-
-    private fun parseShadowsocksMethodPassword(linkContent: String): String {
-        val credentials = linkContent.substringBefore("@")
-        return when {
-            credentials.contains(":") -> credentials
-            credentials.isNotBlank() -> runCatching { decodeBase64Compat(credentials) }.getOrDefault("aes-256-gcm:password")
-            else -> "aes-256-gcm:password"
-        }
-    }
-
-    /**
-     * 统一传输层别名，避免将订阅中的新字段原样下发给当前 libbox。
-     * 当前内核不识别 xhttp，但二进制中包含 httpupgrade 能力，因此先降级映射。
-     */
-    private fun normalizeTransportType(type: String?): String {
-        return when (type?.trim()?.lowercase()) {
-            null, "", "tcp", "raw" -> "tcp"
-            "h2" -> "http"
-            "websocket" -> "ws"
-            "gun" -> "grpc"
-            "http-upgrade" -> "httpupgrade"
-            // xhttp/splitHTTP is not equivalent to HTTPUpgrade on sing-box 1.13.
-            "splithttp", "split-http", "xhttp" -> "unsupported"
-            else -> type.trim().lowercase()
-        }
-    }
-
-    private fun resolveUriTransportType(uri: Uri): String {
-        val transport = normalizeTransportType(queryParamFirst(uri, "type", "network"))
-        if (transport == "tcp" || transport == "none") {
-            val headerType = queryParamFirst(uri, "headerType", "header_type")
-            if (headerType.equals("http", ignoreCase = true)) {
-                return "http"
-            }
-        }
-        return transport
-    }
-
-    private fun resolveVmessTransportType(config: JsonObject): String {
-        val network = normalizeTransportType(parseJsonString(config.get("net")) ?: parseJsonString(config.get("network")))
-        if (network == "tcp" || network == "none") {
-            val headerType = parseJsonString(config.get("headerType")) ?: parseJsonString(config.get("type"))
-            if (headerType.equals("http", ignoreCase = true)) {
-                return "http"
-            }
-        }
-        return network
-    }
-
-    private fun isSupportedTransport(type: String): Boolean {
-        return type == "ws" || type == "grpc" || type == "http" || type == "httpupgrade" || type == "quic"
-    }
-    
-    private fun createTransport(type: String, uri: Uri): JsonObject {
-        val hostValues = parseCsvParams(queryParamFirst(uri, "host"))
-        return JsonObject().apply {
-            addProperty("type", type)
-            when (type) {
-                "ws" -> {
-                    addProperty("path", uri.getQueryParameter("path") ?: "/")
-                    hostValues.firstOrNull()?.let {
-                        add("headers", JsonObject().apply { addProperty("Host", it) })
-                    }
-                    queryParamFirst(uri, "ed", "maxEarlyData", "max_early_data")?.toIntOrNull()?.takeIf { it > 0 }?.let {
-                        addProperty("max_early_data", it)
-                    }
-                    queryParamFirst(uri, "eh", "earlyDataHeaderName", "early_data_header_name")?.let {
-                        addProperty("early_data_header_name", it)
-                    }
-                }
-                "grpc" -> {
-                    addProperty("service_name", queryParamFirst(uri, "serviceName", "service_name", "path") ?: "")
-                    queryParamFirst(uri, "idleTimeout", "idle_timeout")?.let { addProperty("idle_timeout", it) }
-                    queryParamFirst(uri, "pingTimeout", "ping_timeout")?.let { addProperty("ping_timeout", it) }
-                    if (queryParamEnabled(uri, "permitWithoutStream", "permit_without_stream")) {
-                        addProperty("permit_without_stream", true)
-                    }
-                }
-                "http" -> {
-                    addProperty("path", uri.getQueryParameter("path") ?: "/")
-                    if (hostValues.isNotEmpty()) {
-                        add("host", JsonArray().apply { hostValues.forEach { add(it) } })
-                    }
-                    queryParamFirst(uri, "method")?.let { addProperty("method", it) }
-                    queryParamFirst(uri, "idleTimeout", "idle_timeout")?.let { addProperty("idle_timeout", it) }
-                    queryParamFirst(uri, "pingTimeout", "ping_timeout")?.let { addProperty("ping_timeout", it) }
-                }
-                "httpupgrade" -> {
-                    addProperty("path", uri.getQueryParameter("path") ?: "/")
-                    hostValues.firstOrNull()?.let { addProperty("host", it) }
-                }
-            }
-        }
-    }
-    
-    private fun createVmessTransport(network: String, config: JsonObject): JsonObject {
-        val hostValues = parseJsonStringList(config.get("host"))
-        return JsonObject().apply {
-            addProperty("type", network)
-            when (network) {
-                "ws" -> {
-                    addProperty("path", config.get("path")?.asString ?: "/")
-                    hostValues.firstOrNull()?.let {
-                        add("headers", JsonObject().apply { addProperty("Host", it) })
-                    }
-                    (parseJsonInt(config.get("ed"))
-                        ?: parseJsonInt(config.get("maxEarlyData"))
-                        ?: parseJsonInt(config.get("max_early_data")))
-                        ?.takeIf { it > 0 }
-                        ?.let { addProperty("max_early_data", it) }
-                    (parseJsonString(config.get("eh"))
-                        ?: parseJsonString(config.get("earlyDataHeaderName"))
-                        ?: parseJsonString(config.get("early_data_header_name")))
-                        ?.let { addProperty("early_data_header_name", it) }
-                }
-                "grpc" -> {
-                    addProperty("service_name", parseJsonString(config.get("serviceName")) ?: config.get("path")?.asString ?: "")
-                    parseJsonString(config.get("idleTimeout"))?.let { addProperty("idle_timeout", it) }
-                    parseJsonString(config.get("pingTimeout"))?.let { addProperty("ping_timeout", it) }
-                    parseJsonBoolean(config.get("permitWithoutStream"))?.let { addProperty("permit_without_stream", it) }
-                }
-                "http" -> {
-                    addProperty("path", config.get("path")?.asString ?: "/")
-                    if (hostValues.isNotEmpty()) {
-                        add("host", JsonArray().apply { hostValues.forEach { add(it) } })
-                    }
-                    parseJsonString(config.get("method"))?.let { addProperty("method", it) }
-                    parseJsonString(config.get("idleTimeout"))?.let { addProperty("idle_timeout", it) }
-                    parseJsonString(config.get("pingTimeout"))?.let { addProperty("ping_timeout", it) }
-                }
-                "httpupgrade" -> {
-                    addProperty("path", config.get("path")?.asString ?: "/")
-                    hostValues.firstOrNull()?.let { addProperty("host", it) }
-                }
-            }
-        }
-    }
-    
     private fun createRoute(proxyMode: ProxyMode, nodeDomains: List<String>, nodeIPs: List<String>): JsonObject {
         val rules = JsonArray()
         

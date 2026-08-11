@@ -5,6 +5,7 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xyz.a202132.app.util.RuleManager
 import xyz.a202132.app.util.SignatureVerifier
@@ -21,6 +22,9 @@ class VpnApplication : Application() {
         
         // 后台更新规则集（不阻塞启动，失败不影响使用）
         applicationScope.launch(Dispatchers.IO) {
+            // Give homepage database/network preloading priority. Bundled
+            // rules remain available if VPN starts before maintenance runs.
+            delay(15_000)
             try {
                 RuleManager.updateRuleSets(this@VpnApplication)
             } catch (e: Exception) {

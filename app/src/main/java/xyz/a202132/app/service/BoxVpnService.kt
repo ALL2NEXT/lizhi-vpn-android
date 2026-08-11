@@ -1,27 +1,21 @@
 package xyz.a202132.app.service
 
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Intent
 import android.net.VpnService
-import android.os.Build
+import android.os.SystemClock
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import io.nekohasekai.libbox.Libbox
 import kotlinx.coroutines.*
 import xyz.a202132.app.AppConfig
-import xyz.a202132.app.MainActivity
-import xyz.a202132.app.R
 import xyz.a202132.app.data.local.NodeDao
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
-import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.repository.SettingsRepository
-import xyz.a202132.app.util.SingBoxConfigGenerator
+import xyz.a202132.app.data.repository.VpnRuntimeSettings
 import xyz.a202132.app.util.RuleManager
 import java.io.File
 import java.net.ServerSocket
@@ -41,6 +35,7 @@ class BoxVpnService : VpnService() {
         private const val TAG = "BoxVpnService"
         private const val CORE_STATUS_FRESH_MS = 3_500L
         private const val CORE_STATUS_STARTUP_GRACE_MS = 6_000L
+        private const val NOTIFICATION_UPDATE_INTERVAL_MS = 2_000L
         
         const val ACTION_START = "xyz.a202132.app.START_VPN"
         const val ACTION_STOP = "xyz.a202132.app.STOP_VPN"
@@ -78,7 +73,8 @@ class BoxVpnService : VpnService() {
     
     private var commandServer: io.nekohasekai.libbox.CommandServer? = null
     private var platformInterface: BoxPlatformInterface? = null
-    private val configGenerator = SingBoxConfigGenerator()
+    private val configPreparer = VpnConfigPreparer()
+    private val notificationFactory = VpnNotificationFactory(this)
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var disconnectRecoveryManager: DisconnectRecoveryManager
     @Volatile private var isStopping = false
@@ -96,7 +92,7 @@ class BoxVpnService : VpnService() {
                 }
             }
         )
-        createNotificationChannel()
+        notificationFactory.createChannel()
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -176,76 +172,43 @@ class BoxVpnService : VpnService() {
                     selectedNodeId = rawNodes.find { it.getRawLinkPlain() == rawLink }?.id
                 }
 
-                setupLibboxForConfigCheck()
-                val allNodes = filterCoreCompatibleNodes(rawNodes)
-                if (allNodes.isEmpty()) {
-                    Log.e(TAG, "No core compatible nodes available")
-                    Log.e(TAG, "VPN start failed: no core compatible nodes available")
-                    withContext(Dispatchers.Main) {
-                        ServiceManager.notifyError("\u5f53\u524d\u8282\u70b9\u5217\u8868\u6ca1\u6709\u6838\u5fc3\u652f\u6301\u7684\u8282\u70b9")
-                    }
-                    return@launch
-                }
-                if (selectedNodeId != null && allNodes.none { it.id == selectedNodeId }) {
-                    Log.e(TAG, "Selected node is not core compatible: $selectedNodeId")
-                    Log.e(TAG, "VPN start failed: selected node is not core compatible")
-                    withContext(Dispatchers.Main) {
-                        ServiceManager.notifyError("\u6240\u9009\u8282\u70b9\u914d\u7f6e\u4e0d\u88ab\u6838\u5fc3\u652f\u6301")
-                    }
-                    return@launch
-                }
-
-                // 读取 IPv6 路由模式
-                val ipv6Mode = try {
-                    settingsRepo.ipv6RoutingMode.first()
-                } catch (e: Exception) {
-                    xyz.a202132.app.data.model.IPv6RoutingMode.DISABLED  // 默认禁用
-                }
-                val vpnMtu = try {
-                    settingsRepo.vpnMtu.first()
-                } catch (e: Exception) {
-                    AppConfig.VPN_MTU
-                }
-                val tunStack = try {
-                    settingsRepo.tunStack.first()
-                } catch (e: Exception) {
-                    TunStack.GVISOR
-                }
-                val hysteriaUpMbps = try {
-                    settingsRepo.hysteriaUpMbps.first()
-                } catch (e: Exception) {
-                    AppConfig.HYSTERIA_UP_MBPS
-                }
-                val hysteriaDownMbps = try {
-                    settingsRepo.hysteriaDownMbps.first()
-                } catch (e: Exception) {
-                    AppConfig.HYSTERIA_DOWN_MBPS
-                }
+                val runtimeSettings = settingsRepo.getVpnRuntimeSettings()
+                val ipv6Mode = runtimeSettings.ipv6RoutingMode
+                val vpnMtu = runtimeSettings.vpnMtu
+                val tunStack = runtimeSettings.tunStack
+                val hysteriaUpMbps = runtimeSettings.hysteriaUpMbps
+                val hysteriaDownMbps = runtimeSettings.hysteriaDownMbps
                 val internalSocksPort = pickFreeInternalSocksPort()
                 
-                Log.d(TAG, "Generating config with ${allNodes.size} nodes, selected: $selectedNodeId, ipv6Mode: $ipv6Mode, tunStack=$tunStack, mtu: $vpnMtu, hysteria=${hysteriaUpMbps}/${hysteriaDownMbps}Mbps, internalSocks=$internalSocksPort")
+                Log.d(TAG, "Generating config with ${rawNodes.size} nodes, selected: $selectedNodeId, ipv6Mode: $ipv6Mode, tunStack=$tunStack, mtu: $vpnMtu, hysteria=${hysteriaUpMbps}/${hysteriaDownMbps}Mbps, internalSocks=$internalSocksPort")
 
                 // 3. 确保规则集文件存在（从 assets 拷贝兜底）
                 RuleManager.ensureRuleSets(application)
 
-                // 4. 生成sing-box配置
-                val config = configGenerator.generateConfig(
-                    allNodes,
-                    selectedNodeId,
-                    proxyMode,
-                    ipv6Mode,
-                    vpnMtu,
-                    internalSocksPort,
-                    hysteriaUpMbps,
-                    hysteriaDownMbps,
-                    tunStack
+                // 4. Generate and validate the complete config once. Per-node
+                // validation is only used as a recovery path when it fails.
+                setupLibboxForConfigCheck()
+                val configContent = configPreparer.prepare(
+                    nodes = rawNodes,
+                    selectedNodeId = selectedNodeId,
+                    proxyMode = proxyMode,
+                    ipv6Mode = ipv6Mode,
+                    vpnMtu = vpnMtu,
+                    internalSocksPort = internalSocksPort,
+                    hysteriaUpMbps = hysteriaUpMbps,
+                    hysteriaDownMbps = hysteriaDownMbps,
+                    tunStack = tunStack
                 )
-                Libbox.checkConfig(config)
                 deleteLegacyConfigFile()
-                logConfigForDebug(config)
+                logConfigForDebug(configContent)
 
                 // 初始化 libbox
-                initializeLibbox(config, nodeName, internalSocksPort)
+                initializeLibbox(
+                    configContent,
+                    nodeName,
+                    internalSocksPort,
+                    runtimeSettings
+                )
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start VPN", e)
@@ -261,7 +224,8 @@ class BoxVpnService : VpnService() {
     private suspend fun initializeLibbox(
         configContent: String,
         nodeName: String,
-        internalSocksPort: Int
+        internalSocksPort: Int,
+        runtimeSettings: VpnRuntimeSettings
     ) {
         withContext(Dispatchers.IO) {
             try {
@@ -283,7 +247,10 @@ class BoxVpnService : VpnService() {
                 Log.d(TAG, "Config content length: ${configContent.length}")
 
                 // 创建平台接口并启动网络监控
-                platformInterface = BoxPlatformInterface(this@BoxVpnService)
+                platformInterface = BoxPlatformInterface(
+                    this@BoxVpnService,
+                    runtimeSettings.perAppProxy
+                )
                 platformInterface?.startNetworkMonitor()
 
                 // 创建 CommandServerHandler
@@ -348,6 +315,8 @@ class BoxVpnService : VpnService() {
     private var trafficMonitorStartedAt = 0L
     private var fallbackUploadTotalOffset = 0L
     private var fallbackDownloadTotalOffset = 0L
+    private var lastNotificationUpdateAt = 0L
+    private var lastNotificationSnapshot: String? = null
     
     private fun startCommandClient() {
         commandClientJob = serviceScope.launch {
@@ -437,6 +406,8 @@ class BoxVpnService : VpnService() {
         trafficMonitorStartedAt = System.currentTimeMillis()
         fallbackUploadTotalOffset = 0L
         fallbackDownloadTotalOffset = 0L
+        lastNotificationUpdateAt = 0L
+        lastNotificationSnapshot = null
         uploadSpeed = 0L
         downloadSpeed = 0L
         uploadTotal = 0L
@@ -675,28 +646,6 @@ class BoxVpnService : VpnService() {
         Libbox.setup(options)
     }
 
-    private fun filterCoreCompatibleNodes(nodes: List<Node>): List<Node> {
-        val compatibleNodes = nodes.filter { node ->
-            isNodeCoreConfigCompatible(node)
-        }
-        val skippedCount = nodes.size - compatibleNodes.size
-        if (skippedCount > 0) {
-            Log.w(TAG, "Skipped $skippedCount core-incompatible nodes before VPN start")
-            Log.w(TAG, "Skipped $skippedCount core-incompatible nodes before VPN start")
-        }
-        return compatibleNodes
-    }
-
-    private fun isNodeCoreConfigCompatible(node: Node): Boolean {
-        return runCatching {
-            val config = configGenerator.generateTestConfig(node)
-            Libbox.checkConfig(config)
-        }.onFailure { error ->
-            Log.w(TAG, "Core-incompatible node skipped: id=${node.id}, type=${node.type}, server=${node.server}, error=${error.message}")
-            Log.w(TAG, "Core-incompatible node skipped: type=${node.type}", error)
-        }.isSuccess
-    }
-
     private fun stopVpn() {
         val stopStartTime = System.currentTimeMillis()
         Log.d(TAG, "Stopping VPN - start")
@@ -798,41 +747,15 @@ class BoxVpnService : VpnService() {
                 } catch (e: Exception) {
                     listOfNotNull(savedNode)
                 }
-                
-                if (rawNodes.isNotEmpty()) {
-                    // 读取代理模式
-                    val proxyMode = try {
-                        settingsRepo.proxyMode.first()
-                    } catch (e: Exception) {
-                        ProxyMode.SMART
-                    }
 
-                    // 读取 IPv6 路由模式
-                    val ipv6Mode = try {
-                        settingsRepo.ipv6RoutingMode.first()
-                    } catch (e: Exception) {
-                        xyz.a202132.app.data.model.IPv6RoutingMode.DISABLED
-                    }
-                    val vpnMtu = try {
-                        settingsRepo.vpnMtu.first()
-                    } catch (e: Exception) {
-                        AppConfig.VPN_MTU
-                    }
-                    val tunStack = try {
-                        settingsRepo.tunStack.first()
-                    } catch (e: Exception) {
-                        TunStack.GVISOR
-                    }
-                    val hysteriaUpMbps = try {
-                        settingsRepo.hysteriaUpMbps.first()
-                    } catch (e: Exception) {
-                        AppConfig.HYSTERIA_UP_MBPS
-                    }
-                    val hysteriaDownMbps = try {
-                        settingsRepo.hysteriaDownMbps.first()
-                    } catch (e: Exception) {
-                        AppConfig.HYSTERIA_DOWN_MBPS
-                    }
+                if (rawNodes.isNotEmpty()) {
+                    val runtimeSettings = settingsRepo.getVpnRuntimeSettings()
+                    val proxyMode = runtimeSettings.proxyMode
+                    val ipv6Mode = runtimeSettings.ipv6RoutingMode
+                    val vpnMtu = runtimeSettings.vpnMtu
+                    val tunStack = runtimeSettings.tunStack
+                    val hysteriaUpMbps = runtimeSettings.hysteriaUpMbps
+                    val hysteriaDownMbps = runtimeSettings.hysteriaDownMbps
                     val internalSocksPort = pickFreeInternalSocksPort()
 
                     // 获取选中的节点
@@ -846,43 +769,28 @@ class BoxVpnService : VpnService() {
                     }
 
                     // 确保规则集文件存在
-                    setupLibboxForConfigCheck()
-                    val allNodes = filterCoreCompatibleNodes(rawNodes)
-                    if (allNodes.isEmpty()) {
-                        Log.e(TAG, "No core compatible nodes available during restart")
-                        Log.e(TAG, "VPN restart failed: no core compatible nodes available")
-                        withContext(Dispatchers.Main) {
-                            ServiceManager.notifyError("\u5f53\u524d\u8282\u70b9\u5217\u8868\u6ca1\u6709\u6838\u5fc3\u652f\u6301\u7684\u8282\u70b9")
-                        }
-                        return@launch
-                    }
-                    if (selectedNodeId != null && allNodes.none { it.id == selectedNodeId }) {
-                        Log.e(TAG, "Selected node is not core compatible during restart: $selectedNodeId")
-                        Log.e(TAG, "VPN restart failed: selected node is not core compatible")
-                        withContext(Dispatchers.Main) {
-                            ServiceManager.notifyError("\u6240\u9009\u8282\u70b9\u914d\u7f6e\u4e0d\u88ab\u6838\u5fc3\u652f\u6301")
-                        }
-                        return@launch
-                    }
-
                     RuleManager.ensureRuleSets(application)
-                    
-                    val config = configGenerator.generateConfig(
-                        allNodes,
-                        selectedNodeId,
-                        proxyMode,
-                        ipv6Mode,
-                        vpnMtu,
-                        internalSocksPort,
-                        hysteriaUpMbps,
-                        hysteriaDownMbps,
-                        tunStack
+                    setupLibboxForConfigCheck()
+                    val configContent = configPreparer.prepare(
+                        nodes = rawNodes,
+                        selectedNodeId = selectedNodeId,
+                        proxyMode = proxyMode,
+                        ipv6Mode = ipv6Mode,
+                        vpnMtu = vpnMtu,
+                        internalSocksPort = internalSocksPort,
+                        hysteriaUpMbps = hysteriaUpMbps,
+                        hysteriaDownMbps = hysteriaDownMbps,
+                        tunStack = tunStack
                     )
-                    Libbox.checkConfig(config)
                     deleteLegacyConfigFile()
-                    logConfigForDebug(config)
+                    logConfigForDebug(configContent)
 
-                    initializeLibbox(config, savedNodeName, internalSocksPort)
+                    initializeLibbox(
+                        configContent,
+                        savedNodeName,
+                        internalSocksPort,
+                        runtimeSettings
+                    )
                 }
             }
         }
@@ -994,74 +902,14 @@ class BoxVpnService : VpnService() {
         super.onDestroy()
     }
     
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                AppConfig.NOTIFICATION_CHANNEL_ID,
-                getString(R.string.vpn_notification_channel),
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "VPN服务通知"
-                setShowBadge(false)
-            }
-            
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannel(channel)
-        }
-    }
-    
     private fun createNotification(nodeName: String): Notification {
-        return buildNotification(nodeName, uploadSpeed, downloadSpeed)
-    }
-    
-    private fun buildNotification(nodeName: String, upSpeed: Long, downSpeed: Long): Notification {
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        return notificationFactory.build(
+            nodeName,
+            uploadSpeed,
+            downloadSpeed,
+            uploadTotal,
+            downloadTotal
         )
-        
-        val stopIntent = PendingIntent.getService(
-            this,
-            1,
-            Intent(this, BoxVpnService::class.java).apply {
-                action = ACTION_STOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        val restartIntent = PendingIntent.getService(
-            this,
-            2,
-            Intent(this, BoxVpnService::class.java).apply {
-                action = ACTION_RESTART
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // 格式化速度显示
-        val upSpeedStr = ServiceManager.formatSpeed(upSpeed)
-        val downSpeedStr = ServiceManager.formatSpeed(downSpeed)
-
-        // 构建通知内容 - 默认显示速度，展开显示总流量
-        val contentText = "上传 $upSpeedStr  下载 $downSpeedStr"
-        
-        return NotificationCompat.Builder(this, AppConfig.NOTIFICATION_CHANNEL_ID)
-            .setContentTitle(nodeName)
-            .setContentText(contentText)
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("上传 $upSpeedStr   累计 ${ServiceManager.formatTraffic(uploadTotal)}\n下载 $downSpeedStr   累计 ${ServiceManager.formatTraffic(downloadTotal)}"))
-            .setSmallIcon(R.drawable.ic_vpn_key)
-            .setContentIntent(pendingIntent)
-            .addAction(R.drawable.ic_vpn_key, "断开连接", stopIntent)
-            .addAction(R.drawable.ic_vpn_key, "重置连接", restartIntent)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOnlyAlertOnce(true) // 更新时不发出声音
-            .build()
     }
     
     /**
@@ -1069,8 +917,15 @@ class BoxVpnService : VpnService() {
      */
     private fun updateNotification(nodeName: String) {
         if (!isRunning) return
-        
-        val notification = buildNotification(nodeName, uploadSpeed, downloadSpeed)
+
+        val now = SystemClock.elapsedRealtime()
+        val snapshot = "$nodeName:$uploadSpeed:$downloadSpeed:$uploadTotal:$downloadTotal"
+        if (snapshot == lastNotificationSnapshot) return
+        if (now - lastNotificationUpdateAt < NOTIFICATION_UPDATE_INTERVAL_MS) return
+        lastNotificationUpdateAt = now
+        lastNotificationSnapshot = snapshot
+
+        val notification = createNotification(nodeName)
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.notify(AppConfig.NOTIFICATION_ID, notification)
     }

@@ -3,8 +3,6 @@ package xyz.a202132.app.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.util.Log
-import com.google.gson.Gson
-import com.google.gson.JsonParser
 import io.nekohasekai.libbox.Libbox
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,26 +11,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Job
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.local.AppDatabase
 import xyz.a202132.app.data.local.NodeLatencyUpdate
 import xyz.a202132.app.data.local.NodeLocationUpdate
+import xyz.a202132.app.data.local.NodeDao
 import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.LatencyTester
-import xyz.a202132.app.network.NetworkClient
+import xyz.a202132.app.network.NodeDownloadBandwidthTester
 import xyz.a202132.app.network.SpeedTestService
-import xyz.a202132.app.network.SubscriptionListParser
 import xyz.a202132.app.network.SubscriptionParser
 import xyz.a202132.app.network.DownloadManager
-import xyz.a202132.app.network.NodeTestProxyManager
 import xyz.a202132.app.network.NodeLocationResolver
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.service.BoxVpnService
@@ -40,11 +32,7 @@ import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import java.io.File
-import java.net.InetSocketAddress
-import java.net.Proxy
-import java.net.ServerSocket
 import kotlin.math.ceil
-import java.util.concurrent.TimeUnit
 import java.util.UUID
 
 enum class NodeImportResult {
@@ -59,29 +47,38 @@ private const val BYTES_PER_MEGABYTE = 1024.0 * 1024.0
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val tag = "MainViewModel"
-    private val database = AppDatabase.getInstance(application)
-    private val nodeDao = database.nodeDao()
+    // SQLCipher/KeyStore initialization and the first database open can be
+    // expensive. Start it immediately for splash-screen preloading, but never
+    // execute it on the UI thread.
+    private val nodeDaoDeferred = viewModelScope.async(Dispatchers.IO) {
+        AppDatabase.getInstance(application).nodeDao()
+    }
+    private val nodeDaoFlow: Flow<NodeDao> = flow { emit(nodeDaoDeferred.await()) }
+
+    private suspend fun nodeDao(): NodeDao = nodeDaoDeferred.await()
     private val settingsRepository = SettingsRepository(application)
     private val subscriptionParser = SubscriptionParser()
     private val accountManager = AccountManager(application)
-    private val subscriptionListParser = SubscriptionListParser()
     private val configGenerator = SingBoxConfigGenerator()
     private val latencyTester = LatencyTester()
+    private val bandwidthTester = NodeDownloadBandwidthTester(application)
     // 节流控制
     private val THROTTLE_INTERVAL = 5000L // 5秒节流间隔
-    private var lastFetchNodesTime = 0L
     private var lastCheckUpdateTime = 0L
-    // 缓存最新拉取的节点，避免 Room Flow 延迟导致后续操作使用旧节点
-    private var lastFetchedNodes: List<Node>? = null
-    private var cachedSubscriptionList: SubscriptionList? = null
     private var trafficSessionId: String? = null
     private var nodeLocationEnrichmentJob: Job? = null
-    private val gson = Gson()
-    private var backendUpdateInfo: UpdateInfo? = null
+    private val subscriptionDataLoader = SubscriptionDataLoader(
+        context = application,
+        settingsRepository = settingsRepository,
+        accountManager = accountManager,
+        nodeDao = { nodeDao() },
+        activeNode = { activeConnectionNode.value },
+        onNodesPersisted = ::scheduleNodeLocationEnrichment,
+        onMessage = { message -> _error.value = message }
+    )
     
     // UI状态
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
+    val isLoading = subscriptionDataLoader.isLoading
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
@@ -99,17 +96,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _notice = MutableStateFlow<NoticeInfo?>(null)
     val notice = _notice.asStateFlow()
     
-    // 持久通知配置（与对话框可见性无关）
-    private val _noticeConfig = MutableStateFlow<NoticeInfo?>(null)
-
-    private val _backendSettings = MutableStateFlow(BackendAppSettings())
-    val backendSettings = _backendSettings.asStateFlow()
+    val backendSettings = subscriptionDataLoader.backendSettings
 
     val accountInfo = accountManager.accountInfo
     private val _isUpdatingNickname = MutableStateFlow(false)
     val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
-    private val _isAccountRegisteredForSession = MutableStateFlow(false)
-    private val _isNodeAccessGranted = MutableStateFlow(false)
     
     private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
     val updateInfo = _updateInfo.asStateFlow()
@@ -148,7 +139,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         NodeListCategory.PRIMARY
     )
 
-    val subscriptionGroups = nodeDao.getSubscriptionGroups()
+    val subscriptionGroups = nodeDaoFlow.flatMapLatest { it.getSubscriptionGroups() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val storedSubscriptionSourceId = settingsRepository.selectedSubscriptionSourceId
@@ -164,7 +155,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val selectedSubscriptionSourceId = activeSubscriptionSourceId
 
-    val favoriteSourceNodeIds = nodeDao.getFavoriteSourceNodeIds()
+    val favoriteSourceNodeIds = nodeDaoFlow.flatMapLatest { it.getFavoriteSourceNodeIds() }
         .map { it.filterNotNull().toSet() }
         .stateIn(
             viewModelScope,
@@ -172,16 +163,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             emptySet()
         )
 
-    private val subscriptionNodes = activeSubscriptionSourceId
-        .flatMapLatest { sourceId ->
-            if (sourceId.isNullOrBlank()) {
-                nodeDao.getSubscriptionNodes()
-            } else {
-                nodeDao.getSubscriptionNodesBySource(sourceId)
+    private val subscriptionNodes = nodeDaoFlow
+        .flatMapLatest { dao ->
+            activeSubscriptionSourceId.flatMapLatest { sourceId ->
+                if (sourceId.isNullOrBlank()) {
+                    dao.getSubscriptionNodes()
+                } else {
+                    dao.getSubscriptionNodesBySource(sourceId)
+                }
             }
         }
 
-    private val favoriteNodes = nodeDao.getFavoriteNodes()
+    private val favoriteNodes = nodeDaoFlow.flatMapLatest { it.getFavoriteNodes() }
 
     // Data
     private val visibleNodes = combine(
@@ -197,7 +190,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         activeConnectionNode
     ) { visibleNodes, connectedNode ->
         sortNodesForList(visibleNodes, pinnedNodeId = connectedNode?.id)
-    }.stateIn(
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(
         viewModelScope,
         SharingStarted.Lazily,
         emptyList()
@@ -233,8 +228,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     val isUserAgreementAccepted = settingsRepository.isUserAgreementAccepted.stateIn(
         viewModelScope,
-        SharingStarted.Lazily,
-        true // 默认 true 防止闪烁，init 里会 reset 状态或者第一次启动时读出来是 false
+        SharingStarted.Eagerly,
+        false
     )
 
     // 自动化测试设置
@@ -257,7 +252,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Eagerly, TunStack.GVISOR)
     private val selectedNodeFromDatabase = selectedNodeId
         .flatMapLatest { selectedId ->
-            if (selectedId == null) flowOf(null) else nodeDao.observeNodeById(selectedId)
+            if (selectedId == null) {
+                flowOf(null)
+            } else {
+                nodeDaoFlow.flatMapLatest { it.observeNodeById(selectedId) }
+            }
         }
 
     val currentNode = combine(
@@ -273,31 +272,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
     
     init {
-        // 为历史缓存节点补充地区信息；名称识别优先，IP 查询在后台执行。
-        nodeLocationEnrichmentJob = viewModelScope.launch(Dispatchers.IO) {
-            delay(1_500)
-            enrichAndPersistNodeLocations(nodeDao.getAllNodes().first())
-        }
-
         viewModelScope.launch {
-            // 数据库选择仍按原行为重置；正在连接的节点由 VPN 会话状态独立维护。
-            settingsRepository.setSelectedNodeId(null)
-            
-            // 标记初始化完成，此时 selectedNodeId 才开始发出真实值
-            // 这样 UI 不会看到旧的选中状态闪烁
-            _isInitialized.value = true
+            _startupUpdateCheckCompleted.value = false
+            try {
+                // Keep the cached selection available immediately; refreshing
+                // data should not blank and rewrite DataStore on every launch.
+                _isInitialized.value = true
 
-            settingsRepository.isUserAgreementAccepted
-                .filter { it }
-                .first()
-
-            // 先应用缓存中的超时等设置，但订阅权限必须以本次在线请求为准。
-            loadCachedSubscriptionList()
-            if (initializeSubscriptionData()) {
-                restoreRememberedLastSelectedNodeIfNeeded(lastFetchedNodes)
+                // Preload cached and remote data while the startup splash is
+                // visible. User-agreement presentation must not serialize the
+                // resource-loading pipeline.
+                subscriptionDataLoader.loadCachedSubscriptionList()
+                if (subscriptionDataLoader.initialize()) {
+                    restoreRememberedLastSelectedNodeIfNeeded(
+                        subscriptionDataLoader.lastFetchedNodes
+                    )
+                } else {
+                    // A successful refresh schedules enrichment for the fresh
+                    // nodes. Only fall back to cached nodes when refresh failed.
+                    scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
+                }
+                checkNotice()
+                checkUpdateInternal(isAuto = true)
+            } catch (error: Exception) {
+                Log.e(tag, "Startup preload failed", error)
+            } finally {
+                _startupUpdateCheckCompleted.value = true
             }
-            checkNotice()
-            checkUpdate(isAuto = true, trackStartupSplash = true)
         }
         
         // 监听 ServiceManager 的错误消息
@@ -311,57 +312,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         observeTrafficDisconnects()
-    }
-
-    private suspend fun registerAccountForSession(): AccountInfo? {
-        return accountManager.register(backendSettings.value.nodeRequestTimeoutMs)
-            .onSuccess { account ->
-                _isAccountRegisteredForSession.value = true
-                if (account.level == 0) {
-                    _error.value = "当前账户已被封禁（Lv0），后台托管订阅不可用"
-                }
-            }
-            .onFailure { error ->
-                _isAccountRegisteredForSession.value = false
-                Log.w(tag, "Account registration failed; managed subscriptions unavailable", error)
-                _error.value = "账户注册失败，后台托管订阅不可用"
-            }
-            .getOrNull()
-    }
-
-    private suspend fun initializeSubscriptionData(forceRefresh: Boolean = false): Boolean = coroutineScope {
-        _isNodeAccessGranted.value = false
-        val listRequest = async { fetchSubscriptionList(forceRefresh = forceRefresh) }
-        val accountRequest = async { registerAccountForSession() }
-        val listResult = listRequest.await()
-        val account = accountRequest.await()
-        val subscriptionList = listResult.getOrNull()
-
-        if (subscriptionList == null) {
-            showNodeFetchToast(true, "获取订阅列表失败: ${listResult.exceptionOrNull()?.message ?: "未知错误"}")
-            return@coroutineScope false
-        }
-
-        val canUseManagedSubscriptions =
-            _isAccountRegisteredForSession.value && account != null && account.level > 0
-        val accessibleSources = subscriptionList.sources.filter { source ->
-            !isWorkerManagedSubscription(source.url) || canUseManagedSubscriptions
-        }
-
-        if (accessibleSources.isEmpty()) {
-            nodeDao.replaceSubscriptionNodes(emptyList())
-            lastFetchedNodes = emptyList()
-            _isNodeAccessGranted.value = true
-            return@coroutineScope true
-        }
-
-        val fetched = fetchNodesInternal(
-            bypassThrottle = true,
-            fetchingLabel = "请求节点中",
-            subscriptionList = subscriptionList.copy(sources = accessibleSources)
-        )
-        _isNodeAccessGranted.value = fetched
-        fetched
     }
 
     private fun observeTrafficDisconnects() {
@@ -396,236 +346,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun fetchSubscriptionList(forceRefresh: Boolean = false): Result<SubscriptionList> {
-        if (AppConfig.BACKEND_URL.isBlank()) {
-            return Result.failure(IllegalStateException("未配置订阅列表接口"))
-        }
-
-        return try {
-            var response = runCatching {
-                withTimeout(backendSettings.value.nodeRequestTimeoutMs.coerceIn(5000L, 60000L)) {
-                    NetworkClient.apiService.getBackendConfig(backendClientUrl(forceRefresh))
-                }
-            }
-            if (response.isFailure) {
-                response = runCatching {
-                    withTimeout(backendSettings.value.nodeRequestTimeoutMs.coerceIn(5000L, 60000L)) {
-                        NetworkClient.apiService.getBackendConfig(backendClientUrl(forceRefresh))
-                    }
-                }
-            }
-
-            val raw = response.getOrThrow()
-            applyBackendConfig(raw)
-            val parsed = subscriptionListParser.parse(raw).getOrThrow()
-            settingsRepository.setSubscriptionList(raw)
-            cachedSubscriptionList = parsed
-            Result.success(parsed)
-        } catch (e: Exception) {
-            Log.e(tag, "Failed to fetch subscription list", e)
-            Result.failure(e)
-        }
-    }
-
-    private suspend fun loadCachedSubscriptionList(): SubscriptionList? {
-        cachedSubscriptionList?.let { return it }
-        val cachedJson = settingsRepository.subscriptionListJson.first() ?: return null
-        applyBackendConfig(cachedJson)
-        return subscriptionListParser.parse(cachedJson).getOrNull()?.also {
-            cachedSubscriptionList = it
-        }
-    }
-
-    private fun backendClientUrl(forceRefresh: Boolean): String {
-        val endpoint = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/client"
-        return if (forceRefresh) "$endpoint?refresh=1" else endpoint
-    }
-
-    private fun applyBackendConfig(raw: String) {
-        runCatching {
-            val root = JsonParser.parseString(raw).asJsonObject
-            _noticeConfig.value = root.get("notice")
-                ?.takeIf { !it.isJsonNull && it.isJsonObject }
-                ?.let { gson.fromJson(it, NoticeInfo::class.java) }
-            _backendSettings.value = root.get("settings")
-                ?.takeIf { !it.isJsonNull && it.isJsonObject }
-                ?.let { gson.fromJson(it, BackendAppSettings::class.java) }
-                ?: BackendAppSettings()
-            backendUpdateInfo = root.get("appUpdate")
-                ?.takeIf { !it.isJsonNull && it.isJsonObject }
-                ?.let { gson.fromJson(it, UpdateInfo::class.java) }
-        }.onFailure { error ->
-            Log.w(tag, "Backend config does not contain valid notice/update metadata", error)
-        }
-    }
-
-    private suspend fun fetchNodesFromSubscriptions(
-        sources: List<SubscriptionSource>
-    ): Result<List<Node>> = coroutineScope {
-        val results = sources.map { subscription ->
-            async {
-                val requestUrl = subscriptionRequestUrl(subscription.url)
-                var result = subscriptionParser.fetchAndParse(
-                    requestUrl,
-                    backendSettings.value.nodeRequestTimeoutMs,
-                    subscription.encrypted
-                )
-                if (result.isFailure) {
-                    Log.w(tag, "Subscription fetch failed, retrying: ${subscription.name}", result.exceptionOrNull())
-                    result = subscriptionParser.fetchAndParse(
-                        requestUrl,
-                        backendSettings.value.nodeRequestTimeoutMs,
-                        subscription.encrypted
-                    )
-                }
-                subscription to result
-            }
-        }.awaitAll()
-
-        val mergedNodes = LinkedHashMap<String, Node>()
-        var failedCount = 0
-        var firstFailure: Throwable? = null
-
-        results.forEach { (subscription, result) ->
-            if (result.isFailure) {
-                failedCount++
-                firstFailure = firstFailure ?: result.exceptionOrNull()
-                return@forEach
-            }
-
-            result.getOrThrow().forEach { node ->
-                // Keep the same raw node separate when it appears in different
-                // subscriptions, so each subscription can be tested independently.
-                val scopedNodeId = "${subscription.id}:${node.id}"
-                val taggedNode = node.copy(
-                    id = scopedNodeId,
-                    source = NodeSource.SUBSCRIPTION,
-                    favoriteSourceNodeId = null,
-                    favoriteCreatedAt = 0L,
-                    subscriptionSourceId = subscription.id,
-                    subscriptionSourceName = subscription.name
-                )
-                val existing = mergedNodes[scopedNodeId]
-                mergedNodes[scopedNodeId] = if (existing == null) {
-                    taggedNode
-                } else {
-                    existing.copy(
-                        subscriptionSourceName = listOfNotNull(
-                            existing.subscriptionSourceName,
-                            subscription.name
-                        ).distinct().joinToString("、")
-                    )
-                }
-            }
-        }
-
-        if (mergedNodes.isEmpty()) {
-            Result.failure(firstFailure ?: IllegalStateException("订阅列表未返回节点"))
-        } else {
-            if (failedCount > 0) {
-                Log.w(tag, "$failedCount subscription source(s) failed; using successful sources")
-            }
-            Result.success(mergedNodes.values.toList())
-        }
-    }
-
-    private suspend fun fetchNodesInternal(
-        bypassThrottle: Boolean = false,
-        allowWhenTestRunning: Boolean = false,
-        allowWhenFetchingInProgress: Boolean = false,
-        fetchingLabel: String = "请求节点中",
-        showToast: Boolean = true,
-        subscriptionList: SubscriptionList? = null,
-        forceBackendRefresh: Boolean = false,
-        replaceSubscriptionSourceId: String? = null
-    ): Boolean {
-        if (!allowWhenTestRunning && GlobalTestExecution.mutex.isLocked) {
-            showNodeFetchToast(showToast, GlobalTestExecution.busyHint())
-            return false
-        }
-        if (!allowWhenFetchingInProgress && GlobalTestExecution.isFetching()) {
-            showNodeFetchToast(showToast, GlobalTestExecution.fetchingHint())
-            return false
-        }
-
-        // 节流检查 (内部调用可跳过)
-        if (!bypassThrottle) {
-            val now = System.currentTimeMillis()
-            if (now - lastFetchNodesTime < THROTTLE_INTERVAL) {
-                showNodeFetchToast(showToast, "操作过于频繁，请稍后再试")
-                return false
-            }
-            lastFetchNodesTime = now
-        }
-
-        GlobalTestExecution.beginFetching(fetchingLabel)
-        _isLoading.value = true
-        try {
-            // 1. 检查网络状态
-            if (!NetworkUtils.isNetworkAvailable(getApplication())) {
-                showNodeFetchToast(showToast, "当前无网络连接，无法获取节点")
-                return false
-            }
-
-            val activeSubscriptionList = subscriptionList
-                ?: fetchSubscriptionList(forceRefresh = forceBackendRefresh).getOrElse {
-                    loadCachedSubscriptionList()
-                        ?: throw IllegalStateException("无法获取订阅列表", it)
-                }
-            val result = fetchNodesFromSubscriptions(activeSubscriptionList.sources)
-
-            if (result.isSuccess) {
-                val fetchedNodes = result.getOrThrow()
-                val connectedNode = activeConnectionNode.value
-                    ?.takeIf { node ->
-                        node.source == NodeSource.SUBSCRIPTION &&
-                            (
-                                replaceSubscriptionSourceId.isNullOrBlank() ||
-                                    node.subscriptionSourceId == replaceSubscriptionSourceId
-                            )
-                    }
-                val nodesToPersist = if (
-                    connectedNode != null && fetchedNodes.none { it.id == connectedNode.id }
-                ) {
-                    Log.w(
-                        tag,
-                        "Active node is absent from refreshed subscription; retaining it until disconnect: ${connectedNode.id}"
-                    )
-                    fetchedNodes + connectedNode
-                } else {
-                    fetchedNodes
-                }
-                if (replaceSubscriptionSourceId.isNullOrBlank()) {
-                    nodeDao.replaceSubscriptionNodes(nodesToPersist)
-                } else {
-                    nodeDao.replaceSubscriptionNodesBySource(replaceSubscriptionSourceId, nodesToPersist)
-                }
-                // 缓存最新节点，避免 Room Flow 延迟导致后续操作使用旧节点
-                lastFetchedNodes = if (replaceSubscriptionSourceId.isNullOrBlank()) {
-                    nodesToPersist
-                } else {
-                    nodeDao.getSubscriptionNodes().first()
-                }
-                scheduleNodeLocationEnrichment(nodesToPersist)
-
-                Log.d(tag, "Fetched ${fetchedNodes.size} nodes, persisted ${nodesToPersist.size}")
-                return true
-            } else {
-                val e = result.exceptionOrNull()
-                Log.e(tag, "Failed to fetch nodes", e)
-                showNodeFetchToast(showToast, "获取节点失败: ${e?.message ?: "未知错误"}")
-                return false
-            }
-        } catch (e: Exception) {
-            Log.e(tag, "Error fetching nodes", e)
-            showNodeFetchToast(showToast, "网络错误")
-            return false
-        } finally {
-            _isLoading.value = false
-            GlobalTestExecution.endFetching()
-        }
-    }
-
     private fun scheduleNodeLocationEnrichment(nodes: List<Node>) {
         if (nodes.isEmpty()) return
         nodeLocationEnrichmentJob?.cancel()
@@ -651,15 +371,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 countryName = enrichedNode.countryName
             )
         }
-        if (updates.isNotEmpty()) nodeDao.updateNodeLocations(updates)
+        if (updates.isNotEmpty()) nodeDao().updateNodeLocations(updates)
     }
 
-    private fun showNodeFetchToast(showToast: Boolean, message: String) {
-        if (showToast) {
-            _error.value = message
-        }
-    }
-    
     fun testAllNodes(targetNodes: List<Node>? = null) {
         viewModelScope.launch {
             if (rejectUnavailableAccount()) return@launch
@@ -747,7 +461,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         node,
                         AppConfig.SMART_CONNECT_SPEED_TEST_SIZE_MB
                     )
-                    nodeDao.updateDownloadMbps(node.id, speedMbps)
+                    nodeDao().updateDownloadMbps(node.id, speedMbps)
                     speedResults += node to speedMbps
                 }
 
@@ -782,7 +496,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (rejectUnavailableAccount()) return@launch
             val selectedId = settingsRepository.selectedNodeId.first()
-            val selectedNode = selectedId?.let { nodeDao.getNodeById(it) }
+            val selectedNode = selectedId?.let { nodeDao().getNodeById(it) }
             val node = selectedNode ?: currentSubscriptionNodeSnapshot().firstOrNull()
             if (node == null) {
                 _error.value = "没有可用节点"
@@ -1102,7 +816,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val updates = results.map { result ->
             NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
         }
-        val updatedRows = nodeDao.updateUrlTestResults(updates, System.currentTimeMillis())
+        val updatedRows = nodeDao().updateUrlTestResults(updates, System.currentTimeMillis())
         if (updatedRows != updates.size) {
             Log.w(tag, "Only $updatedRows/${updates.size} URL test results were applied")
         }
@@ -1121,7 +835,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (timedOutNodeIds.isEmpty()) return
 
         val selectedNodeId = settingsRepository.selectedNodeId.first()
-        nodeDao.deleteNodesByIds(timedOutNodeIds)
+        nodeDao().deleteNodesByIds(timedOutNodeIds)
         if (selectedNodeId != null && selectedNodeId in timedOutNodeIds) {
             settingsRepository.setSelectedNodeId(null)
         }
@@ -1164,7 +878,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val updates = results.map { result ->
             NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
         }
-        nodeDao.updateTcpingResults(updates, System.currentTimeMillis())
+        nodeDao().updateTcpingResults(updates, System.currentTimeMillis())
         deleteTimedOutNodes(results)
         return results
     }
@@ -1234,16 +948,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleFavoriteNode(node: Node) {
         viewModelScope.launch(Dispatchers.IO) {
             if (node.source == NodeSource.FAVORITE) {
-                nodeDao.deleteNodeById(node.id)
+                nodeDao().deleteNodeById(node.id)
                 if (settingsRepository.selectedNodeId.first() == node.id) {
                     settingsRepository.setSelectedNodeId(null)
                 }
                 return@launch
             }
 
-            val existingFavorite = nodeDao.getFavoriteBySourceNodeId(node.id)
+            val existingFavorite = nodeDao().getFavoriteBySourceNodeId(node.id)
             if (existingFavorite != null) {
-                nodeDao.deleteNodeById(existingFavorite.id)
+                nodeDao().deleteNodeById(existingFavorite.id)
                 if (settingsRepository.selectedNodeId.first() == existingFavorite.id) {
                     settingsRepository.setSelectedNodeId(null)
                 }
@@ -1251,7 +965,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val now = System.currentTimeMillis()
-            nodeDao.insertNode(
+            nodeDao().insertNode(
                 node.copy(
                     id = "fav_${UUID.randomUUID()}",
                     source = NodeSource.FAVORITE,
@@ -1275,7 +989,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (coreCompatibleNodes.isEmpty()) return@withContext NodeImportResult.INVALID to 0
 
-                val existingFavoriteRawLinks = nodeDao.getFavoriteNodes().first()
+                val existingFavoriteRawLinks = nodeDao().getFavoriteNodes().first()
                     .map { it.getRawLinkPlain() }
                     .toMutableSet()
                 val uniqueNodes = coreCompatibleNodes.filter { node ->
@@ -1296,7 +1010,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         uploadMbps = 0f,
                     )
                 }
-                nodeDao.insertNodes(favorites)
+                nodeDao().insertNodes(favorites)
                 NodeImportResult.IMPORTED to favorites.size
             }
             val result = importResult.first
@@ -1418,11 +1132,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun checkNotice() {
-        val result = _noticeConfig.value?.let { Result.success(it) }
+        val result = subscriptionDataLoader.noticeConfig?.let { Result.success(it) }
             ?: Result.failure<NoticeInfo>(IllegalStateException("backend config unavailable"))
         result.onSuccess { noticeInfo ->
-            _noticeConfig.value = noticeInfo
-
             if (noticeInfo.hasNotice) {
                 // 如果 showOnce 为 true，检查是否已显示过
                 // 如果 showOnce 为 false，则每次都显示
@@ -1451,26 +1163,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun checkUpdate(isAuto: Boolean = false, trackStartupSplash: Boolean = false) {
         viewModelScope.launch {
-            if (trackStartupSplash) {
-                _startupUpdateCheckCompleted.value = false
-            }
-            if (backendUpdateInfo == null) {
-                if (trackStartupSplash) {
-                    _startupUpdateCheckCompleted.value = true
-                }
-                return@launch
+            checkUpdateInternal(isAuto, trackStartupSplash)
+        }
+    }
+
+    private suspend fun checkUpdateInternal(
+        isAuto: Boolean,
+        trackStartupSplash: Boolean = false
+    ) {
+        if (trackStartupSplash) {
+            _startupUpdateCheckCompleted.value = false
+        }
+        try {
+            if (subscriptionDataLoader.updateInfo == null) {
+                return
             }
             // 节流检查 (自动检查可跳过)
             if (!isAuto) {
                 val now = System.currentTimeMillis()
                 if (now - lastCheckUpdateTime < THROTTLE_INTERVAL) {
                     _error.value = "操作过于频繁，请稍后再试"
-                    return@launch
+                    return
                 }
                 lastCheckUpdateTime = now
             }
             
-            val result = backendUpdateInfo?.let { Result.success(it) }
+            val result = subscriptionDataLoader.updateInfo?.let { Result.success(it) }
                 ?: Result.failure<UpdateInfo>(IllegalStateException("backend update metadata unavailable"))
             result.onSuccess { info ->
                 val currentVersionCode = getApplication<Application>().packageManager
@@ -1506,10 +1224,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }.onFailure { e ->
                 Log.e(tag, "Failed to check update", e)
                 Log.w(tag, "Failed to check update", e)
-            }.also {
-                if (trackStartupSplash) {
-                    _startupUpdateCheckCompleted.value = true
-                }
+            }
+        } finally {
+            if (trackStartupSplash) {
+                _startupUpdateCheckCompleted.value = true
             }
         }
     }
@@ -1643,7 +1361,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun rejectUnavailableAccount(requireNodeAccess: Boolean = true): Boolean {
         return when {
-            requireNodeAccess && !_isNodeAccessGranted.value -> {
+            requireNodeAccess && !subscriptionDataLoader.isNodeAccessGranted -> {
                 _error.value = "订阅权限尚未通过后台验证，请刷新节点"
                 true
             }
@@ -1651,53 +1369,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun isWorkerManagedSubscription(url: String): Boolean {
-        val managedPrefix = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/subscription/"
-        return managedPrefix.length > "/api/subscription/".length &&
-            url.startsWith(managedPrefix, ignoreCase = true)
-    }
-
-    private fun subscriptionRequestUrl(url: String): String {
-        if (!isWorkerManagedSubscription(url)) return url
-        val accountId = accountManager.currentAccount()?.id ?: return url
-        val separator = if ('?' in url) '&' else '?'
-        val encodedAccountId = java.net.URLEncoder.encode(accountId, Charsets.UTF_8.name())
-        return "$url${separator}accountId=$encodedAccountId"
-    }
-    
     fun acceptUserAgreement() {
         viewModelScope.launch {
             settingsRepository.setUserAgreementAccepted(true)
         }
     }
 
-private suspend fun currentNodeListSnapshot(): List<Node> {
+    private suspend fun currentNodeListSnapshot(): List<Node> = withContext(Dispatchers.Default) {
         val category = settingsRepository.nodeListCategory.first()
         val snapshot = when (category) {
             NodeListCategory.PRIMARY -> currentSubscriptionNodeSnapshot()
-            NodeListCategory.FAVORITES -> nodeDao.getFavoriteNodes().first()
+            NodeListCategory.FAVORITES -> nodeDao().getFavoriteNodes().first()
         }
-        return sortNodesForList(snapshot)
+        sortNodesForList(snapshot)
     }
 
-private suspend fun currentSubscriptionNodeSnapshot(): List<Node> {
-        val groups = nodeDao.getSubscriptionGroups().first()
+    private suspend fun currentSubscriptionNodeSnapshot(): List<Node> = withContext(Dispatchers.Default) {
+        val groups = nodeDao().getSubscriptionGroups().first()
         val storedSourceId = settingsRepository.selectedSubscriptionSourceId.first()
         val sourceId = storedSourceId
             ?.takeIf { id -> groups.any { it.sourceId == id } }
             ?: groups.firstOrNull()?.sourceId
-        val all = nodeDao.getSubscriptionNodes().first()
+        val all = nodeDao().getSubscriptionNodes().first()
         val scoped = if (sourceId.isNullOrBlank()) {
             all
         } else {
             all.filter { it.subscriptionSourceId == sourceId }
         }
-        return sortNodesForList(scoped)
+        sortNodesForList(scoped)
     }
 
-private suspend fun currentSmartConnectNodes(): List<Node> = currentNodeListSnapshot()
+    private suspend fun currentSmartConnectNodes(): List<Node> = currentNodeListSnapshot()
 
-private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {
+    private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {
         if (nodes.isEmpty()) return emptyList()
         val normalizedPercent = percent.coerceIn(1, 100)
         val count = ((nodes.size.toLong() * normalizedPercent + 99L) / 100L)
@@ -1706,12 +1410,12 @@ private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {
         return nodes.take(count)
     }
 
-private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<Node>? = null) {
+    private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<Node>? = null) {
         if (!settingsRepository.rememberLastSelectedNodeEnabled.first()) return
         val rememberedNodeId = settingsRepository.lastSelectedNodeId.first()?.takeIf { it.isNotBlank() } ?: return
-        val candidateNodes = freshNodes ?: nodeDao.getAllNodes().first()
+        val candidateNodes = freshNodes ?: nodeDao().getAllNodes().first()
         val rememberedNode = candidateNodes.firstOrNull { it.id == rememberedNodeId }
-            ?: nodeDao.getNodeById(rememberedNodeId)
+            ?: nodeDao().getNodeById(rememberedNodeId)
         if (rememberedNode?.source != NodeSource.SUBSCRIPTION && rememberedNode != null) {
             settingsRepository.setSelectedNodeId(rememberedNodeId)
         }
@@ -1728,7 +1432,7 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
                 _error.value = GlobalTestExecution.busyHint()
                 return@launch
             }
-            val fetchOk = initializeSubscriptionData(forceRefresh = true)
+            val fetchOk = subscriptionDataLoader.initialize(forceRefresh = true)
             if (!fetchOk) return@launch
         }
     }
@@ -1748,54 +1452,12 @@ private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<N
         return Result.failure(second.exceptionOrNull() ?: first.exceptionOrNull() ?: IllegalStateException("${requestName}请求失败"))
     }
 
-    private suspend fun testNodeDownloadBandwidthMbps(node: Node, sizeMb: Int): Float = withContext(Dispatchers.IO) {
-        val port = pickFreePort()
-        val session = NodeTestProxyManager.createSession(
-            getApplication(),
+    private suspend fun testNodeDownloadBandwidthMbps(node: Node, sizeMb: Int): Float =
+        bandwidthTester.test(
             node,
-            port,
+            sizeMb,
             hysteriaUpMbps.value,
             hysteriaDownMbps.value
         )
-        val started = session.start()
-        if (!started) return@withContext 0f
-
-        try {
-            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
-            val builder = NetworkClient.withUserAgent(OkHttpClient.Builder())
-                .proxy(proxy)
-                .connectTimeout(AppConfig.SMART_CONNECT_SPEED_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                .readTimeout(AppConfig.SMART_CONNECT_SPEED_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                .callTimeout(AppConfig.SMART_CONNECT_SPEED_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            val client = builder.build()
-
-            val bytes = sizeMb.toLong() * 1_000_000L
-            val url = "${AppConfig.SPEED_TEST_DOWNLOAD_URL}?bytes=$bytes&r=${System.currentTimeMillis()}"
-            val request = Request.Builder().url(url).build()
-
-            val start = System.currentTimeMillis()
-            var total = 0L
-            client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext 0f
-                val source = resp.body?.source() ?: return@withContext 0f
-                val buffer = ByteArray(8192)
-                var read: Int
-                while (source.read(buffer).also { read = it } != -1) {
-                    total += read
-                }
-            }
-            val durationMs = (System.currentTimeMillis() - start).coerceAtLeast(1)
-            (total * 8f / 1_000_000f) / (durationMs / 1000f)
-        } catch (e: Exception) {
-            Log.e(tag, "Download bandwidth test failed for ${node.getDisplayName()}: ${e.message}")
-            0f
-        } finally {
-            session.stop()
-        }
-    }
-
-    private fun pickFreePort(): Int {
-        return ServerSocket(0).use { it.localPort }
-    }
 
 }
