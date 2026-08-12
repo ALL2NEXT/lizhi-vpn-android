@@ -8,6 +8,9 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Url
 import xyz.a202132.app.data.model.AccountBindingRequest
+import xyz.a202132.app.data.model.AccountActionResponse
+import xyz.a202132.app.data.model.AccountDeleteRequest
+import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.AccountRegisterResponse
@@ -33,6 +36,18 @@ interface ApiService {
         @Url url: String,
         @Body request: AccountBindingRequest
     ): AccountRegisterResponse
+
+    @POST
+    suspend fun loginAccount(
+        @Url url: String,
+        @Body request: AccountLoginRequest
+    ): AccountRegisterResponse
+
+    @POST
+    suspend fun deleteAccount(
+        @Url url: String,
+        @Body request: AccountDeleteRequest
+    ): AccountActionResponse
 
     @PATCH
     suspend fun updateAccountProfile(

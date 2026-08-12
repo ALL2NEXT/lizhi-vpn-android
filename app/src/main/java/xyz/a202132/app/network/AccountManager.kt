@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withTimeout
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.BuildConfig
+import xyz.a202132.app.data.model.AccountActionResponse
 import xyz.a202132.app.data.model.AccountInfo
 import xyz.a202132.app.data.model.AccountBindingRequest
+import xyz.a202132.app.data.model.AccountDeleteRequest
+import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.TrafficReportRequest
@@ -92,6 +95,43 @@ class AccountManager(private val context: Context) {
         }
     }
 
+    suspend fun loginAccount(
+        email: String,
+        password: String,
+        timeoutMs: Long = 10000L
+    ): Result<AccountInfo> {
+        val normalizedEmail = email.trim().lowercase()
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches()) {
+            return Result.failure(IllegalArgumentException("邮箱格式无效"))
+        }
+        if (password.length !in 8..128) {
+            return Result.failure(IllegalArgumentException("密码长度需要在 8～128 个字符之间"))
+        }
+
+        return runCatching {
+            val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.loginAccount(
+                    accountEndpoint("/api/account/login"),
+                    AccountLoginRequest(
+                        deviceId = accountId(),
+                        email = normalizedEmail,
+                        password = password,
+                        appVersion = BuildConfig.VERSION_NAME,
+                        brand = Build.MANUFACTURER.orEmpty(),
+                        model = Build.MODEL.orEmpty(),
+                        androidVersion = Build.VERSION.RELEASE.orEmpty(),
+                        androidSdk = Build.VERSION.SDK_INT
+                    )
+                )
+            }
+            val loggedIn = response.account ?: throw IllegalStateException(
+                response.error ?: "账户登录失败"
+            )
+            persistAccount(loggedIn)
+            loggedIn
+        }
+    }
+
     suspend fun bindEmailPassword(
         email: String,
         password: String,
@@ -165,6 +205,34 @@ class AccountManager(private val context: Context) {
         }
     }
 
+    suspend fun deleteAccount(
+        password: String,
+        timeoutMs: Long = 10000L
+    ): Result<Unit> {
+        val registered = currentAccount()
+            ?: return Result.failure(IllegalStateException("账户尚未同步"))
+        if (registered.email.isNotBlank() && password.length !in 8..128) {
+            return Result.failure(IllegalArgumentException("请输入当前账户密码"))
+        }
+
+        return runCatching {
+            val response: AccountActionResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.deleteAccount(
+                    accountEndpoint("/api/account/delete"),
+                    AccountDeleteRequest(
+                        deviceId = accountId(),
+                        uid = registered.uid,
+                        password = password
+                    )
+                )
+            }
+            if (!response.ok) {
+                throw IllegalStateException(response.error ?: "账户注销失败")
+            }
+            clearLocalAccount()
+        }
+    }
+
     private fun accountEndpoint(path: String): String =
         "${AppConfig.BACKEND_URL.trimEnd('/')}$path"
 
@@ -225,6 +293,22 @@ class AccountManager(private val context: Context) {
             .putInt(ACCOUNT_ANDROID_SDK_KEY, normalized.androidSdk)
             .putString(ACCOUNT_APP_VERSION_KEY, normalized.appVersion)
             .apply()
+    }
+
+    private fun clearLocalAccount() {
+        preferences.edit()
+            .remove(ACCOUNT_ID_KEY)
+            .remove(ACCOUNT_NICKNAME_KEY)
+            .remove(ACCOUNT_LEVEL_KEY)
+            .remove(ACCOUNT_EXPERIENCE_KEY)
+            .remove(ACCOUNT_EMAIL_KEY)
+            .remove(ACCOUNT_BRAND_KEY)
+            .remove(ACCOUNT_MODEL_KEY)
+            .remove(ACCOUNT_ANDROID_VERSION_KEY)
+            .remove(ACCOUNT_ANDROID_SDK_KEY)
+            .remove(ACCOUNT_APP_VERSION_KEY)
+            .apply()
+        _accountInfo.value = null
     }
 
     private companion object {

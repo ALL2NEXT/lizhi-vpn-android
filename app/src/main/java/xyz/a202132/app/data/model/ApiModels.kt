@@ -105,6 +105,51 @@ data class AccountBindingRequest(
     val password: String
 )
 
+data class AccountLoginRequest(
+    @SerializedName("deviceId")
+    val deviceId: String,
+
+    @SerializedName("email")
+    val email: String,
+
+    @SerializedName("password")
+    val password: String,
+
+    @SerializedName("appVersion")
+    val appVersion: String,
+
+    @SerializedName("brand")
+    val brand: String,
+
+    @SerializedName("model")
+    val model: String,
+
+    @SerializedName("androidVersion")
+    val androidVersion: String,
+
+    @SerializedName("androidSdk")
+    val androidSdk: Int
+)
+
+data class AccountDeleteRequest(
+    @SerializedName("deviceId")
+    val deviceId: String,
+
+    @SerializedName("uid")
+    val uid: String,
+
+    @SerializedName("password")
+    val password: String = ""
+)
+
+data class AccountActionResponse(
+    @SerializedName("ok")
+    val ok: Boolean = false,
+
+    @SerializedName("error")
+    val error: String? = null
+)
+
 data class AccountInfo(
     @SerializedName("uid")
     val uid: String,

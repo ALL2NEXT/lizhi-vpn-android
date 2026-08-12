@@ -11,6 +11,8 @@
  *   GET /api/client
  *   GET /api/client?refresh=1   // refresh is handled by the app; query is tolerated for compatibility
  *   GET /api/subscription/<id>?uid=<UID>  // authenticated Worker relay; all sources are encrypted here
+ *   POST /api/account/login     // switch to an email/password account
+ *   POST /api/account/delete    // permanently delete the current account
  *   POST /api/debug/users       // temporary public debug user upsert; remove after testing
  *
  * Admin endpoints:
@@ -301,6 +303,71 @@ async function handleAccount(path, request, env) {
     }
     const updated = await readD1User(env, identity.userId);
     return json({ ok: true, account: publicAccount(updated) });
+  }
+
+  // 使用邮箱和密码切换账户，同时把当前设备转移到登录账户。
+  if (path === "/api/account/login" && request.method === "POST") {
+    const body = await request.json();
+    const deviceId = normalizeAccountId(body && body.deviceId);
+    const email = normalizeAccountEmail(body && body.email);
+    const password = normalizeAccountPassword(body && body.password);
+    if (!deviceId || !email || !password) {
+      return json({ ok: false, error: "invalid_login_credentials" }, 400);
+    }
+
+    const db = await ensureUserSchema(env);
+    const row = await db.prepare(
+      "SELECT id, uid, level, email, password_hash FROM users_mb WHERE email = ?",
+    ).bind(email).first();
+    if (!row || !(await verifyAccountPassword(password, cleanText(row.password_hash)))) {
+      return json({ ok: false, error: "invalid_login_credentials" }, 401);
+    }
+    if (normalizeLevel(row.level, 0) === 0) {
+      return json({ ok: false, error: "account_banned" }, 403);
+    }
+
+    await attachDeviceToUser(db, Number(row.id), deviceId, body || {});
+    const account = await readD1User(env, Number(row.id));
+    return json({ ok: true, account: publicAccount(account) });
+  }
+
+  // 注销会删除账户、设备和流量数据；绑定账户必须再次提供当前密码。
+  if (path === "/api/account/delete" && request.method === "POST") {
+    const body = await request.json();
+    const deviceId = normalizeAccountId(body && body.deviceId);
+    const requestedUid = normalizeUid(body && body.uid);
+    const password = typeof (body && body.password) === "string" ? body.password : "";
+    if (!deviceId) {
+      return json({ ok: false, error: "invalid_delete_request" }, 400);
+    }
+
+    const db = await ensureUserSchema(env);
+    const identity = await resolveUserIdentity(env, deviceId);
+    if (!identity || (requestedUid && requestedUid !== identity.uid)) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    const user = await readD1User(env, identity.userId);
+    if (!user) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    const stored = await db.prepare(
+      "SELECT email, password_hash FROM users_mb WHERE id = ?",
+    ).bind(identity.userId).first();
+    if (cleanText(stored && stored.email)) {
+      if (!(await verifyAccountPassword(password, cleanText(stored.password_hash)))) {
+        return json({ ok: false, error: "invalid_account_password" }, 401);
+      }
+    }
+
+    const result = await db.batch([
+      db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
+    ]);
+    const deleteResult = result[result.length - 1];
+    if (!deleteResult || !deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    return json({ ok: true });
   }
 
   if (path === "/api/account/profile" && request.method === "PATCH") {
@@ -1091,6 +1158,50 @@ function rowToUser(row) {
   };
 }
 
+async function attachDeviceToUser(db, userId, deviceId, profile) {
+  const brand = cleanText(profile && profile.brand).slice(0, 80);
+  const model = cleanText(profile && profile.model).slice(0, 120);
+  const androidVersion = cleanText(profile && profile.androidVersion).slice(0, 80);
+  const androidSdk = normalizeAndroidSdk(profile && profile.androidSdk);
+  const appVersion = cleanText(profile && profile.appVersion).slice(0, 40);
+
+  await db.prepare(
+    "DELETE FROM user_devices_mb WHERE device_id = ? AND user_id <> ?",
+  ).bind(deviceId, userId).run();
+  const existing = await db.prepare(
+    "SELECT id FROM user_devices_mb WHERE device_id = ? AND user_id = ?",
+  ).bind(deviceId, userId).first();
+  if (existing) {
+    await db.prepare(
+      "UPDATE user_devices_mb SET " +
+        "brand = CASE WHEN ? <> '' THEN ? ELSE brand END, " +
+        "model = CASE WHEN ? <> '' THEN ? ELSE model END, " +
+        "android_version = CASE WHEN ? <> '' THEN ? ELSE android_version END, " +
+        "android_sdk = CASE WHEN ? > 0 THEN ? ELSE android_sdk END, " +
+        "app_version = CASE WHEN ? <> '' THEN ? ELSE app_version END " +
+        "WHERE id = ?",
+    ).bind(
+      brand, brand, model, model, androidVersion, androidVersion,
+      androidSdk, androidSdk, appVersion, appVersion, Number(existing.id),
+    ).run();
+    return;
+  }
+
+  await db.prepare(
+    "INSERT INTO user_devices_mb " +
+      "(user_id, device_id, brand, model, android_version, android_sdk, app_version) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).bind(
+    userId,
+    deviceId,
+    brand,
+    model,
+    androidVersion,
+    androidSdk,
+    appVersion,
+  ).run();
+}
+
 async function registerOrTouchUser(env, deviceId, profile, now) {
   const db = await ensureUserSchema(env);
   const brand = cleanText(profile.brand).slice(0, 80);
@@ -1439,10 +1550,61 @@ async function hashAccountPassword(password) {
   return `pbkdf2-sha256$${iterations}$${base64EncodeBytes(salt)}$${base64EncodeBytes(new Uint8Array(derived))}`;
 }
 
+async function verifyAccountPassword(password, storedHash) {
+  const parts = String(storedHash || "").split("$");
+  if (parts.length !== 4 || parts[0] !== "pbkdf2-sha256") return false;
+  const iterations = Number(parts[1]);
+  if (!Number.isInteger(iterations) || iterations < 10000 || iterations > 1000000) {
+    return false;
+  }
+
+  let salt;
+  let expected;
+  try {
+    salt = base64DecodeBytes(parts[2]);
+    expected = base64DecodeBytes(parts[3]);
+  } catch (_) {
+    return false;
+  }
+  if (salt.length === 0 || expected.length === 0) return false;
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    TEXT_ENCODER.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const derived = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+    key,
+    expected.length * 8,
+  );
+  return constantTimeBytesEqual(new Uint8Array(derived), expected);
+}
+
 function base64EncodeBytes(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
+}
+
+function base64DecodeBytes(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function constantTimeBytesEqual(left, right) {
+  const length = Math.max(left.length, right.length);
+  let difference = left.length ^ right.length;
+  for (let index = 0; index < length; index += 1) {
+    difference |= (left[index] || 0) ^ (right[index] || 0);
+  }
+  return difference === 0;
 }
 
 function normalizeUid(value) {

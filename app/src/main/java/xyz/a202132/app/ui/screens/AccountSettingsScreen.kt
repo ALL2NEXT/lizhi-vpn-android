@@ -4,17 +4,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +47,8 @@ fun AccountSettingsScreen(
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val isBindingAccount by viewModel.isBindingAccount.collectAsStateWithLifecycle()
+    val isSwitchingAccount by viewModel.isSwitchingAccount.collectAsStateWithLifecycle()
+    val isDeletingAccount by viewModel.isDeletingAccount.collectAsStateWithLifecycle()
     val accountMessage by viewModel.accountMessage.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
     val account = accountInfo
@@ -53,6 +60,10 @@ fun AccountSettingsScreen(
     }
     var password by remember(accountInfo?.uid) { mutableStateOf("") }
     var confirmPassword by remember(accountInfo?.uid) { mutableStateOf("") }
+    var switchEmail by remember(accountInfo?.uid) { mutableStateOf("") }
+    var switchPassword by remember(accountInfo?.uid) { mutableStateOf("") }
+    var deletePassword by remember(accountInfo?.uid) { mutableStateOf("") }
+    var showDeleteConfirmation by remember(accountInfo?.uid) { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.clearAccountMessage()
@@ -68,6 +79,10 @@ fun AccountSettingsScreen(
             password = ""
             confirmPassword = ""
         }
+        switchEmail = ""
+        switchPassword = ""
+        deletePassword = ""
+        showDeleteConfirmation = false
     }
 
     val normalizedNickname = nickname.trim()
@@ -85,6 +100,15 @@ fun AccountSettingsScreen(
         password.length in 8..128 &&
         password == confirmPassword &&
         !isBindingAccount
+    val canSwitchAccount = account != null &&
+        android.util.Patterns.EMAIL_ADDRESS.matcher(switchEmail.trim()).matches() &&
+        switchPassword.length in 8..128 &&
+        !isSwitchingAccount &&
+        !isDeletingAccount
+    val canDeleteAccount = account != null &&
+        (account.email.isBlank() || deletePassword.length in 8..128) &&
+        !isDeletingAccount &&
+        !isSwitchingAccount
 
     AppScreenScaffold(
         title = "账户设置",
@@ -141,7 +165,7 @@ fun AccountSettingsScreen(
                 if (account.email.isBlank()) {
                     AccountSettingsSection(title = "绑定账户") {
                         Text(
-                            text = "绑定邮箱可获得经验，经验达到后台设置的升级门槛后自动升级。Lv0 账户不能获取经验。密码只会在服务端加密保存。",
+                            text = "绑定邮箱可获得一次性经验奖励，但不会直接改变等级；经验达到后台设置的门槛后才会升级。Lv0 账户不能获取经验。密码只会在服务端加密保存。",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -214,9 +238,9 @@ fun AccountSettingsScreen(
                         label = "绑定邮箱",
                         value = account.email.displayOrUnknown()
                     )
-                    AccountInfoRow(
-                        label = "账户等级",
-                        value = accountLevelText(account)
+                    AccountLevelRow(
+                        accountInfo = account,
+                        thresholds = backendSettings.experienceThresholds
                     )
                     AccountInfoRow(
                         label = "当前经验",
@@ -247,8 +271,113 @@ fun AccountSettingsScreen(
                         value = account.appVersion.displayOrUnknown()
                     )
                 }
+
+                AccountSettingsSection(title = "账户操作") {
+                    Text(
+                        text = "输入其他已绑定账户的邮箱和密码，可将当前设备切换到该账户。切换前请先断开 VPN。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = switchEmail,
+                        onValueChange = { switchEmail = it },
+                        label = { Text("切换账户邮箱") },
+                        singleLine = true,
+                        enabled = !isSwitchingAccount && !isDeletingAccount,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = switchPassword,
+                        onValueChange = { if (it.length <= 128) switchPassword = it },
+                        label = { Text("切换账户密码") },
+                        singleLine = true,
+                        enabled = !isSwitchingAccount && !isDeletingAccount,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            viewModel.switchAccount(switchEmail.trim(), switchPassword)
+                        },
+                        enabled = canSwitchAccount,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        if (isSwitchingAccount) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.padding(end = 8.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        Text(if (isSwitchingAccount) "切换中…" else "切换账户")
+                    }
+
+                    Text(
+                        text = "注销账户会永久删除账户、邮箱绑定和全部流量记录，操作不可恢复。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    if (account.email.isNotBlank()) {
+                        OutlinedTextField(
+                            value = deletePassword,
+                            onValueChange = { if (it.length <= 128) deletePassword = it },
+                            label = { Text("当前账户密码") },
+                            supportingText = { Text("绑定账户注销时必须填写") },
+                            singleLine = true,
+                            enabled = !isSwitchingAccount && !isDeletingAccount,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    Button(
+                        onClick = { showDeleteConfirmation = true },
+                        enabled = canDeleteAccount,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ),
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        if (isDeletingAccount) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.padding(end = 8.dp),
+                                color = MaterialTheme.colorScheme.onError,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        Text(if (isDeletingAccount) "注销中…" else "注销账户")
+                    }
+                }
             }
         }
+    }
+
+    if (showDeleteConfirmation && account != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("确认注销账户？") },
+            text = {
+                Text("账户数据和流量记录将永久删除，当前设备随后会重新注册为游客账户。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        viewModel.deleteAccount(deletePassword)
+                    }
+                ) {
+                    Text("确认注销", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 
@@ -305,6 +434,48 @@ private fun AccountInfoRow(
     }
 }
 
+@Composable
+private fun AccountLevelRow(
+    accountInfo: AccountInfo,
+    thresholds: List<Long>
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "账户等级",
+            modifier = Modifier.weight(0.34f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp
+        )
+        Row(
+            modifier = Modifier.weight(0.66f),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = accountLevelText(accountInfo),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 14.sp
+            )
+            LinearProgressIndicator(
+                progress = accountExperienceProgress(accountInfo, thresholds),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(6.dp),
+                color = if (accountInfo.level == 0) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                trackColor = MaterialTheme.colorScheme.surface
+            )
+        }
+    }
+}
+
 private fun accountLevelText(accountInfo: AccountInfo): String {
     return if (accountInfo.level == 0) "Lv0 · 已封禁" else "Lv${accountInfo.level.coerceIn(1, 6)}"
 }
@@ -322,6 +493,17 @@ private fun accountExperienceText(
             if (required == null) "$experience" else "$experience / $required"
         }
     }
+}
+
+private fun accountExperienceProgress(
+    accountInfo: AccountInfo,
+    thresholds: List<Long>
+): Float {
+    if (accountInfo.level >= 6) return 1f
+    if (accountInfo.level <= 0) return 0f
+    val required = thresholds.getOrNull(accountInfo.level - 1) ?: return 0f
+    if (required <= 0L) return 0f
+    return (accountInfo.experience.toFloat() / required.toFloat()).coerceIn(0f, 1f)
 }
 
 private fun String.displayOrUnknown(): String = trim().ifBlank { "未登记" }

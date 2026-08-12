@@ -103,6 +103,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
     private val _isBindingAccount = MutableStateFlow(false)
     val isBindingAccount = _isBindingAccount.asStateFlow()
+    private val _isSwitchingAccount = MutableStateFlow(false)
+    val isSwitchingAccount = _isSwitchingAccount.asStateFlow()
+    private val _isDeletingAccount = MutableStateFlow(false)
+    val isDeletingAccount = _isDeletingAccount.asStateFlow()
     private val _accountMessage = MutableStateFlow<String?>(null)
     val accountMessage = _accountMessage.asStateFlow()
     
@@ -1405,6 +1409,71 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _accountMessage.value = null
     }
 
+    fun switchAccount(email: String, password: String) {
+        if (_isSwitchingAccount.value || _isDeletingAccount.value) return
+        if (vpnState.value != VpnState.DISCONNECTED) {
+            _accountMessage.value = "请先断开 VPN，再切换账户"
+            return
+        }
+        viewModelScope.launch {
+            _isSwitchingAccount.value = true
+            _accountMessage.value = null
+            try {
+                val result = accountManager.loginAccount(
+                    email = email,
+                    password = password,
+                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                )
+                result.onFailure { error ->
+                    Log.w(tag, "Failed to switch account", error)
+                    _accountMessage.value = accountActionErrorMessage(error)
+                }
+                if (result.isSuccess) {
+                    val refreshed = subscriptionDataLoader.initialize(forceRefresh = true)
+                    _accountMessage.value = if (refreshed) {
+                        "账户切换成功"
+                    } else {
+                        "账户切换成功，但订阅线路刷新失败"
+                    }
+                }
+            } finally {
+                _isSwitchingAccount.value = false
+            }
+        }
+    }
+
+    fun deleteAccount(password: String) {
+        if (_isDeletingAccount.value || _isSwitchingAccount.value) return
+        if (vpnState.value != VpnState.DISCONNECTED) {
+            _accountMessage.value = "请先断开 VPN，再注销账户"
+            return
+        }
+        viewModelScope.launch {
+            _isDeletingAccount.value = true
+            _accountMessage.value = null
+            try {
+                val result = accountManager.deleteAccount(
+                    password = password,
+                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                )
+                result.onFailure { error ->
+                    Log.w(tag, "Failed to delete account", error)
+                    _accountMessage.value = accountActionErrorMessage(error)
+                }
+                if (result.isSuccess) {
+                    val refreshed = subscriptionDataLoader.initialize(forceRefresh = true)
+                    _accountMessage.value = if (refreshed) {
+                        "账户已注销，当前设备已重新注册为游客"
+                    } else {
+                        "账户已注销，但游客账户和订阅线路重新注册失败"
+                    }
+                }
+            } finally {
+                _isDeletingAccount.value = false
+            }
+        }
+    }
+
     private fun accountBindingErrorMessage(error: Throwable): String {
         return when (error.message) {
             "invalid_bind_credentials" -> "邮箱或密码格式无效"
@@ -1413,6 +1482,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "email_already_bound" -> "该邮箱已经绑定其他账户"
             "account_not_found" -> "账户不存在，请重新同步账户"
             else -> error.message ?: "账户绑定失败"
+        }
+    }
+
+    private fun accountActionErrorMessage(error: Throwable): String {
+        return when (error.message) {
+            "invalid_login_credentials" -> "邮箱或密码错误"
+            "invalid_account_password" -> "当前账户密码错误"
+            "account_banned" -> "账户已被封禁，无法切换"
+            "account_not_found" -> "账户不存在，请重新同步账户"
+            else -> error.message ?: "账户操作失败"
         }
     }
 
