@@ -14,6 +14,7 @@
  *   POST /api/account/login     // 使用邮箱和密码切换账户
  *   POST /api/account/delete    // 永久删除当前账户
  *   GET  /api/account/tasks?uid=<UID>
+ *   GET  /api/account/tasks/speed-share-results?uid=<UID>
  *   POST /api/account/tasks/checkin
  *   POST /api/account/tasks/speed-share
  *   POST /api/account/tasks/telegram
@@ -45,6 +46,9 @@ const MAX_ACCOUNT_EXPERIENCE = 1e12;
 const ACCOUNT_BINDING_EXPERIENCE = 50;
 const DEFAULT_DAILY_CHECKIN_EXPERIENCE = 10;
 const DEFAULT_TELEGRAM_TASK_EXPERIENCE = 50;
+const DEFAULT_SPEED_SHARE_SMART_EXPERIENCE = 5;
+const DEFAULT_SPEED_SHARE_FULL_EXPERIENCE = 20;
+const SPEED_SHARE_FULL_COOLDOWN_SECONDS = 2 * 60 * 60;
 const DEFAULT_EXPERIENCE_THRESHOLDS = [100, 200, 400, 800, 1600];
 const SUBSCRIPTION_CACHE_KEY_PREFIX = "fireflyvpn:subscription-cache:v1:";
 const DEFAULT_SUBSCRIPTION_CACHE_MINUTES = 30;
@@ -141,6 +145,12 @@ const USER_SCHEMA_STATEMENTS = [
 )`,
 `CREATE INDEX IF NOT EXISTS idx_speed_share_daily_mb_user_date
   ON speed_share_daily_mb(user_id, report_date DESC)`,
+`CREATE TABLE IF NOT EXISTS speed_share_full_mb (
+  user_id INTEGER PRIMARY KEY,
+  reported_at TEXT NOT NULL,
+  reported_epoch INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+)`,
 ];
 const USER_SCHEMA_MIGRATIONS = [
   "ALTER TABLE users_mb ADD COLUMN experience INTEGER NOT NULL DEFAULT 0",
@@ -165,6 +175,8 @@ const DEFAULT_STATE = {
     dailyCheckinExperience: DEFAULT_DAILY_CHECKIN_EXPERIENCE,
     telegramGroupUrl: "",
     telegramTaskExperience: DEFAULT_TELEGRAM_TASK_EXPERIENCE,
+    speedShareSmartExperience: DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
+    speedShareFullExperience: DEFAULT_SPEED_SHARE_FULL_EXPERIENCE,
   },
 };
 
@@ -432,6 +444,7 @@ async function handleAccount(path, request, env) {
       db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM speed_share_full_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
     ]);
     const deleteResult = result[result.length - 1];
@@ -477,8 +490,36 @@ async function handleAccount(path, request, env) {
       ok: true,
       account: publicAccount(user),
       checkin: await readDailyCheckin(env, identity.userId, state.settings),
-      speedShare: await readSpeedShareStatus(env, identity.userId),
+      speedShare: await readSpeedShareStatus(env, identity.userId, state.settings),
       telegram: await readTelegramTask(env, identity.userId, state.settings),
+    });
+  }
+
+  if (path === "/api/account/tasks/speed-share-results" && request.method === "GET") {
+    const requestUrl = new URL(request.url);
+    const reference = requestUrl.searchParams.get("uid") || requestUrl.searchParams.get("accountId");
+    const identity = await resolveUserIdentity(env, reference);
+    if (!identity) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    const user = await readD1User(env, identity.userId);
+    if (!user) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    if (user.level === 0) {
+      return json({ ok: false, error: "account_banned" }, 403);
+    }
+    const db = await ensureUserSchema(env);
+    const query = await db.prepare(
+      "SELECT node_id, node_name, subscription_group_name, " +
+        "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
+        "upload_mbps, updated_at, last_reported_at, report_count " +
+        "FROM speed_share_results_mb ORDER BY updated_at DESC LIMIT 1000",
+    ).all();
+    return json({
+      ok: true,
+      results: (query.results || []).map(publicAdminSpeedShareResult),
+      generatedAt: beijingTimestamp(),
     });
   }
 
@@ -698,9 +739,20 @@ async function handleSpeedShareSubmission(request, env) {
     return json({ ok: false, error: "speed_share_results_empty" }, 400);
   }
 
+  const state = await readState(env);
   const db = await ensureUserSchema(env);
-  const reportDate = usagePeriodKeys(new Date()).day;
-  const reportedAt = beijingTimestamp();
+  const now = new Date();
+  const reportDate = usagePeriodKeys(now).day;
+  const reportedAt = beijingTimestamp(now);
+  const reportEpoch = Math.floor(now.getTime() / 1000);
+  const reward = normalizeExperience(
+    mode === "smart"
+      ? state.settings.speedShareSmartExperience
+      : state.settings.speedShareFullExperience,
+    mode === "smart"
+      ? DEFAULT_SPEED_SHARE_SMART_EXPERIENCE
+      : DEFAULT_SPEED_SHARE_FULL_EXPERIENCE,
+  );
   if (mode === "smart") {
     const daily = await db.prepare(
       `INSERT OR IGNORE INTO speed_share_daily_mb
@@ -710,7 +762,31 @@ async function handleSpeedShareSubmission(request, env) {
       return json({
         ok: false,
         error: "speed_share_already_reported_today",
-        speedShare: await readSpeedShareStatus(env, identity.userId),
+        speedShare: await readSpeedShareStatus(env, identity.userId, state.settings),
+      });
+    }
+  } else {
+    const full = await db.prepare(
+      `INSERT INTO speed_share_full_mb (user_id, reported_at, reported_epoch)
+       VALUES (?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         reported_at = excluded.reported_at,
+         reported_epoch = excluded.reported_epoch
+       WHERE excluded.reported_epoch - speed_share_full_mb.reported_epoch >= ?`,
+    ).bind(
+      identity.userId,
+      reportedAt,
+      reportEpoch,
+      SPEED_SHARE_FULL_COOLDOWN_SECONDS,
+    ).run();
+    if (!full || !full.meta || Number(full.meta.changes) < 1) {
+      const speedShare = await readSpeedShareStatus(env, identity.userId, state.settings);
+      return json({
+        ok: false,
+        error: "speed_share_full_cooldown",
+        retryAfterSeconds: speedShare.fullRetryAfterSeconds,
+        nextAvailableAt: speedShare.fullNextAvailableAt,
+        speedShare,
       });
     }
   }
@@ -774,11 +850,24 @@ async function handleSpeedShareSubmission(request, env) {
     await db.batch(statements.slice(index, index + 100));
   }
 
+  const progression = applyExperience(
+    user.level,
+    user.experience,
+    reward,
+    state.settings.experienceThresholds,
+  );
+  await db.prepare(
+    "UPDATE users_mb SET experience = ?, level = ? WHERE id = ?",
+  ).bind(progression.experience, progression.level, identity.userId).run();
+  const updated = await readD1User(env, identity.userId);
+
   return json({
     ok: true,
     mode,
     acceptedResults: results.length,
-    speedShare: await readSpeedShareStatus(env, identity.userId),
+    account: publicAccount(updated),
+    experienceAwarded: reward,
+    speedShare: await readSpeedShareStatus(env, identity.userId, state.settings),
   });
 }
 
@@ -1310,14 +1399,15 @@ async function handleAdmin(path, request, env) {
         db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
+        db.prepare("DELETE FROM speed_share_full_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
       );
     }
     const result = await db.batch(statements);
     const changed = identities.reduce(
       (total, _identity, index) => total + Number(
-        result[index * 5 + 4] && result[index * 5 + 4].meta
-          ? result[index * 5 + 4].meta.changes
+        result[index * 6 + 5] && result[index * 6 + 5].meta
+          ? result[index * 6 + 5].meta.changes
           : 0,
       ),
       0,
@@ -1335,6 +1425,7 @@ async function handleAdmin(path, request, env) {
       db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM speed_share_full_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
     ]);
     const deleteResult = result[result.length - 1];
@@ -1464,23 +1555,44 @@ async function readDailyCheckin(env, userId, settings) {
   };
 }
 
-async function readSpeedShareStatus(env, userId) {
+async function readSpeedShareStatus(env, userId, settings = {}) {
   const db = await ensureUserSchema(env);
   const reportDate = usagePeriodKeys(new Date()).day;
   const daily = await db.prepare(
     "SELECT reported_at FROM speed_share_daily_mb " +
       "WHERE user_id = ? AND report_date = ?",
   ).bind(userId, reportDate).first();
+  const full = await db.prepare(
+    "SELECT reported_at, reported_epoch FROM speed_share_full_mb WHERE user_id = ?",
+  ).bind(userId).first();
   const latest = await db.prepare(
     "SELECT MAX(last_reported_at) AS last_reported_at FROM speed_share_results_mb",
   ).first();
   const count = await db.prepare(
     "SELECT COUNT(*) AS retained_count FROM speed_share_results_mb",
   ).first();
+  const fullReportedEpoch = Number(full && full.reported_epoch) || 0;
+  const fullNextEpoch = fullReportedEpoch + SPEED_SHARE_FULL_COOLDOWN_SECONDS;
+  const fullRetryAfterSeconds = fullReportedEpoch > 0
+    ? Math.max(0, fullNextEpoch - Math.floor(Date.now() / 1000))
+    : 0;
   return {
     enabled: true,
     smartReportedToday: Boolean(daily),
     smartReportedAt: cleanText(daily && daily.reported_at),
+    smartRewardExperience: normalizeExperience(
+      settings && settings.speedShareSmartExperience,
+      DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
+    ),
+    fullReportedAt: cleanText(full && full.reported_at),
+    fullNextAvailableAt: fullRetryAfterSeconds > 0
+      ? beijingTimestamp(new Date(fullNextEpoch * 1000))
+      : "",
+    fullRetryAfterSeconds,
+    fullRewardExperience: normalizeExperience(
+      settings && settings.speedShareFullExperience,
+      DEFAULT_SPEED_SHARE_FULL_EXPERIENCE,
+    ),
     lastReportedAt: cleanText(latest && latest.last_reported_at),
     retainedResultCount: Number(count && count.retained_count) || 0,
   };
@@ -2605,6 +2717,14 @@ function normalizeSettings(value) {
       settings.telegramTaskExperience,
       DEFAULT_TELEGRAM_TASK_EXPERIENCE,
     ),
+    speedShareSmartExperience: normalizeExperience(
+      settings.speedShareSmartExperience,
+      DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
+    ),
+    speedShareFullExperience: normalizeExperience(
+      settings.speedShareFullExperience,
+      DEFAULT_SPEED_SHARE_FULL_EXPERIENCE,
+    ),
   };
 }
 
@@ -2968,13 +3088,15 @@ function adminHtml() {
        <div class="field"><label>每日签到经验奖励<input id="dailyCheckinExperience" type="number" min="0" step="1"></label></div>
        <div class="field"><label>TG 群连接<input id="telegramGroupUrl" type="text" placeholder="https://t.me/your_group"></label></div>
        <div class="field"><label>TG 任务经验奖励<input id="telegramTaskExperience" type="number" min="0" step="1"></label></div>
+       <div class="field"><label>智能测速共享经验奖励<input id="speedShareSmartExperience" type="number" min="0" step="1"></label></div>
+       <div class="field"><label>全量测速共享经验奖励<input id="speedShareFullExperience" type="number" min="0" step="1"></label></div>
       <div class="field"><label>Lv1 → Lv2 所需经验<input id="experienceThresholdLv2" type="number" min="1" step="1"></label></div>
       <div class="field"><label>Lv2 → Lv3 所需经验<input id="experienceThresholdLv3" type="number" min="1" step="1"></label></div>
       <div class="field"><label>Lv3 → Lv4 所需经验<input id="experienceThresholdLv4" type="number" min="1" step="1"></label></div>
       <div class="field"><label>Lv4 → Lv5 所需经验<input id="experienceThresholdLv5" type="number" min="1" step="1"></label></div>
       <div class="field"><label>Lv5 → Lv6 所需经验<input id="experienceThresholdLv6" type="number" min="1" step="1"></label></div>
      </div>
-     <small class="hint">绑定邮箱可获得经验，达到对应门槛后自动升级；Lv0 不会获得经验。经验门槛是每个等级区间所需的经验，超出经验会保留到下一级。</small>
+     <small class="hint">绑定邮箱可获得经验，测速共享成功后也会发放经验；达到对应门槛后自动升级。Lv0 不会获得经验。经验门槛是每个等级区间所需的经验，超出经验会保留到下一级。</small>
      <button type="button" onclick="pushSection('app-settings')">推送</button>
    </section>
 
@@ -4471,6 +4593,8 @@ function fillState(state) {
    setValue('dailyCheckinExperience', settings.dailyCheckinExperience == null ? 10 : settings.dailyCheckinExperience);
    setValue('telegramGroupUrl', settings.telegramGroupUrl);
    setValue('telegramTaskExperience', settings.telegramTaskExperience == null ? 50 : settings.telegramTaskExperience);
+   setValue('speedShareSmartExperience', settings.speedShareSmartExperience == null ? 5 : settings.speedShareSmartExperience);
+   setValue('speedShareFullExperience', settings.speedShareFullExperience == null ? 20 : settings.speedShareFullExperience);
   const experienceThresholds = Array.isArray(settings.experienceThresholds)
     ? settings.experienceThresholds
     : [100, 200, 400, 800, 1600];
@@ -4545,6 +4669,8 @@ function formState() {
        dailyCheckinExperience: Number(value('dailyCheckinExperience') || 0),
        telegramGroupUrl: value('telegramGroupUrl'),
        telegramTaskExperience: Number(value('telegramTaskExperience') || 0),
+       speedShareSmartExperience: Number(value('speedShareSmartExperience') || 0),
+       speedShareFullExperience: Number(value('speedShareFullExperience') || 0),
        experienceThresholds: [
         Number(value('experienceThresholdLv2') || 100),
         Number(value('experienceThresholdLv3') || 200),

@@ -39,6 +39,7 @@ fun FeatureScreen(
     val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsStateWithLifecycle()
     val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsStateWithLifecycle()
     val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsStateWithLifecycle()
+    val sharedDataDirectConnectEnabled by viewModel.sharedDataDirectConnectEnabled.collectAsStateWithLifecycle()
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
@@ -88,7 +89,7 @@ fun FeatureScreen(
         ) {
             FeatureSection(
                 title = "智能连接",
-                description = "主页短按使用已选节点；未选择时使用当前订阅第一个节点。长按执行 TCPing → URL Test 204 → 5MB 下载测速并连接最优节点。"
+                description = "主页短按默认使用已选节点；未选择时使用当前订阅第一个节点。长按执行 TCPing → URL Test 204 → 5MB 下载测速并连接最优节点。"
             ) {
                 FeatureNumberField(
                     label = "TCPing 节点比例 (%)",
@@ -119,6 +120,28 @@ fun FeatureScreen(
                             viewModel.setSmartConnectSpeedTestPercent(value.coerceIn(1, 100))
                         }
                     }
+                )
+            }
+
+            FeatureSection(
+                title = "共享数据直连",
+                description = "开启后，主页点击直接连接会读取服务器保留的共享测速结果，在当前订阅中选择延迟更低、带宽更大的节点。没有匹配结果或读取失败时会回退到原有直连逻辑。",
+                titleAction = {
+                    Switch(
+                        checked = sharedDataDirectConnectEnabled,
+                        onCheckedChange = { viewModel.setSharedDataDirectConnectEnabled(it) },
+                        colors = featureSwitchColors()
+                    )
+                }
+            ) {
+                Text(
+                    text = if (sharedDataDirectConnectEnabled) {
+                        "主页短按已启用共享数据选优"
+                    } else {
+                        "主页短按仍使用已选节点或当前订阅第一个节点"
+                    },
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 

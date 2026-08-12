@@ -17,6 +17,7 @@ import xyz.a202132.app.data.model.AccountRegisterResponse
 import xyz.a202132.app.data.model.DailyCheckinRequest
 import xyz.a202132.app.data.model.SpeedShareRequest
 import xyz.a202132.app.data.model.SpeedShareResponse
+import xyz.a202132.app.data.model.SpeedShareResultsResponse
 import xyz.a202132.app.data.model.TelegramTaskResponse
 import xyz.a202132.app.data.model.TelegramTaskSubmitRequest
 import xyz.a202132.app.data.model.TrafficReportRequest
@@ -76,6 +77,11 @@ interface ApiService {
         @Url url: String,
         @Body request: SpeedShareRequest
     ): SpeedShareResponse
+
+    @GET
+    suspend fun getSpeedShareResults(
+        @Url url: String
+    ): SpeedShareResultsResponse
 
     @POST
     suspend fun submitTelegramTask(

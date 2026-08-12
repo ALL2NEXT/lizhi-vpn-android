@@ -119,7 +119,7 @@ fun TaskCenterScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "只上传节点标识和测速数值，不上传订阅链接。智能共享不额外测速，每天最多上传一次；全量共享会按 100% 比例完成 TCPing、204 URL Test 和带宽测试。",
+                        text = "只上传节点标识和测速数值，不上传订阅链接。智能共享不额外测速，每人每天最多一次；全量共享会按 100% 比例完成 TCPing、204 URL Test 和带宽测试，每人每两小时最多一次。成功上报会获得经验。",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -150,11 +150,15 @@ fun TaskCenterScreen(
                         text = when (speedShareMode) {
                             SpeedShareMode.OFF -> "当前未共享测速结果"
                             SpeedShareMode.SMART -> if (speedShareStatus?.smartReportedToday == true) {
-                                "智能共享：今天已经上传过结果"
+                                "智能共享：今天已经上传过结果，本次奖励 ${speedShareStatus?.smartRewardExperience ?: 5} 经验"
                             } else {
-                                "智能共享：下次连接前自动上传已有测速结果"
+                                "智能共享：下次连接前自动上传已有测速结果，成功奖励 ${speedShareStatus?.smartRewardExperience ?: 5} 经验"
                             }
-                            SpeedShareMode.FULL -> "全量共享：点击下方按钮开始完整测速并上传"
+                            SpeedShareMode.FULL -> if ((speedShareStatus?.fullRetryAfterSeconds ?: 0L) > 0L) {
+                                "全量共享：下次可上传时间 ${speedShareStatus?.fullNextAvailableAt}，成功奖励 ${speedShareStatus?.fullRewardExperience ?: 20} 经验"
+                            } else {
+                                "全量共享：点击下方按钮开始完整测速并上传，成功奖励 ${speedShareStatus?.fullRewardExperience ?: 20} 经验"
+                            }
                         },
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
@@ -164,7 +168,8 @@ fun TaskCenterScreen(
                         Button(
                             onClick = viewModel::startFullSpeedShare,
                             enabled = account != null && !isBanned &&
-                                !isTesting && !isSharingSpeedResults,
+                                !isTesting && !isSharingSpeedResults &&
+                                (speedShareStatus?.fullRetryAfterSeconds ?: 0L) <= 0L,
                             modifier = Modifier.align(Alignment.End)
                         ) {
                             if (isSharingSpeedResults) {

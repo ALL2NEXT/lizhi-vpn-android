@@ -75,6 +75,8 @@ class SettingsRepository(private val context: Context) {
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val SPEED_SHARE_MODE = stringPreferencesKey("speed_share_mode")
         private val SPEED_SHARE_SMART_LAST_DATE = stringPreferencesKey("speed_share_smart_last_date")
+        private val SHARED_DATA_DIRECT_CONNECT_ENABLED =
+            booleanPreferencesKey("shared_data_direct_connect_enabled")
 
     }
     
@@ -92,6 +94,10 @@ class SettingsRepository(private val context: Context) {
         preferences[SPEED_SHARE_SMART_LAST_DATE]
     }
 
+    val sharedDataDirectConnectEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SHARED_DATA_DIRECT_CONNECT_ENABLED] ?: false
+    }
+
     suspend fun setSpeedShareMode(mode: SpeedShareMode) {
         context.dataStore.edit { preferences ->
             preferences[SPEED_SHARE_MODE] = mode.name
@@ -101,6 +107,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSpeedShareSmartLastDate(date: String) {
         context.dataStore.edit { preferences ->
             preferences[SPEED_SHARE_SMART_LAST_DATE] = date
+        }
+    }
+
+    suspend fun setSharedDataDirectConnectEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SHARED_DATA_DIRECT_CONNECT_ENABLED] = enabled
         }
     }
 

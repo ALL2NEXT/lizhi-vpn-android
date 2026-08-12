@@ -279,6 +279,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
     val speedShareMode = settingsRepository.speedShareMode.stateIn(viewModelScope, SharingStarted.Eagerly, SpeedShareMode.OFF)
+    val sharedDataDirectConnectEnabled = settingsRepository.sharedDataDirectConnectEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
     val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
@@ -526,9 +527,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess { response ->
                     _speedShareStatus.value = response.speedShare ?: _speedShareStatus.value
-                    _speedShareMessage.value = "已完成全量测速并共享 ${shareResults.size} 条结果"
+                    _speedShareMessage.value = "已完成全量测速并共享 ${shareResults.size} 条结果，获得 ${response.experienceAwarded} 经验"
                 }.onFailure { error ->
                     Log.w(tag, "Full speed share failed", error)
+                    if (error.message?.startsWith("speed_share_full_cooldown") == true) {
+                        loadTelegramTask()
+                    }
                     _speedShareMessage.value = speedShareErrorMessage(error)
                 }
             } catch (error: Exception) {
@@ -649,14 +653,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (rejectUnavailableAccount()) return@launch
             val selectedId = settingsRepository.selectedNodeId.first()
             val selectedNode = selectedId?.let { nodeDao().getNodeById(it) }
-            val node = selectedNode ?: currentSubscriptionNodeSnapshot().firstOrNull()
+            val subscriptionNodes = currentSubscriptionNodeSnapshot()
+            val sharedBestNode = if (sharedDataDirectConnectEnabled.value) {
+                findBestSharedNode(subscriptionNodes)
+            } else {
+                null
+            }
+            val node = sharedBestNode ?: selectedNode ?: subscriptionNodes.firstOrNull()
             if (node == null) {
                 _error.value = "没有可用节点"
                 return@launch
             }
 
             settingsRepository.setSelectedNodeId(node.id)
-            Log.i(tag, "Connecting to selected/default node: ${node.getDisplayName()}")
+            Log.i(
+                tag,
+                if (sharedBestNode != null) {
+                    "Connecting to shared-data best node: ${node.getDisplayName()}"
+                } else {
+                    "Connecting to selected/default node: ${node.getDisplayName()}"
+                }
+            )
             scheduleSmartSpeedShare(buildSpeedShareResults(listOf(node)))
             if (!NetworkUtils.isNetworkAvailable(getApplication())) {
                 Log.w(tag, "Default VPN start requested while network is unavailable")
@@ -1528,6 +1545,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setSharedDataDirectConnectEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSharedDataDirectConnectEnabled(enabled)
+        }
+    }
+
     fun loadTelegramTask() {
         if (_isLoadingTelegramTask.value) return
         viewModelScope.launch {
@@ -1732,11 +1755,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun speedShareErrorMessage(error: Throwable): String {
-        return when (error.message) {
-            "speed_share_already_reported_today" -> "今天的智能测速结果已经共享过了"
-            "speed_share_results_empty" -> "没有可共享的有效测速结果"
-            "account_banned" -> "账户已被封禁，无法共享测速结果"
-            else -> error.message ?: "测速结果共享失败"
+        val message = error.message.orEmpty()
+        return when {
+            message == "speed_share_already_reported_today" -> "今天的智能测速结果已经共享过了"
+            message.startsWith("speed_share_full_cooldown") -> "全量测速共享每两小时最多一次，请稍后再试"
+            message == "speed_share_results_empty" -> "没有可共享的有效测速结果"
+            message == "account_banned" -> "账户已被封禁，无法共享测速结果"
+            else -> message.ifBlank { "测速结果共享失败" }
         }
     }
 
@@ -1857,6 +1882,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return Result.failure(second.exceptionOrNull() ?: first.exceptionOrNull() ?: IllegalStateException("${requestName}请求失败"))
     }
 
+    private suspend fun findBestSharedNode(nodes: List<Node>): Node? {
+        if (nodes.isEmpty()) return null
+        val sharedResults = accountManager.getSpeedShareResults(
+            timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+        ).getOrElse { error ->
+            Log.w(tag, "Failed to load shared speed results; falling back to normal direct connect", error)
+            return null
+        }
+        val resultsByNodeId = sharedResults.associateBy { it.nodeId }
+        return nodes.asSequence()
+            .mapNotNull { node ->
+                val result = resultsByNodeId[sharedNodeId(node)] ?: return@mapNotNull null
+                if (result.tcpingLatencyMs <= 0 &&
+                    result.urlTestLatencyMs <= 0 &&
+                    result.downloadMbps <= 0f &&
+                    result.uploadMbps <= 0f
+                ) {
+                    return@mapNotNull null
+                }
+                node to result
+            }
+            .sortedWith(
+                compareBy<Pair<Node, SpeedShareNodeResult>> {
+                    sharedLatencyScore(it.second)
+                }
+                    .thenByDescending { it.second.downloadMbps }
+                    .thenByDescending { it.second.uploadMbps }
+                    .thenBy { it.first.id }
+            )
+            .firstOrNull()
+            ?.first
+    }
+
+    private fun sharedLatencyScore(result: SpeedShareNodeResult): Int {
+        val tcping = result.tcpingLatencyMs.takeIf { it > 0 }
+        val urlTest = result.urlTestLatencyMs.takeIf { it > 0 }
+        return when {
+            tcping != null && urlTest != null ->
+                (tcping * 0.4f + urlTest * 0.6f).toInt()
+            urlTest != null -> urlTest
+            tcping != null -> tcping
+            else -> Int.MAX_VALUE
+        }
+    }
+
+    private fun sharedNodeId(node: Node): String = node.favoriteSourceNodeId ?: node.id
+
     private fun buildSpeedShareResults(
         nodes: List<Node>,
         tcpingResults: List<LatencyTester.LatencyResult> = emptyList(),
@@ -1877,7 +1949,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@mapNotNull null
             }
             SpeedShareNodeResult(
-                nodeId = node.favoriteSourceNodeId ?: node.id,
+                nodeId = sharedNodeId(node),
                 nodeName = node.getDisplayName(),
                 subscriptionGroupName = node.subscriptionSourceName.orEmpty(),
                 tcpingLatencyMs = tcpingLatency ?: 0,

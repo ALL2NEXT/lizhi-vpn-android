@@ -20,6 +20,7 @@ import xyz.a202132.app.data.model.DailyCheckinStatus
 import xyz.a202132.app.data.model.SpeedShareNodeResult
 import xyz.a202132.app.data.model.SpeedShareRequest
 import xyz.a202132.app.data.model.SpeedShareResponse
+import xyz.a202132.app.data.model.SpeedShareResultsResponse
 import xyz.a202132.app.data.model.SpeedShareStatus
 import xyz.a202132.app.data.model.TelegramTaskResponse
 import xyz.a202132.app.data.model.TelegramTaskStatus
@@ -183,9 +184,40 @@ class AccountManager(private val context: Context) {
                 )
             }
             if (!response.ok) {
-                throw IllegalStateException(response.error ?: "speed_share_submission_failed")
+                val error = response.error ?: "speed_share_submission_failed"
+                if (error == "speed_share_full_cooldown") {
+                    throw IllegalStateException(
+                        "$error:${response.retryAfterSeconds}"
+                    )
+                }
+                throw IllegalStateException(error)
             }
+            response.account?.let(::persistAccount)
             response
+        }
+    }
+
+    suspend fun getSpeedShareResults(
+        timeoutMs: Long = 10000L
+    ): Result<List<SpeedShareNodeResult>> {
+        val registered = currentAccount()
+            ?: return Result.failure(IllegalStateException("account_not_synced"))
+        if (registered.level == 0) {
+            return Result.failure(IllegalStateException("account_banned"))
+        }
+
+        return runCatching {
+            val response: SpeedShareResultsResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.getSpeedShareResults(
+                    accountEndpoint(
+                        "/api/account/tasks/speed-share-results?uid=${registered.uid}"
+                    )
+                )
+            }
+            if (!response.ok) {
+                throw IllegalStateException(response.error ?: "speed_share_results_load_failed")
+            }
+            response.results
         }
     }
 
