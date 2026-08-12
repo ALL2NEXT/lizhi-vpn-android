@@ -58,7 +58,8 @@ fun MainScreen(
     onOpenProxyScope: () -> Unit = {},
     onOpenNodeList: () -> Unit = {},
     onOpenOtherConfig: () -> Unit = {},
-    onOpenFeatures: () -> Unit = {}
+    onOpenFeatures: () -> Unit = {},
+    onOpenAccountSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -101,7 +102,6 @@ fun MainScreen(
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
-    val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsStateWithLifecycle()
@@ -139,6 +139,7 @@ fun MainScreen(
                     onOpenProxyScope = { closeDrawerThen(onOpenProxyScope) },
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
                     onOpenFeatures = { closeDrawerThen(onOpenFeatures) },
+                    onOpenAccountSettings = { closeDrawerThen(onOpenAccountSettings) },
                     onClose = {
                         scope.launch {
                             drawerState.animateTo(DrawerValue.Closed, drawerAnimationSpec)
@@ -148,9 +149,7 @@ fun MainScreen(
                     feedbackEmail = backendSettings.feedbackEmail,
                     feedbackUrl = backendSettings.feedbackUrl,
                     githubUrl = backendSettings.githubUrl,
-                    accountInfo = accountInfo,
-                    isUpdatingNickname = isUpdatingNickname,
-                    onUpdateNickname = viewModel::updateNickname
+                    accountInfo = accountInfo
                 )
             }
         },

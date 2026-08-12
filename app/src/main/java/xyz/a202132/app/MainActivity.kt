@@ -44,6 +44,7 @@ import xyz.a202132.app.ui.components.StartupSplashOverlay
 import xyz.a202132.app.ui.components.NodeListScreen
 import xyz.a202132.app.ui.navigation.AppRoute
 import xyz.a202132.app.ui.screens.FeatureScreen
+import xyz.a202132.app.ui.screens.AccountSettingsScreen
 import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
@@ -195,7 +196,8 @@ class MainActivity : ComponentActivity() {
                                     onOpenProxyScope = { navigateTo(AppRoute.PROXY_SCOPE) },
                                     onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
                                     onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
-                                    onOpenFeatures = { navigateTo(AppRoute.FEATURES) }
+                                    onOpenFeatures = { navigateTo(AppRoute.FEATURES) },
+                                    onOpenAccountSettings = { navigateTo(AppRoute.ACCOUNT_SETTINGS) }
                                 )
                             }
 
@@ -317,6 +319,13 @@ class MainActivity : ComponentActivity() {
 
                             composable(AppRoute.FEATURES) {
                                 FeatureScreen(
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.ACCOUNT_SETTINGS) {
+                                AccountSettingsScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() }
                                 )
