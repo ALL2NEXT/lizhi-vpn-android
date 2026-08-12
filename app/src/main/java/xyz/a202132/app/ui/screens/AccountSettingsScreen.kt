@@ -235,6 +235,10 @@ fun AccountSettingsScreen(
                 }
 
                 AccountSettingsSection(title = "账户信息") {
+                    AccountInfoRow(
+                        label = "账户身份",
+                        value = accountIdentityText(account)
+                    )
                     AccountInfoRow(label = "UID", value = account.uid)
                     AccountInfoRow(
                         label = "绑定邮箱",
@@ -532,6 +536,14 @@ private fun AccountLevelRow(
 
 private fun accountLevelText(accountInfo: AccountInfo): String {
     return if (accountInfo.level == 0) "Lv0 · 已封禁" else "Lv${accountInfo.level.coerceIn(1, 6)}"
+}
+
+private fun accountIdentityText(accountInfo: AccountInfo): String {
+    return when {
+        accountInfo.level == 0 -> "受限账户"
+        accountInfo.email.isBlank() -> "游客"
+        else -> "正式用户"
+    }
 }
 
 private fun accountExperienceText(

@@ -19,14 +19,14 @@ import androidx.compose.ui.unit.sp
 import xyz.a202132.app.data.model.AccountInfo
 import xyz.a202132.app.ui.components.AppScreenScaffold
 
-/** 展示游客与正式用户的身份状态及当前可完成的账户任务。 */
+/** 展示账户任务及其完成状态。 */
 @Composable
 fun TaskCenterScreen(
     accountInfo: AccountInfo?,
     onOpenAccountSettings: () -> Unit,
     onBack: () -> Unit
 ) {
-    val isOfficialUser = !accountInfo?.email.isNullOrBlank()
+    val isTaskCompleted = !accountInfo?.email.isNullOrBlank()
     val isBanned = accountInfo?.level == 0
 
     AppScreenScaffold(
@@ -45,53 +45,11 @@ fun TaskCenterScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "当前身份",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = when {
-                            accountInfo == null -> "账户同步中…"
-                            isBanned -> "Lv0 · 账户受限"
-                            isOfficialUser -> "正式用户"
-                            else -> "游客"
-                        },
-                        modifier = Modifier.padding(top = 6.dp),
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isBanned) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        }
-                    )
-                    Text(
-                        text = when {
-                            accountInfo == null -> "正在读取账户信息。"
-                            isBanned -> "当前账户已被封禁或注册异常，暂不可完成账户任务。"
-                            isOfficialUser -> "你已绑定邮箱，是正式用户。"
-                            else -> "当前未绑定邮箱，是游客用户。"
-                        },
-                        modifier = Modifier.padding(top = 6.dp),
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            if (accountInfo != null && !isBanned && !isOfficialUser) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
+                    Column {
                         Text(
                             text = "绑定邮箱和密码",
                             fontSize = 17.sp,
@@ -99,10 +57,32 @@ fun TaskCenterScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "完成绑定后成为正式用户，并获得一次性经验奖励。经验达到升级门槛后可提升等级。",
+                            text = when {
+                                accountInfo == null -> "正在读取任务状态。"
+                                isTaskCompleted -> "已完成绑定，任务奖励已发放。"
+                                isBanned -> "Lv0 账户暂不可完成此任务。"
+                                else -> "完成绑定后可获得一次性经验奖励。经验达到升级门槛后可提升等级。"
+                            },
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    Text(
+                        text = when {
+                            accountInfo == null -> "同步中…"
+                            isTaskCompleted -> "已完成"
+                            isBanned -> "暂不可完成"
+                            else -> "未完成"
+                        },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = when {
+                            isTaskCompleted -> MaterialTheme.colorScheme.primary
+                            isBanned -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                    if (accountInfo != null && !isTaskCompleted && !isBanned) {
                         Button(
                             onClick = onOpenAccountSettings,
                             modifier = Modifier.align(androidx.compose.ui.Alignment.End)
