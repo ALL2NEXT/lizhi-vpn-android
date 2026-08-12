@@ -334,9 +334,8 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable(AppRoute.TASK_CENTER) {
-                                val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
                                 TaskCenterScreen(
-                                    accountInfo = accountInfo,
+                                    viewModel = viewModel,
                                     onOpenAccountSettings = {
                                         navigateTo(AppRoute.ACCOUNT_SETTINGS)
                                     },

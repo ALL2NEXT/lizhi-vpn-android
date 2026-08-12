@@ -685,15 +685,16 @@ Release 版本默认移除所有 `android.util.Log` 调用（包括 `Log.d`、`L
 
 ## Cloudflare Worker 后端
 
-项目根目录的 `cloudflare-worker.js` 是可直接粘贴到 Cloudflare Workers 的单文件后台。
+`backend/serverless.js` 是可直接部署到 Cloudflare Workers 的单文件后台，后端说明见 [`backend/README.md`](backend/README.md)。
 
 部署步骤：
 
 1. 在 Cloudflare 创建一个 KV Namespace，并在 Worker 设置中绑定变量名 `CONFIG`。
-2. 创建 Worker Secret `ADMIN_TOKEN`，不要把它写入 App 或提交到 Git。
-3. 将 `cloudflare-worker.js` 粘贴并部署，打开 `https://你的域名/admin`。
-4. 打开管理后台，用表单添加订阅线路、网站、反馈联系方式、GitHub、公告和版本更新；不需要手写 JSON。
-5. 将 `AppConfig.kt` 中唯一的后端配置改成 Worker 地址：`AppConfig.BACKEND_URL`。
+2. 创建 D1 数据库，并在 Worker 设置中绑定变量名 `USERS_DB`。
+3. 创建 Worker Secret `ADMIN_TOKEN`，不要把它写入 App 或提交到 Git。
+4. 将 `backend/serverless.js` 粘贴并部署，打开 `https://你的域名/3e9a0eed-6a29-4d16-91b1-3adae4bd88e6`。
+5. 打开管理后台，用表单添加订阅线路、网站、反馈联系方式、GitHub、公告和版本更新；不需要手写 JSON。
+6. 将 `AppConfig.kt` 中唯一的后端配置改成 Worker 地址：`AppConfig.BACKEND_URL`。
 
 App 使用的唯一公开接口是 `GET /api/client`：
 
@@ -718,7 +719,7 @@ APP 手动刷新时会重新请求 `/api/client`，先按账户等级与 `minLev
 
 管理后台的每条线路也支持直接粘贴纯文本节点（每行一个）。填写纯文本后，该内容会随后台状态保存在 `CONFIG` KV 中，单条线路最多 2 MiB；Worker 会忽略该线路填写的外部 URL，并在 `/api/client` 中自动下发自身的 `/api/subscription/<id>` 地址及 `encrypted: true`。App 请求这个地址时，Worker 才按照当前请求 IP 动态编码返回，公开的 `/api/client` 不包含节点明文。清空纯文本后，线路恢复使用外部订阅地址和手动加密标记。
 
-后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /api/admin/state` 读取，`PUT /api/admin/state` 保存订阅名称、URL 和其他后台配置。线路序号由 Worker 自动生成，详细订阅内容由 APP 直接获取。
+后台接口需要 `Authorization: Bearer ADMIN_TOKEN`：`GET /<ADMIN_UUID>/api/state` 读取，`PUT /<ADMIN_UUID>/api/state` 保存订阅名称、URL 和其他后台配置。线路序号由 Worker 自动生成，详细订阅内容由 APP 直接获取。
 
 这样 App 只内置一个 Worker 地址；更换线路、公告、更新信息和上游订阅地址都在 Worker 管理后台完成。
 

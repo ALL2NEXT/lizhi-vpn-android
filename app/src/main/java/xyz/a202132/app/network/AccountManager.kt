@@ -15,6 +15,9 @@ import xyz.a202132.app.data.model.AccountDeleteRequest
 import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
+import xyz.a202132.app.data.model.TelegramTaskResponse
+import xyz.a202132.app.data.model.TelegramTaskStatus
+import xyz.a202132.app.data.model.TelegramTaskSubmitRequest
 import xyz.a202132.app.data.model.TrafficReportRequest
 import xyz.a202132.app.data.model.TrafficReportResponse
 import java.security.MessageDigest
@@ -92,6 +95,56 @@ class AccountManager(private val context: Context) {
             )
             persistAccount(updated)
             updated
+        }
+    }
+
+    suspend fun getTelegramTaskStatus(
+        timeoutMs: Long = 10000L
+    ): Result<TelegramTaskStatus> {
+        val registered = currentAccount()
+            ?: return Result.failure(IllegalStateException("账户尚未同步"))
+
+        return runCatching {
+            val response: TelegramTaskResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.getTelegramTask(
+                    accountEndpoint("/api/account/tasks?uid=${registered.uid}")
+                )
+            }
+            response.account?.let(::persistAccount)
+            response.telegram ?: throw IllegalStateException(
+                response.error ?: "后台未返回 TG 任务状态"
+            )
+        }
+    }
+
+    suspend fun submitTelegramTask(
+        telegramNickname: String,
+        timeoutMs: Long = 10000L
+    ): Result<TelegramTaskStatus> {
+        val registered = currentAccount()
+            ?: return Result.failure(IllegalStateException("账户尚未同步"))
+        val normalizedNickname = telegramNickname.trim()
+        if (normalizedNickname.isBlank() || normalizedNickname.length > 64) {
+            return Result.failure(IllegalArgumentException("TG 昵称长度需要在 1～64 个字符之间"))
+        }
+        if (registered.level == 0) {
+            return Result.failure(IllegalStateException("account_banned"))
+        }
+
+        return runCatching {
+            val response: TelegramTaskResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.submitTelegramTask(
+                    accountEndpoint("/api/account/tasks/telegram"),
+                    TelegramTaskSubmitRequest(
+                        uid = registered.uid,
+                        telegramNickname = normalizedNickname
+                    )
+                )
+            }
+            response.account?.let(::persistAccount)
+            response.telegram ?: throw IllegalStateException(
+                response.error ?: "TG 任务提交失败"
+            )
         }
     }
 

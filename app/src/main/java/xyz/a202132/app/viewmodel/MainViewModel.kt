@@ -111,6 +111,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isDeletingAccount = _isDeletingAccount.asStateFlow()
     private val _accountMessage = MutableStateFlow<String?>(null)
     val accountMessage = _accountMessage.asStateFlow()
+    private val _telegramTaskStatus = MutableStateFlow<TelegramTaskStatus?>(null)
+    val telegramTaskStatus = _telegramTaskStatus.asStateFlow()
+    private val _isLoadingTelegramTask = MutableStateFlow(false)
+    val isLoadingTelegramTask = _isLoadingTelegramTask.asStateFlow()
+    private val _isSubmittingTelegramTask = MutableStateFlow(false)
+    val isSubmittingTelegramTask = _isSubmittingTelegramTask.asStateFlow()
+    private val _telegramTaskMessage = MutableStateFlow<String?>(null)
+    val telegramTaskMessage = _telegramTaskMessage.asStateFlow()
     
     private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
     val updateInfo = _updateInfo.asStateFlow()
@@ -1387,6 +1395,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun loadTelegramTask() {
+        if (_isLoadingTelegramTask.value) return
+        viewModelScope.launch {
+            _isLoadingTelegramTask.value = true
+            _telegramTaskStatus.value = null
+            _telegramTaskMessage.value = null
+            try {
+                accountManager.getTelegramTaskStatus(
+                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                ).onSuccess { status ->
+                    _telegramTaskStatus.value = status
+                }.onFailure { error ->
+                    Log.w(tag, "Failed to load Telegram task", error)
+                    _telegramTaskMessage.value = telegramTaskErrorMessage(error)
+                }
+            } finally {
+                _isLoadingTelegramTask.value = false
+            }
+        }
+    }
+
+    fun submitTelegramTask(telegramNickname: String) {
+        if (_isSubmittingTelegramTask.value) return
+        viewModelScope.launch {
+            _isSubmittingTelegramTask.value = true
+            _telegramTaskMessage.value = null
+            try {
+                accountManager.submitTelegramTask(
+                    telegramNickname = telegramNickname,
+                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                ).onSuccess { status ->
+                    _telegramTaskStatus.value = status
+                    _telegramTaskMessage.value = "已提交 TG 昵称，请等待后台人工审核"
+                }.onFailure { error ->
+                    Log.w(tag, "Failed to submit Telegram task", error)
+                    _telegramTaskMessage.value = telegramTaskErrorMessage(error)
+                }
+            } finally {
+                _isSubmittingTelegramTask.value = false
+            }
+        }
+    }
+
+    fun clearTelegramTaskMessage() {
+        _telegramTaskMessage.value = null
+    }
+
     /** 客户端再次校验公告时间，避免配置缓存导致过期公告继续显示。 */
     private fun isNoticeWithinTimeRange(noticeInfo: NoticeInfo): Boolean {
         val now = Instant.now()
@@ -1500,6 +1555,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "email_already_bound" -> "该邮箱已经绑定其他账户"
             "account_not_found" -> "账户不存在，请重新同步账户"
             else -> error.message ?: "账户绑定失败"
+        }
+    }
+
+    private fun telegramTaskErrorMessage(error: Throwable): String {
+        return when (error.message) {
+            "invalid_telegram_task_submission" -> "请输入有效的 TG 昵称"
+            "telegram_task_disabled" -> "后台暂未配置 TG 群任务"
+            "telegram_task_already_submitted" -> "TG 任务已经提交，请等待后台审核"
+            "telegram_task_already_approved" -> "TG 加群任务已经审核通过"
+            "telegram_task_permanently_rejected" -> "TG 加群任务已被拒绝，无法再次提交"
+            "account_banned" -> "账户已被封禁，无法提交任务"
+            else -> error.message ?: "TG 任务操作失败"
         }
     }
 

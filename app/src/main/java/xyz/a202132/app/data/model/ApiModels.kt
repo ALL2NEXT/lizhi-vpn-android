@@ -63,7 +63,13 @@ data class BackendAppSettings(
     val nodeRequestTimeoutMs: Long = 25000L,
 
     @SerializedName("experienceThresholds")
-    val experienceThresholds: List<Long> = listOf(100L, 200L, 400L, 800L, 1600L)
+    val experienceThresholds: List<Long> = listOf(100L, 200L, 400L, 800L, 1600L),
+
+    @SerializedName("telegramGroupUrl")
+    val telegramGroupUrl: String = "",
+
+    @SerializedName("telegramTaskExperience")
+    val telegramTaskExperience: Long = 50L
 )
 
 data class AccountRegisterRequest(
@@ -194,6 +200,54 @@ data class AccountProfileUpdateRequest(
 
     @SerializedName("nickname")
     val nickname: String
+)
+
+data class TelegramTaskSubmitRequest(
+    @SerializedName("uid")
+    val uid: String,
+
+    @SerializedName("telegramNickname")
+    val telegramNickname: String
+)
+
+data class TelegramTaskStatus(
+    @SerializedName("enabled")
+    val enabled: Boolean = false,
+
+    @SerializedName("groupUrl")
+    val groupUrl: String = "",
+
+    @SerializedName("rewardExperience")
+    val rewardExperience: Long = 50L,
+
+    @SerializedName("status")
+    val status: String = "not_submitted",
+
+    @SerializedName("telegramNickname")
+    val telegramNickname: String = "",
+
+    @SerializedName("submittedAt")
+    val submittedAt: String = "",
+
+    @SerializedName("reviewedAt")
+    val reviewedAt: String = "",
+
+    @SerializedName("experienceAwarded")
+    val experienceAwarded: Long = 0L
+)
+
+data class TelegramTaskResponse(
+    @SerializedName("ok")
+    val ok: Boolean = false,
+
+    @SerializedName("account")
+    val account: AccountInfo? = null,
+
+    @SerializedName("telegram")
+    val telegram: TelegramTaskStatus? = null,
+
+    @SerializedName("error")
+    val error: String? = null
 )
 
 data class TrafficReportRequest(
