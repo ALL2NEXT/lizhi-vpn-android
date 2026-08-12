@@ -180,6 +180,7 @@ async function handleClient(request, env) {
         enabled: source.enabled,
         encrypted: true,
         minLevel: source.minLevel,
+        refreshOnAppOpen: source.refreshOnAppOpen,
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
       })),
     notice: visibleNotice(state.notice),
@@ -1895,6 +1896,10 @@ function normalizeState(input) {
         url: content ? "" : externalUrl,
         name: cleanText(item.name || item.title),
         enabled: parseFlag(item.enabled, true),
+        refreshOnAppOpen: parseFlag(
+          item.refreshOnAppOpen ?? item.openAppImmediateUpdate ?? item.updateOnAppOpen,
+          true,
+        ),
         minLevel: normalizeLevel(item.minLevel ?? item.requiredLevel),
         minAppVersion: normalizeMinimumAppVersion(
           item.minAppVersion ?? item.minimumAppVersion,
@@ -1910,6 +1915,7 @@ function normalizeState(input) {
       name: item.name || `线路${index + 1}`,
       url: item.url,
       enabled: item.enabled,
+      refreshOnAppOpen: item.refreshOnAppOpen,
       minLevel: item.minLevel,
       minAppVersion: item.minAppVersion,
       cacheMinutes: item.cacheMinutes,
@@ -3692,6 +3698,7 @@ function addSource(source) {
       '<div class="field"><label>接口缓存时间（分钟）<input data-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '"></label></div>' +
     '</div><small>接口必须返回可识别的明文节点，由 Worker 中转并加密；缓存时间设为 0 会每次请求上游。</small></div>' +
     '<div class="source-mode" data-source-mode="content"><div class="field"><label>纯文本节点（每行一个）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div><small>保存后由 Worker 直接加密下发，不经过外部接口缓存。</small></div>' +
+    '<label class="check"><input data-field="refreshOnAppOpen" type="checkbox" ' + (source.refreshOnAppOpen === false ? '' : 'checked') + '>打开app立即更新</label>' +
     '<label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
     '<div class="row-actions"><button class="danger" type="button">删除</button></div>';
   row.querySelector('.danger').onclick = function() { row.remove(); };
@@ -3763,6 +3770,7 @@ function formState() {
         ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 0)
         : 0,
       content: sourceType === 'content' ? content : '',
+      refreshOnAppOpen: row.querySelector('[data-field="refreshOnAppOpen"]').checked,
       remark: row.querySelector('[data-field="remark"]').value.trim()
     };
   }).filter(function(item) { return item.url || item.content; });
