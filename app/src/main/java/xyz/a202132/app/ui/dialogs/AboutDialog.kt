@@ -133,7 +133,7 @@ fun AboutDialog(
 
                     // 标语
                     Text(
-                        text = "流萤加速器",
+                        text = "FireflyVPN",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

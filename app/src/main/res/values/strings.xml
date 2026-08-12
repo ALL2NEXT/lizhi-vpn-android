@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">流萤加速器</string>
+    <string name="app_name">FireflyVPN</string>
     <string name="version">版本</string>
     <string name="update_title">发现新版本</string>
     <string name="update_now">立即更新</string>
