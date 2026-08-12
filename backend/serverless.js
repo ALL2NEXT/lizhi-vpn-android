@@ -15,6 +15,7 @@
  *   POST /api/account/delete    // 永久删除当前账户
  *   GET  /api/account/tasks?uid=<UID>
  *   POST /api/account/tasks/checkin
+ *   POST /api/account/tasks/speed-share
  *   POST /api/account/tasks/telegram
  *   POST /api/debug/users       // 临时公开调试用户接口，测试结束后应移除
  *
@@ -30,6 +31,7 @@
  *   DELETE /<ADMIN_UUID>/api/users/batch      // 批量删除用户
  *   GET  /<ADMIN_UUID>/api/telegram-tasks
  *   PATCH /<ADMIN_UUID>/api/telegram-tasks/<id>
+ *   GET  /<ADMIN_UUID>/api/speed-share-results
  */
 
 const STATE_KEY = "fireflyvpn:state:v1";
@@ -37,6 +39,7 @@ const CLIENT_IP_HEADER = "X-Firefly-Client-IP";
 const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 const MAX_BATCH_USER_COUNT = 100;
 const MAX_DEBUG_TRAFFIC_RECORDS = 400;
+const MAX_SPEED_SHARE_RESULTS = 1000;
 const MAX_TRAFFIC_BYTES = 1e15;
 const MAX_ACCOUNT_EXPERIENCE = 1e12;
 const ACCOUNT_BINDING_EXPERIENCE = 50;
@@ -115,6 +118,29 @@ const USER_SCHEMA_STATEMENTS = [
 )`,
 `CREATE INDEX IF NOT EXISTS idx_daily_checkins_mb_user_date
   ON daily_checkins_mb(user_id, checkin_date DESC)`,
+`CREATE TABLE IF NOT EXISTS speed_share_results_mb (
+  node_id TEXT PRIMARY KEY,
+  node_name TEXT NOT NULL DEFAULT '',
+  subscription_group_name TEXT NOT NULL DEFAULT '',
+  tcping_latency_ms INTEGER NOT NULL DEFAULT 0,
+  url_test_latency_ms INTEGER NOT NULL DEFAULT 0,
+  download_mbps REAL NOT NULL DEFAULT 0,
+  upload_mbps REAL NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  last_reported_at TEXT NOT NULL,
+  report_count INTEGER NOT NULL DEFAULT 0
+)`,
+`CREATE INDEX IF NOT EXISTS idx_speed_share_results_mb_updated_at
+  ON speed_share_results_mb(updated_at DESC)`,
+`CREATE TABLE IF NOT EXISTS speed_share_daily_mb (
+  user_id INTEGER NOT NULL,
+  report_date TEXT NOT NULL,
+  reported_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, report_date),
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+)`,
+`CREATE INDEX IF NOT EXISTS idx_speed_share_daily_mb_user_date
+  ON speed_share_daily_mb(user_id, report_date DESC)`,
 ];
 const USER_SCHEMA_MIGRATIONS = [
   "ALTER TABLE users_mb ADD COLUMN experience INTEGER NOT NULL DEFAULT 0",
@@ -405,6 +431,7 @@ async function handleAccount(path, request, env) {
       db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
     ]);
     const deleteResult = result[result.length - 1];
@@ -450,6 +477,7 @@ async function handleAccount(path, request, env) {
       ok: true,
       account: publicAccount(user),
       checkin: await readDailyCheckin(env, identity.userId, state.settings),
+      speedShare: await readSpeedShareStatus(env, identity.userId),
       telegram: await readTelegramTask(env, identity.userId, state.settings),
     });
   }
@@ -508,6 +536,10 @@ async function handleAccount(path, request, env) {
       account: publicAccount(updated),
       checkin: await readDailyCheckin(env, identity.userId, state.settings),
     });
+  }
+
+  if (path === "/api/account/tasks/speed-share" && request.method === "POST") {
+    return handleSpeedShareSubmission(request, env);
   }
 
   if (path === "/api/account/tasks/telegram" && request.method === "POST") {
@@ -627,6 +659,162 @@ async function handleAccount(path, request, env) {
   }
 
   return json({ error: "account_route_not_found" }, 404);
+}
+
+async function handleSpeedShareSubmission(request, env) {
+  const body = await request.json();
+  const reference = body && (body.uid || body.accountId);
+  const mode = cleanText(body && body.mode).toLowerCase();
+  if (mode !== "smart" && mode !== "full") {
+    return json({ ok: false, error: "invalid_speed_share_mode" }, 400);
+  }
+  if (!Array.isArray(body && body.results) || body.results.length === 0 ||
+      body.results.length > MAX_SPEED_SHARE_RESULTS) {
+    return json({ ok: false, error: "invalid_speed_share_results" }, 400);
+  }
+
+  const identity = await resolveUserIdentity(env, reference);
+  if (!identity) {
+    return json({ ok: false, error: "account_not_found" }, 404);
+  }
+  const user = await readD1User(env, identity.userId);
+  if (!user) {
+    return json({ ok: false, error: "account_not_found" }, 404);
+  }
+  if (user.level === 0) {
+    return json({ ok: false, error: "account_banned" }, 403);
+  }
+
+  let results;
+  try {
+    results = body.results.map(normalizeSpeedShareResult).filter(Boolean);
+  } catch (error) {
+    return json({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    }, 400);
+  }
+  if (results.length === 0) {
+    return json({ ok: false, error: "speed_share_results_empty" }, 400);
+  }
+
+  const db = await ensureUserSchema(env);
+  const reportDate = usagePeriodKeys(new Date()).day;
+  const reportedAt = beijingTimestamp();
+  if (mode === "smart") {
+    const daily = await db.prepare(
+      `INSERT OR IGNORE INTO speed_share_daily_mb
+       (user_id, report_date, reported_at) VALUES (?, ?, ?)`,
+    ).bind(identity.userId, reportDate, reportedAt).run();
+    if (!daily || !daily.meta || Number(daily.meta.changes) < 1) {
+      return json({
+        ok: false,
+        error: "speed_share_already_reported_today",
+        speedShare: await readSpeedShareStatus(env, identity.userId),
+      });
+    }
+  }
+
+  const statements = results.map((item) => db.prepare(
+    `INSERT INTO speed_share_results_mb
+     (node_id, node_name, subscription_group_name, tcping_latency_ms,
+      url_test_latency_ms, download_mbps, upload_mbps, updated_at,
+      last_reported_at, report_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+     ON CONFLICT(node_id) DO UPDATE SET
+       node_name = CASE WHEN excluded.node_name <> ''
+         THEN excluded.node_name ELSE speed_share_results_mb.node_name END,
+       subscription_group_name = CASE WHEN excluded.subscription_group_name <> ''
+         THEN excluded.subscription_group_name
+         ELSE speed_share_results_mb.subscription_group_name END,
+       tcping_latency_ms = CASE
+         WHEN excluded.tcping_latency_ms > 0 AND
+           (speed_share_results_mb.tcping_latency_ms <= 0 OR
+            excluded.tcping_latency_ms < speed_share_results_mb.tcping_latency_ms)
+         THEN excluded.tcping_latency_ms
+         ELSE speed_share_results_mb.tcping_latency_ms END,
+       url_test_latency_ms = CASE
+         WHEN excluded.url_test_latency_ms > 0 AND
+           (speed_share_results_mb.url_test_latency_ms <= 0 OR
+            excluded.url_test_latency_ms < speed_share_results_mb.url_test_latency_ms)
+         THEN excluded.url_test_latency_ms
+         ELSE speed_share_results_mb.url_test_latency_ms END,
+       download_mbps = CASE
+         WHEN excluded.download_mbps > speed_share_results_mb.download_mbps
+         THEN excluded.download_mbps
+         ELSE speed_share_results_mb.download_mbps END,
+       upload_mbps = CASE
+         WHEN excluded.upload_mbps > speed_share_results_mb.upload_mbps
+         THEN excluded.upload_mbps
+         ELSE speed_share_results_mb.upload_mbps END,
+       updated_at = CASE WHEN
+         (excluded.tcping_latency_ms > 0 AND
+           (speed_share_results_mb.tcping_latency_ms <= 0 OR
+            excluded.tcping_latency_ms < speed_share_results_mb.tcping_latency_ms)) OR
+         (excluded.url_test_latency_ms > 0 AND
+           (speed_share_results_mb.url_test_latency_ms <= 0 OR
+            excluded.url_test_latency_ms < speed_share_results_mb.url_test_latency_ms)) OR
+         excluded.download_mbps > speed_share_results_mb.download_mbps OR
+         excluded.upload_mbps > speed_share_results_mb.upload_mbps
+         THEN excluded.updated_at ELSE speed_share_results_mb.updated_at END,
+       last_reported_at = excluded.last_reported_at,
+       report_count = speed_share_results_mb.report_count + 1`,
+  ).bind(
+    item.nodeId,
+    item.nodeName,
+    item.subscriptionGroupName,
+    item.tcpingLatencyMs,
+    item.urlTestLatencyMs,
+    item.downloadMbps,
+    item.uploadMbps,
+    reportedAt,
+    reportedAt,
+  ));
+  for (let index = 0; index < statements.length; index += 100) {
+    await db.batch(statements.slice(index, index + 100));
+  }
+
+  return json({
+    ok: true,
+    mode,
+    acceptedResults: results.length,
+    speedShare: await readSpeedShareStatus(env, identity.userId),
+  });
+}
+
+function normalizeSpeedShareResult(value) {
+  if (!plainObject(value)) throw new Error("invalid_speed_share_result");
+  const nodeId = cleanText(value.nodeId || value.id).slice(0, 128);
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/.test(nodeId)) {
+    throw new Error("invalid_speed_share_node_id");
+  }
+  const result = {
+    nodeId,
+    nodeName: cleanText(value.nodeName || value.name).slice(0, 200),
+    subscriptionGroupName: cleanText(
+      value.subscriptionGroupName || value.groupName,
+    ).slice(0, 200),
+    tcpingLatencyMs: sharedLatency(value.tcpingLatencyMs ?? value.tcpingLatency),
+    urlTestLatencyMs: sharedLatency(value.urlTestLatencyMs ?? value.urlTestLatency),
+    downloadMbps: sharedMbps(value.downloadMbps ?? value.download),
+    uploadMbps: sharedMbps(value.uploadMbps ?? value.upload),
+  };
+  return result.tcpingLatencyMs > 0 || result.urlTestLatencyMs > 0 ||
+    result.downloadMbps > 0 || result.uploadMbps > 0
+    ? result
+    : null;
+}
+
+function sharedLatency(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 && number <= 600000 ? number : 0;
+}
+
+function sharedMbps(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 && number <= 1000000
+    ? Math.round(number * 1000) / 1000
+    : 0;
 }
 
 async function handleDebugUserV2(request, env) {
@@ -989,6 +1177,26 @@ async function handleAdmin(path, request, env) {
     });
   }
 
+  if (path === "/api/speed-share-results" && request.method === "GET") {
+    const requestUrl = new URL(request.url);
+    const requestedLimit = Number(requestUrl.searchParams.get("limit"));
+    const limit = Number.isInteger(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 1000)
+      : 500;
+    const db = await ensureUserSchema(env);
+    const query = await db.prepare(
+      "SELECT node_id, node_name, subscription_group_name, " +
+        "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
+        "upload_mbps, updated_at, last_reported_at, report_count " +
+        "FROM speed_share_results_mb ORDER BY updated_at DESC LIMIT ?",
+    ).bind(limit).all();
+    return json({
+      ok: true,
+      results: (query.results || []).map(publicAdminSpeedShareResult),
+      generatedAt: beijingTimestamp(),
+    });
+  }
+
   const telegramTaskMatch = path.match(/^\/api\/telegram-tasks\/(\d+)$/);
   if (telegramTaskMatch && request.method === "PATCH") {
     const body = await request.json();
@@ -1101,14 +1309,15 @@ async function handleAdmin(path, request, env) {
         db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
+        db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
       );
     }
     const result = await db.batch(statements);
     const changed = identities.reduce(
       (total, _identity, index) => total + Number(
-        result[index * 4 + 3] && result[index * 4 + 3].meta
-          ? result[index * 4 + 3].meta.changes
+        result[index * 5 + 4] && result[index * 5 + 4].meta
+          ? result[index * 5 + 4].meta.changes
           : 0,
       ),
       0,
@@ -1125,6 +1334,7 @@ async function handleAdmin(path, request, env) {
       db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
     ]);
     const deleteResult = result[result.length - 1];
@@ -1254,6 +1464,28 @@ async function readDailyCheckin(env, userId, settings) {
   };
 }
 
+async function readSpeedShareStatus(env, userId) {
+  const db = await ensureUserSchema(env);
+  const reportDate = usagePeriodKeys(new Date()).day;
+  const daily = await db.prepare(
+    "SELECT reported_at FROM speed_share_daily_mb " +
+      "WHERE user_id = ? AND report_date = ?",
+  ).bind(userId, reportDate).first();
+  const latest = await db.prepare(
+    "SELECT MAX(last_reported_at) AS last_reported_at FROM speed_share_results_mb",
+  ).first();
+  const count = await db.prepare(
+    "SELECT COUNT(*) AS retained_count FROM speed_share_results_mb",
+  ).first();
+  return {
+    enabled: true,
+    smartReportedToday: Boolean(daily),
+    smartReportedAt: cleanText(daily && daily.reported_at),
+    lastReportedAt: cleanText(latest && latest.last_reported_at),
+    retainedResultCount: Number(count && count.retained_count) || 0,
+  };
+}
+
 async function readTelegramTask(env, userId, settings) {
   const db = await ensureUserSchema(env);
   const row = await db.prepare(
@@ -1317,6 +1549,21 @@ function publicAdminTelegramTask(row) {
     submittedAt: cleanText(row.submitted_at),
     reviewedAt: cleanText(row.reviewed_at),
     experienceAwarded: normalizeExperience(row.experience_awarded),
+  };
+}
+
+function publicAdminSpeedShareResult(row) {
+  return {
+    nodeId: cleanText(row.node_id),
+    nodeName: cleanText(row.node_name),
+    subscriptionGroupName: cleanText(row.subscription_group_name),
+    tcpingLatencyMs: sharedLatency(row.tcping_latency_ms),
+    urlTestLatencyMs: sharedLatency(row.url_test_latency_ms),
+    downloadMbps: sharedMbps(row.download_mbps),
+    uploadMbps: sharedMbps(row.upload_mbps),
+    updatedAt: cleanText(row.updated_at),
+    lastReportedAt: cleanText(row.last_reported_at),
+    reportCount: Number(row.report_count) || 0,
   };
 }
 

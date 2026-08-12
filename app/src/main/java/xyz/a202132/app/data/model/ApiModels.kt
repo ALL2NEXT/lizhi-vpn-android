@@ -238,6 +238,80 @@ data class DailyCheckinStatus(
     val experienceAwarded: Long = 0L
 )
 
+enum class SpeedShareMode {
+    OFF,
+    SMART,
+    FULL
+}
+
+data class SpeedShareNodeResult(
+    @SerializedName("nodeId")
+    val nodeId: String,
+
+    @SerializedName("nodeName")
+    val nodeName: String = "",
+
+    @SerializedName("subscriptionGroupName")
+    val subscriptionGroupName: String = "",
+
+    @SerializedName("tcpingLatencyMs")
+    val tcpingLatencyMs: Int = 0,
+
+    @SerializedName("urlTestLatencyMs")
+    val urlTestLatencyMs: Int = 0,
+
+    @SerializedName("downloadMbps")
+    val downloadMbps: Float = 0f,
+
+    @SerializedName("uploadMbps")
+    val uploadMbps: Float = 0f
+)
+
+data class SpeedShareRequest(
+    @SerializedName("uid")
+    val uid: String,
+
+    @SerializedName("mode")
+    val mode: String,
+
+    @SerializedName("results")
+    val results: List<SpeedShareNodeResult>
+)
+
+data class SpeedShareStatus(
+    @SerializedName("enabled")
+    val enabled: Boolean = true,
+
+    @SerializedName("smartReportedToday")
+    val smartReportedToday: Boolean = false,
+
+    @SerializedName("smartReportedAt")
+    val smartReportedAt: String = "",
+
+    @SerializedName("lastReportedAt")
+    val lastReportedAt: String = "",
+
+    @SerializedName("retainedResultCount")
+    val retainedResultCount: Int = 0
+)
+
+data class SpeedShareResponse(
+    @SerializedName("ok")
+    val ok: Boolean = false,
+
+    @SerializedName("mode")
+    val mode: String? = null,
+
+    @SerializedName("acceptedResults")
+    val acceptedResults: Int = 0,
+
+    @SerializedName("speedShare")
+    val speedShare: SpeedShareStatus? = null,
+
+    @SerializedName("error")
+    val error: String? = null
+)
+
 data class TelegramTaskStatus(
     @SerializedName("enabled")
     val enabled: Boolean = false,
@@ -274,6 +348,9 @@ data class TelegramTaskResponse(
     @SerializedName("checkin")
     val checkin: DailyCheckinStatus? = null,
 
+    @SerializedName("speedShare")
+    val speedShare: SpeedShareStatus? = null,
+
     @SerializedName("telegram")
     val telegram: TelegramTaskStatus? = null,
 
@@ -283,6 +360,7 @@ data class TelegramTaskResponse(
 
 data class TaskCenterStatus(
     val checkin: DailyCheckinStatus,
+    val speedShare: SpeedShareStatus = SpeedShareStatus(),
     val telegram: TelegramTaskStatus
 )
 

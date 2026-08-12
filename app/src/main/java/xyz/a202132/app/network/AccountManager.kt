@@ -17,6 +17,10 @@ import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.DailyCheckinRequest
 import xyz.a202132.app.data.model.DailyCheckinStatus
+import xyz.a202132.app.data.model.SpeedShareNodeResult
+import xyz.a202132.app.data.model.SpeedShareRequest
+import xyz.a202132.app.data.model.SpeedShareResponse
+import xyz.a202132.app.data.model.SpeedShareStatus
 import xyz.a202132.app.data.model.TelegramTaskResponse
 import xyz.a202132.app.data.model.TelegramTaskStatus
 import xyz.a202132.app.data.model.TelegramTaskSubmitRequest
@@ -118,6 +122,7 @@ class AccountManager(private val context: Context) {
                 checkin = response.checkin ?: throw IllegalStateException(
                     response.error ?: "后台未返回签到状态"
                 ),
+                speedShare = response.speedShare ?: SpeedShareStatus(),
                 telegram = response.telegram ?: throw IllegalStateException(
                     response.error ?: "后台未返回 TG 任务状态"
                 )
@@ -146,6 +151,41 @@ class AccountManager(private val context: Context) {
             }
             response.account?.let(::persistAccount)
             response.checkin ?: throw IllegalStateException("后台未返回签到状态")
+        }
+    }
+
+    suspend fun reportSpeedResults(
+        mode: String,
+        results: List<SpeedShareNodeResult>,
+        timeoutMs: Long = 15000L
+    ): Result<SpeedShareResponse> {
+        val registered = currentAccount()
+            ?: return Result.failure(IllegalStateException("璐︽埛灏氭湭鍚屾"))
+        if (registered.level == 0) {
+            return Result.failure(IllegalStateException("account_banned"))
+        }
+        if (mode != "smart" && mode != "full") {
+            return Result.failure(IllegalArgumentException("invalid_speed_share_mode"))
+        }
+        if (results.isEmpty()) {
+            return Result.failure(IllegalArgumentException("speed_share_results_empty"))
+        }
+
+        return runCatching {
+            val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
+                NetworkClient.apiService.shareSpeedResults(
+                    accountEndpoint("/api/account/tasks/speed-share"),
+                    SpeedShareRequest(
+                        uid = registered.uid,
+                        mode = mode,
+                        results = results.take(1000)
+                    )
+                )
+            }
+            if (!response.ok) {
+                throw IllegalStateException(response.error ?: "speed_share_submission_failed")
+            }
+            response
         }
     }
 

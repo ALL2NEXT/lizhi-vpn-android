@@ -11,6 +11,7 @@ import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.PerAppProxyMode
 import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.SpeedShareMode
 import xyz.a202132.app.data.model.TunStack
 
 data class PerAppProxySettings(
@@ -72,11 +73,35 @@ class SettingsRepository(private val context: Context) {
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
+        private val SPEED_SHARE_MODE = stringPreferencesKey("speed_share_mode")
+        private val SPEED_SHARE_SMART_LAST_DATE = stringPreferencesKey("speed_share_smart_last_date")
 
     }
     
     val selectedNodeId: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[SELECTED_NODE_ID]
+    }
+
+    val speedShareMode: Flow<SpeedShareMode> = context.dataStore.data.map { preferences ->
+        runCatching {
+            SpeedShareMode.valueOf(preferences[SPEED_SHARE_MODE] ?: SpeedShareMode.OFF.name)
+        }.getOrDefault(SpeedShareMode.OFF)
+    }
+
+    val speedShareSmartLastDate: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[SPEED_SHARE_SMART_LAST_DATE]
+    }
+
+    suspend fun setSpeedShareMode(mode: SpeedShareMode) {
+        context.dataStore.edit { preferences ->
+            preferences[SPEED_SHARE_MODE] = mode.name
+        }
+    }
+
+    suspend fun setSpeedShareSmartLastDate(date: String) {
+        context.dataStore.edit { preferences ->
+            preferences[SPEED_SHARE_SMART_LAST_DATE] = date
+        }
     }
 
     val nodeListCategory: Flow<NodeListCategory> = context.dataStore.data.map { preferences ->
