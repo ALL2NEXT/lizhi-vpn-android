@@ -44,10 +44,10 @@ import xyz.a202132.app.ui.theme.*
 import xyz.a202132.app.viewmodel.MainViewModel
 
 private val WEB_SPEED_TESTS = listOf(
-    "中科大测速（墙内测速）" to AppConfig.USTC_SPEED_TEST_URL,
-    "南大测速（墙内测速）" to AppConfig.NJU_SPEED_TEST_URL,
-    "奈飞测速（墙外测速）" to AppConfig.NETFLIX_SPEED_TEST_URL,
-    "Google测速（墙外测速）" to AppConfig.GOOGLE_SPEED_TEST_URL
+    "中科大测速" to AppConfig.USTC_SPEED_TEST_URL,
+    "南大测速" to AppConfig.NJU_SPEED_TEST_URL,
+    "奈飞测速" to AppConfig.NETFLIX_SPEED_TEST_URL,
+    "Google测速" to AppConfig.GOOGLE_SPEED_TEST_URL
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
