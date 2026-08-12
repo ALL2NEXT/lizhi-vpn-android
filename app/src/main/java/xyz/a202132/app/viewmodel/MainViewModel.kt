@@ -31,6 +31,7 @@ import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
+import xyz.a202132.app.util.DatabasePassphraseManager
 import java.io.File
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -1515,7 +1516,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun deleteAccount(password: String) {
+    fun deleteAccount(password: String, onDeleted: () -> Unit = {}) {
         if (_isDeletingAccount.value || _isSwitchingAccount.value) return
         if (vpnState.value != VpnState.DISCONNECTED) {
             _accountMessage.value = "请先断开 VPN，再注销账户"
@@ -1534,16 +1535,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _accountMessage.value = accountActionErrorMessage(error)
                 }
                 if (result.isSuccess) {
-                    val refreshed = subscriptionDataLoader.initialize(forceRefresh = true)
-                    _accountMessage.value = if (refreshed) {
-                        "账户已注销，当前设备已重新注册为游客"
-                    } else {
-                        "账户已注销，但游客账户和订阅线路重新注册失败"
-                    }
+                    runCatching { clearLocalApplicationData() }
+                        .onFailure { error ->
+                            Log.e(tag, "Failed to clear local application data after account deletion", error)
+                        }
+                    onDeleted()
                 }
             } finally {
                 _isDeletingAccount.value = false
             }
+        }
+    }
+
+    /** 注销成功后清除本地数据，避免退出前再次自动注册游客账户。 */
+    private suspend fun clearLocalApplicationData() {
+        val appContext = getApplication<Application>()
+        withContext(Dispatchers.IO) {
+            settingsRepository.clearAll()
+            appContext.deleteSharedPreferences("rule_manager")
+            AppConfig.resetBackendUrl(appContext)
+            File(appContext.filesDir, "sing-box").deleteRecursively()
+            AppDatabase.clearAndClose(appContext)
+            DatabasePassphraseManager.clear(appContext)
         }
     }
 

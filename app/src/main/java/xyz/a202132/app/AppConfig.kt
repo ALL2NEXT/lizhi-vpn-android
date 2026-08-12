@@ -41,6 +41,16 @@ object AppConfig {
         return true
     }
 
+    /** 注销账户时恢复默认后端地址。 */
+    fun resetBackendUrl(context: Context) {
+        context.applicationContext
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .remove(BACKEND_URL_KEY)
+            .apply()
+        configuredBackendUrl = DEFAULT_BACKEND_URL
+    }
+
     private fun normalizeBackendUrl(value: String?): String? {
         val raw = value?.trim().orEmpty()
         if (raw.isBlank() || raw.length > 2048) return null

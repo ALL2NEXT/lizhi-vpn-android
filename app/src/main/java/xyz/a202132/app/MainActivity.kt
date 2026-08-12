@@ -330,7 +330,8 @@ class MainActivity : ComponentActivity() {
                             composable(AppRoute.ACCOUNT_SETTINGS) {
                                 AccountSettingsScreen(
                                     viewModel = viewModel,
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onAccountDeleted = { finishAndRemoveTask() }
                                 )
                             }
 

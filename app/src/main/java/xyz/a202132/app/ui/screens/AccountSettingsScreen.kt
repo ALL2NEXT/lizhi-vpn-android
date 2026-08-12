@@ -42,7 +42,8 @@ import xyz.a202132.app.viewmodel.MainViewModel
 @Composable
 fun AccountSettingsScreen(
     viewModel: MainViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onAccountDeleted: () -> Unit
 ) {
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
@@ -332,7 +333,7 @@ fun AccountSettingsScreen(
                             when {
                                 account.level == 0 -> "Lv0 不可注销"
                                 isDeletingAccount -> "注销中…"
-                                else -> "注销账户"
+                                else -> "注销账户并清除数据后退出"
                             }
                         )
                     }
@@ -394,10 +395,10 @@ fun AccountSettingsScreen(
     if (showDeleteConfirmation && account != null) {
         AlertDialog(
             onDismissRequest = { if (!isDeletingAccount) showDeleteConfirmation = false },
-            title = { Text("注销账户") },
+            title = { Text("注销账户并清除数据后退出") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("账户数据和流量记录将永久删除，当前设备随后会重新注册为游客账户。此操作不可恢复。")
+                    Text("账户数据、流量记录和本地数据将永久删除，注销成功后软件会立即退出。下次进入软件需要重新同意用户协议。此操作不可恢复。")
                     if (account.email.isNotBlank()) {
                         OutlinedTextField(
                             value = deletePassword,
@@ -421,10 +422,13 @@ fun AccountSettingsScreen(
                         (account.email.isBlank() || deletePassword.length in 8..128),
                     onClick = {
                         showDeleteConfirmation = false
-                        viewModel.deleteAccount(deletePassword)
+                        viewModel.deleteAccount(deletePassword, onAccountDeleted)
                     }
                 ) {
-                    Text(if (isDeletingAccount) "注销中…" else "确认注销", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        if (isDeletingAccount) "注销中…" else "注销账户并清除数据后退出",
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             },
             dismissButton = {

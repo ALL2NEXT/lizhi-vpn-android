@@ -114,6 +114,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** 注销账户时关闭并删除本地加密数据库。 */
+        fun clearAndClose(context: Context) {
+            synchronized(this) {
+                runCatching { INSTANCE?.close() }
+                INSTANCE = null
+                deleteDatabaseFiles(context.applicationContext)
+            }
+        }
+
         private fun buildEncryptedDatabase(context: Context): AppDatabase {
             val passphrase = DatabasePassphraseManager.getOrCreatePassphrase(context)
             val factory = SupportOpenHelperFactory(passphrase)

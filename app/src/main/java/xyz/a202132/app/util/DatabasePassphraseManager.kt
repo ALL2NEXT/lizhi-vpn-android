@@ -40,6 +40,16 @@ object DatabasePassphraseManager {
         return dbKey.copyOf()
     }
 
+    /** 删除本地数据库密钥，避免注销后继续保留旧数据库凭据。 */
+    fun clear(context: Context) {
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
+        deleteKeyIfExists()
+    }
+
     private fun wrapPassphrase(passphrase: ByteArray): String {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateWrapKey())

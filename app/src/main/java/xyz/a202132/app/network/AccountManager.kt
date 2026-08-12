@@ -350,16 +350,7 @@ class AccountManager(private val context: Context) {
 
     private fun clearLocalAccount() {
         preferences.edit()
-            .remove(ACCOUNT_ID_KEY)
-            .remove(ACCOUNT_NICKNAME_KEY)
-            .remove(ACCOUNT_LEVEL_KEY)
-            .remove(ACCOUNT_EXPERIENCE_KEY)
-            .remove(ACCOUNT_EMAIL_KEY)
-            .remove(ACCOUNT_BRAND_KEY)
-            .remove(ACCOUNT_MODEL_KEY)
-            .remove(ACCOUNT_ANDROID_VERSION_KEY)
-            .remove(ACCOUNT_ANDROID_SDK_KEY)
-            .remove(ACCOUNT_APP_VERSION_KEY)
+            .clear()
             .apply()
         _accountInfo.value = null
     }

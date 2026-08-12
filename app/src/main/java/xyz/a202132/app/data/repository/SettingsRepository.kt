@@ -213,6 +213,13 @@ class SettingsRepository(private val context: Context) {
             preferences[USER_AGREEMENT_ACCEPTED] = accepted
         }
     }
+
+    /** 注销账户时清除本地设置，下一次进入应用需要重新同意用户协议。 */
+    suspend fun clearAll() {
+        context.dataStore.edit { preferences ->
+            preferences.clear()
+        }
+    }
     
     // 分应用代理设置方法
     suspend fun setPerAppProxyEnabled(enabled: Boolean) {
