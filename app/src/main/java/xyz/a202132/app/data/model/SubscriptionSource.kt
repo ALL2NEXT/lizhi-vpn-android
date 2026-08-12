@@ -9,7 +9,9 @@ data class SubscriptionSource(
     val url: String,
     val enabled: Boolean = true,
     val encrypted: Boolean = false,
-    val minLevel: Int = 1
+    val minLevel: Int = 1,
+    /** 是否在应用启动时主动请求这条线路的最新节点。 */
+    val refreshOnAppOpen: Boolean = true
 )
 
 data class SubscriptionList(

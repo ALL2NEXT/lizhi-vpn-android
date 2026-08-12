@@ -108,7 +108,31 @@ internal class SubscriptionDataLoader(
             return@coroutineScope true
         }
 
-        val fetched = fetchAndPersistNodes(subscriptionList.copy(sources = accessibleSources))
+        val cachedNodes = nodeDao().getSubscriptionNodes().first()
+        val accessibleSourceIds = accessibleSources.mapTo(mutableSetOf()) { it.id }
+        val sourcesToRefresh = if (forceRefresh) {
+            accessibleSources
+        } else {
+            accessibleSources.filter { source ->
+                source.refreshOnAppOpen || cachedNodes.none { it.subscriptionSourceId == source.id }
+            }
+        }
+        val cachedAccessibleNodes = cachedNodes.filter {
+            it.subscriptionSourceId in accessibleSourceIds
+        }
+        if (sourcesToRefresh.isEmpty()) {
+            nodeDao().replaceSubscriptionNodes(cachedAccessibleNodes)
+            lastFetchedNodes = cachedAccessibleNodes
+            onNodesPersisted(cachedAccessibleNodes)
+            isNodeAccessGranted = cachedAccessibleNodes.isNotEmpty()
+            return@coroutineScope isNodeAccessGranted
+        }
+
+        val fetched = fetchAndPersistNodes(
+            subscriptionList.copy(sources = accessibleSources),
+            sourcesToRefresh = sourcesToRefresh,
+            cachedNodes = cachedAccessibleNodes,
+        )
         isNodeAccessGranted = fetched
         fetched
     }
@@ -124,6 +148,10 @@ internal class SubscriptionDataLoader(
     private suspend fun fetchSubscriptionList(forceRefresh: Boolean): Result<SubscriptionList> {
         if (AppConfig.BACKEND_URL.isBlank()) {
             return Result.failure(IllegalStateException("未配置订阅列表接口"))
+        }
+
+        if (!forceRefresh) {
+            loadCachedSubscriptionList()?.let { return Result.success(it) }
         }
 
         return try {
@@ -239,7 +267,11 @@ internal class SubscriptionDataLoader(
         }
     }
 
-    private suspend fun fetchAndPersistNodes(subscriptionList: SubscriptionList): Boolean {
+    private suspend fun fetchAndPersistNodes(
+        subscriptionList: SubscriptionList,
+        sourcesToRefresh: List<SubscriptionSource> = subscriptionList.sources,
+        cachedNodes: List<Node>,
+    ): Boolean {
         if (GlobalTestExecution.mutex.isLocked) {
             onMessage(GlobalTestExecution.busyHint())
             return false
@@ -256,23 +288,37 @@ internal class SubscriptionDataLoader(
                 onMessage("当前无网络连接，无法获取节点")
                 return false
             }
-            val result = fetchNodesFromSubscriptions(subscriptionList.sources)
+            val result = fetchNodesFromSubscriptions(sourcesToRefresh)
             if (result.isFailure) {
                 val error = result.exceptionOrNull()
+                if (cachedNodes.isNotEmpty()) {
+                    Log.w(TAG, "Failed to refresh subscriptions; using cached nodes", error)
+                    nodeDao().replaceSubscriptionNodes(cachedNodes)
+                    lastFetchedNodes = cachedNodes
+                    onNodesPersisted(cachedNodes)
+                    return true
+                }
                 Log.e(TAG, "Failed to fetch nodes", error)
                 onMessage("获取节点失败: ${error?.message ?: "未知错误"}")
                 return false
             }
 
             val fetchedNodes = result.getOrThrow()
+            val refreshedSourceIds = sourcesToRefresh.mapTo(mutableSetOf()) { it.id }
+            val fetchedSourceIds = fetchedNodes.mapNotNull { it.subscriptionSourceId }.toSet()
+            val retainedNodes = cachedNodes.filter { node ->
+                node.subscriptionSourceId !in refreshedSourceIds ||
+                    node.subscriptionSourceId !in fetchedSourceIds
+            }
             val connectedNode = activeNode()?.takeIf { it.source == NodeSource.SUBSCRIPTION }
+            val mergedFetchedNodes = (retainedNodes + fetchedNodes).distinctBy(Node::id)
             val nodesToPersist = if (
                 connectedNode != null && fetchedNodes.none { it.id == connectedNode.id }
             ) {
                 Log.w(TAG, "Retaining active node missing from refreshed subscription: ${connectedNode.id}")
-                fetchedNodes + connectedNode
+                mergedFetchedNodes + connectedNode
             } else {
-                fetchedNodes
+                mergedFetchedNodes
             }
             nodeDao().replaceSubscriptionNodes(nodesToPersist)
             lastFetchedNodes = nodesToPersist

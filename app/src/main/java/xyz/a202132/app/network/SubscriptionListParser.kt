@@ -67,13 +67,18 @@ class SubscriptionListParser {
         val minLevel = readInt(source, "minLevel")
             ?.takeIf { it in MIN_ACCOUNT_LEVEL..MAX_ACCOUNT_LEVEL }
             ?: DEFAULT_MIN_LEVEL
+        val refreshOnAppOpen = source.get("refreshOnAppOpen")?.let { readBoolean(it) }
+            ?: source.get("openAppImmediateUpdate")?.let { readBoolean(it) }
+            ?: source.get("updateOnAppOpen")?.let { readBoolean(it) }
+            ?: true
         return SubscriptionSource(
             id = "",
             name = name,
             url = url,
             enabled = enabled,
             encrypted = encrypted,
-            minLevel = minLevel
+            minLevel = minLevel,
+            refreshOnAppOpen = refreshOnAppOpen
         )
     }
 
