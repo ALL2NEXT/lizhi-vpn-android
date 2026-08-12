@@ -65,6 +65,9 @@ data class BackendAppSettings(
     @SerializedName("experienceThresholds")
     val experienceThresholds: List<Long> = listOf(100L, 200L, 400L, 800L, 1600L),
 
+    @SerializedName("dailyCheckinExperience")
+    val dailyCheckinExperience: Long = 10L,
+
     @SerializedName("telegramGroupUrl")
     val telegramGroupUrl: String = "",
 
@@ -210,6 +213,31 @@ data class TelegramTaskSubmitRequest(
     val telegramNickname: String
 )
 
+data class DailyCheckinRequest(
+    @SerializedName("uid")
+    val uid: String
+)
+
+data class DailyCheckinStatus(
+    @SerializedName("enabled")
+    val enabled: Boolean = true,
+
+    @SerializedName("date")
+    val date: String = "",
+
+    @SerializedName("rewardExperience")
+    val rewardExperience: Long = 10L,
+
+    @SerializedName("status")
+    val status: String = "not_checked_in",
+
+    @SerializedName("checkedInAt")
+    val checkedInAt: String = "",
+
+    @SerializedName("experienceAwarded")
+    val experienceAwarded: Long = 0L
+)
+
 data class TelegramTaskStatus(
     @SerializedName("enabled")
     val enabled: Boolean = false,
@@ -243,11 +271,19 @@ data class TelegramTaskResponse(
     @SerializedName("account")
     val account: AccountInfo? = null,
 
+    @SerializedName("checkin")
+    val checkin: DailyCheckinStatus? = null,
+
     @SerializedName("telegram")
     val telegram: TelegramTaskStatus? = null,
 
     @SerializedName("error")
     val error: String? = null
+)
+
+data class TaskCenterStatus(
+    val checkin: DailyCheckinStatus,
+    val telegram: TelegramTaskStatus
 )
 
 data class TrafficReportRequest(

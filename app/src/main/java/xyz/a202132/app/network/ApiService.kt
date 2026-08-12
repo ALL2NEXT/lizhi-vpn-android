@@ -14,6 +14,7 @@ import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.AccountRegisterResponse
+import xyz.a202132.app.data.model.DailyCheckinRequest
 import xyz.a202132.app.data.model.TelegramTaskResponse
 import xyz.a202132.app.data.model.TelegramTaskSubmitRequest
 import xyz.a202132.app.data.model.TrafficReportRequest
@@ -60,6 +61,12 @@ interface ApiService {
     @GET
     suspend fun getTelegramTask(
         @Url url: String
+    ): TelegramTaskResponse
+
+    @POST
+    suspend fun dailyCheckin(
+        @Url url: String,
+        @Body request: DailyCheckinRequest
     ): TelegramTaskResponse
 
     @POST

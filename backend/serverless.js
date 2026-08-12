@@ -14,6 +14,7 @@
  *   POST /api/account/login     // 使用邮箱和密码切换账户
  *   POST /api/account/delete    // 永久删除当前账户
  *   GET  /api/account/tasks?uid=<UID>
+ *   POST /api/account/tasks/checkin
  *   POST /api/account/tasks/telegram
  *   POST /api/debug/users       // 临时公开调试用户接口，测试结束后应移除
  *
@@ -39,6 +40,7 @@ const MAX_DEBUG_TRAFFIC_RECORDS = 400;
 const MAX_TRAFFIC_BYTES = 1e15;
 const MAX_ACCOUNT_EXPERIENCE = 1e12;
 const ACCOUNT_BINDING_EXPERIENCE = 50;
+const DEFAULT_DAILY_CHECKIN_EXPERIENCE = 10;
 const DEFAULT_TELEGRAM_TASK_EXPERIENCE = 50;
 const DEFAULT_EXPERIENCE_THRESHOLDS = [100, 200, 400, 800, 1600];
 const SUBSCRIPTION_CACHE_KEY_PREFIX = "fireflyvpn:subscription-cache:v1:";
@@ -102,6 +104,17 @@ const USER_SCHEMA_STATEMENTS = [
 )`,
 `CREATE INDEX IF NOT EXISTS idx_telegram_task_submissions_mb_status
   ON telegram_task_submissions_mb(status, submitted_at DESC)`,
+`CREATE TABLE IF NOT EXISTS daily_checkins_mb (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  checkin_date TEXT NOT NULL,
+  checked_in_at TEXT NOT NULL,
+  experience_awarded INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (user_id, checkin_date),
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+)`,
+`CREATE INDEX IF NOT EXISTS idx_daily_checkins_mb_user_date
+  ON daily_checkins_mb(user_id, checkin_date DESC)`,
 ];
 const USER_SCHEMA_MIGRATIONS = [
   "ALTER TABLE users_mb ADD COLUMN experience INTEGER NOT NULL DEFAULT 0",
@@ -123,6 +136,7 @@ const DEFAULT_STATE = {
     githubUrl: "",
     nodeRequestTimeoutMs: 25000,
     experienceThresholds: DEFAULT_EXPERIENCE_THRESHOLDS,
+    dailyCheckinExperience: DEFAULT_DAILY_CHECKIN_EXPERIENCE,
     telegramGroupUrl: "",
     telegramTaskExperience: DEFAULT_TELEGRAM_TASK_EXPERIENCE,
   },
@@ -390,6 +404,7 @@ async function handleAccount(path, request, env) {
     const result = await db.batch([
       db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
     ]);
     const deleteResult = result[result.length - 1];
@@ -434,7 +449,64 @@ async function handleAccount(path, request, env) {
     return json({
       ok: true,
       account: publicAccount(user),
+      checkin: await readDailyCheckin(env, identity.userId, state.settings),
       telegram: await readTelegramTask(env, identity.userId, state.settings),
+    });
+  }
+
+  if (path === "/api/account/tasks/checkin" && request.method === "POST") {
+    const body = await request.json();
+    const reference = body && (body.uid || body.accountId);
+    const identity = await resolveUserIdentity(env, reference);
+    if (!identity) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+
+    const state = await readState(env);
+    const db = await ensureUserSchema(env);
+    const user = await readD1User(env, identity.userId);
+    if (!user) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    if (user.level === 0) {
+      return json({ ok: false, error: "account_banned" }, 403);
+    }
+
+    const checkinDate = usagePeriodKeys(new Date()).day;
+    const checkedInAt = beijingTimestamp();
+    const reward = normalizeExperience(
+      state.settings.dailyCheckinExperience,
+      DEFAULT_DAILY_CHECKIN_EXPERIENCE,
+    );
+    const progression = applyExperience(
+      user.level,
+      user.experience,
+      reward,
+      state.settings.experienceThresholds,
+    );
+    const inserted = await db.prepare(
+      `INSERT OR IGNORE INTO daily_checkins_mb
+       (user_id, checkin_date, checked_in_at, experience_awarded)
+       VALUES (?, ?, ?, ?)`,
+    ).bind(identity.userId, checkinDate, checkedInAt, reward).run();
+    if (!inserted || !inserted.meta || Number(inserted.meta.changes) < 1) {
+      return json({
+        ok: false,
+        error: "daily_checkin_already_completed",
+        account: publicAccount(user),
+        checkin: await readDailyCheckin(env, identity.userId, state.settings),
+      });
+    }
+
+    await db.prepare(
+      "UPDATE users_mb SET experience = ?, level = ? WHERE id = ?",
+    ).bind(progression.experience, progression.level, identity.userId).run();
+
+    const updated = await readD1User(env, identity.userId);
+    return json({
+      ok: true,
+      account: publicAccount(updated),
+      checkin: await readDailyCheckin(env, identity.userId, state.settings),
     });
   }
 
@@ -1028,14 +1100,15 @@ async function handleAdmin(path, request, env) {
       statements.push(
         db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
+        db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
       );
     }
     const result = await db.batch(statements);
     const changed = identities.reduce(
       (total, _identity, index) => total + Number(
-        result[index * 3 + 2] && result[index * 3 + 2].meta
-          ? result[index * 3 + 2].meta.changes
+        result[index * 4 + 3] && result[index * 4 + 3].meta
+          ? result[index * 4 + 3].meta.changes
           : 0,
       ),
       0,
@@ -1051,6 +1124,7 @@ async function handleAdmin(path, request, env) {
     const result = await db.batch([
       db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
     ]);
     const deleteResult = result[result.length - 1];
@@ -1156,6 +1230,27 @@ function publicAccount(user) {
     androidVersion: user.androidVersion,
     androidSdk: normalizeAndroidSdk(user.androidSdk),
     appVersion: user.appVersion,
+  };
+}
+
+async function readDailyCheckin(env, userId, settings) {
+  const db = await ensureUserSchema(env);
+  const checkinDate = usagePeriodKeys(new Date()).day;
+  const row = await db.prepare(
+    `SELECT checked_in_at, experience_awarded
+     FROM daily_checkins_mb
+     WHERE user_id = ? AND checkin_date = ?`,
+  ).bind(userId, checkinDate).first();
+  return {
+    enabled: true,
+    date: checkinDate,
+    rewardExperience: normalizeExperience(
+      settings && settings.dailyCheckinExperience,
+      DEFAULT_DAILY_CHECKIN_EXPERIENCE,
+    ),
+    status: row ? "checked_in" : "not_checked_in",
+    checkedInAt: cleanText(row && row.checked_in_at),
+    experienceAwarded: normalizeExperience(row && row.experience_awarded),
   };
 }
 
@@ -2254,6 +2349,10 @@ function normalizeSettings(value) {
       ? Math.round(Math.min(Math.max(timeout, 5000), 60000))
       : 25000,
     experienceThresholds: normalizeExperienceThresholds(settings.experienceThresholds),
+    dailyCheckinExperience: normalizeExperience(
+      settings.dailyCheckinExperience,
+      DEFAULT_DAILY_CHECKIN_EXPERIENCE,
+    ),
     telegramGroupUrl: normalizeTelegramGroupUrl(settings.telegramGroupUrl),
     telegramTaskExperience: normalizeExperience(
       settings.telegramTaskExperience,
@@ -2619,6 +2718,7 @@ function adminHtml() {
       <div class="field"><label>问题反馈链接<input id="feedbackUrl" type="url" placeholder="https://github.com/.../issues"></label></div>
        <div class="field"><label>项目源码链接<input id="githubUrl" type="url" placeholder="https://github.com/.../.../"></label></div>
        <div class="field"><label>后台请求超时（毫秒）<input id="nodeRequestTimeoutMs" type="number" min="5000" max="60000" step="1000"></label></div>
+       <div class="field"><label>每日签到经验奖励<input id="dailyCheckinExperience" type="number" min="0" step="1"></label></div>
        <div class="field"><label>TG 群连接<input id="telegramGroupUrl" type="text" placeholder="https://t.me/your_group"></label></div>
        <div class="field"><label>TG 任务经验奖励<input id="telegramTaskExperience" type="number" min="0" step="1"></label></div>
       <div class="field"><label>Lv1 → Lv2 所需经验<input id="experienceThresholdLv2" type="number" min="1" step="1"></label></div>
@@ -4121,6 +4221,7 @@ function fillState(state) {
   setValue('feedbackUrl', settings.feedbackUrl);
    setValue('githubUrl', settings.githubUrl);
    setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
+   setValue('dailyCheckinExperience', settings.dailyCheckinExperience == null ? 10 : settings.dailyCheckinExperience);
    setValue('telegramGroupUrl', settings.telegramGroupUrl);
    setValue('telegramTaskExperience', settings.telegramTaskExperience == null ? 50 : settings.telegramTaskExperience);
   const experienceThresholds = Array.isArray(settings.experienceThresholds)
@@ -4194,6 +4295,7 @@ function formState() {
       feedbackUrl: value('feedbackUrl'),
        githubUrl: value('githubUrl'),
        nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
+       dailyCheckinExperience: Number(value('dailyCheckinExperience') || 0),
        telegramGroupUrl: value('telegramGroupUrl'),
        telegramTaskExperience: Number(value('telegramTaskExperience') || 0),
        experienceThresholds: [

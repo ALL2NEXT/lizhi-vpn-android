@@ -114,10 +114,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val accountMessage = _accountMessage.asStateFlow()
     private val _telegramTaskStatus = MutableStateFlow<TelegramTaskStatus?>(null)
     val telegramTaskStatus = _telegramTaskStatus.asStateFlow()
+    private val _dailyCheckinStatus = MutableStateFlow<DailyCheckinStatus?>(null)
+    val dailyCheckinStatus = _dailyCheckinStatus.asStateFlow()
     private val _isLoadingTelegramTask = MutableStateFlow(false)
     val isLoadingTelegramTask = _isLoadingTelegramTask.asStateFlow()
     private val _isSubmittingTelegramTask = MutableStateFlow(false)
     val isSubmittingTelegramTask = _isSubmittingTelegramTask.asStateFlow()
+    private val _isCheckingIn = MutableStateFlow(false)
+    val isCheckingIn = _isCheckingIn.asStateFlow()
+    private val _dailyCheckinMessage = MutableStateFlow<String?>(null)
+    val dailyCheckinMessage = _dailyCheckinMessage.asStateFlow()
     private val _telegramTaskMessage = MutableStateFlow<String?>(null)
     val telegramTaskMessage = _telegramTaskMessage.asStateFlow()
     
@@ -1401,18 +1407,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoadingTelegramTask.value = true
             _telegramTaskStatus.value = null
+            _dailyCheckinStatus.value = null
             _telegramTaskMessage.value = null
             try {
-                accountManager.getTelegramTaskStatus(
+                accountManager.getTaskCenterStatus(
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess { status ->
-                    _telegramTaskStatus.value = status
+                    _dailyCheckinStatus.value = status.checkin
+                    _telegramTaskStatus.value = status.telegram
                 }.onFailure { error ->
-                    Log.w(tag, "Failed to load Telegram task", error)
+                    Log.w(tag, "Failed to load task center", error)
                     _telegramTaskMessage.value = telegramTaskErrorMessage(error)
                 }
             } finally {
                 _isLoadingTelegramTask.value = false
+            }
+        }
+    }
+
+    fun dailyCheckin() {
+        if (_isCheckingIn.value) return
+        viewModelScope.launch {
+            _isCheckingIn.value = true
+            _dailyCheckinMessage.value = null
+            try {
+                accountManager.dailyCheckin(
+                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                ).onSuccess { status ->
+                    _dailyCheckinStatus.value = status
+                    _dailyCheckinMessage.value = "签到成功，获得 ${status.experienceAwarded} 经验"
+                }.onFailure { error ->
+                    Log.w(tag, "Failed to complete daily check-in", error)
+                    _dailyCheckinMessage.value = telegramTaskErrorMessage(error)
+                }
+            } finally {
+                _isCheckingIn.value = false
             }
         }
     }
@@ -1441,6 +1470,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearTelegramTaskMessage() {
         _telegramTaskMessage.value = null
+        _dailyCheckinMessage.value = null
     }
 
     /** 客户端再次校验公告时间，避免配置缓存导致过期公告继续显示。 */
@@ -1573,13 +1603,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun telegramTaskErrorMessage(error: Throwable): String {
         return when (error.message) {
+            "daily_checkin_already_completed" -> "今天已经签到过了"
+            "daily_checkin_disabled" -> "每日签到暂未开放"
             "invalid_telegram_task_submission" -> "请输入有效的 TG 昵称"
             "telegram_task_disabled" -> "后台暂未配置 TG 群任务"
             "telegram_task_already_submitted" -> "TG 任务已经提交，请等待后台审核"
             "telegram_task_already_approved" -> "TG 加群任务已经审核通过"
             "telegram_task_permanently_rejected" -> "TG 加群任务已被拒绝，无法再次提交"
             "account_banned" -> "账户已被封禁，无法提交任务"
-            else -> error.message ?: "TG 任务操作失败"
+            else -> error.message ?: "任务操作失败"
         }
     }
 

@@ -15,9 +15,12 @@ import xyz.a202132.app.data.model.AccountDeleteRequest
 import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
+import xyz.a202132.app.data.model.DailyCheckinRequest
+import xyz.a202132.app.data.model.DailyCheckinStatus
 import xyz.a202132.app.data.model.TelegramTaskResponse
 import xyz.a202132.app.data.model.TelegramTaskStatus
 import xyz.a202132.app.data.model.TelegramTaskSubmitRequest
+import xyz.a202132.app.data.model.TaskCenterStatus
 import xyz.a202132.app.data.model.TrafficReportRequest
 import xyz.a202132.app.data.model.TrafficReportResponse
 import java.security.MessageDigest
@@ -98,9 +101,9 @@ class AccountManager(private val context: Context) {
         }
     }
 
-    suspend fun getTelegramTaskStatus(
+    suspend fun getTaskCenterStatus(
         timeoutMs: Long = 10000L
-    ): Result<TelegramTaskStatus> {
+    ): Result<TaskCenterStatus> {
         val registered = currentAccount()
             ?: return Result.failure(IllegalStateException("账户尚未同步"))
 
@@ -111,9 +114,38 @@ class AccountManager(private val context: Context) {
                 )
             }
             response.account?.let(::persistAccount)
-            response.telegram ?: throw IllegalStateException(
-                response.error ?: "后台未返回 TG 任务状态"
+            TaskCenterStatus(
+                checkin = response.checkin ?: throw IllegalStateException(
+                    response.error ?: "后台未返回签到状态"
+                ),
+                telegram = response.telegram ?: throw IllegalStateException(
+                    response.error ?: "后台未返回 TG 任务状态"
+                )
             )
+        }
+    }
+
+    suspend fun dailyCheckin(
+        timeoutMs: Long = 10000L
+    ): Result<DailyCheckinStatus> {
+        val registered = currentAccount()
+            ?: return Result.failure(IllegalStateException("账户尚未同步"))
+        if (registered.level == 0) {
+            return Result.failure(IllegalStateException("account_banned"))
+        }
+
+        return runCatching {
+            val response: TelegramTaskResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.dailyCheckin(
+                    accountEndpoint("/api/account/tasks/checkin"),
+                    DailyCheckinRequest(uid = registered.uid)
+                )
+            }
+            if (!response.ok) {
+                throw IllegalStateException(response.error ?: "每日签到失败")
+            }
+            response.account?.let(::persistAccount)
+            response.checkin ?: throw IllegalStateException("后台未返回签到状态")
         }
     }
 
