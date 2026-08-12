@@ -196,10 +196,10 @@ internal class DisconnectRecoveryManager(
 
     private fun subscriptionRequestUrl(url: String): String {
         if (!isWorkerManagedSubscription(url)) return url
-        val accountId = accountManager.currentAccount()?.id ?: accountManager.accountId()
+        val uid = accountManager.currentAccount()?.uid ?: accountManager.accountId()
         val separator = if ('?' in url) '&' else '?'
-        val encodedAccountId = java.net.URLEncoder.encode(accountId, Charsets.UTF_8.name())
-        return "$url${separator}accountId=$encodedAccountId"
+        val encodedUid = java.net.URLEncoder.encode(uid, Charsets.UTF_8.name())
+        return "$url${separator}uid=$encodedUid"
     }
 
     private fun isWorkerManagedSubscription(url: String): Boolean {

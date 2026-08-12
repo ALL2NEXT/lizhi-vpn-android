@@ -41,8 +41,6 @@ enum class NodeImportResult {
     INVALID
 }
 
-private const val BYTES_PER_MEGABYTE = 1024.0 * 1024.0
-
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
@@ -66,6 +64,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val THROTTLE_INTERVAL = 5000L // 5秒节流间隔
     private var lastCheckUpdateTime = 0L
     private var trafficSessionId: String? = null
+    private var trafficSessionStartedAt: Long? = null
+    private var trafficSubscriptionGroupName: String = ""
     private var nodeLocationEnrichmentJob: Job? = null
     private val subscriptionDataLoader = SubscriptionDataLoader(
         context = application,
@@ -320,6 +320,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ServiceManager.vpnState.collect { state ->
                 if (state == VpnState.CONNECTED && previousState != VpnState.CONNECTED) {
                     trafficSessionId = UUID.randomUUID().toString()
+                    trafficSessionStartedAt = System.currentTimeMillis()
+                    trafficSubscriptionGroupName =
+                        ServiceManager.currentNode.value?.subscriptionSourceName.orEmpty()
                 }
                 if (state == VpnState.DISCONNECTING) {
                     reportTrafficOnDisconnect()
@@ -331,15 +334,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun reportTrafficOnDisconnect() {
         val sessionId = trafficSessionId ?: return
+        val startedAt = trafficSessionStartedAt ?: System.currentTimeMillis()
+        val endedAt = System.currentTimeMillis()
+        val subscriptionGroupName = trafficSubscriptionGroupName
         trafficSessionId = null
+        trafficSessionStartedAt = null
+        trafficSubscriptionGroupName = ""
         // Read the service counters directly before the stop routine resets them.
-        val uploadMb = BoxVpnService.uploadTotal.coerceAtLeast(0L) / BYTES_PER_MEGABYTE
-        val downloadMb = BoxVpnService.downloadTotal.coerceAtLeast(0L) / BYTES_PER_MEGABYTE
+        val uploadBytes = BoxVpnService.uploadTotal.coerceAtLeast(0L)
+        val downloadBytes = BoxVpnService.downloadTotal.coerceAtLeast(0L)
         viewModelScope.launch(Dispatchers.IO) {
             accountManager.reportTraffic(
                 sessionId = sessionId,
-                uploadMb = uploadMb,
-                downloadMb = downloadMb
+                subscriptionGroupName = subscriptionGroupName,
+                startedAt = startedAt,
+                endedAt = endedAt,
+                uploadBytes = uploadBytes,
+                downloadBytes = downloadBytes
             ).onFailure { error ->
                 Log.w(tag, "Traffic report failed", error)
             }

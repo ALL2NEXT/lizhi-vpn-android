@@ -259,6 +259,15 @@ private fun UserAccountCard(
                     color = if (isBanned) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.primary
                 )
+                if (accountInfo != null) {
+                    Text(
+                        text = "UID: ${accountInfo.uid}",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (deviceText.isNotBlank()) {
                     Text(
                         text = deviceText,

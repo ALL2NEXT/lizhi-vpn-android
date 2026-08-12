@@ -77,7 +77,7 @@ class AccountManager(private val context: Context) {
                 NetworkClient.apiService.updateAccountProfile(
                     accountEndpoint("/api/account/profile"),
                     AccountProfileUpdateRequest(
-                        accountId = registered.id,
+                        uid = registered.uid,
                         nickname = normalizedNickname
                     )
                 )
@@ -92,8 +92,11 @@ class AccountManager(private val context: Context) {
 
     suspend fun reportTraffic(
         sessionId: String,
-        uploadMb: Double,
-        downloadMb: Double,
+        subscriptionGroupName: String,
+        startedAt: Long,
+        endedAt: Long,
+        uploadBytes: Long,
+        downloadBytes: Long,
         timeoutMs: Long = 10000L
     ): Result<TrafficReportResponse> {
         val registered = currentAccount()
@@ -108,10 +111,13 @@ class AccountManager(private val context: Context) {
                 NetworkClient.apiService.reportTraffic(
                     accountEndpoint("/api/account/report"),
                     TrafficReportRequest(
-                        accountId = registered.id,
+                        uid = registered.uid,
                         sessionId = sessionId,
-                        uploadMb = uploadMb.coerceAtLeast(0.0),
-                        downloadMb = downloadMb.coerceAtLeast(0.0)
+                        subscriptionGroupName = subscriptionGroupName.trim(),
+                        startedAt = startedAt,
+                        endedAt = endedAt,
+                        uploadBytes = uploadBytes.coerceAtLeast(0L),
+                        downloadBytes = downloadBytes.coerceAtLeast(0L)
                     )
                 )
             }
@@ -145,11 +151,11 @@ class AccountManager(private val context: Context) {
     }
 
     private fun loadPersistedAccount(): AccountInfo? {
-        val id = preferences.getString(ACCOUNT_ID_KEY, null)
+        val uid = preferences.getString(ACCOUNT_ID_KEY, null)
             ?.takeIf { it.isNotBlank() }
             ?: return null
         return AccountInfo(
-            id = id,
+            uid = uid,
             nickname = preferences.getString(ACCOUNT_NICKNAME_KEY, null)
                 ?.takeIf { it.isNotBlank() }
                 ?: "流萤用户",
@@ -165,7 +171,7 @@ class AccountManager(private val context: Context) {
         val normalized = account.copy(level = account.level.coerceIn(0, 6))
         _accountInfo.value = normalized
         preferences.edit()
-            .putString(ACCOUNT_ID_KEY, normalized.id)
+            .putString(ACCOUNT_ID_KEY, normalized.uid)
             .putString(ACCOUNT_NICKNAME_KEY, normalized.nickname)
             .putInt(ACCOUNT_LEVEL_KEY, normalized.level)
             .putString(ACCOUNT_BRAND_KEY, normalized.brand)

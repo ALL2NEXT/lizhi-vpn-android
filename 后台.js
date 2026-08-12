@@ -10,14 +10,17 @@
  * Public client endpoint:
  *   GET /api/client
  *   GET /api/client?refresh=1   // refresh is handled by the app; query is tolerated for compatibility
- *   GET /api/subscription/<id>  // authenticated Worker relay; all sources are encrypted here
+ *   GET /api/subscription/<id>?uid=<UID>  // authenticated Worker relay; all sources are encrypted here
+ *   POST /api/debug/users       // temporary public debug user upsert; remove after testing
  *
  * Admin endpoints:
  *   GET  /<ADMIN_UUID>
  *   GET  /<ADMIN_UUID>/api/state
  *   PUT  /<ADMIN_UUID>/api/state
  *   GET  /<ADMIN_UUID>/api/users
- *   DELETE /<ADMIN_UUID>/api/users/<ACCOUNT_ID>
+ *   GET  /<ADMIN_UUID>/api/users/growth?period=day|week|month&start=YYYY-MM-DD&end=YYYY-MM-DD
+ *   GET  /<ADMIN_UUID>/api/users/traffic?period=day|week|month&start=YYYY-MM-DD&end=YYYY-MM-DD
+ *   DELETE /<ADMIN_UUID>/api/users/<UID>
  *   PATCH /<ADMIN_UUID>/api/users/batch       // batch level changes
  *   DELETE /<ADMIN_UUID>/api/users/batch      // batch user deletion
  */
@@ -26,6 +29,8 @@ const STATE_KEY = "fireflyvpn:state:v1";
 const CLIENT_IP_HEADER = "X-Firefly-Client-IP";
 const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 const MAX_BATCH_USER_COUNT = 100;
+const MAX_DEBUG_TRAFFIC_RECORDS = 400;
+const MAX_TRAFFIC_BYTES = 1e15;
 const SUBSCRIPTION_CACHE_KEY_PREFIX = "fireflyvpn:subscription-cache:v1:";
 const DEFAULT_SUBSCRIPTION_CACHE_MINUTES = 30;
 const MAX_SUBSCRIPTION_CACHE_MINUTES = 7 * 24 * 60;
@@ -39,72 +44,37 @@ const ADMIN_BASE_PATH = `/${ADMIN_UUID}`;
 
 const USER_SCHEMA_STATEMENTS = [
 `CREATE TABLE IF NOT EXISTS users_mb (
-  id TEXT PRIMARY KEY,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uid TEXT NOT NULL UNIQUE,
   nickname TEXT NOT NULL,
   level INTEGER NOT NULL DEFAULT 1 CHECK (level BETWEEN 0 AND 6),
+  created_at TEXT NOT NULL
+)`,
+`CREATE INDEX IF NOT EXISTS idx_users_mb_created_at ON users_mb(created_at DESC)`,
+`CREATE TABLE IF NOT EXISTS user_devices_mb (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  device_id TEXT NOT NULL UNIQUE,
   brand TEXT NOT NULL DEFAULT '',
   model TEXT NOT NULL DEFAULT '',
   android_version TEXT NOT NULL DEFAULT '',
   app_version TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL,
-  last_seen_at TEXT NOT NULL,
-  last_report_at TEXT,
-  updated_at TEXT NOT NULL,
-  total_upload_mb REAL NOT NULL DEFAULT 0,
-  total_download_mb REAL NOT NULL DEFAULT 0
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
 )`,
-`CREATE INDEX IF NOT EXISTS idx_users_mb_last_seen ON users_mb(last_seen_at DESC)`,
+`CREATE INDEX IF NOT EXISTS idx_user_devices_mb_user_id ON user_devices_mb(user_id)`,
 `CREATE TABLE IF NOT EXISTS user_usage_mb (
-  account_id TEXT NOT NULL,
-  period_type TEXT NOT NULL CHECK (period_type IN ('day', 'month')),
-  period_key TEXT NOT NULL,
-  upload_mb REAL NOT NULL DEFAULT 0,
-  download_mb REAL NOT NULL DEFAULT 0,
-  active INTEGER NOT NULL DEFAULT 1,
-  PRIMARY KEY (account_id, period_type, period_key),
-  FOREIGN KEY (account_id) REFERENCES users_mb(id) ON DELETE CASCADE
-)`,
-`CREATE INDEX IF NOT EXISTS idx_user_usage_mb_period ON user_usage_mb(period_type, period_key)`,
-`CREATE TABLE IF NOT EXISTS reported_sessions_mb (
-  account_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
   session_id TEXT NOT NULL,
-  reported_at TEXT NOT NULL,
-  upload_mb REAL NOT NULL DEFAULT 0,
-  download_mb REAL NOT NULL DEFAULT 0,
-  day_key TEXT NOT NULL,
-  month_key TEXT NOT NULL,
-  PRIMARY KEY (account_id, session_id),
-  FOREIGN KEY (account_id) REFERENCES users_mb(id) ON DELETE CASCADE
+  subscription_group_name TEXT NOT NULL DEFAULT '',
+  started_at TEXT NOT NULL,
+  ended_at TEXT NOT NULL,
+  upload_bytes INTEGER NOT NULL DEFAULT 0,
+  download_bytes INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, session_id),
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
 )`,
-`CREATE INDEX IF NOT EXISTS idx_reported_sessions_mb_time
-  ON reported_sessions_mb(account_id, reported_at DESC)`,
-`CREATE INDEX IF NOT EXISTS idx_reported_sessions_mb_day
-  ON reported_sessions_mb(day_key, account_id)`,
-`CREATE TRIGGER IF NOT EXISTS trg_reported_session_usage_mb
-AFTER INSERT ON reported_sessions_mb
-BEGIN
-  UPDATE users_mb SET
-    last_seen_at = NEW.reported_at,
-    last_report_at = NEW.reported_at,
-    updated_at = NEW.reported_at,
-    total_upload_mb = total_upload_mb + NEW.upload_mb,
-    total_download_mb = total_download_mb + NEW.download_mb
-  WHERE id = NEW.account_id;
-  INSERT INTO user_usage_mb
-    (account_id, period_type, period_key, upload_mb, download_mb, active)
-    VALUES (NEW.account_id, 'day', NEW.day_key, NEW.upload_mb, NEW.download_mb, 1)
-    ON CONFLICT(account_id, period_type, period_key) DO UPDATE SET
-      upload_mb = upload_mb + excluded.upload_mb,
-      download_mb = download_mb + excluded.download_mb,
-      active = 1;
-  INSERT INTO user_usage_mb
-    (account_id, period_type, period_key, upload_mb, download_mb, active)
-    VALUES (NEW.account_id, 'month', NEW.month_key, NEW.upload_mb, NEW.download_mb, 1)
-    ON CONFLICT(account_id, period_type, period_key) DO UPDATE SET
-      upload_mb = upload_mb + excluded.upload_mb,
-      download_mb = download_mb + excluded.download_mb,
-      active = 1;
-END`,
+`CREATE INDEX IF NOT EXISTS idx_user_usage_mb_time
+  ON user_usage_mb(user_id, ended_at DESC)`,
 ];
 let userSchemaReady = false;
 
@@ -162,6 +132,11 @@ export default {
         return handleAccount(path, request, env);
       }
 
+      // Temporary public debug endpoint; remove this route and its handler when testing is finished.
+      if (path === "/api/debug/users" && request.method === "POST") {
+        return handleDebugUserV2(request, env);
+      }
+
       if (path.startsWith(`${ADMIN_BASE_PATH}/api/`)) {
         if (!isAdmin(request, env)) {
           return json({ error: "unauthorized" }, 401);
@@ -211,11 +186,12 @@ async function handleManagedSubscription(path, request, env) {
     return json({ error: "subscription_not_found" }, 404);
   }
 
-  const accountId = normalizeAccountId(new URL(request.url).searchParams.get("accountId"));
-  if (!accountId) {
-    return json({ ok: false, error: "account_hash_required" }, 401);
+  const requestUrl = new URL(request.url);
+  const reference = requestUrl.searchParams.get("uid") || requestUrl.searchParams.get("accountId");
+  if (!normalizeUserReference(reference)) {
+    return json({ ok: false, error: "uid_required" }, 401);
   }
-  const access = await resolveAccountAccess(env, accountId);
+  const access = await resolveAccountAccess(env, reference);
   if (source.minLevel > access.level) {
     return json({ ok: false, error: "insufficient_level" }, 403);
   }
@@ -244,48 +220,50 @@ async function handleManagedSubscription(path, request, env) {
 async function handleAccount(path, request, env) {
   if (path === "/api/account/register" && request.method === "POST") {
     const body = await request.json();
-    const accountId = normalizeAccountId(body && body.deviceId);
-    if (!accountId) {
+    const deviceId = normalizeAccountId(body && body.deviceId);
+    if (!deviceId) {
       return json({ ok: false, error: "invalid_device_id" }, 400);
     }
 
     const now = new Date();
     await ensureUserSchema(env);
-    await registerOrTouchUser(env, accountId, body || {}, now);
-    const user = await readD1User(env, accountId);
+    await registerOrTouchUser(env, deviceId, body || {}, now);
+    const user = await readD1User(env, deviceId);
 
     return json({ ok: true, account: publicAccount(user) });
   }
 
   if (path === "/api/account/profile" && request.method === "PATCH") {
     const body = await request.json();
-    const accountId = normalizeAccountId(body && body.accountId);
+    const reference = body && (body.uid || body.accountId);
     const nickname = normalizeNickname(body && body.nickname);
-    if (!accountId || !nickname) {
+    const identity = await resolveUserIdentity(env, reference);
+    if (!identity || !nickname) {
       return json({ ok: false, error: "invalid_profile" }, 400);
     }
 
     const db = await ensureUserSchema(env);
     const result = await db.prepare(
-      "UPDATE users_mb SET nickname = ?, updated_at = ? WHERE id = ?",
-    ).bind(nickname, beijingTimestamp(), accountId).run();
+      "UPDATE users_mb SET nickname = ? WHERE id = ?",
+    ).bind(nickname, identity.userId).run();
     if (!result.meta || Number(result.meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    const user = await readD1User(env, accountId);
+    const user = await readD1User(env, identity.userId);
     return json({ ok: true, account: publicAccount(user) });
   }
 
   if (path === "/api/account/report" && request.method === "POST") {
     const body = await request.json();
-    const accountId = normalizeAccountId(body && body.accountId);
+    const reference = body && (body.uid || body.accountId);
     const sessionId = cleanText(body && body.sessionId).slice(0, 128);
-    if (!accountId || !sessionId) {
+    const identity = await resolveUserIdentity(env, reference);
+    if (!identity || !sessionId) {
       return json({ ok: false, error: "invalid_report" }, 400);
     }
 
     await ensureUserSchema(env);
-    const user = await readD1User(env, accountId);
+    const user = await readD1User(env, identity.userId);
     if (!user) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
@@ -294,46 +272,39 @@ async function handleAccount(path, request, env) {
     }
 
     const now = new Date();
-    const timestamp = beijingTimestamp(now);
+    const endedAt = normalizeReportTimestamp(body && body.endedAt, beijingTimestamp(now));
+    const startedAt = normalizeReportTimestamp(body && body.startedAt, endedAt);
+    if (!startedAt || !endedAt || Date.parse(startedAt) > Date.parse(endedAt)) {
+      return json({ ok: false, error: "invalid_report_time" }, 400);
+    }
     const db = usersDb(env);
-    const uploadMb = boundedMegabytes(body && body.uploadMb);
-    const downloadMb = boundedMegabytes(body && body.downloadMb);
-    const { day, month } = usagePeriodKeys(now);
+    const subscriptionGroupName = cleanText(body && body.subscriptionGroupName).slice(0, 200);
+    const uploadBytes = reportBytes(body && body.uploadBytes, body && body.uploadMb);
+    const downloadBytes = reportBytes(body && body.downloadBytes, body && body.downloadMb);
     const inserted = await db.prepare(
-      `INSERT OR IGNORE INTO reported_sessions_mb
-       (account_id, session_id, reported_at, upload_mb, download_mb, day_key, month_key)
+      `INSERT OR IGNORE INTO user_usage_mb
+       (user_id, session_id, subscription_group_name, started_at, ended_at, upload_bytes, download_bytes)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
-      accountId,
+      identity.userId,
       sessionId,
-      timestamp,
-      uploadMb,
-      downloadMb,
-      day,
-      month,
+      subscriptionGroupName,
+      startedAt,
+      endedAt,
+      uploadBytes,
+      downloadBytes,
     ).run();
     if (!inserted.meta || Number(inserted.meta.changes) < 1) {
-      await db.prepare("UPDATE users_mb SET last_seen_at = ?, updated_at = ? WHERE id = ?")
-        .bind(timestamp, timestamp, accountId).run();
+
       return json({ ok: true, duplicate: true });
     }
 
     await db.batch([
-      db.prepare(`DELETE FROM reported_sessions_mb
-        WHERE account_id = ? AND session_id NOT IN (
-          SELECT session_id FROM reported_sessions_mb
-          WHERE account_id = ? ORDER BY reported_at DESC LIMIT 200
-        )`).bind(accountId, accountId),
       db.prepare(`DELETE FROM user_usage_mb
-        WHERE account_id = ? AND period_type = 'day' AND period_key NOT IN (
-          SELECT period_key FROM user_usage_mb WHERE account_id = ? AND period_type = 'day'
-          ORDER BY period_key DESC LIMIT 400
-        )`).bind(accountId, accountId),
-      db.prepare(`DELETE FROM user_usage_mb
-        WHERE account_id = ? AND period_type = 'month' AND period_key NOT IN (
-          SELECT period_key FROM user_usage_mb WHERE account_id = ? AND period_type = 'month'
-          ORDER BY period_key DESC LIMIT 24
-        )`).bind(accountId, accountId),
+        WHERE user_id = ? AND session_id NOT IN (
+          SELECT session_id FROM user_usage_mb
+          WHERE user_id = ? ORDER BY ended_at DESC LIMIT 200
+        )`).bind(identity.userId, identity.userId),
     ]);
 
     return json({ ok: true });
@@ -342,122 +313,398 @@ async function handleAccount(path, request, env) {
   return json({ error: "account_route_not_found" }, 404);
 }
 
+async function handleDebugUserV2(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (_) {
+    return json({ ok: false, error: "invalid_json" }, 400);
+  }
+  if (!plainObject(body)) {
+    return json({ ok: false, error: "debug_user_body_must_be_object" }, 400);
+  }
+
+  const db = await ensureUserSchema(env);
+  const requestedUid = normalizeUid(body.uid) || normalizeUid(body.id);
+  const requestedDeviceId = normalizeAccountId(body.deviceId) ||
+    normalizeAccountId(body.id) || normalizeAccountId(body.accountId);
+  let identity = requestedUid
+    ? await resolveUserIdentity(env, requestedUid)
+    : requestedDeviceId
+      ? await resolveUserIdentity(env, requestedDeviceId)
+      : null;
+  let created = false;
+  const deviceId = requestedDeviceId || randomDebugAccountId();
+
+  if (!identity) {
+    const uid = requestedUid || randomPublicUid();
+    const createdAt = debugTimestamp(body.createdAt, beijingTimestamp(), "createdAt");
+    const nickname = normalizeNickname(
+      debugText(body.nickname, defaultNickname(uid), 24, "nickname"),
+      defaultNickname(uid),
+    );
+    const level = debugInteger(body.level, 1, 0, 6, "level");
+    await db.prepare(
+      "INSERT INTO users_mb (uid, nickname, level, created_at) VALUES (?, ?, ?, ?)",
+    ).bind(uid, nickname, level, createdAt).run();
+    const user = await db.prepare("SELECT id, uid FROM users_mb WHERE uid = ?").bind(uid).first();
+    if (!user) return json({ ok: false, error: "debug_user_create_failed" }, 500);
+    await db.prepare(
+      "INSERT INTO user_devices_mb " +
+      "(user_id, device_id, brand, model, android_version, app_version) " +
+      "VALUES (?, ?, ?, ?, ?, ?)",
+    ).bind(
+      Number(user.id),
+      deviceId,
+      debugText(body.brand, "", 80, "brand"),
+      debugText(body.model, "", 120, "model"),
+      debugText(body.androidVersion, "", 80, "androidVersion"),
+      debugText(body.appVersion, "", 40, "appVersion"),
+    ).run();
+    identity = { userId: Number(user.id), uid: normalizeUid(user.uid) };
+    created = true;
+  } else {
+    const current = await readD1User(env, identity.userId);
+    const nickname = normalizeNickname(
+      debugText(body.nickname, current && current.nickname, 24, "nickname"),
+      current ? current.nickname : defaultNickname(identity.uid),
+    );
+    const level = debugInteger(body.level, current ? current.level : 1, 0, 6, "level");
+    const createdAt = debugTimestamp(
+      body.createdAt,
+      current && current.createdAt ? current.createdAt : beijingTimestamp(),
+      "createdAt",
+    );
+    await db.prepare(
+      "UPDATE users_mb SET nickname = ?, level = ?, created_at = ? WHERE id = ?",
+    ).bind(nickname, level, createdAt, identity.userId).run();
+    await db.prepare(
+      "UPDATE user_devices_mb SET brand = ?, model = ?, android_version = ?, " +
+      "app_version = ? WHERE user_id = ?",
+    ).bind(
+      debugText(body.brand, current && current.brand, 80, "brand"),
+      debugText(body.model, current && current.model, 120, "model"),
+      debugText(body.androidVersion, current && current.androidVersion, 80, "androidVersion"),
+      debugText(body.appVersion, current && current.appVersion, 40, "appVersion"),
+      identity.userId,
+    ).run();
+  }
+
+  const now = new Date();
+  const statements = [];
+  if (parseFlag(body.replaceUsage, false)) {
+    statements.push(db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId));
+  }
+  const traffic = debugTrafficHistory(body.traffic ?? body.trafficHistory, now);
+  statements.push(...traffic.map((item) => debugTrafficSessionStatement(db, identity.userId, item)));
+  if (statements.length > 0) await db.batch(statements);
+
+  const { day, month } = usagePeriodKeys(now);
+  const saved = await readDebugAdminUser(db, identity.userId, day, month);
+  return json({ ok: true, created, replaced: !created, user: publicAdminUser(saved) });
+}
+
+async function readDebugAdminUser(db, userId, day, month) {
+  return db.prepare(
+    "SELECT u.*, d.brand AS device_brand, d.model AS device_model, " +
+    "d.android_version AS device_android_version, d.app_version AS device_app_version, " +
+    "COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic " +
+      "WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_upload_bytes, " +
+    "COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic " +
+      "WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_download_bytes, " +
+    "CASE WHEN EXISTS (SELECT 1 FROM user_usage_mb traffic WHERE traffic.user_id = u.id " +
+      "AND substr(traffic.started_at, 1, 10) = ?) THEN 1 ELSE 0 END AS active_today, " +
+    "COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic " +
+      "WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?), 0) AS month_upload_bytes, " +
+    "COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic " +
+      "WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?), 0) AS month_download_bytes, " +
+    "CASE WHEN EXISTS (SELECT 1 FROM user_usage_mb traffic WHERE traffic.user_id = u.id " +
+      "AND substr(traffic.started_at, 1, 7) = ?) THEN 1 ELSE 0 END AS active_this_month, " +
+    "(SELECT MAX(ended_at) FROM user_usage_mb traffic WHERE traffic.user_id = u.id) AS last_report_at, " +
+    "COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic WHERE traffic.user_id = u.id), 0) AS total_upload_bytes, " +
+    "COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic WHERE traffic.user_id = u.id), 0) AS total_download_bytes " +
+    "FROM users_mb u " +
+    "LEFT JOIN user_devices_mb d ON d.id = (SELECT id FROM user_devices_mb WHERE user_id = u.id ORDER BY id DESC LIMIT 1) " +
+    "WHERE u.id = ?",
+  ).bind(day, day, day, month, month, month, userId).first();
+}
+
+function debugTrafficHistory(value, now) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > MAX_DEBUG_TRAFFIC_RECORDS) {
+    throw new Error("invalid_debug_traffic");
+  }
+
+  const fallbackTimestamp = beijingTimestamp(now);
+  value.forEach((item) => {
+    if (!plainObject(item)) throw new Error("invalid_debug_traffic");
+  });
+  return value.map((item, index) => {
+    const date = normalizeGrowthDateKey(item.date ?? item.day ?? item.periodKey);
+    const today = usagePeriodKeys(now).day;
+    const startedAt = normalizeReportTimestamp(
+      item.startedAt ?? item.startAt ?? item.startTime ??
+        (date ? `${date}T00:00:00+08:00` : undefined),
+      fallbackTimestamp,
+    );
+    const endedAt = normalizeReportTimestamp(
+      item.endedAt ?? item.endAt ?? item.endTime ??
+        (date ? date === today ? fallbackTimestamp : `${date}T23:59:59+08:00` : undefined),
+      fallbackTimestamp,
+    );
+    if (!startedAt || !endedAt || Date.parse(startedAt) > Date.parse(endedAt)) {
+      throw new Error("invalid_debug_traffic_time");
+    }
+    if (Date.parse(endedAt) > now.getTime() + 60 * 1000) {
+      throw new Error("invalid_debug_traffic_date");
+    }
+    return {
+      sessionId: cleanText(item.sessionId) || `debug-${index + 1}-${startedAt}`,
+      subscriptionGroupName: debugText(
+        item.subscriptionGroupName ?? item.groupName ?? item.subscription,
+        "",
+        200,
+        "subscriptionGroupName",
+      ),
+      startedAt,
+      endedAt,
+      uploadBytes: debugBytes(
+        item.uploadBytes,
+        item.uploadMb,
+        "trafficUploadBytes",
+      ),
+      downloadBytes: debugBytes(
+        item.downloadBytes,
+        item.downloadMb,
+        "trafficDownloadBytes",
+      ),
+    };
+  });
+}
+
+function debugTrafficSessionStatement(db, userId, traffic) {
+  return db.prepare(
+    "INSERT OR IGNORE INTO user_usage_mb " +
+    "(user_id, session_id, subscription_group_name, started_at, ended_at, upload_bytes, download_bytes) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).bind(
+    userId,
+    traffic.sessionId,
+    traffic.subscriptionGroupName,
+    traffic.startedAt,
+    traffic.endedAt,
+    traffic.uploadBytes,
+    traffic.downloadBytes,
+  );
+}
+
+function debugText(value, fallback, maxLength, field) {
+  if (value === undefined) return fallback;
+  if (value !== null && typeof value !== "string") {
+    throw new Error(`invalid_debug_${field}`);
+  }
+  return cleanText(value).replace(/[\u0000-\u001f\u007f]/g, "").slice(0, maxLength);
+}
+
+function debugInteger(value, fallback, minimum, maximum, field) {
+  if (value === undefined) return fallback;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < minimum || number > maximum) {
+    throw new Error(`invalid_debug_${field}`);
+  }
+  return number;
+}
+
+function debugMegabytes(value, fallback, field) {
+  if (value === undefined) return fallback;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0 || number > 1e9) {
+    throw new Error(`invalid_debug_${field}`);
+  }
+  return Math.round(number * 1e6) / 1e6;
+}
+
+function debugBytes(value, legacyMegabytes, field) {
+  if (value === undefined || value === null || value === "") {
+    return megabytesToBytes(debugMegabytes(legacyMegabytes, 0, `${field}LegacyMb`));
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0 || number > MAX_TRAFFIC_BYTES) {
+    throw new Error(`invalid_debug_${field}`);
+  }
+  return Math.round(number);
+}
+
+function debugTimestamp(value, fallback, field) {
+  if (value === undefined) return fallback;
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`invalid_debug_${field}`);
+  }
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error(`invalid_debug_${field}`);
+  }
+  return beijingTimestamp(date);
+}
+
+function debugNullableTimestamp(value, field) {
+  if (value === null || value === "") return null;
+  return debugTimestamp(value, null, field);
+}
+
+function randomDebugAccountId() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function hasOwn(value, key) {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
 async function handleAdmin(path, request, env) {
+  if (path === "/api/users/growth" && request.method === "GET") {
+    const requestUrl = new URL(request.url);
+    const period = normalizeGrowthPeriod(requestUrl.searchParams.get("period"));
+    const startDate = normalizeGrowthDateKey(requestUrl.searchParams.get("start"));
+    const endDate = normalizeGrowthDateKey(requestUrl.searchParams.get("end"));
+    if (startDate === null || endDate === null) {
+      return json({ ok: false, error: "invalid_growth_date_range" }, 400);
+    }
+    if (startDate && endDate && startDate > endDate) {
+      return json({ ok: false, error: "invalid_growth_date_order" }, 400);
+    }
+    const db = await ensureUserSchema(env);
+    const query = await db.prepare(
+      "SELECT created_at FROM users_mb WHERE created_at IS NOT NULL AND created_at <> '' ORDER BY created_at ASC",
+    ).all();
+    const points = buildUserGrowthPoints(
+      query.results || [],
+      period,
+      new Date(),
+      startDate,
+      endDate,
+    );
+
+    return json({
+      ok: true,
+      period,
+      startDate: startDate || null,
+      endDate: endDate || null,
+      points,
+      generatedAt: beijingTimestamp(),
+    });
+  }
+
+  if (path === "/api/users/traffic" && request.method === "GET") {
+    const requestUrl = new URL(request.url);
+    const period = normalizeGrowthPeriod(requestUrl.searchParams.get("period"));
+    const startDate = normalizeGrowthDateKey(requestUrl.searchParams.get("start"));
+    const endDate = normalizeGrowthDateKey(requestUrl.searchParams.get("end"));
+    if (startDate === null || endDate === null) {
+      return json({ ok: false, error: "invalid_traffic_date_range" }, 400);
+    }
+    if (startDate && endDate && startDate > endDate) {
+      return json({ ok: false, error: "invalid_traffic_date_order" }, 400);
+    }
+
+    const db = await ensureUserSchema(env);
+    const query = await db.prepare(
+      `SELECT substr(started_at, 1, 10) AS date_key,
+              SUM(upload_bytes) AS upload_bytes,
+              SUM(download_bytes) AS download_bytes
+       FROM user_usage_mb
+       WHERE started_at IS NOT NULL
+         AND started_at <> ''
+         AND (? = '' OR substr(started_at, 1, 10) >= ?)
+         AND (? = '' OR substr(started_at, 1, 10) <= ?)
+       GROUP BY substr(started_at, 1, 10)
+       ORDER BY substr(started_at, 1, 10) ASC`,
+    ).bind(
+      startDate || "",
+      startDate || "",
+      endDate || "",
+      endDate || "",
+    ).all();
+    const points = buildUserTrafficPoints(
+      query.results || [],
+      period,
+      new Date(),
+      startDate,
+      endDate,
+    );
+
+    return json({
+      ok: true,
+      period,
+      startDate: startDate || null,
+      endDate: endDate || null,
+      points,
+      generatedAt: beijingTimestamp(),
+    });
+  }
+
   if (path === "/api/users" && request.method === "GET") {
     const db = await ensureUserSchema(env);
     const { day, month } = usagePeriodKeys(new Date());
-    // 只有成功接收新的流量会话后，last_report_at 才会更新。
-    // 不使用旧版流量记录的 active 标记，因为早期版本可能在注册时就将其设为活跃。
     const query = await db.prepare(`SELECT
       u.*,
-      COALESCE(d.upload_mb, 0) AS today_upload_mb,
-      COALESCE(d.download_mb, 0) AS today_download_mb,
-      CASE WHEN substr(COALESCE(u.last_report_at, ''), 1, 10) = ?
-        THEN 1 ELSE 0 END AS active_today,
-      COALESCE(m.upload_mb, 0) AS month_upload_mb,
-      COALESCE(m.download_mb, 0) AS month_download_mb,
-      CASE WHEN substr(COALESCE(u.last_report_at, ''), 1, 7) = ?
-        THEN 1 ELSE 0 END AS active_this_month
+      d.brand AS device_brand,
+      d.model AS device_model,
+      d.android_version AS device_android_version,
+      d.app_version AS device_app_version,
+      COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic
+        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_upload_bytes,
+      COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic
+        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_download_bytes,
+      CASE WHEN EXISTS (
+        SELECT 1 FROM user_usage_mb traffic
+        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?
+      ) THEN 1 ELSE 0 END AS active_today,
+      COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic
+        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?), 0) AS month_upload_bytes,
+      COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic
+        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?), 0) AS month_download_bytes,
+      CASE WHEN EXISTS (
+        SELECT 1 FROM user_usage_mb traffic
+        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?
+      ) THEN 1 ELSE 0 END AS active_this_month,
+      (SELECT MAX(ended_at) FROM user_usage_mb traffic
+        WHERE traffic.user_id = u.id) AS last_report_at,
+      COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic
+        WHERE traffic.user_id = u.id), 0) AS total_upload_bytes,
+      COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic
+        WHERE traffic.user_id = u.id), 0) AS total_download_bytes
       FROM users_mb u
-      LEFT JOIN user_usage_mb d ON d.account_id = u.id
-        AND d.period_type = 'day' AND d.period_key = ?
-      LEFT JOIN user_usage_mb m ON m.account_id = u.id
-        AND m.period_type = 'month' AND m.period_key = ?
-      ORDER BY u.last_seen_at DESC`).bind(day, month, day, month).all();
-    const publicUsers = (query.results || []).map(publicAdminUser);
-    const analyticsStartDay = shiftDayKey(day, -119);
-    const hourlyStart = beijingTimestamp(new Date(Date.now() - 48 * 60 * 60 * 1000));
-    const analyticsResults = await db.batch([
-      db.prepare(`WITH RECURSIVE dates(day_key) AS (
-        SELECT ?
-        UNION ALL
-        SELECT date(day_key, '+1 day') FROM dates WHERE day_key < ?
-      ), daily_usage AS (
-        SELECT period_key AS day_key,
-          SUM(upload_mb) AS upload_mb,
-          SUM(download_mb) AS download_mb
-        FROM user_usage_mb
-        WHERE period_type = 'day' AND period_key >= ?
-        GROUP BY period_key
-      ), daily_activity_source AS (
-        SELECT account_id, day_key
-        FROM reported_sessions_mb
-        WHERE day_key >= ?
-        UNION
-        SELECT account_id, period_key AS day_key
-        FROM user_usage_mb
-        WHERE period_type = 'day' AND period_key >= ?
-          AND (upload_mb > 0 OR download_mb > 0)
-      ), daily_active AS (
-        SELECT day_key, COUNT(DISTINCT account_id) AS dau
-        FROM daily_activity_source
-        GROUP BY day_key
-      ), daily_registration AS (
-        SELECT substr(created_at, 1, 10) AS day_key, COUNT(*) AS registrations
-        FROM users_mb
-        WHERE substr(created_at, 1, 10) >= ?
-        GROUP BY substr(created_at, 1, 10)
+      LEFT JOIN user_devices_mb d ON d.id = (
+        SELECT id FROM user_devices_mb WHERE user_id = u.id ORDER BY id DESC LIMIT 1
       )
-      SELECT dates.day_key,
-        COALESCE(daily_active.dau, 0) AS dau,
-        (SELECT COUNT(DISTINCT activity.account_id)
-          FROM daily_activity_source activity
-          WHERE activity.day_key BETWEEN date(dates.day_key, '-29 days') AND dates.day_key
-        ) AS mau,
-        COALESCE(daily_registration.registrations, 0) AS registrations,
-        COALESCE(daily_usage.upload_mb, 0) AS upload_mb,
-        COALESCE(daily_usage.download_mb, 0) AS download_mb
-      FROM dates
-      LEFT JOIN daily_usage ON daily_usage.day_key = dates.day_key
-      LEFT JOIN daily_active ON daily_active.day_key = dates.day_key
-      LEFT JOIN daily_registration ON daily_registration.day_key = dates.day_key
-      ORDER BY dates.day_key`)
-        .bind(
-          analyticsStartDay,
-          day,
-          analyticsStartDay,
-          analyticsStartDay,
-          analyticsStartDay,
-          analyticsStartDay,
-        ),
-      db.prepare(`SELECT
-        substr(reported_at, 1, 13) || ':00:00+08:00' AS hour,
-        SUM(upload_mb) AS upload_mb,
-        SUM(download_mb) AS download_mb,
-        COUNT(DISTINCT account_id) AS active_users
-      FROM reported_sessions_mb
-      WHERE reported_at >= ?
-      GROUP BY substr(reported_at, 1, 13)
-      ORDER BY hour`).bind(hourlyStart),
+      ORDER BY u.created_at DESC`).bind(day, day, day, month, month, month).all();
+    const publicUsers = (query.results || []).map(publicAdminUser);
+    const [usersTable, devicesTable, usageTable] = await Promise.all([
+      db.prepare(
+        "SELECT id, uid, nickname, level, created_at FROM users_mb ORDER BY id ASC",
+      ).all(),
+      db.prepare(
+        "SELECT id, user_id, device_id, brand, model, android_version, app_version " +
+        "FROM user_devices_mb ORDER BY id ASC",
+      ).all(),
+      db.prepare(
+        "SELECT user_id, session_id, subscription_group_name, started_at, ended_at, " +
+        "upload_bytes, download_bytes FROM user_usage_mb " +
+        "ORDER BY user_id ASC, ended_at ASC",
+      ).all(),
     ]);
-    const dailyAnalytics = ((analyticsResults[0] && analyticsResults[0].results) || [])
-      .map(publicDailyAnalytics);
-    const hourlyAnalytics = ((analyticsResults[1] && analyticsResults[1].results) || [])
-      .map(publicHourlyAnalytics);
 
     return json({
       ok: true,
       date: day,
       month,
       users: publicUsers,
-      totals: {
-        today: aggregatePublicUsage(publicUsers, "today"),
-        month: aggregatePublicUsage(publicUsers, "month"),
-        allTime: aggregatePublicTotals(publicUsers),
-      },
-      activeUsers: {
-        today: publicUsers.filter((user) => user.activeToday).length,
-        month: publicUsers.filter((user) => user.activeThisMonth).length,
-      },
-      analytics: {
-        historyStart: analyticsStartDay,
-        historyEnd: day,
-        daily: dailyAnalytics,
-        hourly: hourlyAnalytics,
-        dimensions: {
-          platform: "inferred_from_existing_device_fields",
-          systemVersion: "android_version_only",
-        },
+      tables: {
+        users_mb: usersTable.results || [],
+        user_devices_mb: devicesTable.results || [],
+        user_usage_mb: usageTable.results || [],
       },
       generatedAt: beijingTimestamp(),
     });
@@ -465,7 +712,7 @@ async function handleAdmin(path, request, env) {
 
   if (path === "/api/users/batch" && request.method === "PATCH") {
     const body = await request.json();
-    const accountIds = normalizeBatchAccountIds(body && body.accountIds);
+    const accountIds = normalizeBatchUserReferences(body && (body.uids || body.accountIds));
     const level = Number(body && body.level);
     if (
       accountIds.length === 0 ||
@@ -478,10 +725,13 @@ async function handleAdmin(path, request, env) {
     }
 
     const db = await ensureUserSchema(env);
+    const identities = (await Promise.all(
+      accountIds.map((reference) => resolveUserIdentity(env, reference)),
+    )).filter(Boolean);
     const timestamp = beijingTimestamp();
-    const result = await db.batch(accountIds.map((accountId) => db.prepare(
-      "UPDATE users_mb SET level = ?, updated_at = ? WHERE id = ?",
-    ).bind(level, timestamp, accountId)));
+    const result = await db.batch(identities.map((identity) => db.prepare(
+      "UPDATE users_mb SET level = ? WHERE id = ?",
+    ).bind(level, identity.userId)));
     const changed = result.reduce(
       (total, item) => total + Number(item && item.meta && item.meta.changes || 0),
       0,
@@ -491,25 +741,27 @@ async function handleAdmin(path, request, env) {
 
   if (path === "/api/users/batch" && request.method === "DELETE") {
     const body = await request.json();
-    const accountIds = normalizeBatchAccountIds(body && body.accountIds);
+    const accountIds = normalizeBatchUserReferences(body && (body.uids || body.accountIds));
     if (accountIds.length === 0 || accountIds.length > MAX_BATCH_USER_COUNT) {
       return json({ ok: false, error: "invalid_batch_user_delete" }, 400);
     }
 
     const db = await ensureUserSchema(env);
+    const identities = (await Promise.all(
+      accountIds.map((reference) => resolveUserIdentity(env, reference)),
+    )).filter(Boolean);
     const statements = [];
-    for (const accountId of accountIds) {
+    for (const identity of identities) {
       statements.push(
-        db.prepare("DELETE FROM reported_sessions_mb WHERE account_id = ?").bind(accountId),
-        db.prepare("DELETE FROM user_usage_mb WHERE account_id = ?").bind(accountId),
-        db.prepare("DELETE FROM users_mb WHERE id = ?").bind(accountId),
+        db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
+        db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
       );
     }
     const result = await db.batch(statements);
-    const changed = accountIds.reduce(
-      (total, _accountId, index) => total + Number(
-        result[index * 3 + 2] && result[index * 3 + 2].meta
-          ? result[index * 3 + 2].meta.changes
+    const changed = identities.reduce(
+      (total, _identity, index) => total + Number(
+        result[index * 2 + 1] && result[index * 2 + 1].meta
+          ? result[index * 2 + 1].meta.changes
           : 0,
       ),
       0,
@@ -517,43 +769,45 @@ async function handleAdmin(path, request, env) {
     return json({ ok: true, accountIds, changed });
   }
 
-  const userMatch = path.match(/^\/api\/users\/([a-f0-9]{64})$/);
+  const userMatch = path.match(/^\/api\/users\/([^/]+)$/);
   if (userMatch && request.method === "DELETE") {
-    const accountId = normalizeAccountId(userMatch[1]);
+    const identity = await resolveUserIdentity(env, decodeURIComponent(userMatch[1]));
+    if (!identity) return json({ ok: false, error: "account_not_found" }, 404);
     const db = await ensureUserSchema(env);
     const result = await db.batch([
-      db.prepare("DELETE FROM reported_sessions_mb WHERE account_id = ?").bind(accountId),
-      db.prepare("DELETE FROM user_usage_mb WHERE account_id = ?").bind(accountId),
-      db.prepare("DELETE FROM users_mb WHERE id = ?").bind(accountId),
+      db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
     ]);
     const deleteResult = result[result.length - 1];
     if (!deleteResult || !deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    return json({ ok: true, accountId });
+    return json({ ok: true, uid: identity.uid });
   }
 
   if (userMatch && request.method === "PATCH") {
-    const accountId = normalizeAccountId(userMatch[1]);
+    const identity = await resolveUserIdentity(env, decodeURIComponent(userMatch[1]));
+    if (!identity) return json({ ok: false, error: "account_not_found" }, 404);
     const body = await request.json();
-    const assignments = [];
-    const values = [];
+    const userAssignments = [];
+    const userValues = [];
+    const deviceAssignments = [];
+    const deviceValues = [];
     const db = await ensureUserSchema(env);
-    const timestamp = beijingTimestamp();
 
     if (Object.prototype.hasOwnProperty.call(body || {}, "nickname")) {
       const nickname = normalizeNickname(body.nickname);
       if (!nickname) return json({ ok: false, error: "invalid_nickname" }, 400);
-      assignments.push("nickname = ?");
-      values.push(nickname);
+      userAssignments.push("nickname = ?");
+      userValues.push(nickname);
     }
     if (Object.prototype.hasOwnProperty.call(body || {}, "level")) {
       const level = Number(body.level);
       if (!Number.isInteger(level) || level < 0 || level > 6) {
         return json({ ok: false, error: "invalid_level" }, 400);
       }
-      assignments.push("level = ?");
-      values.push(level);
+      userAssignments.push("level = ?");
+      userValues.push(level);
     }
     const editableTextFields = [
       ["brand", "brand", 80],
@@ -564,19 +818,32 @@ async function handleAdmin(path, request, env) {
     for (const [property, column, maxLength] of editableTextFields) {
       if (!Object.prototype.hasOwnProperty.call(body || {}, property)) continue;
       const fieldValue = cleanText(body[property]).slice(0, maxLength);
-      assignments.push(`${column} = ?`);
-      values.push(fieldValue);
+      deviceAssignments.push(`${column} = ?`);
+      deviceValues.push(fieldValue);
     }
-    if (assignments.length === 0) {
+    if (userAssignments.length === 0 && deviceAssignments.length === 0) {
       return json({ ok: false, error: "no_user_changes" }, 400);
     }
-    const updateResult = await db.prepare(
-      `UPDATE users_mb SET ${assignments.join(", ")}, updated_at = ? WHERE id = ?`,
-    ).bind(...values, timestamp, accountId).run();
-    if (!updateResult.meta || Number(updateResult.meta.changes) < 1) {
+    const statements = [];
+    if (userAssignments.length > 0) {
+      statements.push(db.prepare(
+        `UPDATE users_mb SET ${userAssignments.join(", ")} WHERE id = ?`,
+      ).bind(...userValues, identity.userId));
+    }
+    if (deviceAssignments.length > 0) {
+      statements.push(db.prepare(
+        `UPDATE user_devices_mb SET ${deviceAssignments.join(", ")} WHERE user_id = ?`,
+      ).bind(...deviceValues, identity.userId));
+    }
+    const updateResult = await db.batch(statements);
+    const changed = updateResult.reduce(
+      (total, item) => total + Number(item && item.meta && item.meta.changes || 0),
+      0,
+    );
+    if (changed < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    return json({ ok: true, user: publicAccount(await readD1User(env, accountId)) });
+    return json({ ok: true, user: publicAccount(await readD1User(env, identity.userId)) });
   }
 
   if (path === "/api/state" && request.method === "GET") {
@@ -604,7 +871,7 @@ async function handleAdmin(path, request, env) {
 
 function publicAccount(user) {
   return {
-    id: user.id,
+    uid: user.uid,
     nickname: user.nickname,
     level: normalizeLevel(user.level),
     brand: user.brand,
@@ -615,18 +882,19 @@ function publicAccount(user) {
 }
 
 function publicAdminUser(row) {
-  const todayUpload = boundedMegabytes(row.today_upload_mb);
-  const todayDownload = boundedMegabytes(row.today_download_mb);
-  const monthUpload = boundedMegabytes(row.month_upload_mb);
-  const monthDownload = boundedMegabytes(row.month_download_mb);
+  const todayUpload = bytesToMegabytes(row.today_upload_bytes);
+  const todayDownload = bytesToMegabytes(row.today_download_bytes);
+  const monthUpload = bytesToMegabytes(row.month_upload_bytes);
+  const monthDownload = bytesToMegabytes(row.month_download_bytes);
+  const totalUpload = bytesToMegabytes(row.total_upload_bytes);
+  const totalDownload = bytesToMegabytes(row.total_download_bytes);
   return {
     ...publicAccount(rowToUser(row)),
     createdAt: cleanText(row.created_at),
-    lastSeenAt: cleanText(row.last_seen_at),
     lastReportAt: cleanText(row.last_report_at) || null,
-    totalUploadMb: boundedMegabytes(row.total_upload_mb),
-    totalDownloadMb: boundedMegabytes(row.total_download_mb),
-    totalMb: boundedMegabytes(row.total_upload_mb) + boundedMegabytes(row.total_download_mb),
+    totalUploadMb: totalUpload,
+    totalDownloadMb: totalDownload,
+    totalMb: totalUpload + totalDownload,
     activeToday: Number(row.active_today) === 1,
     activeThisMonth: Number(row.active_this_month) === 1,
     today: {
@@ -642,55 +910,6 @@ function publicAdminUser(row) {
   };
 }
 
-function publicDailyAnalytics(row) {
-  const uploadMb = boundedMegabytes(row.upload_mb);
-  const downloadMb = boundedMegabytes(row.download_mb);
-  return {
-    date: cleanText(row.day_key),
-    dau: Math.max(0, Math.round(Number(row.dau) || 0)),
-    mau: Math.max(0, Math.round(Number(row.mau) || 0)),
-    registrations: Math.max(0, Math.round(Number(row.registrations) || 0)),
-    uploadMb,
-    downloadMb,
-    totalMb: uploadMb + downloadMb,
-  };
-}
-
-function publicHourlyAnalytics(row) {
-  const uploadMb = boundedMegabytes(row.upload_mb);
-  const downloadMb = boundedMegabytes(row.download_mb);
-  return {
-    timestamp: cleanText(row.hour),
-    activeUsers: Math.max(0, Math.round(Number(row.active_users) || 0)),
-    uploadMb,
-    downloadMb,
-    totalMb: uploadMb + downloadMb,
-  };
-}
-
-function aggregatePublicUsage(users, property) {
-  return users.reduce((total, user) => {
-    const usage = user[property] || emptyUsage();
-    total.uploadMb += boundedMegabytes(usage.uploadMb);
-    total.downloadMb += boundedMegabytes(usage.downloadMb);
-    total.totalMb += boundedMegabytes(usage.totalMb);
-    return total;
-  }, emptyUsage());
-}
-
-function aggregatePublicTotals(users) {
-  return users.reduce((total, user) => {
-    total.uploadMb += boundedMegabytes(user.totalUploadMb);
-    total.downloadMb += boundedMegabytes(user.totalDownloadMb);
-    total.totalMb += boundedMegabytes(user.totalMb);
-    return total;
-  }, emptyUsage());
-}
-
-function emptyUsage() {
-  return { uploadMb: 0, downloadMb: 0, totalMb: 0 };
-}
-
 function usersDb(env) {
   if (!env.USERS_DB) throw new Error("Missing D1 binding USERS_DB");
   return env.USERS_DB;
@@ -698,19 +917,45 @@ function usersDb(env) {
 
 async function ensureUserSchema(env) {
   const db = usersDb(env);
-  // D1 I/O promises are request-bound in Workers and must never be cached globally.
-  // A plain boolean is safe to retain and avoids repeating DDL in a warm isolate.
-  if (!userSchemaReady) {
-    await db.batch(USER_SCHEMA_STATEMENTS.map((statement) => db.prepare(statement)));
-    userSchemaReady = true;
-  }
+  if (userSchemaReady) return db;
+  await db.batch(USER_SCHEMA_STATEMENTS.map((statement) => db.prepare(statement)));
+  userSchemaReady = true;
   return db;
 }
 
-async function resolveAccountAccess(env, accountId) {
+function normalizeUserReference(value) {
+  return normalizeUid(value) || normalizeAccountId(value);
+}
+
+async function resolveUserIdentity(env, reference) {
+  const normalized = normalizeUserReference(reference);
+  if (!normalized) return null;
   const db = await ensureUserSchema(env);
-  const row = await db.prepare("SELECT level, app_version FROM users_mb WHERE id = ?")
-    .bind(accountId).first();
+  let row = null;
+  if (normalizeUid(normalized)) {
+    row = await db.prepare("SELECT id AS user_id, uid FROM users_mb WHERE uid = ?")
+      .bind(normalized).first();
+  } else {
+    row = await db.prepare(
+      "SELECT u.id AS user_id, u.uid FROM users_mb u " +
+      "JOIN user_devices_mb d ON d.user_id = u.id WHERE d.device_id = ?",
+    ).bind(normalized).first();
+  }
+  return row
+    ? { userId: Number(row.user_id), uid: normalizeStoredUid(row.uid) }
+    : null;
+}
+
+async function resolveAccountAccess(env, reference) {
+  const identity = await resolveUserIdentity(env, reference);
+  if (!identity) return { level: 0, appVersion: "" };
+  const db = await ensureUserSchema(env);
+  const row = await db.prepare(
+    "SELECT u.level, COALESCE(d.app_version, '') AS app_version " +
+    "FROM users_mb u LEFT JOIN user_devices_mb d ON d.id = (" +
+    "SELECT id FROM user_devices_mb WHERE user_id = u.id ORDER BY id DESC LIMIT 1" +
+    ") WHERE u.id = ?",
+  ).bind(identity.userId).first();
   return row
     ? {
       level: normalizeLevel(row.level, 0),
@@ -719,61 +964,71 @@ async function resolveAccountAccess(env, accountId) {
     : { level: 0, appVersion: "" };
 }
 
-async function readD1User(env, accountId) {
-  const db = usersDb(env);
-  const row = await db.prepare("SELECT * FROM users_mb WHERE id = ?")
-    .bind(accountId).first();
+async function readD1User(env, reference) {
+  const db = await ensureUserSchema(env);
+  const identity = Number.isInteger(Number(reference)) && Number(reference) > 0
+    ? { userId: Number(reference) }
+    : await resolveUserIdentity(env, reference);
+  if (!identity) return null;
+  const row = await db.prepare(
+    "SELECT u.*, d.brand AS device_brand, d.model AS device_model, " +
+    "d.android_version AS device_android_version, d.app_version AS device_app_version " +
+    "FROM users_mb u LEFT JOIN user_devices_mb d ON d.id = (" +
+    "SELECT id FROM user_devices_mb WHERE user_id = u.id ORDER BY id DESC LIMIT 1" +
+    ") WHERE u.id = ?",
+  ).bind(identity.userId).first();
   return row ? rowToUser(row) : null;
 }
 
 function rowToUser(row) {
+  const uid = normalizeStoredUid(row.uid);
   return {
-    id: normalizeAccountId(row.id),
-    nickname: normalizeNickname(row.nickname, defaultNickname(row.id)),
+    uid,
+    nickname: normalizeNickname(row.nickname, defaultNickname(uid)),
     level: normalizeLevel(row.level),
-    brand: cleanText(row.brand),
-    model: cleanText(row.model),
-    androidVersion: cleanText(row.android_version),
-    appVersion: cleanText(row.app_version),
+    brand: cleanText(row.device_brand ?? row.brand),
+    model: cleanText(row.device_model ?? row.model),
+    androidVersion: cleanText(row.device_android_version ?? row.android_version),
+    appVersion: cleanText(row.device_app_version ?? row.app_version),
     createdAt: cleanText(row.created_at),
-    lastSeenAt: cleanText(row.last_seen_at),
-    lastReportAt: cleanText(row.last_report_at) || null,
-    updatedAt: cleanText(row.updated_at),
-    totalUploadMb: boundedMegabytes(row.total_upload_mb),
-    totalDownloadMb: boundedMegabytes(row.total_download_mb),
   };
 }
 
-async function registerOrTouchUser(env, accountId, profile, now) {
-  const db = usersDb(env);
-  const timestamp = beijingTimestamp(now);
+async function registerOrTouchUser(env, deviceId, profile, now) {
+  const db = await ensureUserSchema(env);
   const brand = cleanText(profile.brand).slice(0, 80);
   const model = cleanText(profile.model).slice(0, 120);
   const androidVersion = cleanText(profile.androidVersion).slice(0, 80);
   const appVersion = cleanText(profile.appVersion).slice(0, 40);
-  await db.prepare(`INSERT INTO users_mb
-      (id, nickname, level, brand, model, android_version, app_version,
-       created_at, last_seen_at, last_report_at, updated_at,
-       total_upload_mb, total_download_mb)
-      VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, NULL, ?, 0, 0)
-      ON CONFLICT(id) DO UPDATE SET
-        brand = CASE WHEN excluded.brand <> '' THEN excluded.brand ELSE users_mb.brand END,
-        model = CASE WHEN excluded.model <> '' THEN excluded.model ELSE users_mb.model END,
-        android_version = CASE WHEN excluded.android_version <> '' THEN excluded.android_version ELSE users_mb.android_version END,
-        app_version = CASE WHEN excluded.app_version <> '' THEN excluded.app_version ELSE users_mb.app_version END,
-        last_seen_at = excluded.last_seen_at,
-        updated_at = excluded.updated_at`)
-    .bind(
-      accountId,
-      defaultNickname(accountId),
-      brand,
-      model,
-      androidVersion,
-      appVersion,
-      timestamp,
-      timestamp,
-      timestamp,
+  const existing = await db.prepare(
+    "SELECT u.id AS user_id, u.uid FROM users_mb u " +
+    "JOIN user_devices_mb d ON d.user_id = u.id WHERE d.device_id = ?",
+  ).bind(deviceId).first();
+  if (existing) {
+    await db.prepare(
+      "UPDATE user_devices_mb SET " +
+      "brand = CASE WHEN ? <> '' THEN ? ELSE brand END, " +
+      "model = CASE WHEN ? <> '' THEN ? ELSE model END, " +
+      "android_version = CASE WHEN ? <> '' THEN ? ELSE android_version END, " +
+      "app_version = CASE WHEN ? <> '' THEN ? ELSE app_version END " +
+      "WHERE device_id = ?",
+    ).bind(
+      brand, brand, model, model, androidVersion, androidVersion, appVersion, appVersion, deviceId,
     ).run();
+    return;
+  }
+
+  const uid = randomPublicUid();
+  await db.prepare(
+    "INSERT INTO users_mb (uid, nickname, level, created_at) VALUES (?, ?, 1, ?)",
+  ).bind(uid, defaultNickname(uid), beijingTimestamp(now)).run();
+  const user = await db.prepare("SELECT id FROM users_mb WHERE uid = ?").bind(uid).first();
+  if (!user) throw new Error("account_create_failed");
+  await db.prepare(
+    "INSERT INTO user_devices_mb " +
+    "(user_id, device_id, brand, model, android_version, app_version) " +
+    "VALUES (?, ?, ?, ?, ?, ?)",
+  ).bind(Number(user.id), deviceId, brand, model, androidVersion, appVersion).run();
 }
 
 function normalizeNickname(value, fallback = "") {
@@ -804,12 +1059,162 @@ function usagePeriodKeys(date) {
   return { day, month: `${parts.year}-${parts.month}` };
 }
 
-function shiftDayKey(dayKey, offsetDays) {
-  const parts = String(dayKey || "").split("-").map(Number);
-  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return dayKey;
-  const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-  date.setUTCDate(date.getUTCDate() + Number(offsetDays || 0));
-  return date.toISOString().slice(0, 10);
+function normalizeGrowthPeriod(value) {
+  return value === "week" || value === "month" ? value : "day";
+}
+
+function normalizeGrowthDateKey(value) {
+  const dateKey = cleanText(value);
+  if (!dateKey) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+  const date = dayKeyToUtcDate(dateKey);
+  return utcDateKey(date) === dateKey ? dateKey : null;
+}
+
+function buildUserGrowthPoints(
+  rows,
+  period,
+  now = new Date(),
+  rangeStart = "",
+  rangeEnd = "",
+) {
+  const records = rows.map((row) => {
+    const createdAt = new Date(cleanText(row && row.created_at));
+    if (!Number.isFinite(createdAt.getTime())) return null;
+    return {
+      day: usagePeriodKeys(createdAt).day,
+      key: userGrowthPeriodKey(createdAt, period),
+    };
+  }).filter(Boolean);
+
+  if (records.length === 0) return [];
+  const firstDataKey = records.map((record) => record.key).sort()[0];
+  const todayKey = usagePeriodKeys(now).day;
+  const firstDataDay = records.map((record) => record.day).sort()[0];
+  const startDay = rangeStart || firstDataDay;
+  const requestedEndDay = rangeEnd || todayKey;
+  const endDay = requestedEndDay < todayKey ? requestedEndDay : todayKey;
+  if (startDay > endDay) return [];
+
+  const currentKey = userGrowthPeriodKey(now, period);
+  const requestedStartKey = userGrowthPeriodKey(dayKeyToUtcDate(startDay), period);
+  const requestedEndKey = userGrowthPeriodKey(dayKeyToUtcDate(endDay), period);
+  const firstKey = requestedStartKey > firstDataKey ? requestedStartKey : firstDataKey;
+  const lastKey = requestedEndKey < currentKey ? requestedEndKey : currentKey;
+  if (firstKey > lastKey) return [];
+
+  const points = [];
+  const counts = new Map();
+  let totalUsers = 0;
+  records.forEach((record) => {
+    if (record.day < startDay) totalUsers += 1;
+    if (record.day >= startDay && record.day <= endDay) {
+      counts.set(record.key, (counts.get(record.key) || 0) + 1);
+    }
+  });
+  let key = firstKey;
+
+  while (key <= lastKey) {
+    const newUsers = counts.get(key) || 0;
+    totalUsers += newUsers;
+    points.push({ key, newUsers, totalUsers });
+    key = nextUserGrowthPeriodKey(key, period);
+  }
+  return points;
+}
+
+function buildUserTrafficPoints(
+  rows,
+  period,
+  now = new Date(),
+  rangeStart = "",
+  rangeEnd = "",
+) {
+  const records = rows.map((row) => {
+    const day = normalizeGrowthDateKey(row && row.date_key);
+    if (!day) return null;
+    return {
+      day,
+      key: userGrowthPeriodKey(dayKeyToUtcDate(day), period),
+      uploadBytes: boundedBytes(row && row.upload_bytes),
+      downloadBytes: boundedBytes(row && row.download_bytes),
+    };
+  }).filter(Boolean);
+
+  if (records.length === 0) return [];
+  const firstDataKey = records.map((record) => record.key).sort()[0];
+  const todayKey = usagePeriodKeys(now).day;
+  const firstDataDay = records.map((record) => record.day).sort()[0];
+  const startDay = rangeStart || firstDataDay;
+  const requestedEndDay = rangeEnd || todayKey;
+  const endDay = requestedEndDay < todayKey ? requestedEndDay : todayKey;
+  if (startDay > endDay) return [];
+
+  const currentKey = userGrowthPeriodKey(now, period);
+  const requestedStartKey = userGrowthPeriodKey(dayKeyToUtcDate(startDay), period);
+  const requestedEndKey = userGrowthPeriodKey(dayKeyToUtcDate(endDay), period);
+  const firstKey = requestedStartKey > firstDataKey ? requestedStartKey : firstDataKey;
+  const lastKey = requestedEndKey < currentKey ? requestedEndKey : currentKey;
+  if (firstKey > lastKey) return [];
+
+  const counts = new Map();
+  records.forEach((record) => {
+    if (record.day < startDay || record.day > endDay) return;
+    const current = counts.get(record.key) || { uploadBytes: 0, downloadBytes: 0 };
+    current.uploadBytes += record.uploadBytes;
+    current.downloadBytes += record.downloadBytes;
+    counts.set(record.key, current);
+  });
+
+  const points = [];
+  let key = firstKey;
+  while (key <= lastKey) {
+    const current = counts.get(key) || { uploadBytes: 0, downloadBytes: 0 };
+    const uploadMb = bytesToMegabytes(current.uploadBytes);
+    const downloadMb = bytesToMegabytes(current.downloadBytes);
+    points.push({
+      key,
+      uploadMb,
+      downloadMb,
+      totalMb: Math.round((uploadMb + downloadMb) * 1e6) / 1e6,
+    });
+    key = nextUserGrowthPeriodKey(key, period);
+  }
+  return points;
+}
+
+function userGrowthPeriodKey(date, period) {
+  const { day, month } = usagePeriodKeys(date);
+  if (period === "month") return month;
+  if (period === "week") return mondayOfDayKey(day);
+  return day;
+}
+
+function mondayOfDayKey(dayKey) {
+  const date = dayKeyToUtcDate(dayKey);
+  const daysSinceMonday = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - daysSinceMonday);
+  return utcDateKey(date);
+}
+
+function nextUserGrowthPeriodKey(key, period) {
+  if (period === "month") {
+    const [year, month] = key.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month, 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+  const date = dayKeyToUtcDate(key);
+  date.setUTCDate(date.getUTCDate() + (period === "week" ? 7 : 1));
+  return utcDateKey(date);
+}
+
+function dayKeyToUtcDate(dayKey) {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function utcDateKey(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 function beijingTimestamp(date = new Date()) {
@@ -829,14 +1234,37 @@ function beijingTimestamp(date = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}+08:00`;
 }
 
+function normalizeReportTimestamp(value, fallback = "") {
+  if (value === undefined || value === null || value === "") return fallback;
+  const date = typeof value === "number"
+    ? new Date(value)
+    : new Date(String(value));
+  return Number.isFinite(date.getTime()) ? beijingTimestamp(date) : null;
+}
+
 function normalizeAccountId(value) {
   const accountId = cleanText(value).toLowerCase();
   return /^[a-f0-9]{64}$/.test(accountId) ? accountId : "";
 }
 
-function normalizeBatchAccountIds(value) {
+function normalizeUid(value) {
+  const uid = cleanText(value).toLowerCase();
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(uid)
+    ? uid
+    : "";
+}
+
+function normalizeStoredUid(value) {
+  return normalizeUid(value) || normalizeAccountId(value);
+}
+
+function randomPublicUid() {
+  return crypto.randomUUID().toLowerCase();
+}
+
+function normalizeBatchUserReferences(value) {
   if (!Array.isArray(value)) return [];
-  return Array.from(new Set(value.map(normalizeAccountId).filter(Boolean)));
+  return Array.from(new Set(value.map(normalizeUserReference).filter(Boolean)));
 }
 
 function boundedMegabytes(value) {
@@ -844,6 +1272,28 @@ function boundedMegabytes(value) {
   return Number.isFinite(number) && number > 0
     ? Math.min(Math.round(number * 1e6) / 1e6, 1e9)
     : 0;
+}
+
+function boundedBytes(value) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number > 0
+    ? Math.min(Math.round(number), MAX_TRAFFIC_BYTES)
+    : 0;
+}
+
+function megabytesToBytes(value) {
+  return boundedBytes(boundedMegabytes(value) * 1024 * 1024);
+}
+
+function bytesToMegabytes(value) {
+  return boundedMegabytes(boundedBytes(value) / (1024 * 1024));
+}
+
+function reportBytes(bytesValue, legacyMegabytesValue) {
+  if (bytesValue !== undefined && bytesValue !== null && bytesValue !== "") {
+    return boundedBytes(bytesValue);
+  }
+  return megabytesToBytes(legacyMegabytesValue);
 }
 
 function normalizeManagedContent(value) {
@@ -1214,104 +1664,8 @@ function adminHtml() {
      p, small, label { color: #aab4c5; line-height: 1.55; }
      .card { background: #1f2937; border: 1px solid #374151; border-radius: 14px; padding: 18px; margin-top: 16px; }
      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-     .analytics-filter-bar { position: sticky; top: 0; z-index: 12; box-sizing: border-box; padding: 14px 28px 12px; background: rgba(17, 24, 39, .97); border-bottom: 1px solid #374151; backdrop-filter: blur(10px); }
-     .analytics-filter-bar[hidden] { display: none; }
-     .filter-row, .range-presets, .custom-date-range { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-     .range-button, .filter-reset, .text-button { margin: 0; }
-     .range-button { padding: 8px 11px; color: #cbd5e1; background: #1f2937; border: 1px solid #374151; font-size: 12px; }
-     .range-button:hover { background: #334155; }
-     .range-button.active { color: #052e16; background: #4ade80; border-color: #4ade80; }
-     .analytics-filter-select, .chart-select { width: auto; min-width: 128px; padding: 8px 10px; }
-     .custom-date-range { margin-top: 10px; }
-     .custom-date-range[hidden] { display: none; }
-     .custom-date-range label { display: flex; align-items: center; gap: 8px; }
-     .custom-date-range input { width: auto; padding: 8px; }
-     .custom-date-range button { margin: 0; padding: 8px 12px; }
-     #analyticsFilterStatus { display: block; margin-top: 9px; }
-     .analytics-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
-     .analytics-heading h2 { margin-bottom: 5px; }
-     .analytics-heading p { margin: 0; }
-     .analytics-heading button { margin: 0; }
-     .data-note { max-width: 420px; text-align: right; }
-     .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
-     .kpi-card { box-sizing: border-box; min-width: 0; min-height: 128px; padding: 15px 16px; background: #1f2937; border: 1px solid #374151; border-radius: 12px; }
-     .kpi-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-     .kpi-label { color: #94a3b8; font-size: 13px; }
-     .kpi-value { display: block; margin-top: 9px; color: #f8fafc; font-size: clamp(24px, 2.25vw, 34px); line-height: 1.08; letter-spacing: -.02em; }
-     .kpi-comparison { display: block; margin-top: 9px; color: #94a3b8; font-size: 12px; }
-     .trend-pill { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-     .trend-up { color: #86efac; background: rgba(34, 197, 94, .14); }
-     .trend-down { color: #fca5a5; background: rgba(239, 68, 68, .14); }
-     .trend-flat { color: #cbd5e1; background: rgba(148, 163, 184, .14); }
-     .analytics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-     .analytics-card { box-sizing: border-box; min-width: 0; padding: 17px; background: #1f2937; border: 1px solid #374151; border-radius: 12px; }
-     .analytics-card.span-2 { grid-column: 1 / -1; }
-     .chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
-     .chart-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-     .chart-heading h3 { margin: 0 0 4px; color: #e5e7eb; font-size: 15px; }
-     .chart-heading small { display: block; }
-     .chart-host { position: relative; min-height: 250px; overflow: hidden; }
-     .chart-host-large { min-height: 310px; }
-     .chart-svg { display: block; width: 100%; height: 100%; min-height: inherit; overflow: visible; }
-     .chart-grid-line { stroke: #334155; stroke-width: 1; }
-     .chart-axis-label { fill: #94a3b8; font-size: 11px; }
-     .chart-line { fill: none; stroke: #4ade80; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-     .chart-line-secondary { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-     .chart-area-upload { fill: rgba(56, 189, 248, .42); stroke: #38bdf8; stroke-width: 1.5; }
-     .chart-area-download { fill: rgba(74, 222, 128, .38); stroke: #4ade80; stroke-width: 1.5; }
-     .chart-bar { fill: #22c55e; opacity: .8; }
-     .chart-point { fill: #111827; stroke: #4ade80; stroke-width: 2; }
-     [data-tooltip] { cursor: crosshair; }
-     .chart-tooltip { position: fixed; z-index: 100; max-width: 250px; padding: 8px 10px; pointer-events: none; color: #f8fafc; background: #020617; border: 1px solid #475569; border-radius: 7px; box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 12px; white-space: pre-line; transform: translate(12px, 12px); }
-     .chart-tooltip[hidden] { display: none; }
-     .chart-legend { display: flex; gap: 12px; color: #94a3b8; font-size: 12px; }
-     .chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
-     .chart-legend i { width: 9px; height: 9px; border-radius: 2px; }
-     .legend-upload { background: #38bdf8; }
-     .legend-download { background: #4ade80; }
-     .empty-state, .loading-state, .error-state { display: flex; min-height: 220px; align-items: center; justify-content: center; padding: 18px; color: #94a3b8; text-align: center; }
+     .loading-state, .error-state { display: flex; min-height: 160px; align-items: center; justify-content: center; padding: 18px; color: #94a3b8; text-align: center; }
      .error-state { color: #fca5a5; }
-     .kpi-grid > .empty-state, .kpi-grid > .loading-state, .kpi-grid > .error-state { grid-column: 1 / -1; }
-     .bar-chart-host { min-height: 260px; }
-     .distribution-row { display: grid; grid-template-columns: minmax(90px, 150px) minmax(120px, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(55, 65, 81, .7); }
-     .distribution-row:last-child { border-bottom: 0; }
-     button.distribution-label { overflow: hidden; margin: 0; padding: 0; color: #dbeafe; background: transparent; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-     button.distribution-label:hover { color: #86efac; }
-     .distribution-track { height: 9px; overflow: hidden; background: #111827; border-radius: 999px; }
-     .distribution-fill { display: block; height: 100%; background: #38bdf8; border-radius: inherit; }
-     .distribution-row:nth-child(even) .distribution-fill { background: #4ade80; }
-     .distribution-values { min-width: 125px; color: #cbd5e1; font-size: 12px; text-align: right; }
-     .distribution-meta { display: block; margin-top: 2px; color: #64748b; }
-     .stat-list { display: grid; gap: 9px; }
-     .stat-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 12px; background: #111827; border: 1px solid #334155; border-radius: 8px; }
-     .stat-row strong { color: #f8fafc; }
-     .structure-host { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-     .structure-card { padding: 16px; background: #111827; border: 1px solid #334155; border-radius: 10px; }
-     .structure-card strong { display: block; margin: 7px 0; color: #f8fafc; font-size: 25px; }
-     .compact-table-wrap { max-height: 330px; overflow: auto; border: 1px solid #374151; border-radius: 8px; }
-     table.compact-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-     .compact-table th, .compact-table td { padding: 9px 10px; text-align: left; border-bottom: 1px solid #374151; white-space: nowrap; }
-     .compact-table th { position: sticky; top: 0; z-index: 1; color: #cbd5e1; background: #273244; }
-     .compact-table td { color: #cbd5e1; }
-     .alert-preview, .alert-list { display: grid; gap: 9px; }
-     .alert-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px; color: inherit; background: #111827; border: 1px solid #374151; border-radius: 9px; text-align: left; }
-     button.alert-item { width: 100%; margin: 0; font-weight: 400; }
-     button.alert-item:hover { border-color: #64748b; }
-     .severity-dot { width: 9px; height: 9px; border-radius: 50%; }
-     .severity-critical { color: #fecaca; background: #450a0a; }
-     .severity-warning { color: #fed7aa; background: #431407; }
-     .severity-attention { color: #fef08a; background: #422006; }
-     .severity-normal { color: #bbf7d0; background: #052e16; }
-     .severity-dot.severity-critical { background: #ef4444; }
-     .severity-dot.severity-warning { background: #f97316; }
-     .severity-dot.severity-attention { background: #eab308; }
-     .severity-dot.severity-normal { background: #22c55e; }
-     .severity-badge { padding: 4px 7px; border-radius: 999px; font-size: 11px; }
-     .alert-main strong { display: block; color: #e5e7eb; font-size: 13px; }
-     .alert-main small { display: block; margin-top: 3px; }
-     .alert-value { color: #f8fafc; font-weight: 700; text-align: right; }
-     .alert-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-     .text-button { padding: 0; color: #7dd3fc; background: transparent; font-size: 12px; }
      #dashboard { display: grid; grid-template-columns: clamp(170px, 16vw, 230px) minmax(0, 1fr); min-height: 100vh; }
      #dashboard[hidden] { display: none; }
      .dashboard-sidebar { position: sticky; top: 0; box-sizing: border-box; display: flex; flex-direction: column; width: 100%; height: 100vh; padding: 22px 14px 16px; overflow: hidden; background: #1f2937; border-right: 1px solid #374151; }
@@ -1326,6 +1680,52 @@ function adminHtml() {
      .dashboard-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; background: #111827; }
      .tab-panel { display: none; box-sizing: border-box; flex: 1 1 auto; width: 100%; min-height: 0; padding: 28px; margin: 0; background: #111827; border: 0; border-radius: 0; }
      .tab-panel.active { display: block; }
+     .dashboard-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+     .dashboard-heading h2 { margin-bottom: 6px; }
+     .dashboard-heading p { margin: 0; }
+     .dashboard-heading button { flex: 0 0 auto; margin: 0; }
+     .growth-card { margin-bottom: 14px; padding: 18px; background: #1f2937; border: 1px solid #374151; border-radius: 14px; }
+     .growth-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+     .growth-toolbar h3 { margin: 0 0 4px; color: #f8fafc; font-size: 16px; }
+     .growth-toolbar small { display: block; }
+     .growth-range-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 12px; }
+     .growth-range-field { display: flex; flex-direction: column; gap: 4px; color: #aab4c5; font-size: 12px; }
+     .growth-range-field input { width: 150px; padding: 8px 10px; }
+     .growth-range-controls button { margin: 0; padding: 8px 12px; }
+     .growth-period-switch { display: flex; flex-wrap: wrap; gap: 6px; }
+     .growth-period-button { margin: 0; padding: 8px 12px; background: #374151; color: #cbd5e1; }
+     .growth-period-button.active { background: #22c55e; color: #052e16; }
+     .growth-chart-host { min-height: 360px; margin-top: 16px; overflow-x: auto; }
+     .growth-chart { display: block; width: 100%; min-width: 680px; height: 330px; }
+     .growth-summary { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 2px; color: #cbd5e1; font-size: 13px; }
+     .growth-summary strong { color: #f8fafc; font-size: 16px; }
+     .growth-legend { display: inline-flex; align-items: center; gap: 6px; }
+     .growth-legend i { width: 18px; height: 3px; border-radius: 999px; background: #38bdf8; }
+     .traffic-chart-host { min-height: 360px; margin-top: 16px; overflow-x: auto; }
+     .traffic-chart { display: block; width: 100%; min-width: 680px; height: 330px; }
+     .traffic-legend { display: inline-flex; align-items: center; gap: 6px; }
+     .traffic-legend i { width: 18px; height: 3px; border-radius: 999px; }
+     .traffic-upload i { background: #22c55e; }
+     .traffic-download i { background: #a78bfa; }
+     .traffic-total i { background: #f59e0b; }
+     .growth-empty { min-height: 300px; border: 1px dashed #4b5563; border-radius: 12px; }
+     .pie-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+     .pie-card { min-width: 0; padding: 18px; background: #1f2937; border: 1px solid #374151; border-radius: 14px; }
+     .pie-card h3 { margin: 0 0 4px; color: #f8fafc; font-size: 16px; }
+     .pie-card > small { display: block; min-height: 40px; }
+     .pie-chart-host { min-height: 380px; margin-top: 16px; }
+     .pie-chart-content { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+     .pie-visual-wrap { position: relative; display: grid; width: min(210px, 72vw); aspect-ratio: 1; place-items: center; }
+     .pie-visual { width: 100%; height: 100%; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 12px 30px rgba(0, 0, 0, .2); }
+     .pie-total { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 92px; height: 92px; color: #f8fafc; background: #111827; border: 1px solid #374151; border-radius: 50%; box-shadow: 0 5px 18px rgba(0, 0, 0, .24); pointer-events: none; }
+     .pie-total strong { font-size: 26px; line-height: 1.1; }
+     .pie-total small { margin-top: 3px; color: #94a3b8; font-size: 12px; }
+     .pie-legend { box-sizing: border-box; display: grid; width: 100%; gap: 8px; }
+     .pie-legend-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; color: #cbd5e1; font-size: 13px; }
+     .pie-swatch { width: 10px; height: 10px; border-radius: 3px; }
+     .pie-legend-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+     .pie-legend-value { color: #94a3b8; font-variant-numeric: tabular-nums; white-space: nowrap; }
+     .pie-empty { min-height: 300px; border: 1px dashed #4b5563; border-radius: 12px; }
      .login-gate { max-width: 430px; margin: 12vh auto 0; }
      .login-gate h1 { margin-bottom: 10px; }
      .login-gate .card { margin-top: 18px; }
@@ -1349,8 +1749,19 @@ function adminHtml() {
      .user-sheet-toolbar small { margin-left: auto; }
      .batch-level-select { width: auto; min-width: 105px; margin: 0; padding: 9px 10px; }
      .user-search { flex: 1 1 220px; width: min(300px, 100%); min-width: 180px; padding: 9px 10px; }
-     .table-wrap { max-height: calc(100vh - 210px); overflow: auto; border: 1px solid #4b5563; border-radius: 10px; background: #111827; }
-     table.user-sheet { width: 100%; min-width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+      .table-wrap { max-height: calc(100vh - 210px); overflow: auto; border: 1px solid #4b5563; border-radius: 10px; background: #111827; }
+      .user-tables { display: grid; gap: 14px; }
+      .user-table-card { min-width: 0; padding: 14px; background: #111827; border: 1px solid #374151; border-radius: 10px; }
+      .user-table-card h3 { margin: 0 0 8px; color: #f8fafc; font-size: 16px; }
+      .user-table-meta { margin-bottom: 10px; color: #94a3b8; font-size: 12px; }
+      .user-table-scroll { max-height: 520px; overflow: auto; border: 1px solid #374151; border-radius: 8px; }
+      table.user-data-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 12px; }
+      .user-data-table th, .user-data-table td { padding: 8px; text-align: left; vertical-align: top; border-right: 1px solid #374151; border-bottom: 1px solid #374151; white-space: pre-wrap; word-break: break-word; }
+      .user-data-table th { position: sticky; top: 0; z-index: 1; color: #d1d5db; background: #273244; white-space: nowrap; }
+      .user-data-table td { min-width: 110px; color: #e5e7eb; }
+      .user-data-table td:first-child, .user-data-table th:first-child { min-width: 42px; color: #94a3b8; }
+      .user-table-empty { padding: 18px; color: #94a3b8; border: 1px dashed #4b5563; border-radius: 8px; }
+      table.user-sheet { width: 100%; min-width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
      .user-sheet th, .user-sheet td { text-align: left; padding: 0; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid #374151; border-bottom: 1px solid #374151; white-space: nowrap; background: #111827; }
      .user-sheet th { position: sticky; top: 0; z-index: 3; padding: 9px 12px 9px 8px; overflow: visible; color: #d1d5db; background: #273244; font-weight: 700; user-select: none; }
      .user-sheet th[data-sort-column] { cursor: pointer; }
@@ -1379,9 +1790,7 @@ function adminHtml() {
      #status:not(:empty) { min-height: 44px; padding: 11px 28px; border-bottom: 1px solid #374151; }
      .hint { margin-top: 4px; }
      @media (max-width: 1200px) {
-       .kpi-grid, .alert-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-       .analytics-grid { grid-template-columns: 1fr; }
-       .analytics-card.span-2 { grid-column: auto; }
+       .pie-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
      }
      @media (max-width: 760px) {
        #dashboard { grid-template-columns: 148px minmax(0, 1fr); }
@@ -1392,19 +1801,15 @@ function adminHtml() {
        .tab-nav { padding: 14px 0; }
        .tab-button { padding: 11px 10px; }
        .tab-panel { padding: 18px; }
-       .analytics-filter-bar { padding: 12px 18px; }
-       .range-presets { flex-wrap: nowrap; width: 100%; overflow-x: auto; padding-bottom: 3px; }
-       .range-button { flex: 0 0 auto; }
-       .analytics-filter-select { flex: 1 1 140px; min-width: 0; }
-       .analytics-heading { flex-direction: column; }
-       .chart-heading { align-items: stretch; flex-direction: column; }
-       .chart-controls { justify-content: flex-start; }
-       .data-note { max-width: none; text-align: left; }
-       .kpi-grid, .alert-kpis, .structure-host { grid-template-columns: 1fr; }
-       .distribution-row { grid-template-columns: minmax(80px, 120px) minmax(80px, 1fr); }
-       .distribution-values { grid-column: 1 / -1; text-align: left; }
        #status:not(:empty) { padding: 10px 18px; }
        .grid { grid-template-columns: 1fr; }
+       .dashboard-heading { align-items: stretch; flex-direction: column; }
+       .dashboard-heading button { align-self: flex-start; }
+       .growth-toolbar { flex-direction: column; }
+       .growth-range-controls { align-items: stretch; }
+       .growth-range-field, .growth-range-field input { width: 100%; }
+       .growth-period-switch { align-self: flex-start; }
+       .pie-grid { grid-template-columns: 1fr; }
        .table-wrap { max-height: calc(100vh - 190px); }
      }
   </style>
@@ -1430,13 +1835,9 @@ function adminHtml() {
          <small>管理后台</small>
        </div>
        <nav class="tab-nav" role="tablist" aria-label="后台模块" aria-orientation="vertical">
-         <button class="tab-button" role="tab" type="button" data-tab="overview">数据总览</button>
-         <button class="tab-button" role="tab" type="button" data-tab="user-analysis">用户分析</button>
-         <button class="tab-button" role="tab" type="button" data-tab="traffic-analysis">流量分析</button>
-         <button class="tab-button" role="tab" type="button" data-tab="devices">设备与版本</button>
-         <button class="tab-button" role="tab" type="button" data-tab="alerts">异常监控</button>
-         <button class="tab-button" role="tab" type="button" data-tab="users">用户表单</button>
-         <button class="tab-button" role="tab" type="button" data-tab="subscriptions">订阅线路</button>
+          <button class="tab-button" role="tab" type="button" data-tab="data-dashboard">数据看板</button>
+          <button class="tab-button" role="tab" type="button" data-tab="users">用户表单</button>
+          <button class="tab-button" role="tab" type="button" data-tab="subscriptions">订阅线路</button>
          <button class="tab-button" role="tab" type="button" data-tab="app-settings">应用设置</button>
          <button class="tab-button" role="tab" type="button" data-tab="notice">公告</button>
          <button class="tab-button" role="tab" type="button" data-tab="app-update">版本更新</button>
@@ -1447,108 +1848,85 @@ function adminHtml() {
      <div class="dashboard-workspace">
        <div id="status" role="status" aria-live="polite"></div>
 
-   <div id="analyticsFilterBar" class="analytics-filter-bar" hidden>
-     <div class="filter-row">
-       <div class="range-presets" role="group" aria-label="时间范围">
-         <button class="range-button" type="button" data-range="today">今日</button>
-         <button class="range-button" type="button" data-range="yesterday">昨日</button>
-         <button class="range-button active" type="button" data-range="7d">最近 7 天</button>
-         <button class="range-button" type="button" data-range="30d">最近 30 天</button>
-         <button class="range-button" type="button" data-range="month">本月</button>
-         <button class="range-button" type="button" data-range="previous-month">上月</button>
-         <button class="range-button" type="button" data-range="custom">自定义时间</button>
+   <section class="card tab-panel" role="tabpanel" data-panel="data-dashboard">
+     <div class="dashboard-heading">
+       <div>
+         <h2>数据看板</h2>
+         <p>基于当前已注册账户，查看设备厂商、Android 系统和 App 版本分布。</p>
        </div>
-       <select id="analyticsPlatformFilter" class="analytics-filter-select" aria-label="设备平台"><option value="">全部平台</option></select>
-       <select id="analyticsSystemFilter" class="analytics-filter-select" aria-label="系统版本"><option value="">全部系统</option></select>
-       <select id="analyticsVersionFilter" class="analytics-filter-select" aria-label="客户端版本"><option value="">全部版本</option></select>
-       <button class="secondary filter-reset" type="button" onclick="resetAnalyticsFilters()">重置筛选</button>
+       <button class="secondary" type="button" onclick="loadUsers()">刷新数据</button>
      </div>
-     <div id="customDateRange" class="custom-date-range" hidden>
-       <label>开始日期<input id="analyticsStartDate" type="date"></label>
-       <label>结束日期<input id="analyticsEndDate" type="date"></label>
-       <button type="button" onclick="applyCustomAnalyticsRange()">应用</button>
-     </div>
-     <small id="analyticsFilterStatus">最近 7 天 · 全部用户</small>
-   </div>
-
-   <section class="card tab-panel analytics-panel" role="tabpanel" data-panel="overview">
-     <div class="analytics-heading"><div><h2>数据总览</h2><p>用结果、趋势与异常快速判断当前运营状态。</p></div><button class="secondary" type="button" onclick="loadUsers()">刷新数据</button></div>
-     <div id="overviewKpis" class="kpi-grid"></div>
-     <div class="analytics-grid">
-       <section class="analytics-card"><div class="chart-heading"><div><h3>用户活跃趋势</h3><small>独立查看 DAU、MAU 或粘性指标</small></div><div class="chart-controls"><select id="overviewActiveMetric" class="chart-select"><option value="dau">DAU</option><option value="mau">MAU</option><option value="ratio">DAU / MAU</option></select><select id="overviewActiveGrain" class="chart-select" aria-label="活跃趋势时间粒度"><option value="day">按日</option><option value="week">按周</option><option value="month">按月</option></select></div></div><div id="overviewActiveChart" class="chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>新增用户趋势</h3><small>每日注册与 7 日移动平均</small></div></div><div id="overviewRegistrationChart" class="chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>上传 / 下载流量趋势</h3><small>堆叠高度代表总流量</small></div></div><div id="overviewTrafficChart" class="chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>需要关注</h3><small>自动识别明显偏离和版本风险</small></div><button class="text-button" type="button" onclick="activateTab('alerts')">查看全部</button></div><div id="overviewAlerts" class="alert-preview"></div></section>
+    <article class="growth-card">
+      <div class="growth-toolbar">
+        <div>
+          <h3>用户增长</h3>
+          <small>按日、按周、按月统计注册新增用户，折线显示累计用户数量。</small>
+          <div class="growth-range-controls" aria-label="用户增长时间范围">
+            <label class="growth-range-field">开始日期<input id="growthStartDate" type="date"></label>
+            <label class="growth-range-field">结束日期<input id="growthEndDate" type="date"></label>
+            <button class="secondary" type="button" onclick="applyGrowthRange()">应用范围</button>
+            <button class="secondary" type="button" onclick="clearGrowthRange()">全部时间</button>
+          </div>
+        </div>
+        <div class="growth-period-switch" role="group" aria-label="用户增长统计粒度">
+          <button class="growth-period-button active" type="button" data-growth-period="day" onclick="setGrowthPeriod('day')">按日</button>
+          <button class="growth-period-button" type="button" data-growth-period="week" onclick="setGrowthPeriod('week')">按周</button>
+          <button class="growth-period-button" type="button" data-growth-period="month" onclick="setGrowthPeriod('month')">按月</button>
+        </div>
+      </div>
+      <div id="userGrowthChart" class="growth-chart-host"><div class="loading-state">正在读取用户增长数据…</div></div>
+      <div id="userGrowthSummary" class="growth-summary" aria-live="polite"></div>
+    </article>
+    <article class="growth-card">
+      <div class="growth-toolbar">
+        <div>
+          <h3>流量消耗</h3>
+          <small>上传和下载使用堆叠柱状图，总流量使用折线显示。</small>
+          <div class="growth-range-controls" aria-label="流量统计时间范围">
+            <label class="growth-range-field">开始日期<input id="trafficStartDate" type="date"></label>
+            <label class="growth-range-field">结束日期<input id="trafficEndDate" type="date"></label>
+            <button class="secondary" type="button" onclick="applyTrafficRange()">应用范围</button>
+            <button class="secondary" type="button" onclick="clearTrafficRange()">全部时间</button>
+          </div>
+        </div>
+        <div class="growth-period-switch" role="group" aria-label="流量统计粒度">
+          <button class="growth-period-button active" type="button" data-traffic-period="day" onclick="setTrafficPeriod('day')">按日</button>
+          <button class="growth-period-button" type="button" data-traffic-period="week" onclick="setTrafficPeriod('week')">按周</button>
+          <button class="growth-period-button" type="button" data-traffic-period="month" onclick="setTrafficPeriod('month')">按月</button>
+        </div>
+      </div>
+      <div id="trafficChart" class="traffic-chart-host"><div class="loading-state">正在读取流量数据…</div></div>
+      <div id="trafficSummary" class="growth-summary" aria-live="polite"></div>
+    </article>
+     <div class="pie-grid">
+       <article class="pie-card">
+         <h3>设备厂商</h3>
+         <small>相同厂商的大小写和常见子品牌会自动合并。</small>
+         <div id="brandPie" class="pie-chart-host"><div class="loading-state">正在读取厂商数据…</div></div>
+       </article>
+       <article class="pie-card">
+         <h3>Android 系统版本</h3>
+         <small>按账户最近一次登记的 Android 版本统计。</small>
+         <div id="androidPie" class="pie-chart-host"><div class="loading-state">正在读取系统版本…</div></div>
+       </article>
+       <article class="pie-card">
+         <h3>App 软件版本</h3>
+         <small>按账户最近一次登记的 FireflyVPN 版本统计。</small>
+         <div id="appVersionPie" class="pie-chart-host"><div class="loading-state">正在读取软件版本…</div></div>
+       </article>
      </div>
    </section>
 
-   <section class="card tab-panel analytics-panel" role="tabpanel" data-panel="user-analysis">
-     <div class="analytics-heading"><div><h2>用户分析</h2><p>关注活跃增长、注册质量和新老用户结构。</p></div></div>
-     <div id="userAnalysisKpis" class="kpi-grid"></div>
-     <div class="analytics-grid">
-       <section class="analytics-card"><div class="chart-heading"><div><h3>用户活跃趋势</h3><small>支持指标与日、周、月粒度切换</small></div><div class="chart-controls"><select id="userActiveMetric" class="chart-select"><option value="dau">DAU</option><option value="mau">MAU</option><option value="ratio">DAU / MAU</option></select><select id="userActiveGrain" class="chart-select" aria-label="活跃趋势时间粒度"><option value="day">按日</option><option value="week">按周</option><option value="month">按月</option></select></div></div><div id="userActiveChart" class="chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>新增用户趋势</h3><small>柱状图为每日注册，折线为 7 日平均</small></div></div><div id="userRegistrationChart" class="chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>总用户累计增长</h3><small>基于现存账户注册日期回溯</small></div></div><div id="userCumulativeChart" class="chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>今日活跃用户结构</h3><small>新注册用户与老用户质量对比</small></div></div><div id="newOldStructure" class="structure-host"></div></section>
+    <section class="card tab-panel" role="tabpanel" data-panel="users">
+     <div class="dashboard-heading">
+       <div>
+         <h2>用户表单</h2>
+         <p>分别展示用户、设备和流量统计表，不再把三张表拼接成一张宽表。</p>
+       </div>
+       <button class="secondary" type="button" onclick="loadUsers(true)">刷新</button>
      </div>
-   </section>
-
-   <section class="card tab-panel analytics-panel" role="tabpanel" data-panel="traffic-analysis">
-     <div class="analytics-heading"><div><h2>流量分析</h2><p>判断用户增长与 VPN 流量增长是否匹配。</p></div><select id="trafficRangeMode" class="chart-select"><option value="24h">最近 24 小时</option><option value="7d" selected>最近 7 天</option><option value="30d">最近 30 天</option><option value="month">本月</option><option value="filtered">跟随顶部筛选</option></select></div>
-     <div id="trafficKpis" class="kpi-grid"></div>
-     <div class="analytics-grid">
-       <section class="analytics-card span-2"><div class="chart-heading"><div><h3>上传 / 下载流量趋势</h3><small>堆叠面积图；总高度为总流量</small></div><div class="chart-legend"><span><i class="legend-upload"></i>上传</span><span><i class="legend-download"></i>下载</span></div></div><div id="trafficStackedChart" class="chart-host chart-host-large"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>DAU 人均流量趋势</h3><small>总流量 ÷ 当日活跃用户</small></div></div><div id="perCapitaTrafficChart" class="chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>流量健康度</h3><small>日均、7 日均、30 日均与月累计</small></div></div><div id="trafficHealth" class="stat-list"></div></section>
-     </div>
-   </section>
-
-   <section class="card tab-panel analytics-panel" role="tabpanel" data-panel="devices">
-     <div class="analytics-heading"><div><h2>设备与版本</h2><p>识别主要设备、系统版本和客户端升级风险。</p></div><small class="data-note">平台根据现有设备字段推断；系统版本当前仅有 Android 字段。</small></div>
-     <div id="deviceKpis" class="kpi-grid"></div>
-     <div class="analytics-grid">
-       <section class="analytics-card"><div class="chart-heading"><div><h3>设备平台分布</h3><small>点击平台联动系统版本和型号</small></div></div><div id="platformDistribution" class="bar-chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>操作系统版本</h3><small id="systemVersionSubtitle">按用户规模和活跃率排序</small></div></div><div id="systemVersionDistribution" class="bar-chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>App 客户端版本</h3><small>覆盖率、DAU 与活跃率</small></div></div><div id="appVersionDistribution" class="bar-chart-host"></div></section>
-       <section class="analytics-card"><div class="chart-heading"><div><h3>设备型号 TOP 10</h3><small>人均流量使用本月累计口径</small></div></div><div id="deviceModelTable" class="compact-table-wrap"></div></section>
-     </div>
-   </section>
-
-   <section class="card tab-panel analytics-panel" role="tabpanel" data-panel="alerts">
-     <div class="analytics-heading"><div><h2>异常监控</h2><p>自动提示增长、活跃、流量和版本分布中的异常变化。</p></div><button class="secondary" type="button" onclick="loadUsers()">重新检测</button></div>
-     <div id="alertKpis" class="kpi-grid alert-kpis"></div>
-     <div class="analytics-card"><div class="chart-heading"><div><h3>异常事件</h3><small>点击事件可跳转到对应分析模块</small></div><select id="alertSeverityFilter" class="chart-select"><option value="">全部严重程度</option><option value="critical">严重</option><option value="warning">警告</option><option value="attention">关注</option><option value="normal">正常</option></select></div><div id="alertList" class="alert-list"></div></div>
-   </section>
-
-   <section class="card tab-panel" role="tabpanel" data-panel="users">
-     <h2>用户表单</h2>
-     <div class="user-sheet-toolbar">
-       <button class="secondary" type="button" onclick="loadUsers()">刷新</button>
-       <button id="saveAllUsers" type="button" onclick="saveAllUsers()" disabled>保存全部修改</button>
-       <button class="secondary" type="button" onclick="exportUsersCsv()">导出详细表格（CSV）</button>
-       <button class="secondary" type="button" onclick="resetUserColumnWidths()">重置列宽</button>
-       <input id="userSearch" class="user-search" type="search" placeholder="搜索账户、昵称、设备或版本" oninput="applyUserSearch()" onkeydown="handleUserSearchKey(event)">
-       <button class="secondary" type="button" onclick="locateUserSearch(1)">定位下一个</button>
-       <button class="secondary" type="button" onclick="clearUserSearch()">清除</button>
-       <select id="batchLevel" class="batch-level-select" title="批量修改等级">
-         <option value="">批量等级</option>
-         <option value="0">Lv0（封禁）</option>
-         <option value="1">Lv1</option>
-         <option value="2">Lv2</option>
-         <option value="3">Lv3</option>
-         <option value="4">Lv4</option>
-         <option value="5">Lv5</option>
-         <option value="6">Lv6</option>
-       </select>
-       <button id="batchSetLevelButton" type="button" onclick="batchSetLevel()" disabled>批量改等级</button>
-       <button id="batchBanUsersButton" class="danger" type="button" onclick="batchBanUsers()" disabled>批量封禁</button>
-       <button id="batchDeleteUsersButton" class="danger" type="button" onclick="batchDeleteUsers()" disabled>批量删除</button>
-       <small id="userSearchStatus"></small>
-       <small id="userSelectionStatus"></small>
-     </div>
-     <div id="usersTable" class="table-wrap"></div>
-     <small class="hint">可编辑昵称、等级、品牌、型号、Android 和 App 版本；活跃、流量及时间字段为只读明细。支持批量修改、封禁与删除，黄色行表示尚未保存。</small>
-   </section>
+     <div id="usersTable" class="user-tables"></div>
+    </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <h2>订阅线路</h2>
@@ -1595,14 +1973,17 @@ function adminHtml() {
      <label class="check"><input id="appForce" type="checkbox">强制更新</label>
      <button type="button" onclick="pushSection('app-update')">推送</button>
   </section>
-   <div id="chartTooltip" class="chart-tooltip" hidden></div>
    </div>
    </div>
  </main>
 <script>
- let currentState = null;
- let adminToken = '';
- let currentUsersData = null;
+  let currentState = null;
+  let adminToken = '';
+  let currentUsersData = null;
+  let growthPeriod = 'day';
+ let growthRequestId = 0;
+ let trafficPeriod = 'day';
+ let trafficRequestId = 0;
  const dirtyUserIds = new Set();
  const selectedUserIds = new Set();
  let savingAllUsers = false;
@@ -1610,18 +1991,14 @@ function adminHtml() {
  let userSearchIndex = -1;
  let userSortKey = '';
  let userSortDirection = 'desc';
- let analyticsRange = '7d';
- let analyticsCustomStart = '';
- let analyticsCustomEnd = '';
- let selectedDevicePlatform = '';
- let analyticsAlerts = [];
- let deviceModelSortKey = 'users';
- let deviceModelSortDirection = 'desc';
- const ANALYTICS_TABS = ['overview', 'user-analysis', 'traffic-analysis', 'devices', 'alerts'];
+ const PIE_COLORS = [
+   '#22c55e', '#38bdf8', '#a78bfa', '#f59e0b',
+   '#f472b6', '#2dd4bf', '#fb7185', '#94a3b8'
+ ];
  const USER_COLUMN_WIDTHS_KEY = 'firefly:user-sheet-column-widths:v1';
  const USER_SHEET_COLUMNS = [
    {key: 'select', label: '选择', width: 48, min: 44},
-   {key: 'accountId', label: '账户哈希', width: 135, min: 90},
+   {key: 'accountId', label: '用户 UID', width: 150, min: 110},
    {key: 'nickname', label: '昵称', width: 110, min: 70},
    {key: 'level', label: '等级', width: 80, min: 65},
    {key: 'brand', label: '品牌', width: 90, min: 60},
@@ -1640,7 +2017,6 @@ function adminHtml() {
    {key: 'trafficTotalDownload', label: '累计下载', width: 90, min: 65},
    {key: 'trafficTotal', label: '累计总流量', width: 90, min: 65},
    {key: 'createdAt', label: '注册时间', width: 140, min: 90},
-   {key: 'lastSeenAt', label: '最后访问', width: 140, min: 90},
    {key: 'lastReportAt', label: '最后上报', width: 140, min: 90},
    {key: 'actions', label: '操作', width: 130, min: 100}
  ];
@@ -1656,7 +2032,6 @@ function adminHtml() {
  function setValue(id, data) { el(id).value = data == null ? '' : data; }
  function checked(id, data) { el(id).checked = Boolean(data); }
  function esc(data) { return String(data == null ? '' : data).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
- function cleanText(value) { return typeof value === 'string' ? value.trim() : ''; }
  function headers() { return {'content-type':'application/json','authorization':'Bearer ' + adminToken}; }
  function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#fca5a5' : '#86efac'; }
  function showLoginError(message) { loginStatusEl.textContent = message || ''; }
@@ -1697,10 +2072,10 @@ function adminHtml() {
      currentState = data;
      loginGate.hidden = true;
      el('dashboard').hidden = false;
-     fillState(data);
-     activateTab('overview');
-     if (await loadUsers()) show('登录成功');
-     passwordInput.value = '';
+      fillState(data);
+      activateTab('data-dashboard');
+      if (await loadUsers()) show('登录成功');
+      passwordInput.value = '';
      showLoginError('');
    } catch (error) {
      adminToken = '';
@@ -1725,9 +2100,6 @@ function activateTab(name) {
   document.querySelectorAll('.tab-panel').forEach(function(panel) {
     panel.classList.toggle('active', panel.dataset.panel === name);
   });
-  const analyticsActive = ANALYTICS_TABS.includes(name);
-  el('analyticsFilterBar').hidden = !analyticsActive;
-  if (analyticsActive && currentUsersData) renderAnalyticsDashboard();
 }
 document.querySelectorAll('.tab-button').forEach(function(button) {
   button.onclick = function() {
@@ -1735,25 +2107,6 @@ document.querySelectorAll('.tab-button').forEach(function(button) {
     window.scrollTo({top: 0, behavior: 'auto'});
   };
 });
-document.querySelectorAll('[data-range]').forEach(function(button) {
-  button.onclick = function() { setAnalyticsRange(button.dataset.range); };
-});
-el('analyticsPlatformFilter').onchange = function() {
-  selectedDevicePlatform = el('analyticsPlatformFilter').value;
-  populateAnalyticsDimensionFilters();
-  renderAnalyticsDashboard();
-};
-el('analyticsSystemFilter').onchange = function() {
-  populateAnalyticsDimensionFilters();
-  renderAnalyticsDashboard();
-};
-el('analyticsVersionFilter').onchange = renderAnalyticsDashboard;
-el('overviewActiveMetric').onchange = renderAnalyticsDashboard;
-el('overviewActiveGrain').onchange = renderAnalyticsDashboard;
-el('userActiveMetric').onchange = renderAnalyticsDashboard;
-el('userActiveGrain').onchange = renderAnalyticsDashboard;
-el('trafficRangeMode').onchange = renderTrafficAnalysis;
-el('alertSeverityFilter').onchange = renderAlerts;
 function formatMegabytes(megabytes) {
   let value = Number(megabytes) || 0;
   const units = ['MB', 'GB', 'TB', 'PB'];
@@ -1824,7 +2177,7 @@ function userSheetHeader() {
 function userSortValue(row, columnKey) {
   const accountId = row.dataset.userRow || '';
   const user = currentUsersData && Array.isArray(currentUsersData.users)
-    ? currentUsersData.users.find(function(item) { return item.id === accountId; })
+    ? currentUsersData.users.find(function(item) { return item.uid === accountId; })
     : null;
   if (!user) return accountId;
   const field = function(name, fallback) {
@@ -1832,7 +2185,7 @@ function userSortValue(row, columnKey) {
     return control ? control.value.trim() : fallback;
   };
   switch (columnKey) {
-    case 'accountId': return user.id;
+    case 'accountId': return user.uid;
     case 'nickname': return field('nickname', user.nickname);
     case 'level': return Number(field('level', user.level)) || 0;
     case 'brand': return field('brand', user.brand);
@@ -1851,7 +2204,6 @@ function userSortValue(row, columnKey) {
     case 'trafficTotalDownload': return Number(user.totalDownloadMb) || 0;
     case 'trafficTotal': return Number(user.totalMb) || 0;
     case 'createdAt': return user.createdAt || '';
-    case 'lastSeenAt': return user.lastSeenAt || '';
     case 'lastReportAt': return user.lastReportAt || '';
     default: return '';
   }
@@ -1871,7 +2223,7 @@ function compareUserSortValues(left, right, columnKey) {
   if (leftText && !rightText) return -1;
   if (!leftText && !rightText) return 0;
 
-  const dateColumns = ['createdAt', 'lastSeenAt', 'lastReportAt'];
+  const dateColumns = ['createdAt', 'lastReportAt'];
   if (dateColumns.includes(columnKey)) {
     const leftTime = Date.parse(leftText);
     const rightTime = Date.parse(rightText);
@@ -2115,940 +2467,506 @@ function clearUserSearch() {
   applyUserSearch();
   input.focus();
 }
-function activityRate(active, total) {
-  if (!total) return '0%';
-  return (Math.round((Number(active) || 0) / total * 1000) / 10) + '%';
+// 统一常见厂商及其子品牌，避免同一厂商因大小写或品牌写法不同被拆分。
+function normalizedBrand(value) {
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return '未知厂商';
+  const brand = raw.toLowerCase().replace(/[\\s_-]+/g, '');
+  if (/^(oppo|oneplus|一加|realme|真我)/.test(brand)) return 'OPPO';
+  if (/^(vivo|iqoo)/.test(brand)) return 'vivo';
+  if (/^(xiaomi|redmi|poco|mi|小米)/.test(brand)) return '小米';
+  if (/^(huawei|华为)/.test(brand)) return '华为';
+  if (/^(honor|荣耀)/.test(brand)) return '荣耀';
+  if (/^(samsung|三星)/.test(brand)) return '三星';
+  if (/^(google|pixel)/.test(brand)) return 'Google';
+  if (/^(motorola|moto|lenovo|联想)/.test(brand)) return '联想 / Motorola';
+  if (/^(zte|nubia|红魔|中兴)/.test(brand)) return '中兴 / nubia';
+  if (/^(meizu|魅族)/.test(brand)) return '魅族';
+  if (/^(sony|索尼)/.test(brand)) return 'Sony';
+  if (/^(asus|rog|华硕)/.test(brand)) return '华硕';
+  if (/^(nothing)/.test(brand)) return 'Nothing';
+  return raw;
 }
-function trafficBreakdown(usage) {
-  const value = usage || {};
-  return '上传 ' + formatMegabytes(value.uploadMb) +
-    ' · 下载 ' + formatMegabytes(value.downloadMb);
+function normalizedAndroidVersion(value) {
+  const version = String(value == null ? '' : value).trim().replace(/^android\\s*/i, '');
+  return version ? 'Android ' + version : '未知版本';
 }
-function formatCount(value) {
-  return new Intl.NumberFormat('zh-CN').format(Math.max(0, Math.round(Number(value) || 0)));
+function normalizedAppVersion(value) {
+  const version = String(value == null ? '' : value).trim().replace(/^v/i, '');
+  return version ? 'v' + version : '未知版本';
 }
-function formatPercentRatio(value) {
-  const ratio = Number(value);
-  if (!Number.isFinite(ratio)) return '--';
-  const percentage = ratio * 100;
-  const rounded = Math.round(percentage * 10) / 10;
-  return rounded + '%';
-}
-function changeRate(current, previous) {
-  const currentValue = Number(current) || 0;
-  const previousValue = Number(previous) || 0;
-  if (previousValue === 0) return currentValue === 0 ? 0 : null;
-  return (currentValue - previousValue) / Math.abs(previousValue);
-}
-function formatSignedChange(change) {
-  if (!Number.isFinite(change)) return '--';
-  const value = Math.round(Math.abs(change) * 1000) / 10;
-  return (change > 0 ? '↑ ' : change < 0 ? '↓ ' : '→ ') + value + '%';
-}
-function renderKpiGrid(containerId, items) {
-  const container = el(containerId);
-  if (!container) return;
-  container.innerHTML = (items || []).map(function(item) {
-    const change = Number(item.change);
-    const hasChange = item.change !== null && item.change !== undefined && Number.isFinite(change);
-    const trendClass = !hasChange || change === 0
-      ? 'trend-flat'
-      : change > 0 ? 'trend-up' : 'trend-down';
-    const trendText = hasChange ? formatSignedChange(change) : '--';
-    return '<article class="kpi-card">' +
-      '<div class="kpi-topline"><span class="kpi-label">' + esc(item.label) + '</span>' +
-      '<span class="trend-pill ' + trendClass + '">' + esc(trendText) + '</span></div>' +
-      '<strong class="kpi-value">' + esc(item.value) + '</strong>' +
-      '<small class="kpi-comparison">' + esc(item.comparison || '暂无对比基准') + '</small>' +
-      '</article>';
-  }).join('');
-}
-function analyticsDateAdd(day, offset) {
-  const date = new Date(String(day || '') + 'T00:00:00Z');
-  if (!Number.isFinite(date.getTime())) return day;
-  date.setUTCDate(date.getUTCDate() + Number(offset || 0));
-  return date.toISOString().slice(0, 10);
-}
-function analyticsMonthStart(day) {
-  return String(day || '').slice(0, 7) + '-01';
-}
-function analyticsPreviousMonth(day) {
-  const start = new Date(analyticsMonthStart(day) + 'T00:00:00Z');
-  start.setUTCMonth(start.getUTCMonth() - 1);
-  const previousStart = start.toISOString().slice(0, 10);
-  const end = new Date(start);
-  end.setUTCMonth(end.getUTCMonth() + 1);
-  end.setUTCDate(0);
-  return {start: previousStart, end: end.toISOString().slice(0, 10)};
-}
-function analyticsDailyData() {
-  const analytics = currentUsersData && currentUsersData.analytics;
-  return analytics && Array.isArray(analytics.daily) ? analytics.daily : [];
-}
-function analyticsHourlyData() {
-  const analytics = currentUsersData && currentUsersData.analytics;
-  return analytics && Array.isArray(analytics.hourly) ? analytics.hourly : [];
-}
-function analyticsToday() {
-  return currentUsersData && currentUsersData.date
-    ? currentUsersData.date
-    : (analyticsDailyData().slice(-1)[0] || {}).date || '';
-}
-function dailyRecord(day) {
-  return analyticsDailyData().find(function(item) { return item.date === day; }) || {
-    date: day, dau: 0, mau: 0, registrations: 0,
-    uploadMb: 0, downloadMb: 0, totalMb: 0,
-  };
-}
-function analyticsRangeBounds(range) {
-  const today = analyticsToday();
-  if (!today) return {start: '', end: ''};
-  if (range === 'today') return {start: today, end: today};
-  if (range === 'yesterday') {
-    const yesterday = analyticsDateAdd(today, -1);
-    return {start: yesterday, end: yesterday};
-  }
-  if (range === '30d') return {start: analyticsDateAdd(today, -29), end: today};
-  if (range === 'month') return {start: analyticsMonthStart(today), end: today};
-  if (range === 'previous-month') return analyticsPreviousMonth(today);
-  if (range === 'custom') return {start: analyticsCustomStart, end: analyticsCustomEnd};
-  return {start: analyticsDateAdd(today, -6), end: today};
-}
-function dailyDataForRange(range) {
-  const bounds = analyticsRangeBounds(range || analyticsRange);
-  return analyticsDailyData().filter(function(item) {
-    return (!bounds.start || item.date >= bounds.start) && (!bounds.end || item.date <= bounds.end);
-  });
-}
-function sumDailyData(items) {
-  return (items || []).reduce(function(result, item) {
-    result.registrations += Number(item.registrations) || 0;
-    result.uploadMb += Number(item.uploadMb) || 0;
-    result.downloadMb += Number(item.downloadMb) || 0;
-    result.totalMb += Number(item.totalMb) || 0;
-    return result;
-  }, {registrations: 0, uploadMb: 0, downloadMb: 0, totalMb: 0});
-}
-function averageOf(items, property) {
-  if (!items || items.length === 0) return 0;
-  return items.reduce(function(total, item) { return total + (Number(item[property]) || 0); }, 0) / items.length;
-}
-function movingAverage(items, property, windowSize) {
-  return (items || []).map(function(item, index) {
-    const slice = items.slice(Math.max(0, index - windowSize + 1), index + 1);
-    return {
-      label: item.date,
-      value: averageOf(slice, property),
-    };
-  });
-}
-function devicePlatform(user) {
-  const text = [user.brand, user.model, user.androidVersion].join(' ').toLowerCase();
-  if (/iphone|ipad|\bios\b|apple/.test(text)) return 'iOS';
-  if (/windows|win32|win64/.test(text)) return 'Windows';
-  if (/macos|macbook|imac|darwin/.test(text)) return 'macOS';
-  if (/linux|ubuntu|debian|fedora/.test(text)) return 'Linux';
-  if (cleanText(user.androidVersion) || /android/.test(text)) return 'Android';
-  return '其他';
-}
-function deviceSystemVersion(user) {
-  const platform = devicePlatform(user);
-  if (platform === 'Android') {
-    return cleanText(user.androidVersion) ? 'Android ' + cleanText(user.androidVersion) : 'Android 未知';
-  }
-  return platform + ' 未知';
-}
-function selectedAnalyticsUsers() {
-  const users = currentUsersData && Array.isArray(currentUsersData.users)
-    ? currentUsersData.users
-    : [];
-  const platform = el('analyticsPlatformFilter').value;
-  const system = el('analyticsSystemFilter').value;
-  const version = el('analyticsVersionFilter').value;
-  return users.filter(function(user) {
-    const userVersion = cleanText(user.appVersion) || '未知版本';
-    return (!platform || devicePlatform(user) === platform) &&
-      (!system || deviceSystemVersion(user) === system) &&
-      (!version || userVersion === version);
-  });
-}
-function replaceSelectOptions(control, values, allLabel) {
-  if (!control) return;
-  const previous = control.value;
-  control.innerHTML = '<option value="">' + esc(allLabel) + '</option>' + values.map(function(value) {
-    return '<option value="' + esc(value) + '">' + esc(value) + '</option>';
-  }).join('');
-  control.value = values.includes(previous) ? previous : '';
-}
-function populateAnalyticsDimensionFilters() {
-  const users = currentUsersData && Array.isArray(currentUsersData.users)
-    ? currentUsersData.users
-    : [];
-  const platformControl = el('analyticsPlatformFilter');
-  const platformPrevious = selectedDevicePlatform || platformControl.value;
-  const platforms = Array.from(new Set(users.map(devicePlatform))).sort();
-  replaceSelectOptions(platformControl, platforms, '全部平台');
-  platformControl.value = platforms.includes(platformPrevious) ? platformPrevious : '';
-  selectedDevicePlatform = platformControl.value;
-
-  const platformUsers = users.filter(function(user) {
-    return !platformControl.value || devicePlatform(user) === platformControl.value;
-  });
-  const systems = Array.from(new Set(platformUsers.map(deviceSystemVersion))).sort();
-  replaceSelectOptions(el('analyticsSystemFilter'), systems, '全部系统');
-  const system = el('analyticsSystemFilter').value;
-  const versionUsers = platformUsers.filter(function(user) {
-    return !system || deviceSystemVersion(user) === system;
-  });
-  const versions = Array.from(new Set(versionUsers.map(function(user) {
-    return cleanText(user.appVersion) || '未知版本';
-  }))).sort(compareVersionLabels).reverse();
-  replaceSelectOptions(el('analyticsVersionFilter'), versions, '全部版本');
-}
-function compareVersionLabels(left, right) {
-  const leftParts = String(left || '').replace(/^v/i, '').split('.').map(Number);
-  const rightParts = String(right || '').replace(/^v/i, '').split('.').map(Number);
-  const length = Math.max(leftParts.length, rightParts.length);
-  for (let index = 0; index < length; index += 1) {
-    const difference = (leftParts[index] || 0) - (rightParts[index] || 0);
-    if (difference) return difference;
-  }
-  return String(left).localeCompare(String(right), 'zh-CN', {numeric: true});
-}
-function setAnalyticsRange(range) {
-  analyticsRange = range || '7d';
-  document.querySelectorAll('[data-range]').forEach(function(button) {
-    button.classList.toggle('active', button.dataset.range === analyticsRange);
-  });
-  el('customDateRange').hidden = analyticsRange !== 'custom';
-  if (analyticsRange === 'custom') {
-    const fallback = analyticsRangeBounds('30d');
-    if (!analyticsCustomStart) analyticsCustomStart = fallback.start;
-    if (!analyticsCustomEnd) analyticsCustomEnd = fallback.end;
-    el('analyticsStartDate').value = analyticsCustomStart;
-    el('analyticsEndDate').value = analyticsCustomEnd;
-    return;
-  }
-  renderAnalyticsDashboard();
-}
-function applyCustomAnalyticsRange() {
-  const start = el('analyticsStartDate').value;
-  const end = el('analyticsEndDate').value;
-  if (!start || !end || start > end) {
-    show('自定义时间范围无效', true);
-    return;
-  }
-  analyticsCustomStart = start;
-  analyticsCustomEnd = end;
-  renderAnalyticsDashboard();
-}
-function resetAnalyticsFilters() {
-  selectedDevicePlatform = '';
-  el('analyticsPlatformFilter').value = '';
-  el('analyticsSystemFilter').value = '';
-  el('analyticsVersionFilter').value = '';
-  populateAnalyticsDimensionFilters();
-  setAnalyticsRange('7d');
-}
-function analyticsRangeLabel() {
-  const labels = {
-    today: '今日', yesterday: '昨日', '7d': '最近 7 天', '30d': '最近 30 天',
-    month: '本月', 'previous-month': '上月', custom: '自定义时间',
-  };
-  if (analyticsRange === 'custom') {
-    return (analyticsCustomStart || '--') + ' 至 ' + (analyticsCustomEnd || '--');
-  }
-  return labels[analyticsRange] || labels['7d'];
-}
-function updateAnalyticsFilterStatus() {
-  const filters = [
-    el('analyticsPlatformFilter').value,
-    el('analyticsSystemFilter').value,
-    el('analyticsVersionFilter').value,
-  ].filter(Boolean);
-  el('analyticsFilterStatus').textContent = analyticsRangeLabel() + ' · ' +
-    (filters.length ? filters.join(' · ') : '全部用户') +
-    ' · 历史趋势保留近 120 天' +
-    (filters.length ? ' · 设备筛选应用于用户结构与设备版本' : '');
-}
-function chartEmpty(containerId, message, type) {
-  const container = el(containerId);
-  if (!container) return;
-  container.innerHTML = '<div class="' + (type || 'empty-state') + '">' + esc(message || '暂无数据') + '</div>';
-}
-function chartNiceMaximum(value) {
-  const number = Math.max(0, Number(value) || 0);
-  if (number <= 1) return 1;
-  const power = Math.pow(10, Math.floor(Math.log10(number)));
-  return Math.ceil(number / power * 1.15 * 2) / 2 * power;
-}
-function chartXAxisLabels(points, xAt, height, padBottom) {
-  const count = points.length;
-  const step = Math.max(1, Math.ceil(count / 6));
-  return points.map(function(point, index) {
-    if (index % step !== 0 && index !== count - 1) return '';
-    const rawLabel = String(point.label || '');
-    const label = rawLabel.length >= 10
-      ? rawLabel.slice(5, 10).replace('-', '/')
-      : rawLabel;
-    return '<text class="chart-axis-label" x="' + xAt(index) + '" y="' + (height - padBottom + 22) + '" text-anchor="middle">' + esc(label) + '</text>';
-  }).join('');
-}
-function renderLineChart(containerId, points, options) {
-  const container = el(containerId);
-  if (!container) return;
-  if (!points || points.length === 0) return chartEmpty(containerId, '当前筛选范围暂无趋势数据');
-  const width = 720;
-  const height = options && options.large ? 310 : 250;
-  const pad = {left: 58, right: 18, top: 18, bottom: 38};
-  const values = points.map(function(point) { return Number(point.value) || 0; });
-  const maximum = options && Number.isFinite(options.maximum)
-    ? options.maximum
-    : chartNiceMaximum(Math.max.apply(null, values));
-  const xAt = function(index) {
-    return pad.left + (points.length === 1 ? (width - pad.left - pad.right) / 2 : index / (points.length - 1) * (width - pad.left - pad.right));
-  };
-  const yAt = function(value) {
-    return pad.top + (1 - Math.max(0, Number(value) || 0) / (maximum || 1)) * (height - pad.top - pad.bottom);
-  };
-  const formatter = options && options.formatter ? options.formatter : formatCount;
-  let grid = '';
-  for (let index = 0; index <= 4; index += 1) {
-    const y = pad.top + index / 4 * (height - pad.top - pad.bottom);
-    const tick = maximum * (1 - index / 4);
-    grid += '<line class="chart-grid-line" x1="' + pad.left + '" y1="' + y + '" x2="' + (width - pad.right) + '" y2="' + y + '"></line>' +
-      '<text class="chart-axis-label" x="' + (pad.left - 8) + '" y="' + (y + 4) + '" text-anchor="end">' + esc(formatter(tick)) + '</text>';
-  }
-  const path = points.map(function(point, index) {
-    return (index ? 'L' : 'M') + xAt(index) + ',' + yAt(point.value);
-  }).join(' ');
-  const pointsHtml = points.map(function(point, index) {
-    const tooltip = point.tooltip || (point.label + '\\n' + formatter(point.value));
-    return '<circle class="chart-point" cx="' + xAt(index) + '" cy="' + yAt(point.value) + '" r="3.5" data-tooltip="' + esc(tooltip) + '"><title>' + esc(tooltip) + '</title></circle>';
-  }).join('');
-  container.innerHTML = '<svg class="chart-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + esc((options && options.label) || '趋势图') + '">' +
-    grid + '<path class="chart-line" d="' + path + '"></path>' + pointsHtml +
-    chartXAxisLabels(points, xAt, height, pad.bottom) + '</svg>';
-}
-function renderBarLineChart(containerId, items, property) {
-  const container = el(containerId);
-  if (!container) return;
-  if (!items || items.length === 0) return chartEmpty(containerId, '当前筛选范围暂无注册数据');
-  const averages = movingAverage(items, property, 7);
-  const width = 720;
-  const height = 250;
-  const pad = {left: 55, right: 18, top: 18, bottom: 38};
-  const maximum = chartNiceMaximum(Math.max.apply(null, items.map(function(item, index) {
-    return Math.max(Number(item[property]) || 0, averages[index].value);
-  })));
-  const plotWidth = width - pad.left - pad.right;
-  const barWidth = Math.max(2, Math.min(24, plotWidth / items.length * .62));
-  const xAt = function(index) { return pad.left + (index + .5) / items.length * plotWidth; };
-  const yAt = function(value) { return pad.top + (1 - (Number(value) || 0) / maximum) * (height - pad.top - pad.bottom); };
-  let grid = '';
-  for (let index = 0; index <= 4; index += 1) {
-    const y = pad.top + index / 4 * (height - pad.top - pad.bottom);
-    grid += '<line class="chart-grid-line" x1="' + pad.left + '" y1="' + y + '" x2="' + (width - pad.right) + '" y2="' + y + '"></line>';
-  }
-  const bars = items.map(function(item, index) {
-    const value = Number(item[property]) || 0;
-    const tooltip = item.date + '\\n新增 ' + formatCount(value) + '\\n7 日均值 ' + (Math.round(averages[index].value * 10) / 10);
-    return '<rect class="chart-bar" x="' + (xAt(index) - barWidth / 2) + '" y="' + yAt(value) + '" width="' + barWidth + '" height="' + Math.max(0, height - pad.bottom - yAt(value)) + '" rx="2" data-tooltip="' + esc(tooltip) + '"><title>' + esc(tooltip) + '</title></rect>';
-  }).join('');
-  const line = averages.map(function(point, index) {
-    return (index ? 'L' : 'M') + xAt(index) + ',' + yAt(point.value);
-  }).join(' ');
-  const axisPoints = items.map(function(item) { return {label: item.date}; });
-  container.innerHTML = '<svg class="chart-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="新增用户趋势">' +
-    grid + bars + '<path class="chart-line-secondary" d="' + line + '"></path>' +
-    chartXAxisLabels(axisPoints, xAt, height, pad.bottom) + '</svg>';
-}
-function areaBetweenPath(points, xAt, yAt, lowerProperty, upperProperty) {
-  if (!points.length) return '';
-  const upper = points.map(function(point, index) {
-    return (index ? 'L' : 'M') + xAt(index) + ',' + yAt(point[upperProperty]);
-  }).join(' ');
-  const lower = points.slice().reverse().map(function(point, reverseIndex) {
-    const index = points.length - reverseIndex - 1;
-    return 'L' + xAt(index) + ',' + yAt(lowerProperty ? point[lowerProperty] : 0);
-  }).join(' ');
-  return upper + ' ' + lower + ' Z';
-}
-function renderStackedAreaChart(containerId, items, options) {
-  const container = el(containerId);
-  if (!container) return;
-  if (!items || items.length === 0) return chartEmpty(containerId, '当前筛选范围暂无流量数据');
-  const points = items.map(function(item) {
-    const upload = Number(item.uploadMb) || 0;
-    const download = Number(item.downloadMb) || 0;
-    return {
-      label: item.label || item.date || item.timestamp,
-      uploadMb: upload,
-      downloadMb: download,
-      totalMb: upload + download,
-    };
-  });
-  const width = 720;
-  const height = options && options.large ? 310 : 250;
-  const pad = {left: 62, right: 18, top: 18, bottom: 38};
-  const maximum = chartNiceMaximum(Math.max.apply(null, points.map(function(point) { return point.totalMb; })));
-  const xAt = function(index) {
-    return pad.left + (points.length === 1 ? (width - pad.left - pad.right) / 2 : index / (points.length - 1) * (width - pad.left - pad.right));
-  };
-  const yAt = function(value) { return pad.top + (1 - (Number(value) || 0) / maximum) * (height - pad.top - pad.bottom); };
-  let grid = '';
-  for (let index = 0; index <= 4; index += 1) {
-    const y = pad.top + index / 4 * (height - pad.top - pad.bottom);
-    const tick = maximum * (1 - index / 4);
-    grid += '<line class="chart-grid-line" x1="' + pad.left + '" y1="' + y + '" x2="' + (width - pad.right) + '" y2="' + y + '"></line>' +
-      '<text class="chart-axis-label" x="' + (pad.left - 8) + '" y="' + (y + 4) + '" text-anchor="end">' + esc(formatMegabytes(tick)) + '</text>';
-  }
-  const hitWidth = Math.max(8, (width - pad.left - pad.right) / points.length);
-  const hitAreas = points.map(function(point, index) {
-    const tooltip = point.label + '\\n上传 ' + formatMegabytes(point.uploadMb) + '\\n下载 ' + formatMegabytes(point.downloadMb) + '\\n总计 ' + formatMegabytes(point.totalMb);
-    return '<rect x="' + (xAt(index) - hitWidth / 2) + '" y="' + pad.top + '" width="' + hitWidth + '" height="' + (height - pad.top - pad.bottom) + '" fill="transparent" data-tooltip="' + esc(tooltip) + '"><title>' + esc(tooltip) + '</title></rect>';
-  }).join('');
-  container.innerHTML = '<svg class="chart-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="流量趋势">' +
-    grid +
-    '<path class="chart-area-download" d="' + areaBetweenPath(points, xAt, yAt, '', 'downloadMb') + '"></path>' +
-    '<path class="chart-area-upload" d="' + areaBetweenPath(points, xAt, yAt, 'downloadMb', 'totalMb') + '"></path>' +
-    hitAreas + chartXAxisLabels(points, xAt, height, pad.bottom) + '</svg>';
-}
-function currentMonthDailyData() {
-  const prefix = analyticsToday().slice(0, 7);
-  return analyticsDailyData().filter(function(item) { return item.date.slice(0, 7) === prefix; });
-}
-function previousMonthComparableData() {
-  const today = analyticsToday();
-  const previous = analyticsPreviousMonth(today);
-  const dayOfMonth = Math.max(1, Number(today.slice(8)) || 1);
-  const comparableEnd = analyticsDateAdd(previous.start, dayOfMonth - 1);
-  const end = comparableEnd > previous.end ? previous.end : comparableEnd;
-  return analyticsDailyData().filter(function(item) {
-    return item.date >= previous.start && item.date <= end;
-  });
-}
-function previousSevenCompleteDays() {
-  const today = analyticsToday();
-  const start = analyticsDateAdd(today, -7);
-  const end = analyticsDateAdd(today, -1);
-  return analyticsDailyData().filter(function(item) { return item.date >= start && item.date <= end; });
-}
-function overviewKpiItems() {
-  const data = currentUsersData || {};
-  const users = Array.isArray(data.users) ? data.users : [];
-  const todayKey = analyticsToday();
-  const today = dailyRecord(todayKey);
-  const yesterday = dailyRecord(analyticsDateAdd(todayKey, -1));
-  const month = sumDailyData(currentMonthDailyData());
-  const previousMonth = sumDailyData(previousMonthComparableData());
-  const totalUsers = users.length;
-  const previousTotalUsers = Math.max(0, totalUsers - (Number(today.registrations) || 0));
-  const todayRatio = today.mau ? today.dau / today.mau : 0;
-  const yesterdayRatio = yesterday.mau ? yesterday.dau / yesterday.mau : 0;
-  return [
-    {label:'总用户数', value:formatCount(totalUsers), change:changeRate(totalUsers, previousTotalUsers), comparison:'较昨日净增 ' + formatCount(today.registrations)},
-    {label:'DAU', value:formatCount(today.dau), change:changeRate(today.dau, yesterday.dau), comparison:'较昨日 ' + formatCount(yesterday.dau)},
-    {label:'MAU', value:formatCount(today.mau), change:changeRate(today.mau, yesterday.mau), comparison:'昨日口径 ' + formatCount(yesterday.mau)},
-    {label:'DAU / MAU', value:formatPercentRatio(todayRatio), change:changeRate(todayRatio, yesterdayRatio), comparison:'昨日 ' + formatPercentRatio(yesterdayRatio)},
-    {label:'今日注册用户', value:formatCount(today.registrations), change:changeRate(today.registrations, yesterday.registrations), comparison:'昨日 ' + formatCount(yesterday.registrations)},
-    {label:'本月注册用户', value:formatCount(month.registrations), change:changeRate(month.registrations, previousMonth.registrations), comparison:'上月同期 ' + formatCount(previousMonth.registrations)},
-    {label:'今日总流量', value:formatMegabytes(today.totalMb), change:changeRate(today.totalMb, yesterday.totalMb), comparison:'昨日 ' + formatMegabytes(yesterday.totalMb)},
-    {label:'本月总流量', value:formatMegabytes(month.totalMb), change:changeRate(month.totalMb, previousMonth.totalMb), comparison:'上月同期 ' + formatMegabytes(previousMonth.totalMb)},
-  ];
-}
-function activitySeriesByGrain(items, grain) {
-  if (!items || grain === 'day') return items || [];
+function distributionForUsers(users, labelForUser) {
   const groups = new Map();
-  items.forEach(function(item) {
-    let key;
-    if (grain === 'month') {
-      key = item.date.slice(0, 7);
-    } else {
-      const date = new Date(item.date + 'T00:00:00Z');
-      const mondayOffset = (date.getUTCDay() + 6) % 7;
-      key = analyticsDateAdd(item.date, -mondayOffset);
-    }
-    const group = groups.get(key) || [];
-    group.push(item);
-    groups.set(key, group);
+  users.forEach(function(user) {
+    const label = labelForUser(user);
+    const key = label.toLocaleLowerCase('zh-CN');
+    const current = groups.get(key);
+    if (current) current.count++;
+    else groups.set(key, {label: label, count: 1});
   });
-  return Array.from(groups.entries()).map(function(entry) {
-    const group = entry[1];
-    const last = group[group.length - 1] || {};
-    return {
-      date: entry[0],
-      label: grain === 'month'
-        ? entry[0]
-        : entry[0] + ' 至 ' + (last.date || entry[0]),
-      dau: averageOf(group, 'dau'),
-      mau: Number(last.mau) || 0,
-    };
+  return Array.from(groups.values()).sort(function(left, right) {
+    return right.count - left.count || left.label.localeCompare(right.label, 'zh-CN', {
+      numeric: true,
+      sensitivity: 'base'
+    });
   });
 }
-function activeMetricPoints(items, metric) {
-  return (items || []).map(function(item) {
-    const value = metric === 'ratio'
-      ? (item.mau ? item.dau / item.mau : 0)
-      : Number(item[metric]) || 0;
-    return {
-      label: item.label || item.date,
-      value,
-      tooltip: (item.label || item.date) + '\\n' + (metric === 'ratio' ? 'DAU / MAU ' + formatPercentRatio(value) : metric.toUpperCase() + ' ' + formatCount(value)),
-    };
-  });
+function compactDistribution(groups) {
+  if (groups.length <= PIE_COLORS.length) return groups;
+  const visible = groups.slice(0, PIE_COLORS.length - 1);
+  const otherCount = groups.slice(PIE_COLORS.length - 1).reduce(function(total, group) {
+    return total + group.count;
+  }, 0);
+  visible.push({label: '其他', count: otherCount});
+  return visible;
 }
-function renderActiveMetricChart(containerId, selectorId, grainSelectorId, series) {
-  const metric = el(selectorId).value || 'dau';
-  const grain = el(grainSelectorId).value || 'day';
-  renderLineChart(containerId, activeMetricPoints(activitySeriesByGrain(series, grain), metric), {
-    label: metric === 'ratio' ? 'DAU / MAU 趋势' : metric.toUpperCase() + ' 趋势',
-    maximum: metric === 'ratio' ? 1 : undefined,
-    formatter: metric === 'ratio' ? formatPercentRatio : formatCount,
-  });
+function growthPointLabel(key, period) {
+  const parts = key.split('-').map(Number);
+  if (period === 'month') return parts[0] + '年' + parts[1] + '月';
+  return parts[1] + '月' + parts[2] + '日';
 }
-function renderRegistrationTrend(containerId, series) {
-  renderBarLineChart(containerId, series, 'registrations');
-}
-function cumulativeUserPoints(series) {
-  const users = currentUsersData && Array.isArray(currentUsersData.users)
-    ? currentUsersData.users
-    : [];
-  return (series || []).map(function(item) {
-    const count = users.filter(function(user) {
-      return cleanText(user.createdAt).slice(0, 10) <= item.date;
-    }).length;
-    return {label:item.date, value:count, tooltip:item.date + '\\n累计用户 ' + formatCount(count)};
-  });
-}
-function renderNewOldStructure() {
-  const container = el('newOldStructure');
-  const users = selectedAnalyticsUsers();
-  const today = analyticsToday();
-  const active = users.filter(function(user) { return user.activeToday; });
-  const newUsers = active.filter(function(user) { return cleanText(user.createdAt).slice(0, 10) === today; });
-  const oldUsers = active.filter(function(user) { return cleanText(user.createdAt).slice(0, 10) !== today; });
-  const usage = function(list) {
-    return list.reduce(function(total, user) { return total + (Number(user.today && user.today.totalMb) || 0); }, 0);
-  };
-  const card = function(label, list) {
-    const share = active.length ? list.length / active.length : 0;
-    const perCapita = list.length ? usage(list) / list.length : 0;
-    return '<article class="structure-card"><small>' + esc(label) + '</small>' +
-      '<strong>' + formatCount(list.length) + '</strong>' +
-      '<span>占比 ' + formatPercentRatio(share) + '</span><small>人均流量 ' + formatMegabytes(perCapita) + '</small></article>';
-  };
-  container.innerHTML = card('今日新注册活跃用户', newUsers) + card('老用户', oldUsers);
-}
-function renderOverview() {
-  const series = dailyDataForRange();
-  renderKpiGrid('overviewKpis', overviewKpiItems());
-  renderActiveMetricChart('overviewActiveChart', 'overviewActiveMetric', 'overviewActiveGrain', series);
-  renderRegistrationTrend('overviewRegistrationChart', series);
-  renderStackedAreaChart('overviewTrafficChart', series, {});
-  renderAlertPreview();
-}
-function renderUserAnalysis() {
-  const series = dailyDataForRange();
-  const today = dailyRecord(analyticsToday());
-  const yesterday = dailyRecord(analyticsDateAdd(analyticsToday(), -1));
-  const month = sumDailyData(currentMonthDailyData());
-  const previousMonth = sumDailyData(previousMonthComparableData());
-  renderKpiGrid('userAnalysisKpis', [
-    {label:'今日注册',value:formatCount(today.registrations),change:changeRate(today.registrations,yesterday.registrations),comparison:'昨日 ' + formatCount(yesterday.registrations)},
-    {label:'昨日注册',value:formatCount(yesterday.registrations),change:null,comparison:'作为今日对比基准'},
-    {label:'本月累计注册',value:formatCount(month.registrations),change:changeRate(month.registrations,previousMonth.registrations),comparison:'上月同期 ' + formatCount(previousMonth.registrations)},
-    {label:'当前用户规模',value:formatCount((currentUsersData.users || []).length),change:null,comparison:'现存账户总量'},
-  ]);
-  renderActiveMetricChart('userActiveChart', 'userActiveMetric', 'userActiveGrain', series);
-  renderRegistrationTrend('userRegistrationChart', series);
-  renderLineChart('userCumulativeChart', cumulativeUserPoints(series), {label:'累计用户增长',formatter:formatCount});
-  renderNewOldStructure();
-}
-function trafficSeriesForMode() {
-  const mode = el('trafficRangeMode').value || '7d';
-  if (mode === '24h') {
-    return analyticsHourlyData().slice(-24).map(function(item) {
+function renderGrowthChart(data) {
+  const host = el('userGrowthChart');
+  const summary = el('userGrowthSummary');
+  if (!host) return;
+  const period = data && (data.period === 'week' || data.period === 'month')
+    ? data.period
+    : 'day';
+  const points = data && Array.isArray(data.points)
+    ? data.points.map(function(point) {
       return {
-        label: cleanText(item.timestamp).slice(5, 13).replace('T', ' '),
-        uploadMb: Number(item.uploadMb) || 0,
-        downloadMb: Number(item.downloadMb) || 0,
-        totalMb: Number(item.totalMb) || 0,
-        dau: Number(item.activeUsers) || 0,
+        key: String(point.key || ''),
+        newUsers: Math.max(0, Number(point.newUsers) || 0),
+        totalUsers: Math.max(0, Number(point.totalUsers) || 0)
       };
-    });
+    }).filter(function(point) { return /^\\d{4}-\\d{2}(-\\d{2})?$/.test(point.key); })
+    : [];
+  if (points.length === 0) {
+    host.innerHTML = '<div class="loading-state growth-empty">暂无可统计的注册数据</div>';
+    if (summary) summary.textContent = '';
+    return;
   }
-  if (mode === 'filtered') return dailyDataForRange();
-  return dailyDataForRange(mode === 'month' ? 'month' : mode);
+
+  const width = 920;
+  const height = 330;
+  const padding = {top: 20, right: 24, bottom: 48, left: 54};
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const maxValue = Math.max(1, points.reduce(function(maximum, point) {
+    return Math.max(maximum, point.totalUsers);
+  }, 0));
+  const tickStep = Math.max(1, Math.ceil(maxValue / 4));
+  const chartMax = tickStep * 4;
+  const xFor = function(index) {
+    return points.length === 1
+      ? padding.left + plotWidth / 2
+      : padding.left + index / (points.length - 1) * plotWidth;
+  };
+  const yFor = function(value) {
+    return padding.top + plotHeight - value / chartMax * plotHeight;
+  };
+  const linePath = points.map(function(point, index) {
+    return (index === 0 ? 'M' : 'L') + ' ' + xFor(index).toFixed(2) + ' ' + yFor(point.totalUsers).toFixed(2);
+  }).join(' ');
+  const grid = Array.from({length: 5}, function(_, index) {
+    const value = tickStep * index;
+    const y = yFor(value).toFixed(2);
+    return '<line x1="' + padding.left + '" y1="' + y + '" x2="' + (width - padding.right) +
+      '" y2="' + y + '" stroke="#374151" stroke-width="1" />' +
+      '<text x="' + (padding.left - 10) + '" y="' + (Number(y) + 4) +
+      '" text-anchor="end" fill="#94a3b8" font-size="12">' + value + '</text>';
+  }).join('');
+  const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+  const labels = points.map(function(point, index) {
+    const isLast = index === points.length - 1;
+    if (index !== 0 && !isLast && index % labelEvery !== 0) return '';
+    return '<text x="' + xFor(index).toFixed(2) + '" y="' + (height - 16) +
+      '" text-anchor="middle" fill="#94a3b8" font-size="12">' +
+      esc(growthPointLabel(point.key, period)) + '</text>';
+  }).join('');
+  const circles = points.map(function(point, index) {
+    const label = growthPointLabel(point.key, period);
+    return '<circle cx="' + xFor(index).toFixed(2) + '" cy="' + yFor(point.totalUsers).toFixed(2) +
+      '" r="4" fill="#38bdf8" stroke="#0f172a" stroke-width="2"><title>' +
+      esc(label + '：累计 ' + point.totalUsers + '，新增 ' + point.newUsers) + '</title></circle>';
+  }).join('');
+  host.innerHTML = '<svg class="growth-chart" viewBox="0 0 ' + width + ' ' + height +
+    '" role="img" aria-label="' + esc('用户增长折线图，按' + (period === 'day' ? '日' : period === 'week' ? '周' : '月') + '统计') + '">' +
+    grid +
+    '<line x1="' + padding.left + '" y1="' + (padding.top + plotHeight) + '" x2="' +
+    (width - padding.right) + '" y2="' + (padding.top + plotHeight) + '" stroke="#64748b" stroke-width="1" />' +
+    '<path d="' + linePath + '" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
+    circles + labels +
+    '</svg>';
+  if (summary) {
+    const latest = points[points.length - 1];
+    summary.innerHTML = '<span>当前累计 <strong>' + latest.totalUsers + '</strong> 个用户</span>' +
+      '<span>最近' + (period === 'day' ? '一天' : period === 'week' ? '一周' : '一月') +
+      '新增 <strong>' + latest.newUsers + '</strong> 个</span>' +
+      '<span class="growth-legend"><i></i>累计用户</span>';
+  }
 }
-function perCapitaPoints(items) {
-  return (items || []).map(function(item) {
-    const active = Number(item.dau || item.activeUsers) || 0;
-    const value = active ? (Number(item.totalMb) || 0) / active : 0;
-    return {
-      label: item.label || item.date || item.timestamp,
-      value,
-      tooltip: (item.label || item.date || item.timestamp) + '\\n人均流量 ' + formatMegabytes(value),
-    };
+function renderTrafficChart(data) {
+  const host = el('trafficChart');
+  const summary = el('trafficSummary');
+  if (!host) return;
+  const period = data && (data.period === 'week' || data.period === 'month')
+    ? data.period
+    : 'day';
+  const points = data && Array.isArray(data.points)
+    ? data.points.map(function(point) {
+      const uploadMb = Math.max(0, Number(point.uploadMb) || 0);
+      const downloadMb = Math.max(0, Number(point.downloadMb) || 0);
+      return {
+        key: String(point.key || ''),
+        uploadMb: uploadMb,
+        downloadMb: downloadMb,
+        totalMb: uploadMb + downloadMb
+      };
+    }).filter(function(point) { return /^\\d{4}-\\d{2}(-\\d{2})?$/.test(point.key); })
+    : [];
+  if (points.length === 0) {
+    host.innerHTML = '<div class="loading-state growth-empty">当前范围暂无流量数据</div>';
+    if (summary) summary.textContent = '';
+    return;
+  }
+
+  const width = 920;
+  const height = 330;
+  const padding = {top: 20, right: 24, bottom: 48, left: 68};
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const maxValue = Math.max(1, points.reduce(function(maximum, point) {
+    return Math.max(maximum, point.totalMb);
+  }, 0));
+  const tickStep = Math.max(1, Math.ceil(maxValue / 4));
+  const chartMax = tickStep * 4;
+  const xFor = function(index) {
+    return points.length === 1
+      ? padding.left + plotWidth / 2
+      : padding.left + index / (points.length - 1) * plotWidth;
+  };
+  const yFor = function(value) {
+    return padding.top + plotHeight - value / chartMax * plotHeight;
+  };
+  const grid = Array.from({length: 5}, function(_, index) {
+    const value = tickStep * index;
+    const y = yFor(value).toFixed(2);
+    return '<line x1="' + padding.left + '" y1="' + y + '" x2="' + (width - padding.right) +
+      '" y2="' + y + '" stroke="#374151" stroke-width="1" />' +
+      '<text x="' + (padding.left - 10) + '" y="' + (Number(y) + 4) +
+      '" text-anchor="end" fill="#94a3b8" font-size="12">' + esc(formatMegabytes(value)) + '</text>';
+  }).join('');
+  const groupWidth = plotWidth / Math.max(points.length, 1);
+  const barWidth = Math.max(8, Math.min(36, groupWidth * 0.58));
+  const baseline = yFor(0);
+  const bars = points.map(function(point, index) {
+    const x = xFor(index) - barWidth / 2;
+    const downloadY = yFor(point.downloadMb);
+    const totalY = yFor(point.totalMb);
+    const downloadHeight = Math.max(0, baseline - downloadY);
+    const uploadHeight = Math.max(0, downloadY - totalY);
+    const label = growthPointLabel(point.key, period);
+    return '<rect x="' + x.toFixed(2) + '" y="' + downloadY.toFixed(2) +
+      '" width="' + barWidth.toFixed(2) + '" height="' + downloadHeight.toFixed(2) +
+      '" rx="2" fill="#a78bfa"><title>' + esc(label + '：下载 ' + formatMegabytes(point.downloadMb)) +
+      '</title></rect>' +
+      '<rect x="' + x.toFixed(2) + '" y="' + totalY.toFixed(2) +
+      '" width="' + barWidth.toFixed(2) + '" height="' + uploadHeight.toFixed(2) +
+      '" rx="2" fill="#22c55e"><title>' + esc(label + '：上传 ' + formatMegabytes(point.uploadMb)) +
+      '</title></rect>';
+  }).join('');
+  const linePath = points.map(function(point, index) {
+    return (index === 0 ? 'M' : 'L') + ' ' + xFor(index).toFixed(2) + ' ' + yFor(point.totalMb).toFixed(2);
+  }).join(' ');
+  const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+  const labels = points.map(function(point, index) {
+    const isLast = index === points.length - 1;
+    if (index !== 0 && !isLast && index % labelEvery !== 0) return '';
+    return '<text x="' + xFor(index).toFixed(2) + '" y="' + (height - 16) +
+      '" text-anchor="middle" fill="#94a3b8" font-size="12">' +
+      esc(growthPointLabel(point.key, period)) + '</text>';
+  }).join('');
+  const circles = points.map(function(point, index) {
+    const label = growthPointLabel(point.key, period);
+    return '<circle cx="' + xFor(index).toFixed(2) + '" cy="' + yFor(point.totalMb).toFixed(2) +
+      '" r="4" fill="#f59e0b" stroke="#0f172a" stroke-width="2"><title>' +
+      esc(label + '：总流量 ' + formatMegabytes(point.totalMb)) + '</title></circle>';
+  }).join('');
+  host.innerHTML = '<svg class="traffic-chart" viewBox="0 0 ' + width + ' ' + height +
+    '" role="img" aria-label="' + esc('流量消耗图，按' + (period === 'day' ? '日' : period === 'week' ? '周' : '月') + '统计') + '">' +
+    grid +
+    '<line x1="' + padding.left + '" y1="' + baseline + '" x2="' + (width - padding.right) +
+    '" y2="' + baseline + '" stroke="#64748b" stroke-width="1" />' +
+    bars +
+    '<path d="' + linePath + '" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
+    circles + labels +
+    '</svg>';
+  if (summary) {
+    const totalUpload = points.reduce(function(total, point) { return total + point.uploadMb; }, 0);
+    const totalDownload = points.reduce(function(total, point) { return total + point.downloadMb; }, 0);
+    summary.innerHTML = '<span>范围上传 <strong>' + formatMegabytes(totalUpload) + '</strong></span>' +
+      '<span>范围下载 <strong>' + formatMegabytes(totalDownload) + '</strong></span>' +
+      '<span>范围总流量 <strong>' + formatMegabytes(totalUpload + totalDownload) + '</strong></span>' +
+      '<span class="traffic-legend traffic-upload"><i></i>上传</span>' +
+      '<span class="traffic-legend traffic-download"><i></i>下载</span>' +
+      '<span class="traffic-legend traffic-total"><i></i>总流量</span>';
+  }
+}
+function growthTodayDateKey() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date()).reduce(function(result, part) {
+    if (part.type !== 'literal') result[part.type] = part.value;
+    return result;
+  }, {});
+  return parts.year + '-' + parts.month + '-' + parts.day;
+}
+function initializeGrowthRange() {
+  const today = growthTodayDateKey();
+  ['growthStartDate', 'growthEndDate'].forEach(function(id) {
+    const input = el(id);
+    if (input) input.max = today;
   });
 }
-function renderTrafficHealth(series) {
-  const container = el('trafficHealth');
-  const daily = analyticsDailyData();
-  const today = analyticsToday();
-  const last7 = daily.filter(function(item) { return item.date >= analyticsDateAdd(today, -6) && item.date <= today; });
-  const last30 = daily.filter(function(item) { return item.date >= analyticsDateAdd(today, -29) && item.date <= today; });
-  const selected = sumDailyData(series);
-  const rows = [
-    ['当前范围日均流量', formatMegabytes(series.length ? selected.totalMb / series.length : 0)],
-    ['7 日平均', formatMegabytes(averageOf(last7, 'totalMb'))],
-    ['30 日平均', formatMegabytes(averageOf(last30, 'totalMb'))],
-    ['本月累计流量', formatMegabytes(sumDailyData(currentMonthDailyData()).totalMb)],
-  ];
-  container.innerHTML = rows.map(function(row) {
-    return '<div class="stat-row"><span>' + esc(row[0]) + '</span><strong>' + esc(row[1]) + '</strong></div>';
+function applyGrowthRange() {
+  const start = value('growthStartDate');
+  const end = value('growthEndDate');
+  if (start && end && start > end) {
+    show('开始日期不能晚于结束日期', true);
+    return;
+  }
+  loadGrowthChart(growthPeriod);
+}
+function clearGrowthRange() {
+  setValue('growthStartDate', '');
+  setValue('growthEndDate', '');
+  loadGrowthChart(growthPeriod);
+}
+function growthRequestQuery(period) {
+  const params = new URLSearchParams();
+  params.set('period', period);
+  const start = value('growthStartDate');
+  const end = value('growthEndDate');
+  if (start) params.set('start', start);
+  if (end) params.set('end', end);
+  return params.toString();
+}
+function initializeTrafficRange() {
+  const today = growthTodayDateKey();
+  ['trafficStartDate', 'trafficEndDate'].forEach(function(id) {
+    const input = el(id);
+    if (input) input.max = today;
+  });
+}
+function applyTrafficRange() {
+  const start = value('trafficStartDate');
+  const end = value('trafficEndDate');
+  if (start && end && start > end) {
+    show('开始日期不能晚于结束日期', true);
+    return;
+  }
+  loadTrafficChart(trafficPeriod);
+}
+function clearTrafficRange() {
+  setValue('trafficStartDate', '');
+  setValue('trafficEndDate', '');
+  loadTrafficChart(trafficPeriod);
+}
+function trafficRequestQuery(period) {
+  const params = new URLSearchParams();
+  params.set('period', period);
+  const start = value('trafficStartDate');
+  const end = value('trafficEndDate');
+  if (start) params.set('start', start);
+  if (end) params.set('end', end);
+  return params.toString();
+}
+function setTrafficPeriod(period) {
+  if (period !== 'day' && period !== 'week' && period !== 'month') return;
+  trafficPeriod = period;
+  document.querySelectorAll('[data-traffic-period]').forEach(function(button) {
+    button.classList.toggle('active', button.dataset.trafficPeriod === period);
+  });
+  loadTrafficChart(period);
+}
+async function loadTrafficChart(period) {
+  const host = el('trafficChart');
+  const summary = el('trafficSummary');
+  const requestId = ++trafficRequestId;
+  if (host) host.innerHTML = '<div class="loading-state">正在读取流量数据…</div>';
+  if (summary) summary.textContent = '';
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/users/traffic?' + trafficRequestQuery(period), {
+      headers: headers()
+    });
+    const responseText = await response.text();
+    let data = {};
+    try { data = JSON.parse(responseText); } catch (_) {}
+    if (!response.ok) throw new Error(data.error || ('流量数据读取失败（HTTP ' + response.status + '）'));
+    if (requestId === trafficRequestId) renderTrafficChart(data);
+  } catch (error) {
+    if (requestId !== trafficRequestId || !host) return;
+    host.innerHTML = '<div class="error-state growth-empty">流量数据读取失败</div>';
+    if (summary) summary.textContent = '';
+  }
+}
+function setGrowthPeriod(period) {
+  if (period !== 'day' && period !== 'week' && period !== 'month') return;
+  growthPeriod = period;
+  document.querySelectorAll('[data-growth-period]').forEach(function(button) {
+    button.classList.toggle('active', button.dataset.growthPeriod === period);
+  });
+  loadGrowthChart(period);
+}
+async function loadGrowthChart(period) {
+  const host = el('userGrowthChart');
+  const summary = el('userGrowthSummary');
+  const requestId = ++growthRequestId;
+  if (host) host.innerHTML = '<div class="loading-state">正在读取用户增长数据…</div>';
+  if (summary) summary.textContent = '';
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/users/growth?' + growthRequestQuery(period), {
+      headers: headers()
+    });
+    const responseText = await response.text();
+    let data = {};
+    try { data = JSON.parse(responseText); } catch (_) {}
+    if (!response.ok) throw new Error(data.error || ('用户增长数据读取失败（HTTP ' + response.status + '）'));
+    if (requestId === growthRequestId) renderGrowthChart(data);
+  } catch (error) {
+    if (requestId !== growthRequestId || !host) return;
+    host.innerHTML = '<div class="error-state growth-empty">用户增长数据读取失败</div>';
+    if (summary) summary.textContent = '';
+  }
+}
+function setDashboardState(className, message) {
+  ['brandPie', 'androidPie', 'appVersionPie', 'userGrowthChart', 'trafficChart'].forEach(function(id) {
+    const host = el(id);
+    if (host) host.innerHTML = '<div class="' + className + '">' + esc(message) + '</div>';
+  });
+  const summary = el('userGrowthSummary');
+  if (summary) summary.textContent = '';
+  const trafficSummary = el('trafficSummary');
+  if (trafficSummary) trafficSummary.textContent = '';
+}
+function renderPieChart(hostId, groups, total, chartName) {
+  const host = el(hostId);
+  if (!host) return;
+  if (!total || groups.length === 0) {
+    host.innerHTML = '<div class="loading-state pie-empty">暂无可统计的账户数据</div>';
+    return;
+  }
+  const visibleGroups = compactDistribution(groups);
+  let start = 0;
+  const segments = visibleGroups.map(function(group, index) {
+    const end = start + group.count / total * 100;
+    const segment = PIE_COLORS[index] + ' ' + start.toFixed(4) + '% ' + end.toFixed(4) + '%';
+    start = end;
+    return segment;
+  });
+  const legend = visibleGroups.map(function(group, index) {
+    const percent = Math.round(group.count / total * 1000) / 10;
+    return '<div class="pie-legend-row" title="' + esc(group.label) + '：' + group.count +
+      ' 个账户，占 ' + percent + '%">' +
+      '<span class="pie-swatch" style="background:' + PIE_COLORS[index] + '"></span>' +
+      '<span class="pie-legend-label">' + esc(group.label) + '</span>' +
+      '<span class="pie-legend-value">' + group.count + ' · ' + percent + '%</span></div>';
+  }).join('');
+  host.innerHTML = '<div class="pie-chart-content">' +
+    '<div class="pie-visual-wrap">' +
+      '<div class="pie-visual" role="img" aria-label="' + esc(chartName) +
+        '，共 ' + total + ' 个账户" style="background:conic-gradient(' + segments.join(',') + ')"></div>' +
+      '<div class="pie-total"><strong>' + total + '</strong><small>账户</small></div>' +
+    '</div>' +
+    '<div class="pie-legend">' + legend + '</div>' +
+  '</div>';
+}
+function renderDashboard(data) {
+  const users = data && Array.isArray(data.users) ? data.users : [];
+  renderPieChart('brandPie', distributionForUsers(users, function(user) {
+    return normalizedBrand(user.brand);
+  }), users.length, '设备厂商分布');
+  renderPieChart('androidPie', distributionForUsers(users, function(user) {
+    return normalizedAndroidVersion(user.androidVersion);
+  }), users.length, 'Android 系统版本分布');
+  renderPieChart('appVersionPie', distributionForUsers(users, function(user) {
+    return normalizedAppVersion(user.appVersion);
+  }), users.length, 'App 软件版本分布');
+}
+const USER_TABLE_DEFINITIONS = [
+  {
+    key: 'users_mb',
+    title: 'users_mb（用户表）',
+    columns: ['id', 'uid', 'nickname', 'level', 'created_at'],
+  },
+  {
+    key: 'user_devices_mb',
+    title: 'user_devices_mb（设备表）',
+    columns: ['id', 'user_id', 'device_id', 'brand', 'model', 'android_version', 'app_version'],
+  },
+  {
+    key: 'user_usage_mb',
+    title: 'user_usage_mb（流量统计表，Bytes）',
+    columns: [
+      'user_id',
+      'session_id',
+      'subscription_group_name',
+      'started_at',
+      'ended_at',
+      'upload_bytes',
+      'download_bytes',
+    ],
+  },
+];
+function rawUserTableValue(value) {
+  if (value === null) return 'NULL';
+  if (value === undefined) return '';
+  return String(value);
+}
+function renderRawUserTable(definition, rows) {
+  const values = Array.isArray(rows) ? rows : [];
+  const head = '<tr><th>#</th>' + definition.columns.map(function(column) {
+    return '<th>' + esc(column) + '</th>';
+  }).join('') + '</tr>';
+  const body = values.map(function(row, index) {
+    return '<tr><td>' + (index + 1) + '</td>' + definition.columns.map(function(column) {
+      return '<td>' + esc(rawUserTableValue(row && row[column])) + '</td>';
+    }).join('') + '</tr>';
+  }).join('');
+  const content = values.length
+    ? '<div class="user-table-scroll"><table class="user-data-table"><thead>' + head +
+      '</thead><tbody>' + body + '</tbody></table></div>'
+    : '<div class="user-table-empty">当前表暂无数据</div>';
+  return '<article class="user-table-card"><h3>' + esc(definition.title) + '</h3>' +
+    '<div class="user-table-meta">共 ' + values.length + ' 条记录</div>' + content + '</article>';
+}
+function renderUserTables(tables) {
+  const host = el('usersTable');
+  if (!host) return;
+  const source = tables && typeof tables === 'object' ? tables : {};
+  host.innerHTML = USER_TABLE_DEFINITIONS.map(function(definition) {
+    return renderRawUserTable(definition, source[definition.key]);
   }).join('');
 }
-function renderTrafficAnalysis() {
-  if (!currentUsersData) return;
-  const today = dailyRecord(analyticsToday());
-  const yesterday = dailyRecord(analyticsDateAdd(analyticsToday(), -1));
-  const month = sumDailyData(currentMonthDailyData());
-  const previousMonth = sumDailyData(previousMonthComparableData());
-  const allTime = (currentUsersData.totals && currentUsersData.totals.allTime) || {};
-  const perCapita = today.dau ? today.totalMb / today.dau : 0;
-  const previousPerCapita = yesterday.dau ? yesterday.totalMb / yesterday.dau : 0;
-  renderKpiGrid('trafficKpis', [
-    {label:'今日上传流量',value:formatMegabytes(today.uploadMb),change:changeRate(today.uploadMb,yesterday.uploadMb),comparison:'昨日 ' + formatMegabytes(yesterday.uploadMb)},
-    {label:'今日下载流量',value:formatMegabytes(today.downloadMb),change:changeRate(today.downloadMb,yesterday.downloadMb),comparison:'昨日 ' + formatMegabytes(yesterday.downloadMb)},
-    {label:'今日总流量',value:formatMegabytes(today.totalMb),change:changeRate(today.totalMb,yesterday.totalMb),comparison:'昨日 ' + formatMegabytes(yesterday.totalMb)},
-    {label:'DAU 人均流量',value:formatMegabytes(perCapita),change:changeRate(perCapita,previousPerCapita),comparison:'昨日 ' + formatMegabytes(previousPerCapita)},
-    {label:'本月上传流量',value:formatMegabytes(month.uploadMb),change:changeRate(month.uploadMb,previousMonth.uploadMb),comparison:'上月同期 ' + formatMegabytes(previousMonth.uploadMb)},
-    {label:'本月下载流量',value:formatMegabytes(month.downloadMb),change:changeRate(month.downloadMb,previousMonth.downloadMb),comparison:'上月同期 ' + formatMegabytes(previousMonth.downloadMb)},
-    {label:'本月总流量',value:formatMegabytes(month.totalMb),change:changeRate(month.totalMb,previousMonth.totalMb),comparison:'上月同期 ' + formatMegabytes(previousMonth.totalMb)},
-    {label:'历史累计流量',value:formatMegabytes(allTime.totalMb),change:null,comparison:trafficBreakdown(allTime)},
-  ]);
-  const series = trafficSeriesForMode();
-  renderStackedAreaChart('trafficStackedChart', series, {large:true});
-  renderLineChart('perCapitaTrafficChart', perCapitaPoints(series), {label:'人均流量趋势',formatter:formatMegabytes});
-  renderTrafficHealth(series);
-}
-function groupUsersBy(users, labelFactory) {
-  const groups = new Map();
-  (users || []).forEach(function(user) {
-    const label = labelFactory(user) || '未知';
-    const group = groups.get(label) || {label:label, users:0, dau:0, monthMb:0};
-    group.users += 1;
-    group.dau += user.activeToday ? 1 : 0;
-    group.monthMb += Number(user.month && user.month.totalMb) || 0;
-    groups.set(label, group);
-  });
-  return Array.from(groups.values()).map(function(group) {
-    group.activeRate = group.users ? group.dau / group.users : 0;
-    group.perCapitaMb = group.users ? group.monthMb / group.users : 0;
-    return group;
-  });
-}
-function renderDistribution(containerId, groups, options) {
-  const container = el(containerId);
-  if (!container) return;
-  if (!groups || groups.length === 0) return chartEmpty(containerId, '当前筛选条件下暂无分布数据');
-  const sorted = groups.slice().sort(function(left, right) { return right.users - left.users; });
-  const total = sorted.reduce(function(sum, group) { return sum + group.users; }, 0);
-  const maximum = Math.max.apply(null, sorted.map(function(group) { return group.users; })) || 1;
-  container.innerHTML = sorted.slice(0, (options && options.limit) || 10).map(function(group) {
-    const share = total ? group.users / total : 0;
-    const clickable = options && options.clickable;
-    const label = clickable
-      ? '<button class="distribution-label" type="button" data-distribution-value="' + esc(group.label) + '">' + esc(group.label) + '</button>'
-      : '<button class="distribution-label" type="button" disabled>' + esc(group.label) + '</button>';
-    return '<div class="distribution-row">' + label +
-      '<div class="distribution-track"><span class="distribution-fill" style="width:' + Math.max(2, group.users / maximum * 100) + '%"></span></div>' +
-      '<div class="distribution-values">' + formatCount(group.users) + ' · ' + formatPercentRatio(share) +
-      '<span class="distribution-meta">DAU ' + formatCount(group.dau) + ' · 活跃率 ' + formatPercentRatio(group.activeRate) + '</span></div></div>';
-  }).join('');
-  if (options && options.clickable) {
-    container.querySelectorAll('[data-distribution-value]').forEach(function(button) {
-      button.onclick = function() {
-        const label = button.dataset.distributionValue;
-        const value = options.valueFactory ? options.valueFactory(label) : label;
-        const filterId = options.filterId || 'analyticsPlatformFilter';
-        const control = el(filterId);
-        if (!control) return;
-        control.value = value;
-        if (filterId === 'analyticsPlatformFilter') selectedDevicePlatform = value;
-        if (filterId === 'analyticsPlatformFilter' || filterId === 'analyticsSystemFilter') {
-          populateAnalyticsDimensionFilters();
-        }
-        renderAnalyticsDashboard();
-      };
-    });
-  }
-}
-function latestAppVersion(users) {
-  const configured = currentState && currentState.appUpdate && cleanText(currentState.appUpdate.version);
-  if (configured) return configured.replace(/^v/i, '');
-  const versions = (users || []).map(function(user) { return cleanText(user.appVersion).replace(/^v/i, ''); }).filter(Boolean);
-  return versions.sort(compareVersionLabels).slice(-1)[0] || '';
-}
-function renderDeviceModelTable(groups) {
-  const container = el('deviceModelTable');
-  if (!groups || groups.length === 0) return chartEmpty('deviceModelTable', '当前筛选条件下暂无设备型号数据');
-  const direction = deviceModelSortDirection === 'desc' ? -1 : 1;
-  const sorted = groups.slice().sort(function(left, right) {
-    const leftValue = deviceModelSortKey === 'model' ? left.label : Number(left[deviceModelSortKey]) || 0;
-    const rightValue = deviceModelSortKey === 'model' ? right.label : Number(right[deviceModelSortKey]) || 0;
-    if (deviceModelSortKey === 'model') return String(leftValue).localeCompare(String(rightValue), 'zh-CN', {numeric:true}) * direction;
-    return (leftValue - rightValue) * direction;
-  }).slice(0, 10);
-  const total = groups.reduce(function(sum, group) { return sum + group.users; }, 0);
-  const header = function(label, key) {
-    return '<button class="text-button" type="button" data-model-sort="' + key + '">' + label + (deviceModelSortKey === key ? (deviceModelSortDirection === 'desc' ? ' ↓' : ' ↑') : '') + '</button>';
-  };
-  container.innerHTML = '<table class="compact-table"><thead><tr><th>排名</th><th>' + header('设备型号','model') + '</th><th>系统</th><th>' + header('用户数量','users') + '</th><th>' + header('活跃用户','dau') + '</th><th>占比</th><th>' + header('人均流量','perCapitaMb') + '</th></tr></thead><tbody>' +
-    sorted.map(function(group, index) {
-      return '<tr><td>' + (index + 1) + '</td><td>' + esc(group.label) + '</td><td>' + esc(group.system || '未知') + '</td><td>' + formatCount(group.users) + '</td><td>' + formatCount(group.dau) + '</td><td>' + formatPercentRatio(total ? group.users / total : 0) + '</td><td>' + formatMegabytes(group.perCapitaMb) + '</td></tr>';
-    }).join('') + '</tbody></table>';
-  container.querySelectorAll('[data-model-sort]').forEach(function(button) {
-    button.onclick = function() { sortDeviceModels(button.dataset.modelSort); };
-  });
-}
-function sortDeviceModels(key) {
-  if (deviceModelSortKey === key) deviceModelSortDirection = deviceModelSortDirection === 'desc' ? 'asc' : 'desc';
-  else { deviceModelSortKey = key; deviceModelSortDirection = 'desc'; }
-  renderDevices();
-}
-function renderDevices() {
-  if (!currentUsersData) return;
-  const allUsers = Array.isArray(currentUsersData.users) ? currentUsersData.users : [];
-  const users = selectedAnalyticsUsers();
-  const latest = latestAppVersion(allUsers);
-  const latestUsers = allUsers.filter(function(user) { return cleanText(user.appVersion).replace(/^v/i, '') === latest; });
-  const oldActive = allUsers.filter(function(user) {
-    return user.activeToday && latest && cleanText(user.appVersion).replace(/^v/i, '') !== latest;
-  });
-  const platforms = groupUsersBy(allUsers, devicePlatform);
-  const android = platforms.find(function(group) { return group.label === 'Android'; });
-  renderKpiGrid('deviceKpis', [
-    {label:'已识别设备',value:formatCount(allUsers.length),change:null,comparison:'当前账户设备资料'},
-    {label:'Android 占比',value:formatPercentRatio(allUsers.length && android ? android.users / allUsers.length : 0),change:null,comparison:android ? formatCount(android.users) + ' 个账户' : '暂无 Android 设备'},
-    {label:'最新版覆盖率',value:formatPercentRatio(allUsers.length ? latestUsers.length / allUsers.length : 0),change:null,comparison:latest ? '最新版 v' + latest : '暂无版本数据'},
-    {label:'旧版本活跃用户',value:formatCount(oldActive.length),change:null,comparison:'今日仍活跃且非最新版'},
-  ]);
-  renderDistribution('platformDistribution', groupUsersBy(allUsers, devicePlatform), {clickable:true,limit:6});
-  renderDistribution('systemVersionDistribution', groupUsersBy(users, deviceSystemVersion), {
-    clickable:true,
-    filterId:'analyticsSystemFilter',
-    limit:10,
-  });
-  el('systemVersionSubtitle').textContent = (el('analyticsPlatformFilter').value || '全部平台') + ' · 用户数量 / DAU / 活跃率';
-  renderDistribution('appVersionDistribution', groupUsersBy(users, function(user) {
-    return cleanText(user.appVersion) ? 'v' + cleanText(user.appVersion).replace(/^v/i, '') : '未知版本';
-  }), {
-    clickable:true,
-    filterId:'analyticsVersionFilter',
-    valueFactory:function(label) { return label === '未知版本' ? label : label.replace(/^v/i, ''); },
-    limit:10,
-  });
-  const modelGroups = groupUsersBy(users, function(user) { return cleanText(user.model) || '未知型号'; });
-  modelGroups.forEach(function(group) {
-    const matched = users.find(function(user) { return (cleanText(user.model) || '未知型号') === group.label; });
-    group.system = matched ? deviceSystemVersion(matched) : '未知';
-  });
-  renderDeviceModelTable(modelGroups);
-}
-function severityFromChange(change) {
-  const magnitude = Math.abs(Number(change) || 0);
-  if (magnitude >= .8) return 'critical';
-  if (magnitude >= .5) return 'warning';
-  if (magnitude >= .2) return 'attention';
-  return 'normal';
-}
-function severityLabel(value) {
-  return {critical:'严重',warning:'警告',attention:'关注',normal:'正常'}[value] || '正常';
-}
-function buildAnalyticsAlerts() {
-  const todayKey = analyticsToday();
-  const today = dailyRecord(todayKey);
-  const yesterday = dailyRecord(analyticsDateAdd(todayKey, -1));
-  const baselineDays = previousSevenCompleteDays();
-  const alerts = [];
-  const addMetricAlert = function(type, title, current, baseline, formatter, target) {
-    const change = changeRate(current, baseline);
-    if (!Number.isFinite(change) || Math.abs(change) < .2) return;
-    alerts.push({
-      type:type,
-      title:title,
-      current:formatter(current),
-      baseline:formatter(baseline),
-      change:change,
-      time:todayKey,
-      severity:severityFromChange(change),
-      target:target,
-    });
-  };
-  addMetricAlert('traffic','今日下载流量偏离 7 日均值',today.downloadMb,averageOf(baselineDays,'downloadMb'),formatMegabytes,'traffic-analysis');
-  addMetricAlert('traffic','今日总流量偏离 7 日均值',today.totalMb,averageOf(baselineDays,'totalMb'),formatMegabytes,'traffic-analysis');
-  addMetricAlert('growth','今日新增用户偏离 7 日均值',today.registrations,averageOf(baselineDays,'registrations'),formatCount,'user-analysis');
-  addMetricAlert('activity','今日 DAU 偏离 7 日均值',today.dau,averageOf(baselineDays,'dau'),formatCount,'user-analysis');
-
-  const dauChange = changeRate(today.dau, yesterday.dau);
-  const trafficChange = changeRate(today.totalMb, yesterday.totalMb);
-  if (Number.isFinite(dauChange) && Number.isFinite(trafficChange) && Math.abs(dauChange) < .1 && trafficChange > .4) {
-    alerts.push({type:'mismatch',title:'DAU 基本不变但流量明显上涨',current:formatMegabytes(today.totalMb),baseline:formatMegabytes(yesterday.totalMb),change:trafficChange,time:todayKey,severity:severityFromChange(trafficChange),target:'traffic-analysis'});
-  }
-  const mauChange = changeRate(today.mau, yesterday.mau);
-  if (Number.isFinite(mauChange) && Number.isFinite(dauChange) && Math.abs(mauChange) < .05 && dauChange < -.2) {
-    alerts.push({type:'activity',title:'MAU 稳定但 DAU 明显下降',current:formatCount(today.dau),baseline:formatCount(yesterday.dau),change:dauChange,time:todayKey,severity:severityFromChange(dauChange),target:'user-analysis'});
-  }
-
-  const hourly = analyticsHourlyData();
-  if (hourly.length >= 8) {
-    const latestHour = hourly[hourly.length - 1];
-    const previousHours = hourly.slice(Math.max(0, hourly.length - 25), -1);
-    const hourlyBaseline = averageOf(previousHours, 'totalMb');
-    const hourlyChange = changeRate(latestHour.totalMb, hourlyBaseline);
-    if (Number.isFinite(hourlyChange) && hourlyChange > .5) {
-      alerts.push({
-        type:'traffic',
-        title:'最近一小时流量明显高于 24 小时均值',
-        current:formatMegabytes(latestHour.totalMb),
-        baseline:formatMegabytes(hourlyBaseline),
-        change:hourlyChange,
-        time:cleanText(latestHour.timestamp) || todayKey,
-        severity:severityFromChange(hourlyChange),
-        target:'traffic-analysis',
-      });
-    }
-  }
-
-  const users = currentUsersData && Array.isArray(currentUsersData.users) ? currentUsersData.users : [];
-  const latest = latestAppVersion(users);
-  if (latest && users.length) {
-    const latestCount = users.filter(function(user) { return cleanText(user.appVersion).replace(/^v/i, '') === latest; }).length;
-    const coverage = latestCount / users.length;
-    if (coverage < .8) {
-      alerts.push({type:'version',title:'最新版覆盖率偏低',current:formatPercentRatio(coverage),baseline:'目标 80%',change:coverage / .8 - 1,time:todayKey,severity:coverage < .5 ? 'warning' : 'attention',target:'devices'});
-    }
-    const activeUsers = users.filter(function(user) { return user.activeToday; });
-    const oldVersionGroups = groupUsersBy(activeUsers.filter(function(user) {
-      return cleanText(user.appVersion).replace(/^v/i, '') !== latest;
-    }), function(user) {
-      return cleanText(user.appVersion) ? 'v' + cleanText(user.appVersion).replace(/^v/i, '') : '未知版本';
-    }).sort(function(left, right) { return right.users - left.users; });
-    const largestOldVersion = oldVersionGroups[0];
-    const oldVersionShare = largestOldVersion && activeUsers.length
-      ? largestOldVersion.users / activeUsers.length
-      : 0;
-    if (largestOldVersion && oldVersionShare >= .15) {
-      alerts.push({
-        type:'version',
-        title:largestOldVersion.label + ' 仍有较多活跃用户',
-        current:formatCount(largestOldVersion.users) + ' 人',
-        baseline:'今日 DAU 的 ' + formatPercentRatio(oldVersionShare),
-        change:oldVersionShare,
-        time:todayKey,
-        severity:oldVersionShare >= .3 ? 'warning' : 'attention',
-        target:'devices',
-      });
-    }
-  }
-  const models = groupUsersBy(users, function(user) { return cleanText(user.model) || '未知型号'; });
-  const averageModelTraffic = users.length
-    ? users.reduce(function(total, user) { return total + (Number(user.month && user.month.totalMb) || 0); }, 0) / users.length
-    : 0;
-  const abnormalModel = models.filter(function(group) {
-    return group.users >= 2 && averageModelTraffic > 0 && group.perCapitaMb > averageModelTraffic * 2.5;
-  }).sort(function(left,right) { return right.perCapitaMb - left.perCapitaMb; })[0];
-  if (abnormalModel) {
-    alerts.push({type:'device',title:abnormalModel.label + ' 人均流量异常高',current:formatMegabytes(abnormalModel.perCapitaMb),baseline:'全体 ' + formatMegabytes(averageModelTraffic),change:abnormalModel.perCapitaMb / averageModelTraffic - 1,time:todayKey,severity:'warning',target:'devices'});
-  }
-  if (alerts.length === 0) {
-    alerts.push({type:'normal',title:'当前未发现明显运营异常',current:'正常',baseline:'近 7 日基准',change:0,time:todayKey,severity:'normal',target:'overview'});
-  }
-  const order = {critical:0,warning:1,attention:2,normal:3};
-  return alerts.sort(function(left,right) { return order[left.severity] - order[right.severity]; });
-}
-function alertItemHtml(alert) {
-  return '<button class="alert-item" type="button" data-alert-target="' + esc(alert.target) + '">' +
-    '<span class="severity-dot severity-' + alert.severity + '"></span>' +
-    '<span class="alert-main"><strong>' + esc(alert.title) + '</strong><small>当前 ' + esc(alert.current) + ' · 对比 ' + esc(alert.baseline) + ' · ' + esc(alert.time) + '</small></span>' +
-    '<span class="alert-value">' + esc(formatSignedChange(alert.change)) + '<small class="severity-badge severity-' + alert.severity + '">' + esc(severityLabel(alert.severity)) + '</small></span>' +
-    '</button>';
-}
-function attachAlertNavigation(container) {
-  if (!container) return;
-  container.querySelectorAll('[data-alert-target]').forEach(function(button) {
-    button.onclick = function() {
-      activateTab(button.dataset.alertTarget || 'overview');
-      window.scrollTo({top:0,behavior:'auto'});
-    };
-  });
-}
-function renderAlertPreview() {
-  const container = el('overviewAlerts');
-  if (!container) return;
-  container.innerHTML = analyticsAlerts.slice(0, 4).map(alertItemHtml).join('');
-  attachAlertNavigation(container);
-}
-function renderAlerts() {
-  if (!currentUsersData) return;
-  const counts = {critical:0,warning:0,attention:0,normal:0};
-  analyticsAlerts.forEach(function(alert) { counts[alert.severity] += 1; });
-  renderKpiGrid('alertKpis', [
-    {label:'严重',value:formatCount(counts.critical),change:null,comparison:'需要立即处理'},
-    {label:'警告',value:formatCount(counts.warning),change:null,comparison:'建议当天检查'},
-    {label:'关注',value:formatCount(counts.attention),change:null,comparison:'持续观察变化'},
-    {label:'正常',value:formatCount(counts.normal),change:null,comparison:'未发现明显偏离'},
-  ]);
-  const severity = el('alertSeverityFilter').value;
-  const filtered = analyticsAlerts.filter(function(alert) { return !severity || alert.severity === severity; });
-  const container = el('alertList');
-  container.innerHTML = filtered.length ? filtered.map(alertItemHtml).join('') : '<div class="empty-state">当前筛选条件下没有异常事件</div>';
-  attachAlertNavigation(container);
-}
-function renderAnalyticsDashboard() {
-  if (!currentUsersData) return;
-  updateAnalyticsFilterStatus();
-  analyticsAlerts = buildAnalyticsAlerts();
-  renderOverview();
-  renderUserAnalysis();
-  renderTrafficAnalysis();
-  renderDevices();
-  renderAlerts();
-}
-document.addEventListener('pointerover', function(event) {
-  const target = event.target.closest && event.target.closest('[data-tooltip]');
-  if (!target) return;
-  const tooltip = el('chartTooltip');
-  tooltip.textContent = target.dataset.tooltip || '';
-  tooltip.hidden = false;
-});
-document.addEventListener('pointermove', function(event) {
-  const tooltip = el('chartTooltip');
-  if (tooltip && !tooltip.hidden) {
-    tooltip.style.left = event.clientX + 'px';
-    tooltip.style.top = event.clientY + 'px';
-  }
-});
-document.addEventListener('pointerout', function(event) {
-  const target = event.target.closest && event.target.closest('[data-tooltip]');
-  if (target) el('chartTooltip').hidden = true;
-});
 function renderUsers(data) {
   data = data || {users: []};
   currentUsersData = data;
-  populateAnalyticsDimensionFilters();
-  renderAnalyticsDashboard();
+  renderDashboard(data);
+  renderUserTables(data.tables);
+  return;
   dirtyUserIds.clear();
   selectedUserIds.clear();
   const batchLevel = el('batchLevel');
   if (batchLevel) batchLevel.value = '';
   const rows = (data.users || []).map(function(user) {
-    return '<tr class="user-row" data-user-row="' + esc(user.id) + '">' +
-      '<td class="selection-cell"><input type="checkbox" data-user-select="' + esc(user.id) +
+    return '<tr class="user-row" data-user-row="' + esc(user.uid) + '">' +
+      '<td class="selection-cell"><input type="checkbox" data-user-select="' + esc(user.uid) +
         '" aria-label="选择用户"></td>' +
-      '<td><code title="' + esc(user.id) + '">' + esc(user.id.slice(0, 16) + '…') + '</code></td>' +
+      '<td><code title="' + esc(user.uid) + '">' + esc(user.uid.slice(0, 16) + '…') + '</code></td>' +
       '<td><input class="sheet-input" data-user-field="nickname" maxlength="24" value="' + esc(user.nickname) + '"></td>' +
       '<td><select class="sheet-select" data-user-field="level">' + userLevelOptions(user.level) + '</select></td>' +
       '<td><input class="sheet-input" data-user-field="brand" maxlength="80" value="' + esc(user.brand) + '"></td>' +
@@ -3067,10 +2985,9 @@ function renderUsers(data) {
       '<td class="readonly">' + formatMegabytes(user.totalDownloadMb) + '</td>' +
       '<td class="readonly">' + usageTotal(user) + '</td>' +
       '<td class="readonly">' + esc(user.createdAt || '暂无') + '</td>' +
-      '<td class="readonly">' + esc(user.lastSeenAt || '暂无') + '</td>' +
       '<td class="readonly">' + esc(user.lastReportAt || '暂无') + '</td>' +
-      '<td><button class="sheet-save" type="button" data-save-user="' + esc(user.id) + '">保存</button>' +
-        '<button class="sheet-delete danger" type="button" data-delete-user="' + esc(user.id) + '">删除</button></td>' +
+      '<td><button class="sheet-save" type="button" data-save-user="' + esc(user.uid) + '">保存</button>' +
+        '<button class="sheet-delete danger" type="button" data-delete-user="' + esc(user.uid) + '">删除</button></td>' +
       '</tr>';
   }).join('');
   el('usersTable').innerHTML = rows
@@ -3129,37 +3046,30 @@ function userFieldValue(row, field) {
   const control = row && row.querySelector('[data-user-field="' + field + '"]');
   return control ? control.value.trim() : '';
 }
-function setAnalyticsRequestState(type, message) {
-  const className = type === 'error' ? 'error-state' : 'loading-state';
-  const content = '<div class="' + className + '">' + esc(message) + '</div>';
-  document.querySelectorAll(
-    '.analytics-panel .kpi-grid, .analytics-panel .chart-host, .analytics-panel .bar-chart-host, ' +
-    '.analytics-panel .structure-host, .analytics-panel .stat-list, .analytics-panel .alert-preview, ' +
-    '.analytics-panel .alert-list, .analytics-panel .compact-table-wrap'
-  ).forEach(function(container) { container.innerHTML = content; });
-}
 async function loadUsers(force) {
   if (!force && dirtyUserIds.size > 0 && !confirm('刷新会丢弃尚未保存的修改，确定继续吗？')) {
     return false;
   }
-  setAnalyticsRequestState('loading', '正在读取运营数据…');
   el('usersTable').innerHTML = '<div class="loading-state">正在读取用户详细表格…</div>';
+  setDashboardState('loading-state', '正在读取看板数据…');
   try {
     const response = await fetch(ADMIN_API_BASE + '/users', {headers: headers()});
     const responseText = await response.text();
     let data = {};
     try { data = JSON.parse(responseText); } catch (_) {}
     if (!response.ok) {
-      setAnalyticsRequestState('error', data.error || '运营数据读取失败');
       el('usersTable').innerHTML = '<div class="error-state">用户详细表格读取失败</div>';
+      setDashboardState('error-state', '数据看板读取失败');
       show(data.error || ('读取用户失败（HTTP ' + response.status + '）'), true);
       return false;
     }
     renderUsers(data);
+    loadGrowthChart(growthPeriod);
+    loadTrafficChart(trafficPeriod);
     return true;
   } catch (error) {
-    setAnalyticsRequestState('error', '运营数据读取失败，请检查网络和 USERS_DB 绑定');
     el('usersTable').innerHTML = '<div class="error-state">用户详细表格读取失败</div>';
+    setDashboardState('error-state', '数据看板读取失败');
     show('读取用户失败，请检查 USERS_DB 绑定', true);
     return false;
   }
@@ -3206,7 +3116,7 @@ async function deleteUser(accountId) {
   const row = userRow(accountId);
   if (!row) return false;
   const user = currentUsersData && (currentUsersData.users || []).find(function(item) {
-    return item.id === accountId;
+    return item.uid === accountId;
   });
   if (dirtyUserIds.size > 0 && (dirtyUserIds.size > 1 || !dirtyUserIds.has(accountId))) {
     show('请先保存其他用户的修改，再删除用户', true);
@@ -3351,11 +3261,11 @@ function exportUsersCsv() {
     '今日活跃', '本月活跃', '今日上传(MB)', '今日下载(MB)', '今日总量(MB)',
     '本月上传(MB)', '本月下载(MB)', '本月总量(MB)',
     '累计上传(MB)', '累计下载(MB)', '累计总量(MB)',
-    '注册时间', '最后访问', '最后上报'
+    '注册时间', '最后上报'
   ];
   const records = users.map(function(user) {
     return [
-      user.id,
+      user.uid,
       user.nickname,
       user.level,
       user.brand,
@@ -3374,7 +3284,6 @@ function exportUsersCsv() {
       csvMegabytes(user.totalDownloadMb),
       csvMegabytes(user.totalMb),
       user.createdAt || '',
-      user.lastSeenAt || '',
       user.lastReportAt || ''
     ];
   });
@@ -3524,6 +3433,8 @@ async function pushSection(section) {
   fillState(data.state);
   show('当前模块已推送');
 }
+initializeGrowthRange();
+initializeTrafficRange();
 addSource();
 </script>
 </body>

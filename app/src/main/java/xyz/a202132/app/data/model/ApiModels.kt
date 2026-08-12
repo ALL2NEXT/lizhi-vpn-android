@@ -86,8 +86,8 @@ data class AccountRegisterResponse(
 )
 
 data class AccountInfo(
-    @SerializedName("id")
-    val id: String,
+    @SerializedName("uid")
+    val uid: String,
 
     @SerializedName("nickname")
     val nickname: String = "流萤用户",
@@ -109,25 +109,34 @@ data class AccountInfo(
 )
 
 data class AccountProfileUpdateRequest(
-    @SerializedName("accountId")
-    val accountId: String,
+    @SerializedName("uid")
+    val uid: String,
 
     @SerializedName("nickname")
     val nickname: String
 )
 
 data class TrafficReportRequest(
-    @SerializedName("accountId")
-    val accountId: String,
+    @SerializedName("uid")
+    val uid: String,
 
     @SerializedName("sessionId")
     val sessionId: String,
 
-    @SerializedName("uploadMb")
-    val uploadMb: Double,
+    @SerializedName("subscriptionGroupName")
+    val subscriptionGroupName: String,
 
-    @SerializedName("downloadMb")
-    val downloadMb: Double
+    @SerializedName("startedAt")
+    val startedAt: Long,
+
+    @SerializedName("endedAt")
+    val endedAt: Long,
+
+    @SerializedName("uploadBytes")
+    val uploadBytes: Long,
+
+    @SerializedName("downloadBytes")
+    val downloadBytes: Long
 )
 
 data class TrafficReportResponse(
