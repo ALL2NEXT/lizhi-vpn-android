@@ -2122,7 +2122,14 @@ function adminHtml() {
     button.secondary { background: #374151; color: #e5e7eb; }
     button.danger { background: #7f1d1d; color: #fee2e2; }
     .check { display: flex; align-items: center; margin: 8px 0; }
-    .source-row { border: 1px solid #4b5563; border-radius: 10px; padding: 12px; margin: 10px 0; }
+    .source-row { border: 1px solid #4b5563; border-radius: 10px; padding: 14px; margin: 10px 0; }
+    .source-section { padding: 12px; background: #172033; border: 1px solid #374151; border-radius: 8px; }
+    .source-section + .source-section { margin-top: 12px; }
+    .source-section-title { margin: 0 0 10px; color: #f8fafc; font-size: 14px; }
+    .source-identity-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+    .source-permissions-grid { align-items: end; }
+    .source-permissions-grid .check { min-height: 42px; margin: 0; padding: 0 10px; background: #111827; border: 1px solid #4b5563; border-radius: 8px; }
+    .source-details-grid { margin-bottom: 12px; }
     .source-mode { margin-top: 12px; }
     .source-mode[hidden] { display: none; }
     .source-type-field { max-width: 280px; }
@@ -3683,23 +3690,35 @@ function addSource(source) {
   const row = document.createElement('div');
   row.className = 'source-row';
   const sourceType = source.content ? 'content' : 'url';
-  row.innerHTML = '<div class="grid">' +
-    '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
-    '<div class="field source-type-field"><label>订阅来源<select data-field="sourceType">' +
-      '<option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>外部接口</option>' +
-      '<option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>纯文本节点</option>' +
-      '</select></label></div>' +
-    '<div class="field"><label>最低账户等级<select data-field="minLevel">' + levelOptions(source.minLevel == null ? 1 : source.minLevel) + '</select></label></div>' +
-    '<div class="field"><label>最低应用版本<input data-field="minAppVersion" type="text" value="' + esc(source.minAppVersion) + '" placeholder="例如 2.40（留空不限制）"></label></div>' +
-    '<div class="field"><label>后台备注（仅后台保存）<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="例如：备用线路、长期稳定"></label></div>' +
+  row.innerHTML = '<section class="source-section source-identity-section">' +
+    '<div class="grid source-identity-grid">' +
+      '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
+      '<div class="field"><label>后台备注（仅后台保存）<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="例如：备用线路、长期稳定"></label></div>' +
     '</div>' +
-    '<div class="source-mode" data-source-mode="url"><div class="grid">' +
-      '<div class="field"><label>外部明文订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/plain-sub"></label></div>' +
-      '<div class="field"><label>接口缓存时间（分钟）<input data-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '"></label></div>' +
-    '</div><small>接口必须返回可识别的明文节点，由 Worker 中转并加密；缓存时间设为 0 会每次请求上游。</small></div>' +
-    '<div class="source-mode" data-source-mode="content"><div class="field"><label>纯文本节点（每行一个）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div><small>保存后由 Worker 直接加密下发，不经过外部接口缓存。</small></div>' +
-    '<label class="check"><input data-field="refreshOnAppOpen" type="checkbox" ' + (source.refreshOnAppOpen === false ? '' : 'checked') + '>打开app立即更新</label>' +
-    '<label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
+    '</section>' +
+    '<section class="source-section source-permissions-section">' +
+      '<h3 class="source-section-title">线路权限控制</h3>' +
+      '<div class="grid source-permissions-grid">' +
+        '<div class="field"><label>最低账户等级<select data-field="minLevel">' + levelOptions(source.minLevel == null ? 1 : source.minLevel) + '</select></label></div>' +
+        '<div class="field"><label>最低应用版本<input data-field="minAppVersion" type="text" value="' + esc(source.minAppVersion) + '" placeholder="例如 2.40（留空不限制）"></label></div>' +
+        '<label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
+      '</div>' +
+    '</section>' +
+    '<section class="source-section source-details-section">' +
+      '<h3 class="source-section-title">订阅详细设定</h3>' +
+      '<div class="grid source-details-grid">' +
+        '<div class="field source-type-field"><label>订阅来源<select data-field="sourceType">' +
+          '<option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>外部接口</option>' +
+          '<option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>纯文本节点</option>' +
+        '</select></label></div>' +
+        '<label class="check"><input data-field="refreshOnAppOpen" type="checkbox" ' + (source.refreshOnAppOpen === false ? '' : 'checked') + '>打开app立即更新</label>' +
+      '</div>' +
+      '<div class="source-mode" data-source-mode="url"><div class="grid">' +
+        '<div class="field"><label>外部明文订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/plain-sub"></label></div>' +
+        '<div class="field"><label>接口缓存时间（分钟）<input data-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '"></label></div>' +
+      '</div><small>接口必须返回可识别的明文节点，由 Worker 中转并加密；缓存时间设为 0 会每次请求上游。</small></div>' +
+      '<div class="source-mode" data-source-mode="content"><div class="field"><label>纯文本节点（每行一个）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div><small>保存后由 Worker 直接加密下发，不经过外部接口缓存。</small></div>' +
+    '</section>' +
     '<div class="row-actions"><button class="danger" type="button">删除</button></div>';
   row.querySelector('.danger').onclick = function() { row.remove(); };
   row.querySelector('[data-field="sourceType"]').onchange = function() { updateSourceMode(row); };
