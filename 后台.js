@@ -350,6 +350,9 @@ async function handleAccount(path, request, env) {
     if (!user) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
+    if (user.level === 0) {
+      return json({ ok: false, error: "account_banned" }, 403);
+    }
     const stored = await db.prepare(
       "SELECT email, password_hash FROM users_mb WHERE id = ?",
     ).bind(identity.userId).first();

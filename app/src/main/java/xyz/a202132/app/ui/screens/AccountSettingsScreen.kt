@@ -63,6 +63,7 @@ fun AccountSettingsScreen(
     var switchEmail by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var deletePassword by remember(accountInfo?.uid) { mutableStateOf("") }
+    var showSwitchDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showDeleteConfirmation by remember(accountInfo?.uid) { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -82,6 +83,7 @@ fun AccountSettingsScreen(
         switchEmail = ""
         switchPassword = ""
         deletePassword = ""
+        showSwitchDialog = false
         showDeleteConfirmation = false
     }
 
@@ -105,8 +107,8 @@ fun AccountSettingsScreen(
         switchPassword.length in 8..128 &&
         !isSwitchingAccount &&
         !isDeletingAccount
-    val canDeleteAccount = account != null &&
-        (account.email.isBlank() || deletePassword.length in 8..128) &&
+    val canStartDeleteAccount = account != null &&
+        account.level > 0 &&
         !isDeletingAccount &&
         !isSwitchingAccount
 
@@ -274,34 +276,17 @@ fun AccountSettingsScreen(
 
                 AccountSettingsSection(title = "账户操作") {
                     Text(
-                        text = "输入其他已绑定账户的邮箱和密码，可将当前设备切换到该账户。切换前请先断开 VPN。",
+                        text = "切换账户或注销账户时，点击对应按钮后再输入所需信息。操作前请先断开 VPN。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedTextField(
-                        value = switchEmail,
-                        onValueChange = { switchEmail = it },
-                        label = { Text("切换账户邮箱") },
-                        singleLine = true,
-                        enabled = !isSwitchingAccount && !isDeletingAccount,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = switchPassword,
-                        onValueChange = { if (it.length <= 128) switchPassword = it },
-                        label = { Text("切换账户密码") },
-                        singleLine = true,
-                        enabled = !isSwitchingAccount && !isDeletingAccount,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth()
-                    )
                     Button(
                         onClick = {
-                            viewModel.switchAccount(switchEmail.trim(), switchPassword)
+                            switchEmail = ""
+                            switchPassword = ""
+                            showSwitchDialog = true
                         },
-                        enabled = canSwitchAccount,
+                        enabled = account != null && !isSwitchingAccount && !isDeletingAccount,
                         modifier = Modifier.align(Alignment.End)
                     ) {
                         if (isSwitchingAccount) {
@@ -315,26 +300,17 @@ fun AccountSettingsScreen(
                     }
 
                     Text(
-                        text = "注销账户会永久删除账户、邮箱绑定和全部流量记录，操作不可恢复。",
+                        text = if (account.level == 0) {
+                            "Lv0 账户已被封禁或注册异常，不能注销账户。"
+                        } else {
+                            "注销账户会永久删除账户、邮箱绑定和全部流量记录，操作不可恢复。"
+                        },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.error
                     )
-                    if (account.email.isNotBlank()) {
-                        OutlinedTextField(
-                            value = deletePassword,
-                            onValueChange = { if (it.length <= 128) deletePassword = it },
-                            label = { Text("当前账户密码") },
-                            supportingText = { Text("绑定账户注销时必须填写") },
-                            singleLine = true,
-                            enabled = !isSwitchingAccount && !isDeletingAccount,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
                     Button(
                         onClick = { showDeleteConfirmation = true },
-                        enabled = canDeleteAccount,
+                        enabled = canStartDeleteAccount,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error,
                             contentColor = MaterialTheme.colorScheme.onError
@@ -348,32 +324,110 @@ fun AccountSettingsScreen(
                                 strokeWidth = 2.dp
                             )
                         }
-                        Text(if (isDeletingAccount) "注销中…" else "注销账户")
+                        Text(
+                            when {
+                                account.level == 0 -> "Lv0 不可注销"
+                                isDeletingAccount -> "注销中…"
+                                else -> "注销账户"
+                            }
+                        )
                     }
                 }
             }
         }
     }
 
-    if (showDeleteConfirmation && account != null) {
+    if (showSwitchDialog && account != null) {
         AlertDialog(
-            onDismissRequest = { showDeleteConfirmation = false },
-            title = { Text("确认注销账户？") },
+            onDismissRequest = { if (!isSwitchingAccount) showSwitchDialog = false },
+            title = { Text("切换账户") },
             text = {
-                Text("账户数据和流量记录将永久删除，当前设备随后会重新注册为游客账户。")
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("请输入已绑定账户的邮箱和密码。")
+                    OutlinedTextField(
+                        value = switchEmail,
+                        onValueChange = { switchEmail = it },
+                        label = { Text("账户邮箱") },
+                        singleLine = true,
+                        enabled = !isSwitchingAccount,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = switchPassword,
+                        onValueChange = { if (it.length <= 128) switchPassword = it },
+                        label = { Text("账户密码") },
+                        singleLine = true,
+                        enabled = !isSwitchingAccount,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             },
             confirmButton = {
                 TextButton(
+                    enabled = canSwitchAccount,
+                    onClick = {
+                        showSwitchDialog = false
+                        viewModel.switchAccount(switchEmail.trim(), switchPassword)
+                    }
+                ) {
+                    Text(if (isSwitchingAccount) "切换中…" else "确认切换")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isSwitchingAccount,
+                    onClick = { showSwitchDialog = false }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (showDeleteConfirmation && account != null) {
+        AlertDialog(
+            onDismissRequest = { if (!isDeletingAccount) showDeleteConfirmation = false },
+            title = { Text("注销账户") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("账户数据和流量记录将永久删除，当前设备随后会重新注册为游客账户。此操作不可恢复。")
+                    if (account.email.isNotBlank()) {
+                        OutlinedTextField(
+                            value = deletePassword,
+                            onValueChange = { if (it.length <= 128) deletePassword = it },
+                            label = { Text("当前账户密码") },
+                            supportingText = { Text("绑定账户注销时必须填写") },
+                            singleLine = true,
+                            enabled = !isDeletingAccount,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Text("当前为游客账户，无需输入密码。")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isDeletingAccount &&
+                        (account.email.isBlank() || deletePassword.length in 8..128),
                     onClick = {
                         showDeleteConfirmation = false
                         viewModel.deleteAccount(deletePassword)
                     }
                 ) {
-                    Text("确认注销", color = MaterialTheme.colorScheme.error)
+                    Text(if (isDeletingAccount) "注销中…" else "确认注销", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirmation = false }) {
+                TextButton(
+                    enabled = !isDeletingAccount,
+                    onClick = { showDeleteConfirmation = false }
+                ) {
                     Text("取消")
                 }
             }
