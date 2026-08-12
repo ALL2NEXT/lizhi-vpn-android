@@ -46,12 +46,24 @@ object NetworkClient {
         }
     }
     
-    private val retrofit = Retrofit.Builder()
-        .baseUrl("${AppConfig.BACKEND_URL.trimEnd('/')}/")
-        .client(okHttpClient)
-        .addConverterFactory(stringConverterFactory)
-        .addConverterFactory(GsonConverterFactory.create(gson))
-        .build()
-    
-    val apiService: ApiService = retrofit.create(ApiService::class.java)
+    @Volatile
+    private var apiServiceInstance: ApiService = createApiService(AppConfig.BACKEND_URL)
+
+    val apiService: ApiService
+        get() = apiServiceInstance
+
+    /** 后端地址切换后重建 Retrofit，后续请求将使用新地址。 */
+    fun reloadBackend() {
+        apiServiceInstance = createApiService(AppConfig.BACKEND_URL)
+    }
+
+    private fun createApiService(baseUrl: String): ApiService {
+        val retrofit = Retrofit.Builder()
+            .baseUrl("${baseUrl.trimEnd('/')}/")
+            .client(okHttpClient)
+            .addConverterFactory(stringConverterFactory)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+        return retrofit.create(ApiService::class.java)
+    }
 }

@@ -1,13 +1,64 @@
 package xyz.a202132.app
 
+import android.content.Context
+import java.net.URI
+
 /**
  * 应用配置常量
  */
 object AppConfig {
     const val STARTUP_SPLASH_DURATION_SECONDS = 10 // 启动图倒计时时长，设为0则不启用
 
-    // Cloudflare Worker config/account endpoint and Worker-managed subscription origin.
-    const val BACKEND_URL = "https://liuying.11145149.xyz/"
+    // Cloudflare Worker 默认地址；主页连续点击标题五次可以切换到其他后端。
+    const val DEFAULT_BACKEND_URL = "https://liuying.11145149.xyz"
+
+    private const val PREFERENCES_NAME = "firefly_app_config"
+    private const val BACKEND_URL_KEY = "backend_url"
+
+    @Volatile
+    private var configuredBackendUrl = DEFAULT_BACKEND_URL
+
+    /** 在 Activity 启动时加载用户保存的后端地址。 */
+    fun initialize(context: Context) {
+        val savedUrl = context.applicationContext
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .getString(BACKEND_URL_KEY, null)
+        configuredBackendUrl = normalizeBackendUrl(savedUrl) ?: DEFAULT_BACKEND_URL
+    }
+
+    val BACKEND_URL: String
+        get() = configuredBackendUrl
+
+    /** 保存并立即切换后端地址；返回 false 表示地址格式无效。 */
+    fun updateBackendUrl(context: Context, value: String): Boolean {
+        val normalized = normalizeBackendUrl(value) ?: return false
+        context.applicationContext
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(BACKEND_URL_KEY, normalized)
+            .apply()
+        configuredBackendUrl = normalized
+        return true
+    }
+
+    private fun normalizeBackendUrl(value: String?): String? {
+        val raw = value?.trim().orEmpty()
+        if (raw.isBlank() || raw.length > 2048) return null
+        val candidate = if (
+            raw.startsWith("https://", ignoreCase = true) ||
+            raw.startsWith("http://", ignoreCase = true)
+        ) {
+            raw
+        } else {
+            "https://$raw"
+        }
+        val uri = runCatching { URI(candidate) }.getOrNull() ?: return null
+        if (uri.scheme.lowercase() !in setOf("http", "https")) return null
+        if (uri.host.isNullOrBlank() || uri.userInfo != null || uri.query != null || uri.fragment != null) {
+            return null
+        }
+        return candidate.trimEnd('/')
+    }
 
     // Contact
 

@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -11,10 +12,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
@@ -30,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -38,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.VpnState
+import xyz.a202132.app.network.NetworkClient
 import xyz.a202132.app.ui.components.*
 import xyz.a202132.app.ui.dialogs.*
 import xyz.a202132.app.ui.theme.*
@@ -64,6 +69,10 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var showBackendDialog by remember { mutableStateOf(false) }
+    var backendUrlDraft by remember { mutableStateOf(AppConfig.BACKEND_URL) }
+    var titleClickCount by remember { mutableIntStateOf(0) }
+    var lastTitleClickAt by remember { mutableLongStateOf(0L) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val drawerAnimationSpec = remember {
         tween<Float>(durationMillis = 250, easing = FastOutSlowInEasing)
@@ -85,6 +94,23 @@ fun MainScreen(
         },
         label = "nodeSwipeProgress"
     )
+
+    fun handleBackendTitleClick() {
+        val now = SystemClock.elapsedRealtime()
+        titleClickCount = if (
+            lastTitleClickAt > 0L && now - lastTitleClickAt <= 1_500L
+        ) {
+            titleClickCount + 1
+        } else {
+            1
+        }
+        lastTitleClickAt = now
+        if (titleClickCount >= 5) {
+            titleClickCount = 0
+            backendUrlDraft = AppConfig.BACKEND_URL
+            showBackendDialog = true
+        }
+    }
 
     fun closeDrawerThen(action: () -> Unit) {
         scope.launch {
@@ -181,6 +207,7 @@ fun MainScreen(
                     title = {
                         Text(
                             text = "FireflyVPN",
+                            modifier = Modifier.clickable(onClick = ::handleBackendTitleClick),
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground
@@ -412,6 +439,49 @@ fun MainScreen(
     }
     
     // 节点列表弹窗
+    if (showBackendDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackendDialog = false },
+            title = { Text("切换后台") },
+            text = {
+                OutlinedTextField(
+                    value = backendUrlDraft,
+                    onValueChange = { backendUrlDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("后端地址") },
+                    placeholder = { Text("https://example.com") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (!AppConfig.updateBackendUrl(context, backendUrlDraft)) {
+                            Toast.makeText(
+                                context,
+                                "后端地址无效，请输入域名或 http(s) 地址",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            NetworkClient.reloadBackend()
+                            showBackendDialog = false
+                            Toast.makeText(context, "后端地址已切换，正在刷新订阅", Toast.LENGTH_SHORT).show()
+                            viewModel.refreshNodes()
+                        }
+                    }
+                ) {
+                    Text("保存并切换")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackendDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     infoDialogMessage?.let { message ->
         AlertDialog(
             onDismissRequest = { viewModel.clearInfoDialogMessage() },
