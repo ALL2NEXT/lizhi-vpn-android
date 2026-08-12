@@ -829,31 +829,12 @@ async function handleAdmin(path, request, env) {
       )
       ORDER BY u.created_at DESC`).bind(day, day, day, month, month, month).all();
     const publicUsers = (query.results || []).map(publicAdminUser);
-    const [usersTable, devicesTable, usageTable] = await Promise.all([
-      db.prepare(
-        "SELECT id, uid, nickname, level, experience, email, created_at FROM users_mb ORDER BY id ASC",
-      ).all(),
-      db.prepare(
-        "SELECT id, user_id, device_id, brand, model, android_version, android_sdk, app_version " +
-        "FROM user_devices_mb ORDER BY id ASC",
-      ).all(),
-      db.prepare(
-        "SELECT user_id, session_id, subscription_group_name, started_at, ended_at, " +
-        "upload_bytes, download_bytes FROM user_usage_mb " +
-        "ORDER BY user_id ASC, ended_at ASC",
-      ).all(),
-    ]);
 
     return json({
       ok: true,
       date: day,
       month,
       users: publicUsers,
-      tables: {
-        users_mb: usersTable.results || [],
-        user_devices_mb: devicesTable.results || [],
-        user_usage_mb: usageTable.results || [],
-      },
       generatedAt: beijingTimestamp(),
     });
   }
@@ -2200,7 +2181,6 @@ function adminHtml() {
        </div>
        <nav class="tab-nav" role="tablist" aria-label="后台模块" aria-orientation="vertical">
           <button class="tab-button" role="tab" type="button" data-tab="data-dashboard">数据看板</button>
-          <button class="tab-button" role="tab" type="button" data-tab="users">用户表单</button>
           <button class="tab-button" role="tab" type="button" data-tab="subscriptions">订阅线路</button>
          <button class="tab-button" role="tab" type="button" data-tab="app-settings">应用设置</button>
          <button class="tab-button" role="tab" type="button" data-tab="notice">公告</button>
@@ -2280,17 +2260,6 @@ function adminHtml() {
        </article>
      </div>
    </section>
-
-    <section class="card tab-panel" role="tabpanel" data-panel="users">
-     <div class="dashboard-heading">
-       <div>
-         <h2>用户表单</h2>
-         <p>分别展示用户、设备和流量统计表，不再把三张表拼接成一张宽表。</p>
-       </div>
-       <button class="secondary" type="button" onclick="loadUsers(true)">刷新</button>
-     </div>
-     <div id="usersTable" class="user-tables"></div>
-    </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <h2>订阅线路</h2>
@@ -3325,7 +3294,6 @@ function renderUsers(data) {
   data = data || {users: []};
   currentUsersData = data;
   renderDashboard(data);
-  renderUserTables(data.tables);
   return;
   dirtyUserIds.clear();
   selectedUserIds.clear();
@@ -3416,10 +3384,6 @@ function userFieldValue(row, field) {
   return control ? control.value.trim() : '';
 }
 async function loadUsers(force) {
-  if (!force && dirtyUserIds.size > 0 && !confirm('刷新会丢弃尚未保存的修改，确定继续吗？')) {
-    return false;
-  }
-  el('usersTable').innerHTML = '<div class="loading-state">正在读取用户详细表格…</div>';
   setDashboardState('loading-state', '正在读取看板数据…');
   try {
     const response = await fetch(ADMIN_API_BASE + '/users', {headers: headers()});
@@ -3427,7 +3391,6 @@ async function loadUsers(force) {
     let data = {};
     try { data = JSON.parse(responseText); } catch (_) {}
     if (!response.ok) {
-      el('usersTable').innerHTML = '<div class="error-state">用户详细表格读取失败</div>';
       setDashboardState('error-state', '数据看板读取失败');
       show(data.error || ('读取用户失败（HTTP ' + response.status + '）'), true);
       return false;
@@ -3437,7 +3400,6 @@ async function loadUsers(force) {
     loadTrafficChart(trafficPeriod);
     return true;
   } catch (error) {
-    el('usersTable').innerHTML = '<div class="error-state">用户详细表格读取失败</div>';
     setDashboardState('error-state', '数据看板读取失败');
     show('读取用户失败，请检查 USERS_DB 绑定', true);
     return false;
