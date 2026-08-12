@@ -54,7 +54,10 @@ data class BackendAppSettings(
     val githubUrl: String = "",
 
     @SerializedName("nodeRequestTimeoutMs")
-    val nodeRequestTimeoutMs: Long = 25000L
+    val nodeRequestTimeoutMs: Long = 25000L,
+
+    @SerializedName("experienceThresholds")
+    val experienceThresholds: List<Long> = listOf(100L, 200L, 400L, 800L, 1600L)
 )
 
 data class AccountRegisterRequest(
@@ -88,6 +91,20 @@ data class AccountRegisterResponse(
     val error: String? = null
 )
 
+data class AccountBindingRequest(
+    @SerializedName("deviceId")
+    val deviceId: String,
+
+    @SerializedName("uid")
+    val uid: String,
+
+    @SerializedName("email")
+    val email: String,
+
+    @SerializedName("password")
+    val password: String
+)
+
 data class AccountInfo(
     @SerializedName("uid")
     val uid: String,
@@ -97,6 +114,12 @@ data class AccountInfo(
 
     @SerializedName("level")
     val level: Int = 1,
+
+    @SerializedName("experience")
+    val experience: Long = 0L,
+
+    @SerializedName("email")
+    val email: String = "",
 
     @SerializedName("brand")
     val brand: String = "",

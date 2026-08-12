@@ -31,6 +31,9 @@ const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 const MAX_BATCH_USER_COUNT = 100;
 const MAX_DEBUG_TRAFFIC_RECORDS = 400;
 const MAX_TRAFFIC_BYTES = 1e15;
+const MAX_ACCOUNT_EXPERIENCE = 1e12;
+const ACCOUNT_BINDING_EXPERIENCE = 50;
+const DEFAULT_EXPERIENCE_THRESHOLDS = [100, 200, 400, 800, 1600];
 const SUBSCRIPTION_CACHE_KEY_PREFIX = "fireflyvpn:subscription-cache:v1:";
 const DEFAULT_SUBSCRIPTION_CACHE_MINUTES = 30;
 const MAX_SUBSCRIPTION_CACHE_MINUTES = 7 * 24 * 60;
@@ -48,6 +51,9 @@ const USER_SCHEMA_STATEMENTS = [
   uid TEXT NOT NULL UNIQUE,
   nickname TEXT NOT NULL,
   level INTEGER NOT NULL DEFAULT 1 CHECK (level BETWEEN 0 AND 6),
+  experience INTEGER NOT NULL DEFAULT 0,
+  email TEXT NOT NULL DEFAULT '',
+  password_hash TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 )`,
 `CREATE INDEX IF NOT EXISTS idx_users_mb_created_at ON users_mb(created_at DESC)`,
@@ -77,6 +83,11 @@ const USER_SCHEMA_STATEMENTS = [
 `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_time
   ON user_usage_mb(user_id, ended_at DESC)`,
 ];
+const USER_SCHEMA_MIGRATIONS = [
+  "ALTER TABLE users_mb ADD COLUMN experience INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE users_mb ADD COLUMN email TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE users_mb ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
+];
 let userSchemaReady = false;
 
 const DEFAULT_STATE = {
@@ -90,6 +101,7 @@ const DEFAULT_STATE = {
     feedbackUrl: "",
     githubUrl: "",
     nodeRequestTimeoutMs: 25000,
+    experienceThresholds: DEFAULT_EXPERIENCE_THRESHOLDS,
   },
 };
 
@@ -232,6 +244,63 @@ async function handleAccount(path, request, env) {
     const user = await readD1User(env, deviceId);
 
     return json({ ok: true, account: publicAccount(user) });
+  }
+
+  if (path === "/api/account/bind" && request.method === "POST") {
+    const body = await request.json();
+    const deviceId = normalizeAccountId(body && body.deviceId);
+    const requestedUid = normalizeUid(body && body.uid);
+    const email = normalizeAccountEmail(body && body.email);
+    const password = normalizeAccountPassword(body && body.password);
+    if (!deviceId || !email || !password) {
+      return json({ ok: false, error: "invalid_bind_credentials" }, 400);
+    }
+
+    const db = await ensureUserSchema(env);
+    const identity = await resolveUserIdentity(env, deviceId);
+    if (!identity || (requestedUid && requestedUid !== identity.uid)) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    const user = await readD1User(env, identity.userId);
+    if (!user) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    if (user.level === 0) {
+      return json({ ok: false, error: "account_banned" }, 403);
+    }
+    if (user.email) {
+      return json({ ok: false, error: "account_already_bound" }, 409);
+    }
+    const emailOwner = await db.prepare(
+      "SELECT id FROM users_mb WHERE email = ? AND id <> ?",
+    ).bind(email, identity.userId).first();
+    if (emailOwner) {
+      return json({ ok: false, error: "email_already_bound" }, 409);
+    }
+
+    const passwordHash = await hashAccountPassword(password);
+    const state = await readState(env);
+    const progression = applyExperience(
+      user.level,
+      user.experience,
+      ACCOUNT_BINDING_EXPERIENCE,
+      state.settings.experienceThresholds,
+    );
+    const result = await db.prepare(
+      "UPDATE users_mb SET email = ?, password_hash = ?, experience = ?, level = ? " +
+        "WHERE id = ?",
+    ).bind(
+      email,
+      passwordHash,
+      progression.experience,
+      progression.level,
+      identity.userId,
+    ).run();
+    if (!result.meta || Number(result.meta.changes) < 1) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    const updated = await readD1User(env, identity.userId);
+    return json({ ok: true, account: publicAccount(updated) });
   }
 
   if (path === "/api/account/profile" && request.method === "PATCH") {
@@ -692,7 +761,7 @@ async function handleAdmin(path, request, env) {
     const publicUsers = (query.results || []).map(publicAdminUser);
     const [usersTable, devicesTable, usageTable] = await Promise.all([
       db.prepare(
-        "SELECT id, uid, nickname, level, created_at FROM users_mb ORDER BY id ASC",
+        "SELECT id, uid, nickname, level, experience, email, created_at FROM users_mb ORDER BY id ASC",
       ).all(),
       db.prepare(
         "SELECT id, user_id, device_id, brand, model, android_version, android_sdk, app_version " +
@@ -883,6 +952,8 @@ function publicAccount(user) {
     uid: user.uid,
     nickname: user.nickname,
     level: normalizeLevel(user.level),
+    experience: normalizeExperience(user.experience),
+    email: cleanText(user.email),
     brand: user.brand,
     model: user.model,
     androidVersion: user.androidVersion,
@@ -929,6 +1000,18 @@ async function ensureUserSchema(env) {
   const db = usersDb(env);
   if (userSchemaReady) return db;
   await db.batch(USER_SCHEMA_STATEMENTS.map((statement) => db.prepare(statement)));
+  for (const statement of USER_SCHEMA_MIGRATIONS) {
+    try {
+      await db.prepare(statement).run();
+    } catch (error) {
+      if (!String(error && error.message || error).toLowerCase().includes("duplicate column name")) {
+        throw error;
+      }
+    }
+  }
+  await db.batch([
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_email ON users_mb(email) WHERE email <> ''"),
+  ]);
   userSchemaReady = true;
   return db;
 }
@@ -997,6 +1080,8 @@ function rowToUser(row) {
     uid,
     nickname: normalizeNickname(row.nickname, defaultNickname(uid)),
     level: normalizeLevel(row.level),
+    experience: normalizeExperience(row.experience),
+    email: cleanText(row.email),
     brand: cleanText(row.device_brand ?? row.brand),
     model: cleanText(row.device_model ?? row.model),
     androidVersion: cleanText(row.device_android_version ?? row.android_version),
@@ -1054,6 +1139,46 @@ function normalizeNickname(value, fallback = "") {
 function normalizeLevel(value, fallback = 1) {
   const level = Number(value);
   return Number.isInteger(level) && level >= 0 && level <= 6 ? level : fallback;
+}
+
+function normalizeExperience(value, fallback = 0) {
+  const experience = Number(value);
+  if (Number.isInteger(experience) && experience >= 0 && experience <= MAX_ACCOUNT_EXPERIENCE) {
+    return experience;
+  }
+  const fallbackExperience = Number(fallback);
+  return Number.isInteger(fallbackExperience) && fallbackExperience >= 0
+    ? Math.min(fallbackExperience, MAX_ACCOUNT_EXPERIENCE)
+    : 0;
+}
+
+function normalizeExperienceThresholds(value) {
+  const values = Array.isArray(value) ? value : [];
+  return DEFAULT_EXPERIENCE_THRESHOLDS.map((fallback, index) => {
+    const threshold = Number(values[index]);
+    return Number.isInteger(threshold) && threshold > 0 && threshold <= MAX_ACCOUNT_EXPERIENCE
+      ? threshold
+      : fallback;
+  });
+}
+
+function applyExperience(levelValue, experienceValue, gainedValue, thresholds) {
+  let level = normalizeLevel(levelValue, 0);
+  let experience = normalizeExperience(experienceValue);
+  if (level === 0) return { level: 0, experience };
+
+  experience = Math.min(
+    experience + normalizeExperience(gainedValue),
+    MAX_ACCOUNT_EXPERIENCE,
+  );
+  const normalizedThresholds = normalizeExperienceThresholds(thresholds);
+  while (level < 6) {
+    const required = normalizedThresholds[level - 1];
+    if (experience < required) break;
+    experience -= required;
+    level += 1;
+  }
+  return { level, experience };
 }
 
 function normalizeAndroidSdk(value, fallback = 0) {
@@ -1276,6 +1401,48 @@ function normalizeReportTimestamp(value, fallback = "") {
 function normalizeAccountId(value) {
   const accountId = cleanText(value).toLowerCase();
   return /^[a-f0-9]{64}$/.test(accountId) ? accountId : "";
+}
+
+function normalizeAccountEmail(value) {
+  const email = cleanText(value).toLowerCase();
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ? email
+    : "";
+}
+
+function normalizeAccountPassword(value) {
+  if (typeof value !== "string") return "";
+  return value.length >= 8 && value.length <= 128 ? value : "";
+}
+
+async function hashAccountPassword(password) {
+  const iterations = 100000;
+  const salt = new Uint8Array(16);
+  crypto.getRandomValues(salt);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    TEXT_ENCODER.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations,
+      hash: "SHA-256",
+    },
+    key,
+    256,
+  );
+  return `pbkdf2-sha256$${iterations}$${base64EncodeBytes(salt)}$${base64EncodeBytes(new Uint8Array(derived))}`;
+}
+
+function base64EncodeBytes(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }
 
 function normalizeUid(value) {
@@ -1636,6 +1803,7 @@ function normalizeSettings(value) {
     nodeRequestTimeoutMs: Number.isFinite(timeout)
       ? Math.round(Math.min(Math.max(timeout, 5000), 60000))
       : 25000,
+    experienceThresholds: normalizeExperienceThresholds(settings.experienceThresholds),
   };
 }
 
@@ -1975,8 +2143,13 @@ function adminHtml() {
       <div class="field"><label>问题反馈链接<input id="feedbackUrl" type="url" placeholder="https://github.com/.../issues"></label></div>
       <div class="field"><label>项目源码链接<input id="githubUrl" type="url" placeholder="https://github.com/.../.../"></label></div>
       <div class="field"><label>后台请求超时（毫秒）<input id="nodeRequestTimeoutMs" type="number" min="5000" max="60000" step="1000"></label></div>
+      <div class="field"><label>Lv1 → Lv2 所需经验<input id="experienceThresholdLv2" type="number" min="1" step="1"></label></div>
+      <div class="field"><label>Lv2 → Lv3 所需经验<input id="experienceThresholdLv3" type="number" min="1" step="1"></label></div>
+      <div class="field"><label>Lv3 → Lv4 所需经验<input id="experienceThresholdLv4" type="number" min="1" step="1"></label></div>
+      <div class="field"><label>Lv4 → Lv5 所需经验<input id="experienceThresholdLv5" type="number" min="1" step="1"></label></div>
+      <div class="field"><label>Lv5 → Lv6 所需经验<input id="experienceThresholdLv6" type="number" min="1" step="1"></label></div>
      </div>
-     <small class="hint">留空的网站、邮箱或链接会在 App 中自动隐藏对应入口。超时范围为 5000～60000 毫秒。</small>
+     <small class="hint">绑定邮箱可获得经验，达到对应门槛后自动升级；Lv0 不会获得经验。经验门槛是每个等级区间所需的经验，超出经验会保留到下一级。</small>
      <button type="button" onclick="pushSection('app-settings')">推送</button>
    </section>
 
@@ -2932,7 +3105,7 @@ const USER_TABLE_DEFINITIONS = [
   {
     key: 'users_mb',
     title: 'users_mb（用户表）',
-    columns: ['id', 'uid', 'nickname', 'level', 'created_at'],
+    columns: ['id', 'uid', 'nickname', 'level', 'experience', 'email', 'created_at'],
   },
   {
     key: 'user_devices_mb',
@@ -3381,6 +3554,13 @@ function fillState(state) {
   setValue('feedbackUrl', settings.feedbackUrl);
   setValue('githubUrl', settings.githubUrl);
   setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
+  const experienceThresholds = Array.isArray(settings.experienceThresholds)
+    ? settings.experienceThresholds
+    : [100, 200, 400, 800, 1600];
+  ['experienceThresholdLv2', 'experienceThresholdLv3', 'experienceThresholdLv4',
+    'experienceThresholdLv5', 'experienceThresholdLv6'].forEach(function(id, index) {
+    setValue(id, experienceThresholds[index]);
+  });
   const notice = currentState.notice || {};
   checked('noticeEnabled', Boolean(currentState.notice && notice.hasNotice !== false));
   setValue('noticeTitle', notice.title);
@@ -3434,7 +3614,14 @@ function formState() {
       feedbackEmail: value('feedbackEmail'),
       feedbackUrl: value('feedbackUrl'),
       githubUrl: value('githubUrl'),
-      nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000)
+      nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
+      experienceThresholds: [
+        Number(value('experienceThresholdLv2') || 100),
+        Number(value('experienceThresholdLv3') || 200),
+        Number(value('experienceThresholdLv4') || 400),
+        Number(value('experienceThresholdLv5') || 800),
+        Number(value('experienceThresholdLv6') || 1600)
+      ]
     },
     notice: notice,
     appUpdate: appUpdate

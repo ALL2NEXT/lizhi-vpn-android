@@ -101,6 +101,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val accountInfo = accountManager.accountInfo
     private val _isUpdatingNickname = MutableStateFlow(false)
     val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
+    private val _isBindingAccount = MutableStateFlow(false)
+    val isBindingAccount = _isBindingAccount.asStateFlow()
+    private val _accountMessage = MutableStateFlow<String?>(null)
+    val accountMessage = _accountMessage.asStateFlow()
     
     private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
     val updateInfo = _updateInfo.asStateFlow()
@@ -1356,17 +1360,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_isUpdatingNickname.value) return
         viewModelScope.launch {
             _isUpdatingNickname.value = true
+            _accountMessage.value = null
             try {
                 accountManager.updateNickname(
                     nickname = nickname,
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onFailure { error ->
                     Log.w(tag, "Failed to update nickname", error)
-                    _error.value = error.message ?: "昵称修改失败"
+                    val message = error.message ?: "昵称修改失败"
+                    _error.value = message
+                    _accountMessage.value = message
+                }.onSuccess {
+                    _accountMessage.value = "昵称已更新"
                 }
             } finally {
                 _isUpdatingNickname.value = false
             }
+        }
+    }
+
+    fun bindEmailPassword(email: String, password: String) {
+        if (_isBindingAccount.value) return
+        viewModelScope.launch {
+            _isBindingAccount.value = true
+            _accountMessage.value = null
+            try {
+                accountManager.bindEmailPassword(
+                    email = email,
+                    password = password,
+                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                ).onSuccess {
+                    _accountMessage.value = "绑定成功，已获得绑定经验"
+                }.onFailure { error ->
+                    Log.w(tag, "Failed to bind account credentials", error)
+                    _accountMessage.value = accountBindingErrorMessage(error)
+                }
+            } finally {
+                _isBindingAccount.value = false
+            }
+        }
+    }
+
+    fun clearAccountMessage() {
+        _accountMessage.value = null
+    }
+
+    private fun accountBindingErrorMessage(error: Throwable): String {
+        return when (error.message) {
+            "invalid_bind_credentials" -> "邮箱或密码格式无效"
+            "account_banned" -> "账户已被封禁，无法绑定"
+            "account_already_bound" -> "账户已经绑定邮箱"
+            "email_already_bound" -> "该邮箱已经绑定其他账户"
+            "account_not_found" -> "账户不存在，请重新同步账户"
+            else -> error.message ?: "账户绑定失败"
         }
     }
 

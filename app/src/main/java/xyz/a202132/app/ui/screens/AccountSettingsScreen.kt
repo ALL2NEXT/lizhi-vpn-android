@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -23,6 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,13 +41,33 @@ fun AccountSettingsScreen(
 ) {
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
+    val isBindingAccount by viewModel.isBindingAccount.collectAsStateWithLifecycle()
+    val accountMessage by viewModel.accountMessage.collectAsStateWithLifecycle()
+    val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
     val account = accountInfo
     var nickname by remember(accountInfo?.uid, accountInfo?.nickname) {
         mutableStateOf(accountInfo?.nickname.orEmpty())
     }
+    var email by remember(accountInfo?.uid, accountInfo?.email) {
+        mutableStateOf(accountInfo?.email.orEmpty())
+    }
+    var password by remember(accountInfo?.uid) { mutableStateOf("") }
+    var confirmPassword by remember(accountInfo?.uid) { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        viewModel.clearAccountMessage()
+    }
 
     LaunchedEffect(accountInfo?.uid, accountInfo?.nickname) {
         nickname = accountInfo?.nickname.orEmpty()
+    }
+
+    LaunchedEffect(accountInfo?.uid, accountInfo?.email) {
+        email = accountInfo?.email.orEmpty()
+        if (!accountInfo?.email.isNullOrBlank()) {
+            password = ""
+            confirmPassword = ""
+        }
     }
 
     val normalizedNickname = nickname.trim()
@@ -52,7 +75,16 @@ fun AccountSettingsScreen(
         normalizedNickname.isNotBlank() &&
         normalizedNickname.length <= 24 &&
         normalizedNickname != account.nickname &&
+        account.level > 0 &&
         !isUpdatingNickname
+    val normalizedEmail = email.trim().lowercase()
+    val canBindAccount = account != null &&
+        account.email.isBlank() &&
+        account.level > 0 &&
+        android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches() &&
+        password.length in 8..128 &&
+        password == confirmPassword &&
+        !isBindingAccount
 
     AppScreenScaffold(
         title = "账户设置",
@@ -87,7 +119,7 @@ fun AccountSettingsScreen(
                         label = { Text("昵称") },
                         supportingText = { Text("${nickname.length}/24") },
                         singleLine = true,
-                        enabled = !isUpdatingNickname,
+                        enabled = account.level > 0 && !isUpdatingNickname,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Button(
@@ -106,11 +138,89 @@ fun AccountSettingsScreen(
                     }
                 }
 
+                if (account.email.isBlank()) {
+                    AccountSettingsSection(title = "绑定账户") {
+                        Text(
+                            text = "绑定邮箱可获得经验，经验达到后台设置的升级门槛后自动升级。Lv0 账户不能获取经验。密码只会在服务端加密保存。",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = email,
+                            onValueChange = { email = it },
+                            label = { Text("邮箱") },
+                            singleLine = true,
+                            enabled = !isBindingAccount,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { if (it.length <= 128) password = it },
+                            label = { Text("密码") },
+                            supportingText = { Text("8～128 个字符") },
+                            singleLine = true,
+                            enabled = !isBindingAccount,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = confirmPassword,
+                            onValueChange = { if (it.length <= 128) confirmPassword = it },
+                            label = { Text("确认密码") },
+                            singleLine = true,
+                            enabled = !isBindingAccount,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            onClick = {
+                                viewModel.bindEmailPassword(normalizedEmail, password)
+                            },
+                            enabled = canBindAccount,
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            if (isBindingAccount) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.padding(end = 8.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                            Text(if (isBindingAccount) "绑定中…" else "绑定账户")
+                        }
+                    }
+                }
+
+                accountMessage?.let { message ->
+                    Text(
+                        text = message,
+                        color = if (
+                            message.contains("成功") || message.contains("已更新")
+                        ) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                        fontSize = 13.sp
+                    )
+                }
+
                 AccountSettingsSection(title = "账户信息") {
                     AccountInfoRow(label = "UID", value = account.uid)
                     AccountInfoRow(
+                        label = "绑定邮箱",
+                        value = account.email.displayOrUnknown()
+                    )
+                    AccountInfoRow(
                         label = "账户等级",
                         value = accountLevelText(account)
+                    )
+                    AccountInfoRow(
+                        label = "当前经验",
+                        value = accountExperienceText(account, backendSettings.experienceThresholds)
                     )
                 }
 
@@ -197,6 +307,21 @@ private fun AccountInfoRow(
 
 private fun accountLevelText(accountInfo: AccountInfo): String {
     return if (accountInfo.level == 0) "Lv0 · 已封禁" else "Lv${accountInfo.level.coerceIn(1, 6)}"
+}
+
+private fun accountExperienceText(
+    accountInfo: AccountInfo,
+    thresholds: List<Long>
+): String {
+    val experience = accountInfo.experience.coerceAtLeast(0L)
+    return when {
+        accountInfo.level == 0 -> "$experience · Lv0 不可获取经验"
+        accountInfo.level >= 6 -> "$experience · 已达最高等级"
+        else -> {
+            val required = thresholds.getOrNull(accountInfo.level - 1)
+            if (required == null) "$experience" else "$experience / $required"
+        }
+    }
 }
 
 private fun String.displayOrUnknown(): String = trim().ifBlank { "未登记" }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.withTimeout
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.BuildConfig
 import xyz.a202132.app.data.model.AccountInfo
+import xyz.a202132.app.data.model.AccountBindingRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.TrafficReportRequest
@@ -91,6 +92,41 @@ class AccountManager(private val context: Context) {
         }
     }
 
+    suspend fun bindEmailPassword(
+        email: String,
+        password: String,
+        timeoutMs: Long = 10000L
+    ): Result<AccountInfo> {
+        val registered = currentAccount()
+            ?: return Result.failure(IllegalStateException("账户尚未同步"))
+        val normalizedEmail = email.trim().lowercase()
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches()) {
+            return Result.failure(IllegalArgumentException("邮箱格式无效"))
+        }
+        if (password.length !in 8..128) {
+            return Result.failure(IllegalArgumentException("密码长度需要在 8～128 个字符之间"))
+        }
+
+        return runCatching {
+            val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.bindAccount(
+                    accountEndpoint("/api/account/bind"),
+                    AccountBindingRequest(
+                        deviceId = accountId(),
+                        uid = registered.uid,
+                        email = normalizedEmail,
+                        password = password
+                    )
+                )
+            }
+            val updated = response.account ?: throw IllegalStateException(
+                response.error ?: "账户绑定失败"
+            )
+            persistAccount(updated)
+            updated
+        }
+    }
+
     suspend fun reportTraffic(
         sessionId: String,
         subscriptionGroupName: String,
@@ -161,6 +197,8 @@ class AccountManager(private val context: Context) {
                 ?.takeIf { it.isNotBlank() }
                 ?: "流萤用户",
             level = preferences.getInt(ACCOUNT_LEVEL_KEY, 1).coerceIn(0, 6),
+            experience = preferences.getLong(ACCOUNT_EXPERIENCE_KEY, 0L).coerceAtLeast(0L),
+            email = preferences.getString(ACCOUNT_EMAIL_KEY, "").orEmpty(),
             brand = preferences.getString(ACCOUNT_BRAND_KEY, "").orEmpty(),
             model = preferences.getString(ACCOUNT_MODEL_KEY, "").orEmpty(),
             androidVersion = preferences.getString(ACCOUNT_ANDROID_VERSION_KEY, "").orEmpty(),
@@ -170,12 +208,17 @@ class AccountManager(private val context: Context) {
     }
 
     private fun persistAccount(account: AccountInfo) {
-        val normalized = account.copy(level = account.level.coerceIn(0, 6))
+        val normalized = account.copy(
+            level = account.level.coerceIn(0, 6),
+            experience = account.experience.coerceAtLeast(0L)
+        )
         _accountInfo.value = normalized
         preferences.edit()
             .putString(ACCOUNT_ID_KEY, normalized.uid)
             .putString(ACCOUNT_NICKNAME_KEY, normalized.nickname)
             .putInt(ACCOUNT_LEVEL_KEY, normalized.level)
+            .putLong(ACCOUNT_EXPERIENCE_KEY, normalized.experience)
+            .putString(ACCOUNT_EMAIL_KEY, normalized.email)
             .putString(ACCOUNT_BRAND_KEY, normalized.brand)
             .putString(ACCOUNT_MODEL_KEY, normalized.model)
             .putString(ACCOUNT_ANDROID_VERSION_KEY, normalized.androidVersion)
@@ -188,6 +231,8 @@ class AccountManager(private val context: Context) {
         const val ACCOUNT_ID_KEY = "account_id"
         const val ACCOUNT_NICKNAME_KEY = "account_nickname"
         const val ACCOUNT_LEVEL_KEY = "account_level"
+        const val ACCOUNT_EXPERIENCE_KEY = "account_experience"
+        const val ACCOUNT_EMAIL_KEY = "account_email"
         const val ACCOUNT_BRAND_KEY = "account_brand"
         const val ACCOUNT_MODEL_KEY = "account_model"
         const val ACCOUNT_ANDROID_VERSION_KEY = "account_android_version"
