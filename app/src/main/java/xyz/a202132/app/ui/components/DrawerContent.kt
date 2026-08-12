@@ -218,7 +218,8 @@ private fun UserAccountCard(
             .joinToString(" ")
         listOf(
             device,
-            account.androidVersion.takeIf(String::isNotBlank)?.let { "Android $it" }.orEmpty()
+            account.androidVersion.takeIf(String::isNotBlank)?.let { "Android $it" }.orEmpty(),
+            account.androidSdk.takeIf { it > 0 }?.let { "SDK $it" }.orEmpty()
         ).filter(String::isNotBlank).joinToString(" · ")
     }.orEmpty()
 

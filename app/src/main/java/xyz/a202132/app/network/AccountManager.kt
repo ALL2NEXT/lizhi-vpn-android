@@ -49,7 +49,8 @@ class AccountManager(private val context: Context) {
                         appVersion = BuildConfig.VERSION_NAME,
                         brand = Build.MANUFACTURER.orEmpty(),
                         model = Build.MODEL.orEmpty(),
-                        androidVersion = "${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})"
+                        androidVersion = Build.VERSION.RELEASE.orEmpty(),
+                        androidSdk = Build.VERSION.SDK_INT
                     )
                 )
             }
@@ -163,6 +164,7 @@ class AccountManager(private val context: Context) {
             brand = preferences.getString(ACCOUNT_BRAND_KEY, "").orEmpty(),
             model = preferences.getString(ACCOUNT_MODEL_KEY, "").orEmpty(),
             androidVersion = preferences.getString(ACCOUNT_ANDROID_VERSION_KEY, "").orEmpty(),
+            androidSdk = preferences.getInt(ACCOUNT_ANDROID_SDK_KEY, 0),
             appVersion = preferences.getString(ACCOUNT_APP_VERSION_KEY, "").orEmpty()
         )
     }
@@ -177,6 +179,7 @@ class AccountManager(private val context: Context) {
             .putString(ACCOUNT_BRAND_KEY, normalized.brand)
             .putString(ACCOUNT_MODEL_KEY, normalized.model)
             .putString(ACCOUNT_ANDROID_VERSION_KEY, normalized.androidVersion)
+            .putInt(ACCOUNT_ANDROID_SDK_KEY, normalized.androidSdk)
             .putString(ACCOUNT_APP_VERSION_KEY, normalized.appVersion)
             .apply()
     }
@@ -188,6 +191,7 @@ class AccountManager(private val context: Context) {
         const val ACCOUNT_BRAND_KEY = "account_brand"
         const val ACCOUNT_MODEL_KEY = "account_model"
         const val ACCOUNT_ANDROID_VERSION_KEY = "account_android_version"
+        const val ACCOUNT_ANDROID_SDK_KEY = "account_android_sdk"
         const val ACCOUNT_APP_VERSION_KEY = "account_app_version"
     }
 }

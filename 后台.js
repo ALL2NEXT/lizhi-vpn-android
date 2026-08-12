@@ -58,6 +58,7 @@ const USER_SCHEMA_STATEMENTS = [
   brand TEXT NOT NULL DEFAULT '',
   model TEXT NOT NULL DEFAULT '',
   android_version TEXT NOT NULL DEFAULT '',
+  android_sdk INTEGER NOT NULL DEFAULT 0,
   app_version TEXT NOT NULL DEFAULT '',
   FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
 )`,
@@ -351,14 +352,15 @@ async function handleDebugUserV2(request, env) {
     if (!user) return json({ ok: false, error: "debug_user_create_failed" }, 500);
     await db.prepare(
       "INSERT INTO user_devices_mb " +
-      "(user_id, device_id, brand, model, android_version, app_version) " +
-      "VALUES (?, ?, ?, ?, ?, ?)",
+      "(user_id, device_id, brand, model, android_version, android_sdk, app_version) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?)",
     ).bind(
       Number(user.id),
       deviceId,
       debugText(body.brand, "", 80, "brand"),
       debugText(body.model, "", 120, "model"),
       debugText(body.androidVersion, "", 80, "androidVersion"),
+      debugAndroidSdk(body.androidSdk, 0, "androidSdk"),
       debugText(body.appVersion, "", 40, "appVersion"),
     ).run();
     identity = { userId: Number(user.id), uid: normalizeUid(user.uid) };
@@ -380,11 +382,16 @@ async function handleDebugUserV2(request, env) {
     ).bind(nickname, level, createdAt, identity.userId).run();
     await db.prepare(
       "UPDATE user_devices_mb SET brand = ?, model = ?, android_version = ?, " +
-      "app_version = ? WHERE user_id = ?",
+      "android_sdk = ?, app_version = ? WHERE user_id = ?",
     ).bind(
       debugText(body.brand, current && current.brand, 80, "brand"),
       debugText(body.model, current && current.model, 120, "model"),
       debugText(body.androidVersion, current && current.androidVersion, 80, "androidVersion"),
+      debugAndroidSdk(
+        body.androidSdk,
+        current && current.androidSdk,
+        "androidSdk",
+      ),
       debugText(body.appVersion, current && current.appVersion, 40, "appVersion"),
       identity.userId,
     ).run();
@@ -407,7 +414,8 @@ async function handleDebugUserV2(request, env) {
 async function readDebugAdminUser(db, userId, day, month) {
   return db.prepare(
     "SELECT u.*, d.brand AS device_brand, d.model AS device_model, " +
-    "d.android_version AS device_android_version, d.app_version AS device_app_version, " +
+    "d.android_version AS device_android_version, d.android_sdk AS device_android_sdk, " +
+    "d.app_version AS device_app_version, " +
     "COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic " +
       "WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_upload_bytes, " +
     "COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic " +
@@ -652,6 +660,7 @@ async function handleAdmin(path, request, env) {
       d.brand AS device_brand,
       d.model AS device_model,
       d.android_version AS device_android_version,
+      d.android_sdk AS device_android_sdk,
       d.app_version AS device_app_version,
       COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic
         WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_upload_bytes,
@@ -686,7 +695,7 @@ async function handleAdmin(path, request, env) {
         "SELECT id, uid, nickname, level, created_at FROM users_mb ORDER BY id ASC",
       ).all(),
       db.prepare(
-        "SELECT id, user_id, device_id, brand, model, android_version, app_version " +
+        "SELECT id, user_id, device_id, brand, model, android_version, android_sdk, app_version " +
         "FROM user_devices_mb ORDER BY id ASC",
       ).all(),
       db.prepare(
@@ -877,6 +886,7 @@ function publicAccount(user) {
     brand: user.brand,
     model: user.model,
     androidVersion: user.androidVersion,
+    androidSdk: normalizeAndroidSdk(user.androidSdk),
     appVersion: user.appVersion,
   };
 }
@@ -972,7 +982,8 @@ async function readD1User(env, reference) {
   if (!identity) return null;
   const row = await db.prepare(
     "SELECT u.*, d.brand AS device_brand, d.model AS device_model, " +
-    "d.android_version AS device_android_version, d.app_version AS device_app_version " +
+    "d.android_version AS device_android_version, d.android_sdk AS device_android_sdk, " +
+    "d.app_version AS device_app_version " +
     "FROM users_mb u LEFT JOIN user_devices_mb d ON d.id = (" +
     "SELECT id FROM user_devices_mb WHERE user_id = u.id ORDER BY id DESC LIMIT 1" +
     ") WHERE u.id = ?",
@@ -989,6 +1000,7 @@ function rowToUser(row) {
     brand: cleanText(row.device_brand ?? row.brand),
     model: cleanText(row.device_model ?? row.model),
     androidVersion: cleanText(row.device_android_version ?? row.android_version),
+    androidSdk: normalizeAndroidSdk(row.device_android_sdk ?? row.android_sdk),
     appVersion: cleanText(row.device_app_version ?? row.app_version),
     createdAt: cleanText(row.created_at),
   };
@@ -999,6 +1011,7 @@ async function registerOrTouchUser(env, deviceId, profile, now) {
   const brand = cleanText(profile.brand).slice(0, 80);
   const model = cleanText(profile.model).slice(0, 120);
   const androidVersion = cleanText(profile.androidVersion).slice(0, 80);
+  const androidSdk = normalizeAndroidSdk(profile.androidSdk);
   const appVersion = cleanText(profile.appVersion).slice(0, 40);
   const existing = await db.prepare(
     "SELECT u.id AS user_id, u.uid FROM users_mb u " +
@@ -1010,10 +1023,12 @@ async function registerOrTouchUser(env, deviceId, profile, now) {
       "brand = CASE WHEN ? <> '' THEN ? ELSE brand END, " +
       "model = CASE WHEN ? <> '' THEN ? ELSE model END, " +
       "android_version = CASE WHEN ? <> '' THEN ? ELSE android_version END, " +
+      "android_sdk = CASE WHEN ? > 0 THEN ? ELSE android_sdk END, " +
       "app_version = CASE WHEN ? <> '' THEN ? ELSE app_version END " +
       "WHERE device_id = ?",
     ).bind(
-      brand, brand, model, model, androidVersion, androidVersion, appVersion, appVersion, deviceId,
+      brand, brand, model, model, androidVersion, androidVersion,
+      androidSdk, androidSdk, appVersion, appVersion, deviceId,
     ).run();
     return;
   }
@@ -1026,9 +1041,9 @@ async function registerOrTouchUser(env, deviceId, profile, now) {
   if (!user) throw new Error("account_create_failed");
   await db.prepare(
     "INSERT INTO user_devices_mb " +
-    "(user_id, device_id, brand, model, android_version, app_version) " +
-    "VALUES (?, ?, ?, ?, ?, ?)",
-  ).bind(Number(user.id), deviceId, brand, model, androidVersion, appVersion).run();
+    "(user_id, device_id, brand, model, android_version, android_sdk, app_version) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).bind(Number(user.id), deviceId, brand, model, androidVersion, androidSdk, appVersion).run();
 }
 
 function normalizeNickname(value, fallback = "") {
@@ -1039,6 +1054,22 @@ function normalizeNickname(value, fallback = "") {
 function normalizeLevel(value, fallback = 1) {
   const level = Number(value);
   return Number.isInteger(level) && level >= 0 && level <= 6 ? level : fallback;
+}
+
+function normalizeAndroidSdk(value, fallback = 0) {
+  const sdk = Number(value);
+  if (Number.isInteger(sdk) && sdk >= 0 && sdk <= 1000) return sdk;
+  const fallbackSdk = Number(fallback);
+  return Number.isInteger(fallbackSdk) && fallbackSdk >= 0 && fallbackSdk <= 1000
+    ? fallbackSdk
+    : 0;
+}
+
+function debugAndroidSdk(value, fallback, field) {
+  if (value === undefined || value === null || value === "") {
+    return normalizeAndroidSdk(fallback);
+  }
+  return debugInteger(value, 0, 0, 1000, field);
 }
 
 function defaultNickname(accountId) {
@@ -2906,7 +2937,7 @@ const USER_TABLE_DEFINITIONS = [
   {
     key: 'user_devices_mb',
     title: 'user_devices_mb（设备表）',
-    columns: ['id', 'user_id', 'device_id', 'brand', 'model', 'android_version', 'app_version'],
+    columns: ['id', 'user_id', 'device_id', 'brand', 'model', 'android_version', 'android_sdk', 'app_version'],
   },
   {
     key: 'user_usage_mb',

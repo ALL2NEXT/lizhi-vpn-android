@@ -71,7 +71,10 @@ data class AccountRegisterRequest(
     val model: String,
 
     @SerializedName("androidVersion")
-    val androidVersion: String
+    val androidVersion: String,
+
+    @SerializedName("androidSdk")
+    val androidSdk: Int
 )
 
 data class AccountRegisterResponse(
@@ -103,6 +106,9 @@ data class AccountInfo(
 
     @SerializedName("androidVersion")
     val androidVersion: String = "",
+
+    @SerializedName("androidSdk")
+    val androidSdk: Int = 0,
 
     @SerializedName("appVersion")
     val appVersion: String = ""
