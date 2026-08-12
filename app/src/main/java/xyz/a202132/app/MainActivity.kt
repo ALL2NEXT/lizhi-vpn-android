@@ -49,6 +49,7 @@ import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
+import xyz.a202132.app.ui.screens.TaskCenterScreen
 import xyz.a202132.app.ui.theme.FireflyVPNTheme
 import xyz.a202132.app.viewmodel.MainViewModel
 import xyz.a202132.app.viewmodel.NodeImportResult
@@ -197,6 +198,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
                                     onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
                                     onOpenFeatures = { navigateTo(AppRoute.FEATURES) },
+                                    onOpenTaskCenter = { navigateTo(AppRoute.TASK_CENTER) },
                                     onOpenAccountSettings = { navigateTo(AppRoute.ACCOUNT_SETTINGS) }
                                 )
                             }
@@ -327,6 +329,17 @@ class MainActivity : ComponentActivity() {
                             composable(AppRoute.ACCOUNT_SETTINGS) {
                                 AccountSettingsScreen(
                                     viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.TASK_CENTER) {
+                                val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
+                                TaskCenterScreen(
+                                    accountInfo = accountInfo,
+                                    onOpenAccountSettings = {
+                                        navigateTo(AppRoute.ACCOUNT_SETTINGS)
+                                    },
                                     onBack = { navController.popBackStack() }
                                 )
                             }

@@ -41,6 +41,7 @@ fun DrawerContent(
     onOpenProxyScope: () -> Unit,
     onOpenOtherConfig: () -> Unit,
     onOpenFeatures: () -> Unit,
+    onOpenTaskCenter: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
     onClose: () -> Unit,
     websiteUrl: String = "",
@@ -108,6 +109,14 @@ fun DrawerContent(
                 title = "特色功能",
                 onClick = {
                     onOpenFeatures()
+                }
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.CheckCircle,
+                title = "任务中心",
+                onClick = {
+                    onOpenTaskCenter()
                 }
             )
 

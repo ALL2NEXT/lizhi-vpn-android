@@ -59,6 +59,7 @@ fun MainScreen(
     onOpenNodeList: () -> Unit = {},
     onOpenOtherConfig: () -> Unit = {},
     onOpenFeatures: () -> Unit = {},
+    onOpenTaskCenter: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -139,6 +140,7 @@ fun MainScreen(
                     onOpenProxyScope = { closeDrawerThen(onOpenProxyScope) },
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
                     onOpenFeatures = { closeDrawerThen(onOpenFeatures) },
+                    onOpenTaskCenter = { closeDrawerThen(onOpenTaskCenter) },
                     onOpenAccountSettings = { closeDrawerThen(onOpenAccountSettings) },
                     onClose = {
                         scope.launch {
