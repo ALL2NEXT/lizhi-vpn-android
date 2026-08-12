@@ -182,7 +182,7 @@ async function handleClient(request, env) {
         minLevel: source.minLevel,
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
       })),
-    notice: state.notice,
+    notice: visibleNotice(state.notice),
     appUpdate: state.appUpdate,
     settings: state.settings,
     generatedAt: beijingTimestamp(),
@@ -1929,13 +1929,46 @@ function normalizeState(input) {
 
 function normalizeNotice(value) {
   if (!plainObject(value)) return null;
+  const startAt = normalizeNoticeTimestamp(value.startAt, "start_at");
+  const endAt = normalizeNoticeTimestamp(value.endAt, "end_at");
+  if (startAt && endAt && Date.parse(startAt) > Date.parse(endAt)) {
+    throw new Error("invalid_notice_time_order");
+  }
   return {
     hasNotice: parseFlag(value.hasNotice, false),
     title: cleanText(value.title),
     content: cleanText(value.content),
     noticeId: cleanText(value.noticeId),
     showOnce: parseFlag(value.showOnce, true),
+    startAt,
+    endAt,
   };
+}
+
+function normalizeNoticeTimestamp(value, field) {
+  const text = cleanText(value);
+  if (!text) return "";
+  const localMinute = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text);
+  const localSecond = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(text);
+  const candidate = localMinute
+    ? `${text}:00+08:00`
+    : localSecond
+      ? `${text}+08:00`
+      : text;
+  const date = new Date(candidate);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error(`invalid_notice_${field}`);
+  }
+  return beijingTimestamp(date);
+}
+
+function visibleNotice(notice, now = Date.now()) {
+  if (!notice || !notice.hasNotice) return null;
+  const startAt = Date.parse(notice.startAt || "");
+  const endAt = Date.parse(notice.endAt || "");
+  if (Number.isFinite(startAt) && now < startAt) return null;
+  if (Number.isFinite(endAt) && now > endAt) return null;
+  return notice;
 }
 
 function normalizeSettings(value) {
@@ -2293,9 +2326,12 @@ function adminHtml() {
     <div class="grid">
       <div class="field"><label>公告标题<input id="noticeTitle" type="text"></label></div>
       <div class="field"><label>公告 ID<input id="noticeId" type="text" placeholder="notice_20260806"></label></div>
+      <div class="field"><label>开始显示时间<input id="noticeStartAt" type="datetime-local"></label></div>
+      <div class="field"><label>结束显示时间<input id="noticeEndAt" type="datetime-local"></label></div>
     </div>
     <div class="field"><label>公告内容<textarea id="noticeContent" placeholder="支持普通文本和 HTML"></textarea></label></div>
     <label class="check"><input id="noticeShowOnce" type="checkbox">每个公告 ID 只显示一次</label>
+    <small class="hint">时间按北京时间执行。开始时间留空表示立即显示，结束时间留空表示永不过期。</small>
      <button type="button" onclick="pushSection('notice')">推送</button>
    </section>
 
@@ -2378,7 +2414,10 @@ function adminHtml() {
     if (error === 'invalid_batch_user_delete') return '批量删除参数无效，最多选择 100 个用户';
     if (error === 'subscription_must_be_plaintext_nodes') return '订阅必须返回可识别的明文节点，不能使用已加密接口';
     if (error === 'invalid_min_app_version') return '最低应用版本格式无效，请填写类似 2.40 的数字版本';
-    if (error === 'external_subscription_unreachable') return '外部明文订阅接口无法访问';
+   if (error === 'external_subscription_unreachable') return '外部明文订阅接口无法访问';
+   if (error === 'invalid_notice_start_at') return '公告开始时间格式无效';
+   if (error === 'invalid_notice_end_at') return '公告结束时间格式无效';
+   if (error === 'invalid_notice_time_order') return '公告结束时间不能早于开始时间';
    if (error === 'external_subscription_url_required') return '请填写外部明文订阅地址';
    if (String(error || '').indexOf('external_subscription_http_') === 0) {
      return '外部明文订阅接口请求失败（HTTP ' + String(error).slice('external_subscription_http_'.length) + '）';
@@ -3692,6 +3731,8 @@ function fillState(state) {
   checked('noticeEnabled', Boolean(currentState.notice && notice.hasNotice !== false));
   setValue('noticeTitle', notice.title);
   setValue('noticeId', notice.noticeId);
+  setValue('noticeStartAt', noticeDateTimeValue(notice.startAt));
+  setValue('noticeEndAt', noticeDateTimeValue(notice.endAt));
   setValue('noticeContent', notice.content);
   checked('noticeShowOnce', notice.showOnce !== false);
   const update = currentState.appUpdate || {};
@@ -3701,6 +3742,11 @@ function fillState(state) {
   setValue('appDownloadUrl', update.downloadUrl);
   setValue('appChangelog', update.changelog);
   checked('appForce', update.is_force === 1 || update.isForce === 1);
+}
+function noticeDateTimeValue(data) {
+  const text = String(data == null ? '' : data).trim();
+  const match = text.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
+  return match ? match[1] : '';
 }
 function formState() {
   const subscriptions = Array.from(document.querySelectorAll('.source-row')).map(function(row, index) {
@@ -3725,7 +3771,9 @@ function formState() {
     title: value('noticeTitle'),
     content: value('noticeContent'),
     noticeId: value('noticeId'),
-    showOnce: el('noticeShowOnce').checked
+    showOnce: el('noticeShowOnce').checked,
+    startAt: value('noticeStartAt'),
+    endAt: value('noticeEndAt')
   } : null;
   const appUpdate = el('appUpdateEnabled').checked ? {
     version: value('appVersion'),

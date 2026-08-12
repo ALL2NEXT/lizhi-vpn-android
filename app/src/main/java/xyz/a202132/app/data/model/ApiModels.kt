@@ -36,7 +36,13 @@ data class NoticeInfo(
     val noticeId: String = "",
     
     @SerializedName("showOnce")
-    val showOnce: Boolean = true
+    val showOnce: Boolean = true,
+
+    @SerializedName("startAt")
+    val startAt: String = "",
+
+    @SerializedName("endAt")
+    val endAt: String = ""
 )
 
 /** App-facing settings delivered by the unified Worker backend. */

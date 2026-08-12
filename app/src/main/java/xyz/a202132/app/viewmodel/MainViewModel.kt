@@ -32,6 +32,8 @@ import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import java.io.File
+import java.time.Instant
+import java.time.OffsetDateTime
 import kotlin.math.ceil
 import java.util.UUID
 
@@ -1154,7 +1156,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val result = subscriptionDataLoader.noticeConfig?.let { Result.success(it) }
             ?: Result.failure<NoticeInfo>(IllegalStateException("backend config unavailable"))
         result.onSuccess { noticeInfo ->
-            if (noticeInfo.hasNotice) {
+            if (noticeInfo.hasNotice && isNoticeWithinTimeRange(noticeInfo)) {
                 // 如果 showOnce 为 true，检查是否已显示过
                 // 如果 showOnce 为 false，则每次都显示
                 if (!noticeInfo.showOnce) {
@@ -1168,6 +1170,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         settingsRepository.setLastNoticeId(noticeInfo.noticeId)
                     }
                 }
+            } else {
+                _notice.value = null
             }
         }.onFailure { e ->
             Log.e(tag, "Failed to check notice", e)
@@ -1381,6 +1385,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _isUpdatingNickname.value = false
             }
         }
+    }
+
+    /** 客户端再次校验公告时间，避免配置缓存导致过期公告继续显示。 */
+    private fun isNoticeWithinTimeRange(noticeInfo: NoticeInfo): Boolean {
+        val now = Instant.now()
+        val startAt = noticeInfo.startAt.toInstantOrNull()
+        val endAt = noticeInfo.endAt.toInstantOrNull()
+        return (startAt == null || !now.isBefore(startAt)) &&
+            (endAt == null || !now.isAfter(endAt))
+    }
+
+    private fun String.toInstantOrNull(): Instant? {
+        if (isBlank()) return null
+        return runCatching { OffsetDateTime.parse(this).toInstant() }.getOrNull()
     }
 
     fun bindEmailPassword(email: String, password: String) {
