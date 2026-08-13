@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -21,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -226,19 +228,20 @@ fun TaskCenterScreen(
                         }
                     )
                     if (account != null && !isBanned && checkinStatus?.status != "checked_in") {
-                        Button(
-                            onClick = viewModel::dailyCheckin,
-                            enabled = !isCheckingIn && checkinStatus != null,
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            if (isCheckingIn) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.padding(end = 8.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    strokeWidth = 2.dp
-                                )
+                        TaskActionRow {
+                            Button(
+                                onClick = viewModel::dailyCheckin,
+                                enabled = !isCheckingIn && checkinStatus != null
+                            ) {
+                                if (isCheckingIn) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.padding(end = 8.dp),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                                Text(if (isCheckingIn) "签到中…" else "立即签到")
                             }
-                            Text(if (isCheckingIn) "签到中…" else "立即签到")
                         }
                     }
                     checkinMessage?.let { message ->
@@ -297,11 +300,10 @@ fun TaskCenterScreen(
                         }
                     )
                     if (account != null && account.email.isBlank() && !isBanned) {
-                        Button(
-                            onClick = onOpenAccountSettings,
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            Text("去绑定")
+                        TaskActionRow {
+                            Button(onClick = onOpenAccountSettings) {
+                                Text("去绑定")
+                            }
                         }
                     }
                 }
@@ -344,12 +346,8 @@ fun TaskCenterScreen(
                             )
                         }
                         else -> {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(onClick = ::openTelegramGroup) {
+                            TaskActionRow {
+                                OutlinedButton(onClick = ::openTelegramGroup) {
                                     Text("打开 TG 群链接")
                                 }
                                 Button(
@@ -426,6 +424,17 @@ fun TaskCenterScreen(
             }
         )
     }
+}
+
+/** 统一任务卡片操作按钮的右对齐方式和按钮间距。 */
+@Composable
+private fun TaskActionRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content
+    )
 }
 
 private fun telegramTaskStatusText(status: TelegramTaskStatus?): String {

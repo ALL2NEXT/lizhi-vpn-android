@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -21,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,8 +42,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.AccountInfo
+import xyz.a202132.app.data.model.DeviceBindingResponse
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
+
+private enum class DeviceAction {
+    BIND,
+    UNBIND
+}
 
 @Composable
 fun AccountSettingsScreen(
@@ -52,6 +60,8 @@ fun AccountSettingsScreen(
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val isSyncingAccount by viewModel.isSyncingAccount.collectAsStateWithLifecycle()
+    val deviceBinding by viewModel.deviceBinding.collectAsStateWithLifecycle()
+    val isManagingDevice by viewModel.isManagingDevice.collectAsStateWithLifecycle()
     val isBindingAccount by viewModel.isBindingAccount.collectAsStateWithLifecycle()
     val isSwitchingAccount by viewModel.isSwitchingAccount.collectAsStateWithLifecycle()
     val isDeletingAccount by viewModel.isDeletingAccount.collectAsStateWithLifecycle()
@@ -69,6 +79,9 @@ fun AccountSettingsScreen(
     var switchEmail by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var deletePassword by remember(accountInfo?.uid) { mutableStateOf("") }
+    var devicePassword by remember(accountInfo?.uid) { mutableStateOf("") }
+    var deviceAction by remember(accountInfo?.uid) { mutableStateOf<DeviceAction?>(null) }
+    var showNicknameDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showBindDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showSwitchDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showDeleteConfirmation by remember(accountInfo?.uid) { mutableStateOf(false) }
@@ -79,6 +92,7 @@ fun AccountSettingsScreen(
 
     LaunchedEffect(accountInfo?.uid, accountInfo?.nickname) {
         nickname = accountInfo?.nickname.orEmpty()
+        showNicknameDialog = false
     }
 
     LaunchedEffect(accountInfo?.uid, accountInfo?.email) {
@@ -91,8 +105,11 @@ fun AccountSettingsScreen(
         switchPassword = ""
         deletePassword = ""
         showBindDialog = false
+        showNicknameDialog = false
         showSwitchDialog = false
         showDeleteConfirmation = false
+        devicePassword = ""
+        deviceAction = null
     }
 
     val normalizedNickname = nickname.trim()
@@ -131,6 +148,13 @@ fun AccountSettingsScreen(
         account.level > 0 &&
         !isDeletingAccount &&
         !isSwitchingAccount
+    val canManageDevice = account != null &&
+        !isManagingDevice &&
+        !isSyncingAccount &&
+        !isUpdatingNickname &&
+        !isBindingAccount &&
+        !isSwitchingAccount &&
+        !isDeletingAccount
 
     AppScreenScaffold(
         title = "账户设置",
@@ -182,65 +206,33 @@ fun AccountSettingsScreen(
                     )
                 }
             } else {
-                AccountSettingsSection(title = "账户资料") {
-                    OutlinedTextField(
-                        value = nickname,
-                        onValueChange = { value ->
-                            if (value.length <= 24) nickname = value
-                        },
-                        label = { Text("昵称") },
-                        supportingText = { Text("${nickname.length}/24") },
-                        singleLine = true,
-                        enabled = account.level > 0 && !isUpdatingNickname,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Button(
-                        onClick = { viewModel.updateNickname(normalizedNickname) },
-                        enabled = canSaveNickname,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        if (isUpdatingNickname) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.padding(end = 8.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                        }
-                        Text(if (isUpdatingNickname) "保存中…" else "保存昵称")
-                    }
-                }
-
-                if (account.email.isBlank()) {
-                    AccountSettingsSection(title = "绑定邮箱") {
-                        Text(
-                            text = "绑定邮箱可获得一次性经验奖励，但不会直接改变等级；经验达到后台设置的门槛后才会升级。Lv0 账户不能获取经验。密码只会在服务端加密保存。",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Button(
-                            onClick = {
-                                email = ""
-                                password = ""
-                                confirmPassword = ""
-                                showBindDialog = true
-                            },
-                            enabled = canOpenBindDialog,
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            Text("绑定邮箱")
-                        }
-                    }
-                }
-
                 AccountSettingsSection(title = "账户信息") {
+                    AccountInfoRowWithIconAction(
+                        label = "昵称",
+                        value = account.nickname.displayOrUnknown(),
+                        actionEnabled = account.level > 0 && !isUpdatingNickname,
+                        onAction = {
+                            nickname = account.nickname
+                            showNicknameDialog = true
+                        }
+                    )
                     AccountInfoRow(
                         label = "账户身份",
                         value = accountIdentityText(account)
                     )
                     AccountInfoRow(label = "UID", value = account.uid)
-                    AccountInfoRow(
-                        label = "绑定邮箱",
-                        value = account.email.displayOrUnknown()
+                    AccountInfoRowWithAction(
+                        label = "邮箱",
+                        value = account.email.displayOrUnknown(),
+                        actionLabel = "绑定邮箱",
+                        showAction = account.email.isBlank(),
+                        actionEnabled = canOpenBindDialog,
+                        onAction = {
+                            email = ""
+                            password = ""
+                            confirmPassword = ""
+                            showBindDialog = true
+                        }
                     )
                     AccountLevelRow(
                         accountInfo = account,
@@ -249,6 +241,13 @@ fun AccountSettingsScreen(
                     AccountInfoRow(
                         label = "当前经验",
                         value = accountExperienceText(account, backendSettings.experienceThresholds)
+                    )
+                }
+
+                AccountSettingsSection(title = "当前权益") {
+                    AccountInfoRow(
+                        label = "线路权益",
+                        value = accountEntitlementText(account)
                     )
                 }
 
@@ -274,6 +273,41 @@ fun AccountSettingsScreen(
                         label = "App 版本",
                         value = account.appVersion.displayOrUnknown()
                     )
+                    AccountInfoRow(
+                        label = "设备状态",
+                        value = deviceBindingText(deviceBinding, account)
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { deviceAction = DeviceAction.BIND },
+                            enabled = canManageDevice,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("绑定设备")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.queryDeviceBinding() },
+                            enabled = canManageDevice,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("查询设备")
+                        }
+                        Button(
+                            onClick = { deviceAction = DeviceAction.UNBIND },
+                            enabled = canManageDevice,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            )
+                        ) {
+                            Text("解绑设备")
+                        }
+                    }
                 }
 
                 AccountSettingsSection(title = "账户操作") {
@@ -337,6 +371,99 @@ fun AccountSettingsScreen(
                 }
             }
         }
+    }
+
+    if (showNicknameDialog && account != null) {
+        AlertDialog(
+            onDismissRequest = { if (!isUpdatingNickname) showNicknameDialog = false },
+            title = { Text("修改昵称") },
+            text = {
+                OutlinedTextField(
+                    value = nickname,
+                    onValueChange = { value ->
+                        if (value.length <= 24) nickname = value
+                    },
+                    label = { Text("昵称") },
+                    supportingText = { Text("${nickname.length}/24") },
+                    singleLine = true,
+                    enabled = !isUpdatingNickname,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.updateNickname(normalizedNickname) },
+                    enabled = canSaveNickname
+                ) {
+                    Text(if (isUpdatingNickname) "保存中…" else "保存")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showNicknameDialog = false },
+                    enabled = !isUpdatingNickname
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (deviceAction != null && account != null) {
+        val action = deviceAction ?: DeviceAction.BIND
+        val requiresPassword = account.email.isNotBlank()
+        AlertDialog(
+            onDismissRequest = { if (!isManagingDevice) deviceAction = null },
+            title = { Text(if (action == DeviceAction.BIND) "绑定设备" else "解绑设备") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        if (action == DeviceAction.BIND) {
+                            "将当前设备绑定到当前账户。清除本地数据后重新注册时，系统会自动找回该账户。"
+                        } else {
+                            "解绑后，当前设备将不再自动登录此账户；清除本地数据后重新注册会创建新账户。"
+                        }
+                    )
+                    if (requiresPassword) {
+                        OutlinedTextField(
+                            value = devicePassword,
+                            onValueChange = { if (it.length <= 128) devicePassword = it },
+                            label = { Text("当前账户密码") },
+                            supportingText = { Text("绑定邮箱账户需要验证密码") },
+                            singleLine = true,
+                            enabled = !isManagingDevice,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isManagingDevice &&
+                        (!requiresPassword || devicePassword.length in 8..128),
+                    onClick = {
+                        deviceAction = null
+                        if (action == DeviceAction.BIND) {
+                            viewModel.bindCurrentDevice(devicePassword)
+                        } else {
+                            viewModel.unbindCurrentDevice(devicePassword)
+                        }
+                    }
+                ) {
+                    Text(if (isManagingDevice) "处理中…" else "确认")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { deviceAction = null },
+                    enabled = !isManagingDevice
+                ) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     if (showBindDialog && account != null) {
@@ -561,6 +688,95 @@ private fun AccountInfoRow(
 }
 
 @Composable
+private fun AccountInfoRowWithAction(
+    label: String,
+    value: String,
+    actionLabel: String,
+    showAction: Boolean,
+    actionEnabled: Boolean,
+    onAction: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(0.34f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp
+        )
+        Row(
+            modifier = Modifier.weight(0.66f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = value,
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 14.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (showAction) {
+                TextButton(
+                    onClick = onAction,
+                    enabled = actionEnabled
+                ) {
+                    Text(actionLabel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountInfoRowWithIconAction(
+    label: String,
+    value: String,
+    actionEnabled: Boolean,
+    onAction: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(0.34f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp
+        )
+        Row(
+            modifier = Modifier.weight(0.66f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = value,
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 14.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            IconButton(
+                onClick = onAction,
+                enabled = actionEnabled
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "修改昵称"
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun AccountLevelRow(
     accountInfo: AccountInfo,
     thresholds: List<Long>
@@ -611,6 +827,23 @@ private fun accountIdentityText(accountInfo: AccountInfo): String {
         accountInfo.level == 0 -> "受限账户"
         accountInfo.email.isBlank() -> "游客"
         else -> "正式用户"
+    }
+}
+
+private fun accountEntitlementText(accountInfo: AccountInfo): String {
+    return "Lv${accountInfo.level.coerceIn(0, 6)}尊享线路"
+}
+
+private fun deviceBindingText(
+    status: DeviceBindingResponse?,
+    accountInfo: AccountInfo
+): String {
+    return when {
+        status?.bound == true && status.account != null -> {
+            if (status.account.uid == accountInfo.uid) "已绑定当前账户" else "已绑定其他账户"
+        }
+        status != null -> "未绑定账户"
+        else -> "未查询"
     }
 }
 

@@ -12,6 +12,9 @@
  *   GET /api/client?refresh=1   // 刷新由客户端处理，接口仅兼容保留该参数
  *   GET /api/subscription/<id>?uid=<UID>  // 经过身份校验的 Worker 中转，所有托管线路在这里加密
  *   POST /api/account/login     // 使用邮箱和密码切换账户
+ *   GET  /api/account/device    // 查询当前设备绑定的账户
+ *   POST /api/account/device/bind   // 绑定当前设备到指定账户
+ *   POST /api/account/device/unbind // 解绑当前设备
  *   POST /api/account/delete    // 永久删除当前账户
  *   GET  /api/account/tasks?uid=<UID>
  *   GET  /api/account/tasks/speed-share-results?uid=<UID>
@@ -332,6 +335,97 @@ async function handleAccount(path, request, env) {
     const user = await readD1User(env, deviceId);
 
     return json({ ok: true, account: publicAccount(user) });
+  }
+
+  if (path === "/api/account/device" && request.method === "GET") {
+    const requestUrl = new URL(request.url);
+    const deviceId = normalizeAccountId(requestUrl.searchParams.get("deviceId"));
+    if (!deviceId) {
+      return json({ ok: false, error: "invalid_device_id" }, 400);
+    }
+
+    const binding = await readDeviceBinding(env, deviceId);
+    return json({
+      ok: true,
+      bound: Boolean(binding),
+      account: binding ? publicAccount(binding.account) : null,
+      device: binding ? binding.device : null,
+    });
+  }
+
+  if (path === "/api/account/device/bind" && request.method === "POST") {
+    const body = await request.json();
+    const deviceId = normalizeAccountId(body && body.deviceId);
+    const requestedUid = normalizeUid(body && body.uid);
+    const password = typeof (body && body.password) === "string" ? body.password : "";
+    if (!deviceId || !requestedUid) {
+      return json({ ok: false, error: "invalid_device_binding" }, 400);
+    }
+
+    const db = await ensureUserSchema(env);
+    const currentIdentity = await resolveUserIdentity(env, deviceId);
+    if (currentIdentity && currentIdentity.uid !== requestedUid) {
+      return json({ ok: false, error: "device_already_bound" }, 409);
+    }
+    const targetIdentity = await resolveUserIdentity(env, requestedUid);
+    if (!targetIdentity) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    const targetUser = await readD1User(env, targetIdentity.userId);
+    if (!targetUser) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    if (targetUser.level === 0) {
+      return json({ ok: false, error: "account_banned" }, 403);
+    }
+    if (targetUser.email) {
+      const stored = await db.prepare(
+        "SELECT password_hash FROM users_mb WHERE id = ?",
+      ).bind(targetIdentity.userId).first();
+      if (!(await verifyAccountPassword(password, cleanText(stored && stored.password_hash)))) {
+        return json({ ok: false, error: "invalid_account_password" }, 401);
+      }
+    }
+
+    await attachDeviceToUser(db, targetIdentity.userId, deviceId, body || {});
+    const account = await readD1User(env, targetIdentity.userId);
+    return json({ ok: true, bound: true, account: publicAccount(account) });
+  }
+
+  if (path === "/api/account/device/unbind" && request.method === "POST") {
+    const body = await request.json();
+    const deviceId = normalizeAccountId(body && body.deviceId);
+    const requestedUid = normalizeUid(body && body.uid);
+    const password = typeof (body && body.password) === "string" ? body.password : "";
+    if (!deviceId || !requestedUid) {
+      return json({ ok: false, error: "invalid_device_binding" }, 400);
+    }
+
+    const db = await ensureUserSchema(env);
+    const identity = await resolveUserIdentity(env, deviceId);
+    if (!identity || identity.uid !== requestedUid) {
+      return json({ ok: false, error: "device_not_bound" }, 404);
+    }
+    const user = await readD1User(env, identity.userId);
+    if (!user) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    if (user.email) {
+      const stored = await db.prepare(
+        "SELECT password_hash FROM users_mb WHERE id = ?",
+      ).bind(identity.userId).first();
+      if (!(await verifyAccountPassword(password, cleanText(stored && stored.password_hash)))) {
+        return json({ ok: false, error: "invalid_account_password" }, 401);
+      }
+    }
+
+    const result = await db.prepare(
+      "DELETE FROM user_devices_mb WHERE device_id = ? AND user_id = ?",
+    ).bind(deviceId, identity.userId).run();
+    if (!result.meta || Number(result.meta.changes) < 1) {
+      return json({ ok: false, error: "device_not_bound" }, 404);
+    }
+    return json({ ok: true, bound: false });
   }
 
   if (path === "/api/account/bind" && request.method === "POST") {
@@ -1775,6 +1869,29 @@ async function readD1User(env, reference) {
     ") WHERE u.id = ?",
   ).bind(identity.userId).first();
   return row ? rowToUser(row) : null;
+}
+
+async function readDeviceBinding(env, deviceId) {
+  const db = await ensureUserSchema(env);
+  const row = await db.prepare(
+    "SELECT u.*, d.brand AS device_brand, d.model AS device_model, " +
+      "d.android_version AS device_android_version, d.android_sdk AS device_android_sdk, " +
+      "d.app_version AS device_app_version " +
+      "FROM users_mb u JOIN user_devices_mb d ON d.user_id = u.id " +
+      "WHERE d.device_id = ?",
+  ).bind(deviceId).first();
+  if (!row) return null;
+
+  return {
+    account: rowToUser(row),
+    device: {
+      brand: cleanText(row.device_brand),
+      model: cleanText(row.device_model),
+      androidVersion: cleanText(row.device_android_version),
+      androidSdk: normalizeAndroidSdk(row.device_android_sdk),
+      appVersion: cleanText(row.device_app_version),
+    },
+  };
 }
 
 function rowToUser(row) {
