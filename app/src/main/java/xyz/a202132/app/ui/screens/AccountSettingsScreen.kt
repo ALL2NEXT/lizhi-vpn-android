@@ -47,6 +47,7 @@ fun AccountSettingsScreen(
 ) {
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
+    val isSyncingAccount by viewModel.isSyncingAccount.collectAsStateWithLifecycle()
     val isBindingAccount by viewModel.isBindingAccount.collectAsStateWithLifecycle()
     val isSwitchingAccount by viewModel.isSwitchingAccount.collectAsStateWithLifecycle()
     val isDeletingAccount by viewModel.isDeletingAccount.collectAsStateWithLifecycle()
@@ -64,6 +65,7 @@ fun AccountSettingsScreen(
     var switchEmail by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var deletePassword by remember(accountInfo?.uid) { mutableStateOf("") }
+    var showBindDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showSwitchDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showDeleteConfirmation by remember(accountInfo?.uid) { mutableStateOf(false) }
 
@@ -84,6 +86,7 @@ fun AccountSettingsScreen(
         switchEmail = ""
         switchPassword = ""
         deletePassword = ""
+        showBindDialog = false
         showSwitchDialog = false
         showDeleteConfirmation = false
     }
@@ -95,6 +98,18 @@ fun AccountSettingsScreen(
         normalizedNickname != account.nickname &&
         account.level > 0 &&
         !isUpdatingNickname
+    val canSyncAccount = !isSyncingAccount &&
+        !isUpdatingNickname &&
+        !isBindingAccount &&
+        !isSwitchingAccount &&
+        !isDeletingAccount
+    val canOpenBindDialog = account != null &&
+        account.email.isBlank() &&
+        account.level > 0 &&
+        !isSyncingAccount &&
+        !isBindingAccount &&
+        !isSwitchingAccount &&
+        !isDeletingAccount
     val normalizedEmail = email.trim().lowercase()
     val canBindAccount = account != null &&
         account.email.isBlank() &&
@@ -123,6 +138,21 @@ fun AccountSettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            accountMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = if (
+                        message.contains("成功") ||
+                            message.contains("已更新") ||
+                            message.contains("已同步")
+                    ) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    fontSize = 13.sp
+                )
+            }
             if (account == null) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -135,6 +165,20 @@ fun AccountSettingsScreen(
                         modifier = Modifier.padding(18.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Button(
+                        onClick = { viewModel.syncCurrentAccount() },
+                        enabled = canSyncAccount,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        if (isSyncingAccount) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.padding(end = 8.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        Text(if (isSyncingAccount) "同步中…" else "同步账户信息")
+                    }
                 }
             } else {
                 AccountSettingsSection(title = "账户资料") {
@@ -163,76 +207,42 @@ fun AccountSettingsScreen(
                         }
                         Text(if (isUpdatingNickname) "保存中…" else "保存昵称")
                     }
+                    Button(
+                        onClick = { viewModel.syncCurrentAccount() },
+                        enabled = canSyncAccount,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        if (isSyncingAccount) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.padding(end = 8.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        Text(if (isSyncingAccount) "同步中…" else "同步账户信息")
+                    }
                 }
 
                 if (account.email.isBlank()) {
-                    AccountSettingsSection(title = "绑定账户") {
+                    AccountSettingsSection(title = "绑定邮箱") {
                         Text(
                             text = "绑定邮箱可获得一次性经验奖励，但不会直接改变等级；经验达到后台设置的门槛后才会升级。Lv0 账户不能获取经验。密码只会在服务端加密保存。",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            label = { Text("邮箱") },
-                            singleLine = true,
-                            enabled = !isBindingAccount,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = { if (it.length <= 128) password = it },
-                            label = { Text("密码") },
-                            supportingText = { Text("8～128 个字符") },
-                            singleLine = true,
-                            enabled = !isBindingAccount,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = confirmPassword,
-                            onValueChange = { if (it.length <= 128) confirmPassword = it },
-                            label = { Text("确认密码") },
-                            singleLine = true,
-                            enabled = !isBindingAccount,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier.fillMaxWidth()
-                        )
                         Button(
                             onClick = {
-                                viewModel.bindEmailPassword(normalizedEmail, password)
+                                email = ""
+                                password = ""
+                                confirmPassword = ""
+                                showBindDialog = true
                             },
-                            enabled = canBindAccount,
+                            enabled = canOpenBindDialog,
                             modifier = Modifier.align(Alignment.End)
                         ) {
-                            if (isBindingAccount) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.padding(end = 8.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
-                            Text(if (isBindingAccount) "绑定中…" else "绑定账户")
+                            Text("绑定邮箱")
                         }
                     }
-                }
-
-                accountMessage?.let { message ->
-                    Text(
-                        text = message,
-                        color = if (
-                            message.contains("成功") || message.contains("已更新")
-                        ) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.error
-                        },
-                        fontSize = 13.sp
-                    )
                 }
 
                 AccountSettingsSection(title = "账户信息") {
@@ -340,6 +350,73 @@ fun AccountSettingsScreen(
                 }
             }
         }
+    }
+
+    if (showBindDialog && account != null) {
+        AlertDialog(
+            onDismissRequest = { if (!isBindingAccount) showBindDialog = false },
+            title = { Text("绑定邮箱") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("请输入要绑定的邮箱和密码。")
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("邮箱") },
+                        singleLine = true,
+                        enabled = !isBindingAccount,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { if (it.length <= 128) password = it },
+                        label = { Text("密码") },
+                        supportingText = { Text("8～128 个字符") },
+                        singleLine = true,
+                        enabled = !isBindingAccount,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { if (it.length <= 128) confirmPassword = it },
+                        label = { Text("确认密码") },
+                        singleLine = true,
+                        enabled = !isBindingAccount,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = canBindAccount,
+                    onClick = {
+                        viewModel.bindEmailPassword(normalizedEmail, password)
+                    }
+                ) {
+                    if (isBindingAccount) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(end = 8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2.dp
+                        )
+                    }
+                    Text(if (isBindingAccount) "绑定中…" else "确认绑定")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isBindingAccount,
+                    onClick = { showBindDialog = false }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     if (showSwitchDialog && account != null) {

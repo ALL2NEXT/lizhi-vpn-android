@@ -29,6 +29,8 @@ import xyz.a202132.app.data.model.TaskCenterStatus
 import xyz.a202132.app.data.model.TrafficReportRequest
 import xyz.a202132.app.data.model.TrafficReportResponse
 import java.security.MessageDigest
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 
 /**
@@ -50,10 +52,23 @@ class AccountManager(private val context: Context) {
 
     fun accountId(): String = deviceKey()
 
-    suspend fun register(timeoutMs: Long = 25000L): Result<AccountInfo> {
+    suspend fun register(
+        timeoutMs: Long = 25000L,
+        force: Boolean = false
+    ): Result<AccountInfo> {
         if (AppConfig.BACKEND_URL.isBlank()) {
             return Result.failure(IllegalStateException("未配置后台地址"))
         }
+
+        val today = LocalDate.now(REGISTRATION_ZONE).toString()
+        val current = currentAccount()
+        if (!force && preferences.getString(LAST_REGISTRATION_DATE_KEY, null) == today) {
+            return current?.let { Result.success(it) }
+                ?: Result.failure(IllegalStateException("account_registration_already_attempted_today"))
+        }
+        // Mark the attempt before the request so repeated app launches do not
+        // retry registration throughout the same day when the backend is down.
+        preferences.edit().putString(LAST_REGISTRATION_DATE_KEY, today).apply()
 
         return runCatching {
             val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
@@ -75,6 +90,10 @@ class AccountManager(private val context: Context) {
             persistAccount(registered)
             registered
         }
+    }
+
+    suspend fun syncCurrentAccount(timeoutMs: Long = 25000L): Result<AccountInfo> {
+        return register(timeoutMs = timeoutMs, force = true)
     }
 
     suspend fun updateNickname(
@@ -460,5 +479,7 @@ class AccountManager(private val context: Context) {
         const val ACCOUNT_ANDROID_VERSION_KEY = "account_android_version"
         const val ACCOUNT_ANDROID_SDK_KEY = "account_android_sdk"
         const val ACCOUNT_APP_VERSION_KEY = "account_app_version"
+        const val LAST_REGISTRATION_DATE_KEY = "last_registration_date"
+        val REGISTRATION_ZONE: ZoneId = ZoneId.of("Asia/Shanghai")
     }
 }

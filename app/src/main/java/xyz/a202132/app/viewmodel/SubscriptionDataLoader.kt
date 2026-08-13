@@ -58,9 +58,6 @@ internal class SubscriptionDataLoader(
         private set
     var lastFetchedNodes: List<Node>? = null
         private set
-    var isNodeAccessGranted: Boolean = false
-        private set
-
     suspend fun loadCachedSubscriptionList(): SubscriptionList? {
         cachedSubscriptionList?.let { return it }
         val cachedJson = settingsRepository.subscriptionListJson.first() ?: return null
@@ -72,7 +69,6 @@ internal class SubscriptionDataLoader(
     }
 
     suspend fun initialize(forceRefresh: Boolean = false): Boolean = coroutineScope {
-        isNodeAccessGranted = false
         val listRequest = async { fetchSubscriptionList(forceRefresh) }
         val accountRequest = async { registerAccountForSession() }
         val listResult = listRequest.await()
@@ -101,7 +97,6 @@ internal class SubscriptionDataLoader(
         if (accessibleSources.isEmpty()) {
             nodeDao().replaceSubscriptionNodes(emptyList())
             lastFetchedNodes = emptyList()
-            isNodeAccessGranted = true
             if (subscriptionList.sources.isNotEmpty()) {
                 onMessage("当前账户 Lv$accountLevel 未达到可用订阅线路的最低等级")
             }
@@ -124,8 +119,7 @@ internal class SubscriptionDataLoader(
             nodeDao().replaceSubscriptionNodes(cachedAccessibleNodes)
             lastFetchedNodes = cachedAccessibleNodes
             onNodesPersisted(cachedAccessibleNodes)
-            isNodeAccessGranted = cachedAccessibleNodes.isNotEmpty()
-            return@coroutineScope isNodeAccessGranted
+            return@coroutineScope true
         }
 
         val fetched = fetchAndPersistNodes(
@@ -133,15 +127,13 @@ internal class SubscriptionDataLoader(
             sourcesToRefresh = sourcesToRefresh,
             cachedNodes = cachedAccessibleNodes,
         )
-        isNodeAccessGranted = fetched
         fetched
     }
 
     private suspend fun registerAccountForSession() =
         accountManager.register(backendSettings.value.nodeRequestTimeoutMs)
             .onFailure { error ->
-                Log.w(TAG, "Account registration failed; applying Lv0 subscription access", error)
-                onMessage("账户同步失败，将按 Lv0 订阅权限获取线路")
+                Log.w(TAG, "Account registration failed; continuing without a fresh account response", error)
             }
             .getOrNull()
 

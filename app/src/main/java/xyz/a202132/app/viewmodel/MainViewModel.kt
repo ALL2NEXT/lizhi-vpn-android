@@ -108,6 +108,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val accountInfo = accountManager.accountInfo
     private val _isUpdatingNickname = MutableStateFlow(false)
     val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
+    private val _isSyncingAccount = MutableStateFlow(false)
+    val isSyncingAccount = _isSyncingAccount.asStateFlow()
     private val _isBindingAccount = MutableStateFlow(false)
     val isBindingAccount = _isBindingAccount.asStateFlow()
     private val _isSwitchingAccount = MutableStateFlow(false)
@@ -423,7 +425,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun testAllNodes(targetNodes: List<Node>? = null) {
         viewModelScope.launch {
-            if (rejectUnavailableAccount()) return@launch
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
@@ -452,7 +453,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun startSmartConnection() {
         viewModelScope.launch {
-            if (rejectUnavailableAccount()) return@launch
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
@@ -549,7 +549,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Connect to the selected node, or to the first node in the active subscription. */
     fun startSelectedOrFirstConnection() {
         viewModelScope.launch {
-            if (rejectUnavailableAccount()) return@launch
             val selectedId = settingsRepository.selectedNodeId.first()
             val selectedNode = selectedId?.let { nodeDao().getNodeById(it) }
             val subscriptionNodes = currentSubscriptionNodeSnapshot()
@@ -587,7 +586,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * VPN 未运行 → 启动临时无头 sing-box 实例 (port 19090)
      */
     fun urlTestAllNodes(targetNodes: List<Node>? = null) {
-        if (rejectUnavailableAccount()) return
         urlTestAllNodesInternal(
             targetNodes = targetNodes,
             requireGlobalLock = true
@@ -731,8 +729,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun adaptHysteriaBandwidth() {
         if (_isHysteriaBandwidthAdapting.value) return
-        if (rejectUnavailableAccount()) return
-
         viewModelScope.launch(Dispatchers.IO) {
             _isHysteriaBandwidthAdapting.value = true
             _hysteriaBandwidthAdaptiveStatus.value = "正在测试直连网络上下行..."
@@ -956,7 +952,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun selectNode(node: Node) {
         viewModelScope.launch {
-            if (rejectUnavailableAccount()) return@launch
             settingsRepository.setSelectedNodeId(node.id)
             Log.i(tag, "Selected node changed: source=${node.source}, type=${node.type}")
             
@@ -979,7 +974,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Select a node from the node list and connect to it immediately. */
     fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
-            if (rejectUnavailableAccount()) return@launch
             settingsRepository.setSelectedNodeId(node.id)
             Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
             when (vpnState.value) {
@@ -1139,7 +1133,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleVpn() {
         when (vpnState.value) {
             VpnState.DISCONNECTED -> {
-                if (rejectUnavailableAccount()) return
                 val node = currentNode.value ?: run {
                     Log.w(tag, "VPN start ignored: no selected node")
                     _error.value = "请先选择节点"
@@ -1170,7 +1163,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * 重启 VPN 如果正在运行 (用于应用设置变更)
      */
     fun restartVpnIfNeeded() {
-        if (rejectUnavailableAccount()) return
         if (vpnState.value == VpnState.CONNECTED) {
             currentNode.value?.let { node ->
                 Log.i(tag, "Settings changed, restarting VPN to apply...")
@@ -1433,6 +1425,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun syncCurrentAccount() {
+        if (
+            _isSyncingAccount.value ||
+            _isUpdatingNickname.value ||
+            _isBindingAccount.value ||
+            _isSwitchingAccount.value ||
+            _isDeletingAccount.value
+        ) return
+        viewModelScope.launch {
+            _isSyncingAccount.value = true
+            _accountMessage.value = null
+            try {
+                accountManager.syncCurrentAccount(
+                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                ).onSuccess {
+                    _accountMessage.value = "账户信息已同步"
+                }.onFailure { error ->
+                    Log.w(tag, "Failed to sync account information", error)
+                    _accountMessage.value = accountActionErrorMessage(error)
+                }
+            } finally {
+                _isSyncingAccount.value = false
+            }
+        }
+    }
+
     fun setSpeedShareMode(mode: SpeedShareMode) {
         viewModelScope.launch {
             settingsRepository.setSpeedShareMode(mode)
@@ -1682,16 +1700,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun rejectUnavailableAccount(requireNodeAccess: Boolean = true): Boolean {
-        return when {
-            requireNodeAccess && !subscriptionDataLoader.isNodeAccessGranted -> {
-                _error.value = "订阅权限尚未通过后台验证，请刷新节点"
-                true
-            }
-            else -> false
-        }
-    }
-
     fun acceptUserAgreement() {
         viewModelScope.launch {
             settingsRepository.setUserAgreementAccepted(true)
@@ -1746,7 +1754,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshNodes() {
         viewModelScope.launch {
-            if (rejectUnavailableAccount(requireNodeAccess = false)) return@launch
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
