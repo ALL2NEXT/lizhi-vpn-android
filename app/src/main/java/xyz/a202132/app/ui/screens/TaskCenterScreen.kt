@@ -52,9 +52,7 @@ fun TaskCenterScreen(
     val checkinMessage by viewModel.dailyCheckinMessage.collectAsStateWithLifecycle()
     val speedShareMode by viewModel.speedShareMode.collectAsStateWithLifecycle()
     val speedShareStatus by viewModel.speedShareStatus.collectAsStateWithLifecycle()
-    val isSharingSpeedResults by viewModel.isSharingSpeedResults.collectAsStateWithLifecycle()
     val speedShareMessage by viewModel.speedShareMessage.collectAsStateWithLifecycle()
-    val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val taskMessage by viewModel.telegramTaskMessage.collectAsStateWithLifecycle()
     val account = accountInfo
     var telegramNickname by remember(account?.uid, taskStatus?.telegramNickname) {
@@ -119,7 +117,7 @@ fun TaskCenterScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "只上传节点标识和测速数值，不上传订阅链接。智能共享不额外测速，每人每天最多一次；全量共享会按 100% 比例完成 TCPing、204 URL Test 和带宽测试，每人每两小时最多一次。成功上报会获得经验。",
+                        text = "只上传节点标识和测速数值，不上传订阅链接。智能共享不额外测速，每人每天最多一次，成功上报会获得经验。",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -128,22 +126,14 @@ fun TaskCenterScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         TextButton(
-                            onClick = { viewModel.setSpeedShareMode(SpeedShareMode.OFF) },
-                            enabled = !isSharingSpeedResults
+                            onClick = { viewModel.setSpeedShareMode(SpeedShareMode.OFF) }
                         ) {
                             Text(if (speedShareMode == SpeedShareMode.OFF) "✓ 关闭" else "关闭")
                         }
                         TextButton(
-                            onClick = { viewModel.setSpeedShareMode(SpeedShareMode.SMART) },
-                            enabled = !isSharingSpeedResults
+                            onClick = { viewModel.setSpeedShareMode(SpeedShareMode.SMART) }
                         ) {
                             Text(if (speedShareMode == SpeedShareMode.SMART) "✓ 智能共享" else "智能共享")
-                        }
-                        TextButton(
-                            onClick = { viewModel.setSpeedShareMode(SpeedShareMode.FULL) },
-                            enabled = !isSharingSpeedResults
-                        ) {
-                            Text(if (speedShareMode == SpeedShareMode.FULL) "✓ 全量共享" else "全量共享")
                         }
                     }
                     Text(
@@ -154,34 +144,11 @@ fun TaskCenterScreen(
                             } else {
                                 "智能共享：下次连接前自动上传已有测速结果，成功奖励 ${speedShareStatus?.smartRewardExperience ?: 5} 经验"
                             }
-                            SpeedShareMode.FULL -> if ((speedShareStatus?.fullRetryAfterSeconds ?: 0L) > 0L) {
-                                "全量共享：下次可上传时间 ${speedShareStatus?.fullNextAvailableAt}，成功奖励 ${speedShareStatus?.fullRewardExperience ?: 20} 经验"
-                            } else {
-                                "全量共享：点击下方按钮开始完整测速并上传，成功奖励 ${speedShareStatus?.fullRewardExperience ?: 20} 经验"
-                            }
                         },
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (speedShareMode == SpeedShareMode.FULL) {
-                        Button(
-                            onClick = viewModel::startFullSpeedShare,
-                            enabled = account != null && !isBanned &&
-                                !isTesting && !isSharingSpeedResults &&
-                                (speedShareStatus?.fullRetryAfterSeconds ?: 0L) <= 0L,
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            if (isSharingSpeedResults) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.padding(end = 8.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
-                            Text(if (isSharingSpeedResults) "测速共享中..." else "开始全量测速并共享")
-                        }
-                    }
                     speedShareMessage?.let { message ->
                         Text(
                             text = message,

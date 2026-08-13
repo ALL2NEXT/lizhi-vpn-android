@@ -75,10 +75,7 @@ data class BackendAppSettings(
     val telegramTaskExperience: Long = 50L,
 
     @SerializedName("speedShareSmartExperience")
-    val speedShareSmartExperience: Long = 5L,
-
-    @SerializedName("speedShareFullExperience")
-    val speedShareFullExperience: Long = 20L
+    val speedShareSmartExperience: Long = 5L
 )
 
 data class AccountRegisterRequest(
@@ -246,8 +243,7 @@ data class DailyCheckinStatus(
 
 enum class SpeedShareMode {
     OFF,
-    SMART,
-    FULL
+    SMART
 }
 
 data class SpeedShareNodeResult(
@@ -277,9 +273,6 @@ data class SpeedShareRequest(
     @SerializedName("uid")
     val uid: String,
 
-    @SerializedName("mode")
-    val mode: String,
-
     @SerializedName("results")
     val results: List<SpeedShareNodeResult>
 )
@@ -297,18 +290,6 @@ data class SpeedShareStatus(
     @SerializedName("smartRewardExperience")
     val smartRewardExperience: Long = 5L,
 
-    @SerializedName("fullReportedAt")
-    val fullReportedAt: String = "",
-
-    @SerializedName("fullNextAvailableAt")
-    val fullNextAvailableAt: String = "",
-
-    @SerializedName("fullRetryAfterSeconds")
-    val fullRetryAfterSeconds: Long = 0L,
-
-    @SerializedName("fullRewardExperience")
-    val fullRewardExperience: Long = 20L,
-
     @SerializedName("lastReportedAt")
     val lastReportedAt: String = "",
 
@@ -320,9 +301,6 @@ data class SpeedShareResponse(
     @SerializedName("ok")
     val ok: Boolean = false,
 
-    @SerializedName("mode")
-    val mode: String? = null,
-
     @SerializedName("acceptedResults")
     val acceptedResults: Int = 0,
 
@@ -331,12 +309,6 @@ data class SpeedShareResponse(
 
     @SerializedName("experienceAwarded")
     val experienceAwarded: Long = 0L,
-
-    @SerializedName("retryAfterSeconds")
-    val retryAfterSeconds: Long = 0L,
-
-    @SerializedName("nextAvailableAt")
-    val nextAvailableAt: String = "",
 
     @SerializedName("speedShare")
     val speedShare: SpeedShareStatus? = null,

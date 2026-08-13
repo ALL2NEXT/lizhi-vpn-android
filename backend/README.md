@@ -25,4 +25,4 @@ https://你的域名/3e9a0eed-6a29-4d16-91b1-3adae4bd88e6
 
 TG 加群任务提交记录保存在 D1 的 `telegram_task_submissions_mb` 表中。任务“驳回”允许用户重新提交，“永久拒绝”不允许再次提交。
 
-测速结果共享使用 `POST /api/account/tasks/speed-share`，客户端可以通过 `GET /api/account/tasks/speed-share-results?uid=<UID>` 读取共享结果。智能共享只接受客户端已有的测速结果，每个账户按北京时间每天最多记录一次；全量共享使用客户端现有的 TCPing、204 URL Test 和下载带宽测速流程，按 100% 节点比例执行，每个账户每 2 小时最多记录一次。每次成功上报会按后台“应用设置”中的智能/全量测速共享经验奖励发放积分，默认分别为 5 和 20。D1 的 `speed_share_results_mb` 只保留每个节点更低的 TCPing/URL 延迟和更高的上下行带宽，管理员可以通过 `GET /<ADMIN_UUID>/api/speed-share-results` 查看当前保留结果。
+测速结果共享使用 `POST /api/account/tasks/speed-share`，客户端可以通过 `GET /api/account/tasks/speed-share-results?uid=<UID>` 读取共享结果。智能共享只上传客户端已有的测速结果，不额外执行测速流程，每个账户按北京时间每天最多记录一次；成功上报会按后台“应用设置”中的智能测速共享经验奖励发放积分，默认 5 经验。D1 的 `speed_share_results_mb` 只保留每个节点更低的 TCPing/URL 延迟和更高的上下行带宽，管理员可以通过 `GET /<ADMIN_UUID>/api/speed-share-results` 查看当前保留结果。

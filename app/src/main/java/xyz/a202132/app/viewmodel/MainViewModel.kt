@@ -129,8 +129,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val dailyCheckinMessage = _dailyCheckinMessage.asStateFlow()
     private val _speedShareStatus = MutableStateFlow<SpeedShareStatus?>(null)
     val speedShareStatus = _speedShareStatus.asStateFlow()
-    private val _isSharingSpeedResults = MutableStateFlow(false)
-    val isSharingSpeedResults = _isSharingSpeedResults.asStateFlow()
     private val _speedShareMessage = MutableStateFlow<String?>(null)
     val speedShareMessage = _speedShareMessage.asStateFlow()
     private val smartSpeedShareInFlight = AtomicBoolean(false)
@@ -441,105 +439,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _testingLabel.value = "TCPing 测试中 ($completed/$total)"
                 }
             } finally {
-                _isTesting.value = false
-                _testingLabel.value = null
-                GlobalTestExecution.finish()
-            }
-        }
-    }
-
-    /** Run every stage of the existing smart test pipeline and share the results. */
-    fun startFullSpeedShare() {
-        if (_isTesting.value || _isSharingSpeedResults.value) return
-        if (rejectUnavailableAccount()) return
-        viewModelScope.launch {
-            if (GlobalTestExecution.isFetching()) {
-                _speedShareMessage.value = GlobalTestExecution.fetchingHint()
-                return@launch
-            }
-            if (!GlobalTestExecution.tryStart("测速结果共享")) {
-                _speedShareMessage.value = GlobalTestExecution.busyHint()
-                return@launch
-            }
-
-            _isTesting.value = true
-            _isSharingSpeedResults.value = true
-            _speedShareMessage.value = null
-            try {
-                val allNodes = currentSmartConnectNodes()
-                if (allNodes.isEmpty()) {
-                    _speedShareMessage.value = "没有可测速的节点"
-                    return@launch
-                }
-
-                _testingLabel.value = "全量共享：TCPing 测试中..."
-                val tcpingResults = internalTestNodes(allNodes) { completed, total ->
-                    _testingLabel.value = "全量共享：TCPing ($completed/$total)"
-                }
-                val nodesById = allNodes.associateBy { it.id }
-                val tcpingCandidates = tcpingResults
-                    .filter { it.isAvailable && it.latency > 0 }
-                    .sortedBy { it.latency }
-                    .mapNotNull { nodesById[it.nodeId] }
-                if (tcpingCandidates.isEmpty()) {
-                    _speedShareMessage.value = "TCPing 没有找到可用节点"
-                    return@launch
-                }
-
-                val urlTestResults = runUrlTestNodes(
-                    nodes = tcpingCandidates,
-                    labelPrefix = "全量共享：URL Test 204"
-                )
-                applyUrlTestResults(urlTestResults)
-                val urlTestCandidates = urlTestResults
-                    .filter { it.isAvailable && it.latency > 0 }
-                    .sortedBy { it.latency }
-                    .mapNotNull { nodesById[it.nodeId] }
-                if (urlTestCandidates.isEmpty()) {
-                    _speedShareMessage.value = "URL Test 没有找到可用节点"
-                    return@launch
-                }
-
-                val bandwidthResults = linkedMapOf<String, Float>()
-                urlTestCandidates.forEachIndexed { index, node ->
-                    _testingLabel.value = "全量共享：带宽测试 (${index + 1}/${urlTestCandidates.size})"
-                    val speedMbps = testNodeDownloadBandwidthMbps(
-                        node,
-                        AppConfig.SMART_CONNECT_SPEED_TEST_SIZE_MB
-                    )
-                    nodeDao().updateDownloadMbps(node.id, speedMbps)
-                    bandwidthResults[node.id] = speedMbps
-                }
-
-                val shareResults = buildSpeedShareResults(
-                    nodes = allNodes,
-                    tcpingResults = tcpingResults,
-                    urlTestResults = urlTestResults,
-                    bandwidthResults = bandwidthResults
-                )
-                if (shareResults.isEmpty()) {
-                    _speedShareMessage.value = "没有可共享的有效测速结果"
-                    return@launch
-                }
-                accountManager.reportSpeedResults(
-                    mode = "full",
-                    results = shareResults,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-                ).onSuccess { response ->
-                    _speedShareStatus.value = response.speedShare ?: _speedShareStatus.value
-                    _speedShareMessage.value = "已完成全量测速并共享 ${shareResults.size} 条结果，获得 ${response.experienceAwarded} 经验"
-                }.onFailure { error ->
-                    Log.w(tag, "Full speed share failed", error)
-                    if (error.message?.startsWith("speed_share_full_cooldown") == true) {
-                        loadTelegramTask()
-                    }
-                    _speedShareMessage.value = speedShareErrorMessage(error)
-                }
-            } catch (error: Exception) {
-                Log.e(tag, "Full speed share failed", error)
-                _speedShareMessage.value = speedShareErrorMessage(error)
-            } finally {
-                _isSharingSpeedResults.value = false
                 _isTesting.value = false
                 _testingLabel.value = null
                 GlobalTestExecution.finish()
@@ -1758,7 +1657,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val message = error.message.orEmpty()
         return when {
             message == "speed_share_already_reported_today" -> "今天的智能测速结果已经共享过了"
-            message.startsWith("speed_share_full_cooldown") -> "全量测速共享每两小时最多一次，请稍后再试"
             message == "speed_share_results_empty" -> "没有可共享的有效测速结果"
             message == "account_banned" -> "账户已被封禁，无法共享测速结果"
             else -> message.ifBlank { "测速结果共享失败" }
@@ -1969,7 +1867,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val reportKey = "$accountUid:$reportDate"
                 if (settingsRepository.speedShareSmartLastDate.first() == reportKey) return@launch
                 accountManager.reportSpeedResults(
-                    mode = "smart",
                     results = results,
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess { response ->

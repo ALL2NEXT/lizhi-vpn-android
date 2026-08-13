@@ -156,7 +156,6 @@ class AccountManager(private val context: Context) {
     }
 
     suspend fun reportSpeedResults(
-        mode: String,
         results: List<SpeedShareNodeResult>,
         timeoutMs: Long = 15000L
     ): Result<SpeedShareResponse> {
@@ -164,9 +163,6 @@ class AccountManager(private val context: Context) {
             ?: return Result.failure(IllegalStateException("璐︽埛灏氭湭鍚屾"))
         if (registered.level == 0) {
             return Result.failure(IllegalStateException("account_banned"))
-        }
-        if (mode != "smart" && mode != "full") {
-            return Result.failure(IllegalArgumentException("invalid_speed_share_mode"))
         }
         if (results.isEmpty()) {
             return Result.failure(IllegalArgumentException("speed_share_results_empty"))
@@ -178,18 +174,12 @@ class AccountManager(private val context: Context) {
                     accountEndpoint("/api/account/tasks/speed-share"),
                     SpeedShareRequest(
                         uid = registered.uid,
-                        mode = mode,
                         results = results.take(1000)
                     )
                 )
             }
             if (!response.ok) {
                 val error = response.error ?: "speed_share_submission_failed"
-                if (error == "speed_share_full_cooldown") {
-                    throw IllegalStateException(
-                        "$error:${response.retryAfterSeconds}"
-                    )
-                }
                 throw IllegalStateException(error)
             }
             response.account?.let(::persistAccount)
