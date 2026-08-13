@@ -9,12 +9,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -130,7 +134,18 @@ fun AccountSettingsScreen(
 
     AppScreenScaffold(
         title = "账户设置",
-        onBack = onBack
+        onBack = onBack,
+        actions = {
+            IconButton(
+                onClick = { viewModel.syncCurrentAccount() },
+                enabled = canSyncAccount
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "刷新账户信息"
+                )
+            }
+        }
     ) {
         Column(
             modifier = Modifier
@@ -165,20 +180,6 @@ fun AccountSettingsScreen(
                         modifier = Modifier.padding(18.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Button(
-                        onClick = { viewModel.syncCurrentAccount() },
-                        enabled = canSyncAccount,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        if (isSyncingAccount) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.padding(end = 8.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                        }
-                        Text(if (isSyncingAccount) "同步中…" else "同步账户信息")
-                    }
                 }
             } else {
                 AccountSettingsSection(title = "账户资料") {
@@ -206,20 +207,6 @@ fun AccountSettingsScreen(
                             )
                         }
                         Text(if (isUpdatingNickname) "保存中…" else "保存昵称")
-                    }
-                    Button(
-                        onClick = { viewModel.syncCurrentAccount() },
-                        enabled = canSyncAccount,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        if (isSyncingAccount) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.padding(end = 8.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                        }
-                        Text(if (isSyncingAccount) "同步中…" else "同步账户信息")
                     }
                 }
 

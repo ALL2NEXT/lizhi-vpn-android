@@ -10,10 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -59,6 +64,9 @@ fun TaskCenterScreen(
     var telegramCode by remember(account?.uid) {
         mutableStateOf("")
     }
+    var showTelegramCodeDialog by remember(account?.uid) {
+        mutableStateOf(false)
+    }
     val context = LocalContext.current
     val isBanned = account?.level == 0
     val canSubmit = account != null &&
@@ -75,7 +83,10 @@ fun TaskCenterScreen(
         viewModel.clearTelegramTaskMessage()
     }
     LaunchedEffect(taskStatus?.status) {
-        if (taskStatus?.status == "claimed") telegramCode = ""
+        if (taskStatus?.status == "claimed") {
+            telegramCode = ""
+            showTelegramCodeDialog = false
+        }
     }
 
     fun openTelegramGroup() {
@@ -90,7 +101,18 @@ fun TaskCenterScreen(
 
     AppScreenScaffold(
         title = "任务中心",
-        onBack = onBack
+        onBack = onBack,
+        actions = {
+            IconButton(
+                onClick = { viewModel.loadTelegramTask() },
+                enabled = account != null && !isLoading
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "刷新任务状态"
+                )
+            }
+        }
     ) {
         Column(
             modifier = Modifier
@@ -296,7 +318,7 @@ fun TaskCenterScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "加入 Telegram 群",
+                        text = "加入 Telegram 群组",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -324,29 +346,26 @@ fun TaskCenterScreen(
                         else -> {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 TextButton(onClick = ::openTelegramGroup) {
                                     Text("打开 TG 群链接")
                                 }
-                                TextButton(onClick = viewModel::loadTelegramTask) {
-                                    Text("刷新状态")
+                                Button(
+                                    onClick = {
+                                        telegramCode = ""
+                                        showTelegramCodeDialog = true
+                                    },
+                                    enabled = !isBanned && taskStatus?.status != "claimed"
+                                ) {
+                                    Text("我已加入")
                                 }
                             }
                             Text(
                                 text = "任务奖励：${taskStatus?.rewardExperience ?: 0} 经验",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            OutlinedTextField(
-                                value = telegramCode,
-                                onValueChange = { telegramCode = it.take(128) },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isBanned && taskStatus?.status != "claimed" && !isSubmitting,
-                                singleLine = true,
-                                label = { Text("进群口令") },
-                                placeholder = { Text("输入群内获取的口令") }
                             )
                             Text(
                                 text = telegramTaskStatusText(taskStatus),
@@ -356,15 +375,6 @@ fun TaskCenterScreen(
                                     else -> MaterialTheme.colorScheme.onSurface
                                 }
                             )
-                            if (taskStatus?.status != "claimed") {
-                                Button(
-                                    onClick = { viewModel.submitTelegramTask(telegramCode) },
-                                    enabled = canSubmit,
-                                    modifier = Modifier.align(Alignment.End)
-                                ) {
-                                    Text(if (isSubmitting) "验证中…" else "验证口令")
-                                }
-                            }
                         }
                     }
                     taskMessage?.let { message ->
@@ -381,6 +391,40 @@ fun TaskCenterScreen(
                 }
             }
         }
+    }
+
+    if (showTelegramCodeDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isSubmitting) showTelegramCodeDialog = false },
+            title = { Text("输入进群口令") },
+            text = {
+                OutlinedTextField(
+                    value = telegramCode,
+                    onValueChange = { telegramCode = it.take(128) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSubmitting,
+                    singleLine = true,
+                    label = { Text("进群口令") },
+                    placeholder = { Text("输入群内获取的口令") }
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.submitTelegramTask(telegramCode) },
+                    enabled = canSubmit
+                ) {
+                    Text(if (isSubmitting) "验证中…" else "验证口令")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showTelegramCodeDialog = false },
+                    enabled = !isSubmitting
+                ) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 

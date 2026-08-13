@@ -199,10 +199,7 @@ private fun UserAccountCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable(
-                enabled = accountInfo != null,
-                onClick = onClick
-            ),
+            .clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -233,14 +230,12 @@ private fun UserAccountCard(
                     else MaterialTheme.colorScheme.primary
                 )
             }
-            if (accountInfo != null) {
-                Icon(
-                    imageVector = Icons.Outlined.ChevronRight,
-                    contentDescription = "账户设置",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = "账户设置",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
