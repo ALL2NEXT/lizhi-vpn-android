@@ -39,7 +39,7 @@ fun FeatureScreen(
     val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsStateWithLifecycle()
     val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsStateWithLifecycle()
     val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsStateWithLifecycle()
-    val sharedDataDirectConnectEnabled by viewModel.sharedDataDirectConnectEnabled.collectAsStateWithLifecycle()
+    val useSharedSpeedResultsEnabled by viewModel.useSharedSpeedResultsEnabled.collectAsStateWithLifecycle()
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
@@ -124,19 +124,19 @@ fun FeatureScreen(
             }
 
             FeatureSection(
-                title = "共享数据直连",
-                description = "开启后，主页点击直接连接会读取服务器保留的共享测速结果，在当前订阅中选择延迟更低、带宽更大的节点。没有匹配结果或读取失败时会回退到原有直连逻辑。",
+                title = "使用共享测速结果",
+                description = "开启后，主页点击直接连接会优先使用本地省份和运营商匹配的共享测速结果，再按测速质量选择节点。没有匹配结果或读取失败时会回退到原有直连逻辑。",
                 titleAction = {
                     Switch(
-                        checked = sharedDataDirectConnectEnabled,
-                        onCheckedChange = { viewModel.setSharedDataDirectConnectEnabled(it) },
+                        checked = useSharedSpeedResultsEnabled,
+                        onCheckedChange = { viewModel.setUseSharedSpeedResultsEnabled(it) },
                         colors = featureSwitchColors()
                     )
                 }
             ) {
                 Text(
-                    text = if (sharedDataDirectConnectEnabled) {
-                        "主页短按已启用共享数据选优"
+                    text = if (useSharedSpeedResultsEnabled) {
+                        "主页短按已启用共享测速结果选优"
                     } else {
                         "主页短按仍使用已选节点或当前订阅第一个节点"
                     },

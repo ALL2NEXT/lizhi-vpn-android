@@ -327,6 +327,12 @@ data class SpeedShareResultsResponse(
     @SerializedName("ok")
     val ok: Boolean = false,
 
+    @SerializedName("clientProvince")
+    val clientProvince: String = "",
+
+    @SerializedName("clientCarrier")
+    val clientCarrier: String = "",
+
     @SerializedName("results")
     val results: List<SpeedShareNodeResult> = emptyList(),
 

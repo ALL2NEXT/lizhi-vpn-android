@@ -277,7 +277,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
     val speedShareMode = settingsRepository.speedShareMode.stateIn(viewModelScope, SharingStarted.Eagerly, SpeedShareMode.OFF)
-    val sharedDataDirectConnectEnabled = settingsRepository.sharedDataDirectConnectEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val useSharedSpeedResultsEnabled = settingsRepository.useSharedSpeedResultsEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
     val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
@@ -552,7 +552,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val selectedId = settingsRepository.selectedNodeId.first()
             val selectedNode = selectedId?.let { nodeDao().getNodeById(it) }
             val subscriptionNodes = currentSubscriptionNodeSnapshot()
-            val sharedBestNode = if (sharedDataDirectConnectEnabled.value) {
+            val sharedBestNode = if (useSharedSpeedResultsEnabled.value) {
                 findBestSharedNode(subscriptionNodes)
             } else {
                 null
@@ -567,7 +567,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             Log.i(
                 tag,
                 if (sharedBestNode != null) {
-                    "Connecting to shared-data best node: ${node.getDisplayName()}"
+                    "Connecting to shared speed result best node: ${node.getDisplayName()}"
                 } else {
                     "Connecting to selected/default node: ${node.getDisplayName()}"
                 }
@@ -1438,9 +1438,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setSharedDataDirectConnectEnabled(enabled: Boolean) {
+    fun setUseSharedSpeedResultsEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            settingsRepository.setSharedDataDirectConnectEnabled(enabled)
+            settingsRepository.setUseSharedSpeedResultsEnabled(enabled)
         }
     }
 
@@ -1776,12 +1776,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun findBestSharedNode(nodes: List<Node>): Node? {
         if (nodes.isEmpty()) return null
-        val sharedResults = accountManager.getSpeedShareResults(
+        val sharedResponse = accountManager.getSpeedShareResults(
             timeoutMs = backendSettings.value.nodeRequestTimeoutMs
         ).getOrElse { error ->
             Log.w(tag, "Failed to load shared speed results; falling back to normal direct connect", error)
             return null
         }
+        val sharedResults = sharedResponse.results
         val resultsByNodeId = sharedResults.associateBy { it.nodeId }
         return nodes.asSequence()
             .mapNotNull { node ->
@@ -1797,8 +1798,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             .sortedWith(
                 compareBy<Pair<Node, SpeedShareNodeResult>> {
-                    sharedLatencyScore(it.second)
+                    sharedLocationPriority(
+                        result = it.second,
+                        clientProvince = sharedResponse.clientProvince,
+                        clientCarrier = sharedResponse.clientCarrier
+                    )
                 }
+                    .thenBy { sharedLatencyScore(it.second) }
                     .thenByDescending { it.second.downloadMbps }
                     .thenByDescending { it.second.uploadMbps }
                     .thenBy { it.first.id }
@@ -1806,6 +1812,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .firstOrNull()
             ?.first
     }
+
+    private fun sharedLocationPriority(
+        result: SpeedShareNodeResult,
+        clientProvince: String,
+        clientCarrier: String
+    ): Int {
+        val provinceMatches = clientProvince.isNotBlank() &&
+            sameSharedLocation(result.province, clientProvince)
+        val carrierMatches = clientCarrier.isNotBlank() &&
+            sameSharedLocation(result.carrier, clientCarrier)
+        return when {
+            provinceMatches && carrierMatches -> 0
+            provinceMatches -> 1
+            carrierMatches -> 2
+            else -> 3
+        }
+    }
+
+    private fun sameSharedLocation(left: String, right: String): Boolean =
+        left.trim().replace(" ", "")
+            .equals(right.trim().replace(" ", ""), ignoreCase = true)
 
     private fun sharedLatencyScore(result: SpeedShareNodeResult): Int {
         val tcping = result.tcpingLatencyMs.takeIf { it > 0 }

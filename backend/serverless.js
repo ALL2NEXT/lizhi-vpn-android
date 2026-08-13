@@ -510,8 +510,11 @@ async function handleAccount(path, request, env) {
         "upload_mbps, updated_at, last_reported_at, report_count " +
         "FROM speed_share_results_mb ORDER BY updated_at DESC LIMIT 1000",
     ).all();
+    const clientLocation = speedShareRequestLocation(request);
     return json({
       ok: true,
+      clientProvince: clientLocation.province,
+      clientCarrier: clientLocation.carrier,
       results: (query.results || []).map(publicAdminSpeedShareResult),
       generatedAt: beijingTimestamp(),
     });

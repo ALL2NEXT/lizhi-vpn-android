@@ -189,7 +189,7 @@ class AccountManager(private val context: Context) {
 
     suspend fun getSpeedShareResults(
         timeoutMs: Long = 10000L
-    ): Result<List<SpeedShareNodeResult>> {
+    ): Result<SpeedShareResultsResponse> {
         val registered = currentAccount()
             ?: return Result.failure(IllegalStateException("account_not_synced"))
         if (registered.level == 0) {
@@ -207,7 +207,7 @@ class AccountManager(private val context: Context) {
             if (!response.ok) {
                 throw IllegalStateException(response.error ?: "speed_share_results_load_failed")
             }
-            response.results
+            response
         }
     }
 

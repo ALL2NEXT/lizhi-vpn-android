@@ -75,7 +75,10 @@ class SettingsRepository(private val context: Context) {
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val SPEED_SHARE_MODE = stringPreferencesKey("speed_share_mode")
         private val SPEED_SHARE_SMART_LAST_DATE = stringPreferencesKey("speed_share_smart_last_date")
-        private val SHARED_DATA_DIRECT_CONNECT_ENABLED =
+        private val USE_SHARED_SPEED_RESULTS_ENABLED =
+            booleanPreferencesKey("use_shared_speed_results_enabled")
+        // 兼容旧版本“共享数据直连”的开关设置。
+        private val LEGACY_SHARED_DATA_DIRECT_CONNECT_ENABLED =
             booleanPreferencesKey("shared_data_direct_connect_enabled")
 
     }
@@ -94,8 +97,10 @@ class SettingsRepository(private val context: Context) {
         preferences[SPEED_SHARE_SMART_LAST_DATE]
     }
 
-    val sharedDataDirectConnectEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SHARED_DATA_DIRECT_CONNECT_ENABLED] ?: false
+    val useSharedSpeedResultsEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[USE_SHARED_SPEED_RESULTS_ENABLED]
+            ?: preferences[LEGACY_SHARED_DATA_DIRECT_CONNECT_ENABLED]
+            ?: false
     }
 
     suspend fun setSpeedShareMode(mode: SpeedShareMode) {
@@ -110,9 +115,9 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setSharedDataDirectConnectEnabled(enabled: Boolean) {
+    suspend fun setUseSharedSpeedResultsEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
-            preferences[SHARED_DATA_DIRECT_CONNECT_ENABLED] = enabled
+            preferences[USE_SHARED_SPEED_RESULTS_ENABLED] = enabled
         }
     }
 
