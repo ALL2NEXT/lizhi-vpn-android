@@ -40,7 +40,7 @@ const CLIENT_IP_HEADER = "X-Firefly-Client-IP";
 const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 const MAX_BATCH_USER_COUNT = 100;
 const MAX_DEBUG_TRAFFIC_RECORDS = 400;
-const MAX_SPEED_SHARE_RESULTS = 1000;
+const MAX_SPEED_SHARE_RESULTS = 1;
 const MAX_TRAFFIC_BYTES = 1e15;
 const MAX_ACCOUNT_EXPERIENCE = 1e12;
 const ACCOUNT_BINDING_EXPERIENCE = 50;
@@ -124,6 +124,8 @@ const USER_SCHEMA_STATEMENTS = [
   node_id TEXT PRIMARY KEY,
   node_name TEXT NOT NULL DEFAULT '',
   subscription_group_name TEXT NOT NULL DEFAULT '',
+  province TEXT NOT NULL DEFAULT '',
+  carrier TEXT NOT NULL DEFAULT '',
   tcping_latency_ms INTEGER NOT NULL DEFAULT 0,
   url_test_latency_ms INTEGER NOT NULL DEFAULT 0,
   download_mbps REAL NOT NULL DEFAULT 0,
@@ -149,6 +151,8 @@ const USER_SCHEMA_MIGRATIONS = [
   "ALTER TABLE users_mb ADD COLUMN email TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE users_mb ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE telegram_task_submissions_mb ADD COLUMN resubmit_allowed INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE speed_share_results_mb ADD COLUMN province TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE speed_share_results_mb ADD COLUMN carrier TEXT NOT NULL DEFAULT ''",
 ];
 let userSchemaReady = false;
 
@@ -501,7 +505,7 @@ async function handleAccount(path, request, env) {
     }
     const db = await ensureUserSchema(env);
     const query = await db.prepare(
-      "SELECT node_id, node_name, subscription_group_name, " +
+      "SELECT node_id, node_name, subscription_group_name, province, carrier, " +
         "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
         "upload_mbps, updated_at, last_reported_at, report_count " +
         "FROM speed_share_results_mb ORDER BY updated_at DESC LIMIT 1000",
@@ -712,9 +716,12 @@ async function handleSpeedShareSubmission(request, env) {
     return json({ ok: false, error: "account_banned" }, 403);
   }
 
+  const requestLocation = speedShareRequestLocation(request);
   let results;
   try {
-    results = body.results.map(normalizeSpeedShareResult).filter(Boolean);
+    results = body.results
+      .map((value) => normalizeSpeedShareResult(value, requestLocation))
+      .filter(Boolean);
   } catch (error) {
     return json({
       ok: false,
@@ -748,16 +755,20 @@ async function handleSpeedShareSubmission(request, env) {
 
   const statements = results.map((item) => db.prepare(
     `INSERT INTO speed_share_results_mb
-     (node_id, node_name, subscription_group_name, tcping_latency_ms,
-      url_test_latency_ms, download_mbps, upload_mbps, updated_at,
-      last_reported_at, report_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+     (node_id, node_name, subscription_group_name, province, carrier,
+      tcping_latency_ms, url_test_latency_ms, download_mbps, upload_mbps,
+      updated_at, last_reported_at, report_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
      ON CONFLICT(node_id) DO UPDATE SET
        node_name = CASE WHEN excluded.node_name <> ''
          THEN excluded.node_name ELSE speed_share_results_mb.node_name END,
        subscription_group_name = CASE WHEN excluded.subscription_group_name <> ''
          THEN excluded.subscription_group_name
          ELSE speed_share_results_mb.subscription_group_name END,
+       province = CASE WHEN excluded.province <> ''
+         THEN excluded.province ELSE speed_share_results_mb.province END,
+       carrier = CASE WHEN excluded.carrier <> ''
+         THEN excluded.carrier ELSE speed_share_results_mb.carrier END,
        tcping_latency_ms = CASE
          WHEN excluded.tcping_latency_ms > 0 AND
            (speed_share_results_mb.tcping_latency_ms <= 0 OR
@@ -794,6 +805,8 @@ async function handleSpeedShareSubmission(request, env) {
     item.nodeId,
     item.nodeName,
     item.subscriptionGroupName,
+    item.province,
+    item.carrier,
     item.tcpingLatencyMs,
     item.urlTestLatencyMs,
     item.downloadMbps,
@@ -825,7 +838,7 @@ async function handleSpeedShareSubmission(request, env) {
   });
 }
 
-function normalizeSpeedShareResult(value) {
+function normalizeSpeedShareResult(value, location = {}) {
   if (!plainObject(value)) throw new Error("invalid_speed_share_result");
   const nodeId = cleanText(value.nodeId || value.id).slice(0, 128);
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/.test(nodeId)) {
@@ -841,11 +854,70 @@ function normalizeSpeedShareResult(value) {
     urlTestLatencyMs: sharedLatency(value.urlTestLatencyMs ?? value.urlTestLatency),
     downloadMbps: sharedMbps(value.downloadMbps ?? value.download),
     uploadMbps: sharedMbps(value.uploadMbps ?? value.upload),
+    province: normalizeSpeedShareProvince(value.province) || cleanText(location.province),
+    carrier: normalizeSpeedShareCarrier(value.carrier || value.operator) || cleanText(location.carrier),
   };
   return result.tcpingLatencyMs > 0 || result.urlTestLatencyMs > 0 ||
     result.downloadMbps > 0 || result.uploadMbps > 0
     ? result
     : null;
+}
+
+function speedShareRequestLocation(request) {
+  const cf = request && request.cf && typeof request.cf === "object" ? request.cf : {};
+  return {
+    province: normalizeSpeedShareProvince(cf.region, cf.regionCode),
+    carrier: normalizeSpeedShareCarrier(cf.asOrganization),
+  };
+}
+
+function normalizeSpeedShareProvince(value, regionCode = "") {
+  const text = cleanText(value).slice(0, 80);
+  const code = cleanText(regionCode).toUpperCase().replace(/^CN-/, "");
+  const codeNames = {
+    AH: "安徽省", BJ: "北京市", CQ: "重庆市", FJ: "福建省", GS: "甘肃省",
+    GD: "广东省", GX: "广西壮族自治区", GZ: "贵州省", HI: "海南省", HB: "河北省",
+    HE: "河南省", HL: "黑龙江省", HN: "湖南省", HU: "湖北省", JL: "吉林省",
+    JS: "江苏省", JX: "江西省", LN: "辽宁省", NM: "内蒙古自治区", NX: "宁夏回族自治区",
+    QH: "青海省", SC: "四川省", SN: "陕西省", SD: "山东省", SH: "上海市", SX: "山西省",
+    TJ: "天津市", XJ: "新疆维吾尔自治区", XZ: "西藏自治区", YN: "云南省", ZJ: "浙江省",
+    HK: "香港特别行政区", MO: "澳门特别行政区", TW: "台湾省",
+  };
+  if (codeNames[code]) return codeNames[code];
+  if (!text) return "";
+  const aliases = {
+    anhui: "安徽省", 安徽: "安徽省", beijing: "北京市", 北京: "北京市",
+    chongqing: "重庆市", 重庆: "重庆市", fujian: "福建省", 福建: "福建省",
+    gansu: "甘肃省", 甘肃: "甘肃省", guangdong: "广东省", 广东: "广东省",
+    guangxi: "广西壮族自治区", 广西: "广西壮族自治区", guizhou: "贵州省", 贵州: "贵州省",
+    hainan: "海南省", 海南: "海南省", hebei: "河北省", 河北: "河北省",
+    henan: "河南省", 河南: "河南省", heilongjiang: "黑龙江省", 黑龙江: "黑龙江省",
+    hunan: "湖南省", 湖南: "湖南省", hubei: "湖北省", 湖北: "湖北省",
+    jilin: "吉林省", 吉林: "吉林省", jiangsu: "江苏省", 江苏: "江苏省",
+    jiangxi: "江西省", 江西: "江西省", liaoning: "辽宁省", 辽宁: "辽宁省",
+    "inner mongolia": "内蒙古自治区", 内蒙古: "内蒙古自治区", ningxia: "宁夏回族自治区", 宁夏: "宁夏回族自治区",
+    qinghai: "青海省", 青海: "青海省", sichuan: "四川省", 四川: "四川省", shaanxi: "陕西省", 陕西: "陕西省",
+    shandong: "山东省", 山东: "山东省", shanghai: "上海市", 上海: "上海市",
+    shanxi: "山西省", 山西: "山西省", tianjin: "天津市", 天津: "天津市",
+    xinjiang: "新疆维吾尔自治区", 新疆: "新疆维吾尔自治区", tibet: "西藏自治区", 西藏: "西藏自治区",
+    yunnan: "云南省", 云南: "云南省", zhejiang: "浙江省", 浙江: "浙江省",
+    "hong kong": "香港特别行政区", 香港: "香港特别行政区", macau: "澳门特别行政区", 澳门: "澳门特别行政区",
+    taiwan: "台湾省", 台湾: "台湾省",
+  };
+  const normalized = text.toLowerCase();
+  const alias = Object.keys(aliases).find((key) => normalized.includes(key));
+  return alias ? aliases[alias] : text;
+}
+
+function normalizeSpeedShareCarrier(value) {
+  const text = cleanText(value).slice(0, 120);
+  if (!text) return "";
+  const normalized = text.toLowerCase().replace(/[\s_-]+/g, "");
+  if (/(中国电信|电信|chinatelecom|telecom|chinanet)/i.test(normalized)) return "电信";
+  if (/(中国联通|联通|chinaunicom|unicom)/i.test(normalized)) return "联通";
+  if (/(中国移动|移动|chinamobile|cmcc|cmnet|mobile)/i.test(normalized)) return "移动";
+  if (/(中国广电|广电|chinabroadnet|broadnet)/i.test(normalized)) return "广电";
+  return text;
 }
 
 function sharedLatency(value) {
@@ -1228,7 +1300,7 @@ async function handleAdmin(path, request, env) {
       : 500;
     const db = await ensureUserSchema(env);
     const query = await db.prepare(
-      "SELECT node_id, node_name, subscription_group_name, " +
+      "SELECT node_id, node_name, subscription_group_name, province, carrier, " +
         "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
         "upload_mbps, updated_at, last_reported_at, report_count " +
         "FROM speed_share_results_mb ORDER BY updated_at DESC LIMIT ?",
@@ -1604,6 +1676,8 @@ function publicAdminSpeedShareResult(row) {
     nodeId: cleanText(row.node_id),
     nodeName: cleanText(row.node_name),
     subscriptionGroupName: cleanText(row.subscription_group_name),
+    province: cleanText(row.province),
+    carrier: cleanText(row.carrier),
     tcpingLatencyMs: sharedLatency(row.tcping_latency_ms),
     urlTestLatencyMs: sharedLatency(row.url_test_latency_ms),
     downloadMbps: sharedMbps(row.download_mbps),

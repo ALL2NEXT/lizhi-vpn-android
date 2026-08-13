@@ -511,15 +511,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     speedResults += node to speedMbps
                 }
 
-                scheduleSmartSpeedShare(
-                    buildSpeedShareResults(
-                        nodes = allNodes,
-                        tcpingResults = tcpingResults,
-                        urlTestResults = urlTestResults,
-                        bandwidthResults = speedResults.associate { it.first.id to it.second }
-                    )
-                )
-
                 val bestNode = speedResults
                     .sortedWith(
                         compareByDescending<Pair<Node, Float>> { it.second }
@@ -533,6 +524,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 settingsRepository.setSelectedNodeId(bestNode.id)
+                scheduleSmartSpeedShare(
+                    buildSpeedShareResults(
+                        nodes = listOf(bestNode),
+                        tcpingResults = tcpingResults,
+                        urlTestResults = urlTestResults,
+                        bandwidthResults = speedResults.associate { it.first.id to it.second }
+                    )
+                )
                 Log.i(tag, "Smart connection selected node: ${bestNode.getDisplayName()}")
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
             } catch (e: Exception) {
@@ -573,7 +572,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     "Connecting to selected/default node: ${node.getDisplayName()}"
                 }
             )
-            scheduleSmartSpeedShare(buildSpeedShareResults(listOf(node)))
             if (!NetworkUtils.isNetworkAvailable(getApplication())) {
                 Log.w(tag, "Default VPN start requested while network is unavailable")
                 _error.value = "当前无网络连接节点！"
@@ -966,7 +964,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Notify user (Optional)
                 Log.i(tag, "Restarting VPN to apply new Node: ${node.name}")
                 Log.i(tag, "Restarting VPN after node selection")
-                scheduleSmartSpeedShare(buildSpeedShareResults(listOf(node)))
                 ServiceManager.startVpn(getApplication(), node, proxyMode.value)
             }
         }
@@ -984,8 +981,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (rejectUnavailableAccount()) return@launch
             settingsRepository.setSelectedNodeId(node.id)
             Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
-            scheduleSmartSpeedShare(buildSpeedShareResults(listOf(node)))
-
             when (vpnState.value) {
                 VpnState.DISCONNECTED -> {
                     if (!NetworkUtils.isNetworkAvailable(getApplication())) {
@@ -1157,7 +1152,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         _error.value = "当前无网络连接节点！"
                     }
                     Log.i(tag, "VPN start requested from UI")
-                    scheduleSmartSpeedShare(buildSpeedShareResults(listOf(node)))
                     ServiceManager.startVpn(getApplication(), node, proxyMode.value)
                 }
             }

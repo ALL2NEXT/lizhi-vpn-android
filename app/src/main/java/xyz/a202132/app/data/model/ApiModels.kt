@@ -266,7 +266,13 @@ data class SpeedShareNodeResult(
     val downloadMbps: Float = 0f,
 
     @SerializedName("uploadMbps")
-    val uploadMbps: Float = 0f
+    val uploadMbps: Float = 0f,
+
+    @SerializedName("province")
+    val province: String = "",
+
+    @SerializedName("carrier")
+    val carrier: String = ""
 )
 
 data class SpeedShareRequest(
