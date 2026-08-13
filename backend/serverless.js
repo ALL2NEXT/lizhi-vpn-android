@@ -12,9 +12,6 @@
  *   GET /api/client?refresh=1   // 刷新由客户端处理，接口仅兼容保留该参数
  *   GET /api/subscription/<id>?deviceId=<DEVICE_ID>  // 设备身份校验后的 Worker 中转
  *   POST /api/account/login     // 使用邮箱和密码切换账户
- *   GET  /api/account/device    // 查询当前设备绑定的账户
- *   POST /api/account/device/bind   // 绑定当前设备到指定账户
- *   POST /api/account/device/unbind // 解绑当前设备
  *   POST /api/account/delete    // 永久删除当前账户
  *   GET  /api/account/tasks?deviceId=<DEVICE_ID>
  *   GET  /api/account/tasks/speed-share-results?deviceId=<DEVICE_ID>
@@ -33,6 +30,9 @@
  *   PATCH /<ADMIN_UUID>/api/users/batch       // 批量修改用户等级
  *   DELETE /<ADMIN_UUID>/api/users/batch      // 批量删除用户
  *   GET  /<ADMIN_UUID>/api/devices            // 当前绑定、历史账户和设备封禁
+ *   GET  /<ADMIN_UUID>/api/security/accounts  // 账户及其历史登录设备
+ *   POST /<ADMIN_UUID>/api/users/<UID>/ban     // 封禁账户及全部历史设备
+ *   DELETE /<ADMIN_UUID>/api/users/<UID>/ban   // 解除账户产生的设备封禁
  *   GET  /<ADMIN_UUID>/api/speed-share-results
  */
 
@@ -457,135 +457,6 @@ async function handleAccount(path, request, env) {
       account: publicAccount(user),
       deviceBlocked: Boolean(identity.deviceBanned),
     });
-  }
-
-  if (path === "/api/account/device" && request.method === "GET") {
-    const requestUrl = new URL(request.url);
-    const deviceId = normalizeAccountId(requestUrl.searchParams.get("deviceId"));
-    if (!deviceId) {
-      return json({ ok: false, error: "invalid_device_id" }, 400);
-    }
-
-    const state = await readState(env);
-    const binding = await readDeviceBinding(env, deviceId, state.settings);
-    return json({
-      ok: true,
-      bound: Boolean(binding && binding.account),
-      blocked: Boolean(binding && binding.blocked),
-      blockReason: cleanText(binding && binding.blockReason),
-      account: binding && binding.account ? publicAccount(binding.account) : null,
-      device: binding ? binding.device : null,
-    });
-  }
-
-  if (path === "/api/account/device/bind" && request.method === "POST") {
-    const body = await request.json();
-    const deviceId = normalizeAccountId(body && body.deviceId);
-    const requestedUid = normalizeUid(body && body.uid);
-    const password = typeof (body && body.password) === "string" ? body.password : "";
-    if (!deviceId || !requestedUid) {
-      return json({ ok: false, error: "invalid_device_binding" }, 400);
-    }
-
-    const db = await ensureUserSchema(env);
-    const currentIdentity = await readDeviceContext(env, deviceId);
-    if (currentIdentity &&
-        (currentIdentity.deviceBanned || currentIdentity.userStatus === "banned")) {
-      return json({ ok: false, error: "device_banned" }, 403);
-    }
-    if (currentIdentity && currentIdentity.userId > 0 &&
-        currentIdentity.uid !== requestedUid) {
-      return json({ ok: false, error: "device_already_bound" }, 409);
-    }
-    const targetIdentity = await resolveUserIdentity(env, requestedUid);
-    if (!targetIdentity) {
-      return json({ ok: false, error: "account_not_found" }, 404);
-    }
-    const state = await readState(env);
-    const targetUser = await readD1User(env, targetIdentity.userId, state.settings);
-    if (!targetUser) {
-      return json({ ok: false, error: "account_not_found" }, 404);
-    }
-    if (targetUser.level === 0) {
-      return json({ ok: false, error: "account_banned" }, 403);
-    }
-    if (targetUser.email) {
-      const stored = await db.prepare(
-        "SELECT password_hash FROM users_mb WHERE id = ?",
-      ).bind(targetIdentity.userId).first();
-      if (!(await verifyAccountPassword(password, cleanText(stored && stored.password_hash)))) {
-        return json({ ok: false, error: "invalid_account_password" }, 401);
-      }
-    } else if (!currentIdentity || currentIdentity.userId !== targetIdentity.userId) {
-      const priorLink = currentIdentity
-        ? await db.prepare(
-          `SELECT 1 FROM device_account_links_mb
-           WHERE device_row_id = ? AND user_uid = ?`,
-        ).bind(currentIdentity.deviceRowId, targetIdentity.uid).first()
-        : null;
-      if (!priorLink) {
-        return json({ ok: false, error: "device_binding_proof_required" }, 403);
-      }
-    }
-
-    const attached = await attachDeviceToUser(
-      db,
-      targetIdentity.userId,
-      deviceId,
-      body || {},
-      false,
-    );
-    if (!attached) return json({ ok: false, error: "device_banned" }, 403);
-    const account = await readD1User(env, targetIdentity.userId, state.settings);
-    return json({ ok: true, bound: true, account: publicAccount(account) });
-  }
-
-  if (path === "/api/account/device/unbind" && request.method === "POST") {
-    const body = await request.json();
-    const deviceId = normalizeAccountId(body && body.deviceId);
-    const requestedUid = normalizeUid(body && body.uid);
-    const password = typeof (body && body.password) === "string" ? body.password : "";
-    if (!deviceId || !requestedUid) {
-      return json({ ok: false, error: "invalid_device_binding" }, 400);
-    }
-
-    const db = await ensureUserSchema(env);
-    const identity = await readDeviceContext(env, deviceId);
-    if (identity && (identity.deviceBanned || identity.userStatus === "banned")) {
-      return json({ ok: false, error: "device_banned" }, 403);
-    }
-    if (!identity || identity.userId <= 0 || identity.uid !== requestedUid) {
-      return json({ ok: false, error: "device_not_bound" }, 404);
-    }
-    const user = await readD1User(env, identity.userId);
-    if (!user) {
-      return json({ ok: false, error: "account_not_found" }, 404);
-    }
-    if (user.level === 0) {
-      return json({ ok: false, error: "account_banned" }, 403);
-    }
-    if (user.email) {
-      const stored = await db.prepare(
-        "SELECT password_hash FROM users_mb WHERE id = ?",
-      ).bind(identity.userId).first();
-      if (!(await verifyAccountPassword(password, cleanText(stored && stored.password_hash)))) {
-        return json({ ok: false, error: "invalid_account_password" }, 401);
-      }
-    }
-
-    const result = await db.prepare(
-      `UPDATE user_devices_mb
-       SET user_id = NULL, last_seen_at = ?
-       WHERE device_id = ? AND user_id = ?
-         AND NOT EXISTS (
-           SELECT 1 FROM device_bans_mb b
-           WHERE b.device_row_id = user_devices_mb.id AND b.lifted_at IS NULL
-         )`,
-    ).bind(beijingTimestamp(), deviceId, identity.userId).run();
-    if (!result.meta || Number(result.meta.changes) < 1) {
-      return json({ ok: false, error: "device_not_bound" }, 404);
-    }
-    return json({ ok: true, bound: false });
   }
 
   if (path === "/api/account/bind" && request.method === "POST") {
@@ -1280,6 +1151,105 @@ async function handleAdmin(path, request, env) {
     });
   }
 
+  if (path === "/api/security/accounts" && request.method === "GET") {
+    const db = await ensureUserSchema(env);
+    const state = await readState(env);
+    const results = await db.batch([
+      db.prepare(
+        `SELECT
+           u.id,
+           u.uid,
+           u.nickname,
+           u.status,
+           u.experience_total,
+           u.email,
+           u.created_at,
+           COUNT(DISTINCT l.device_row_id) AS historical_device_count,
+           COUNT(DISTINCT CASE WHEN b.device_row_id IS NOT NULL AND b.lifted_at IS NULL
+             THEN l.device_row_id END)
+             AS banned_device_count
+         FROM users_mb u
+         LEFT JOIN device_account_links_mb l ON l.user_id = u.id
+         LEFT JOIN device_bans_mb b
+           ON b.device_row_id = l.device_row_id
+          AND b.source_uid = u.uid
+          AND b.reason = 'account_banned'
+         GROUP BY u.id
+         ORDER BY u.created_at DESC`,
+      ),
+      db.prepare(
+        `SELECT
+           l.user_id,
+           l.user_uid,
+           l.first_bound_at,
+           l.last_bound_at,
+           d.device_id,
+           d.brand,
+           d.model,
+           d.android_version,
+           d.android_sdk,
+           d.app_version,
+           d.last_seen_at,
+           CASE WHEN d.user_id = l.user_id THEN 1 ELSE 0 END AS is_current,
+           EXISTS (
+             SELECT 1 FROM device_bans_mb b
+             WHERE b.device_row_id = d.id AND b.lifted_at IS NULL
+           ) AS blocked,
+           EXISTS (
+             SELECT 1 FROM device_bans_mb b
+             WHERE b.device_row_id = d.id
+               AND b.source_uid = l.user_uid
+               AND b.reason = 'account_banned'
+               AND b.lifted_at IS NULL
+           ) AS blocked_by_account
+         FROM device_account_links_mb l
+         JOIN user_devices_mb d ON d.id = l.device_row_id
+         WHERE l.user_id IS NOT NULL
+         ORDER BY l.last_bound_at DESC, d.id DESC`,
+      ),
+    ]);
+    const devicesByUser = new Map();
+    for (const row of results[1].results || []) {
+      const userId = Number(row.user_id);
+      const devices = devicesByUser.get(userId) || [];
+      devices.push({
+        deviceId: normalizeAccountId(row.device_id),
+        brand: cleanText(row.brand),
+        model: cleanText(row.model),
+        androidVersion: cleanText(row.android_version),
+        androidSdk: normalizeAndroidSdk(row.android_sdk),
+        appVersion: cleanText(row.app_version),
+        current: Number(row.is_current) === 1,
+        blocked: Number(row.blocked) === 1,
+        blockedByAccount: Number(row.blocked_by_account) === 1,
+        firstBoundAt: cleanText(row.first_bound_at),
+        lastBoundAt: cleanText(row.last_bound_at),
+        lastSeenAt: cleanText(row.last_seen_at),
+      });
+      devicesByUser.set(userId, devices);
+    }
+    return json({
+      ok: true,
+      accounts: (results[0].results || []).map((row) => {
+        const user = rowToUser(row, state.settings);
+        return {
+          uid: user.uid,
+          nickname: user.nickname,
+          email: user.email,
+          status: user.status,
+          level: user.level,
+          experience: user.experience,
+          experienceTotal: user.experienceTotal,
+          createdAt: user.createdAt,
+          historicalDeviceCount: Number(row.historical_device_count) || 0,
+          bannedDeviceCount: Number(row.banned_device_count) || 0,
+          devices: devicesByUser.get(Number(row.id)) || [],
+        };
+      }),
+      generatedAt: beijingTimestamp(),
+    });
+  }
+
   if (path === "/api/users/growth" && request.method === "GET") {
     const requestUrl = new URL(request.url);
     const period = normalizeGrowthPeriod(requestUrl.searchParams.get("period"));
@@ -1528,6 +1498,47 @@ async function handleAdmin(path, request, env) {
     ).bind(JSON.stringify(accountIds)).run();
     const changed = Number(result.meta && result.meta.changes) || 0;
     return json({ ok: true, accountIds, changed });
+  }
+
+  const userBanMatch = path.match(/^\/api\/users\/([^/]+)\/ban$/);
+  if (userBanMatch && (request.method === "POST" || request.method === "DELETE")) {
+    const identity = await resolveUserIdentity(env, decodeURIComponent(userBanMatch[1]));
+    if (!identity) return json({ ok: false, error: "account_not_found" }, 404);
+    const db = await ensureUserSchema(env);
+    const status = request.method === "POST" ? "banned" : "active";
+    const result = await db.prepare(
+      "UPDATE users_mb SET status = ? WHERE id = ?",
+    ).bind(status, identity.userId).run();
+    if (!result.meta || Number(result.meta.changes) < 1) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    const deviceStats = await db.prepare(
+      `SELECT
+         COUNT(DISTINCT l.device_row_id) AS historical_device_count,
+         COUNT(DISTINCT CASE WHEN own_ban.device_row_id IS NOT NULL
+           THEN l.device_row_id END) AS account_banned_device_count,
+         COUNT(DISTINCT CASE WHEN active_ban.device_row_id IS NOT NULL
+           THEN l.device_row_id END) AS blocked_device_count
+       FROM device_account_links_mb l
+       LEFT JOIN device_bans_mb own_ban
+         ON own_ban.device_row_id = l.device_row_id
+        AND own_ban.source_uid = ?
+        AND own_ban.reason = 'account_banned'
+        AND own_ban.lifted_at IS NULL
+       LEFT JOIN device_bans_mb active_ban
+         ON active_ban.device_row_id = l.device_row_id
+        AND active_ban.lifted_at IS NULL
+       WHERE l.user_id = ?`,
+    ).bind(identity.uid, identity.userId).first();
+    return json({
+      ok: true,
+      uid: identity.uid,
+      status,
+      historicalDeviceCount: Number(deviceStats && deviceStats.historical_device_count) || 0,
+      accountBannedDeviceCount:
+        Number(deviceStats && deviceStats.account_banned_device_count) || 0,
+      blockedDeviceCount: Number(deviceStats && deviceStats.blocked_device_count) || 0,
+    });
   }
 
   const userMatch = path.match(/^\/api\/users\/([^/]+)$/);
@@ -1994,27 +2005,6 @@ async function readD1User(env, userId, settings) {
     ") WHERE u.id = ?",
   ).bind(normalizedUserId).first();
   return row ? rowToUser(row, settings) : null;
-}
-
-async function readDeviceBinding(env, deviceId, settings) {
-  const context = await readDeviceContext(env, deviceId);
-  if (!context) return null;
-  const account = context.userId > 0
-    ? await readD1User(env, context.userId, settings)
-    : null;
-  if (account) account.deviceBlocked = context.deviceBanned;
-  return {
-    blocked: context.deviceBanned,
-    blockReason: context.blockReason,
-    account,
-    device: {
-      brand: context.brand,
-      model: context.model,
-      androidVersion: context.androidVersion,
-      androidSdk: context.androidSdk,
-      appVersion: context.appVersion,
-    },
-  };
 }
 
 function rowToUser(row, settings) {
@@ -3076,6 +3066,26 @@ function adminHtml() {
     .source-type-field { max-width: 280px; }
      .source-row .row-actions { display: flex; align-items: center; justify-content: space-between; }
      .source-row small { display: block; margin-top: 8px; }
+     .security-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+     .security-toolbar input { flex: 1 1 280px; max-width: 520px; }
+     .security-toolbar button { margin: 0; }
+     .security-summary { margin: 0 0 14px; color: #94a3b8; }
+     .security-account-list { display: grid; gap: 14px; }
+     .security-account-card { padding: 16px; background: #172033; border: 1px solid #374151; border-radius: 10px; }
+     .security-account-card.banned { border-color: #991b1b; }
+     .security-account-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+     .security-account-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+     .security-account-title h3 { margin: 0; color: #f8fafc; font-size: 16px; }
+     .security-account-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; color: #94a3b8; font-size: 12px; }
+     .security-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; color: #bbf7d0; background: #14532d; font-size: 12px; font-weight: 700; }
+     .security-badge.banned { color: #fecaca; background: #7f1d1d; }
+     .security-action { flex: 0 0 auto; margin: 0; }
+     .security-device-wrap { margin-top: 14px; overflow: auto; border: 1px solid #374151; border-radius: 8px; }
+     .security-device-table { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 12px; }
+     .security-device-table th, .security-device-table td { padding: 9px; text-align: left; border-right: 1px solid #374151; border-bottom: 1px solid #374151; vertical-align: top; }
+     .security-device-table th { color: #d1d5db; background: #273244; white-space: nowrap; }
+     .security-device-table code { color: #c4b5fd; word-break: break-all; white-space: normal; }
+     .security-device-empty { margin-top: 14px; padding: 12px; color: #94a3b8; border: 1px dashed #4b5563; border-radius: 8px; }
      .user-sheet-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
      .user-sheet-toolbar button { margin: 0; }
      .user-sheet-toolbar small { margin-left: auto; }
@@ -3137,6 +3147,7 @@ function adminHtml() {
        .grid { grid-template-columns: 1fr; }
        .dashboard-heading { align-items: stretch; flex-direction: column; }
        .dashboard-heading button { align-self: flex-start; }
+       .security-account-head { flex-direction: column; }
        .growth-toolbar { flex-direction: column; }
        .growth-range-controls { align-items: stretch; }
        .growth-range-field, .growth-range-field input { width: 100%; }
@@ -3168,6 +3179,7 @@ function adminHtml() {
        </div>
        <nav class="tab-nav" role="tablist" aria-label="后台模块" aria-orientation="vertical">
          <button class="tab-button" role="tab" type="button" data-tab="data-dashboard">数据看板</button>
+         <button class="tab-button" role="tab" type="button" data-tab="account-security">账户安全</button>
          <button class="tab-button" role="tab" type="button" data-tab="subscriptions">订阅线路</button>
           <button class="tab-button" role="tab" type="button" data-tab="app-settings">应用设置</button>
          <button class="tab-button" role="tab" type="button" data-tab="notice">公告</button>
@@ -3248,6 +3260,23 @@ function adminHtml() {
      </div>
    </section>
 
+  <section class="card tab-panel" role="tabpanel" data-panel="account-security">
+    <div class="dashboard-heading">
+      <div>
+        <h2>账户与设备封禁</h2>
+        <p>封禁账户会同时封禁该账户登录过的全部历史设备；解除后只移除由该账户产生的封禁。</p>
+      </div>
+      <button class="secondary" type="button" onclick="loadAccountSecurity(true)">刷新数据</button>
+    </div>
+    <div class="security-toolbar">
+      <input id="securitySearch" type="search" placeholder="搜索 UID、昵称、邮箱或设备 ID" oninput="renderAccountSecurity()">
+    </div>
+    <div id="securitySummary" class="security-summary"></div>
+    <div id="securityAccountList" class="security-account-list">
+      <div class="loading-state">打开此模块后读取账户安全数据</div>
+    </div>
+  </section>
+
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
@@ -3313,6 +3342,8 @@ function adminHtml() {
   let currentState = null;
   let adminToken = '';
   let currentUsersData = null;
+  let accountSecurityData = null;
+  let accountSecurityLoading = false;
   let growthPeriod = 'day';
  let growthRequestId = 0;
  let trafficPeriod = 'day';
@@ -3441,6 +3472,7 @@ function adminHtml() {
  function logout() {
    adminToken = '';
    currentState = null;
+   accountSecurityData = null;
    el('dashboard').hidden = true;
    loginGate.hidden = false;
    passwordInput.value = '';
@@ -3456,6 +3488,9 @@ function activateTab(name) {
   document.querySelectorAll('.tab-panel').forEach(function(panel) {
     panel.classList.toggle('active', panel.dataset.panel === name);
   });
+  if (name === 'account-security' && !accountSecurityData && !accountSecurityLoading) {
+    loadAccountSecurity();
+  }
 }
   document.querySelectorAll('.tab-button').forEach(function(button) {
   button.onclick = function() {
@@ -3463,6 +3498,136 @@ function activateTab(name) {
     window.scrollTo({top: 0, behavior: 'auto'});
   };
  });
+function securityDeviceRows(devices) {
+  if (!Array.isArray(devices) || devices.length === 0) {
+    return '<div class="security-device-empty">该账户暂无历史登录设备</div>';
+  }
+  const rows = devices.map(function(device) {
+    const blockState = device.blockedByAccount
+      ? '被此账户封禁'
+      : device.blocked ? '被其他账户封禁' : '正常';
+    return '<tr>' +
+      '<td><code>' + esc(device.deviceId || '') + '</code></td>' +
+      '<td>' + esc([device.brand, device.model].filter(Boolean).join(' ') || '未登记') + '</td>' +
+      '<td>' + esc(device.androidVersion || '未登记') + ' / SDK ' + esc(device.androidSdk || '-') + '</td>' +
+      '<td>' + esc(device.appVersion || '未登记') + '</td>' +
+      '<td>' + (device.current ? '当前登录' : '历史登录') + '</td>' +
+      '<td>' + esc(blockState) + '</td>' +
+      '<td>' + esc(device.lastSeenAt || device.lastBoundAt || '暂无') + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<div class="security-device-wrap"><table class="security-device-table">' +
+    '<thead><tr><th>设备 ID</th><th>设备</th><th>Android</th><th>App</th>' +
+    '<th>关联状态</th><th>封禁状态</th><th>最后活动</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody></table></div>';
+}
+function renderAccountSecurity() {
+  const host = el('securityAccountList');
+  const summary = el('securitySummary');
+  if (!host || !summary) return;
+  const accounts = accountSecurityData && Array.isArray(accountSecurityData.accounts)
+    ? accountSecurityData.accounts : [];
+  const search = String(value('securitySearch') || '').toLowerCase();
+  const filtered = accounts.filter(function(account) {
+    if (!search) return true;
+    const deviceIds = (account.devices || []).map(function(device) { return device.deviceId; });
+    return [account.uid, account.nickname, account.email].concat(deviceIds)
+      .join(' ').toLowerCase().indexOf(search) >= 0;
+  });
+  const bannedAccounts = accounts.filter(function(account) { return account.status === 'banned'; }).length;
+  const historicalDevices = accounts.reduce(function(total, account) {
+    return total + Number(account.historicalDeviceCount || 0);
+  }, 0);
+  summary.textContent = '账户 ' + accounts.length + ' 个 · 已封禁 ' + bannedAccounts +
+    ' 个 · 历史登录设备关联 ' + historicalDevices + ' 条' +
+    (search ? ' · 当前匹配 ' + filtered.length + ' 个' : '');
+  if (filtered.length === 0) {
+    host.innerHTML = '<div class="security-device-empty">没有匹配的账户</div>';
+    return;
+  }
+  host.innerHTML = filtered.map(function(account) {
+    const banned = account.status === 'banned';
+    const email = account.email || '游客账户';
+    const deviceCount = Number(account.historicalDeviceCount || 0);
+    const bannedDeviceCount = Number(account.bannedDeviceCount || 0);
+    return '<article class="security-account-card' + (banned ? ' banned' : '') + '">' +
+      '<div class="security-account-head"><div>' +
+      '<div class="security-account-title"><h3>' + esc(account.nickname || account.uid) + '</h3>' +
+      '<span class="security-badge' + (banned ? ' banned' : '') + '">' +
+      (banned ? '已封禁' : '正常') + '</span></div>' +
+      '<div class="security-account-meta">' +
+      '<span>UID：<code>' + esc(account.uid) + '</code></span>' +
+      '<span>' + esc(email) + '</span>' +
+      '<span>Lv' + esc(account.level) + '</span>' +
+      '<span>累计经验 ' + esc(account.experienceTotal) + '</span>' +
+      '<span>历史设备 ' + deviceCount + '</span>' +
+      '<span>由本账户封禁 ' + bannedDeviceCount + '</span>' +
+      '<span>注册于 ' + esc(account.createdAt || '暂无') + '</span>' +
+      '</div></div>' +
+      '<button type="button" class="security-action ' + (banned ? 'secondary' : 'danger') +
+      '" data-security-uid="' + esc(account.uid) + '" data-security-ban="' +
+      (banned ? '0' : '1') + '">' + (banned ? '解除账户及设备封禁' : '封禁账户及全部设备') +
+      '</button></div>' + securityDeviceRows(account.devices) + '</article>';
+  }).join('');
+  host.querySelectorAll('[data-security-uid]').forEach(function(button) {
+    button.onclick = function() {
+      setAccountBan(button.dataset.securityUid, button.dataset.securityBan === '1');
+    };
+  });
+}
+async function loadAccountSecurity(force) {
+  if (accountSecurityLoading) return false;
+  if (accountSecurityData && !force) {
+    renderAccountSecurity();
+    return true;
+  }
+  const host = el('securityAccountList');
+  accountSecurityLoading = true;
+  if (host) host.innerHTML = '<div class="loading-state">正在读取账户与历史设备…</div>';
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/security/accounts', {headers: headers()});
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    accountSecurityData = data;
+    renderAccountSecurity();
+    return true;
+  } catch (error) {
+    if (host) host.innerHTML = '<div class="error-state">账户安全数据读取失败</div>';
+    show('账户安全数据读取失败：' + (error.message || error), true);
+    return false;
+  } finally {
+    accountSecurityLoading = false;
+  }
+}
+async function setAccountBan(uid, shouldBan) {
+  const accounts = accountSecurityData && accountSecurityData.accounts || [];
+  const account = accounts.find(function(item) { return item.uid === uid; });
+  const name = account && account.nickname ? account.nickname : uid;
+  const deviceCount = Number(account && account.historicalDeviceCount || 0);
+  const prompt = shouldBan
+    ? '确定封禁账户“' + name + '”及其登录过的 ' + deviceCount + ' 台设备吗？'
+    : '确定解除账户“' + name + '”产生的账户及设备封禁吗？其他账户产生的设备封禁不会被解除。';
+  if (!confirm(prompt)) return;
+  try {
+    const response = await fetch(
+      ADMIN_API_BASE + '/users/' + encodeURIComponent(uid) + '/ban',
+      {method: shouldBan ? 'POST' : 'DELETE', headers: headers()}
+    );
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    await loadAccountSecurity(true);
+    if (shouldBan) {
+      show('账户已封禁，同时封禁 ' + Number(data.accountBannedDeviceCount || 0) + ' 台历史设备');
+    } else {
+      show('账户已解除封禁；当前仍被其他来源封禁的设备有 ' +
+        Number(data.blockedDeviceCount || 0) + ' 台');
+    }
+  } catch (error) {
+    show((shouldBan ? '封禁失败：' : '解除封禁失败：') + (error.message || error), true);
+  }
+}
 function formatMegabytes(megabytes) {
   let value = Number(megabytes) || 0;
   const units = ['MB', 'GB', 'TB', 'PB'];

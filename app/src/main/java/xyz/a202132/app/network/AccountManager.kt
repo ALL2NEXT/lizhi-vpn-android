@@ -17,8 +17,6 @@ import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.DailyCheckinRequest
 import xyz.a202132.app.data.model.DailyCheckinStatus
-import xyz.a202132.app.data.model.DeviceBindingRequest
-import xyz.a202132.app.data.model.DeviceBindingResponse
 import xyz.a202132.app.data.model.SpeedShareNodeResult
 import xyz.a202132.app.data.model.SpeedShareRequest
 import xyz.a202132.app.data.model.SpeedShareResponse
@@ -47,9 +45,6 @@ class AccountManager(private val context: Context) {
 
     private val _accountInfo = MutableStateFlow(loadPersistedAccount())
     val accountInfo = _accountInfo.asStateFlow()
-    private val _deviceBinding = MutableStateFlow<DeviceBindingResponse?>(null)
-    val deviceBinding = _deviceBinding.asStateFlow()
-
     fun currentAccount(): AccountInfo? = _accountInfo.value
 
     fun accountId(): String = deviceKey()
@@ -291,67 +286,6 @@ class AccountManager(private val context: Context) {
         }
     }
 
-    suspend fun queryDeviceBinding(timeoutMs: Long = 10000L): Result<DeviceBindingResponse> {
-        return runCatching {
-            val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
-                NetworkClient.apiService.getDeviceBinding(
-                    accountEndpoint("/api/account/device?deviceId=${accountId()}")
-                )
-            }
-            if (!response.ok) {
-                throw IllegalStateException(response.error ?: "设备查询失败")
-            }
-            response.account?.let(::persistAccount)
-            _deviceBinding.value = response
-            response
-        }
-    }
-
-    suspend fun bindCurrentDevice(
-        password: String = "",
-        timeoutMs: Long = 10000L
-    ): Result<DeviceBindingResponse> {
-        val registered = currentAccount()
-            ?: return Result.failure(IllegalStateException("账户尚未同步"))
-
-        return runCatching {
-            val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
-                NetworkClient.apiService.bindDevice(
-                    accountEndpoint("/api/account/device/bind"),
-                    deviceBindingRequest(registered.uid, password)
-                )
-            }
-            val account = response.account ?: throw IllegalStateException(
-                response.error ?: "设备绑定失败"
-            )
-            persistAccount(account)
-            _deviceBinding.value = response
-            response
-        }
-    }
-
-    suspend fun unbindCurrentDevice(
-        password: String = "",
-        timeoutMs: Long = 10000L
-    ): Result<DeviceBindingResponse> {
-        val registered = currentAccount()
-            ?: return Result.failure(IllegalStateException("账户尚未同步"))
-
-        return runCatching {
-            val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
-                NetworkClient.apiService.unbindDevice(
-                    accountEndpoint("/api/account/device/unbind"),
-                    deviceBindingRequest(registered.uid, password)
-                )
-            }
-            if (!response.ok) {
-                throw IllegalStateException(response.error ?: "设备解绑失败")
-            }
-            _deviceBinding.value = response.copy(account = null, device = null, bound = false)
-            response
-        }
-    }
-
     suspend fun bindEmailPassword(
         email: String,
         password: String,
@@ -456,19 +390,6 @@ class AccountManager(private val context: Context) {
     private fun accountEndpoint(path: String): String =
         "${AppConfig.BACKEND_URL.trimEnd('/')}$path"
 
-    private fun deviceBindingRequest(uid: String, password: String): DeviceBindingRequest {
-        return DeviceBindingRequest(
-            deviceId = accountId(),
-            uid = uid,
-            password = password,
-            brand = Build.MANUFACTURER.orEmpty(),
-            model = Build.MODEL.orEmpty(),
-            androidVersion = Build.VERSION.RELEASE.orEmpty(),
-            androidSdk = Build.VERSION.SDK_INT,
-            appVersion = BuildConfig.VERSION_NAME
-        )
-    }
-
     private fun deviceKey(): String {
         val androidId = Settings.Secure.getString(
             context.contentResolver,
@@ -535,7 +456,6 @@ class AccountManager(private val context: Context) {
             .clear()
             .apply()
         _accountInfo.value = null
-        _deviceBinding.value = null
     }
 
     private companion object {

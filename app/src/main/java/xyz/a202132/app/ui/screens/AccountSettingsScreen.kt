@@ -22,7 +22,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,14 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.AccountInfo
-import xyz.a202132.app.data.model.DeviceBindingResponse
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
-
-private enum class DeviceAction {
-    BIND,
-    UNBIND
-}
 
 @Composable
 fun AccountSettingsScreen(
@@ -60,8 +53,6 @@ fun AccountSettingsScreen(
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val isSyncingAccount by viewModel.isSyncingAccount.collectAsStateWithLifecycle()
-    val deviceBinding by viewModel.deviceBinding.collectAsStateWithLifecycle()
-    val isManagingDevice by viewModel.isManagingDevice.collectAsStateWithLifecycle()
     val isBindingAccount by viewModel.isBindingAccount.collectAsStateWithLifecycle()
     val isSwitchingAccount by viewModel.isSwitchingAccount.collectAsStateWithLifecycle()
     val isDeletingAccount by viewModel.isDeletingAccount.collectAsStateWithLifecycle()
@@ -79,8 +70,6 @@ fun AccountSettingsScreen(
     var switchEmail by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var deletePassword by remember(accountInfo?.uid) { mutableStateOf("") }
-    var devicePassword by remember(accountInfo?.uid) { mutableStateOf("") }
-    var deviceAction by remember(accountInfo?.uid) { mutableStateOf<DeviceAction?>(null) }
     var showNicknameDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showBindDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showSwitchDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
@@ -108,8 +97,6 @@ fun AccountSettingsScreen(
         showNicknameDialog = false
         showSwitchDialog = false
         showDeleteConfirmation = false
-        devicePassword = ""
-        deviceAction = null
     }
 
     val normalizedNickname = nickname.trim()
@@ -150,16 +137,6 @@ fun AccountSettingsScreen(
         account.level > 0 &&
         !isDeletingAccount &&
         !isSwitchingAccount
-    val canManageDevice = account != null &&
-        account.level > 0 &&
-        !account.deviceBlocked &&
-        !isManagingDevice &&
-        !isSyncingAccount &&
-        !isUpdatingNickname &&
-        !isBindingAccount &&
-        !isSwitchingAccount &&
-        !isDeletingAccount
-
     AppScreenScaffold(
         title = "账户设置",
         onBack = onBack,
@@ -277,41 +254,6 @@ fun AccountSettingsScreen(
                         label = "App 版本",
                         value = account.appVersion.displayOrUnknown()
                     )
-                    AccountInfoRow(
-                        label = "设备状态",
-                        value = deviceBindingText(deviceBinding, account)
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(
-                            onClick = { deviceAction = DeviceAction.BIND },
-                            enabled = canManageDevice,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("绑定设备")
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.queryDeviceBinding() },
-                            enabled = canManageDevice,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("查询设备")
-                        }
-                        Button(
-                            onClick = { deviceAction = DeviceAction.UNBIND },
-                            enabled = canManageDevice,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = MaterialTheme.colorScheme.onError
-                            )
-                        ) {
-                            Text("解绑设备")
-                        }
-                    }
                 }
 
                 AccountSettingsSection(title = "账户操作") {
@@ -341,7 +283,7 @@ fun AccountSettingsScreen(
 
                     Text(
                         text = if (account.deviceBlocked) {
-                            "当前设备已被封禁，不能切换、解绑或注销账户。"
+                            "当前设备已被封禁，不能切换或注销账户。"
                         } else if (account.level == 0) {
                             "当前账户已被封禁，不能注销账户。"
                         } else {
@@ -409,63 +351,6 @@ fun AccountSettingsScreen(
                 TextButton(
                     onClick = { showNicknameDialog = false },
                     enabled = !isUpdatingNickname
-                ) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-
-    if (deviceAction != null && account != null) {
-        val action = deviceAction ?: DeviceAction.BIND
-        val requiresPassword = account.email.isNotBlank()
-        AlertDialog(
-            onDismissRequest = { if (!isManagingDevice) deviceAction = null },
-            title = { Text(if (action == DeviceAction.BIND) "绑定设备" else "解绑设备") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        if (action == DeviceAction.BIND) {
-                            "将当前设备绑定到当前账户。清除本地数据后重新注册时，系统会自动找回该账户。"
-                        } else {
-                            "解绑只移除当前登录关系。设备历史、封禁记录和设备级任务记录仍会保留。"
-                        }
-                    )
-                    if (requiresPassword) {
-                        OutlinedTextField(
-                            value = devicePassword,
-                            onValueChange = { if (it.length <= 128) devicePassword = it },
-                            label = { Text("当前账户密码") },
-                            supportingText = { Text("绑定邮箱账户需要验证密码") },
-                            singleLine = true,
-                            enabled = !isManagingDevice,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !isManagingDevice &&
-                        (!requiresPassword || devicePassword.length in 8..128),
-                    onClick = {
-                        deviceAction = null
-                        if (action == DeviceAction.BIND) {
-                            viewModel.bindCurrentDevice(devicePassword)
-                        } else {
-                            viewModel.unbindCurrentDevice(devicePassword)
-                        }
-                    }
-                ) {
-                    Text(if (isManagingDevice) "处理中…" else "确认")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { deviceAction = null },
-                    enabled = !isManagingDevice
                 ) {
                     Text("取消")
                 }
@@ -844,20 +729,6 @@ private fun accountIdentityText(accountInfo: AccountInfo): String {
 
 private fun accountEntitlementText(accountInfo: AccountInfo): String {
     return "Lv${accountInfo.level.coerceIn(0, 6)}尊享线路"
-}
-
-private fun deviceBindingText(
-    status: DeviceBindingResponse?,
-    accountInfo: AccountInfo
-): String {
-    return when {
-        status?.blocked == true || accountInfo.deviceBlocked -> "设备已封禁"
-        status?.bound == true && status.account != null -> {
-            if (status.account.uid == accountInfo.uid) "已绑定当前账户" else "已绑定其他账户"
-        }
-        status != null -> "未绑定账户"
-        else -> "未查询"
-    }
 }
 
 private fun accountExperienceText(

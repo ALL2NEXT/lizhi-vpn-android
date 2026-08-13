@@ -15,8 +15,6 @@ import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.AccountRegisterResponse
 import xyz.a202132.app.data.model.DailyCheckinRequest
-import xyz.a202132.app.data.model.DeviceBindingRequest
-import xyz.a202132.app.data.model.DeviceBindingResponse
 import xyz.a202132.app.data.model.SpeedShareRequest
 import xyz.a202132.app.data.model.SpeedShareResponse
 import xyz.a202132.app.data.model.SpeedShareResultsResponse
@@ -50,23 +48,6 @@ interface ApiService {
         @Url url: String,
         @Body request: AccountLoginRequest
     ): AccountRegisterResponse
-
-    @GET
-    suspend fun getDeviceBinding(
-        @Url url: String
-    ): DeviceBindingResponse
-
-    @POST
-    suspend fun bindDevice(
-        @Url url: String,
-        @Body request: DeviceBindingRequest
-    ): DeviceBindingResponse
-
-    @POST
-    suspend fun unbindDevice(
-        @Url url: String,
-        @Body request: DeviceBindingRequest
-    ): DeviceBindingResponse
 
     @POST
     suspend fun deleteAccount(

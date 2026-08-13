@@ -106,9 +106,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val backendSettings = subscriptionDataLoader.backendSettings
 
     val accountInfo = accountManager.accountInfo
-    val deviceBinding = accountManager.deviceBinding
-    private val _isManagingDevice = MutableStateFlow(false)
-    val isManagingDevice = _isManagingDevice.asStateFlow()
     private val _isUpdatingNickname = MutableStateFlow(false)
     val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
     private val _isSyncingAccount = MutableStateFlow(false)
@@ -1454,72 +1451,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun queryDeviceBinding() {
-        if (_isManagingDevice.value) return
-        viewModelScope.launch {
-            _isManagingDevice.value = true
-            _accountMessage.value = null
-            try {
-                accountManager.queryDeviceBinding(
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-                ).onSuccess { status ->
-                    _accountMessage.value = if (status.bound && status.account != null) {
-                        "设备已绑定账户 ${status.account.nickname}（${status.account.uid}）"
-                    } else {
-                        "当前设备未绑定账户"
-                    }
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to query device binding", error)
-                    _accountMessage.value = accountActionErrorMessage(error)
-                }
-            } finally {
-                _isManagingDevice.value = false
-            }
-        }
-    }
-
-    fun bindCurrentDevice(password: String = "") {
-        if (_isManagingDevice.value) return
-        viewModelScope.launch {
-            _isManagingDevice.value = true
-            _accountMessage.value = null
-            try {
-                accountManager.bindCurrentDevice(
-                    password = password,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-                ).onSuccess {
-                    _accountMessage.value = "设备绑定成功"
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to bind current device", error)
-                    _accountMessage.value = accountActionErrorMessage(error)
-                }
-            } finally {
-                _isManagingDevice.value = false
-            }
-        }
-    }
-
-    fun unbindCurrentDevice(password: String = "") {
-        if (_isManagingDevice.value) return
-        viewModelScope.launch {
-            _isManagingDevice.value = true
-            _accountMessage.value = null
-            try {
-                accountManager.unbindCurrentDevice(
-                    password = password,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-                ).onSuccess {
-                    _accountMessage.value = "设备解绑成功；清除本地数据后重新注册将创建新账户"
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to unbind current device", error)
-                    _accountMessage.value = accountActionErrorMessage(error)
-                }
-            } finally {
-                _isManagingDevice.value = false
-            }
-        }
-    }
-
     fun setSpeedShareMode(mode: SpeedShareMode) {
         viewModelScope.launch {
             settingsRepository.setSpeedShareMode(mode)
@@ -1764,9 +1695,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "invalid_login_credentials" -> "邮箱或密码错误"
             "invalid_account_password" -> "当前账户密码错误"
             "account_banned" -> "账户已被封禁，无法切换"
-            "device_already_bound" -> "当前设备已绑定其他账户"
-            "device_not_bound" -> "当前设备未绑定此账户"
-            "invalid_device_binding" -> "设备绑定参数无效"
             "account_not_found" -> "账户不存在，请重新同步账户"
             else -> error.message ?: "账户操作失败"
         }
