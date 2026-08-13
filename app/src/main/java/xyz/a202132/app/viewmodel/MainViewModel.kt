@@ -34,7 +34,8 @@ import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.DatabasePassphraseManager
 import java.io.File
 import java.time.Instant
-import java.time.LocalDate
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import kotlin.math.ceil
@@ -1650,7 +1651,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun speedShareErrorMessage(error: Throwable): String {
         val message = error.message.orEmpty()
         return when {
-            message == "speed_share_already_reported_today" -> "今天的智能测速结果已经共享过了"
+            message == "speed_share_already_reported_this_hour" -> "本小时的智能测速结果已经共享过了"
             message == "speed_share_results_empty" -> "没有可共享的有效测速结果"
             message == "account_banned" -> "账户已被封禁，无法共享测速结果"
             else -> message.ifBlank { "测速结果共享失败" }
@@ -1883,19 +1884,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             if (!smartSpeedShareInFlight.compareAndSet(false, true)) return@launch
             try {
-                val reportDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).toString()
+                val reportHour = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH"))
                 val accountUid = accountManager.currentAccount()?.uid ?: return@launch
-                val reportKey = "$accountUid:$reportDate"
-                if (settingsRepository.speedShareSmartLastDate.first() == reportKey) return@launch
+                val reportKey = "$accountUid:$reportHour"
+                if (settingsRepository.speedShareSmartLastHour.first() == reportKey) return@launch
                 accountManager.reportSpeedResults(
                     results = results,
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess { response ->
-                    settingsRepository.setSpeedShareSmartLastDate(reportKey)
+                    settingsRepository.setSpeedShareSmartLastHour(reportKey)
                     _speedShareStatus.value = response.speedShare ?: _speedShareStatus.value
                 }.onFailure { error ->
-                    if (error.message == "speed_share_already_reported_today") {
-                        settingsRepository.setSpeedShareSmartLastDate(reportKey)
+                    if (error.message == "speed_share_already_reported_this_hour") {
+                        settingsRepository.setSpeedShareSmartLastHour(reportKey)
                     } else {
                         Log.w(tag, "Smart speed share failed", error)
                     }

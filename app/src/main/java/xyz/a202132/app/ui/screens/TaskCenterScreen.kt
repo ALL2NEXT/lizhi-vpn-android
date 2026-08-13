@@ -117,7 +117,7 @@ fun TaskCenterScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "只上传节点标识和测速数值，不上传订阅链接。智能共享不额外测速，每人每天最多一次，成功上报会获得经验。",
+                        text = "只上传节点标识和测速数值，不上传订阅链接。智能共享不额外测速，每人每小时最多一次，成功上报会获得经验。",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -139,8 +139,8 @@ fun TaskCenterScreen(
                     Text(
                         text = when (speedShareMode) {
                             SpeedShareMode.OFF -> "当前未共享测速结果"
-                            SpeedShareMode.SMART -> if (speedShareStatus?.smartReportedToday == true) {
-                                "智能共享：今天已经上传过结果，本次奖励 ${speedShareStatus?.smartRewardExperience ?: 5} 经验"
+                            SpeedShareMode.SMART -> if (speedShareStatus?.smartReportedThisHour == true) {
+                                "智能共享：本小时已经上传过结果，本次奖励 ${speedShareStatus?.smartRewardExperience ?: 5} 经验"
                             } else {
                                 "智能共享：下次连接前自动上传已有测速结果，成功奖励 ${speedShareStatus?.smartRewardExperience ?: 5} 经验"
                             }

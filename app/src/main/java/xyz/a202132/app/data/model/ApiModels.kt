@@ -287,8 +287,8 @@ data class SpeedShareStatus(
     @SerializedName("enabled")
     val enabled: Boolean = true,
 
-    @SerializedName("smartReportedToday")
-    val smartReportedToday: Boolean = false,
+    @SerializedName("smartReportedThisHour")
+    val smartReportedThisHour: Boolean = false,
 
     @SerializedName("smartReportedAt")
     val smartReportedAt: String = "",
