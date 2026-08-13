@@ -56,22 +56,16 @@ fun TaskCenterScreen(
     val speedShareMessage by viewModel.speedShareMessage.collectAsStateWithLifecycle()
     val taskMessage by viewModel.telegramTaskMessage.collectAsStateWithLifecycle()
     val account = accountInfo
-    var telegramNickname by remember(account?.uid, taskStatus?.telegramNickname) {
-        mutableStateOf(taskStatus?.telegramNickname.orEmpty())
+    var telegramCode by remember(account?.uid) {
+        mutableStateOf("")
     }
     val context = LocalContext.current
     val isBanned = account?.level == 0
-    // 待审核和永久拒绝状态都不能修改昵称；驳回状态允许重新编辑并提交。
-    val isApproved = taskStatus?.status == "approved"
-    val isPending = taskStatus?.status == "pending"
-    val isRejected = taskStatus?.status == "rejected"
     val canSubmit = account != null &&
         !isBanned &&
-        !isApproved &&
-        !isPending &&
-        !isRejected &&
-        telegramNickname.trim().isNotBlank() &&
-        telegramNickname.trim().length <= 64 &&
+        taskStatus?.status != "claimed" &&
+        telegramCode.trim().isNotBlank() &&
+        telegramCode.trim().length <= 128 &&
         !isSubmitting
 
     LaunchedEffect(account?.uid) {
@@ -79,6 +73,9 @@ fun TaskCenterScreen(
     }
     LaunchedEffect(Unit) {
         viewModel.clearTelegramTaskMessage()
+    }
+    LaunchedEffect(taskStatus?.status) {
+        if (taskStatus?.status == "claimed") telegramCode = ""
     }
 
     fun openTelegramGroup() {
@@ -305,7 +302,7 @@ fun TaskCenterScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "加入后台配置的 TG 群后，提交你的 TG 昵称，管理员核实后完成任务。",
+                        text = "加入后台配置的 TG 群后，输入群内获取的口令，验证一致即可完成任务。",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -343,32 +340,29 @@ fun TaskCenterScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             OutlinedTextField(
-                                value = telegramNickname,
-                                onValueChange = { telegramNickname = it.take(64) },
+                                value = telegramCode,
+                                onValueChange = { telegramCode = it.take(128) },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !isBanned && !isApproved && !isPending &&
-                                    !isRejected && !isSubmitting,
+                                enabled = !isBanned && taskStatus?.status != "claimed" && !isSubmitting,
                                 singleLine = true,
-                                label = { Text("TG 昵称") },
-                                placeholder = { Text("例如：@yourname") }
+                                label = { Text("进群口令") },
+                                placeholder = { Text("输入群内获取的口令") }
                             )
                             Text(
                                 text = telegramTaskStatusText(taskStatus),
                                 fontWeight = FontWeight.Bold,
                                 color = when (taskStatus?.status) {
-                                    "approved" -> MaterialTheme.colorScheme.primary
-                                    "returned" -> MaterialTheme.colorScheme.tertiary
-                                    "rejected" -> MaterialTheme.colorScheme.error
+                                    "claimed" -> MaterialTheme.colorScheme.primary
                                     else -> MaterialTheme.colorScheme.onSurface
                                 }
                             )
-                            if (!isApproved && !isPending && !isRejected) {
+                            if (taskStatus?.status != "claimed") {
                                 Button(
-                                    onClick = { viewModel.submitTelegramTask(telegramNickname) },
+                                    onClick = { viewModel.submitTelegramTask(telegramCode) },
                                     enabled = canSubmit,
                                     modifier = Modifier.align(Alignment.End)
                                 ) {
-                                    Text(if (isSubmitting) "提交中…" else "提交审核")
+                                    Text(if (isSubmitting) "验证中…" else "验证口令")
                                 }
                             }
                         }
@@ -392,10 +386,7 @@ fun TaskCenterScreen(
 
 private fun telegramTaskStatusText(status: TelegramTaskStatus?): String {
     return when (status?.status) {
-        "approved" -> "已通过，任务奖励已发放"
-        "pending" -> "已提交，等待后台人工审核"
-        "returned" -> "已驳回，请修改 TG 昵称后重新提交"
-        "rejected" -> "已拒绝，无法再次提交"
-        else -> "未提交"
+        "claimed" -> "已完成，任务奖励已发放"
+        else -> "未完成"
     }
 }

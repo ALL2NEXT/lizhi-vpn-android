@@ -231,14 +231,14 @@ class AccountManager(private val context: Context) {
     }
 
     suspend fun submitTelegramTask(
-        telegramNickname: String,
+        telegramCode: String,
         timeoutMs: Long = 10000L
     ): Result<TelegramTaskStatus> {
         val registered = currentAccount()
             ?: return Result.failure(IllegalStateException("账户尚未同步"))
-        val normalizedNickname = telegramNickname.trim()
-        if (normalizedNickname.isBlank() || normalizedNickname.length > 64) {
-            return Result.failure(IllegalArgumentException("TG 昵称长度需要在 1～64 个字符之间"))
+        val normalizedCode = telegramCode.trim()
+        if (normalizedCode.isBlank() || normalizedCode.length > 128) {
+            return Result.failure(IllegalArgumentException("invalid_telegram_task_code"))
         }
         if (registered.level == 0) {
             return Result.failure(IllegalStateException("account_banned"))
@@ -250,7 +250,7 @@ class AccountManager(private val context: Context) {
                     accountEndpoint("/api/account/tasks/telegram"),
                     TelegramTaskSubmitRequest(
                         uid = registered.uid,
-                        telegramNickname = normalizedNickname
+                        code = normalizedCode
                     )
                 )
             }

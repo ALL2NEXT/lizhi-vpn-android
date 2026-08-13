@@ -212,8 +212,8 @@ data class TelegramTaskSubmitRequest(
     @SerializedName("uid")
     val uid: String,
 
-    @SerializedName("telegramNickname")
-    val telegramNickname: String
+    @SerializedName("code")
+    val code: String
 )
 
 data class DailyCheckinRequest(
@@ -357,16 +357,10 @@ data class TelegramTaskStatus(
     val rewardExperience: Long = 50L,
 
     @SerializedName("status")
-    val status: String = "not_submitted",
+    val status: String = "not_claimed",
 
-    @SerializedName("telegramNickname")
-    val telegramNickname: String = "",
-
-    @SerializedName("submittedAt")
-    val submittedAt: String = "",
-
-    @SerializedName("reviewedAt")
-    val reviewedAt: String = "",
+    @SerializedName("claimedAt")
+    val claimedAt: String = "",
 
     @SerializedName("experienceAwarded")
     val experienceAwarded: Long = 0L

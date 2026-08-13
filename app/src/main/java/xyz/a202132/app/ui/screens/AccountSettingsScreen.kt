@@ -301,7 +301,7 @@ fun AccountSettingsScreen(
                             switchPassword = ""
                             showSwitchDialog = true
                         },
-                        enabled = account != null && !isSwitchingAccount && !isDeletingAccount,
+                        enabled = !isSwitchingAccount && !isDeletingAccount,
                         modifier = Modifier.align(Alignment.End)
                     ) {
                         if (isSwitchingAccount) {

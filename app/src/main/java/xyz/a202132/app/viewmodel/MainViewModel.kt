@@ -1510,18 +1510,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun submitTelegramTask(telegramNickname: String) {
+    fun submitTelegramTask(telegramCode: String) {
         if (_isSubmittingTelegramTask.value) return
         viewModelScope.launch {
             _isSubmittingTelegramTask.value = true
             _telegramTaskMessage.value = null
             try {
                 accountManager.submitTelegramTask(
-                    telegramNickname = telegramNickname,
+                    telegramCode = telegramCode,
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess { status ->
                     _telegramTaskStatus.value = status
-                    _telegramTaskMessage.value = "已提交 TG 昵称，请等待后台人工审核"
+                    _telegramTaskMessage.value = "口令正确，TG 加群任务已完成"
                 }.onFailure { error ->
                     Log.w(tag, "Failed to submit Telegram task", error)
                     _telegramTaskMessage.value = telegramTaskErrorMessage(error)
@@ -1680,11 +1680,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return when (error.message) {
             "daily_checkin_already_completed" -> "今天已经签到过了"
             "daily_checkin_disabled" -> "每日签到暂未开放"
-            "invalid_telegram_task_submission" -> "请输入有效的 TG 昵称"
+            "invalid_telegram_task_code" -> "请输入有效的 TG 进群口令"
+            "telegram_task_claim_failed" -> "TG 任务领取失败，请稍后重试"
             "telegram_task_disabled" -> "后台暂未配置 TG 群任务"
-            "telegram_task_already_submitted" -> "TG 任务已经提交，请等待后台审核"
-            "telegram_task_already_approved" -> "TG 加群任务已经审核通过"
-            "telegram_task_permanently_rejected" -> "TG 加群任务已被拒绝，无法再次提交"
+            "telegram_task_invalid_code" -> "TG 进群口令错误"
+            "telegram_task_already_claimed" -> "TG 加群任务已经完成"
             "account_banned" -> "账户已被封禁，无法提交任务"
             else -> error.message ?: "任务操作失败"
         }

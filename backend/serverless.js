@@ -17,7 +17,7 @@
  *   GET  /api/account/tasks/speed-share-results?uid=<UID>
  *   POST /api/account/tasks/checkin
  *   POST /api/account/tasks/speed-share
- *   POST /api/account/tasks/telegram
+ *   POST /api/account/tasks/telegram   // 使用进群口令领取 TG 任务奖励
  *   POST /api/debug/users       // 临时公开调试用户接口，测试结束后应移除
  *
  * 管理后台接口：
@@ -30,8 +30,6 @@
  *   DELETE /<ADMIN_UUID>/api/users/<UID>
  *   PATCH /<ADMIN_UUID>/api/users/batch       // 批量修改用户等级
  *   DELETE /<ADMIN_UUID>/api/users/batch      // 批量删除用户
- *   GET  /<ADMIN_UUID>/api/telegram-tasks
- *   PATCH /<ADMIN_UUID>/api/telegram-tasks/<id>
  *   GET  /<ADMIN_UUID>/api/speed-share-results
  */
 
@@ -96,19 +94,14 @@ const USER_SCHEMA_STATEMENTS = [
 )`,
 `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_time
   ON user_usage_mb(user_id, ended_at DESC)`,
-`CREATE TABLE IF NOT EXISTS telegram_task_submissions_mb (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL UNIQUE,
-  telegram_nickname TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-  submitted_at TEXT NOT NULL,
-  reviewed_at TEXT NOT NULL DEFAULT '',
+`CREATE TABLE IF NOT EXISTS telegram_task_claims_mb (
+  user_id INTEGER NOT NULL PRIMARY KEY,
+  claimed_at TEXT NOT NULL,
   experience_awarded INTEGER NOT NULL DEFAULT 0,
-  resubmit_allowed INTEGER NOT NULL DEFAULT 0 CHECK (resubmit_allowed IN (0, 1)),
   FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
 )`,
-`CREATE INDEX IF NOT EXISTS idx_telegram_task_submissions_mb_status
-  ON telegram_task_submissions_mb(status, submitted_at DESC)`,
+`CREATE INDEX IF NOT EXISTS idx_telegram_task_claims_mb_claimed_at
+  ON telegram_task_claims_mb(claimed_at DESC)`,
 `CREATE TABLE IF NOT EXISTS daily_checkins_mb (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -170,7 +163,6 @@ const USER_SCHEMA_MIGRATIONS = [
   "ALTER TABLE users_mb ADD COLUMN experience INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE users_mb ADD COLUMN email TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE users_mb ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
-  "ALTER TABLE telegram_task_submissions_mb ADD COLUMN resubmit_allowed INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE speed_share_results_mb ADD COLUMN province TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE speed_share_results_mb ADD COLUMN carrier TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE speed_share_results_mb ADD COLUMN server_host TEXT NOT NULL DEFAULT ''",
@@ -191,6 +183,7 @@ const DEFAULT_STATE = {
     experienceThresholds: DEFAULT_EXPERIENCE_THRESHOLDS,
     dailyCheckinExperience: DEFAULT_DAILY_CHECKIN_EXPERIENCE,
     telegramGroupUrl: "",
+    telegramJoinCode: "",
     telegramTaskExperience: DEFAULT_TELEGRAM_TASK_EXPERIENCE,
     speedShareSmartExperience: DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   },
@@ -277,7 +270,7 @@ async function handleClient(request, env) {
       })),
     notice: visibleNotice(state.notice),
     appUpdate: state.appUpdate,
-    settings: state.settings,
+    settings: publicClientSettings(state.settings),
     generatedAt: beijingTimestamp(),
   });
 }
@@ -457,7 +450,7 @@ async function handleAccount(path, request, env) {
 
     const result = await db.batch([
       db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM telegram_task_claims_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_hourly_mb WHERE user_id = ?").bind(identity.userId),
@@ -606,14 +599,14 @@ async function handleAccount(path, request, env) {
   if (path === "/api/account/tasks/telegram" && request.method === "POST") {
     const body = await request.json();
     const reference = body && (body.uid || body.accountId);
-    const telegramNickname = normalizeTelegramNickname(body && body.telegramNickname);
+    const telegramCode = normalizeTelegramJoinCode(body && body.code);
     const identity = await resolveUserIdentity(env, reference);
-    if (!identity || !telegramNickname) {
-      return json({ ok: false, error: "invalid_telegram_task_submission" }, 400);
+    if (!identity || !telegramCode) {
+      return json({ ok: false, error: "invalid_telegram_task_code" }, 400);
     }
 
     const state = await readState(env);
-    if (!state.settings.telegramGroupUrl) {
+    if (!state.settings.telegramGroupUrl || !state.settings.telegramJoinCode) {
       return json({ ok: false, error: "telegram_task_disabled" }, 409);
     }
     const db = await ensureUserSchema(env);
@@ -624,40 +617,53 @@ async function handleAccount(path, request, env) {
     if (user.level === 0) {
       return json({ ok: false, error: "account_banned" }, 403);
     }
-    const existing = await db.prepare(
-      "SELECT status, resubmit_allowed FROM telegram_task_submissions_mb WHERE user_id = ?",
-    ).bind(identity.userId).first();
-    const existingStatus = cleanText(existing && existing.status);
-    // 待审核期间禁止修改昵称或重复提交；只有后台“驳回”后才允许重新提交。
-    const canResubmit = existingStatus === "rejected" &&
-      Number(existing && existing.resubmit_allowed) === 1;
-    if (existingStatus === "pending") {
-      return json({ ok: false, error: "telegram_task_already_submitted" }, 409);
-    }
-    if (existingStatus === "approved") {
-      return json({ ok: false, error: "telegram_task_already_approved" }, 409);
-    }
-    if (existingStatus === "rejected" && !canResubmit) {
-      return json({ ok: false, error: "telegram_task_permanently_rejected" }, 409);
+    if (telegramCode !== state.settings.telegramJoinCode) {
+      return json({ ok: false, error: "telegram_task_invalid_code" }, 403);
     }
 
-    const submittedAt = beijingTimestamp();
-    await db.prepare(
-      `INSERT INTO telegram_task_submissions_mb
-       (user_id, telegram_nickname, status, submitted_at, reviewed_at, experience_awarded, resubmit_allowed)
-       VALUES (?, ?, 'pending', ?, '', 0, 0)
-       ON CONFLICT(user_id) DO UPDATE SET
-         telegram_nickname = excluded.telegram_nickname,
-         status = 'pending',
-         submitted_at = excluded.submitted_at,
-         reviewed_at = '',
-         experience_awarded = 0,
-         resubmit_allowed = 0`,
-    ).bind(identity.userId, telegramNickname, submittedAt).run();
+    const claimedAt = beijingTimestamp();
+    const reward = normalizeExperience(
+      state.settings.telegramTaskExperience,
+      DEFAULT_TELEGRAM_TASK_EXPERIENCE,
+    );
+    const progression = applyExperience(
+      user.level,
+      user.experience,
+      reward,
+      state.settings.experienceThresholds,
+    );
+    const result = await db.batch([
+      db.prepare(
+        `INSERT OR IGNORE INTO telegram_task_claims_mb
+         (user_id, claimed_at, experience_awarded) VALUES (?, ?, ?)`,
+      ).bind(identity.userId, claimedAt, reward),
+      db.prepare(
+        `UPDATE users_mb SET experience = ?, level = ?
+         WHERE id = ? AND EXISTS (
+           SELECT 1 FROM telegram_task_claims_mb
+           WHERE user_id = ? AND claimed_at = ?
+         )`,
+      ).bind(
+        progression.experience,
+        progression.level,
+        identity.userId,
+        identity.userId,
+        claimedAt,
+      ),
+    ]);
+    const inserted = result[0];
+    const updatedResult = result[1];
+    if (!inserted || !inserted.meta || Number(inserted.meta.changes) < 1) {
+      return json({ ok: false, error: "telegram_task_already_claimed" }, 409);
+    }
+    if (!updatedResult || !updatedResult.meta || Number(updatedResult.meta.changes) < 1) {
+      throw new Error("telegram_task_claim_failed");
+    }
+    const updated = await readD1User(env, identity.userId);
 
     return json({
       ok: true,
-      account: publicAccount(user),
+      account: publicAccount(updated),
       telegram: await readTelegramTask(env, identity.userId, state.settings),
     });
   }
@@ -1321,28 +1327,6 @@ async function handleAdmin(path, request, env) {
     });
   }
 
-  if (path === "/api/telegram-tasks" && request.method === "GET") {
-    const db = await ensureUserSchema(env);
-    const query = await db.prepare(
-      `SELECT t.id, t.user_id, t.telegram_nickname, t.status, t.submitted_at,
-              t.reviewed_at, t.experience_awarded, t.resubmit_allowed,
-              u.uid, u.nickname, u.level, u.experience
-       FROM telegram_task_submissions_mb t
-       JOIN users_mb u ON u.id = t.user_id
-       ORDER BY CASE
-                  WHEN t.status = 'pending' THEN 0
-                  WHEN t.status = 'rejected' AND t.resubmit_allowed = 1 THEN 1
-                  ELSE 2
-                END,
-                t.submitted_at DESC`,
-    ).all();
-    return json({
-      ok: true,
-      tasks: (query.results || []).map(publicAdminTelegramTask),
-      generatedAt: beijingTimestamp(),
-    });
-  }
-
   if (path === "/api/speed-share-results" && request.method === "GET") {
     const requestUrl = new URL(request.url);
     const requestedLimit = Number(requestUrl.searchParams.get("limit"));
@@ -1361,24 +1345,6 @@ async function handleAdmin(path, request, env) {
       results: (query.results || []).map(publicAdminSpeedShareResult),
       generatedAt: beijingTimestamp(),
     });
-  }
-
-  const telegramTaskMatch = path.match(/^\/api\/telegram-tasks\/(\d+)$/);
-  if (telegramTaskMatch && request.method === "PATCH") {
-    const body = await request.json();
-    const action = cleanText(body && (body.action || body.status)).toLowerCase();
-    if (action !== "approve" && action !== "return" && action !== "reject") {
-      return json({ ok: false, error: "invalid_telegram_task_action" }, 400);
-    }
-    try {
-      const task = await reviewTelegramTask(env, Number(telegramTaskMatch[1]), action);
-      return json({ ok: true, task });
-    } catch (error) {
-      return json({
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      }, 409);
-    }
   }
 
   if (path === "/api/users" && request.method === "GET") {
@@ -1473,7 +1439,7 @@ async function handleAdmin(path, request, env) {
     for (const identity of identities) {
       statements.push(
         db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
-        db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
+        db.prepare("DELETE FROM telegram_task_claims_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM speed_share_hourly_mb WHERE user_id = ?").bind(identity.userId),
@@ -1500,7 +1466,7 @@ async function handleAdmin(path, request, env) {
     const db = await ensureUserSchema(env);
     const result = await db.batch([
       db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM telegram_task_submissions_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM telegram_task_claims_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_hourly_mb WHERE user_id = ?").bind(identity.userId),
@@ -1665,21 +1631,18 @@ async function readSpeedShareStatus(env, userId, settings = {}) {
 async function readTelegramTask(env, userId, settings) {
   const db = await ensureUserSchema(env);
   const row = await db.prepare(
-    `SELECT telegram_nickname, status, submitted_at, reviewed_at,
-            experience_awarded, resubmit_allowed
-     FROM telegram_task_submissions_mb WHERE user_id = ?`,
+    `SELECT claimed_at, experience_awarded
+     FROM telegram_task_claims_mb WHERE user_id = ?`,
   ).bind(userId).first();
   return {
-    enabled: Boolean(settings && settings.telegramGroupUrl),
+    enabled: Boolean(settings && settings.telegramGroupUrl && settings.telegramJoinCode),
     groupUrl: cleanText(settings && settings.telegramGroupUrl),
     rewardExperience: normalizeExperience(
       settings && settings.telegramTaskExperience,
       DEFAULT_TELEGRAM_TASK_EXPERIENCE,
     ),
-    status: publicTelegramTaskStatus(row),
-    telegramNickname: cleanText(row && row.telegram_nickname),
-    submittedAt: cleanText(row && row.submitted_at),
-    reviewedAt: cleanText(row && row.reviewed_at),
+    status: row ? "claimed" : "not_claimed",
+    claimedAt: cleanText(row && row.claimed_at),
     experienceAwarded: normalizeExperience(row && row.experience_awarded),
   };
 }
@@ -1713,21 +1676,6 @@ function publicAdminUser(row) {
   };
 }
 
-function publicAdminTelegramTask(row) {
-  return {
-    id: Number(row.id),
-    uid: normalizeStoredUid(row.uid),
-    nickname: cleanText(row.nickname),
-    level: normalizeLevel(row.level),
-    experience: normalizeExperience(row.experience),
-    telegramNickname: cleanText(row.telegram_nickname),
-    status: publicTelegramTaskStatus(row),
-    submittedAt: cleanText(row.submitted_at),
-    reviewedAt: cleanText(row.reviewed_at),
-    experienceAwarded: normalizeExperience(row.experience_awarded),
-  };
-}
-
 function publicAdminSpeedShareResult(row) {
   return {
     nodeId: cleanText(row.node_id),
@@ -1744,84 +1692,6 @@ function publicAdminSpeedShareResult(row) {
     lastReportedAt: cleanText(row.last_reported_at),
     reportCount: Number(row.report_count) || 0,
   };
-}
-
-function publicTelegramTaskStatus(row) {
-  const status = cleanText(row && row.status);
-  return status === "rejected" && Number(row && row.resubmit_allowed) === 1
-    ? "returned"
-    : status || "not_submitted";
-}
-
-async function readTelegramTaskRow(env, taskId) {
-  const db = await ensureUserSchema(env);
-  return db.prepare(
-    `SELECT t.id, t.user_id, t.telegram_nickname, t.status, t.submitted_at,
-            t.reviewed_at, t.experience_awarded, t.resubmit_allowed,
-            u.uid, u.nickname, u.level, u.experience
-     FROM telegram_task_submissions_mb t
-     JOIN users_mb u ON u.id = t.user_id
-     WHERE t.id = ?`,
-  ).bind(taskId).first();
-}
-
-async function reviewTelegramTask(env, taskId, action) {
-  const db = await ensureUserSchema(env);
-  const row = await readTelegramTaskRow(env, taskId);
-  if (!row) throw new Error("telegram_task_not_found");
-  const currentStatus = cleanText(row.status);
-  const resubmitAllowed = Number(row.resubmit_allowed) === 1;
-
-  // “驳回”允许用户修改后重新提交，“永久拒绝”则锁定该任务。
-  if (currentStatus === "approved") {
-    throw new Error("telegram_task_already_approved");
-  }
-  if (currentStatus === "rejected" && !resubmitAllowed) {
-    throw new Error("telegram_task_permanently_rejected");
-  }
-
-  if (action === "return") {
-    await db.prepare(
-      "UPDATE telegram_task_submissions_mb SET status = 'rejected', reviewed_at = ?, " +
-        "resubmit_allowed = 1 WHERE id = ?",
-    ).bind(beijingTimestamp(), taskId).run();
-    return publicAdminTelegramTask(await readTelegramTaskRow(env, taskId));
-  }
-
-  if (action === "reject") {
-    await db.prepare(
-      "UPDATE telegram_task_submissions_mb SET status = 'rejected', reviewed_at = ?, " +
-        "resubmit_allowed = 0 WHERE id = ?",
-    ).bind(beijingTimestamp(), taskId).run();
-    return publicAdminTelegramTask(await readTelegramTaskRow(env, taskId));
-  }
-
-  if (currentStatus !== "pending") {
-    throw new Error("telegram_task_not_pending");
-  }
-
-  const state = await readState(env);
-  const reward = normalizeExperience(
-    state.settings.telegramTaskExperience,
-    DEFAULT_TELEGRAM_TASK_EXPERIENCE,
-  );
-  const progression = applyExperience(
-    normalizeLevel(row.level),
-    normalizeExperience(row.experience),
-    reward,
-    state.settings.experienceThresholds,
-  );
-  const reviewedAt = beijingTimestamp();
-  await db.batch([
-    db.prepare(
-      "UPDATE users_mb SET experience = ?, level = ? WHERE id = ?",
-    ).bind(progression.experience, progression.level, Number(row.user_id)),
-    db.prepare(
-      "UPDATE telegram_task_submissions_mb SET status = 'approved', reviewed_at = ?, " +
-        "experience_awarded = ?, resubmit_allowed = 0 WHERE id = ?",
-    ).bind(reviewedAt, reward, taskId),
-  ]);
-  return publicAdminTelegramTask(await readTelegramTaskRow(env, taskId));
 }
 
 function usersDb(env) {
@@ -2294,9 +2164,9 @@ function normalizeAccountPassword(value) {
   return value.length >= 8 && value.length <= 128 ? value : "";
 }
 
-function normalizeTelegramNickname(value) {
-  const nickname = cleanText(value).replace(/^@+/, "@");
-  return nickname.length >= 1 && nickname.length <= 64 ? nickname : "";
+function normalizeTelegramJoinCode(value) {
+  const code = cleanText(value).replace(/[\u0000-\u001f\u007f]/g, "");
+  return code.length >= 1 && code.length <= 128 ? code : "";
 }
 
 async function hashAccountPassword(password) {
@@ -2782,6 +2652,7 @@ function normalizeSettings(value) {
       DEFAULT_DAILY_CHECKIN_EXPERIENCE,
     ),
     telegramGroupUrl: normalizeTelegramGroupUrl(settings.telegramGroupUrl),
+    telegramJoinCode: normalizeTelegramJoinCode(settings.telegramJoinCode),
     telegramTaskExperience: normalizeExperience(
       settings.telegramTaskExperience,
       DEFAULT_TELEGRAM_TASK_EXPERIENCE,
@@ -2791,6 +2662,12 @@ function normalizeSettings(value) {
       DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
     ),
   };
+}
+
+function publicClientSettings(settings) {
+  const value = normalizeSettings(settings);
+  const { telegramJoinCode, ...publicSettings } = value;
+  return publicSettings;
 }
 
 function normalizeTelegramGroupUrl(value) {
@@ -2975,22 +2852,6 @@ function adminHtml() {
      .user-row.dirty td:first-child { background: #3b321d; }
       .user-row.search-current td { box-shadow: inset 0 0 0 2px #38bdf8; }
       .user-row[hidden] { display: none; }
-      .task-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-      .task-toolbar button { margin: 0; }
-      .task-list { display: grid; gap: 12px; }
-      .task-card { padding: 14px; background: #111827; border: 1px solid #374151; border-radius: 10px; }
-      .task-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-      .task-card h3 { margin: 0 0 4px; color: #f8fafc; font-size: 15px; }
-      .task-card-meta { color: #94a3b8; font-size: 12px; }
-      .task-card dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; margin: 12px 0 0; }
-      .task-card dt { color: #94a3b8; font-size: 12px; }
-      .task-card dd { margin: 2px 0 0; color: #e5e7eb; word-break: break-word; }
-      .task-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-      .task-actions button { margin: 0; }
-      .task-status { display: inline-block; padding: 4px 8px; border-radius: 999px; color: #d1fae5; background: #14532d; font-size: 12px; white-space: nowrap; }
-      .task-status.pending { color: #fef3c7; background: #78350f; }
-      .task-status.returned { color: #dbeafe; background: #1e3a8a; }
-      .task-status.rejected { color: #fee2e2; background: #7f1d1d; }
       button:disabled { cursor: not-allowed; opacity: .5; }
      #status { position: sticky; top: 0; z-index: 20; box-sizing: border-box; color: #86efac; background: #111827; }
      #status:not(:empty) { min-height: 44px; padding: 11px 28px; border-bottom: 1px solid #374151; }
@@ -3043,7 +2904,6 @@ function adminHtml() {
        <nav class="tab-nav" role="tablist" aria-label="后台模块" aria-orientation="vertical">
          <button class="tab-button" role="tab" type="button" data-tab="data-dashboard">数据看板</button>
          <button class="tab-button" role="tab" type="button" data-tab="subscriptions">订阅线路</button>
-         <button class="tab-button" role="tab" type="button" data-tab="telegram-tasks">TG任务审核</button>
           <button class="tab-button" role="tab" type="button" data-tab="app-settings">应用设置</button>
          <button class="tab-button" role="tab" type="button" data-tab="notice">公告</button>
          <button class="tab-button" role="tab" type="button" data-tab="app-update">版本更新</button>
@@ -3131,17 +2991,6 @@ function adminHtml() {
      <button type="button" onclick="pushSection('subscriptions')">推送</button>
    </section>
 
-  <section class="card tab-panel" role="tabpanel" data-panel="telegram-tasks">
-    <div class="task-toolbar">
-      <div>
-        <h2>TG 加群任务审核</h2>
-        <p>客户端提交 TG 昵称后，在这里人工确认是否已加入群组。</p>
-      </div>
-      <button class="secondary" type="button" onclick="loadTelegramTasks()">刷新审核列表</button>
-    </div>
-    <div id="telegramTasks" class="task-list"><div class="loading-state">正在读取 TG 任务…</div></div>
-  </section>
-
   <section class="card tab-panel" role="tabpanel" data-panel="app-settings">
     <h2>应用基础设置</h2>
     <div class="grid">
@@ -3152,6 +3001,7 @@ function adminHtml() {
        <div class="field"><label>后台请求超时（毫秒）<input id="nodeRequestTimeoutMs" type="number" min="5000" max="60000" step="1000"></label></div>
        <div class="field"><label>每日签到经验奖励<input id="dailyCheckinExperience" type="number" min="0" step="1"></label></div>
        <div class="field"><label>TG 群连接<input id="telegramGroupUrl" type="text" placeholder="https://t.me/your_group"></label></div>
+       <div class="field"><label>TG 进群口令<input id="telegramJoinCode" type="text" placeholder="例如：FIREFLY2026"></label></div>
        <div class="field"><label>TG 任务经验奖励<input id="telegramTaskExperience" type="number" min="0" step="1"></label></div>
        <div class="field"><label>智能测速共享经验奖励<input id="speedShareSmartExperience" type="number" min="0" step="1"></label></div>
       <div class="field"><label>Lv1 → Lv2 所需经验<input id="experienceThresholdLv2" type="number" min="1" step="1"></label></div>
@@ -3258,11 +3108,6 @@ function adminHtml() {
  function adminErrorMessage(error, fallback) {
     if (error === 'invalid_batch_user_update') return '批量修改参数无效，最多选择 100 个用户，等级范围为 Lv0～Lv6';
      if (error === 'invalid_batch_user_delete') return '批量删除参数无效，最多选择 100 个用户';
-     if (error === 'telegram_task_not_found') return 'TG 任务不存在';
-     if (error === 'telegram_task_permanently_rejected') return '该 TG 任务已被永久拒绝，不能再次提交';
-     if (error === 'telegram_task_not_pending') return '该 TG 任务当前不在待审核状态';
-     if (error === 'telegram_task_already_approved') return '该 TG 任务已经通过，不能重复处理';
-     if (error === 'invalid_telegram_task_action') return 'TG 任务处理动作无效';
     if (error === 'subscription_must_be_plaintext_nodes') return '订阅必须返回可识别的明文节点，不能使用已加密接口';
     if (error === 'invalid_min_app_version') return '最低应用版本格式无效，请填写类似 2.40 的数字版本';
    if (error === 'external_subscription_unreachable') return '外部明文订阅接口无法访问';
@@ -3350,86 +3195,9 @@ function activateTab(name) {
   document.querySelectorAll('.tab-button').forEach(function(button) {
   button.onclick = function() {
     activateTab(button.dataset.tab);
-    if (button.dataset.tab === 'telegram-tasks') loadTelegramTasks();
     window.scrollTo({top: 0, behavior: 'auto'});
   };
  });
- function telegramTaskStatusText(status) {
-   if (status === 'pending') return '待审核';
-   if (status === 'approved') return '已通过';
-   if (status === 'returned') return '已驳回，可重新提交';
-   if (status === 'rejected') return '已拒绝，不可再次提交';
-   return '未提交';
- }
- async function loadTelegramTasks() {
-   const host = el('telegramTasks');
-   if (!host) return;
-   host.innerHTML = '<div class="loading-state">正在读取 TG 任务…</div>';
-   try {
-     const response = await fetch(ADMIN_API_BASE + '/telegram-tasks', {headers: headers()});
-     const responseText = await response.text();
-     let data = {};
-     try { data = JSON.parse(responseText); } catch (_) {}
-     if (!response.ok) throw new Error(data.error || 'telegram_tasks_load_failed');
-     const tasks = Array.isArray(data.tasks) ? data.tasks : [];
-     if (tasks.length === 0) {
-       host.innerHTML = '<div class="user-table-empty">暂无 TG 加群任务提交</div>';
-       return;
-     }
-     host.innerHTML = tasks.map(function(task) {
-       const status = String(task.status || '');
-       const actions = status !== 'pending'
-         ? ''
-         : '<div class="task-actions">' +
-           '<button type="button" onclick="reviewTelegramTask(' + Number(task.id) + ', \\'approve\\')">通过并发放经验</button>' +
-           '<button class="secondary" type="button" onclick="reviewTelegramTask(' + Number(task.id) + ', \\'return\\')">驳回，可重新提交</button>' +
-           '<button class="danger" type="button" onclick="reviewTelegramTask(' + Number(task.id) + ', \\'reject\\')">永久拒绝</button>' +
-           '</div>';
-       return '<article class="task-card">' +
-         '<div class="task-card-header"><div><h3>' + esc(task.nickname || task.uid) + '</h3>' +
-         '<div class="task-card-meta">UID：' + esc(task.uid) + ' · 提交时间：' + esc(task.submittedAt || '-') + '</div></div>' +
-         '<span class="task-status ' + esc(status) + '">' + telegramTaskStatusText(status) + '</span></div>' +
-         '<dl><div><dt>TG 昵称</dt><dd>' + esc(task.telegramNickname) + '</dd></div>' +
-         '<div><dt>账户等级</dt><dd>Lv' + Number(task.level || 0) + '</dd></div>' +
-         '<div><dt>已奖励经验</dt><dd>' + Number(task.experienceAwarded || 0) + '</dd></div></dl>' +
-         (task.reviewedAt ? '<div class="task-card-meta">处理时间：' + esc(task.reviewedAt) + '</div>' : '') +
-         actions + '</article>';
-     }).join('');
-   } catch (error) {
-     host.innerHTML = '<div class="error-state">TG 任务读取失败</div>';
-     show('TG 任务读取失败，请检查网络', true);
-   }
- }
- async function reviewTelegramTask(taskId, action) {
-   const message = action === 'approve'
-     ? '确定已核实该用户加入 TG 群，并发放经验奖励吗？'
-     : action === 'return'
-       ? '确定驳回该 TG 加群任务，并允许用户修改后重新提交吗？'
-       : '确定永久拒绝该 TG 加群任务吗？拒绝后用户无法再次提交。';
-   if (!confirm(message)) return;
-   try {
-     const response = await fetch(ADMIN_API_BASE + '/telegram-tasks/' + encodeURIComponent(taskId), {
-       method: 'PATCH',
-       headers: headers(),
-       body: JSON.stringify({action: action})
-     });
-     const responseText = await response.text();
-     let data = {};
-     try { data = JSON.parse(responseText); } catch (_) {}
-     if (!response.ok) {
-       show(adminErrorMessage(data.error, 'TG 任务处理失败（HTTP ' + response.status + '）'), true);
-       return;
-     }
-     await loadTelegramTasks();
-     show(action === 'approve'
-       ? 'TG 任务已通过并发放经验'
-       : action === 'return'
-         ? 'TG 任务已驳回，用户可重新提交'
-         : 'TG 任务已永久拒绝');
-   } catch (error) {
-     show('TG 任务处理失败，请检查网络', true);
-   }
- }
 function formatMegabytes(megabytes) {
   let value = Number(megabytes) || 0;
   const units = ['MB', 'GB', 'TB', 'PB'];
@@ -4656,6 +4424,7 @@ function fillState(state) {
    setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
    setValue('dailyCheckinExperience', settings.dailyCheckinExperience == null ? 10 : settings.dailyCheckinExperience);
    setValue('telegramGroupUrl', settings.telegramGroupUrl);
+   setValue('telegramJoinCode', settings.telegramJoinCode);
    setValue('telegramTaskExperience', settings.telegramTaskExperience == null ? 50 : settings.telegramTaskExperience);
    setValue('speedShareSmartExperience', settings.speedShareSmartExperience == null ? 5 : settings.speedShareSmartExperience);
   const experienceThresholds = Array.isArray(settings.experienceThresholds)
@@ -4731,6 +4500,7 @@ function formState() {
        nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
        dailyCheckinExperience: Number(value('dailyCheckinExperience') || 0),
        telegramGroupUrl: value('telegramGroupUrl'),
+       telegramJoinCode: value('telegramJoinCode'),
        telegramTaskExperience: Number(value('telegramTaskExperience') || 0),
        speedShareSmartExperience: Number(value('speedShareSmartExperience') || 0),
        experienceThresholds: [
