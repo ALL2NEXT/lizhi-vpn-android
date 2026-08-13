@@ -123,6 +123,7 @@ const USER_SCHEMA_STATEMENTS = [
 `CREATE TABLE IF NOT EXISTS speed_share_results_mb (
   node_id TEXT PRIMARY KEY,
   node_name TEXT NOT NULL DEFAULT '',
+  server_host TEXT NOT NULL DEFAULT '',
   subscription_group_name TEXT NOT NULL DEFAULT '',
   province TEXT NOT NULL DEFAULT '',
   carrier TEXT NOT NULL DEFAULT '',
@@ -172,6 +173,7 @@ const USER_SCHEMA_MIGRATIONS = [
   "ALTER TABLE telegram_task_submissions_mb ADD COLUMN resubmit_allowed INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE speed_share_results_mb ADD COLUMN province TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE speed_share_results_mb ADD COLUMN carrier TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE speed_share_results_mb ADD COLUMN server_host TEXT NOT NULL DEFAULT ''",
 ];
 let userSchemaReady = false;
 
@@ -526,7 +528,7 @@ async function handleAccount(path, request, env) {
     }
     const db = await ensureUserSchema(env);
     const query = await db.prepare(
-      "SELECT node_id, node_name, subscription_group_name, province, carrier, " +
+      "SELECT node_id, node_name, server_host, subscription_group_name, province, carrier, " +
         "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
         "upload_mbps, updated_at, last_reported_at, report_count " +
         "FROM speed_share_results_mb ORDER BY updated_at DESC LIMIT 1000",
@@ -781,13 +783,15 @@ async function handleSpeedShareSubmission(request, env) {
 
   const statements = results.map((item) => db.prepare(
     `INSERT INTO speed_share_results_mb
-     (node_id, node_name, subscription_group_name, province, carrier,
+     (node_id, node_name, server_host, subscription_group_name, province, carrier,
       tcping_latency_ms, url_test_latency_ms, download_mbps, upload_mbps,
       updated_at, last_reported_at, report_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
      ON CONFLICT(node_id) DO UPDATE SET
        node_name = CASE WHEN excluded.node_name <> ''
          THEN excluded.node_name ELSE speed_share_results_mb.node_name END,
+       server_host = CASE WHEN excluded.server_host <> ''
+         THEN excluded.server_host ELSE speed_share_results_mb.server_host END,
        subscription_group_name = CASE WHEN excluded.subscription_group_name <> ''
          THEN excluded.subscription_group_name
          ELSE speed_share_results_mb.subscription_group_name END,
@@ -830,6 +834,7 @@ async function handleSpeedShareSubmission(request, env) {
   ).bind(
     item.nodeId,
     item.nodeName,
+    item.serverHost,
     item.subscriptionGroupName,
     item.province,
     item.carrier,
@@ -873,6 +878,9 @@ function normalizeSpeedShareResult(value, location = {}) {
   const result = {
     nodeId,
     nodeName: cleanText(value.nodeName || value.name).slice(0, 200),
+    serverHost: normalizeSpeedShareServerHost(
+      value.serverHost || value.server || value.host,
+    ),
     subscriptionGroupName: cleanText(
       value.subscriptionGroupName || value.groupName,
     ).slice(0, 200),
@@ -956,6 +964,23 @@ function sharedMbps(value) {
   return Number.isFinite(number) && number > 0 && number <= 1000000
     ? Math.round(number * 1000) / 1000
     : 0;
+}
+
+function normalizeSpeedShareServerHost(value) {
+  let host = cleanText(value).slice(0, 255);
+  if (!host) return "";
+  if (host.startsWith("[")) {
+    const closingBracket = host.indexOf("]");
+    if (closingBracket > 1) host = host.slice(1, closingBracket);
+  } else {
+    const firstColon = host.indexOf(":");
+    const lastColon = host.lastIndexOf(":");
+    if (firstColon === lastColon && lastColon > 0 &&
+        /^\d+$/.test(host.slice(lastColon + 1))) {
+      host = host.slice(0, lastColon);
+    }
+  }
+  return host.trim().replace(/\.$/, "").toLowerCase();
 }
 
 async function handleDebugUserV2(request, env) {
@@ -1326,7 +1351,7 @@ async function handleAdmin(path, request, env) {
       : 500;
     const db = await ensureUserSchema(env);
     const query = await db.prepare(
-      "SELECT node_id, node_name, subscription_group_name, province, carrier, " +
+      "SELECT node_id, node_name, server_host, subscription_group_name, province, carrier, " +
         "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
         "upload_mbps, updated_at, last_reported_at, report_count " +
         "FROM speed_share_results_mb ORDER BY updated_at DESC LIMIT ?",
@@ -1707,6 +1732,7 @@ function publicAdminSpeedShareResult(row) {
   return {
     nodeId: cleanText(row.node_id),
     nodeName: cleanText(row.node_name),
+    serverHost: cleanText(row.server_host),
     subscriptionGroupName: cleanText(row.subscription_group_name),
     province: cleanText(row.province),
     carrier: cleanText(row.carrier),

@@ -1785,16 +1785,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val sharedResults = sharedResponse.results
         val resultsByNodeId = sharedResults.associateBy { it.nodeId }
+        val sharedResultComparator = compareBy<SpeedShareNodeResult> {
+            sharedLocationPriority(
+                result = it,
+                clientProvince = sharedResponse.clientProvince,
+                clientCarrier = sharedResponse.clientCarrier
+            )
+        }
+            .thenBy { sharedLatencyScore(it) }
+            .thenByDescending { it.downloadMbps }
+            .thenByDescending { it.uploadMbps }
+            .thenBy { it.nodeId }
+        val resultsByServerHost = sharedResults
+            .filter { sharedServerHost(it.serverHost).isNotBlank() }
+            .groupBy { sharedServerHost(it.serverHost) }
+            .mapValues { (_, results) -> results.minWithOrNull(sharedResultComparator) }
         return nodes.asSequence()
             .mapNotNull { node ->
-                val result = resultsByNodeId[sharedNodeId(node)] ?: return@mapNotNull null
-                if (result.tcpingLatencyMs <= 0 &&
-                    result.urlTestLatencyMs <= 0 &&
-                    result.downloadMbps <= 0f &&
-                    result.uploadMbps <= 0f
-                ) {
-                    return@mapNotNull null
-                }
+                val result = resultsByNodeId[sharedNodeId(node)]
+                    ?.takeIf(::hasSharedSpeedMetrics)
+                    ?: resultsByServerHost[sharedServerHost(node.server)]
+                        ?.takeIf(::hasSharedSpeedMetrics)
+                    ?: return@mapNotNull null
                 node to result
             }
             .sortedWith(
@@ -1849,6 +1861,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun sharedNodeId(node: Node): String = node.favoriteSourceNodeId ?: node.id
 
+    private fun hasSharedSpeedMetrics(result: SpeedShareNodeResult): Boolean =
+        result.tcpingLatencyMs > 0 ||
+            result.urlTestLatencyMs > 0 ||
+            result.downloadMbps > 0f ||
+            result.uploadMbps > 0f
+
+    private fun sharedServerHost(value: String): String {
+        var host = value.trim()
+        if (host.isBlank()) return ""
+        if (host.startsWith("[")) {
+            val closingBracket = host.indexOf(']')
+            if (closingBracket > 1) host = host.substring(1, closingBracket)
+        } else {
+            val firstColon = host.indexOf(':')
+            val lastColon = host.lastIndexOf(':')
+            if (firstColon == lastColon && lastColon > 0 &&
+                host.substring(lastColon + 1).all { it.isDigit() }
+            ) {
+                host = host.substring(0, lastColon)
+            }
+        }
+        return host.trim().trimEnd('.').lowercase()
+    }
+
     private fun buildSpeedShareResults(
         nodes: List<Node>,
         tcpingResults: List<LatencyTester.LatencyResult> = emptyList(),
@@ -1871,6 +1907,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             SpeedShareNodeResult(
                 nodeId = sharedNodeId(node),
                 nodeName = node.getDisplayName(),
+                serverHost = sharedServerHost(node.server),
                 subscriptionGroupName = node.subscriptionSourceName.orEmpty(),
                 tcpingLatencyMs = tcpingLatency ?: 0,
                 urlTestLatencyMs = urlTestLatency ?: 0,

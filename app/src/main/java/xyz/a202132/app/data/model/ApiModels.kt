@@ -253,6 +253,9 @@ data class SpeedShareNodeResult(
     @SerializedName("nodeName")
     val nodeName: String = "",
 
+    @SerializedName("serverHost")
+    val serverHost: String = "",
+
     @SerializedName("subscriptionGroupName")
     val subscriptionGroupName: String = "",
 
