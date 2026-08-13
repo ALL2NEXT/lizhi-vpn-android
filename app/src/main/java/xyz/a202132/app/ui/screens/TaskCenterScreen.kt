@@ -16,6 +16,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -111,36 +112,41 @@ fun TaskCenterScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "测速结果共享",
+                        text = "智能测速结果共享",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "只上传节点标识和测速数值，不上传订阅链接。智能共享不额外测速，每人每小时最多一次，成功上报会获得经验。",
+                        text = "只上传节点标识和测速数值，不上传订阅链接。智能共享不额外测速，每个账户每个订阅组每小时最多一次，成功上报会获得经验。",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(
-                            onClick = { viewModel.setSpeedShareMode(SpeedShareMode.OFF) }
-                        ) {
-                            Text(if (speedShareMode == SpeedShareMode.OFF) "✓ 关闭" else "关闭")
-                        }
-                        TextButton(
-                            onClick = { viewModel.setSpeedShareMode(SpeedShareMode.SMART) }
-                        ) {
-                            Text(if (speedShareMode == SpeedShareMode.SMART) "✓ 智能共享" else "智能共享")
-                        }
+                        Text(
+                            text = if (speedShareMode == SpeedShareMode.SMART) "已开启" else "已关闭",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Switch(
+                            checked = speedShareMode == SpeedShareMode.SMART,
+                            onCheckedChange = { enabled ->
+                                viewModel.setSpeedShareMode(
+                                    if (enabled) SpeedShareMode.SMART else SpeedShareMode.OFF
+                                )
+                            }
+                        )
                     }
                     Text(
                         text = when (speedShareMode) {
                             SpeedShareMode.OFF -> "当前未共享测速结果"
                             SpeedShareMode.SMART -> if (speedShareStatus?.smartReportedThisHour == true) {
-                                "智能共享：本小时已经上传过结果，本次奖励 ${speedShareStatus?.smartRewardExperience ?: 5} 经验"
+                                "智能共享：本小时已上传 ${speedShareStatus?.smartReportedGroupCount ?: 0} 个订阅组结果，其他订阅组仍可上传"
                             } else {
                                 "智能共享：下次连接前自动上传已有测速结果，成功奖励 ${speedShareStatus?.smartRewardExperience ?: 5} 经验"
                             }

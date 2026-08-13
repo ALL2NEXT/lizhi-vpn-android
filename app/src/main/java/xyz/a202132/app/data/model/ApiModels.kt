@@ -290,6 +290,9 @@ data class SpeedShareStatus(
     @SerializedName("smartReportedThisHour")
     val smartReportedThisHour: Boolean = false,
 
+    @SerializedName("smartReportedGroupCount")
+    val smartReportedGroupCount: Int = 0,
+
     @SerializedName("smartReportedAt")
     val smartReportedAt: String = "",
 

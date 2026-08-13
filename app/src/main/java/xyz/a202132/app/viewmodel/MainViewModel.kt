@@ -1651,7 +1651,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun speedShareErrorMessage(error: Throwable): String {
         val message = error.message.orEmpty()
         return when {
-            message == "speed_share_already_reported_this_hour" -> "本小时的智能测速结果已经共享过了"
+            message == "speed_share_already_reported_this_hour_group" -> "本小时该订阅组的智能测速结果已经共享过了"
             message == "speed_share_results_empty" -> "没有可共享的有效测速结果"
             message == "account_banned" -> "账户已被封禁，无法共享测速结果"
             else -> message.ifBlank { "测速结果共享失败" }
@@ -1887,17 +1887,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val reportHour = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH"))
                 val accountUid = accountManager.currentAccount()?.uid ?: return@launch
-                val reportKey = "$accountUid:$reportHour"
-                if (settingsRepository.speedShareSmartLastHour.first() == reportKey) return@launch
+                val subscriptionGroupName = results.firstOrNull()?.subscriptionGroupName
+                    .orEmpty()
+                    .trim()
+                val reportGroupKey = subscriptionGroupName.ifBlank { "__default__" }
+                val reportKey = "$accountUid:$reportHour:$reportGroupKey"
+                if (settingsRepository.speedShareSmartReportedGroups.first().contains(reportKey)) {
+                    return@launch
+                }
                 accountManager.reportSpeedResults(
                     results = results,
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess { response ->
-                    settingsRepository.setSpeedShareSmartLastHour(reportKey)
+                    settingsRepository.addSpeedShareSmartReportedGroup(reportKey)
                     _speedShareStatus.value = response.speedShare ?: _speedShareStatus.value
                 }.onFailure { error ->
-                    if (error.message == "speed_share_already_reported_this_hour") {
-                        settingsRepository.setSpeedShareSmartLastHour(reportKey)
+                    if (error.message == "speed_share_already_reported_this_hour_group") {
+                        settingsRepository.addSpeedShareSmartReportedGroup(reportKey)
                     } else {
                         Log.w(tag, "Smart speed share failed", error)
                     }

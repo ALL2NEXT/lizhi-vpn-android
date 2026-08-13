@@ -74,7 +74,8 @@ class SettingsRepository(private val context: Context) {
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val SPEED_SHARE_MODE = stringPreferencesKey("speed_share_mode")
-        private val SPEED_SHARE_SMART_LAST_HOUR = stringPreferencesKey("speed_share_smart_last_hour")
+        private val SPEED_SHARE_SMART_REPORTED_GROUPS =
+            stringSetPreferencesKey("speed_share_smart_reported_groups")
         private val USE_SHARED_SPEED_RESULTS_ENABLED =
             booleanPreferencesKey("use_shared_speed_results_enabled")
         // 兼容旧版本“共享数据直连”的开关设置。
@@ -93,8 +94,8 @@ class SettingsRepository(private val context: Context) {
         }.getOrDefault(SpeedShareMode.OFF)
     }
 
-    val speedShareSmartLastHour: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[SPEED_SHARE_SMART_LAST_HOUR]
+    val speedShareSmartReportedGroups: Flow<Set<String>> = context.dataStore.data.map { preferences ->
+        preferences[SPEED_SHARE_SMART_REPORTED_GROUPS] ?: emptySet()
     }
 
     val useSharedSpeedResultsEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
@@ -109,9 +110,15 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setSpeedShareSmartLastHour(hour: String) {
+    suspend fun addSpeedShareSmartReportedGroup(reportKey: String) {
         context.dataStore.edit { preferences ->
-            preferences[SPEED_SHARE_SMART_LAST_HOUR] = hour
+            val reportedGroups = (preferences[SPEED_SHARE_SMART_REPORTED_GROUPS] ?: emptySet())
+                .toMutableSet()
+            reportedGroups += reportKey
+            if (reportedGroups.size > 200) {
+                reportedGroups.remove(reportedGroups.first())
+            }
+            preferences[SPEED_SHARE_SMART_REPORTED_GROUPS] = reportedGroups
         }
     }
 

@@ -154,6 +154,16 @@ const USER_SCHEMA_STATEMENTS = [
 )`,
 `CREATE INDEX IF NOT EXISTS idx_speed_share_hourly_mb_user_hour
   ON speed_share_hourly_mb(user_id, report_hour DESC)`,
+`CREATE TABLE IF NOT EXISTS speed_share_hourly_groups_mb (
+  user_id INTEGER NOT NULL,
+  report_hour TEXT NOT NULL,
+  subscription_group_name TEXT NOT NULL,
+  reported_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, report_hour, subscription_group_name),
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+)`,
+`CREATE INDEX IF NOT EXISTS idx_speed_share_hourly_groups_mb_user_hour
+  ON speed_share_hourly_groups_mb(user_id, report_hour DESC)`,
 ];
 const USER_SCHEMA_MIGRATIONS = [
   "ALTER TABLE users_mb ADD COLUMN experience INTEGER NOT NULL DEFAULT 0",
@@ -449,6 +459,7 @@ async function handleAccount(path, request, env) {
       db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_hourly_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM speed_share_hourly_groups_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
     ]);
     const deleteResult = result[result.length - 1];
@@ -749,19 +760,21 @@ async function handleSpeedShareSubmission(request, env) {
   const db = await ensureUserSchema(env);
   const now = new Date();
   const reportHour = usagePeriodKeys(now).hour;
+  const subscriptionGroupName = cleanText(results[0].subscriptionGroupName).slice(0, 200) || "__default__";
   const reportedAt = beijingTimestamp(now);
   const reward = normalizeExperience(
     state.settings.speedShareSmartExperience,
     DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   );
-  const hourly = await db.prepare(
-    `INSERT OR IGNORE INTO speed_share_hourly_mb
-     (user_id, report_hour, reported_at) VALUES (?, ?, ?)`,
-  ).bind(identity.userId, reportHour, reportedAt).run();
-  if (!hourly || !hourly.meta || Number(hourly.meta.changes) < 1) {
+  const hourlyGroup = await db.prepare(
+    `INSERT OR IGNORE INTO speed_share_hourly_groups_mb
+     (user_id, report_hour, subscription_group_name, reported_at)
+     VALUES (?, ?, ?, ?)`,
+  ).bind(identity.userId, reportHour, subscriptionGroupName, reportedAt).run();
+  if (!hourlyGroup || !hourlyGroup.meta || Number(hourlyGroup.meta.changes) < 1) {
     return json({
       ok: false,
-      error: "speed_share_already_reported_this_hour",
+      error: "speed_share_already_reported_this_hour_group",
       speedShare: await readSpeedShareStatus(env, identity.userId, state.settings),
     });
   }
@@ -1439,14 +1452,15 @@ async function handleAdmin(path, request, env) {
         db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM speed_share_hourly_mb WHERE user_id = ?").bind(identity.userId),
+        db.prepare("DELETE FROM speed_share_hourly_groups_mb WHERE user_id = ?").bind(identity.userId),
         db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
       );
     }
     const result = await db.batch(statements);
     const changed = identities.reduce(
       (total, _identity, index) => total + Number(
-        result[index * 6 + 5] && result[index * 6 + 5].meta
-          ? result[index * 6 + 5].meta.changes
+        result[index * 7 + 6] && result[index * 7 + 6].meta
+          ? result[index * 7 + 6].meta.changes
           : 0,
       ),
       0,
@@ -1465,6 +1479,7 @@ async function handleAdmin(path, request, env) {
       db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM speed_share_hourly_mb WHERE user_id = ?").bind(identity.userId),
+      db.prepare("DELETE FROM speed_share_hourly_groups_mb WHERE user_id = ?").bind(identity.userId),
       db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
     ]);
     const deleteResult = result[result.length - 1];
@@ -1597,8 +1612,9 @@ async function readDailyCheckin(env, userId, settings) {
 async function readSpeedShareStatus(env, userId, settings = {}) {
   const db = await ensureUserSchema(env);
   const reportHour = usagePeriodKeys(new Date()).hour;
-  const hourly = await db.prepare(
-    "SELECT reported_at FROM speed_share_hourly_mb " +
+  const hourlyGroups = await db.prepare(
+    "SELECT COUNT(*) AS reported_group_count, MAX(reported_at) AS reported_at " +
+      "FROM speed_share_hourly_groups_mb " +
       "WHERE user_id = ? AND report_hour = ?",
   ).bind(userId, reportHour).first();
   const latest = await db.prepare(
@@ -1609,8 +1625,9 @@ async function readSpeedShareStatus(env, userId, settings = {}) {
   ).first();
   return {
     enabled: true,
-    smartReportedThisHour: Boolean(hourly),
-    smartReportedAt: cleanText(hourly && hourly.reported_at),
+    smartReportedThisHour: Number(hourlyGroups && hourlyGroups.reported_group_count) > 0,
+    smartReportedGroupCount: Number(hourlyGroups && hourlyGroups.reported_group_count) || 0,
+    smartReportedAt: cleanText(hourlyGroups && hourlyGroups.reported_at),
     smartRewardExperience: normalizeExperience(
       settings && settings.speedShareSmartExperience,
       DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
