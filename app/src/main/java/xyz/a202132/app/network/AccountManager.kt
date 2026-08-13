@@ -31,8 +31,6 @@ import xyz.a202132.app.data.model.TaskCenterStatus
 import xyz.a202132.app.data.model.TrafficReportRequest
 import xyz.a202132.app.data.model.TrafficReportResponse
 import java.security.MessageDigest
-import java.time.LocalDate
-import java.time.ZoneId
 import java.util.UUID
 
 /**
@@ -57,22 +55,11 @@ class AccountManager(private val context: Context) {
     fun accountId(): String = deviceKey()
 
     suspend fun register(
-        timeoutMs: Long = 25000L,
-        force: Boolean = false
+        timeoutMs: Long = 25000L
     ): Result<AccountInfo> {
         if (AppConfig.BACKEND_URL.isBlank()) {
             return Result.failure(IllegalStateException("未配置后台地址"))
         }
-
-        val today = LocalDate.now(REGISTRATION_ZONE).toString()
-        val current = currentAccount()
-        if (!force && preferences.getString(LAST_REGISTRATION_DATE_KEY, null) == today) {
-            return current?.let { Result.success(it) }
-                ?: Result.failure(IllegalStateException("account_registration_already_attempted_today"))
-        }
-        // Mark the attempt before the request so repeated app launches do not
-        // retry registration throughout the same day when the backend is down.
-        preferences.edit().putString(LAST_REGISTRATION_DATE_KEY, today).apply()
 
         return runCatching {
             val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
@@ -97,15 +84,16 @@ class AccountManager(private val context: Context) {
     }
 
     suspend fun syncCurrentAccount(timeoutMs: Long = 25000L): Result<AccountInfo> {
-        return register(timeoutMs = timeoutMs, force = true)
+        return register(timeoutMs = timeoutMs)
     }
 
     suspend fun updateNickname(
         nickname: String,
         timeoutMs: Long = 10000L
     ): Result<AccountInfo> {
-        val registered = currentAccount()
-            ?: return Result.failure(IllegalStateException("账户尚未同步"))
+        if (currentAccount() == null) {
+            return Result.failure(IllegalStateException("账户尚未同步"))
+        }
         val normalizedNickname = nickname.trim()
         if (normalizedNickname.isBlank() || normalizedNickname.length > 24) {
             return Result.failure(IllegalArgumentException("昵称长度需要在 1～24 个字符之间"))
@@ -116,7 +104,7 @@ class AccountManager(private val context: Context) {
                 NetworkClient.apiService.updateAccountProfile(
                     accountEndpoint("/api/account/profile"),
                     AccountProfileUpdateRequest(
-                        uid = registered.uid,
+                        deviceId = accountId(),
                         nickname = normalizedNickname
                     )
                 )
@@ -132,13 +120,14 @@ class AccountManager(private val context: Context) {
     suspend fun getTaskCenterStatus(
         timeoutMs: Long = 10000L
     ): Result<TaskCenterStatus> {
-        val registered = currentAccount()
-            ?: return Result.failure(IllegalStateException("账户尚未同步"))
+        if (currentAccount() == null) {
+            return Result.failure(IllegalStateException("账户尚未同步"))
+        }
 
         return runCatching {
             val response: TelegramTaskResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
                 NetworkClient.apiService.getTelegramTask(
-                    accountEndpoint("/api/account/tasks?uid=${registered.uid}")
+                    accountEndpoint("/api/account/tasks?deviceId=${accountId()}")
                 )
             }
             response.account?.let(::persistAccount)
@@ -167,7 +156,7 @@ class AccountManager(private val context: Context) {
             val response: TelegramTaskResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
                 NetworkClient.apiService.dailyCheckin(
                     accountEndpoint("/api/account/tasks/checkin"),
-                    DailyCheckinRequest(uid = registered.uid)
+                    DailyCheckinRequest(deviceId = accountId())
                 )
             }
             if (!response.ok) {
@@ -196,8 +185,8 @@ class AccountManager(private val context: Context) {
                 NetworkClient.apiService.shareSpeedResults(
                     accountEndpoint("/api/account/tasks/speed-share"),
                     SpeedShareRequest(
-                        uid = registered.uid,
-                        results = results.take(1000)
+                        deviceId = accountId(),
+                        results = results.take(1)
                     )
                 )
             }
@@ -223,7 +212,7 @@ class AccountManager(private val context: Context) {
             val response: SpeedShareResultsResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
                 NetworkClient.apiService.getSpeedShareResults(
                     accountEndpoint(
-                        "/api/account/tasks/speed-share-results?uid=${registered.uid}"
+                        "/api/account/tasks/speed-share-results?deviceId=${accountId()}"
                     )
                 )
             }
@@ -253,7 +242,7 @@ class AccountManager(private val context: Context) {
                 NetworkClient.apiService.submitTelegramTask(
                     accountEndpoint("/api/account/tasks/telegram"),
                     TelegramTaskSubmitRequest(
-                        uid = registered.uid,
+                        deviceId = accountId(),
                         code = normalizedCode
                     )
                 )
@@ -419,7 +408,7 @@ class AccountManager(private val context: Context) {
                 NetworkClient.apiService.reportTraffic(
                     accountEndpoint("/api/account/report"),
                     TrafficReportRequest(
-                        uid = registered.uid,
+                        deviceId = accountId(),
                         sessionId = sessionId,
                         subscriptionGroupName = subscriptionGroupName.trim(),
                         startedAt = startedAt,
@@ -515,13 +504,14 @@ class AccountManager(private val context: Context) {
             model = preferences.getString(ACCOUNT_MODEL_KEY, "").orEmpty(),
             androidVersion = preferences.getString(ACCOUNT_ANDROID_VERSION_KEY, "").orEmpty(),
             androidSdk = preferences.getInt(ACCOUNT_ANDROID_SDK_KEY, 0),
-            appVersion = preferences.getString(ACCOUNT_APP_VERSION_KEY, "").orEmpty()
+            appVersion = preferences.getString(ACCOUNT_APP_VERSION_KEY, "").orEmpty(),
+            deviceBlocked = preferences.getBoolean(ACCOUNT_DEVICE_BLOCKED_KEY, false)
         )
     }
 
     private fun persistAccount(account: AccountInfo) {
         val normalized = account.copy(
-            level = account.level.coerceIn(0, 6),
+            level = if (account.deviceBlocked) 0 else account.level.coerceIn(0, 6),
             experience = account.experience.coerceAtLeast(0L)
         )
         _accountInfo.value = normalized
@@ -536,6 +526,7 @@ class AccountManager(private val context: Context) {
             .putString(ACCOUNT_ANDROID_VERSION_KEY, normalized.androidVersion)
             .putInt(ACCOUNT_ANDROID_SDK_KEY, normalized.androidSdk)
             .putString(ACCOUNT_APP_VERSION_KEY, normalized.appVersion)
+            .putBoolean(ACCOUNT_DEVICE_BLOCKED_KEY, normalized.deviceBlocked)
             .apply()
     }
 
@@ -558,7 +549,6 @@ class AccountManager(private val context: Context) {
         const val ACCOUNT_ANDROID_VERSION_KEY = "account_android_version"
         const val ACCOUNT_ANDROID_SDK_KEY = "account_android_sdk"
         const val ACCOUNT_APP_VERSION_KEY = "account_app_version"
-        const val LAST_REGISTRATION_DATE_KEY = "last_registration_date"
-        val REGISTRATION_ZONE: ZoneId = ZoneId.of("Asia/Shanghai")
+        const val ACCOUNT_DEVICE_BLOCKED_KEY = "account_device_blocked"
     }
 }

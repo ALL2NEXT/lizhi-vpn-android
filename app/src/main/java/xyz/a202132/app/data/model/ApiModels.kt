@@ -218,6 +218,12 @@ data class DeviceBindingResponse(
     @SerializedName("bound")
     val bound: Boolean = false,
 
+    @SerializedName("blocked")
+    val blocked: Boolean = false,
+
+    @SerializedName("blockReason")
+    val blockReason: String = "",
+
     @SerializedName("account")
     val account: AccountInfo? = null,
 
@@ -257,28 +263,31 @@ data class AccountInfo(
     val androidSdk: Int = 0,
 
     @SerializedName("appVersion")
-    val appVersion: String = ""
+    val appVersion: String = "",
+
+    @SerializedName("deviceBlocked")
+    val deviceBlocked: Boolean = false
 )
 
 data class AccountProfileUpdateRequest(
-    @SerializedName("uid")
-    val uid: String,
+    @SerializedName("deviceId")
+    val deviceId: String,
 
     @SerializedName("nickname")
     val nickname: String
 )
 
 data class TelegramTaskSubmitRequest(
-    @SerializedName("uid")
-    val uid: String,
+    @SerializedName("deviceId")
+    val deviceId: String,
 
     @SerializedName("code")
     val code: String
 )
 
 data class DailyCheckinRequest(
-    @SerializedName("uid")
-    val uid: String
+    @SerializedName("deviceId")
+    val deviceId: String
 )
 
 data class DailyCheckinStatus(
@@ -339,8 +348,8 @@ data class SpeedShareNodeResult(
 )
 
 data class SpeedShareRequest(
-    @SerializedName("uid")
-    val uid: String,
+    @SerializedName("deviceId")
+    val deviceId: String,
 
     @SerializedName("results")
     val results: List<SpeedShareNodeResult>
@@ -453,8 +462,8 @@ data class TaskCenterStatus(
 )
 
 data class TrafficReportRequest(
-    @SerializedName("uid")
-    val uid: String,
+    @SerializedName("deviceId")
+    val deviceId: String,
 
     @SerializedName("sessionId")
     val sessionId: String,

@@ -140,6 +140,8 @@ fun AccountSettingsScreen(
         password == confirmPassword &&
         !isBindingAccount
     val canSwitchAccount = account != null &&
+        account.level > 0 &&
+        !account.deviceBlocked &&
         android.util.Patterns.EMAIL_ADDRESS.matcher(switchEmail.trim()).matches() &&
         switchPassword.length in 8..128 &&
         !isSwitchingAccount &&
@@ -149,6 +151,8 @@ fun AccountSettingsScreen(
         !isDeletingAccount &&
         !isSwitchingAccount
     val canManageDevice = account != null &&
+        account.level > 0 &&
+        !account.deviceBlocked &&
         !isManagingDevice &&
         !isSyncingAccount &&
         !isUpdatingNickname &&
@@ -336,8 +340,10 @@ fun AccountSettingsScreen(
                     }
 
                     Text(
-                        text = if (account.level == 0) {
-                            "Lv0 账户已被封禁或注册异常，不能注销账户。"
+                        text = if (account.deviceBlocked) {
+                            "当前设备已被封禁，不能切换、解绑或注销账户。"
+                        } else if (account.level == 0) {
+                            "当前账户已被封禁，不能注销账户。"
                         } else {
                             "注销账户会永久删除账户、邮箱绑定和全部流量记录，操作不可恢复。"
                         },
@@ -362,7 +368,8 @@ fun AccountSettingsScreen(
                         }
                         Text(
                             when {
-                                account.level == 0 -> "Lv0 不可注销"
+                                account.deviceBlocked -> "封禁设备不可注销"
+                                account.level == 0 -> "封禁账户不可注销"
                                 isDeletingAccount -> "注销中…"
                                 else -> "注销账户并清除数据后退出"
                             }
@@ -421,7 +428,7 @@ fun AccountSettingsScreen(
                         if (action == DeviceAction.BIND) {
                             "将当前设备绑定到当前账户。清除本地数据后重新注册时，系统会自动找回该账户。"
                         } else {
-                            "解绑后，当前设备将不再自动登录此账户；清除本地数据后重新注册会创建新账户。"
+                            "解绑只移除当前登录关系。设备历史、封禁记录和设备级任务记录仍会保留。"
                         }
                     )
                     if (requiresPassword) {
@@ -819,11 +826,16 @@ private fun AccountLevelRow(
 }
 
 private fun accountLevelText(accountInfo: AccountInfo): String {
-    return if (accountInfo.level == 0) "Lv0 · 已封禁" else "Lv${accountInfo.level.coerceIn(1, 6)}"
+    return when {
+        accountInfo.deviceBlocked -> "Lv0 · 设备已封禁"
+        accountInfo.level == 0 -> "Lv0 · 账户已封禁"
+        else -> "Lv${accountInfo.level.coerceIn(1, 6)}"
+    }
 }
 
 private fun accountIdentityText(accountInfo: AccountInfo): String {
     return when {
+        accountInfo.deviceBlocked -> "受限设备"
         accountInfo.level == 0 -> "受限账户"
         accountInfo.email.isBlank() -> "游客"
         else -> "正式用户"
@@ -839,6 +851,7 @@ private fun deviceBindingText(
     accountInfo: AccountInfo
 ): String {
     return when {
+        status?.blocked == true || accountInfo.deviceBlocked -> "设备已封禁"
         status?.bound == true && status.account != null -> {
             if (status.account.uid == accountInfo.uid) "已绑定当前账户" else "已绑定其他账户"
         }

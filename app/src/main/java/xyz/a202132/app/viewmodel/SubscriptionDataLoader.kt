@@ -335,10 +335,9 @@ internal class SubscriptionDataLoader(
 
     private fun subscriptionRequestUrl(url: String): String {
         if (!isWorkerManagedSubscription(url)) return url
-        val uid = accountManager.currentAccount()?.uid ?: accountManager.accountId()
         val separator = if ('?' in url) '&' else '?'
-        val encodedUid = URLEncoder.encode(uid, Charsets.UTF_8.name())
-        return "$url${separator}uid=$encodedUid"
+        val encodedDeviceId = URLEncoder.encode(accountManager.accountId(), Charsets.UTF_8.name())
+        return "$url${separator}deviceId=$encodedDeviceId"
     }
 
     private companion object {

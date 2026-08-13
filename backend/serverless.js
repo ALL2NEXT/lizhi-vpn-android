@@ -10,18 +10,17 @@
  * 客户端公开接口：
  *   GET /api/client
  *   GET /api/client?refresh=1   // 刷新由客户端处理，接口仅兼容保留该参数
- *   GET /api/subscription/<id>?uid=<UID>  // 经过身份校验的 Worker 中转，所有托管线路在这里加密
+ *   GET /api/subscription/<id>?deviceId=<DEVICE_ID>  // 设备身份校验后的 Worker 中转
  *   POST /api/account/login     // 使用邮箱和密码切换账户
  *   GET  /api/account/device    // 查询当前设备绑定的账户
  *   POST /api/account/device/bind   // 绑定当前设备到指定账户
  *   POST /api/account/device/unbind // 解绑当前设备
  *   POST /api/account/delete    // 永久删除当前账户
- *   GET  /api/account/tasks?uid=<UID>
- *   GET  /api/account/tasks/speed-share-results?uid=<UID>
+ *   GET  /api/account/tasks?deviceId=<DEVICE_ID>
+ *   GET  /api/account/tasks/speed-share-results?deviceId=<DEVICE_ID>
  *   POST /api/account/tasks/checkin
  *   POST /api/account/tasks/speed-share
  *   POST /api/account/tasks/telegram   // 使用进群口令领取 TG 任务奖励
- *   POST /api/debug/users       // 临时公开调试用户接口，测试结束后应移除
  *
  * 管理后台接口：
  *   GET  /<ADMIN_UUID>
@@ -33,6 +32,7 @@
  *   DELETE /<ADMIN_UUID>/api/users/<UID>
  *   PATCH /<ADMIN_UUID>/api/users/batch       // 批量修改用户等级
  *   DELETE /<ADMIN_UUID>/api/users/batch      // 批量删除用户
+ *   GET  /<ADMIN_UUID>/api/devices            // 当前绑定、历史账户和设备封禁
  *   GET  /<ADMIN_UUID>/api/speed-share-results
  */
 
@@ -40,7 +40,6 @@ const STATE_KEY = "fireflyvpn:state:v1";
 const CLIENT_IP_HEADER = "X-Firefly-Client-IP";
 const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 const MAX_BATCH_USER_COUNT = 100;
-const MAX_DEBUG_TRAFFIC_RECORDS = 400;
 const MAX_SPEED_SHARE_RESULTS = 1;
 const MAX_TRAFFIC_BYTES = 1e15;
 const MAX_ACCOUNT_EXPERIENCE = 1e12;
@@ -56,121 +55,228 @@ const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria2|hy2|a
 const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 const TEXT_ENCODER = new TextEncoder();
+const USER_SCHEMA_VERSION = 1;
+const USER_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS app_schema_mb (
+    component TEXT PRIMARY KEY,
+    version INTEGER NOT NULL CHECK (version > 0),
+    applied_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS users_mb (
+    id INTEGER PRIMARY KEY,
+    uid TEXT NOT NULL UNIQUE,
+    nickname TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active'
+      CHECK (status IN ('active', 'banned')),
+    experience_total INTEGER NOT NULL DEFAULT 0
+      CHECK (experience_total BETWEEN 0 AND 1000000000000),
+    email TEXT COLLATE NOCASE,
+    password_hash TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    created_day TEXT GENERATED ALWAYS AS (substr(created_at, 1, 10)) VIRTUAL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_users_mb_created_at
+    ON users_mb(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_users_mb_created_day
+    ON users_mb(created_day)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_email
+    ON users_mb(email)
+    WHERE email IS NOT NULL AND email <> ''`,
+  `CREATE TABLE IF NOT EXISTS user_devices_mb (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    device_id TEXT NOT NULL UNIQUE,
+    brand TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    android_version TEXT NOT NULL DEFAULT '',
+    android_sdk INTEGER NOT NULL DEFAULT 0
+      CHECK (android_sdk BETWEEN 0 AND 1000),
+    app_version TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_user_devices_mb_user_seen
+    ON user_devices_mb(user_id, last_seen_at DESC, id DESC)`,
+  `CREATE TABLE IF NOT EXISTS device_account_links_mb (
+    id INTEGER PRIMARY KEY,
+    device_row_id INTEGER NOT NULL,
+    user_id INTEGER,
+    user_uid TEXT NOT NULL,
+    first_bound_at TEXT NOT NULL,
+    last_bound_at TEXT NOT NULL,
+    UNIQUE (device_row_id, user_uid),
+    FOREIGN KEY (device_row_id) REFERENCES user_devices_mb(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_device_account_links_mb_user
+    ON device_account_links_mb(user_id, device_row_id)
+    WHERE user_id IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS device_bans_mb (
+    device_row_id INTEGER NOT NULL,
+    source_uid TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    banned_at TEXT NOT NULL,
+    lifted_at TEXT,
+    PRIMARY KEY (device_row_id, source_uid, reason),
+    FOREIGN KEY (device_row_id) REFERENCES user_devices_mb(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_device_bans_mb_active
+    ON device_bans_mb(device_row_id)
+    WHERE lifted_at IS NULL`,
+  `CREATE TRIGGER IF NOT EXISTS trg_users_ban_devices_mb
+  AFTER UPDATE OF status ON users_mb
+  WHEN NEW.status = 'banned'
+  BEGIN
+    INSERT INTO device_bans_mb
+      (device_row_id, source_uid, reason, banned_at, lifted_at)
+    SELECT
+      device_row_id,
+      NEW.uid,
+      'account_banned',
+      strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+      NULL
+    FROM device_account_links_mb
+    WHERE user_id = NEW.id
+    ON CONFLICT(device_row_id, source_uid, reason) DO UPDATE SET
+      banned_at = excluded.banned_at,
+      lifted_at = NULL;
+  END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_users_unban_devices_mb
+  AFTER UPDATE OF status ON users_mb
+  WHEN NEW.status = 'active'
+  BEGIN
+    UPDATE device_bans_mb
+    SET lifted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    WHERE source_uid = NEW.uid
+      AND reason = 'account_banned'
+      AND lifted_at IS NULL;
+  END`,
+  `CREATE TABLE IF NOT EXISTS user_usage_mb (
+    user_id INTEGER NOT NULL,
+    session_id TEXT NOT NULL CHECK (length(session_id) BETWEEN 1 AND 128),
+    subscription_group_name TEXT NOT NULL DEFAULT '',
+    started_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL,
+    reported_at TEXT NOT NULL,
+    usage_day TEXT GENERATED ALWAYS AS (substr(started_at, 1, 10)) VIRTUAL,
+    upload_bytes INTEGER NOT NULL DEFAULT 0
+      CHECK (upload_bytes BETWEEN 0 AND 1000000000000000),
+    download_bytes INTEGER NOT NULL DEFAULT 0
+      CHECK (download_bytes BETWEEN 0 AND 1000000000000000),
+    PRIMARY KEY (user_id, session_id),
+    CHECK (ended_at >= started_at),
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_user_ended
+    ON user_usage_mb(user_id, ended_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS user_usage_daily_mb (
+    user_id INTEGER NOT NULL,
+    usage_day TEXT NOT NULL CHECK (
+      length(usage_day) = 10 AND
+      usage_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+    ),
+    upload_bytes INTEGER NOT NULL DEFAULT 0
+      CHECK (upload_bytes BETWEEN 0 AND 9000000000000000000),
+    download_bytes INTEGER NOT NULL DEFAULT 0
+      CHECK (download_bytes BETWEEN 0 AND 9000000000000000000),
+    last_ended_at TEXT NOT NULL,
+    last_reported_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, usage_day),
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_user_usage_daily_mb_day
+    ON user_usage_daily_mb(usage_day, user_id)`,
+  `CREATE TRIGGER IF NOT EXISTS trg_user_usage_daily_insert_mb
+  AFTER INSERT ON user_usage_mb
+  BEGIN
+    INSERT INTO user_usage_daily_mb
+      (user_id, usage_day, upload_bytes, download_bytes, last_ended_at, last_reported_at)
+    VALUES
+      (NEW.user_id, NEW.usage_day, NEW.upload_bytes, NEW.download_bytes,
+       NEW.ended_at, NEW.reported_at)
+    ON CONFLICT(user_id, usage_day) DO UPDATE SET
+      upload_bytes = user_usage_daily_mb.upload_bytes + excluded.upload_bytes,
+      download_bytes = user_usage_daily_mb.download_bytes + excluded.download_bytes,
+      last_ended_at = MAX(user_usage_daily_mb.last_ended_at, excluded.last_ended_at),
+      last_reported_at = MAX(user_usage_daily_mb.last_reported_at, excluded.last_reported_at);
+  END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_user_usage_daily_update_mb
+  AFTER UPDATE OF ended_at, reported_at, upload_bytes, download_bytes ON user_usage_mb
+  BEGIN
+    UPDATE user_usage_daily_mb
+    SET upload_bytes = upload_bytes + (NEW.upload_bytes - OLD.upload_bytes),
+        download_bytes = download_bytes + (NEW.download_bytes - OLD.download_bytes),
+        last_ended_at = MAX(last_ended_at, NEW.ended_at),
+        last_reported_at = MAX(last_reported_at, NEW.reported_at)
+    WHERE user_id = NEW.user_id AND usage_day = NEW.usage_day;
+  END`,
+  `CREATE TABLE IF NOT EXISTS user_reward_claims_mb (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    user_uid TEXT NOT NULL,
+    device_row_id INTEGER NOT NULL,
+    reward_type TEXT NOT NULL,
+    period_key TEXT NOT NULL,
+    context_key TEXT NOT NULL DEFAULT '',
+    claim_token TEXT NOT NULL UNIQUE,
+    claimed_at TEXT NOT NULL,
+    experience_awarded INTEGER NOT NULL DEFAULT 0
+      CHECK (experience_awarded BETWEEN 0 AND 1000000000000),
+    UNIQUE (user_id, reward_type, period_key, context_key),
+    UNIQUE (device_row_id, reward_type, period_key, context_key),
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL,
+    FOREIGN KEY (device_row_id) REFERENCES user_devices_mb(id) ON DELETE CASCADE
+  )`,
+  `CREATE TRIGGER IF NOT EXISTS trg_user_reward_claim_award_mb
+  AFTER INSERT ON user_reward_claims_mb
+  WHEN NEW.experience_awarded > 0
+  BEGIN
+    UPDATE users_mb
+    SET experience_total = MIN(
+      experience_total + NEW.experience_awarded,
+      1000000000000
+    )
+    WHERE id = NEW.user_id AND status = 'active';
+  END`,
+  `CREATE TABLE IF NOT EXISTS speed_share_results_mb (
+    subscription_group_name TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    province TEXT NOT NULL DEFAULT '',
+    carrier TEXT NOT NULL DEFAULT '',
+    node_name TEXT NOT NULL DEFAULT '',
+    server_host TEXT NOT NULL DEFAULT '',
+    tcping_latency_ms INTEGER NOT NULL DEFAULT 0
+      CHECK (tcping_latency_ms BETWEEN 0 AND 600000),
+    url_test_latency_ms INTEGER NOT NULL DEFAULT 0
+      CHECK (url_test_latency_ms BETWEEN 0 AND 600000),
+    download_mbps REAL NOT NULL DEFAULT 0
+      CHECK (download_mbps BETWEEN 0 AND 1000000),
+    upload_mbps REAL NOT NULL DEFAULT 0
+      CHECK (upload_mbps BETWEEN 0 AND 1000000),
+    updated_at TEXT NOT NULL,
+    last_reported_at TEXT NOT NULL,
+    last_reporter_user_id INTEGER,
+    report_count INTEGER NOT NULL DEFAULT 1 CHECK (report_count > 0),
+    PRIMARY KEY (subscription_group_name, node_id, province, carrier),
+    FOREIGN KEY (last_reporter_user_id)
+      REFERENCES users_mb(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_speed_share_results_mb_reported
+    ON speed_share_results_mb(last_reported_at DESC)`,
+  `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
+    VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+];
+const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";
+const REWARD_TYPE_DAILY_CHECKIN = "daily_checkin";
+const REWARD_TYPE_SPEED_SHARE = "speed_share";
+const REWARD_TYPE_TELEGRAM = "telegram";
+const REWARD_PERIOD_LIFETIME = "lifetime";
 // 修改此 UUID 可以更换私有管理后台地址。
 const ADMIN_UUID = "3e9a0eed-6a29-4d16-91b1-3adae4bd88e6";
 const ADMIN_BASE_PATH = `/${ADMIN_UUID}`;
-
-const USER_SCHEMA_STATEMENTS = [
-`CREATE TABLE IF NOT EXISTS users_mb (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uid TEXT NOT NULL UNIQUE,
-  nickname TEXT NOT NULL,
-  level INTEGER NOT NULL DEFAULT 1 CHECK (level BETWEEN 0 AND 6),
-  experience INTEGER NOT NULL DEFAULT 0,
-  email TEXT NOT NULL DEFAULT '',
-  password_hash TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL
-)`,
-`CREATE INDEX IF NOT EXISTS idx_users_mb_created_at ON users_mb(created_at DESC)`,
-`CREATE TABLE IF NOT EXISTS user_devices_mb (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  device_id TEXT NOT NULL UNIQUE,
-  brand TEXT NOT NULL DEFAULT '',
-  model TEXT NOT NULL DEFAULT '',
-  android_version TEXT NOT NULL DEFAULT '',
-  android_sdk INTEGER NOT NULL DEFAULT 0,
-  app_version TEXT NOT NULL DEFAULT '',
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-)`,
-`CREATE INDEX IF NOT EXISTS idx_user_devices_mb_user_id ON user_devices_mb(user_id)`,
-`CREATE TABLE IF NOT EXISTS user_usage_mb (
-  user_id INTEGER NOT NULL,
-  session_id TEXT NOT NULL,
-  subscription_group_name TEXT NOT NULL DEFAULT '',
-  started_at TEXT NOT NULL,
-  ended_at TEXT NOT NULL,
-  upload_bytes INTEGER NOT NULL DEFAULT 0,
-  download_bytes INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (user_id, session_id),
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-)`,
-`CREATE INDEX IF NOT EXISTS idx_user_usage_mb_time
-  ON user_usage_mb(user_id, ended_at DESC)`,
-`CREATE TABLE IF NOT EXISTS telegram_task_claims_mb (
-  user_id INTEGER NOT NULL PRIMARY KEY,
-  claimed_at TEXT NOT NULL,
-  experience_awarded INTEGER NOT NULL DEFAULT 0,
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-)`,
-`CREATE INDEX IF NOT EXISTS idx_telegram_task_claims_mb_claimed_at
-  ON telegram_task_claims_mb(claimed_at DESC)`,
-`CREATE TABLE IF NOT EXISTS daily_checkins_mb (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  checkin_date TEXT NOT NULL,
-  checked_in_at TEXT NOT NULL,
-  experience_awarded INTEGER NOT NULL DEFAULT 0,
-  UNIQUE (user_id, checkin_date),
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-)`,
-`CREATE INDEX IF NOT EXISTS idx_daily_checkins_mb_user_date
-  ON daily_checkins_mb(user_id, checkin_date DESC)`,
-`CREATE TABLE IF NOT EXISTS speed_share_results_mb (
-  node_id TEXT PRIMARY KEY,
-  node_name TEXT NOT NULL DEFAULT '',
-  server_host TEXT NOT NULL DEFAULT '',
-  subscription_group_name TEXT NOT NULL DEFAULT '',
-  province TEXT NOT NULL DEFAULT '',
-  carrier TEXT NOT NULL DEFAULT '',
-  tcping_latency_ms INTEGER NOT NULL DEFAULT 0,
-  url_test_latency_ms INTEGER NOT NULL DEFAULT 0,
-  download_mbps REAL NOT NULL DEFAULT 0,
-  upload_mbps REAL NOT NULL DEFAULT 0,
-  updated_at TEXT NOT NULL,
-  last_reported_at TEXT NOT NULL,
-  report_count INTEGER NOT NULL DEFAULT 0
-)`,
-`CREATE INDEX IF NOT EXISTS idx_speed_share_results_mb_updated_at
-  ON speed_share_results_mb(updated_at DESC)`,
-`CREATE TABLE IF NOT EXISTS speed_share_daily_mb (
-  user_id INTEGER NOT NULL,
-  report_date TEXT NOT NULL,
-  reported_at TEXT NOT NULL,
-  PRIMARY KEY (user_id, report_date),
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-)`,
-`CREATE INDEX IF NOT EXISTS idx_speed_share_daily_mb_user_date
-  ON speed_share_daily_mb(user_id, report_date DESC)`,
-`CREATE TABLE IF NOT EXISTS speed_share_hourly_mb (
-  user_id INTEGER NOT NULL,
-  report_hour TEXT NOT NULL,
-  reported_at TEXT NOT NULL,
-  PRIMARY KEY (user_id, report_hour),
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-)`,
-`CREATE INDEX IF NOT EXISTS idx_speed_share_hourly_mb_user_hour
-  ON speed_share_hourly_mb(user_id, report_hour DESC)`,
-`CREATE TABLE IF NOT EXISTS speed_share_hourly_groups_mb (
-  user_id INTEGER NOT NULL,
-  report_hour TEXT NOT NULL,
-  subscription_group_name TEXT NOT NULL,
-  reported_at TEXT NOT NULL,
-  PRIMARY KEY (user_id, report_hour, subscription_group_name),
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-)`,
-`CREATE INDEX IF NOT EXISTS idx_speed_share_hourly_groups_mb_user_hour
-  ON speed_share_hourly_groups_mb(user_id, report_hour DESC)`,
-];
-const USER_SCHEMA_MIGRATIONS = [
-  "ALTER TABLE users_mb ADD COLUMN experience INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE users_mb ADD COLUMN email TEXT NOT NULL DEFAULT ''",
-  "ALTER TABLE users_mb ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
-  "ALTER TABLE speed_share_results_mb ADD COLUMN province TEXT NOT NULL DEFAULT ''",
-  "ALTER TABLE speed_share_results_mb ADD COLUMN carrier TEXT NOT NULL DEFAULT ''",
-  "ALTER TABLE speed_share_results_mb ADD COLUMN server_host TEXT NOT NULL DEFAULT ''",
-];
 let userSchemaReady = false;
+let userSchemaInitialization = null;
 
 const DEFAULT_STATE = {
   version: 1,
@@ -203,6 +309,9 @@ export default {
       const path = url.pathname.replace(/\/+$/, "") || "/";
 
       if (path === "/" || path === "/health") {
+        const usersSchemaVersion = env.USERS_DB
+          ? await initializeUserSchema(env)
+          : null;
         return json({
           ok: true,
           service: "fireflyvpn-worker",
@@ -210,6 +319,10 @@ export default {
             config: Boolean(env.CONFIG),
             usersDb: Boolean(env.USERS_DB),
             adminToken: Boolean(env.ADMIN_TOKEN),
+          },
+          database: {
+            initialized: usersSchemaVersion === USER_SCHEMA_VERSION,
+            schemaVersion: usersSchemaVersion,
           },
         });
       }
@@ -233,11 +346,6 @@ export default {
 
       if (path.startsWith("/api/account/")) {
         return handleAccount(path, request, env);
-      }
-
-      // 临时公开调试接口；测试完成后应同时移除该路由和对应处理函数。
-      if (path === "/api/debug/users" && request.method === "POST") {
-        return handleDebugUserV2(request, env);
       }
 
       if (path.startsWith(`${ADMIN_BASE_PATH}/api/`)) {
@@ -291,11 +399,11 @@ async function handleManagedSubscription(path, request, env) {
   }
 
   const requestUrl = new URL(request.url);
-  const reference = requestUrl.searchParams.get("uid") || requestUrl.searchParams.get("accountId");
-  if (!normalizeUserReference(reference)) {
-    return json({ ok: false, error: "uid_required" }, 401);
+  const deviceId = normalizeAccountId(requestUrl.searchParams.get("deviceId"));
+  if (!deviceId) {
+    return json({ ok: false, error: "device_id_required" }, 401);
   }
-  const access = await resolveAccountAccess(env, reference);
+  const access = await resolveAccountAccess(env, deviceId, state.settings);
   if (source.minLevel > access.level) {
     return json({ ok: false, error: "insufficient_level" }, 403);
   }
@@ -331,10 +439,24 @@ async function handleAccount(path, request, env) {
 
     const now = new Date();
     await ensureUserSchema(env);
-    await registerOrTouchUser(env, deviceId, body || {}, now);
-    const user = await readD1User(env, deviceId);
+    const identity = await registerOrTouchUser(env, deviceId, body || {}, now);
+    const state = await readState(env);
+    const user = identity && identity.userId > 0
+      ? await readD1User(env, identity.userId, state.settings)
+      : null;
+    if (!user) {
+      if (identity && identity.deviceBanned) {
+        return json({ ok: false, error: "device_banned", deviceBlocked: true }, 403);
+      }
+      throw new Error("account_create_failed");
+    }
+    user.deviceBlocked = Boolean(identity.deviceBanned);
 
-    return json({ ok: true, account: publicAccount(user) });
+    return json({
+      ok: true,
+      account: publicAccount(user),
+      deviceBlocked: Boolean(identity.deviceBanned),
+    });
   }
 
   if (path === "/api/account/device" && request.method === "GET") {
@@ -344,11 +466,14 @@ async function handleAccount(path, request, env) {
       return json({ ok: false, error: "invalid_device_id" }, 400);
     }
 
-    const binding = await readDeviceBinding(env, deviceId);
+    const state = await readState(env);
+    const binding = await readDeviceBinding(env, deviceId, state.settings);
     return json({
       ok: true,
-      bound: Boolean(binding),
-      account: binding ? publicAccount(binding.account) : null,
+      bound: Boolean(binding && binding.account),
+      blocked: Boolean(binding && binding.blocked),
+      blockReason: cleanText(binding && binding.blockReason),
+      account: binding && binding.account ? publicAccount(binding.account) : null,
       device: binding ? binding.device : null,
     });
   }
@@ -363,15 +488,21 @@ async function handleAccount(path, request, env) {
     }
 
     const db = await ensureUserSchema(env);
-    const currentIdentity = await resolveUserIdentity(env, deviceId);
-    if (currentIdentity && currentIdentity.uid !== requestedUid) {
+    const currentIdentity = await readDeviceContext(env, deviceId);
+    if (currentIdentity &&
+        (currentIdentity.deviceBanned || currentIdentity.userStatus === "banned")) {
+      return json({ ok: false, error: "device_banned" }, 403);
+    }
+    if (currentIdentity && currentIdentity.userId > 0 &&
+        currentIdentity.uid !== requestedUid) {
       return json({ ok: false, error: "device_already_bound" }, 409);
     }
     const targetIdentity = await resolveUserIdentity(env, requestedUid);
     if (!targetIdentity) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    const targetUser = await readD1User(env, targetIdentity.userId);
+    const state = await readState(env);
+    const targetUser = await readD1User(env, targetIdentity.userId, state.settings);
     if (!targetUser) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
@@ -385,10 +516,27 @@ async function handleAccount(path, request, env) {
       if (!(await verifyAccountPassword(password, cleanText(stored && stored.password_hash)))) {
         return json({ ok: false, error: "invalid_account_password" }, 401);
       }
+    } else if (!currentIdentity || currentIdentity.userId !== targetIdentity.userId) {
+      const priorLink = currentIdentity
+        ? await db.prepare(
+          `SELECT 1 FROM device_account_links_mb
+           WHERE device_row_id = ? AND user_uid = ?`,
+        ).bind(currentIdentity.deviceRowId, targetIdentity.uid).first()
+        : null;
+      if (!priorLink) {
+        return json({ ok: false, error: "device_binding_proof_required" }, 403);
+      }
     }
 
-    await attachDeviceToUser(db, targetIdentity.userId, deviceId, body || {});
-    const account = await readD1User(env, targetIdentity.userId);
+    const attached = await attachDeviceToUser(
+      db,
+      targetIdentity.userId,
+      deviceId,
+      body || {},
+      false,
+    );
+    if (!attached) return json({ ok: false, error: "device_banned" }, 403);
+    const account = await readD1User(env, targetIdentity.userId, state.settings);
     return json({ ok: true, bound: true, account: publicAccount(account) });
   }
 
@@ -402,13 +550,19 @@ async function handleAccount(path, request, env) {
     }
 
     const db = await ensureUserSchema(env);
-    const identity = await resolveUserIdentity(env, deviceId);
-    if (!identity || identity.uid !== requestedUid) {
+    const identity = await readDeviceContext(env, deviceId);
+    if (identity && (identity.deviceBanned || identity.userStatus === "banned")) {
+      return json({ ok: false, error: "device_banned" }, 403);
+    }
+    if (!identity || identity.userId <= 0 || identity.uid !== requestedUid) {
       return json({ ok: false, error: "device_not_bound" }, 404);
     }
     const user = await readD1User(env, identity.userId);
     if (!user) {
       return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    if (user.level === 0) {
+      return json({ ok: false, error: "account_banned" }, 403);
     }
     if (user.email) {
       const stored = await db.prepare(
@@ -420,8 +574,14 @@ async function handleAccount(path, request, env) {
     }
 
     const result = await db.prepare(
-      "DELETE FROM user_devices_mb WHERE device_id = ? AND user_id = ?",
-    ).bind(deviceId, identity.userId).run();
+      `UPDATE user_devices_mb
+       SET user_id = NULL, last_seen_at = ?
+       WHERE device_id = ? AND user_id = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM device_bans_mb b
+           WHERE b.device_row_id = user_devices_mb.id AND b.lifted_at IS NULL
+         )`,
+    ).bind(beijingTimestamp(), deviceId, identity.userId).run();
     if (!result.meta || Number(result.meta.changes) < 1) {
       return json({ ok: false, error: "device_not_bound" }, 404);
     }
@@ -439,11 +599,12 @@ async function handleAccount(path, request, env) {
     }
 
     const db = await ensureUserSchema(env);
-    const identity = await resolveUserIdentity(env, deviceId);
+    const identity = await resolveDeviceIdentity(env, deviceId);
     if (!identity || (requestedUid && requestedUid !== identity.uid)) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    const user = await readD1User(env, identity.userId);
+    const state = await readState(env);
+    const user = await readD1User(env, identity.userId, state.settings);
     if (!user) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
@@ -461,27 +622,27 @@ async function handleAccount(path, request, env) {
     }
 
     const passwordHash = await hashAccountPassword(password);
-    const state = await readState(env);
-    const progression = applyExperience(
-      user.level,
-      user.experience,
-      ACCOUNT_BINDING_EXPERIENCE,
-      state.settings.experienceThresholds,
-    );
-    const result = await db.prepare(
-      "UPDATE users_mb SET email = ?, password_hash = ?, experience = ?, level = ? " +
-        "WHERE id = ?",
-    ).bind(
-      email,
-      passwordHash,
-      progression.experience,
-      progression.level,
-      identity.userId,
-    ).run();
-    if (!result.meta || Number(result.meta.changes) < 1) {
+    const boundAt = beijingTimestamp();
+    const results = await db.batch([
+      db.prepare(
+        "UPDATE users_mb SET email = ?, password_hash = ? " +
+          "WHERE id = ? AND (email IS NULL OR email = '')",
+      ).bind(email, passwordHash, identity.userId),
+      rewardClaimStatement(db, {
+        userId: identity.userId,
+        userUid: identity.uid,
+        deviceRowId: identity.deviceRowId,
+        rewardType: REWARD_TYPE_ACCOUNT_BINDING,
+        periodKey: REWARD_PERIOD_LIFETIME,
+        contextKey: "email-v1",
+        claimedAt: boundAt,
+        experienceAwarded: ACCOUNT_BINDING_EXPERIENCE,
+      }),
+    ]);
+    if (!results[0].meta || Number(results[0].meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    const updated = await readD1User(env, identity.userId);
+    const updated = await readD1User(env, identity.userId, state.settings);
     return json({ ok: true, account: publicAccount(updated) });
   }
 
@@ -496,22 +657,35 @@ async function handleAccount(path, request, env) {
     }
 
     const db = await ensureUserSchema(env);
+    const currentDevice = await readDeviceContextFromDb(db, deviceId);
+    if (currentDevice &&
+        (currentDevice.deviceBanned || currentDevice.userStatus === "banned")) {
+      return json({ ok: false, error: "device_banned" }, 403);
+    }
     const row = await db.prepare(
-      "SELECT id, uid, level, email, password_hash FROM users_mb WHERE email = ?",
+      "SELECT id, uid, status, email, password_hash FROM users_mb WHERE email = ?",
     ).bind(email).first();
     if (!row || !(await verifyAccountPassword(password, cleanText(row.password_hash)))) {
       return json({ ok: false, error: "invalid_login_credentials" }, 401);
     }
-    if (normalizeLevel(row.level, 0) === 0) {
+    if (cleanText(row.status) === "banned") {
       return json({ ok: false, error: "account_banned" }, 403);
     }
 
-    await attachDeviceToUser(db, Number(row.id), deviceId, body || {});
-    const account = await readD1User(env, Number(row.id));
+    const attached = await attachDeviceToUser(
+      db,
+      Number(row.id),
+      deviceId,
+      body || {},
+      true,
+    );
+    if (!attached) return json({ ok: false, error: "device_banned" }, 403);
+    const state = await readState(env);
+    const account = await readD1User(env, Number(row.id), state.settings);
     return json({ ok: true, account: publicAccount(account) });
   }
 
-  // 注销会删除账户、设备和流量数据；绑定账户必须再次提供当前密码。
+  // 注销会删除账户数据，但设备身份、历史关联和设备级奖励记录会保留。
   if (path === "/api/account/delete" && request.method === "POST") {
     const body = await request.json();
     const deviceId = normalizeAccountId(body && body.deviceId);
@@ -522,7 +696,7 @@ async function handleAccount(path, request, env) {
     }
 
     const db = await ensureUserSchema(env);
-    const identity = await resolveUserIdentity(env, deviceId);
+    const identity = await resolveDeviceIdentity(env, deviceId);
     if (!identity || (requestedUid && requestedUid !== identity.uid)) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
@@ -542,17 +716,10 @@ async function handleAccount(path, request, env) {
       }
     }
 
-    const result = await db.batch([
-      db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM telegram_task_claims_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM speed_share_hourly_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM speed_share_hourly_groups_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
-    ]);
-    const deleteResult = result[result.length - 1];
-    if (!deleteResult || !deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
+    const deleteResult = await db.prepare(
+      "DELETE FROM users_mb WHERE id = ?",
+    ).bind(identity.userId).run();
+    if (!deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
     return json({ ok: true });
@@ -560,9 +727,9 @@ async function handleAccount(path, request, env) {
 
   if (path === "/api/account/profile" && request.method === "PATCH") {
     const body = await request.json();
-    const reference = body && (body.uid || body.accountId);
+    const deviceId = normalizeAccountId(body && body.deviceId);
     const nickname = normalizeNickname(body && body.nickname);
-    const identity = await resolveUserIdentity(env, reference);
+    const identity = await resolveDeviceIdentity(env, deviceId);
     if (!identity || !nickname) {
       return json({ ok: false, error: "invalid_profile" }, 400);
     }
@@ -574,39 +741,48 @@ async function handleAccount(path, request, env) {
     if (!result.meta || Number(result.meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    const user = await readD1User(env, identity.userId);
+    const state = await readState(env);
+    const user = await readD1User(env, identity.userId, state.settings);
     return json({ ok: true, account: publicAccount(user) });
   }
 
   if (path === "/api/account/tasks" && request.method === "GET") {
     const requestUrl = new URL(request.url);
-    const reference = requestUrl.searchParams.get("uid") || requestUrl.searchParams.get("accountId");
-    const identity = await resolveUserIdentity(env, reference);
+    const identity = await resolveDeviceIdentity(
+      env,
+      requestUrl.searchParams.get("deviceId"),
+    );
     if (!identity) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    const user = await readD1User(env, identity.userId);
+    const state = await readState(env);
+    const user = await readD1User(env, identity.userId, state.settings);
     if (!user) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    const state = await readState(env);
     return json({
       ok: true,
       account: publicAccount(user),
-      checkin: await readDailyCheckin(env, identity.userId, state.settings),
-      speedShare: await readSpeedShareStatus(env, identity.userId, state.settings),
-      telegram: await readTelegramTask(env, identity.userId, state.settings),
+      checkin: await readDailyCheckin(
+        env, identity.userId, identity.deviceRowId, state.settings),
+      speedShare: await readSpeedShareStatus(
+        env, identity.userId, identity.deviceRowId, state.settings),
+      telegram: await readTelegramTask(
+        env, identity.userId, identity.deviceRowId, state.settings),
     });
   }
 
   if (path === "/api/account/tasks/speed-share-results" && request.method === "GET") {
     const requestUrl = new URL(request.url);
-    const reference = requestUrl.searchParams.get("uid") || requestUrl.searchParams.get("accountId");
-    const identity = await resolveUserIdentity(env, reference);
+    const identity = await resolveDeviceIdentity(
+      env,
+      requestUrl.searchParams.get("deviceId"),
+    );
     if (!identity) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    const user = await readD1User(env, identity.userId);
+    const state = await readState(env);
+    const user = await readD1User(env, identity.userId, state.settings);
     if (!user) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
@@ -618,7 +794,7 @@ async function handleAccount(path, request, env) {
       "SELECT node_id, node_name, server_host, subscription_group_name, province, carrier, " +
         "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
         "upload_mbps, updated_at, last_reported_at, report_count " +
-        "FROM speed_share_results_mb ORDER BY updated_at DESC LIMIT 1000",
+        "FROM speed_share_results_mb ORDER BY last_reported_at DESC LIMIT 1000",
     ).all();
     const clientLocation = speedShareRequestLocation(request);
     return json({
@@ -632,15 +808,15 @@ async function handleAccount(path, request, env) {
 
   if (path === "/api/account/tasks/checkin" && request.method === "POST") {
     const body = await request.json();
-    const reference = body && (body.uid || body.accountId);
-    const identity = await resolveUserIdentity(env, reference);
+    const deviceId = normalizeAccountId(body && body.deviceId);
+    const identity = await resolveDeviceIdentity(env, deviceId);
     if (!identity) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
 
     const state = await readState(env);
     const db = await ensureUserSchema(env);
-    const user = await readD1User(env, identity.userId);
+    const user = await readD1User(env, identity.userId, state.settings);
     if (!user) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
@@ -654,35 +830,32 @@ async function handleAccount(path, request, env) {
       state.settings.dailyCheckinExperience,
       DEFAULT_DAILY_CHECKIN_EXPERIENCE,
     );
-    const progression = applyExperience(
-      user.level,
-      user.experience,
-      reward,
-      state.settings.experienceThresholds,
-    );
-    const inserted = await db.prepare(
-      `INSERT OR IGNORE INTO daily_checkins_mb
-       (user_id, checkin_date, checked_in_at, experience_awarded)
-       VALUES (?, ?, ?, ?)`,
-    ).bind(identity.userId, checkinDate, checkedInAt, reward).run();
+    const inserted = await rewardClaimStatement(db, {
+      userId: identity.userId,
+      userUid: identity.uid,
+      deviceRowId: identity.deviceRowId,
+      rewardType: REWARD_TYPE_DAILY_CHECKIN,
+      periodKey: checkinDate,
+      contextKey: "",
+      claimedAt: checkedInAt,
+      experienceAwarded: reward,
+    }).run();
     if (!inserted || !inserted.meta || Number(inserted.meta.changes) < 1) {
       return json({
         ok: false,
         error: "daily_checkin_already_completed",
         account: publicAccount(user),
-        checkin: await readDailyCheckin(env, identity.userId, state.settings),
+        checkin: await readDailyCheckin(
+          env, identity.userId, identity.deviceRowId, state.settings),
       });
     }
 
-    await db.prepare(
-      "UPDATE users_mb SET experience = ?, level = ? WHERE id = ?",
-    ).bind(progression.experience, progression.level, identity.userId).run();
-
-    const updated = await readD1User(env, identity.userId);
+    const updated = await readD1User(env, identity.userId, state.settings);
     return json({
       ok: true,
       account: publicAccount(updated),
-      checkin: await readDailyCheckin(env, identity.userId, state.settings),
+      checkin: await readDailyCheckin(
+        env, identity.userId, identity.deviceRowId, state.settings),
     });
   }
 
@@ -692,9 +865,9 @@ async function handleAccount(path, request, env) {
 
   if (path === "/api/account/tasks/telegram" && request.method === "POST") {
     const body = await request.json();
-    const reference = body && (body.uid || body.accountId);
+    const deviceId = normalizeAccountId(body && body.deviceId);
     const telegramCode = normalizeTelegramJoinCode(body && body.code);
-    const identity = await resolveUserIdentity(env, reference);
+    const identity = await resolveDeviceIdentity(env, deviceId);
     if (!identity || !telegramCode) {
       return json({ ok: false, error: "invalid_telegram_task_code" }, 400);
     }
@@ -704,7 +877,7 @@ async function handleAccount(path, request, env) {
       return json({ ok: false, error: "telegram_task_disabled" }, 409);
     }
     const db = await ensureUserSchema(env);
-    const user = await readD1User(env, identity.userId);
+    const user = await readD1User(env, identity.userId, state.settings);
     if (!user) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
@@ -720,53 +893,34 @@ async function handleAccount(path, request, env) {
       state.settings.telegramTaskExperience,
       DEFAULT_TELEGRAM_TASK_EXPERIENCE,
     );
-    const progression = applyExperience(
-      user.level,
-      user.experience,
-      reward,
-      state.settings.experienceThresholds,
-    );
-    const result = await db.batch([
-      db.prepare(
-        `INSERT OR IGNORE INTO telegram_task_claims_mb
-         (user_id, claimed_at, experience_awarded) VALUES (?, ?, ?)`,
-      ).bind(identity.userId, claimedAt, reward),
-      db.prepare(
-        `UPDATE users_mb SET experience = ?, level = ?
-         WHERE id = ? AND EXISTS (
-           SELECT 1 FROM telegram_task_claims_mb
-           WHERE user_id = ? AND claimed_at = ?
-         )`,
-      ).bind(
-        progression.experience,
-        progression.level,
-        identity.userId,
-        identity.userId,
-        claimedAt,
-      ),
-    ]);
-    const inserted = result[0];
-    const updatedResult = result[1];
+    const inserted = await rewardClaimStatement(db, {
+      userId: identity.userId,
+      userUid: identity.uid,
+      deviceRowId: identity.deviceRowId,
+      rewardType: REWARD_TYPE_TELEGRAM,
+      periodKey: REWARD_PERIOD_LIFETIME,
+      contextKey: "join-v1",
+      claimedAt,
+      experienceAwarded: reward,
+    }).run();
     if (!inserted || !inserted.meta || Number(inserted.meta.changes) < 1) {
       return json({ ok: false, error: "telegram_task_already_claimed" }, 409);
     }
-    if (!updatedResult || !updatedResult.meta || Number(updatedResult.meta.changes) < 1) {
-      throw new Error("telegram_task_claim_failed");
-    }
-    const updated = await readD1User(env, identity.userId);
+    const updated = await readD1User(env, identity.userId, state.settings);
 
     return json({
       ok: true,
       account: publicAccount(updated),
-      telegram: await readTelegramTask(env, identity.userId, state.settings),
+      telegram: await readTelegramTask(
+        env, identity.userId, identity.deviceRowId, state.settings),
     });
   }
 
   if (path === "/api/account/report" && request.method === "POST") {
     const body = await request.json();
-    const reference = body && (body.uid || body.accountId);
+    const deviceId = normalizeAccountId(body && body.deviceId);
     const sessionId = cleanText(body && body.sessionId).slice(0, 128);
-    const identity = await resolveUserIdentity(env, reference);
+    const identity = await resolveDeviceIdentity(env, deviceId);
     if (!identity || !sessionId) {
       return json({ ok: false, error: "invalid_report" }, 400);
     }
@@ -783,40 +937,44 @@ async function handleAccount(path, request, env) {
     const now = new Date();
     const endedAt = normalizeReportTimestamp(body && body.endedAt, beijingTimestamp(now));
     const startedAt = normalizeReportTimestamp(body && body.startedAt, endedAt);
-    if (!startedAt || !endedAt || Date.parse(startedAt) > Date.parse(endedAt)) {
+    if (
+      !startedAt ||
+      !endedAt ||
+      Date.parse(startedAt) > Date.parse(endedAt) ||
+      Date.parse(endedAt) > now.getTime() + 5 * 60 * 1000
+    ) {
       return json({ ok: false, error: "invalid_report_time" }, 400);
     }
     const db = usersDb(env);
     const subscriptionGroupName = cleanText(body && body.subscriptionGroupName).slice(0, 200);
     const uploadBytes = reportBytes(body && body.uploadBytes, body && body.uploadMb);
     const downloadBytes = reportBytes(body && body.downloadBytes, body && body.downloadMb);
-    const inserted = await db.prepare(
-      `INSERT OR IGNORE INTO user_usage_mb
-       (user_id, session_id, subscription_group_name, started_at, ended_at, upload_bytes, download_bytes)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    const reportedAt = beijingTimestamp(now);
+    const stored = await db.prepare(
+      `INSERT INTO user_usage_mb
+       (user_id, session_id, subscription_group_name, started_at, ended_at,
+        reported_at, upload_bytes, download_bytes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, session_id) DO UPDATE SET
+         subscription_group_name = CASE
+           WHEN excluded.subscription_group_name <> ''
+           THEN excluded.subscription_group_name
+           ELSE user_usage_mb.subscription_group_name END,
+         ended_at = MAX(user_usage_mb.ended_at, excluded.ended_at),
+         reported_at = excluded.reported_at,
+         upload_bytes = MAX(user_usage_mb.upload_bytes, excluded.upload_bytes),
+         download_bytes = MAX(user_usage_mb.download_bytes, excluded.download_bytes)`,
     ).bind(
       identity.userId,
       sessionId,
       subscriptionGroupName,
       startedAt,
       endedAt,
+      reportedAt,
       uploadBytes,
       downloadBytes,
     ).run();
-    if (!inserted.meta || Number(inserted.meta.changes) < 1) {
-
-      return json({ ok: true, duplicate: true });
-    }
-
-    await db.batch([
-      db.prepare(`DELETE FROM user_usage_mb
-        WHERE user_id = ? AND session_id NOT IN (
-          SELECT session_id FROM user_usage_mb
-          WHERE user_id = ? ORDER BY ended_at DESC LIMIT 200
-        )`).bind(identity.userId, identity.userId),
-    ]);
-
-    return json({ ok: true });
+    return json({ ok: true, stored: Number(stored.meta && stored.meta.changes) > 0 });
   }
 
   return json({ error: "account_route_not_found" }, 404);
@@ -824,17 +982,18 @@ async function handleAccount(path, request, env) {
 
 async function handleSpeedShareSubmission(request, env) {
   const body = await request.json();
-  const reference = body && (body.uid || body.accountId);
+  const deviceId = normalizeAccountId(body && body.deviceId);
   if (!Array.isArray(body && body.results) || body.results.length === 0 ||
       body.results.length > MAX_SPEED_SHARE_RESULTS) {
     return json({ ok: false, error: "invalid_speed_share_results" }, 400);
   }
 
-  const identity = await resolveUserIdentity(env, reference);
+  const identity = await resolveDeviceIdentity(env, deviceId);
   if (!identity) {
     return json({ ok: false, error: "account_not_found" }, 404);
   }
-  const user = await readD1User(env, identity.userId);
+  const state = await readState(env);
+  const user = await readD1User(env, identity.userId, state.settings);
   if (!user) {
     return json({ ok: false, error: "account_not_found" }, 404);
   }
@@ -858,7 +1017,6 @@ async function handleSpeedShareSubmission(request, env) {
     return json({ ok: false, error: "speed_share_results_empty" }, 400);
   }
 
-  const state = await readState(env);
   const db = await ensureUserSchema(env);
   const now = new Date();
   const reportHour = usagePeriodKeys(now).hour;
@@ -868,104 +1026,73 @@ async function handleSpeedShareSubmission(request, env) {
     state.settings.speedShareSmartExperience,
     DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   );
-  const hourlyGroup = await db.prepare(
-    `INSERT OR IGNORE INTO speed_share_hourly_groups_mb
-     (user_id, report_hour, subscription_group_name, reported_at)
-     VALUES (?, ?, ?, ?)`,
-  ).bind(identity.userId, reportHour, subscriptionGroupName, reportedAt).run();
-  if (!hourlyGroup || !hourlyGroup.meta || Number(hourlyGroup.meta.changes) < 1) {
-    return json({
-      ok: false,
-      error: "speed_share_already_reported_this_hour_group",
-      speedShare: await readSpeedShareStatus(env, identity.userId, state.settings),
-    });
-  }
-
+  const claimToken = crypto.randomUUID();
+  const claim = rewardClaimStatement(db, {
+    userId: identity.userId,
+    userUid: identity.uid,
+    deviceRowId: identity.deviceRowId,
+    rewardType: REWARD_TYPE_SPEED_SHARE,
+    periodKey: reportHour,
+    contextKey: subscriptionGroupName,
+    claimToken,
+    claimedAt: reportedAt,
+    experienceAwarded: reward,
+  });
   const statements = results.map((item) => db.prepare(
     `INSERT INTO speed_share_results_mb
-     (node_id, node_name, server_host, subscription_group_name, province, carrier,
+     (subscription_group_name, node_id, province, carrier, node_name, server_host,
       tcping_latency_ms, url_test_latency_ms, download_mbps, upload_mbps,
-      updated_at, last_reported_at, report_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-     ON CONFLICT(node_id) DO UPDATE SET
-       node_name = CASE WHEN excluded.node_name <> ''
-         THEN excluded.node_name ELSE speed_share_results_mb.node_name END,
-       server_host = CASE WHEN excluded.server_host <> ''
-         THEN excluded.server_host ELSE speed_share_results_mb.server_host END,
-       subscription_group_name = CASE WHEN excluded.subscription_group_name <> ''
-         THEN excluded.subscription_group_name
-         ELSE speed_share_results_mb.subscription_group_name END,
-       province = CASE WHEN excluded.province <> ''
-         THEN excluded.province ELSE speed_share_results_mb.province END,
-       carrier = CASE WHEN excluded.carrier <> ''
-         THEN excluded.carrier ELSE speed_share_results_mb.carrier END,
-       tcping_latency_ms = CASE
-         WHEN excluded.tcping_latency_ms > 0 AND
-           (speed_share_results_mb.tcping_latency_ms <= 0 OR
-            excluded.tcping_latency_ms < speed_share_results_mb.tcping_latency_ms)
-         THEN excluded.tcping_latency_ms
-         ELSE speed_share_results_mb.tcping_latency_ms END,
-       url_test_latency_ms = CASE
-         WHEN excluded.url_test_latency_ms > 0 AND
-           (speed_share_results_mb.url_test_latency_ms <= 0 OR
-            excluded.url_test_latency_ms < speed_share_results_mb.url_test_latency_ms)
-         THEN excluded.url_test_latency_ms
-         ELSE speed_share_results_mb.url_test_latency_ms END,
-       download_mbps = CASE
-         WHEN excluded.download_mbps > speed_share_results_mb.download_mbps
-         THEN excluded.download_mbps
-         ELSE speed_share_results_mb.download_mbps END,
-       upload_mbps = CASE
-         WHEN excluded.upload_mbps > speed_share_results_mb.upload_mbps
-         THEN excluded.upload_mbps
-         ELSE speed_share_results_mb.upload_mbps END,
-       updated_at = CASE WHEN
-         (excluded.tcping_latency_ms > 0 AND
-           (speed_share_results_mb.tcping_latency_ms <= 0 OR
-            excluded.tcping_latency_ms < speed_share_results_mb.tcping_latency_ms)) OR
-         (excluded.url_test_latency_ms > 0 AND
-           (speed_share_results_mb.url_test_latency_ms <= 0 OR
-            excluded.url_test_latency_ms < speed_share_results_mb.url_test_latency_ms)) OR
-         excluded.download_mbps > speed_share_results_mb.download_mbps OR
-         excluded.upload_mbps > speed_share_results_mb.upload_mbps
-         THEN excluded.updated_at ELSE speed_share_results_mb.updated_at END,
+      updated_at, last_reported_at, last_reporter_user_id, report_count)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1
+     WHERE EXISTS (
+       SELECT 1 FROM user_reward_claims_mb WHERE claim_token = ?
+     )
+     ON CONFLICT(subscription_group_name, node_id, province, carrier) DO UPDATE SET
+       node_name = excluded.node_name,
+       server_host = excluded.server_host,
+       tcping_latency_ms = excluded.tcping_latency_ms,
+       url_test_latency_ms = excluded.url_test_latency_ms,
+       download_mbps = excluded.download_mbps,
+       upload_mbps = excluded.upload_mbps,
+       updated_at = excluded.updated_at,
        last_reported_at = excluded.last_reported_at,
+       last_reporter_user_id = excluded.last_reporter_user_id,
        report_count = speed_share_results_mb.report_count + 1`,
   ).bind(
+    subscriptionGroupName,
     item.nodeId,
-    item.nodeName,
-    item.serverHost,
-    item.subscriptionGroupName,
     item.province,
     item.carrier,
+    item.nodeName,
+    item.serverHost,
     item.tcpingLatencyMs,
     item.urlTestLatencyMs,
     item.downloadMbps,
     item.uploadMbps,
     reportedAt,
     reportedAt,
+    identity.userId,
+    claimToken,
   ));
-  for (let index = 0; index < statements.length; index += 100) {
-    await db.batch(statements.slice(index, index + 100));
+  const batchResults = await db.batch([claim, ...statements]);
+  const claimResult = batchResults[0];
+  if (!claimResult || !claimResult.meta || Number(claimResult.meta.changes) < 1) {
+    return json({
+      ok: false,
+      error: "speed_share_already_reported_this_hour_group",
+      speedShare: await readSpeedShareStatus(
+        env, identity.userId, identity.deviceRowId, state.settings),
+    });
   }
-
-  const progression = applyExperience(
-    user.level,
-    user.experience,
-    reward,
-    state.settings.experienceThresholds,
-  );
-  await db.prepare(
-    "UPDATE users_mb SET experience = ?, level = ? WHERE id = ?",
-  ).bind(progression.experience, progression.level, identity.userId).run();
-  const updated = await readD1User(env, identity.userId);
+  const updated = await readD1User(env, identity.userId, state.settings);
 
   return json({
     ok: true,
     acceptedResults: results.length,
     account: publicAccount(updated),
     experienceAwarded: reward,
-    speedShare: await readSpeedShareStatus(env, identity.userId, state.settings),
+    speedShare: await readSpeedShareStatus(
+      env, identity.userId, identity.deviceRowId, state.settings),
   });
 }
 
@@ -988,8 +1115,8 @@ function normalizeSpeedShareResult(value, location = {}) {
     urlTestLatencyMs: sharedLatency(value.urlTestLatencyMs ?? value.urlTestLatency),
     downloadMbps: sharedMbps(value.downloadMbps ?? value.download),
     uploadMbps: sharedMbps(value.uploadMbps ?? value.upload),
-    province: normalizeSpeedShareProvince(value.province) || cleanText(location.province),
-    carrier: normalizeSpeedShareCarrier(value.carrier || value.operator) || cleanText(location.carrier),
+    province: cleanText(location.province) || normalizeSpeedShareProvince(value.province),
+    carrier: cleanText(location.carrier) || normalizeSpeedShareCarrier(value.carrier || value.operator),
   };
   return result.tcpingLatencyMs > 0 || result.urlTestLatencyMs > 0 ||
     result.downloadMbps > 0 || result.uploadMbps > 0
@@ -1083,263 +1210,76 @@ function normalizeSpeedShareServerHost(value) {
   return host.trim().replace(/\.$/, "").toLowerCase();
 }
 
-async function handleDebugUserV2(request, env) {
-  let body;
-  try {
-    body = await request.json();
-  } catch (_) {
-    return json({ ok: false, error: "invalid_json" }, 400);
-  }
-  if (!plainObject(body)) {
-    return json({ ok: false, error: "debug_user_body_must_be_object" }, 400);
-  }
-
-  const db = await ensureUserSchema(env);
-  const requestedUid = normalizeUid(body.uid) || normalizeUid(body.id);
-  const requestedDeviceId = normalizeAccountId(body.deviceId) ||
-    normalizeAccountId(body.id) || normalizeAccountId(body.accountId);
-  let identity = requestedUid
-    ? await resolveUserIdentity(env, requestedUid)
-    : requestedDeviceId
-      ? await resolveUserIdentity(env, requestedDeviceId)
-      : null;
-  let created = false;
-  const deviceId = requestedDeviceId || randomDebugAccountId();
-
-  if (!identity) {
-    const uid = requestedUid || randomPublicUid();
-    const createdAt = debugTimestamp(body.createdAt, beijingTimestamp(), "createdAt");
-    const nickname = normalizeNickname(
-      debugText(body.nickname, defaultNickname(uid), 24, "nickname"),
-      defaultNickname(uid),
-    );
-    const level = debugInteger(body.level, 1, 0, 6, "level");
-    await db.prepare(
-      "INSERT INTO users_mb (uid, nickname, level, created_at) VALUES (?, ?, ?, ?)",
-    ).bind(uid, nickname, level, createdAt).run();
-    const user = await db.prepare("SELECT id, uid FROM users_mb WHERE uid = ?").bind(uid).first();
-    if (!user) return json({ ok: false, error: "debug_user_create_failed" }, 500);
-    await db.prepare(
-      "INSERT INTO user_devices_mb " +
-      "(user_id, device_id, brand, model, android_version, android_sdk, app_version) " +
-      "VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(
-      Number(user.id),
-      deviceId,
-      debugText(body.brand, "", 80, "brand"),
-      debugText(body.model, "", 120, "model"),
-      debugText(body.androidVersion, "", 80, "androidVersion"),
-      debugAndroidSdk(body.androidSdk, 0, "androidSdk"),
-      debugText(body.appVersion, "", 40, "appVersion"),
-    ).run();
-    identity = { userId: Number(user.id), uid: normalizeUid(user.uid) };
-    created = true;
-  } else {
-    const current = await readD1User(env, identity.userId);
-    const nickname = normalizeNickname(
-      debugText(body.nickname, current && current.nickname, 24, "nickname"),
-      current ? current.nickname : defaultNickname(identity.uid),
-    );
-    const level = debugInteger(body.level, current ? current.level : 1, 0, 6, "level");
-    const createdAt = debugTimestamp(
-      body.createdAt,
-      current && current.createdAt ? current.createdAt : beijingTimestamp(),
-      "createdAt",
-    );
-    await db.prepare(
-      "UPDATE users_mb SET nickname = ?, level = ?, created_at = ? WHERE id = ?",
-    ).bind(nickname, level, createdAt, identity.userId).run();
-    await db.prepare(
-      "UPDATE user_devices_mb SET brand = ?, model = ?, android_version = ?, " +
-      "android_sdk = ?, app_version = ? WHERE user_id = ?",
-    ).bind(
-      debugText(body.brand, current && current.brand, 80, "brand"),
-      debugText(body.model, current && current.model, 120, "model"),
-      debugText(body.androidVersion, current && current.androidVersion, 80, "androidVersion"),
-      debugAndroidSdk(
-        body.androidSdk,
-        current && current.androidSdk,
-        "androidSdk",
-      ),
-      debugText(body.appVersion, current && current.appVersion, 40, "appVersion"),
-      identity.userId,
-    ).run();
-  }
-
-  const now = new Date();
-  const statements = [];
-  if (parseFlag(body.replaceUsage, false)) {
-    statements.push(db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId));
-  }
-  const traffic = debugTrafficHistory(body.traffic ?? body.trafficHistory, now);
-  statements.push(...traffic.map((item) => debugTrafficSessionStatement(db, identity.userId, item)));
-  if (statements.length > 0) await db.batch(statements);
-
-  const { day, month } = usagePeriodKeys(now);
-  const saved = await readDebugAdminUser(db, identity.userId, day, month);
-  return json({ ok: true, created, replaced: !created, user: publicAdminUser(saved) });
-}
-
-async function readDebugAdminUser(db, userId, day, month) {
-  return db.prepare(
-    "SELECT u.*, d.brand AS device_brand, d.model AS device_model, " +
-    "d.android_version AS device_android_version, d.android_sdk AS device_android_sdk, " +
-    "d.app_version AS device_app_version, " +
-    "COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic " +
-      "WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_upload_bytes, " +
-    "COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic " +
-      "WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_download_bytes, " +
-    "CASE WHEN EXISTS (SELECT 1 FROM user_usage_mb traffic WHERE traffic.user_id = u.id " +
-      "AND substr(traffic.started_at, 1, 10) = ?) THEN 1 ELSE 0 END AS active_today, " +
-    "COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic " +
-      "WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?), 0) AS month_upload_bytes, " +
-    "COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic " +
-      "WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?), 0) AS month_download_bytes, " +
-    "CASE WHEN EXISTS (SELECT 1 FROM user_usage_mb traffic WHERE traffic.user_id = u.id " +
-      "AND substr(traffic.started_at, 1, 7) = ?) THEN 1 ELSE 0 END AS active_this_month, " +
-    "(SELECT MAX(ended_at) FROM user_usage_mb traffic WHERE traffic.user_id = u.id) AS last_report_at, " +
-    "COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic WHERE traffic.user_id = u.id), 0) AS total_upload_bytes, " +
-    "COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic WHERE traffic.user_id = u.id), 0) AS total_download_bytes " +
-    "FROM users_mb u " +
-    "LEFT JOIN user_devices_mb d ON d.id = (SELECT id FROM user_devices_mb WHERE user_id = u.id ORDER BY id DESC LIMIT 1) " +
-    "WHERE u.id = ?",
-  ).bind(day, day, day, month, month, month, userId).first();
-}
-
-function debugTrafficHistory(value, now) {
-  if (value === undefined || value === null) return [];
-  if (!Array.isArray(value) || value.length > MAX_DEBUG_TRAFFIC_RECORDS) {
-    throw new Error("invalid_debug_traffic");
-  }
-
-  const fallbackTimestamp = beijingTimestamp(now);
-  value.forEach((item) => {
-    if (!plainObject(item)) throw new Error("invalid_debug_traffic");
-  });
-  return value.map((item, index) => {
-    const date = normalizeGrowthDateKey(item.date ?? item.day ?? item.periodKey);
-    const today = usagePeriodKeys(now).day;
-    const startedAt = normalizeReportTimestamp(
-      item.startedAt ?? item.startAt ?? item.startTime ??
-        (date ? `${date}T00:00:00+08:00` : undefined),
-      fallbackTimestamp,
-    );
-    const endedAt = normalizeReportTimestamp(
-      item.endedAt ?? item.endAt ?? item.endTime ??
-        (date ? date === today ? fallbackTimestamp : `${date}T23:59:59+08:00` : undefined),
-      fallbackTimestamp,
-    );
-    if (!startedAt || !endedAt || Date.parse(startedAt) > Date.parse(endedAt)) {
-      throw new Error("invalid_debug_traffic_time");
-    }
-    if (Date.parse(endedAt) > now.getTime() + 60 * 1000) {
-      throw new Error("invalid_debug_traffic_date");
-    }
-    return {
-      sessionId: cleanText(item.sessionId) || `debug-${index + 1}-${startedAt}`,
-      subscriptionGroupName: debugText(
-        item.subscriptionGroupName ?? item.groupName ?? item.subscription,
-        "",
-        200,
-        "subscriptionGroupName",
-      ),
-      startedAt,
-      endedAt,
-      uploadBytes: debugBytes(
-        item.uploadBytes,
-        item.uploadMb,
-        "trafficUploadBytes",
-      ),
-      downloadBytes: debugBytes(
-        item.downloadBytes,
-        item.downloadMb,
-        "trafficDownloadBytes",
-      ),
-    };
-  });
-}
-
-function debugTrafficSessionStatement(db, userId, traffic) {
-  return db.prepare(
-    "INSERT OR IGNORE INTO user_usage_mb " +
-    "(user_id, session_id, subscription_group_name, started_at, ended_at, upload_bytes, download_bytes) " +
-    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-  ).bind(
-    userId,
-    traffic.sessionId,
-    traffic.subscriptionGroupName,
-    traffic.startedAt,
-    traffic.endedAt,
-    traffic.uploadBytes,
-    traffic.downloadBytes,
-  );
-}
-
-function debugText(value, fallback, maxLength, field) {
-  if (value === undefined) return fallback;
-  if (value !== null && typeof value !== "string") {
-    throw new Error(`invalid_debug_${field}`);
-  }
-  return cleanText(value).replace(/[\u0000-\u001f\u007f]/g, "").slice(0, maxLength);
-}
-
-function debugInteger(value, fallback, minimum, maximum, field) {
-  if (value === undefined) return fallback;
-  const number = Number(value);
-  if (!Number.isInteger(number) || number < minimum || number > maximum) {
-    throw new Error(`invalid_debug_${field}`);
-  }
-  return number;
-}
-
-function debugMegabytes(value, fallback, field) {
-  if (value === undefined) return fallback;
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0 || number > 1e9) {
-    throw new Error(`invalid_debug_${field}`);
-  }
-  return Math.round(number * 1e6) / 1e6;
-}
-
-function debugBytes(value, legacyMegabytes, field) {
-  if (value === undefined || value === null || value === "") {
-    return megabytesToBytes(debugMegabytes(legacyMegabytes, 0, `${field}LegacyMb`));
-  }
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0 || number > MAX_TRAFFIC_BYTES) {
-    throw new Error(`invalid_debug_${field}`);
-  }
-  return Math.round(number);
-}
-
-function debugTimestamp(value, fallback, field) {
-  if (value === undefined) return fallback;
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`invalid_debug_${field}`);
-  }
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) {
-    throw new Error(`invalid_debug_${field}`);
-  }
-  return beijingTimestamp(date);
-}
-
-function debugNullableTimestamp(value, field) {
-  if (value === null || value === "") return null;
-  return debugTimestamp(value, null, field);
-}
-
-function randomDebugAccountId() {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
-}
-
-function hasOwn(value, key) {
-  return Object.prototype.hasOwnProperty.call(value, key);
-}
-
 async function handleAdmin(path, request, env) {
+  if (path === "/api/devices" && request.method === "GET") {
+    const requestUrl = new URL(request.url);
+    const requestedLimit = Number(requestUrl.searchParams.get("limit"));
+    const limit = Number.isInteger(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 1000)
+      : 500;
+    const db = await ensureUserSchema(env);
+    const query = await db.prepare(
+      `WITH link_stats AS (
+         SELECT
+           device_row_id,
+           COUNT(*) AS historical_account_count,
+           GROUP_CONCAT(user_uid) AS linked_uids
+         FROM device_account_links_mb
+         GROUP BY device_row_id
+       ), active_bans AS (
+         SELECT
+           device_row_id,
+           COUNT(*) AS active_ban_count,
+           GROUP_CONCAT(source_uid || ':' || reason) AS active_bans
+         FROM device_bans_mb
+         WHERE lifted_at IS NULL
+         GROUP BY device_row_id
+       )
+       SELECT
+         d.device_id,
+         d.brand,
+         d.model,
+         d.android_version,
+         d.android_sdk,
+         d.app_version,
+         d.created_at,
+         d.last_seen_at,
+         u.uid AS current_uid,
+         u.status AS current_account_status,
+         COALESCE(l.historical_account_count, 0) AS historical_account_count,
+         COALESCE(l.linked_uids, '') AS linked_uids,
+         COALESCE(b.active_ban_count, 0) AS active_ban_count,
+         COALESCE(b.active_bans, '') AS active_bans
+       FROM user_devices_mb d
+       LEFT JOIN users_mb u ON u.id = d.user_id
+       LEFT JOIN link_stats l ON l.device_row_id = d.id
+       LEFT JOIN active_bans b ON b.device_row_id = d.id
+       ORDER BY d.last_seen_at DESC, d.id DESC
+       LIMIT ?`,
+    ).bind(limit).all();
+    return json({
+      ok: true,
+      devices: (query.results || []).map((row) => ({
+        deviceId: normalizeAccountId(row.device_id),
+        currentUid: normalizeStoredUid(row.current_uid) || null,
+        currentAccountStatus: cleanText(row.current_account_status) || null,
+        blocked: Number(row.active_ban_count) > 0,
+        activeBanCount: Number(row.active_ban_count) || 0,
+        activeBans: cleanText(row.active_bans).split(",").filter(Boolean),
+        historicalAccountCount: Number(row.historical_account_count) || 0,
+        linkedUids: cleanText(row.linked_uids).split(",").filter(Boolean),
+        brand: cleanText(row.brand),
+        model: cleanText(row.model),
+        androidVersion: cleanText(row.android_version),
+        androidSdk: normalizeAndroidSdk(row.android_sdk),
+        appVersion: cleanText(row.app_version),
+        createdAt: cleanText(row.created_at),
+        lastSeenAt: cleanText(row.last_seen_at),
+      })),
+      generatedAt: beijingTimestamp(),
+    });
+  }
+
   if (path === "/api/users/growth" && request.method === "GET") {
     const requestUrl = new URL(request.url);
     const period = normalizeGrowthPeriod(requestUrl.searchParams.get("period"));
@@ -1352,13 +1292,20 @@ async function handleAdmin(path, request, env) {
       return json({ ok: false, error: "invalid_growth_date_order" }, 400);
     }
     const db = await ensureUserSchema(env);
+    const now = new Date();
+    const today = usagePeriodKeys(now).day;
+    const lastDay = endDate && endDate < today ? endDate : today;
     const query = await db.prepare(
-      "SELECT created_at FROM users_mb WHERE created_at IS NOT NULL AND created_at <> '' ORDER BY created_at ASC",
-    ).all();
+      `SELECT created_day AS date_key, COUNT(*) AS new_users
+       FROM users_mb
+       WHERE created_day <> '' AND created_day <= ?
+       GROUP BY created_day
+       ORDER BY created_day ASC`,
+    ).bind(lastDay).all();
     const points = buildUserGrowthPoints(
       query.results || [],
       period,
-      new Date(),
+      now,
       startDate,
       endDate,
     );
@@ -1386,23 +1333,28 @@ async function handleAdmin(path, request, env) {
     }
 
     const db = await ensureUserSchema(env);
-    const query = await db.prepare(
-      `SELECT substr(started_at, 1, 10) AS date_key,
+    const filters = [];
+    const filterValues = [];
+    if (startDate) {
+      filters.push("usage_day >= ?");
+      filterValues.push(startDate);
+    }
+    if (endDate) {
+      filters.push("usage_day <= ?");
+      filterValues.push(endDate);
+    }
+    const trafficStatement = db.prepare(
+      `SELECT usage_day AS date_key,
               SUM(upload_bytes) AS upload_bytes,
               SUM(download_bytes) AS download_bytes
-       FROM user_usage_mb
-       WHERE started_at IS NOT NULL
-         AND started_at <> ''
-         AND (? = '' OR substr(started_at, 1, 10) >= ?)
-         AND (? = '' OR substr(started_at, 1, 10) <= ?)
-       GROUP BY substr(started_at, 1, 10)
-       ORDER BY substr(started_at, 1, 10) ASC`,
-    ).bind(
-      startDate || "",
-      startDate || "",
-      endDate || "",
-      endDate || "",
-    ).all();
+       FROM user_usage_daily_mb
+       ${filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : ""}
+       GROUP BY usage_day
+       ORDER BY usage_day ASC`,
+    );
+    const query = filterValues.length > 0
+      ? await trafficStatement.bind(...filterValues).all()
+      : await trafficStatement.all();
     const points = buildUserTrafficPoints(
       query.results || [],
       period,
@@ -1432,7 +1384,7 @@ async function handleAdmin(path, request, env) {
       "SELECT node_id, node_name, server_host, subscription_group_name, province, carrier, " +
         "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
         "upload_mbps, updated_at, last_reported_at, report_count " +
-        "FROM speed_share_results_mb ORDER BY updated_at DESC LIMIT ?",
+        "FROM speed_share_results_mb ORDER BY last_reported_at DESC LIMIT ?",
     ).bind(limit).all();
     return json({
       ok: true,
@@ -1441,44 +1393,78 @@ async function handleAdmin(path, request, env) {
     });
   }
 
+  if (path === "/api/dashboard/devices" && request.method === "GET") {
+    const db = await ensureUserSchema(env);
+    const query = await db.prepare(
+      `SELECT
+         u.uid,
+         COALESCE(d.brand, '') AS brand,
+         COALESCE(d.android_version, '') AS android_version,
+         COALESCE(d.app_version, '') AS app_version
+       FROM users_mb u
+       LEFT JOIN user_devices_mb d ON d.id = (
+         SELECT id FROM user_devices_mb
+         WHERE user_id = u.id
+         ORDER BY last_seen_at DESC, id DESC LIMIT 1
+       )
+       ORDER BY u.created_at DESC`,
+    ).all();
+    return json({
+      ok: true,
+      users: (query.results || []).map((row) => ({
+        uid: normalizeStoredUid(row.uid),
+        brand: cleanText(row.brand),
+        androidVersion: cleanText(row.android_version),
+        appVersion: cleanText(row.app_version),
+      })),
+      generatedAt: beijingTimestamp(),
+    });
+  }
+
   if (path === "/api/users" && request.method === "GET") {
     const db = await ensureUserSchema(env);
     const { day, month } = usagePeriodKeys(new Date());
-    const query = await db.prepare(`SELECT
+    const query = await db.prepare(`WITH usage_stats AS (
+      SELECT
+        user_id,
+        SUM(CASE WHEN usage_day = ? THEN upload_bytes ELSE 0 END) AS today_upload_bytes,
+        SUM(CASE WHEN usage_day = ? THEN download_bytes ELSE 0 END) AS today_download_bytes,
+        MAX(CASE WHEN usage_day = ? THEN 1 ELSE 0 END) AS active_today,
+        SUM(CASE WHEN substr(usage_day, 1, 7) = ? THEN upload_bytes ELSE 0 END) AS month_upload_bytes,
+        SUM(CASE WHEN substr(usage_day, 1, 7) = ? THEN download_bytes ELSE 0 END) AS month_download_bytes,
+        MAX(CASE WHEN substr(usage_day, 1, 7) = ? THEN 1 ELSE 0 END) AS active_this_month,
+        MAX(last_ended_at) AS last_report_at,
+        SUM(upload_bytes) AS total_upload_bytes,
+        SUM(download_bytes) AS total_download_bytes
+      FROM user_usage_daily_mb
+      GROUP BY user_id
+    )
+    SELECT
       u.*,
       d.brand AS device_brand,
       d.model AS device_model,
       d.android_version AS device_android_version,
       d.android_sdk AS device_android_sdk,
       d.app_version AS device_app_version,
-      COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic
-        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_upload_bytes,
-      COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic
-        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?), 0) AS today_download_bytes,
-      CASE WHEN EXISTS (
-        SELECT 1 FROM user_usage_mb traffic
-        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 10) = ?
-      ) THEN 1 ELSE 0 END AS active_today,
-      COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic
-        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?), 0) AS month_upload_bytes,
-      COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic
-        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?), 0) AS month_download_bytes,
-      CASE WHEN EXISTS (
-        SELECT 1 FROM user_usage_mb traffic
-        WHERE traffic.user_id = u.id AND substr(traffic.started_at, 1, 7) = ?
-      ) THEN 1 ELSE 0 END AS active_this_month,
-      (SELECT MAX(ended_at) FROM user_usage_mb traffic
-        WHERE traffic.user_id = u.id) AS last_report_at,
-      COALESCE((SELECT SUM(upload_bytes) FROM user_usage_mb traffic
-        WHERE traffic.user_id = u.id), 0) AS total_upload_bytes,
-      COALESCE((SELECT SUM(download_bytes) FROM user_usage_mb traffic
-        WHERE traffic.user_id = u.id), 0) AS total_download_bytes
+      COALESCE(s.today_upload_bytes, 0) AS today_upload_bytes,
+      COALESCE(s.today_download_bytes, 0) AS today_download_bytes,
+      COALESCE(s.active_today, 0) AS active_today,
+      COALESCE(s.month_upload_bytes, 0) AS month_upload_bytes,
+      COALESCE(s.month_download_bytes, 0) AS month_download_bytes,
+      COALESCE(s.active_this_month, 0) AS active_this_month,
+      s.last_report_at AS last_report_at,
+      COALESCE(s.total_upload_bytes, 0) AS total_upload_bytes,
+      COALESCE(s.total_download_bytes, 0) AS total_download_bytes
       FROM users_mb u
       LEFT JOIN user_devices_mb d ON d.id = (
-        SELECT id FROM user_devices_mb WHERE user_id = u.id ORDER BY id DESC LIMIT 1
+        SELECT id FROM user_devices_mb WHERE user_id = u.id
+        ORDER BY last_seen_at DESC, id DESC LIMIT 1
       )
+      LEFT JOIN usage_stats s ON s.user_id = u.id
       ORDER BY u.created_at DESC`).bind(day, day, day, month, month, month).all();
-    const publicUsers = (query.results || []).map(publicAdminUser);
+    const state = await readState(env);
+    const publicUsers = (query.results || []).map((row) =>
+      publicAdminUser(row, state.settings));
 
     return json({
       ok: true,
@@ -1504,17 +1490,22 @@ async function handleAdmin(path, request, env) {
     }
 
     const db = await ensureUserSchema(env);
-    const identities = (await Promise.all(
-      accountIds.map((reference) => resolveUserIdentity(env, reference)),
-    )).filter(Boolean);
-    const timestamp = beijingTimestamp();
-    const result = await db.batch(identities.map((identity) => db.prepare(
-      "UPDATE users_mb SET level = ? WHERE id = ?",
-    ).bind(level, identity.userId)));
-    const changed = result.reduce(
-      (total, item) => total + Number(item && item.meta && item.meta.changes || 0),
-      0,
-    );
+    const state = await readState(env);
+    const status = level === 0 ? "banned" : "active";
+    const experienceTotal = experienceTotalForLevel(level, state.settings.experienceThresholds);
+    const result = await db.prepare(
+      `WITH refs(value) AS (SELECT value FROM json_each(?)),
+       target_users(user_id) AS (
+         SELECT id FROM users_mb WHERE uid IN (SELECT value FROM refs)
+         UNION
+         SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
+       )
+       UPDATE users_mb
+       SET status = ?,
+           experience_total = CASE WHEN ? = 'active' THEN ? ELSE experience_total END
+       WHERE id IN (SELECT user_id FROM target_users)`,
+    ).bind(JSON.stringify(accountIds), status, status, experienceTotal).run();
+    const changed = Number(result.meta && result.meta.changes) || 0;
     return json({ ok: true, accountIds, level, changed });
   }
 
@@ -1526,30 +1517,16 @@ async function handleAdmin(path, request, env) {
     }
 
     const db = await ensureUserSchema(env);
-    const identities = (await Promise.all(
-      accountIds.map((reference) => resolveUserIdentity(env, reference)),
-    )).filter(Boolean);
-    const statements = [];
-    for (const identity of identities) {
-      statements.push(
-        db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
-        db.prepare("DELETE FROM telegram_task_claims_mb WHERE user_id = ?").bind(identity.userId),
-        db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
-        db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
-        db.prepare("DELETE FROM speed_share_hourly_mb WHERE user_id = ?").bind(identity.userId),
-        db.prepare("DELETE FROM speed_share_hourly_groups_mb WHERE user_id = ?").bind(identity.userId),
-        db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
-      );
-    }
-    const result = await db.batch(statements);
-    const changed = identities.reduce(
-      (total, _identity, index) => total + Number(
-        result[index * 7 + 6] && result[index * 7 + 6].meta
-          ? result[index * 7 + 6].meta.changes
-          : 0,
-      ),
-      0,
-    );
+    const result = await db.prepare(
+      `WITH refs(value) AS (SELECT value FROM json_each(?)),
+       target_users(user_id) AS (
+         SELECT id FROM users_mb WHERE uid IN (SELECT value FROM refs)
+         UNION
+         SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
+       )
+       DELETE FROM users_mb WHERE id IN (SELECT user_id FROM target_users)`,
+    ).bind(JSON.stringify(accountIds)).run();
+    const changed = Number(result.meta && result.meta.changes) || 0;
     return json({ ok: true, accountIds, changed });
   }
 
@@ -1558,17 +1535,10 @@ async function handleAdmin(path, request, env) {
     const identity = await resolveUserIdentity(env, decodeURIComponent(userMatch[1]));
     if (!identity) return json({ ok: false, error: "account_not_found" }, 404);
     const db = await ensureUserSchema(env);
-    const result = await db.batch([
-      db.prepare("DELETE FROM user_usage_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM telegram_task_claims_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM daily_checkins_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM speed_share_daily_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM speed_share_hourly_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM speed_share_hourly_groups_mb WHERE user_id = ?").bind(identity.userId),
-      db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
-    ]);
-    const deleteResult = result[result.length - 1];
-    if (!deleteResult || !deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
+    const deleteResult = await db.prepare(
+      "DELETE FROM users_mb WHERE id = ?",
+    ).bind(identity.userId).run();
+    if (!deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
     return json({ ok: true, uid: identity.uid });
@@ -1595,8 +1565,13 @@ async function handleAdmin(path, request, env) {
       if (!Number.isInteger(level) || level < 0 || level > 6) {
         return json({ ok: false, error: "invalid_level" }, 400);
       }
-      userAssignments.push("level = ?");
-      userValues.push(level);
+      const state = await readState(env);
+      userAssignments.push("status = ?");
+      userValues.push(level === 0 ? "banned" : "active");
+      if (level > 0) {
+        userAssignments.push("experience_total = ?");
+        userValues.push(experienceTotalForLevel(level, state.settings.experienceThresholds));
+      }
     }
     const editableTextFields = [
       ["brand", "brand", 80],
@@ -1621,7 +1596,11 @@ async function handleAdmin(path, request, env) {
     }
     if (deviceAssignments.length > 0) {
       statements.push(db.prepare(
-        `UPDATE user_devices_mb SET ${deviceAssignments.join(", ")} WHERE user_id = ?`,
+        `UPDATE user_devices_mb SET ${deviceAssignments.join(", ")}
+         WHERE id = (
+           SELECT id FROM user_devices_mb WHERE user_id = ?
+           ORDER BY last_seen_at DESC, id DESC LIMIT 1
+         )`,
       ).bind(...deviceValues, identity.userId));
     }
     const updateResult = await db.batch(statements);
@@ -1632,7 +1611,11 @@ async function handleAdmin(path, request, env) {
     if (changed < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
-    return json({ ok: true, user: publicAccount(await readD1User(env, identity.userId)) });
+    const state = await readState(env);
+    return json({
+      ok: true,
+      user: publicAccount(await readD1User(env, identity.userId, state.settings)),
+    });
   }
 
   if (path === "/api/state" && request.method === "GET") {
@@ -1670,17 +1653,39 @@ function publicAccount(user) {
     androidVersion: user.androidVersion,
     androidSdk: normalizeAndroidSdk(user.androidSdk),
     appVersion: user.appVersion,
+    deviceBlocked: Boolean(user.deviceBlocked),
   };
 }
 
-async function readDailyCheckin(env, userId, settings) {
+function rewardClaimStatement(db, claim) {
+  const claimToken = cleanText(claim && claim.claimToken) || crypto.randomUUID();
+  return db.prepare(
+    `INSERT OR IGNORE INTO user_reward_claims_mb
+     (user_id, user_uid, device_row_id, reward_type, period_key, context_key,
+      claim_token, claimed_at, experience_awarded)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    Number(claim.userId),
+    normalizeStoredUid(claim.userUid),
+    Number(claim.deviceRowId),
+    cleanText(claim.rewardType),
+    cleanText(claim.periodKey),
+    cleanText(claim.contextKey),
+    claimToken,
+    cleanText(claim.claimedAt),
+    normalizeExperience(claim.experienceAwarded),
+  );
+}
+
+async function readDailyCheckin(env, userId, deviceRowId, settings) {
   const db = await ensureUserSchema(env);
   const checkinDate = usagePeriodKeys(new Date()).day;
   const row = await db.prepare(
-    `SELECT checked_in_at, experience_awarded
-     FROM daily_checkins_mb
-     WHERE user_id = ? AND checkin_date = ?`,
-  ).bind(userId, checkinDate).first();
+    `SELECT claimed_at, experience_awarded
+     FROM user_reward_claims_mb
+     WHERE (user_id = ? OR device_row_id = ?)
+       AND reward_type = ? AND period_key = ? AND context_key = ''`,
+  ).bind(userId, deviceRowId, REWARD_TYPE_DAILY_CHECKIN, checkinDate).first();
   return {
     enabled: true,
     date: checkinDate,
@@ -1689,19 +1694,20 @@ async function readDailyCheckin(env, userId, settings) {
       DEFAULT_DAILY_CHECKIN_EXPERIENCE,
     ),
     status: row ? "checked_in" : "not_checked_in",
-    checkedInAt: cleanText(row && row.checked_in_at),
+    checkedInAt: cleanText(row && row.claimed_at),
     experienceAwarded: normalizeExperience(row && row.experience_awarded),
   };
 }
 
-async function readSpeedShareStatus(env, userId, settings = {}) {
+async function readSpeedShareStatus(env, userId, deviceRowId, settings = {}) {
   const db = await ensureUserSchema(env);
   const reportHour = usagePeriodKeys(new Date()).hour;
   const hourlyGroups = await db.prepare(
-    "SELECT COUNT(*) AS reported_group_count, MAX(reported_at) AS reported_at " +
-      "FROM speed_share_hourly_groups_mb " +
-      "WHERE user_id = ? AND report_hour = ?",
-  ).bind(userId, reportHour).first();
+    "SELECT COUNT(DISTINCT context_key) AS reported_group_count, " +
+      "MAX(claimed_at) AS reported_at " +
+      "FROM user_reward_claims_mb " +
+      "WHERE (user_id = ? OR device_row_id = ?) AND reward_type = ? AND period_key = ?",
+  ).bind(userId, deviceRowId, REWARD_TYPE_SPEED_SHARE, reportHour).first();
   const latest = await db.prepare(
     "SELECT MAX(last_reported_at) AS last_reported_at FROM speed_share_results_mb",
   ).first();
@@ -1722,12 +1728,20 @@ async function readSpeedShareStatus(env, userId, settings = {}) {
   };
 }
 
-async function readTelegramTask(env, userId, settings) {
+async function readTelegramTask(env, userId, deviceRowId, settings) {
   const db = await ensureUserSchema(env);
   const row = await db.prepare(
     `SELECT claimed_at, experience_awarded
-     FROM telegram_task_claims_mb WHERE user_id = ?`,
-  ).bind(userId).first();
+     FROM user_reward_claims_mb
+     WHERE (user_id = ? OR device_row_id = ?)
+       AND reward_type = ? AND period_key = ? AND context_key = ?`,
+  ).bind(
+    userId,
+    deviceRowId,
+    REWARD_TYPE_TELEGRAM,
+    REWARD_PERIOD_LIFETIME,
+    "join-v1",
+  ).first();
   return {
     enabled: Boolean(settings && settings.telegramGroupUrl && settings.telegramJoinCode),
     groupUrl: cleanText(settings && settings.telegramGroupUrl),
@@ -1741,7 +1755,7 @@ async function readTelegramTask(env, userId, settings) {
   };
 }
 
-function publicAdminUser(row) {
+function publicAdminUser(row, settings) {
   const todayUpload = bytesToMegabytes(row.today_upload_bytes);
   const todayDownload = bytesToMegabytes(row.today_download_bytes);
   const monthUpload = bytesToMegabytes(row.month_upload_bytes);
@@ -1749,7 +1763,7 @@ function publicAdminUser(row) {
   const totalUpload = bytesToMegabytes(row.total_upload_bytes);
   const totalDownload = bytesToMegabytes(row.total_download_bytes);
   return {
-    ...publicAccount(rowToUser(row)),
+    ...publicAccount(rowToUser(row, settings)),
     createdAt: cleanText(row.created_at),
     lastReportAt: cleanText(row.last_report_at) || null,
     totalUploadMb: totalUpload,
@@ -1796,21 +1810,71 @@ function usersDb(env) {
 async function ensureUserSchema(env) {
   const db = usersDb(env);
   if (userSchemaReady) return db;
-  await db.batch(USER_SCHEMA_STATEMENTS.map((statement) => db.prepare(statement)));
-  for (const statement of USER_SCHEMA_MIGRATIONS) {
-    try {
-      await db.prepare(statement).run();
-    } catch (error) {
-      if (!String(error && error.message || error).toLowerCase().includes("duplicate column name")) {
-        throw error;
-      }
-    }
-  }
-  await db.batch([
-    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_email ON users_mb(email) WHERE email <> ''"),
-  ]);
-  userSchemaReady = true;
+  await initializeUserSchema(env);
   return db;
+}
+
+async function initializeUserSchema(env) {
+  const db = usersDb(env);
+  if (userSchemaReady) return USER_SCHEMA_VERSION;
+  if (!userSchemaInitialization) {
+    userSchemaInitialization = initializeUserSchemaDatabase(db);
+  }
+  try {
+    const version = await userSchemaInitialization;
+    userSchemaReady = true;
+    return version;
+  } catch (error) {
+    userSchemaInitialization = null;
+    throw error;
+  }
+}
+
+async function initializeUserSchemaDatabase(db) {
+  let schema;
+  try {
+    schema = await db.prepare(
+      "SELECT version FROM app_schema_mb WHERE component = 'users'",
+    ).first();
+  } catch (error) {
+    const message = String(error && error.message || error);
+    if (!/no such table[^]*app_schema_mb/i.test(message)) throw error;
+    schema = null;
+  }
+
+  if (schema && Number(schema.version) !== USER_SCHEMA_VERSION) {
+    throw new Error("users_db_schema_version_mismatch");
+  }
+  if (schema) return Number(schema.version);
+
+  const existing = await db.prepare(
+    `SELECT name FROM sqlite_schema
+     WHERE type = 'table' AND name IN (
+       'users_mb',
+       'user_devices_mb',
+       'device_account_links_mb',
+       'device_bans_mb',
+       'user_usage_mb',
+       'user_usage_daily_mb',
+       'user_reward_claims_mb',
+       'speed_share_results_mb'
+     )
+     LIMIT 1`,
+  ).first();
+  if (existing) {
+    throw new Error("users_db_unversioned_schema_detected");
+  }
+
+  await db.batch(
+    USER_SCHEMA_STATEMENTS.map((statement) => db.prepare(statement)),
+  );
+  const initialized = await db.prepare(
+    "SELECT version FROM app_schema_mb WHERE component = 'users'",
+  ).first();
+  if (!initialized || Number(initialized.version) !== USER_SCHEMA_VERSION) {
+    throw new Error("users_db_initialization_failed");
+  }
+  return Number(initialized.version);
 }
 
 function normalizeUserReference(value) {
@@ -1836,71 +1900,137 @@ async function resolveUserIdentity(env, reference) {
     : null;
 }
 
-async function resolveAccountAccess(env, reference) {
-  const identity = await resolveUserIdentity(env, reference);
+async function resolveDeviceIdentity(env, value) {
+  const context = await readDeviceContext(env, value);
+  return context && !context.deviceBanned && context.userStatus === "active" &&
+      context.userId > 0
+    ? context
+    : null;
+}
+
+async function readDeviceContext(env, value) {
+  const deviceId = normalizeAccountId(value);
+  if (!deviceId) return null;
+  return readDeviceContextFromDb(await ensureUserSchema(env), deviceId);
+}
+
+async function readDeviceContextFromDb(db, deviceId) {
+  const row = await db.prepare(
+    `SELECT
+       d.id AS device_row_id,
+       d.device_id,
+       d.user_id,
+       d.brand,
+       d.model,
+       d.android_version,
+       d.android_sdk,
+       d.app_version,
+       u.uid,
+       u.status AS user_status,
+       EXISTS (
+         SELECT 1 FROM device_bans_mb b
+         WHERE b.device_row_id = d.id AND b.lifted_at IS NULL
+       ) AS device_banned,
+       COALESCE((
+         SELECT b.reason FROM device_bans_mb b
+         WHERE b.device_row_id = d.id AND b.lifted_at IS NULL
+         ORDER BY b.banned_at DESC LIMIT 1
+       ), '') AS block_reason
+     FROM user_devices_mb d
+     LEFT JOIN users_mb u ON u.id = d.user_id
+     WHERE d.device_id = ?`,
+  ).bind(deviceId).first();
+  if (!row) return null;
+  const userId = Number(row.user_id);
+  return {
+    deviceRowId: Number(row.device_row_id),
+    deviceId: normalizeAccountId(row.device_id),
+    deviceBanned: Number(row.device_banned) === 1,
+    blockReason: cleanText(row.block_reason),
+    userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
+    uid: normalizeStoredUid(row.uid),
+    userStatus: cleanText(row.user_status),
+    brand: cleanText(row.brand),
+    model: cleanText(row.model),
+    androidVersion: cleanText(row.android_version),
+    androidSdk: normalizeAndroidSdk(row.android_sdk),
+    appVersion: cleanText(row.app_version),
+  };
+}
+
+async function resolveAccountAccess(env, deviceId, settings) {
+  const identity = await resolveDeviceIdentity(env, deviceId);
   if (!identity) return { level: 0, appVersion: "" };
   const db = await ensureUserSchema(env);
   const row = await db.prepare(
-    "SELECT u.level, COALESCE(d.app_version, '') AS app_version " +
-    "FROM users_mb u LEFT JOIN user_devices_mb d ON d.id = (" +
-    "SELECT id FROM user_devices_mb WHERE user_id = u.id ORDER BY id DESC LIMIT 1" +
-    ") WHERE u.id = ?",
-  ).bind(identity.userId).first();
+    "SELECT u.status, u.experience_total, COALESCE(d.app_version, '') AS app_version " +
+      "FROM users_mb u JOIN user_devices_mb d ON d.user_id = u.id " +
+      "WHERE u.id = ? AND d.device_id = ?",
+  ).bind(identity.userId, identity.deviceId).first();
+  const progress = accountProgress(
+    row && row.experience_total,
+    settings && settings.experienceThresholds,
+    cleanText(row && row.status),
+  );
   return row
     ? {
-      level: normalizeLevel(row.level, 0),
+      level: progress.level,
       appVersion: cleanText(row.app_version),
     }
     : { level: 0, appVersion: "" };
 }
 
-async function readD1User(env, reference) {
+async function readD1User(env, userId, settings) {
   const db = await ensureUserSchema(env);
-  const identity = Number.isInteger(Number(reference)) && Number(reference) > 0
-    ? { userId: Number(reference) }
-    : await resolveUserIdentity(env, reference);
-  if (!identity) return null;
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
   const row = await db.prepare(
     "SELECT u.*, d.brand AS device_brand, d.model AS device_model, " +
     "d.android_version AS device_android_version, d.android_sdk AS device_android_sdk, " +
     "d.app_version AS device_app_version " +
     "FROM users_mb u LEFT JOIN user_devices_mb d ON d.id = (" +
-    "SELECT id FROM user_devices_mb WHERE user_id = u.id ORDER BY id DESC LIMIT 1" +
+    "SELECT id FROM user_devices_mb WHERE user_id = u.id " +
+    "ORDER BY last_seen_at DESC, id DESC LIMIT 1" +
     ") WHERE u.id = ?",
-  ).bind(identity.userId).first();
-  return row ? rowToUser(row) : null;
+  ).bind(normalizedUserId).first();
+  return row ? rowToUser(row, settings) : null;
 }
 
-async function readDeviceBinding(env, deviceId) {
-  const db = await ensureUserSchema(env);
-  const row = await db.prepare(
-    "SELECT u.*, d.brand AS device_brand, d.model AS device_model, " +
-      "d.android_version AS device_android_version, d.android_sdk AS device_android_sdk, " +
-      "d.app_version AS device_app_version " +
-      "FROM users_mb u JOIN user_devices_mb d ON d.user_id = u.id " +
-      "WHERE d.device_id = ?",
-  ).bind(deviceId).first();
-  if (!row) return null;
-
+async function readDeviceBinding(env, deviceId, settings) {
+  const context = await readDeviceContext(env, deviceId);
+  if (!context) return null;
+  const account = context.userId > 0
+    ? await readD1User(env, context.userId, settings)
+    : null;
+  if (account) account.deviceBlocked = context.deviceBanned;
   return {
-    account: rowToUser(row),
+    blocked: context.deviceBanned,
+    blockReason: context.blockReason,
+    account,
     device: {
-      brand: cleanText(row.device_brand),
-      model: cleanText(row.device_model),
-      androidVersion: cleanText(row.device_android_version),
-      androidSdk: normalizeAndroidSdk(row.device_android_sdk),
-      appVersion: cleanText(row.device_app_version),
+      brand: context.brand,
+      model: context.model,
+      androidVersion: context.androidVersion,
+      androidSdk: context.androidSdk,
+      appVersion: context.appVersion,
     },
   };
 }
 
-function rowToUser(row) {
+function rowToUser(row, settings) {
   const uid = normalizeStoredUid(row.uid);
+  const progress = accountProgress(
+    row.experience_total,
+    settings && settings.experienceThresholds,
+    cleanText(row.status),
+  );
   return {
     uid,
     nickname: normalizeNickname(row.nickname, defaultNickname(uid)),
-    level: normalizeLevel(row.level),
-    experience: normalizeExperience(row.experience),
+    level: progress.level,
+    experience: progress.experience,
+    experienceTotal: progress.experienceTotal,
+    status: progress.status,
     email: cleanText(row.email),
     brand: cleanText(row.device_brand ?? row.brand),
     model: cleanText(row.device_model ?? row.model),
@@ -1911,40 +2041,43 @@ function rowToUser(row) {
   };
 }
 
-async function attachDeviceToUser(db, userId, deviceId, profile) {
+async function attachDeviceToUser(db, userId, deviceId, profile, allowTransfer = false) {
   const brand = cleanText(profile && profile.brand).slice(0, 80);
   const model = cleanText(profile && profile.model).slice(0, 120);
   const androidVersion = cleanText(profile && profile.androidVersion).slice(0, 80);
   const androidSdk = normalizeAndroidSdk(profile && profile.androidSdk);
   const appVersion = cleanText(profile && profile.appVersion).slice(0, 40);
+  const now = beijingTimestamp();
+  const existing = await readDeviceContextFromDb(db, deviceId);
+  if (existing && existing.deviceBanned) return false;
+  const user = await db.prepare(
+    "SELECT uid, status FROM users_mb WHERE id = ?",
+  ).bind(userId).first();
+  if (!user || cleanText(user.status) !== "active") return false;
 
-  await db.prepare(
-    "DELETE FROM user_devices_mb WHERE device_id = ? AND user_id <> ?",
-  ).bind(deviceId, userId).run();
-  const existing = await db.prepare(
-    "SELECT id FROM user_devices_mb WHERE device_id = ? AND user_id = ?",
-  ).bind(deviceId, userId).first();
-  if (existing) {
-    await db.prepare(
-      "UPDATE user_devices_mb SET " +
-        "brand = CASE WHEN ? <> '' THEN ? ELSE brand END, " +
-        "model = CASE WHEN ? <> '' THEN ? ELSE model END, " +
-        "android_version = CASE WHEN ? <> '' THEN ? ELSE android_version END, " +
-        "android_sdk = CASE WHEN ? > 0 THEN ? ELSE android_sdk END, " +
-        "app_version = CASE WHEN ? <> '' THEN ? ELSE app_version END " +
-        "WHERE id = ?",
-    ).bind(
-      brand, brand, model, model, androidVersion, androidVersion,
-      androidSdk, androidSdk, appVersion, appVersion, Number(existing.id),
-    ).run();
-    return;
-  }
-
-  await db.prepare(
+  const results = await db.batch([
+    db.prepare(
     "INSERT INTO user_devices_mb " +
-      "(user_id, device_id, brand, model, android_version, android_sdk, app_version) " +
-      "VALUES (?, ?, ?, ?, ?, ?, ?)",
-  ).bind(
+      "(user_id, device_id, brand, model, android_version, android_sdk, app_version, " +
+      "created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+      "ON CONFLICT(device_id) DO UPDATE SET " +
+      "user_id = excluded.user_id, " +
+      "brand = CASE WHEN excluded.brand <> '' THEN excluded.brand ELSE brand END, " +
+      "model = CASE WHEN excluded.model <> '' THEN excluded.model ELSE model END, " +
+      "android_version = CASE WHEN excluded.android_version <> '' " +
+        "THEN excluded.android_version ELSE android_version END, " +
+      "android_sdk = CASE WHEN excluded.android_sdk > 0 " +
+        "THEN excluded.android_sdk ELSE android_sdk END, " +
+      "app_version = CASE WHEN excluded.app_version <> '' " +
+        "THEN excluded.app_version ELSE app_version END, " +
+      "last_seen_at = excluded.last_seen_at " +
+      "WHERE (? = 1 OR user_devices_mb.user_id IS NULL OR " +
+        "user_devices_mb.user_id = excluded.user_id) " +
+      "AND NOT EXISTS (" +
+        "SELECT 1 FROM device_bans_mb b " +
+        "WHERE b.device_row_id = user_devices_mb.id AND b.lifted_at IS NULL" +
+      ")",
+    ).bind(
     userId,
     deviceId,
     brand,
@@ -1952,47 +2085,60 @@ async function attachDeviceToUser(db, userId, deviceId, profile) {
     androidVersion,
     androidSdk,
     appVersion,
-  ).run();
+    now,
+    now,
+    allowTransfer ? 1 : 0,
+    ),
+    db.prepare(
+      `INSERT INTO device_account_links_mb
+       (device_row_id, user_id, user_uid, first_bound_at, last_bound_at)
+       SELECT d.id, u.id, u.uid, ?, ?
+       FROM user_devices_mb d JOIN users_mb u ON u.id = d.user_id
+       WHERE d.device_id = ? AND u.id = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM device_bans_mb b
+           WHERE b.device_row_id = d.id AND b.lifted_at IS NULL
+         )
+       ON CONFLICT(device_row_id, user_uid) DO UPDATE SET
+         user_id = excluded.user_id,
+         last_bound_at = excluded.last_bound_at`,
+    ).bind(now, now, deviceId, userId),
+  ]);
+  return Number(results[0] && results[0].meta && results[0].meta.changes) > 0 &&
+    Number(results[1] && results[1].meta && results[1].meta.changes) > 0;
 }
 
 async function registerOrTouchUser(env, deviceId, profile, now) {
   const db = await ensureUserSchema(env);
-  const brand = cleanText(profile.brand).slice(0, 80);
-  const model = cleanText(profile.model).slice(0, 120);
-  const androidVersion = cleanText(profile.androidVersion).slice(0, 80);
-  const androidSdk = normalizeAndroidSdk(profile.androidSdk);
-  const appVersion = cleanText(profile.appVersion).slice(0, 40);
-  const existing = await db.prepare(
-    "SELECT u.id AS user_id, u.uid FROM users_mb u " +
-    "JOIN user_devices_mb d ON d.user_id = u.id WHERE d.device_id = ?",
-  ).bind(deviceId).first();
-  if (existing) {
-    await db.prepare(
-      "UPDATE user_devices_mb SET " +
-      "brand = CASE WHEN ? <> '' THEN ? ELSE brand END, " +
-      "model = CASE WHEN ? <> '' THEN ? ELSE model END, " +
-      "android_version = CASE WHEN ? <> '' THEN ? ELSE android_version END, " +
-      "android_sdk = CASE WHEN ? > 0 THEN ? ELSE android_sdk END, " +
-      "app_version = CASE WHEN ? <> '' THEN ? ELSE app_version END " +
-      "WHERE device_id = ?",
-    ).bind(
-      brand, brand, model, model, androidVersion, androidVersion,
-      androidSdk, androidSdk, appVersion, appVersion, deviceId,
-    ).run();
-    return;
+  const seenAt = beijingTimestamp(now);
+  const existing = await readDeviceContextFromDb(db, deviceId);
+  if (existing && (existing.deviceBanned || existing.userStatus === "banned")) {
+    return existing;
+  }
+  if (existing && existing.userId > 0) {
+    await attachDeviceToUser(db, existing.userId, deviceId, profile, false);
+    return readDeviceContextFromDb(db, deviceId);
   }
 
   const uid = randomPublicUid();
   await db.prepare(
-    "INSERT INTO users_mb (uid, nickname, level, created_at) VALUES (?, ?, 1, ?)",
-  ).bind(uid, defaultNickname(uid), beijingTimestamp(now)).run();
-  const user = await db.prepare("SELECT id FROM users_mb WHERE uid = ?").bind(uid).first();
-  if (!user) throw new Error("account_create_failed");
-  await db.prepare(
-    "INSERT INTO user_devices_mb " +
-    "(user_id, device_id, brand, model, android_version, android_sdk, app_version) " +
-    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-  ).bind(Number(user.id), deviceId, brand, model, androidVersion, androidSdk, appVersion).run();
+    "INSERT INTO users_mb (uid, nickname, created_at) VALUES (?, ?, ?)",
+  ).bind(uid, defaultNickname(uid), seenAt).run();
+  const created = await db.prepare(
+    "SELECT id FROM users_mb WHERE uid = ?",
+  ).bind(uid).first();
+  if (!created) throw new Error("account_create_failed");
+  const attached = await attachDeviceToUser(
+    db,
+    Number(created.id),
+    deviceId,
+    profile,
+    false,
+  );
+  if (!attached) {
+    await db.prepare("DELETE FROM users_mb WHERE id = ?").bind(Number(created.id)).run();
+  }
+  return readDeviceContextFromDb(db, deviceId);
 }
 
 function normalizeNickname(value, fallback = "") {
@@ -2026,15 +2172,14 @@ function normalizeExperienceThresholds(value) {
   });
 }
 
-function applyExperience(levelValue, experienceValue, gainedValue, thresholds) {
-  let level = normalizeLevel(levelValue, 0);
-  let experience = normalizeExperience(experienceValue);
-  if (level === 0) return { level: 0, experience };
+function accountProgress(experienceTotalValue, thresholds, status = "active") {
+  const experienceTotal = normalizeExperience(experienceTotalValue);
+  if (status === "banned") {
+    return { level: 0, experience: experienceTotal, experienceTotal, status: "banned" };
+  }
 
-  experience = Math.min(
-    experience + normalizeExperience(gainedValue),
-    MAX_ACCOUNT_EXPERIENCE,
-  );
+  let level = 1;
+  let experience = experienceTotal;
   const normalizedThresholds = normalizeExperienceThresholds(thresholds);
   while (level < 6) {
     const required = normalizedThresholds[level - 1];
@@ -2042,7 +2187,15 @@ function applyExperience(levelValue, experienceValue, gainedValue, thresholds) {
     experience -= required;
     level += 1;
   }
-  return { level, experience };
+  return { level, experience, experienceTotal, status: "active" };
+}
+
+function experienceTotalForLevel(levelValue, thresholds) {
+  const level = normalizeLevel(levelValue, 1);
+  if (level <= 1) return 0;
+  return normalizeExperienceThresholds(thresholds)
+    .slice(0, Math.min(level - 1, 5))
+    .reduce((total, threshold) => total + threshold, 0);
 }
 
 function normalizeAndroidSdk(value, fallback = 0) {
@@ -2052,13 +2205,6 @@ function normalizeAndroidSdk(value, fallback = 0) {
   return Number.isInteger(fallbackSdk) && fallbackSdk >= 0 && fallbackSdk <= 1000
     ? fallbackSdk
     : 0;
-}
-
-function debugAndroidSdk(value, fallback, field) {
-  if (value === undefined || value === null || value === "") {
-    return normalizeAndroidSdk(fallback);
-  }
-  return debugInteger(value, 0, 0, 1000, field);
 }
 
 function defaultNickname(accountId) {
@@ -2101,11 +2247,13 @@ function buildUserGrowthPoints(
   rangeEnd = "",
 ) {
   const records = rows.map((row) => {
-    const createdAt = new Date(cleanText(row && row.created_at));
-    if (!Number.isFinite(createdAt.getTime())) return null;
+    const day = normalizeGrowthDateKey(row && row.date_key);
+    const count = Number(row && row.new_users);
+    if (!day || !Number.isInteger(count) || count <= 0) return null;
     return {
-      day: usagePeriodKeys(createdAt).day,
-      key: userGrowthPeriodKey(createdAt, period),
+      day,
+      key: userGrowthPeriodKey(dayKeyToUtcDate(day), period),
+      count,
     };
   }).filter(Boolean);
 
@@ -2129,9 +2277,9 @@ function buildUserGrowthPoints(
   const counts = new Map();
   let totalUsers = 0;
   records.forEach((record) => {
-    if (record.day < startDay) totalUsers += 1;
+    if (record.day < startDay) totalUsers += record.count;
     if (record.day >= startDay && record.day <= endDay) {
-      counts.set(record.key, (counts.get(record.key) || 0) + 1);
+      counts.set(record.key, (counts.get(record.key) || 0) + record.count);
     }
   });
   let key = firstKey;
@@ -4084,12 +4232,15 @@ const USER_TABLE_DEFINITIONS = [
   {
     key: 'users_mb',
     title: 'users_mb（用户表）',
-    columns: ['id', 'uid', 'nickname', 'level', 'experience', 'email', 'created_at'],
+    columns: ['id', 'uid', 'nickname', 'status', 'experience_total', 'email', 'created_at'],
   },
   {
     key: 'user_devices_mb',
     title: 'user_devices_mb（设备表）',
-    columns: ['id', 'user_id', 'device_id', 'brand', 'model', 'android_version', 'android_sdk', 'app_version'],
+    columns: [
+      'id', 'user_id', 'device_id', 'brand', 'model', 'android_version',
+      'android_sdk', 'app_version', 'created_at', 'last_seen_at',
+    ],
   },
   {
     key: 'user_usage_mb',
@@ -4100,6 +4251,8 @@ const USER_TABLE_DEFINITIONS = [
       'subscription_group_name',
       'started_at',
       'ended_at',
+      'reported_at',
+      'usage_day',
       'upload_bytes',
       'download_bytes',
     ],
@@ -4231,7 +4384,7 @@ function userFieldValue(row, field) {
 async function loadUsers(force) {
   setDashboardState('loading-state', '正在读取看板数据…');
   try {
-    const response = await fetch(ADMIN_API_BASE + '/users', {headers: headers()});
+    const response = await fetch(ADMIN_API_BASE + '/dashboard/devices', {headers: headers()});
     const responseText = await response.text();
     let data = {};
     try { data = JSON.parse(responseText); } catch (_) {}

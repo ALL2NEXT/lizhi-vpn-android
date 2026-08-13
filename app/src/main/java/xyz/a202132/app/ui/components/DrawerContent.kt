@@ -192,6 +192,7 @@ private fun UserAccountCard(
     val isBanned = accountInfo?.level == 0
     val levelText = when {
         accountInfo == null -> "账户同步中"
+        accountInfo.deviceBlocked -> "Lv0 · 设备已封禁"
         isBanned -> "Lv0 · 已封禁"
         else -> "Lv${accountInfo.level.coerceIn(1, 6)}"
     }
