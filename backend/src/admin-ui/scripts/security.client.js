@@ -28,7 +28,7 @@ function securityFilteredAccounts() {
   return accounts.filter(function(account) {
     if (!search) return true;
     const deviceIds = (account.devices || []).map(function(device) { return device.deviceId; });
-    return [account.uid, account.nickname, account.email].concat(deviceIds)
+    return [account.uid, account.nickname, account.email, account.inviteCode, account.invitedByCode].concat(deviceIds)
       .join(' ').toLowerCase().indexOf(search) >= 0;
   });
 }
@@ -112,6 +112,8 @@ function renderAccountSecurity() {
       '<td><span class="security-account-name">' + esc(account.nickname || account.uid) + '</span></td>' +
       '<td><code>' + esc(account.uid) + '</code></td>' +
       '<td><span class="security-account-email">' + esc(email) + '</span></td>' +
+      '<td><code>' + esc(account.inviteCode || '未生成') + '</code></td>' +
+      '<td>' + esc(account.inviteeCount == null ? 0 : account.inviteeCount) + ' 人</td>' +
       '<td>Lv' + esc(account.level == null ? '-' : account.level) + '</td>' +
       '<td>' + esc(account.experienceTotal == null ? '-' : account.experienceTotal) + '</td>' +
       '<td>' + deviceCell + '</td>' +
@@ -119,8 +121,9 @@ function renderAccountSecurity() {
       '<td>' + esc(account.createdAt || '暂无') + '</td></tr>';
   }).join('');
   host.innerHTML = '<table class="security-account-table" aria-label="账户安全信息">' +
-    '<thead><tr><th>选择</th><th>状态</th><th>昵称</th><th>UID</th><th>邮箱</th><th>等级</th>' +
-    '<th>累计经验</th><th>历史设备</th><th>本账户封禁设备</th><th>注册时间</th></tr></thead>' +
+    '<thead><tr><th>选择</th><th>状态</th><th>昵称</th><th>UID</th><th>邮箱</th><th>邀请码</th>' +
+    '<th>邀请人数</th><th>等级</th><th>累计经验</th><th>历史设备</th><th>本账户封禁设备</th>' +
+    '<th>注册时间</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-security-select-uid]').forEach(function(input) {
     input.onchange = function() {

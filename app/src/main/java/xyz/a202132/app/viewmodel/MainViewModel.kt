@@ -112,6 +112,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isSyncingAccount = _isSyncingAccount.asStateFlow()
     private val _isBindingAccount = MutableStateFlow(false)
     val isBindingAccount = _isBindingAccount.asStateFlow()
+    private val _isBindingInviteCode = MutableStateFlow(false)
+    val isBindingInviteCode = _isBindingInviteCode.asStateFlow()
     private val _isSwitchingAccount = MutableStateFlow(false)
     val isSwitchingAccount = _isSwitchingAccount.asStateFlow()
     private val _isDeletingAccount = MutableStateFlow(false)
@@ -1424,6 +1426,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isSyncingAccount.value ||
             _isUpdatingNickname.value ||
             _isBindingAccount.value ||
+            _isBindingInviteCode.value ||
             _isSwitchingAccount.value ||
             _isDeletingAccount.value
         ) return
@@ -1540,6 +1543,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } finally {
                 _isBindingAccount.value = false
+            }
+        }
+    }
+
+    fun bindInviteCode(code: String) {
+        if (_isBindingInviteCode.value) return
+        viewModelScope.launch {
+            _isBindingInviteCode.value = true
+            _accountMessage.value = null
+            try {
+                accountManager.bindInviteCode(
+                    code = code,
+                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                ).onSuccess {
+                    _accountMessage.value = "邀请码绑定成功"
+                }.onFailure { error ->
+                    Log.w(tag, "Failed to bind invite code", error)
+                    _accountMessage.value = accountActionErrorMessage(error)
+                }
+            } finally {
+                _isBindingInviteCode.value = false
             }
         }
     }
@@ -1664,6 +1688,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "invalid_account_password" -> "当前账户密码错误"
             "account_banned" -> "账户已被封禁，无法切换"
             "account_not_found" -> "账户不存在，请重新同步账户"
+            "invalid_invite_code" -> "请输入 8 位有效邀请码"
+            "invite_code_not_found" -> "邀请码不存在或所属账户不可用"
+            "invite_self_not_allowed" -> "不能绑定自己的邀请码"
+            "invite_already_bound" -> "当前账户已经绑定过邀请码"
             else -> error.message ?: "账户操作失败"
         }
     }

@@ -8,6 +8,7 @@ import {
 import {
   bytesToMegabytes,
   normalizeAndroidSdk,
+  normalizeInviteCode,
   normalizeExperience,
   normalizeLevel,
   normalizeStoredUid,
@@ -28,6 +29,9 @@ export function publicAccount(user) {
     androidVersion: user.androidVersion,
     androidSdk: normalizeAndroidSdk(user.androidSdk),
     appVersion: user.appVersion,
+    inviteCode: normalizeInviteCode(user.inviteCode),
+    invitedByCode: normalizeInviteCode(user.invitedByCode),
+    inviteeCount: Math.max(0, Number(user.inviteeCount) || 0),
     deviceBlocked: Boolean(user.deviceBlocked),
   };
 }

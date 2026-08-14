@@ -21,7 +21,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 1;
+export const USER_SCHEMA_VERSION = 2;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -36,6 +36,9 @@ export const USER_SCHEMA_STATEMENTS = [
       CHECK (status IN ('active', 'banned')),
     experience_total INTEGER NOT NULL DEFAULT 0
       CHECK (experience_total BETWEEN 0 AND 1000000000000),
+    invite_code TEXT NOT NULL UNIQUE,
+    invited_by_user_id INTEGER,
+    invited_at TEXT,
     email TEXT COLLATE NOCASE,
     password_hash TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
@@ -48,6 +51,11 @@ export const USER_SCHEMA_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_email
     ON users_mb(email)
     WHERE email IS NOT NULL AND email <> ''`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_invite_code
+    ON users_mb(invite_code)
+    WHERE invite_code IS NOT NULL AND invite_code <> ''`,
+  `CREATE INDEX IF NOT EXISTS idx_users_mb_invited_by
+    ON users_mb(invited_by_user_id)`,
   `CREATE TABLE IF NOT EXISTS user_devices_mb (
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
@@ -234,6 +242,19 @@ export const USER_SCHEMA_STATEMENTS = [
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
+// 采用增量迁移，保证已存在的 D1 用户数据可以平滑增加邀请码字段。
+export const USER_SCHEMA_MIGRATIONS = {
+  2: [
+    `ALTER TABLE users_mb ADD COLUMN invite_code TEXT`,
+    `ALTER TABLE users_mb ADD COLUMN invited_by_user_id INTEGER`,
+    `ALTER TABLE users_mb ADD COLUMN invited_at TEXT`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_invite_code
+      ON users_mb(invite_code)
+      WHERE invite_code IS NOT NULL AND invite_code <> ''`,
+    `CREATE INDEX IF NOT EXISTS idx_users_mb_invited_by
+      ON users_mb(invited_by_user_id)`,
+  ],
+};
 export const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";
 export const REWARD_TYPE_SPEED_SHARE = "speed_share";
 export const REWARD_TYPE_TELEGRAM = "telegram";

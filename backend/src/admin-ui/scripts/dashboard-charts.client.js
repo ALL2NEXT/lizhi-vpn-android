@@ -421,7 +421,10 @@ const USER_TABLE_DEFINITIONS = [
   {
     key: 'users_mb',
     title: 'users_mb（用户表）',
-    columns: ['id', 'uid', 'nickname', 'status', 'experience_total', 'email', 'created_at'],
+    columns: [
+      'id', 'uid', 'nickname', 'status', 'experience_total', 'invite_code',
+      'invited_by_user_id', 'invited_at', 'email', 'created_at',
+    ],
   },
   {
     key: 'user_devices_mb',
@@ -447,4 +450,3 @@ const USER_TABLE_DEFINITIONS = [
     ],
   },
 ];
-

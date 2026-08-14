@@ -12,6 +12,7 @@ import xyz.a202132.app.data.model.AccountActionResponse
 import xyz.a202132.app.data.model.AccountInfo
 import xyz.a202132.app.data.model.AccountBindingRequest
 import xyz.a202132.app.data.model.AccountDeleteRequest
+import xyz.a202132.app.data.model.AccountInviteRequest
 import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
@@ -286,6 +287,38 @@ class AccountManager(private val context: Context) {
             }
             val updated = response.account ?: throw IllegalStateException(
                 response.error ?: "账户绑定失败"
+            )
+            persistAccount(updated)
+            updated
+        }
+    }
+
+    suspend fun bindInviteCode(
+        code: String,
+        timeoutMs: Long = 10000L
+    ): Result<AccountInfo> {
+        val registered = currentAccount()
+            ?: return Result.failure(IllegalStateException("账户尚未同步"))
+        val normalizedCode = code.trim().uppercase().replace("-", "").replace(" ", "")
+        if (!Regex("^[A-HJ-NP-Z2-9]{8}$").matches(normalizedCode)) {
+            return Result.failure(IllegalArgumentException("邀请码格式无效"))
+        }
+        if (registered.level == 0) {
+            return Result.failure(IllegalStateException("account_banned"))
+        }
+
+        return runCatching {
+            val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.bindInviteCode(
+                    accountEndpoint("/api/account/invite"),
+                    AccountInviteRequest(
+                        deviceId = accountId(),
+                        code = normalizedCode
+                    )
+                )
+            }
+            val updated = response.account ?: throw IllegalStateException(
+                response.error ?: "邀请码绑定失败"
             )
             persistAccount(updated)
             updated

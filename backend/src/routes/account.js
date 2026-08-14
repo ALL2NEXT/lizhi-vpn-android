@@ -30,6 +30,7 @@ export function createAccountRoutes(deps) {
     registerOrTouchUser,
     normalizeNickname,
     normalizeExperience,
+    normalizeInviteCode,
     usagePeriodKeys,
     beijingTimestamp,
     normalizeReportTimestamp,
@@ -135,6 +136,50 @@ async function handleAccount(path, request, env) {
     return json({ ok: true, account: publicAccount(updated) });
   }
 
+  // 每个账户只能绑定一次上级邀请码，绑定关系用于统计邀请来源。
+  if (path === "/api/account/invite" && request.method === "POST") {
+    const body = await request.json();
+    const deviceId = normalizeAccountId(body && body.deviceId);
+    const inviteCode = normalizeInviteCode(body && body.code);
+    if (!deviceId || !inviteCode) {
+      return json({ ok: false, error: "invalid_invite_code" }, 400);
+    }
+
+    const identity = await resolveDeviceIdentity(env, deviceId);
+    if (!identity) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    const db = await ensureUserSchema(env);
+    const state = await readState(env);
+    const user = await readD1User(env, identity.userId, state.settings);
+    if (!user) {
+      return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    if (user.invitedByCode) {
+      return json({ ok: false, error: "invite_already_bound" }, 409);
+    }
+
+    const inviter = await db.prepare(
+      "SELECT id, status FROM users_mb WHERE invite_code = ?",
+    ).bind(inviteCode).first();
+    if (!inviter || cleanText(inviter.status) !== "active") {
+      return json({ ok: false, error: "invite_code_not_found" }, 404);
+    }
+    if (Number(inviter.id) === identity.userId) {
+      return json({ ok: false, error: "invite_self_not_allowed" }, 409);
+    }
+
+    const result = await db.prepare(
+      "UPDATE users_mb SET invited_by_user_id = ?, invited_at = ? " +
+        "WHERE id = ? AND invited_by_user_id IS NULL",
+    ).bind(Number(inviter.id), beijingTimestamp(), identity.userId).run();
+    if (!result.meta || Number(result.meta.changes) < 1) {
+      return json({ ok: false, error: "invite_already_bound" }, 409);
+    }
+    const updated = await readD1User(env, identity.userId, state.settings);
+    return json({ ok: true, account: publicAccount(updated) });
+  }
+
   // 使用邮箱和密码切换账户，同时把当前设备转移到登录账户。
   if (path === "/api/account/login" && request.method === "POST") {
     const body = await request.json();
@@ -205,10 +250,14 @@ async function handleAccount(path, request, env) {
       }
     }
 
-    const deleteResult = await db.prepare(
-      "DELETE FROM users_mb WHERE id = ?",
-    ).bind(identity.userId).run();
-    if (!deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
+    const deleteResults = await db.batch([
+      db.prepare(
+        "UPDATE users_mb SET invited_by_user_id = NULL, invited_at = NULL " +
+          "WHERE invited_by_user_id = ?",
+      ).bind(identity.userId),
+      db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
+    ]);
+    if (!deleteResults[1].meta || Number(deleteResults[1].meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
     return json({ ok: true });

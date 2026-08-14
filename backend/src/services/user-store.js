@@ -1,13 +1,19 @@
-import { USER_SCHEMA_STATEMENTS, USER_SCHEMA_VERSION } from "../config.js";
+import {
+  USER_SCHEMA_MIGRATIONS,
+  USER_SCHEMA_STATEMENTS,
+  USER_SCHEMA_VERSION,
+} from "../config.js";
 import {
   accountProgress,
   defaultNickname,
   normalizeAccountId,
   normalizeAndroidSdk,
   normalizeNickname,
+  normalizeInviteCode,
   normalizeStoredUid,
   normalizeUid,
   normalizeUserReference,
+  randomInviteCode,
   randomPublicUid,
 } from "../domain/account.js";
 import { beijingTimestamp } from "../domain/time.js";
@@ -56,10 +62,24 @@ export async function initializeUserSchemaDatabase(db) {
     schema = null;
   }
 
-  if (schema && Number(schema.version) !== USER_SCHEMA_VERSION) {
-    throw new Error("users_db_schema_version_mismatch");
+  if (schema) {
+    let version = Number(schema.version);
+    if (!Number.isInteger(version) || version < 1 || version > USER_SCHEMA_VERSION) {
+      throw new Error("users_db_schema_version_mismatch");
+    }
+    for (let nextVersion = version + 1; nextVersion <= USER_SCHEMA_VERSION; nextVersion += 1) {
+      const statements = USER_SCHEMA_MIGRATIONS[nextVersion] || [];
+      if (statements.length > 0) {
+        await db.batch(statements.map((statement) => db.prepare(statement)));
+      }
+      await db.prepare(
+        "UPDATE app_schema_mb SET version = ?, applied_at = ? WHERE component = 'users'",
+      ).bind(nextVersion, beijingTimestamp()).run();
+      version = nextVersion;
+    }
+    await backfillInviteCodes(db);
+    return version;
   }
-  if (schema) return Number(schema.version);
 
   const existing = await db.prepare(
     `SELECT name FROM sqlite_schema
@@ -88,7 +108,32 @@ export async function initializeUserSchemaDatabase(db) {
   if (!initialized || Number(initialized.version) !== USER_SCHEMA_VERSION) {
     throw new Error("users_db_initialization_failed");
   }
+  await backfillInviteCodes(db);
   return Number(initialized.version);
+}
+
+async function backfillInviteCodes(db) {
+  const result = await db.prepare(
+    "SELECT id FROM users_mb WHERE invite_code IS NULL OR invite_code = '' ORDER BY id ASC",
+  ).all();
+  for (const row of result.results || []) {
+    const userId = Number(row.id);
+    if (!Number.isInteger(userId) || userId <= 0) continue;
+    let assigned = false;
+    for (let attempt = 0; attempt < 8 && !assigned; attempt += 1) {
+      try {
+        const update = await db.prepare(
+          "UPDATE users_mb SET invite_code = ? WHERE id = ? AND (invite_code IS NULL OR invite_code = '')",
+        ).bind(randomInviteCode(), userId).run();
+        assigned = Number(update.meta && update.meta.changes) > 0 ||
+          Boolean(await db.prepare("SELECT invite_code FROM users_mb WHERE id = ? AND invite_code <> ''")
+            .bind(userId).first());
+      } catch (error) {
+        if (!/unique|constraint/i.test(String(error && error.message || error))) throw error;
+      }
+    }
+    if (!assigned) throw new Error("invite_code_generation_failed");
+  }
 }
 
 export async function resolveUserIdentity(env, reference) {
@@ -197,12 +242,12 @@ export async function readD1User(env, userId, settings) {
   const row = await db.prepare(
     "SELECT u.*, d.brand AS device_brand, d.model AS device_model, " +
     "d.android_version AS device_android_version, d.android_sdk AS device_android_sdk, " +
-
-    "d.app_version AS device_app_version " +
+    "d.app_version AS device_app_version, inviter.invite_code AS invited_by_code, " +
+    "(SELECT COUNT(*) FROM users_mb invited WHERE invited.invited_by_user_id = u.id) AS invitee_count " +
     "FROM users_mb u LEFT JOIN user_devices_mb d ON d.id = (" +
     "SELECT id FROM user_devices_mb WHERE user_id = u.id " +
     "ORDER BY last_seen_at DESC, id DESC LIMIT 1" +
-    ") WHERE u.id = ?",
+    ") LEFT JOIN users_mb inviter ON inviter.id = u.invited_by_user_id WHERE u.id = ?",
   ).bind(normalizedUserId).first();
   return row ? rowToUser(row, settings) : null;
 }
@@ -227,6 +272,9 @@ export function rowToUser(row, settings) {
     androidVersion: cleanText(row.device_android_version ?? row.android_version),
     androidSdk: normalizeAndroidSdk(row.device_android_sdk ?? row.android_sdk),
     appVersion: cleanText(row.device_app_version ?? row.app_version),
+    inviteCode: normalizeInviteCode(row.invite_code),
+    invitedByCode: normalizeInviteCode(row.invited_by_code),
+    inviteeCount: Math.max(0, Number(row.invitee_count) || 0),
     createdAt: cleanText(row.created_at),
   };
 }
@@ -310,13 +358,21 @@ export async function registerOrTouchUser(env, deviceId, profile, now) {
     return readDeviceContextFromDb(db, deviceId);
   }
 
-  const uid = randomPublicUid();
-  await db.prepare(
-    "INSERT INTO users_mb (uid, nickname, created_at) VALUES (?, ?, ?)",
-  ).bind(uid, defaultNickname(uid), seenAt).run();
-  const created = await db.prepare(
-    "SELECT id FROM users_mb WHERE uid = ?",
-  ).bind(uid).first();
+  let uid = "";
+  let created = null;
+  for (let attempt = 0; attempt < 8 && !created; attempt += 1) {
+    uid = randomPublicUid();
+    try {
+      await db.prepare(
+        "INSERT INTO users_mb (uid, nickname, invite_code, created_at) VALUES (?, ?, ?, ?)",
+      ).bind(uid, defaultNickname(uid), randomInviteCode(), seenAt).run();
+      created = await db.prepare(
+        "SELECT id FROM users_mb WHERE uid = ?",
+      ).bind(uid).first();
+    } catch (error) {
+      if (!/unique|constraint/i.test(String(error && error.message || error))) throw error;
+    }
+  }
   if (!created) throw new Error("account_create_failed");
   const attached = await attachDeviceToUser(
     db,
@@ -330,4 +386,3 @@ export async function registerOrTouchUser(env, deviceId, profile, now) {
   }
   return readDeviceContextFromDb(db, deviceId);
 }
-

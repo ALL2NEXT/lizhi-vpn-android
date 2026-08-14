@@ -10,6 +10,7 @@ import retrofit2.http.Url
 import xyz.a202132.app.data.model.AccountBindingRequest
 import xyz.a202132.app.data.model.AccountActionResponse
 import xyz.a202132.app.data.model.AccountDeleteRequest
+import xyz.a202132.app.data.model.AccountInviteRequest
 import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
@@ -40,6 +41,12 @@ interface ApiService {
     suspend fun bindAccount(
         @Url url: String,
         @Body request: AccountBindingRequest
+    ): AccountRegisterResponse
+
+    @POST
+    suspend fun bindInviteCode(
+        @Url url: String,
+        @Body request: AccountInviteRequest
     ): AccountRegisterResponse
 
     @POST

@@ -120,6 +120,14 @@ data class AccountBindingRequest(
     val password: String
 )
 
+data class AccountInviteRequest(
+    @SerializedName("deviceId")
+    val deviceId: String,
+
+    @SerializedName("code")
+    val code: String
+)
+
 data class AccountLoginRequest(
     @SerializedName("deviceId")
     val deviceId: String,
@@ -195,6 +203,15 @@ data class AccountInfo(
 
     @SerializedName("appVersion")
     val appVersion: String = "",
+
+    @SerializedName("inviteCode")
+    val inviteCode: String = "",
+
+    @SerializedName("invitedByCode")
+    val invitedByCode: String = "",
+
+    @SerializedName("inviteeCount")
+    val inviteeCount: Int = 0,
 
     @SerializedName("deviceBlocked")
     val deviceBlocked: Boolean = false

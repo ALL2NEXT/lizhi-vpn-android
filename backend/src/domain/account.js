@@ -6,6 +6,8 @@ import {
 } from "../config.js";
 import { cleanText } from "../lib/values.js";
 
+const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
 export function normalizeUserReference(value) {
   return normalizeUid(value) || normalizeAccountId(value);
 }
@@ -100,6 +102,17 @@ export function normalizeAccountPassword(value) {
 export function normalizeTelegramJoinCode(value) {
   const code = cleanText(value).replace(/[\u0000-\u001f\u007f]/g, "");
   return code.length >= 1 && code.length <= 128 ? code : "";
+}
+
+export function normalizeInviteCode(value) {
+  const code = cleanText(value).toUpperCase().replace(/[\s-]/g, "");
+  return /^[A-HJ-NP-Z2-9]{8}$/.test(code) ? code : "";
+}
+
+export function randomInviteCode() {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => INVITE_CODE_ALPHABET[byte % INVITE_CODE_ALPHABET.length]).join("");
 }
 
 export async function hashAccountPassword(password) {
