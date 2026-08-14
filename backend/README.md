@@ -5,12 +5,15 @@
 ## 目录结构
 
 - `serverless.js`：Cloudflare Worker 稳定入口，仅负责导出运行时。
-- `src/worker-core.js`：Worker 生命周期、统一异常处理、共享 D1/KV 辅助函数和路由组合。
+- `src/worker-core.js`：Worker 组合根，只负责依赖装配、入口分发和统一异常日志。
 - `src/config.js`：运行时常量、默认状态和 D1 初始化 schema。
+- `src/domain/`：账号字段、时间周期和统计聚合等纯业务规则。
+- `src/services/`：D1 用户仓储、奖励、测速、订阅和 KV 状态服务。
+- `src/http/`、`src/lib/`：HTTP 响应、安全校验和通用值处理。
 - `src/routes/client.js`：客户端配置、订阅中转路由。
 - `src/routes/account.js`：注册、绑定、登录、账户和任务路由。
-- `src/routes/admin.js`：管理后台 API 路由。
-- `src/admin-ui.js`：管理后台 HTML/CSS/JavaScript 页面。
+- `src/routes/admin.js`：管理 API 组合器，具体路由按安全、统计、AI、用户和状态拆在 `src/routes/admin/`。
+- `src/admin-ui.js`：管理页资源组合器；HTML、CSS 和浏览器脚本位于 `src/admin-ui/`，脚本继续按业务模块拆分。
 - `schema.sql`：D1 schema 的可读副本。
 - `migrations/`：后续 D1 增量迁移目录。
 
@@ -18,7 +21,7 @@
 
 - KV 命名空间绑定：`CONFIG`
 - D1 数据库绑定：`USERS_DB`
-- Worker Secret：`ADMIN_TOKEN`
+- Worker Secret：`ADMIN_TOKEN`；启用 AI 看板分析时还需 `GEMINI_API_KEY`。
 
 管理后台地址：
 
@@ -41,3 +44,13 @@ Authorization: Bearer <ADMIN_TOKEN>
 ## 兼容性说明
 
 本次重构只调整代码组织，不改变现有 API 路径、请求字段、响应字段、D1 表名或 KV 状态格式。部署时仍指向 `backend/serverless.js`。
+
+## 本地验证
+
+```powershell
+npx.cmd wrangler deploy --dry-run
+npx.cmd wrangler check startup
+npx.cmd wrangler dev --local
+```
+
+`wrangler.jsonc` 使用 Text 模块规则导入管理页的 HTML、CSS 和 `*.client.js`，新增管理页资源时应沿用对应扩展名。

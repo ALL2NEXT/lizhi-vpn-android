@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>管理后台</title>
+  <style>
+/* __ADMIN_STYLES__ */
+  </style>
+</head>
+<body>
+ <main>
+   <section id="loginGate" class="login-gate">
+     <div class="card">
+       <form id="loginForm">
+         <div class="field"><input id="adminPassword" type="password" autocomplete="current-password" placeholder="输入管理员密码" aria-label="管理员密码"></div>
+         <button type="submit">进入后台</button>
+         <div id="loginStatus"></div>
+       </form>
+     </div>
+   </section>
+
+   <div id="dashboard" hidden>
+     <aside class="dashboard-sidebar">
+       <div class="sidebar-brand">
+         <h1>FireflyVPN</h1>
+         <small>管理后台</small>
+       </div>
+       <nav class="tab-nav" role="tablist" aria-label="后台模块" aria-orientation="vertical">
+          <div class="nav-group" data-nav-group="dashboard">
+            <button class="tab-button nav-parent" type="button" aria-expanded="true" aria-controls="dashboard-subnav">
+              <span>数据看板</span><span class="nav-chevron" aria-hidden="true">⌄</span>
+            </button>
+            <div id="dashboard-subnav" class="nav-submenu" role="group" aria-label="数据看板子菜单">
+              <button class="tab-button" role="tab" type="button" data-tab="user-trends">用户趋势</button>
+              <button class="tab-button" role="tab" type="button" data-tab="traffic-trends">流量趋势</button>
+              <button class="tab-button" role="tab" type="button" data-tab="profile-ratio">占比画像</button>
+            </div>
+          </div>
+           <div class="nav-group" data-nav-group="form-query">
+            <button class="tab-button nav-parent" type="button" aria-expanded="true" aria-controls="form-query-subnav">
+              <span>表单查询</span><span class="nav-chevron" aria-hidden="true">⌄</span>
+            </button>
+            <div id="form-query-subnav" class="nav-submenu" role="group" aria-label="表单查询子菜单">
+              <button class="tab-button" role="tab" type="button" data-tab="account-security">账户及其设备信息</button>
+              <button class="tab-button" role="tab" type="button" data-tab="traffic-query">流量汇总表单</button>
+              <button class="tab-button" role="tab" type="button" data-tab="speed-share-results">共享测速表单</button>
+            </div>
+          </div>
+          <div class="nav-group" data-nav-group="app-settings">
+            <button class="tab-button nav-parent" type="button" aria-expanded="true" aria-controls="app-settings-subnav">
+              <span>应用设置</span><span class="nav-chevron" aria-hidden="true">⌄</span>
+            </button>
+             <div id="app-settings-subnav" class="nav-submenu" role="group" aria-label="应用设置子菜单">
+               <button class="tab-button" role="tab" type="button" data-tab="app-settings">应用基础设置</button>
+               <button class="tab-button" role="tab" type="button" data-tab="subscriptions">订阅线路</button>
+               <button class="tab-button" role="tab" type="button" data-tab="notice">公告</button>
+              <button class="tab-button" role="tab" type="button" data-tab="app-update">版本更新</button>
+            </div>
+          </div>
+       </nav>
+       <button class="secondary sidebar-logout" type="button" onclick="logout()">退出登录</button>
+     </aside>
+
+     <div class="dashboard-workspace">
+       <div id="status" role="status" aria-live="polite"></div>
+
+   <section class="card tab-panel" role="tabpanel" data-panel="user-trends">
+     <div class="dashboard-heading">
+       <div>
+         <h2>用户趋势</h2>
+         <p>按日、按周、按月查看注册新增用户和累计用户数量。</p>
+       </div>
+       <button class="secondary" type="button" onclick="loadGrowthChart(growthPeriod)">刷新数据</button>
+     </div>
+    <article class="growth-card">
+      <div class="growth-toolbar">
+        <div>
+          <h3>用户增长</h3>
+          <small>按日、按周、按月统计注册新增用户，折线显示累计用户数量。</small>
+          <div class="growth-range-controls" aria-label="用户增长时间范围">
+            <label class="growth-range-field">开始日期<input id="growthStartDate" type="date"></label>
+            <label class="growth-range-field">结束日期<input id="growthEndDate" type="date"></label>
+            <button class="secondary" type="button" onclick="applyGrowthRange()">应用范围</button>
+            <button class="secondary" type="button" onclick="clearGrowthRange()">全部时间</button>
+          </div>
+        </div>
+        <div class="growth-period-switch" role="group" aria-label="用户增长统计粒度">
+          <button class="growth-period-button active" type="button" data-growth-period="day" onclick="setGrowthPeriod('day')">按日</button>
+          <button class="growth-period-button" type="button" data-growth-period="week" onclick="setGrowthPeriod('week')">按周</button>
+          <button class="growth-period-button" type="button" data-growth-period="month" onclick="setGrowthPeriod('month')">按月</button>
+        </div>
+      </div>
+       <div id="userGrowthChart" class="growth-chart-host"><div class="loading-state">正在读取用户增长数据…</div></div>
+       <div id="userGrowthSummary" class="growth-summary" aria-live="polite"></div>
+     </article>
+   </section>
+
+   <section class="card tab-panel" role="tabpanel" data-panel="traffic-trends">
+     <div class="dashboard-heading">
+       <div>
+         <h2>流量趋势</h2>
+         <p>按时间粒度查看上传、下载和总流量的变化趋势。</p>
+       </div>
+       <button class="secondary" type="button" onclick="loadTrafficChart(trafficPeriod)">刷新数据</button>
+     </div>
+     <article class="growth-card">
+       <div class="growth-toolbar">
+         <div>
+           <h3>流量消耗</h3>
+           <small>上传和下载使用堆叠柱状图，总流量使用折线显示。</small>
+           <div class="growth-range-controls" aria-label="流量统计时间范围">
+             <label class="growth-range-field">开始日期<input id="trafficStartDate" type="date"></label>
+             <label class="growth-range-field">结束日期<input id="trafficEndDate" type="date"></label>
+             <button class="secondary" type="button" onclick="applyTrafficRange()">应用范围</button>
+             <button class="secondary" type="button" onclick="clearTrafficRange()">全部时间</button>
+           </div>
+         </div>
+         <div class="growth-period-switch" role="group" aria-label="流量统计粒度">
+           <button class="growth-period-button active" type="button" data-traffic-period="day" onclick="setTrafficPeriod('day')">按日</button>
+           <button class="growth-period-button" type="button" data-traffic-period="week" onclick="setTrafficPeriod('week')">按周</button>
+           <button class="growth-period-button" type="button" data-traffic-period="month" onclick="setTrafficPeriod('month')">按月</button>
+         </div>
+       </div>
+       <div id="trafficChart" class="traffic-chart-host"><div class="loading-state">正在读取流量数据…</div></div>
+       <div id="trafficSummary" class="growth-summary" aria-live="polite"></div>
+     </article>
+   </section>
+
+   <section class="card tab-panel" role="tabpanel" data-panel="profile-ratio">
+     <div class="dashboard-heading">
+       <div>
+         <h2>占比画像</h2>
+         <p>查看账户设备厂商、Android 系统版本和 App 软件版本的分布情况。</p>
+       </div>
+       <button class="secondary" type="button" onclick="loadUsers()">刷新数据</button>
+     </div>
+      <div class="distribution-grid">
+       <article class="distribution-card">
+         <h3>设备厂商</h3>
+         <small>相同厂商的大小写和常见子品牌会自动合并。</small>
+         <div id="brandDistribution" class="distribution-list"><div class="loading-state">正在读取厂商数据…</div></div>
+       </article>
+       <article class="distribution-card">
+
+         <h3>Android 系统版本</h3>
+         <small>按账户最近一次登记的 Android 版本统计。</small>
+         <div id="androidDistribution" class="distribution-list"><div class="loading-state">正在读取系统版本…</div></div>
+       </article>
+       <article class="distribution-card">
+         <h3>App 软件版本</h3>
+         <small>按账户最近一次登记的 FireflyVPN 版本统计。</small>
+         <div id="appVersionDistribution" class="distribution-list"><div class="loading-state">正在读取软件版本…</div></div>
+       </article>
+     </div>
+   </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="account-security">
+    <div class="dashboard-heading">
+      <div>
+         <h2>账户及其设备信息</h2>
+        <p>封禁账户会同时封禁该账户登录过的全部历史设备；解除后只移除由该账户产生的封禁。</p>
+      </div>
+      <button class="secondary" type="button" onclick="loadAccountSecurity(true)">刷新数据</button>
+    </div>
+    <div class="security-toolbar">
+      <input id="securitySearch" type="search" placeholder="搜索 UID、昵称、邮箱或设备 ID" oninput="renderAccountSecurity()">
+    </div>
+    <div id="securityBatchToolbar" class="security-batch-toolbar">
+      <label><input id="securitySelectAll" type="checkbox" onchange="toggleAllSecurityAccounts(this.checked)">全选当前筛选结果</label>
+      <span id="securitySelectionCount" class="security-selection-count">已选择 0 个账户</span>
+      <button id="securityBatchBan" class="danger" type="button" disabled onclick="batchSetAccountBan(true)">批量封禁</button>
+      <button id="securityBatchUnban" class="secondary" type="button" disabled onclick="batchSetAccountBan(false)">批量解除封禁</button>
+      <button class="secondary" type="button" onclick="clearSecuritySelection()">清除选择</button>
+    </div>
+    <div id="securitySummary" class="security-summary"></div>
+    <div id="securityAccountList" class="security-account-list">
+      <div class="loading-state">打开此模块后读取账户安全数据</div>
+    </div>
+  </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="traffic-query">
+    <div class="dashboard-heading">
+      <div>
+        <h2>流量汇总表单</h2>
+        <p>按账户查看今日、本月及累计上传、下载和总流量。</p>
+      </div>
+      <button class="secondary" type="button" onclick="loadTrafficDetails(true)">刷新数据</button>
+    </div>
+    <div class="traffic-detail-toolbar">
+      <div class="traffic-zero-filters" role="group" aria-label="零流量用户过滤">
+        <button class="secondary traffic-filter-button" type="button" data-traffic-zero-filter="today" aria-pressed="false" onclick="toggleTrafficZeroFilter('today')">过滤日流量为零</button>
+        <button class="secondary traffic-filter-button" type="button" data-traffic-zero-filter="month" aria-pressed="false" onclick="toggleTrafficZeroFilter('month')">过滤月流量为零</button>
+        <button class="secondary traffic-filter-button" type="button" data-traffic-zero-filter="total" aria-pressed="false" onclick="toggleTrafficZeroFilter('total')">过滤总流量为零</button>
+      </div>
+      <div class="traffic-detail-search">
+        <input id="trafficDetailSearch" type="search" placeholder="搜索 UID、昵称或邮箱" oninput="renderTrafficDetails()">
+        <span id="trafficDetailSummary" class="traffic-detail-summary"></span>
+      </div>
+    </div>
+    <div id="trafficDetailsTable" class="traffic-detail-wrap">
+      <div class="loading-state">打开此模块后读取流量汇总表单</div>
+    </div>
+  </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="speed-share-results">
+    <div class="dashboard-heading">
+      <div>
+        <h2>共享测速表单</h2>
+        <p>查看当前数据库中各节点最近一次共享测速结果和累计上报次数。</p>
+      </div>
+      <button class="secondary" type="button" onclick="loadSpeedShareResults(true)">刷新数据</button>
+    </div>
+    <div class="traffic-detail-toolbar">
+      <div class="traffic-detail-search">
+        <input id="speedShareSearch" type="search" placeholder="搜索节点、服务器、分组、省份或运营商" oninput="renderSpeedShareResults()">
+        <span id="speedShareSummary" class="traffic-detail-summary"></span>
+      </div>
+    </div>
+    <div id="speedShareResultsTable" class="traffic-detail-wrap">
+      <div class="loading-state">打开此模块后读取共享测速结果</div>
+    </div>
+  </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
+    <h2>订阅线路</h2>
+    <div id="subscriptionRows"></div>
+     <button class="secondary" onclick="addSource()">添加线路</button>
+     <small class="hint">每条线路只能选择一种来源：外部接口或纯文本节点。外部接口可设置缓存时间；纯文本节点不使用缓存。还可以按账户等级和最低应用版本限制下发。</small>
+     <button type="button" onclick="pushSection('subscriptions')">推送</button>
+   </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="app-settings">
+    <h2>应用基础设置</h2>
+    <div class="settings-sections">
+      <section class="settings-section">
+        <h3 class="settings-section-title">应用基础信息</h3>
+        <p class="settings-section-description">配置应用官网、反馈入口和项目源码地址。</p>
+        <div class="grid">
+          <div class="field"><label>官方网站<input id="websiteUrl" type="url" placeholder="https://example.com"></label></div>
+          <div class="field"><label>反馈邮箱<input id="feedbackEmail" type="email" placeholder="support@example.com"></label></div>
+          <div class="field"><label>问题反馈链接<input id="feedbackUrl" type="url" placeholder="https://github.com/.../issues"></label></div>
+          <div class="field"><label>项目源码链接<input id="githubUrl" type="url" placeholder="https://github.com/.../..."></label></div>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3 class="settings-section-title">服务请求设置</h3>
+        <p class="settings-section-description">设置后台请求超时时间，避免外部服务响应过慢。</p>
+        <div class="grid">
+          <div class="field"><label>后台请求超时（毫秒）<input id="nodeRequestTimeoutMs" type="number" min="5000" max="60000" step="1000"></label></div>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3 class="settings-section-title">经验与社群激励</h3>
+        <p class="settings-section-description">配置签到、Telegram 进群任务和共享测速奖励。</p>
+        <div class="grid">
+          <div class="field"><label>每日签到经验奖励<input id="dailyCheckinExperience" type="number" min="0" step="1"></label></div>
+          <div class="field"><label>TG 群连接<input id="telegramGroupUrl" type="text" placeholder="https://t.me/your_group"></label></div>
+          <div class="field"><label>TG 进群口令<input id="telegramJoinCode" type="text" placeholder="例如：FIREFLY2026"></label></div>
+          <div class="field"><label>TG 任务经验奖励<input id="telegramTaskExperience" type="number" min="0" step="1"></label></div>
+          <div class="field"><label>智能测速共享经验奖励<input id="speedShareSmartExperience" type="number" min="0" step="1"></label></div>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3 class="settings-section-title">等级经验门槛</h3>
+        <p class="settings-section-description">设置用户从 Lv1 升至 Lv6 各等级区间所需的经验值。</p>
+        <div class="grid">
+          <div class="field"><label>Lv1 → Lv2 所需经验<input id="experienceThresholdLv2" type="number" min="1" step="1"></label></div>
+          <div class="field"><label>Lv2 → Lv3 所需经验<input id="experienceThresholdLv3" type="number" min="1" step="1"></label></div>
+          <div class="field"><label>Lv3 → Lv4 所需经验<input id="experienceThresholdLv4" type="number" min="1" step="1"></label></div>
+          <div class="field"><label>Lv4 → Lv5 所需经验<input id="experienceThresholdLv5" type="number" min="1" step="1"></label></div>
+          <div class="field"><label>Lv5 → Lv6 所需经验<input id="experienceThresholdLv6" type="number" min="1" step="1"></label></div>
+        </div>
+        <small class="hint">绑定邮箱可获得经验，测速共享成功后也会发放经验；Lv0 不会获得经验。超出经验会保留到下一级。</small>
+      </section>
+    </div>
+    <button type="button" onclick="pushSection('app-settings')">推送</button>
+   </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="notice">
+    <h2>公告</h2>
+    <label class="check"><input id="noticeEnabled" type="checkbox">显示公告</label>
+    <div class="grid">
+      <div class="field"><label>公告标题<input id="noticeTitle" type="text"></label></div>
+      <div class="field"><label>公告 ID<input id="noticeId" type="text" placeholder="notice_20260806"></label></div>
+      <div class="field"><label>开始显示时间<input id="noticeStartAt" type="datetime-local"></label></div>
+      <div class="field"><label>结束显示时间<input id="noticeEndAt" type="datetime-local"></label></div>
+    </div>
+    <div class="field"><label>公告内容<textarea id="noticeContent" placeholder="支持普通文本和 HTML"></textarea></label></div>
+    <label class="check"><input id="noticeShowOnce" type="checkbox">每个公告 ID 只显示一次</label>
+    <small class="hint">时间按北京时间执行。开始时间留空表示立即显示，结束时间留空表示永不过期。</small>
+     <button type="button" onclick="pushSection('notice')">推送</button>
+   </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="app-update">
+    <h2>版本更新</h2>
+    <label class="check"><input id="appUpdateEnabled" type="checkbox">启用版本更新提示</label>
+    <div class="grid">
+      <div class="field"><label>版本名称<input id="appVersion" type="text" placeholder="1.1.0"></label></div>
+      <div class="field"><label>版本号<input id="appVersionCode" type="number" min="1" step="1"></label></div>
+      <div class="field"><label>APK 下载地址<input id="appDownloadUrl" type="url" placeholder="https://example.com/app.apk"></label></div>
+     </div>
+     <div class="field"><label>更新说明<textarea id="appChangelog"></textarea></label></div>
+     <label class="check"><input id="appForce" type="checkbox">强制更新</label>
+     <button type="button" onclick="pushSection('app-update')">推送</button>
+  </section>
+   <button id="aiAnalysisFab" class="ai-analysis-fab" type="button" hidden title="拖动悬浮球，点击打开 AI 数据分析" aria-label="拖动悬浮球或打开 AI 数据分析" onclick="openAiAnalysis()">✦</button>
+   <div id="aiAnalysisOverlay" class="ai-analysis-overlay" hidden role="presentation" onclick="closeAiAnalysis(event)">
+     <section class="ai-analysis-dialog" role="dialog" aria-modal="false" aria-labelledby="aiAnalysisTitle" onclick="event.stopPropagation()">
+       <div class="ai-analysis-toolbar">
+         <div>
+           <div class="ai-analysis-title-row">
+             <h2 id="aiAnalysisTitle">AI 数据分析</h2>
+             <button id="aiAnalysisSettingsButton" class="secondary ai-analysis-settings-button" type="button" title="打开详细设定" aria-label="打开详细设定" aria-expanded="false" onclick="toggleAiAnalysisSettings()">⚙</button>
+           </div>
+         </div>
+         <button class="secondary ai-analysis-close" type="button" aria-label="关闭 AI 数据分析" onclick="closeAiAnalysis()">×</button>
+       </div>
+       <details id="aiAnalysisSettings" class="ai-analysis-settings">
+         <div class="ai-analysis-settings-grid">
+           <label>分析模型
+             <select id="aiAnalysisModel">
+               <option value="gemini-flash-latest">gemini-flash-latest</option>
+               <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
+             </select>
+           </label>
+           <label>思考级别
+             <select id="aiAnalysisThinkingLevel">
+               <option value="minimal">minimal（最快）</option>
+               <option value="low" selected>low（推荐）</option>
+               <option value="medium">medium（更深入）</option>
+               <option value="high">high（最深入）</option>
+             </select>
+           </label>
+           <label>最大输出 tokens
+             <input id="aiAnalysisMaxOutputTokens" type="number" min="256" max="65536" step="256" value="4096">
+           </label>
+           <label>分析风格
+             <select id="aiAnalysisStyle">
+               <option value="concise">简洁摘要</option>
+               <option value="standard" selected>标准报告</option>
+               <option value="detailed">详细报告</option>
+             </select>
+           </label>
+         </div>
+         <label style="margin-top: 10px">补充要求（可选）
+           <textarea id="aiAnalysisInstruction" maxlength="1000" placeholder="例如：重点关注异常增长，并给出可执行的处理优先级。"></textarea>
+         </label>
+         <small class="ai-analysis-settings-note">输出 tokens 越大，可容纳的 Markdown 内容越多；思考级别越高，分析耗时可能越长。</small>
+       </details>
+       <div class="ai-analysis-controls">
+         <button id="aiAnalyzeButton" class="secondary" type="button" onclick="analyzeDashboardData()">开始分析</button>
+       </div>
+       <div id="aiAnalysisResult" class="ai-analysis-result" aria-live="polite">调整详细设定后点击“开始分析”，AI 将根据当前看板生成运营分析。</div>
+     </section>
+   </div>
+   </div>
+   </div>
+ </main>
+<script>
+/* __ADMIN_SCRIPT__ */
+</script>
+</body>
+</html>
