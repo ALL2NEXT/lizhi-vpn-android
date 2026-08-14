@@ -317,6 +317,7 @@
          <button class="secondary ai-analysis-close" type="button" aria-label="关闭 AI 数据分析" onclick="closeAiAnalysis()">×</button>
        </div>
        <details id="aiAnalysisSettings" class="ai-analysis-settings">
+         <summary class="ai-analysis-settings-summary" aria-hidden="true"></summary>
          <div class="ai-analysis-settings-grid">
            <label>分析模型
              <select id="aiAnalysisModel">
@@ -351,7 +352,7 @@
        <div class="ai-analysis-controls">
          <button id="aiAnalyzeButton" class="secondary" type="button" onclick="analyzeDashboardData()">开始分析</button>
        </div>
-       <div id="aiAnalysisResult" class="ai-analysis-result" aria-live="polite">调整详细设定后点击“开始分析”，AI 将根据当前看板生成运营分析。</div>
+       <div id="aiAnalysisResult" class="ai-analysis-result" aria-live="polite">点击“开始分析”生成 Markdown 分析。</div>
      </section>
    </div>
    </div>

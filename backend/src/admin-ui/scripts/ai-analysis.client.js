@@ -244,8 +244,8 @@ function openAiAnalysis() {
   overlay.hidden = false;
   positionAiAnalysisDialog();
   window.requestAnimationFrame(positionAiAnalysisDialog);
-  const modelSelect = el('aiAnalysisModel');
-  if (modelSelect) modelSelect.focus();
+  const analyzeButton = el('aiAnalyzeButton');
+  if (analyzeButton) analyzeButton.focus();
 }
 function closeAiAnalysis(event) {
   if (event && event.target !== event.currentTarget) return;

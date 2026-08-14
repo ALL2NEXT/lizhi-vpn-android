@@ -52,7 +52,7 @@
      .ai-analysis-controls label { display: flex; flex-direction: column; gap: 4px; min-width: 190px; }
      .ai-analysis-controls select { min-width: 190px; }
      .ai-analysis-settings { margin-top: 16px; padding: 12px; border: 1px solid #374151; border-radius: 10px; background: #172033; }
-     .ai-analysis-settings summary { color: #f8fafc; cursor: pointer; font-weight: 700; }
+     .ai-analysis-settings-summary { display: none; }
      .ai-analysis-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
      .ai-analysis-settings label { display: flex; flex-direction: column; gap: 4px; color: #aab4c5; font-size: 12px; }
      .ai-analysis-settings textarea { min-height: 74px; resize: vertical; }
@@ -266,4 +266,3 @@
        .source-row-header { align-items: flex-start; flex-direction: column; }
        .source-row-controls { justify-content: flex-start; }
      }
-

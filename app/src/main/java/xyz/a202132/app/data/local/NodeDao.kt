@@ -28,7 +28,7 @@ interface NodeDao {
     @Query("SELECT * FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId = :sourceId ORDER BY sortOrder ASC, latency ASC")
     fun getSubscriptionNodesBySource(sourceId: String): Flow<List<Node>>
 
-    @Query("SELECT DISTINCT subscriptionSourceId AS sourceId, subscriptionSourceName AS name FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId IS NOT NULL ORDER BY subscriptionSourceName ASC")
+    @Query("SELECT DISTINCT subscriptionSourceId AS sourceId, subscriptionSourceName AS name FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId IS NOT NULL ORDER BY CAST(subscriptionSourceId AS INTEGER) ASC, subscriptionSourceName ASC")
     fun getSubscriptionGroups(): Flow<List<SubscriptionGroup>>
 
     @Query("SELECT * FROM nodes WHERE source = 'FAVORITE' ORDER BY favoriteCreatedAt ASC, sortOrder ASC, latency ASC")
