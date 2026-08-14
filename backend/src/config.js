@@ -21,7 +21,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 2;
+export const USER_SCHEMA_VERSION = 3;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -127,7 +127,7 @@ export const USER_SCHEMA_STATEMENTS = [
       AND lifted_at IS NULL;
   END`,
   `CREATE TABLE IF NOT EXISTS user_usage_mb (
-    user_id INTEGER NOT NULL,
+    user_id INTEGER,
     session_id TEXT NOT NULL CHECK (length(session_id) BETWEEN 1 AND 128),
     subscription_group_name TEXT NOT NULL DEFAULT '',
     started_at TEXT NOT NULL,
@@ -140,7 +140,7 @@ export const USER_SCHEMA_STATEMENTS = [
       CHECK (download_bytes BETWEEN 0 AND 1000000000000000),
     PRIMARY KEY (user_id, session_id),
     CHECK (ended_at >= started_at),
-    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_user_ended
     ON user_usage_mb(user_id, ended_at DESC)`,
@@ -213,6 +213,29 @@ export const USER_SCHEMA_STATEMENTS = [
     )
     WHERE id = NEW.user_id AND status = 'active';
   END`,
+  `CREATE TABLE IF NOT EXISTS user_experience_awards_mb (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    user_uid TEXT NOT NULL,
+    experience_awarded INTEGER NOT NULL
+      CHECK (experience_awarded BETWEEN 1 AND 1000000000000),
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_user_experience_awards_created_at
+    ON user_experience_awards_mb(created_at DESC, id DESC)`,
+  `CREATE TRIGGER IF NOT EXISTS trg_user_experience_award_mb
+  AFTER INSERT ON user_experience_awards_mb
+  WHEN NEW.experience_awarded > 0
+  BEGIN
+    UPDATE users_mb
+    SET experience_total = MIN(
+      experience_total + NEW.experience_awarded,
+      1000000000000
+    )
+    WHERE id = NEW.user_id AND status = 'active';
+  END`,
   `CREATE TABLE IF NOT EXISTS speed_share_results_mb (
     subscription_group_name TEXT NOT NULL,
     node_id TEXT NOT NULL,
@@ -254,10 +277,36 @@ export const USER_SCHEMA_MIGRATIONS = {
     `CREATE INDEX IF NOT EXISTS idx_users_mb_invited_by
       ON users_mb(invited_by_user_id)`,
   ],
+  3: [
+    `CREATE TABLE IF NOT EXISTS user_experience_awards_mb (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER,
+      user_uid TEXT NOT NULL,
+      experience_awarded INTEGER NOT NULL
+        CHECK (experience_awarded BETWEEN 1 AND 1000000000000),
+      reason TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_user_experience_awards_created_at
+      ON user_experience_awards_mb(created_at DESC, id DESC)`,
+    `CREATE TRIGGER IF NOT EXISTS trg_user_experience_award_mb
+    AFTER INSERT ON user_experience_awards_mb
+    WHEN NEW.experience_awarded > 0
+    BEGIN
+      UPDATE users_mb
+      SET experience_total = MIN(
+        experience_total + NEW.experience_awarded,
+        1000000000000
+      )
+      WHERE id = NEW.user_id AND status = 'active';
+    END`,
+  ],
 };
 export const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";
 export const REWARD_TYPE_SPEED_SHARE = "speed_share";
 export const REWARD_TYPE_TELEGRAM = "telegram";
+export const REWARD_TYPE_ADMIN_MANUAL = "admin_manual";
 export const REWARD_PERIOD_LIFETIME = "lifetime";
 // 修改此 UUID 可以更换私有管理后台地址。
 export const ADMIN_UUID = "3e9a0eed-6a29-4d16-91b1-3adae4bd88e6";

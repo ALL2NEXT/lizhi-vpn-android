@@ -91,6 +91,7 @@ export async function initializeUserSchemaDatabase(db) {
        'user_usage_mb',
        'user_usage_daily_mb',
        'user_reward_claims_mb',
+       'user_experience_awards_mb',
        'speed_share_results_mb'
      )
      LIMIT 1`,

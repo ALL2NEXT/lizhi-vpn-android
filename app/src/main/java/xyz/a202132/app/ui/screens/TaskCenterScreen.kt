@@ -317,6 +317,45 @@ fun TaskCenterScreen(
                     }
                 }
             }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "服务器 / 节点贡献",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "任务内容：贡献可用的服务器或节点，或者助推 TG 群组。完成后请进入 TG 群组联系管理员，管理员确认贡献有效后，会在后台为你的账户发放自定义经验奖励。",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TaskActionRow {
+                        OutlinedButton(
+                            onClick = ::openTelegramGroup,
+                            enabled = taskStatus?.groupUrl?.isNotBlank() == true
+                        ) {
+                            Text("打开 TG 群组")
+                        }
+                    }
+                    if (taskStatus?.groupUrl.isNullOrBlank()) {
+                        Text(
+                            text = "TG 群组尚未配置，请稍后再试。",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
         }
     }
 

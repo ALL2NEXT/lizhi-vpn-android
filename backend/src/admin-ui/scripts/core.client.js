@@ -91,6 +91,9 @@
    return new URL(ADMIN_API_BASE + path, window.location.origin).toString();
  }
  function adminErrorMessage(error, fallback) {
+   if (error === 'invalid_experience_award') return '请填写正整数经验值和审核说明';
+   if (error === 'account_not_found') return '用户不存在，请检查 UID';
+   if (error === 'account_banned') return '账户已封禁，无法发放经验';
     if (error === 'invalid_batch_user_update') return '批量修改参数无效，最多选择 100 个用户，等级范围为 Lv0～Lv6';
      if (error === 'invalid_batch_user_delete') return '批量删除参数无效，最多选择 100 个用户';
     if (error === 'subscription_must_be_plaintext_nodes') return '订阅必须返回可识别的明文节点，不能使用已加密接口';
@@ -223,6 +226,9 @@
    }
    if (name === 'admin-login-records' && !adminLoginRecordsData && !adminLoginRecordsLoading) {
      loadAdminLoginRecords();
+   }
+   if (name === 'experience-rewards' && !experienceAwardsData && !experienceAwardsLoading) {
+     loadExperienceAwards();
    }
  }
    document.querySelectorAll('.tab-button[data-tab]').forEach(function(button) {

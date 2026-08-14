@@ -65,6 +65,7 @@
             <div id="backend-settings-subnav" class="nav-submenu" role="group" aria-label="后台设置子菜单">
               <button class="tab-button" role="tab" type="button" data-tab="ai-config">AI 配置</button>
               <button class="tab-button" role="tab" type="button" data-tab="admin-login-records">后台登录记录</button>
+              <button class="tab-button" role="tab" type="button" data-tab="experience-rewards">经验发放</button>
             </div>
           </div>
        </nav>
@@ -365,6 +366,30 @@
     </div>
     <div id="adminLoginRecordsTable" class="admin-login-record-wrap">
       <div class="loading-state">打开此模块后读取登录记录</div>
+    </div>
+  </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="experience-rewards">
+    <div class="dashboard-heading">
+      <div>
+        <h2>经验发放</h2>
+        <p>审核用户贡献服务器或节点、助推 TG 群组后，在此处指定 UID 和自定义经验值发放。所有发放会保留记录。</p>
+      </div>
+      <button class="secondary" type="button" onclick="loadExperienceAwards(true)">刷新记录</button>
+    </div>
+    <div class="settings-sections">
+      <section class="settings-section">
+        <h3 class="settings-section-title">为单个用户发放经验</h3>
+        <div class="grid">
+          <div class="field"><label>用户 UID<input id="experienceRewardUid" type="text" maxlength="128" placeholder="请输入用户完整 UID"></label></div>
+          <div class="field"><label>发放经验<input id="experienceRewardAmount" type="number" min="1" step="1" placeholder="例如：100"></label></div>
+        </div>
+        <div class="field"><label>审核说明<textarea id="experienceRewardReason" maxlength="500" placeholder="例如：贡献一个新节点，管理员已完成核验"></textarea></label></div>
+        <button type="button" onclick="grantUserExperience()">确认发放经验</button>
+      </section>
+    </div>
+    <div id="experienceAwardsTable" class="traffic-detail-wrap">
+      <div class="loading-state">打开此模块后读取经验发放记录</div>
     </div>
   </section>
 
