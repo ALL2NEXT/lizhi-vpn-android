@@ -90,6 +90,7 @@ import {
   usersDb,
 } from "./services/user-store.js";
 import { readAdminLoginRecords, recordAdminLogin } from "./services/admin-access.js";
+import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.js";
 
 const routeDeps = {
   CLIENT_IP_HEADER,
@@ -172,6 +173,10 @@ const worker = {
 
       const url = new URL(request.url);
       const path = url.pathname.replace(/\/+$/, "") || "/";
+
+      if (isHoneypotPath(path)) {
+        return handleHoneypotRoute(path, request, env, recordAdminLogin, json);
+      }
 
       if (path === "/" || path === "/health") {
         const usersSchemaVersion = env.USERS_DB

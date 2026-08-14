@@ -7,14 +7,16 @@ function renderAdminLoginRecords() {
     return;
   }
   host.innerHTML = '<table class="admin-login-table">' +
-    '<thead><tr><th>时间</th><th>结果</th><th>IP 地址</th><th>客户端</th></tr></thead>' +
+    '<thead><tr><th>时间</th><th>结果</th><th>路径</th><th>方法</th><th>IP 地址</th><th>客户端</th></tr></thead>' +
     '<tbody>' + records.map(function(record) {
       const success = Boolean(record && record.success);
       return '<tr>' +
         '<td>' + esc(record && record.at || '-') + '</td>' +
         '<td><span class="admin-login-badge ' + (success ? 'success' : 'failed') + '">' +
-          (success ? '登录成功' : '密码错误') +
+          (record && record.honeypot ? '蜜罐命中' : success ? '登录成功' : '密码错误') +
         '</span></td>' +
+        '<td class="admin-login-path"><code>' + esc(record && record.path || '-') + '</code></td>' +
+        '<td>' + esc(record && record.method || '-') + '</td>' +
         '<td><code>' + esc(record && record.ip || '-') + '</code></td>' +
         '<td class="admin-login-user-agent">' + esc(record && record.userAgent || '-') + '</td>' +
       '</tr>';

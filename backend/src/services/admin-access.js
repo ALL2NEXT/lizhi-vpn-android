@@ -18,7 +18,11 @@ function requestUserAgent(request) {
   return String(request.headers.get("User-Agent") || "").trim().slice(0, 500);
 }
 
-export async function recordAdminLogin(env, request, success) {
+function requestPath(request, path) {
+  return String(path || new URL(request.url).pathname).slice(0, 256);
+}
+
+export async function recordAdminLogin(env, request, success, details = {}) {
   if (!env.CONFIG) return;
   try {
     const stored = await env.CONFIG.get(ADMIN_LOGIN_RECORDS_KEY, "json");
@@ -28,6 +32,9 @@ export async function recordAdminLogin(env, request, success) {
       ip: requestIp(request),
       userAgent: requestUserAgent(request),
       success: Boolean(success),
+      path: requestPath(request, details.path),
+      method: String(details.method || request.method).slice(0, 16),
+      honeypot: Boolean(details.honeypot),
     });
     await env.CONFIG.put(
       ADMIN_LOGIN_RECORDS_KEY,
