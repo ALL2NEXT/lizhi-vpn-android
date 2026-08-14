@@ -3,6 +3,7 @@
  */
 
 import { createAdminAiRoutes } from "./admin/ai-analysis.js";
+import { createAdminAccessRoutes } from "./admin/access.js";
 import { createAdminAnalyticsRoutes } from "./admin/analytics.js";
 import { createAdminSecurityRoutes } from "./admin/security.js";
 import { createAdminStateRoutes } from "./admin/state.js";
@@ -10,6 +11,7 @@ import { createAdminUserRoutes } from "./admin/users.js";
 
 export function createAdminRoutes(deps) {
   const handlers = [
+    createAdminAccessRoutes(deps),
     createAdminSecurityRoutes(deps),
     createAdminAnalyticsRoutes(deps),
     createAdminAiRoutes(deps),
@@ -27,4 +29,3 @@ export function createAdminRoutes(deps) {
 
   return { handleAdmin };
 }
-

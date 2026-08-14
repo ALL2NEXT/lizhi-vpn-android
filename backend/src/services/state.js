@@ -141,6 +141,23 @@ export function visibleNotice(notice, now = Date.now()) {
 export function normalizeSettings(value) {
   const settings = plainObject(value) ? value : {};
   const timeout = Number(settings.nodeRequestTimeoutMs);
+  const aiAnalysis = plainObject(settings.aiAnalysis) ? settings.aiAnalysis : {};
+  const aiMaxOutputTokens = Number(aiAnalysis.maxOutputTokens);
+  const aiModel = ["gemini-flash-latest", "gemini-flash-lite-latest"].includes(
+    cleanText(aiAnalysis.model),
+  )
+    ? cleanText(aiAnalysis.model)
+    : "gemini-flash-latest";
+  const aiThinkingLevel = ["minimal", "low", "medium", "high"].includes(
+    cleanText(aiAnalysis.thinkingLevel),
+  )
+    ? cleanText(aiAnalysis.thinkingLevel)
+    : "low";
+  const aiAnalysisStyle = ["concise", "standard", "detailed"].includes(
+    cleanText(aiAnalysis.analysisStyle),
+  )
+    ? cleanText(aiAnalysis.analysisStyle)
+    : "standard";
   return {
     websiteUrl: cleanText(settings.websiteUrl),
     feedbackEmail: cleanText(settings.feedbackEmail),
@@ -164,12 +181,21 @@ export function normalizeSettings(value) {
       settings.speedShareSmartExperience,
       DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
     ),
+    aiAnalysis: {
+      model: aiModel,
+      thinkingLevel: aiThinkingLevel,
+      maxOutputTokens: Number.isFinite(aiMaxOutputTokens)
+        ? Math.min(Math.max(Math.round(aiMaxOutputTokens), 256), 65536)
+        : 4096,
+      analysisStyle: aiAnalysisStyle,
+      customInstruction: cleanText(aiAnalysis.customInstruction).slice(0, 1000),
+    },
   };
 }
 
 export function publicClientSettings(settings) {
   const value = normalizeSettings(settings);
-  const { telegramJoinCode, ...publicSettings } = value;
+  const { telegramJoinCode, aiAnalysis, ...publicSettings } = value;
   return publicSettings;
 }
 
@@ -177,4 +203,3 @@ export function normalizeTelegramGroupUrl(value) {
   const url = cleanText(value).slice(0, 500);
   return /^(?:https?:\/\/|tg:\/\/)/i.test(url) ? url : "";
 }
-

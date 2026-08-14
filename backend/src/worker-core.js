@@ -90,6 +90,7 @@ import {
   rowToUser,
   usersDb,
 } from "./services/user-store.js";
+import { readAdminLoginRecords, recordAdminLogin } from "./services/admin-access.js";
 
 const routeDeps = {
   CLIENT_IP_HEADER,
@@ -157,6 +158,7 @@ const routeDeps = {
   validateAndWarmSubscriptionSources,
   writeState,
   normalizeState,
+  readAdminLoginRecords,
 };
 
 const { handleClient, handleManagedSubscription } = createClientRoutes(routeDeps);
@@ -214,9 +216,13 @@ const worker = {
       }
 
       if (path.startsWith(`${ADMIN_BASE_PATH}/api/`)) {
-        if (!(await isAdmin(request, env))) {
+        const isLoginRequest = path === `${ADMIN_BASE_PATH}/api/state` && request.method === "GET";
+        const authorized = await isAdmin(request, env);
+        if (!authorized) {
+          if (isLoginRequest) await recordAdminLogin(env, request, false);
           return json({ error: "unauthorized" }, 401);
         }
+        if (isLoginRequest) await recordAdminLogin(env, request, true);
         return handleAdmin(path.slice(ADMIN_BASE_PATH.length), request, env);
       }
 

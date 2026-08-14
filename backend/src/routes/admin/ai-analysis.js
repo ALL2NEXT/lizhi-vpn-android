@@ -8,6 +8,20 @@ const DASHBOARD_AI_PANEL_LABELS = new Map([
   ["traffic-trends", "流量趋势"],
   ["profile-ratio", "占比画像"],
 ]);
+const DASHBOARD_AI_TASKS = new Map([
+  [
+    "user-trends",
+    "根据近 30 天新增用户趋势，预测明天的新增用户量和累计用户量。",
+  ],
+  [
+    "traffic-trends",
+    "根据近 30 天上传、下载和总流量趋势，预测明天的上传流量、下载流量和总流量。",
+  ],
+  [
+    "profile-ratio",
+    "根据设备品牌和 App 版本占比，判断是否需要更新客户端版本，并给出更新优先级和依据。",
+  ],
+]);
 const GEMINI_THINKING_LEVELS = new Set(["minimal", "low", "medium", "high"]);
 const AI_ANALYSIS_STYLES = new Map([
   ["concise", "简洁摘要：优先给出关键结论和少量重点数据，控制篇幅。"],
@@ -30,10 +44,13 @@ function bytesToGiB(value) {
   return roundedNumber(positiveNumber(value) / (1024 ** 3), 2);
 }
 
-function aggregateLabels(rows, labelColumn = "label") {
+function aggregateLabels(rows, total, labelColumn = "label") {
   return (rows || []).map((row) => ({
     label: String(row[labelColumn] == null ? "" : row[labelColumn]).trim() || "未知",
     count: positiveNumber(row.count),
+    ratioPercent: total > 0
+      ? roundedNumber((positiveNumber(row.count) / total) * 100, 1)
+      : 0,
   }));
 }
 
@@ -84,6 +101,9 @@ export function createAdminAiRoutes(deps) {
       const customInstruction = cleanText(body && body.customInstruction).slice(0, 1000);
       const db = await ensureUserSchema(env);
       const today = usagePeriodKeys(new Date()).day;
+      const tomorrowDate = new Date(`${today}T00:00:00+08:00`);
+      tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+      const tomorrow = tomorrowDate.toISOString().slice(0, 10);
       const startDateObject = new Date(`${today}T00:00:00+08:00`);
       startDateObject.setUTCDate(startDateObject.getUTCDate() - 29);
       const startDate = startDateObject.toISOString().slice(0, 10);
@@ -175,6 +195,7 @@ export function createAdminAiRoutes(deps) {
       const dataWindow = {
         startDate,
         endDate: today,
+        forecastDate: tomorrow,
         timezone: "Asia/Shanghai",
       };
       let facts;
@@ -212,14 +233,23 @@ export function createAdminAiRoutes(deps) {
             activeLast30Days: positiveNumber(devices.active_devices_30d),
             brandCount: positiveNumber(devices.brand_count),
             appVersionCount: positiveNumber(devices.app_version_count),
-            topBrands: aggregateLabels(aggregate[5] && aggregate[5].results),
-            topAppVersions: aggregateLabels(aggregate[6] && aggregate[6].results),
+            topBrands: aggregateLabels(
+              aggregate[5] && aggregate[5].results,
+              positiveNumber(devices.total_devices),
+            ),
+            topAppVersions: aggregateLabels(
+              aggregate[6] && aggregate[6].results,
+              positiveNumber(devices.total_devices),
+            ),
           },
         };
       }
+      const panelTask = DASHBOARD_AI_TASKS.get(panel);
       const prompt = [
-        "你是 VPN 运营后台的“" + panelLabel + "”数据分析助手。本次只分析“" + panelLabel + "”板块，禁止引入其他板块的指标。请只根据下面 JSON 中的事实进行分析，不要编造原因或数字。",
-        "请用中文 Markdown 输出，包含：1. 核心结论；2. 值得关注的异常或风险；3. 可执行的运营建议；4. 数据范围和口径。",
+        "你是 VPN 运营后台的 AI 助手。本次只分析“" + panelLabel + "”板块，禁止引入其他板块的指标。",
+        "你的主要职责是：" + panelTask,
+        "请用中文 Markdown 输出，必须包含：1. 核心结论；2. 预测或更新判断；3. 判断依据和关键数据；4. 风险、置信度与数据不足说明；5. 可执行的运营建议；6. 数据范围和口径。",
+        "预测结果必须明确标注预测日期、点估计和合理区间，预测不是已发生事实；不要编造数字，不要把相关性说成因果关系。",
         AI_ANALYSIS_STYLES.get(analysisStyle),
         customInstruction ? "用户补充要求：" + customInstruction : "",
         "如果数据不足以支持某个判断，请明确写出‘数据不足’，不要把相关性说成因果关系。不要输出任何个人信息，也不要要求补充 UID、昵称、邮箱等个人明细。",
@@ -353,4 +383,3 @@ export function createAdminAiRoutes(deps) {
     return null;
   };
 }
-

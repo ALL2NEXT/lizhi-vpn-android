@@ -67,9 +67,9 @@ function updateAiAnalysisContext(resetResult) {
   const context = DASHBOARD_AI_CONTEXT[activeDashboardTab] || DASHBOARD_AI_CONTEXT['user-trends'];
   const title = el('aiAnalysisTitle');
   const result = el('aiAnalysisResult');
-  if (title) title.textContent = 'AI 数据分析';
+  if (title) title.textContent = 'AI 助手';
   if (resetResult && result && !aiAnalysisLoading) {
-    result.textContent = '当前板块：' + context.title + '。点击“开始分析”生成 Markdown 分析。';
+    result.textContent = '当前板块：' + context.title + '。主要职责：' + context.task + '。点击“开始分析”生成 Markdown 分析。';
   }
 }
 function setAiAnalysisSettingsDisabled(disabled) {
@@ -204,7 +204,7 @@ async function analyzeDashboardData() {
     if (!response.ok) {
       const responseText = await response.text();
       const data = parseResponseJson(responseText);
-      throw new Error(adminErrorMessage(data.error, 'AI 数据分析失败（HTTP ' + response.status + '）'));
+      throw new Error(adminErrorMessage(data.error, 'AI 助手失败（HTTP ' + response.status + '）'));
     }
     const data = await readAiAnalysisStream(response, host);
     if (host) {
@@ -220,14 +220,15 @@ async function analyzeDashboardData() {
         ' · **输出 tokens：** ' + String(usage.outputTokens || '-') + '/' + String(settings.maxOutputTokens || maxOutputTokens) +
         ' · **数据范围：** ' + String(data.dataWindow && data.dataWindow.startDate || '-') +
         ' 至 ' + String(data.dataWindow && data.dataWindow.endDate || '-') +
+        ' · **预测日期：** ' + String(data.dataWindow && data.dataWindow.forecastDate || '-') +
         finishWarning;
       host.innerHTML = renderAiMarkdown(String(data.analysis || '') + metadata);
       positionAiAnalysisDialog();
     }
-    show('AI 数据分析完成');
+    show('AI 助手分析完成');
   } catch (error) {
-    if (host) host.textContent = error.message || 'AI 数据分析失败';
-    show(error.message || 'AI 数据分析失败', true);
+    if (host) host.textContent = error.message || 'AI 助手失败';
+    show(error.message || 'AI 助手失败', true);
   } finally {
     aiAnalysisLoading = false;
     if (button) {

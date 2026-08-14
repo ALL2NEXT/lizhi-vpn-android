@@ -151,6 +151,12 @@ function fillState(state) {
    setValue('telegramJoinCode', settings.telegramJoinCode);
    setValue('telegramTaskExperience', settings.telegramTaskExperience == null ? 50 : settings.telegramTaskExperience);
    setValue('speedShareSmartExperience', settings.speedShareSmartExperience == null ? 5 : settings.speedShareSmartExperience);
+  const aiAnalysis = settings.aiAnalysis || {};
+  setValue('aiAnalysisModel', aiAnalysis.model || 'gemini-flash-latest');
+  setValue('aiAnalysisThinkingLevel', aiAnalysis.thinkingLevel || 'low');
+  setValue('aiAnalysisMaxOutputTokens', aiAnalysis.maxOutputTokens || 4096);
+  setValue('aiAnalysisStyle', aiAnalysis.analysisStyle || 'standard');
+  setValue('aiAnalysisInstruction', aiAnalysis.customInstruction || '');
   const experienceThresholds = Array.isArray(settings.experienceThresholds)
     ? settings.experienceThresholds
     : [100, 200, 400, 800, 1600];
@@ -227,6 +233,13 @@ function formState() {
        telegramJoinCode: value('telegramJoinCode'),
        telegramTaskExperience: Number(value('telegramTaskExperience') || 0),
        speedShareSmartExperience: Number(value('speedShareSmartExperience') || 0),
+       aiAnalysis: {
+        model: value('aiAnalysisModel') || 'gemini-flash-latest',
+        thinkingLevel: value('aiAnalysisThinkingLevel') || 'low',
+        maxOutputTokens: Number(value('aiAnalysisMaxOutputTokens') || 4096),
+        analysisStyle: value('aiAnalysisStyle') || 'standard',
+        customInstruction: value('aiAnalysisInstruction').slice(0, 1000)
+       },
        experienceThresholds: [
         Number(value('experienceThresholdLv2') || 100),
         Number(value('experienceThresholdLv3') || 200),
@@ -248,7 +261,9 @@ async function pushSection(section) {
   const form = formState();
   const state = {
     subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,
-    settings: section === 'app-settings' ? form.settings : currentState.settings,
+    settings: section === 'app-settings' || section === 'ai-config'
+      ? form.settings
+      : currentState.settings,
     notice: section === 'notice' ? form.notice : currentState.notice,
     appUpdate: section === 'app-update' ? form.appUpdate : currentState.appUpdate
   };
@@ -266,4 +281,3 @@ async function pushSection(section) {
 initializeGrowthRange();
 initializeTrafficRange();
 addSource();
-

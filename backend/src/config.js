@@ -260,6 +260,12 @@ export const DEFAULT_STATE = {
     telegramJoinCode: "",
     telegramTaskExperience: DEFAULT_TELEGRAM_TASK_EXPERIENCE,
     speedShareSmartExperience: DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
+    aiAnalysis: {
+      model: "gemini-flash-latest",
+      thinkingLevel: "low",
+      maxOutputTokens: 4096,
+      analysisStyle: "standard",
+      customInstruction: "",
+    },
   },
 };
-

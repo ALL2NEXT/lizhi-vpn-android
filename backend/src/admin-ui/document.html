@@ -58,6 +58,15 @@
               <button class="tab-button" role="tab" type="button" data-tab="app-update">版本更新</button>
             </div>
           </div>
+          <div class="nav-group" data-nav-group="backend-settings">
+            <button class="tab-button nav-parent" type="button" aria-expanded="true" aria-controls="backend-settings-subnav">
+              <span>后台设置</span><span class="nav-chevron" aria-hidden="true">⌄</span>
+            </button>
+            <div id="backend-settings-subnav" class="nav-submenu" role="group" aria-label="后台设置子菜单">
+              <button class="tab-button" role="tab" type="button" data-tab="ai-config">AI 配置</button>
+              <button class="tab-button" role="tab" type="button" data-tab="admin-login-records">后台登录记录</button>
+            </div>
+          </div>
        </nav>
        <button class="secondary sidebar-logout" type="button" onclick="logout()">退出登录</button>
      </aside>
@@ -304,51 +313,71 @@
      <label class="check"><input id="appForce" type="checkbox">强制更新</label>
      <button type="button" onclick="pushSection('app-update')">推送</button>
   </section>
-   <button id="aiAnalysisFab" class="ai-analysis-fab" type="button" hidden title="拖动悬浮球，点击打开 AI 数据分析" aria-label="拖动悬浮球或打开 AI 数据分析" onclick="openAiAnalysis()">✦</button>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="ai-config">
+    <div class="dashboard-heading">
+      <div>
+        <h2>AI 配置</h2>
+        <p>配置 AI 助手使用的模型、思考级别和输出格式。</p>
+      </div>
+    </div>
+    <div id="aiAnalysisSettings" class="ai-analysis-settings ai-config-settings">
+      <div class="ai-analysis-settings-grid">
+        <label>分析模型
+          <select id="aiAnalysisModel">
+            <option value="gemini-flash-latest">gemini-flash-latest</option>
+            <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
+          </select>
+        </label>
+        <label>思考级别
+          <select id="aiAnalysisThinkingLevel">
+            <option value="minimal">minimal（最快）</option>
+            <option value="low" selected>low（推荐）</option>
+            <option value="medium">medium（更深入）</option>
+            <option value="high">high（最深入）</option>
+          </select>
+        </label>
+        <label>最大输出 tokens
+          <input id="aiAnalysisMaxOutputTokens" type="number" min="256" max="65536" step="256" value="4096">
+        </label>
+        <label>分析风格
+          <select id="aiAnalysisStyle">
+            <option value="concise">简洁摘要</option>
+            <option value="standard" selected>标准报告</option>
+            <option value="detailed">详细报告</option>
+          </select>
+        </label>
+      </div>
+      <label style="margin-top: 10px">补充要求（可选）
+        <textarea id="aiAnalysisInstruction" maxlength="1000" placeholder="例如：重点关注异常增长，并给出可执行的处理优先级。"></textarea>
+      </label>
+      <small class="ai-analysis-settings-note">保存后，AI 助手会使用以上配置。</small>
+    </div>
+    <button type="button" onclick="pushSection('ai-config')">保存 AI 配置</button>
+  </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="admin-login-records">
+    <div class="dashboard-heading">
+      <div>
+        <h2>后台登录记录</h2>
+        <p>记录最近的后台登录成功和失败尝试，最多保留 200 条。</p>
+      </div>
+      <button class="secondary" type="button" onclick="loadAdminLoginRecords(true)">刷新记录</button>
+    </div>
+    <div id="adminLoginRecordsTable" class="admin-login-record-wrap">
+      <div class="loading-state">打开此模块后读取登录记录</div>
+    </div>
+  </section>
+
+   <button id="aiAnalysisFab" class="ai-analysis-fab" type="button" hidden title="拖动悬浮球，点击打开 AI 助手" aria-label="拖动悬浮球或打开 AI 助手" onclick="openAiAnalysis()">✦</button>
    <div id="aiAnalysisOverlay" class="ai-analysis-overlay" hidden role="presentation" onclick="closeAiAnalysis(event)">
      <section class="ai-analysis-dialog" role="dialog" aria-modal="false" aria-labelledby="aiAnalysisTitle" onclick="event.stopPropagation()">
        <div class="ai-analysis-toolbar">
          <div>
-           <div class="ai-analysis-title-row">
-             <h2 id="aiAnalysisTitle">AI 数据分析</h2>
-             <button id="aiAnalysisSettingsButton" class="secondary ai-analysis-settings-button" type="button" title="打开详细设定" aria-label="打开详细设定" aria-expanded="false" onclick="toggleAiAnalysisSettings()">⚙</button>
-           </div>
+           <h2 id="aiAnalysisTitle">AI 助手</h2>
          </div>
-         <button class="secondary ai-analysis-close" type="button" aria-label="关闭 AI 数据分析" onclick="closeAiAnalysis()">×</button>
+         <button class="secondary ai-analysis-close" type="button" aria-label="关闭 AI 助手" onclick="closeAiAnalysis()">×</button>
        </div>
-       <details id="aiAnalysisSettings" class="ai-analysis-settings">
-         <summary class="ai-analysis-settings-summary" aria-hidden="true"></summary>
-         <div class="ai-analysis-settings-grid">
-           <label>分析模型
-             <select id="aiAnalysisModel">
-               <option value="gemini-flash-latest">gemini-flash-latest</option>
-               <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
-             </select>
-           </label>
-           <label>思考级别
-             <select id="aiAnalysisThinkingLevel">
-               <option value="minimal">minimal（最快）</option>
-               <option value="low" selected>low（推荐）</option>
-               <option value="medium">medium（更深入）</option>
-               <option value="high">high（最深入）</option>
-             </select>
-           </label>
-           <label>最大输出 tokens
-             <input id="aiAnalysisMaxOutputTokens" type="number" min="256" max="65536" step="256" value="4096">
-           </label>
-           <label>分析风格
-             <select id="aiAnalysisStyle">
-               <option value="concise">简洁摘要</option>
-               <option value="standard" selected>标准报告</option>
-               <option value="detailed">详细报告</option>
-             </select>
-           </label>
-         </div>
-         <label style="margin-top: 10px">补充要求（可选）
-           <textarea id="aiAnalysisInstruction" maxlength="1000" placeholder="例如：重点关注异常增长，并给出可执行的处理优先级。"></textarea>
-         </label>
-         <small class="ai-analysis-settings-note">输出 tokens 越大，可容纳的 Markdown 内容越多；思考级别越高，分析耗时可能越长。</small>
-       </details>
        <div class="ai-analysis-controls">
          <button id="aiAnalyzeButton" class="secondary" type="button" onclick="analyzeDashboardData()">开始分析</button>
        </div>

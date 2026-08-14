@@ -8,6 +8,8 @@
   let trafficDetailsLoading = false;
   let speedShareResultsData = null;
   let speedShareResultsLoading = false;
+  let adminLoginRecordsData = null;
+  let adminLoginRecordsLoading = false;
   let aiAnalysisLoading = false;
   let aiFabDragState = null;
   let aiFabDragMoved = false;
@@ -15,13 +17,16 @@
   let activeDashboardTab = 'user-trends';
   const DASHBOARD_AI_CONTEXT = {
     'user-trends': {
-      title: 'AI 分析 · 用户趋势',
+      title: 'AI 助手 · 用户趋势',
+      task: '预测明天的新增用户量和累计用户量',
     },
     'traffic-trends': {
-      title: 'AI 分析 · 流量趋势',
+      title: 'AI 助手 · 流量趋势',
+      task: '预测明天的上传、下载和总流量',
     },
     'profile-ratio': {
-      title: 'AI 分析 · 占比画像',
+      title: 'AI 助手 · 占比画像',
+      task: '分析是否需要更新客户端版本',
     },
   };
   let trafficDetailsSortKey = '';
@@ -166,6 +171,8 @@
    accountSecuritySelection.clear();
    trafficDetailsData = null;
    speedShareResultsData = null;
+   adminLoginRecordsData = null;
+   adminLoginRecordsLoading = false;
    aiAnalysisLoading = false;
    closeAiAnalysis();
    trafficZeroFilters.today = false;
@@ -213,6 +220,9 @@
    }
    if (name === 'speed-share-results' && !speedShareResultsData && !speedShareResultsLoading) {
      loadSpeedShareResults();
+   }
+   if (name === 'admin-login-records' && !adminLoginRecordsData && !adminLoginRecordsLoading) {
+     loadAdminLoginRecords();
    }
  }
    document.querySelectorAll('.tab-button[data-tab]').forEach(function(button) {
@@ -292,22 +302,6 @@ function positionAiAnalysisDialog() {
   dialog.style.right = 'auto';
   dialog.style.bottom = 'auto';
 }
-function updateAiAnalysisSettingsButton() {
-  const settings = el('aiAnalysisSettings');
-  const button = el('aiAnalysisSettingsButton');
-  if (!settings || !button) return;
-  const expanded = settings.open;
-  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  button.title = expanded ? '收起详细设定' : '打开详细设定';
-  button.setAttribute('aria-label', button.title);
-}
-function toggleAiAnalysisSettings() {
-  const settings = el('aiAnalysisSettings');
-  if (!settings) return;
-  settings.open = !settings.open;
-  updateAiAnalysisSettingsButton();
-  positionAiAnalysisDialog();
-}
 function setupAiAnalysisFabDrag() {
   const fab = el('aiAnalysisFab');
   if (!fab) return;
@@ -356,14 +350,6 @@ function setupAiAnalysisFabDrag() {
     event.stopImmediatePropagation();
     aiFabDragMoved = false;
   }, true);
-  const settings = el('aiAnalysisSettings');
-  if (settings) {
-    settings.addEventListener('toggle', function() {
-      updateAiAnalysisSettingsButton();
-      positionAiAnalysisDialog();
-    });
-  }
-  updateAiAnalysisSettingsButton();
   restoreAiAnalysisFabPosition();
   window.addEventListener('resize', function() {
     if (fab.style.left && !fab.hidden) {
