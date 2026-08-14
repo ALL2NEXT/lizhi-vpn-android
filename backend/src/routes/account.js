@@ -8,11 +8,9 @@ export function createAccountRoutes(deps) {
   const {
     MAX_SPEED_SHARE_RESULTS,
     ACCOUNT_BINDING_EXPERIENCE,
-    DEFAULT_DAILY_CHECKIN_EXPERIENCE,
     DEFAULT_TELEGRAM_TASK_EXPERIENCE,
     DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
     REWARD_TYPE_ACCOUNT_BINDING,
-    REWARD_TYPE_DAILY_CHECKIN,
     REWARD_TYPE_SPEED_SHARE,
     REWARD_TYPE_TELEGRAM,
     REWARD_PERIOD_LIFETIME,
@@ -20,7 +18,6 @@ export function createAccountRoutes(deps) {
     speedShareRequestLocation,
     publicAccount,
     rewardClaimStatement,
-    readDailyCheckin,
     readSpeedShareStatus,
     readTelegramTask,
     publicAdminSpeedShareResult,
@@ -255,8 +252,6 @@ async function handleAccount(path, request, env) {
     return json({
       ok: true,
       account: publicAccount(user),
-      checkin: await readDailyCheckin(
-        env, identity.userId, identity.deviceRowId, state.settings),
       speedShare: await readSpeedShareStatus(
         env, identity.userId, identity.deviceRowId, state.settings),
       telegram: await readTelegramTask(
@@ -295,59 +290,6 @@ async function handleAccount(path, request, env) {
       clientCarrier: clientLocation.carrier,
       results: (query.results || []).map(publicAdminSpeedShareResult),
       generatedAt: beijingTimestamp(),
-    });
-  }
-
-  if (path === "/api/account/tasks/checkin" && request.method === "POST") {
-    const body = await request.json();
-    const deviceId = normalizeAccountId(body && body.deviceId);
-    const identity = await resolveDeviceIdentity(env, deviceId);
-    if (!identity) {
-      return json({ ok: false, error: "account_not_found" }, 404);
-    }
-
-    const state = await readState(env);
-    const db = await ensureUserSchema(env);
-    const user = await readD1User(env, identity.userId, state.settings);
-    if (!user) {
-      return json({ ok: false, error: "account_not_found" }, 404);
-    }
-    if (user.level === 0) {
-      return json({ ok: false, error: "account_banned" }, 403);
-    }
-
-    const checkinDate = usagePeriodKeys(new Date()).day;
-    const checkedInAt = beijingTimestamp();
-    const reward = normalizeExperience(
-      state.settings.dailyCheckinExperience,
-      DEFAULT_DAILY_CHECKIN_EXPERIENCE,
-    );
-    const inserted = await rewardClaimStatement(db, {
-      userId: identity.userId,
-      userUid: identity.uid,
-      deviceRowId: identity.deviceRowId,
-      rewardType: REWARD_TYPE_DAILY_CHECKIN,
-      periodKey: checkinDate,
-      contextKey: "",
-      claimedAt: checkedInAt,
-      experienceAwarded: reward,
-    }).run();
-    if (!inserted || !inserted.meta || Number(inserted.meta.changes) < 1) {
-      return json({
-        ok: false,
-        error: "daily_checkin_already_completed",
-        account: publicAccount(user),
-        checkin: await readDailyCheckin(
-          env, identity.userId, identity.deviceRowId, state.settings),
-      });
-    }
-
-    const updated = await readD1User(env, identity.userId, state.settings);
-    return json({
-      ok: true,
-      account: publicAccount(updated),
-      checkin: await readDailyCheckin(
-        env, identity.userId, identity.deviceRowId, state.settings),
     });
   }
 
@@ -591,4 +533,3 @@ async function handleSpeedShareSubmission(request, env) {
 
   return { handleAccount, handleSpeedShareSubmission };
 }
-

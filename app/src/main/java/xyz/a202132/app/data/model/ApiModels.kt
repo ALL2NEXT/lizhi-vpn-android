@@ -65,9 +65,6 @@ data class BackendAppSettings(
     @SerializedName("experienceThresholds")
     val experienceThresholds: List<Long> = listOf(100L, 200L, 400L, 800L, 1600L),
 
-    @SerializedName("dailyCheckinExperience")
-    val dailyCheckinExperience: Long = 10L,
-
     @SerializedName("telegramGroupUrl")
     val telegramGroupUrl: String = "",
 
@@ -219,31 +216,6 @@ data class TelegramTaskSubmitRequest(
     val code: String
 )
 
-data class DailyCheckinRequest(
-    @SerializedName("deviceId")
-    val deviceId: String
-)
-
-data class DailyCheckinStatus(
-    @SerializedName("enabled")
-    val enabled: Boolean = true,
-
-    @SerializedName("date")
-    val date: String = "",
-
-    @SerializedName("rewardExperience")
-    val rewardExperience: Long = 10L,
-
-    @SerializedName("status")
-    val status: String = "not_checked_in",
-
-    @SerializedName("checkedInAt")
-    val checkedInAt: String = "",
-
-    @SerializedName("experienceAwarded")
-    val experienceAwarded: Long = 0L
-)
-
 enum class SpeedShareMode {
     OFF,
     SMART
@@ -376,9 +348,6 @@ data class TelegramTaskResponse(
     @SerializedName("account")
     val account: AccountInfo? = null,
 
-    @SerializedName("checkin")
-    val checkin: DailyCheckinStatus? = null,
-
     @SerializedName("speedShare")
     val speedShare: SpeedShareStatus? = null,
 
@@ -390,7 +359,6 @@ data class TelegramTaskResponse(
 )
 
 data class TaskCenterStatus(
-    val checkin: DailyCheckinStatus,
     val speedShare: SpeedShareStatus = SpeedShareStatus(),
     val telegram: TelegramTaskStatus
 )

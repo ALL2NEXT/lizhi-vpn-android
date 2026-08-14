@@ -11,7 +11,6 @@ export const MAX_SPEED_SHARE_RESULTS = 1;
 export const MAX_TRAFFIC_BYTES = 1e15;
 export const MAX_ACCOUNT_EXPERIENCE = 1e12;
 export const ACCOUNT_BINDING_EXPERIENCE = 50;
-export const DEFAULT_DAILY_CHECKIN_EXPERIENCE = 10;
 export const DEFAULT_TELEGRAM_TASK_EXPERIENCE = 50;
 export const DEFAULT_SPEED_SHARE_SMART_EXPERIENCE = 5;
 export const DEFAULT_EXPERIENCE_THRESHOLDS = [100, 200, 400, 800, 1600];
@@ -236,7 +235,6 @@ export const USER_SCHEMA_STATEMENTS = [
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
 export const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";
-export const REWARD_TYPE_DAILY_CHECKIN = "daily_checkin";
 export const REWARD_TYPE_SPEED_SHARE = "speed_share";
 export const REWARD_TYPE_TELEGRAM = "telegram";
 export const REWARD_PERIOD_LIFETIME = "lifetime";
@@ -255,7 +253,6 @@ export const DEFAULT_STATE = {
     githubUrl: "",
     nodeRequestTimeoutMs: 25000,
     experienceThresholds: DEFAULT_EXPERIENCE_THRESHOLDS,
-    dailyCheckinExperience: DEFAULT_DAILY_CHECKIN_EXPERIENCE,
     telegramGroupUrl: "",
     telegramJoinCode: "",
     telegramTaskExperience: DEFAULT_TELEGRAM_TASK_EXPERIENCE,

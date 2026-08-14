@@ -1,9 +1,7 @@
 import {
-  DEFAULT_DAILY_CHECKIN_EXPERIENCE,
   DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   DEFAULT_TELEGRAM_TASK_EXPERIENCE,
   REWARD_PERIOD_LIFETIME,
-  REWARD_TYPE_DAILY_CHECKIN,
   REWARD_TYPE_SPEED_SHARE,
   REWARD_TYPE_TELEGRAM,
 } from "../config.js";
@@ -52,28 +50,6 @@ export function rewardClaimStatement(db, claim) {
     cleanText(claim.claimedAt),
     normalizeExperience(claim.experienceAwarded),
   );
-}
-
-export async function readDailyCheckin(env, userId, deviceRowId, settings) {
-  const db = await ensureUserSchema(env);
-  const checkinDate = usagePeriodKeys(new Date()).day;
-  const row = await db.prepare(
-    `SELECT claimed_at, experience_awarded
-     FROM user_reward_claims_mb
-     WHERE (user_id = ? OR device_row_id = ?)
-       AND reward_type = ? AND period_key = ? AND context_key = ''`,
-  ).bind(userId, deviceRowId, REWARD_TYPE_DAILY_CHECKIN, checkinDate).first();
-  return {
-    enabled: true,
-    date: checkinDate,
-    rewardExperience: normalizeExperience(
-      settings && settings.dailyCheckinExperience,
-      DEFAULT_DAILY_CHECKIN_EXPERIENCE,
-    ),
-    status: row ? "checked_in" : "not_checked_in",
-    checkedInAt: cleanText(row && row.claimed_at),
-    experienceAwarded: normalizeExperience(row && row.experience_awarded),
-  };
 }
 
 export async function readSpeedShareStatus(env, userId, deviceRowId, settings = {}) {
@@ -161,4 +137,3 @@ export function publicAdminUser(row, settings) {
     },
   };
 }
-

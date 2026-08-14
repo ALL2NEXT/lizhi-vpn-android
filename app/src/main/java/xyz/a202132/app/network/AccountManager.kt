@@ -15,8 +15,6 @@ import xyz.a202132.app.data.model.AccountDeleteRequest
 import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
-import xyz.a202132.app.data.model.DailyCheckinRequest
-import xyz.a202132.app.data.model.DailyCheckinStatus
 import xyz.a202132.app.data.model.SpeedShareNodeResult
 import xyz.a202132.app.data.model.SpeedShareRequest
 import xyz.a202132.app.data.model.SpeedShareResponse
@@ -127,38 +125,11 @@ class AccountManager(private val context: Context) {
             }
             response.account?.let(::persistAccount)
             TaskCenterStatus(
-                checkin = response.checkin ?: throw IllegalStateException(
-                    response.error ?: "后台未返回签到状态"
-                ),
                 speedShare = response.speedShare ?: SpeedShareStatus(),
                 telegram = response.telegram ?: throw IllegalStateException(
                     response.error ?: "后台未返回 TG 任务状态"
                 )
             )
-        }
-    }
-
-    suspend fun dailyCheckin(
-        timeoutMs: Long = 10000L
-    ): Result<DailyCheckinStatus> {
-        val registered = currentAccount()
-            ?: return Result.failure(IllegalStateException("账户尚未同步"))
-        if (registered.level == 0) {
-            return Result.failure(IllegalStateException("account_banned"))
-        }
-
-        return runCatching {
-            val response: TelegramTaskResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
-                NetworkClient.apiService.dailyCheckin(
-                    accountEndpoint("/api/account/tasks/checkin"),
-                    DailyCheckinRequest(deviceId = accountId())
-                )
-            }
-            if (!response.ok) {
-                throw IllegalStateException(response.error ?: "每日签到失败")
-            }
-            response.account?.let(::persistAccount)
-            response.checkin ?: throw IllegalStateException("后台未返回签到状态")
         }
     }
 

@@ -1,5 +1,4 @@
 import {
-  DEFAULT_DAILY_CHECKIN_EXPERIENCE,
   DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   DEFAULT_STATE,
   DEFAULT_TELEGRAM_TASK_EXPERIENCE,
@@ -167,10 +166,6 @@ export function normalizeSettings(value) {
       ? Math.round(Math.min(Math.max(timeout, 5000), 60000))
       : 25000,
     experienceThresholds: normalizeExperienceThresholds(settings.experienceThresholds),
-    dailyCheckinExperience: normalizeExperience(
-      settings.dailyCheckinExperience,
-      DEFAULT_DAILY_CHECKIN_EXPERIENCE,
-    ),
     telegramGroupUrl: normalizeTelegramGroupUrl(settings.telegramGroupUrl),
     telegramJoinCode: normalizeTelegramJoinCode(settings.telegramJoinCode),
     telegramTaskExperience: normalizeExperience(

@@ -52,12 +52,9 @@ fun TaskCenterScreen(
     onBack: () -> Unit
 ) {
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
-    val checkinStatus by viewModel.dailyCheckinStatus.collectAsStateWithLifecycle()
     val taskStatus by viewModel.telegramTaskStatus.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoadingTelegramTask.collectAsStateWithLifecycle()
     val isSubmitting by viewModel.isSubmittingTelegramTask.collectAsStateWithLifecycle()
-    val isCheckingIn by viewModel.isCheckingIn.collectAsStateWithLifecycle()
-    val checkinMessage by viewModel.dailyCheckinMessage.collectAsStateWithLifecycle()
     val speedShareMode by viewModel.speedShareMode.collectAsStateWithLifecycle()
     val speedShareStatus by viewModel.speedShareStatus.collectAsStateWithLifecycle()
     val speedShareMessage by viewModel.speedShareMessage.collectAsStateWithLifecycle()
@@ -177,74 +174,6 @@ fun TaskCenterScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     speedShareMessage?.let { message ->
-                        Text(
-                            text = message,
-                            color = if (message.contains("失败") || message.contains("无法") || message.contains("封禁")) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            },
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "每日签到",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "每天签到一次即可获得 ${checkinStatus?.rewardExperience ?: 10} 经验。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = when {
-                            account == null -> "账户同步中…"
-                            isBanned -> "Lv0 账户暂不可签到。"
-                            checkinStatus?.status == "checked_in" -> "今日已签到"
-                            isLoading && checkinStatus == null -> "正在读取签到状态…"
-                            else -> "今日未签到"
-                        },
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = when {
-                            checkinStatus?.status == "checked_in" -> MaterialTheme.colorScheme.primary
-                            isBanned -> MaterialTheme.colorScheme.error
-                            else -> MaterialTheme.colorScheme.onSurface
-                        }
-                    )
-                    if (account != null && !isBanned && checkinStatus?.status != "checked_in") {
-                        TaskActionRow {
-                            Button(
-                                onClick = viewModel::dailyCheckin,
-                                enabled = !isCheckingIn && checkinStatus != null
-                            ) {
-                                if (isCheckingIn) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.padding(end = 8.dp),
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        strokeWidth = 2.dp
-                                    )
-                                }
-                                Text(if (isCheckingIn) "签到中…" else "立即签到")
-                            }
-                        }
-                    }
-                    checkinMessage?.let { message ->
                         Text(
                             text = message,
                             color = if (message.contains("失败") || message.contains("无法") || message.contains("封禁")) {

@@ -146,7 +146,6 @@ function fillState(state) {
   setValue('feedbackUrl', settings.feedbackUrl);
    setValue('githubUrl', settings.githubUrl);
    setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
-   setValue('dailyCheckinExperience', settings.dailyCheckinExperience == null ? 10 : settings.dailyCheckinExperience);
    setValue('telegramGroupUrl', settings.telegramGroupUrl);
    setValue('telegramJoinCode', settings.telegramJoinCode);
    setValue('telegramTaskExperience', settings.telegramTaskExperience == null ? 50 : settings.telegramTaskExperience);
@@ -228,7 +227,6 @@ function formState() {
       feedbackUrl: value('feedbackUrl'),
        githubUrl: value('githubUrl'),
        nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
-       dailyCheckinExperience: Number(value('dailyCheckinExperience') || 0),
        telegramGroupUrl: value('telegramGroupUrl'),
        telegramJoinCode: value('telegramJoinCode'),
        telegramTaskExperience: Number(value('telegramTaskExperience') || 0),

@@ -120,16 +120,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val accountMessage = _accountMessage.asStateFlow()
     private val _telegramTaskStatus = MutableStateFlow<TelegramTaskStatus?>(null)
     val telegramTaskStatus = _telegramTaskStatus.asStateFlow()
-    private val _dailyCheckinStatus = MutableStateFlow<DailyCheckinStatus?>(null)
-    val dailyCheckinStatus = _dailyCheckinStatus.asStateFlow()
     private val _isLoadingTelegramTask = MutableStateFlow(false)
     val isLoadingTelegramTask = _isLoadingTelegramTask.asStateFlow()
     private val _isSubmittingTelegramTask = MutableStateFlow(false)
     val isSubmittingTelegramTask = _isSubmittingTelegramTask.asStateFlow()
-    private val _isCheckingIn = MutableStateFlow(false)
-    val isCheckingIn = _isCheckingIn.asStateFlow()
-    private val _dailyCheckinMessage = MutableStateFlow<String?>(null)
-    val dailyCheckinMessage = _dailyCheckinMessage.asStateFlow()
     private val _speedShareStatus = MutableStateFlow<SpeedShareStatus?>(null)
     val speedShareStatus = _speedShareStatus.asStateFlow()
     private val _speedShareMessage = MutableStateFlow<String?>(null)
@@ -1468,7 +1462,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoadingTelegramTask.value = true
             _telegramTaskStatus.value = null
-            _dailyCheckinStatus.value = null
             _speedShareStatus.value = null
             _telegramTaskMessage.value = null
             _speedShareMessage.value = null
@@ -1476,7 +1469,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 accountManager.getTaskCenterStatus(
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess { status ->
-                    _dailyCheckinStatus.value = status.checkin
                     _speedShareStatus.value = status.speedShare
                     _telegramTaskStatus.value = status.telegram
                 }.onFailure { error ->
@@ -1485,27 +1477,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } finally {
                 _isLoadingTelegramTask.value = false
-            }
-        }
-    }
-
-    fun dailyCheckin() {
-        if (_isCheckingIn.value) return
-        viewModelScope.launch {
-            _isCheckingIn.value = true
-            _dailyCheckinMessage.value = null
-            try {
-                accountManager.dailyCheckin(
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-                ).onSuccess { status ->
-                    _dailyCheckinStatus.value = status
-                    _dailyCheckinMessage.value = "签到成功，获得 ${status.experienceAwarded} 经验"
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to complete daily check-in", error)
-                    _dailyCheckinMessage.value = telegramTaskErrorMessage(error)
-                }
-            } finally {
-                _isCheckingIn.value = false
             }
         }
     }
@@ -1534,7 +1505,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearTelegramTaskMessage() {
         _telegramTaskMessage.value = null
-        _dailyCheckinMessage.value = null
         _speedShareMessage.value = null
     }
 
@@ -1678,8 +1648,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun telegramTaskErrorMessage(error: Throwable): String {
         return when (error.message) {
-            "daily_checkin_already_completed" -> "今天已经签到过了"
-            "daily_checkin_disabled" -> "每日签到暂未开放"
             "invalid_telegram_task_code" -> "请输入有效的 TG 进群口令"
             "telegram_task_claim_failed" -> "TG 任务领取失败，请稍后重试"
             "telegram_task_disabled" -> "后台暂未配置 TG 群任务"
