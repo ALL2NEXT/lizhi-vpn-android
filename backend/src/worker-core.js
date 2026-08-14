@@ -198,7 +198,7 @@ const worker = {
         });
       }
 
-      if (path === adminBasePath && request.method === "GET") {
+      if (adminBasePath && path === adminBasePath && request.method === "GET") {
         return new Response(adminHtml(adminBasePath), {
           headers: {
             "content-type": "text/html; charset=utf-8",
@@ -219,7 +219,7 @@ const worker = {
         return handleAccount(path, request, env);
       }
 
-      if (path.startsWith(`${adminBasePath}/api/`)) {
+      if (adminBasePath && path.startsWith(`${adminBasePath}/api/`)) {
         const isLoginRequest = path === `${adminBasePath}/api/state` && request.method === "GET";
         const authorized = await isAdmin(request, env);
         if (!authorized) {

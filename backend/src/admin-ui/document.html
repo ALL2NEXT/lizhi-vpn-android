@@ -45,6 +45,7 @@
               <button class="tab-button" role="tab" type="button" data-tab="account-security">账户及其设备信息</button>
               <button class="tab-button" role="tab" type="button" data-tab="traffic-query">流量汇总表单</button>
               <button class="tab-button" role="tab" type="button" data-tab="speed-share-results">共享测速表单</button>
+              <button class="tab-button" role="tab" type="button" data-tab="invite-relations">邀请关系表单</button>
             </div>
           </div>
           <div class="nav-group" data-nav-group="app-settings">
@@ -210,6 +211,25 @@
     </div>
     <div id="trafficDetailsTable" class="traffic-detail-wrap">
       <div class="loading-state">打开此模块后读取流量汇总表单</div>
+    </div>
+  </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="invite-relations">
+    <div class="dashboard-heading">
+      <div>
+        <h2>邀请关系表单</h2>
+        <p>查看邀请码邀请人与被邀请账户之间的绑定关系。</p>
+      </div>
+      <button class="secondary" type="button" onclick="loadInviteRelations(true)">刷新数据</button>
+    </div>
+    <div class="traffic-detail-toolbar">
+      <div class="traffic-detail-search">
+        <input id="inviteRelationSearch" type="search" placeholder="搜索邀请人、被邀请人 UID、昵称或邀请码" oninput="renderInviteRelations()">
+        <span id="inviteRelationSummary" class="traffic-detail-summary"></span>
+      </div>
+    </div>
+    <div id="inviteRelationsTable" class="traffic-detail-wrap">
+      <div class="loading-state">打开此模块后读取邀请关系</div>
     </div>
   </section>
 

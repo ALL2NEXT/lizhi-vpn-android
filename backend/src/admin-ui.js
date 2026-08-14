@@ -1,4 +1,3 @@
-import { ADMIN_BASE_PATH } from "./config.js";
 import adminDocument from "./admin-ui/document.html";
 import adminStyles from "./admin-ui/styles.css";
 import coreScript from "./admin-ui/scripts/core.client.js";
@@ -25,7 +24,7 @@ const adminScript = [
   settingsScript,
 ].join("\n");
 
-export function adminHtml(basePath = ADMIN_BASE_PATH) {
+export function adminHtml(basePath) {
   return adminDocument
     .replace("/* __ADMIN_STYLES__ */", () => adminStyles)
     .replace("/* __ADMIN_SCRIPT__ */", () => adminScript)

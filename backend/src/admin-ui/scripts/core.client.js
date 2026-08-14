@@ -6,6 +6,8 @@
   const accountSecuritySelection = new Set();
   let trafficDetailsData = null;
   let trafficDetailsLoading = false;
+  let inviteRelationsData = null;
+  let inviteRelationsLoading = false;
   let speedShareResultsData = null;
   let speedShareResultsLoading = false;
   let adminLoginRecordsData = null;
@@ -173,6 +175,8 @@
    accountSecurityData = null;
    accountSecuritySelection.clear();
    trafficDetailsData = null;
+   inviteRelationsData = null;
+   inviteRelationsLoading = false;
    speedShareResultsData = null;
    adminLoginRecordsData = null;
    adminLoginRecordsLoading = false;
@@ -220,6 +224,9 @@
    }
    if (name === 'traffic-query' && !trafficDetailsData && !trafficDetailsLoading) {
      loadTrafficDetails();
+   }
+   if (name === 'invite-relations' && !inviteRelationsData && !inviteRelationsLoading) {
+     loadInviteRelations();
    }
    if (name === 'speed-share-results' && !speedShareResultsData && !speedShareResultsLoading) {
      loadSpeedShareResults();
