@@ -1,0 +1,37 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "liuying",
+  "main": "serverless.js",
+  "compatibility_date": "2026-08-06",
+
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG",
+      "id": "231d5bb6977b42c2b20cd199efda3c94"
+    }
+  ],
+
+  "d1_databases": [
+    {
+      "binding": "USERS_DB",
+      "database_name": "test",
+      "database_id": "3973e3a2-a6f7-4e1c-afec-d6b87332a472"
+    }
+  ],
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  }
+}
