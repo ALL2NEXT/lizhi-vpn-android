@@ -7,7 +7,6 @@
 
 import {
   ACCOUNT_BINDING_EXPERIENCE,
-  ADMIN_BASE_PATH,
   CLIENT_IP_HEADER,
   DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   DEFAULT_TELEGRAM_TASK_EXPERIENCE,
@@ -18,6 +17,7 @@ import {
   REWARD_TYPE_ACCOUNT_BINDING,
   REWARD_TYPE_SPEED_SHARE,
   REWARD_TYPE_TELEGRAM,
+  resolveAdminBasePath,
   USER_SCHEMA_VERSION,
 } from "./config.js";
 import { adminHtml } from "./admin-ui.js";
@@ -173,6 +173,7 @@ const worker = {
 
       const url = new URL(request.url);
       const path = url.pathname.replace(/\/+$/, "") || "/";
+      const adminBasePath = resolveAdminBasePath(env.ADMIN_PATH);
 
       if (isHoneypotPath(path)) {
         return handleHoneypotRoute(path, request, env, recordAdminLogin, json);
@@ -197,8 +198,8 @@ const worker = {
         });
       }
 
-      if (path === ADMIN_BASE_PATH && request.method === "GET") {
-        return new Response(adminHtml(), {
+      if (path === adminBasePath && request.method === "GET") {
+        return new Response(adminHtml(adminBasePath), {
           headers: {
             "content-type": "text/html; charset=utf-8",
             "cache-control": "no-store, no-cache, must-revalidate",
@@ -218,15 +219,15 @@ const worker = {
         return handleAccount(path, request, env);
       }
 
-      if (path.startsWith(`${ADMIN_BASE_PATH}/api/`)) {
-        const isLoginRequest = path === `${ADMIN_BASE_PATH}/api/state` && request.method === "GET";
+      if (path.startsWith(`${adminBasePath}/api/`)) {
+        const isLoginRequest = path === `${adminBasePath}/api/state` && request.method === "GET";
         const authorized = await isAdmin(request, env);
         if (!authorized) {
           if (isLoginRequest) await recordAdminLogin(env, request, false);
           return json({ error: "unauthorized" }, 401);
         }
         if (isLoginRequest) await recordAdminLogin(env, request, true);
-        return handleAdmin(path.slice(ADMIN_BASE_PATH.length), request, env);
+        return handleAdmin(path.slice(adminBasePath.length), request, env);
       }
 
       return json({ error: "not_found" }, 404);

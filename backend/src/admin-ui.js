@@ -25,9 +25,9 @@ const adminScript = [
   settingsScript,
 ].join("\n");
 
-export function adminHtml() {
+export function adminHtml(basePath = ADMIN_BASE_PATH) {
   return adminDocument
     .replace("/* __ADMIN_STYLES__ */", () => adminStyles)
     .replace("/* __ADMIN_SCRIPT__ */", () => adminScript)
-    .replaceAll("__ADMIN_BASE_PATH__", () => ADMIN_BASE_PATH);
+    .replaceAll("__ADMIN_BASE_PATH__", () => basePath);
 }

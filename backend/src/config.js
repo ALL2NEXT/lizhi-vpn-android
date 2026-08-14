@@ -308,9 +308,17 @@ export const REWARD_TYPE_SPEED_SHARE = "speed_share";
 export const REWARD_TYPE_TELEGRAM = "telegram";
 export const REWARD_TYPE_ADMIN_MANUAL = "admin_manual";
 export const REWARD_PERIOD_LIFETIME = "lifetime";
-// 修改此 UUID 可以更换私有管理后台地址。
+// 未配置 ADMIN_PATH 时的兼容回退地址；生产环境应使用 Worker 变量或机密覆盖。
 export const ADMIN_UUID = "3e9a0eed-6a29-4d16-91b1-3adae4bd88e6";
 export const ADMIN_BASE_PATH = `/${ADMIN_UUID}`;
+
+export function resolveAdminBasePath(value) {
+  const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");
+  return /^[A-Za-z0-9_-]{1,128}$/.test(route)
+    ? `/${route}`
+    : ADMIN_BASE_PATH;
+}
+
 export const DEFAULT_STATE = {
   version: 1,
   subscriptions: [],
