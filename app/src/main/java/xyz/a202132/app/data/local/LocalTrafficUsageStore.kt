@@ -32,7 +32,11 @@ object LocalTrafficUsageStore {
 
     private val gson = Gson()
     private val lock = Any()
-    private val recordType = object : TypeToken<MutableMap<String, PendingDailyTrafficRecord>>() {}.type
+    private val recordType = TypeToken.getParameterized(
+        MutableMap::class.java,
+        String::class.java,
+        PendingDailyTrafficRecord::class.java,
+    ).type
 
     /** Adds only the newly observed bytes to today's pending record. */
     fun addDelta(
