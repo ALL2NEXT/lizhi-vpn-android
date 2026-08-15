@@ -1512,7 +1512,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     code = code,
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess {
-                    _accountMessage.value = "邀请码绑定成功"
+                    _accountMessage.value = "邀请码绑定成功，邀请人可获得 ${backendSettings.value.invitationExperience.coerceAtLeast(0)} 点经验"
                 }.onFailure { error ->
                     Log.w(tag, "Failed to bind invite code", error)
                     _accountMessage.value = accountActionErrorMessage(error)

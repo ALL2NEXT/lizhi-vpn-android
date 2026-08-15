@@ -8,6 +8,7 @@
 import {
   ACCOUNT_BINDING_EXPERIENCE,
   CLIENT_IP_HEADER,
+  DEFAULT_INVITATION_EXPERIENCE,
   DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   DEFAULT_TELEGRAM_TASK_EXPERIENCE,
   MAX_ACCOUNT_EXPERIENCE,
@@ -15,6 +16,7 @@ import {
   MAX_SPEED_SHARE_RESULTS,
   REWARD_PERIOD_LIFETIME,
   REWARD_TYPE_ACCOUNT_BINDING,
+  REWARD_TYPE_INVITATION,
   REWARD_TYPE_SPEED_SHARE,
   REWARD_TYPE_TELEGRAM,
   resolveAdminBasePath,
@@ -52,6 +54,7 @@ import { createAccountRoutes } from "./routes/account.js";
 import { createAdminRoutes } from "./routes/admin.js";
 import { createClientRoutes } from "./routes/client.js";
 import {
+  invitationRewardClaimStatement,
   publicAccount,
   publicAdminUser,
   readSpeedShareStatus,
@@ -109,16 +112,19 @@ const routeDeps = {
   json,
   MAX_SPEED_SHARE_RESULTS,
   ACCOUNT_BINDING_EXPERIENCE,
+  DEFAULT_INVITATION_EXPERIENCE,
   DEFAULT_TELEGRAM_TASK_EXPERIENCE,
   DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   MAX_ACCOUNT_EXPERIENCE,
   REWARD_TYPE_ACCOUNT_BINDING,
+  REWARD_TYPE_INVITATION,
   REWARD_TYPE_SPEED_SHARE,
   REWARD_TYPE_TELEGRAM,
   REWARD_PERIOD_LIFETIME,
   normalizeSpeedShareResult,
   speedShareRequestLocation,
   publicAccount,
+  invitationRewardClaimStatement,
   rewardClaimStatement,
   readSpeedShareStatus,
   readTelegramTask,

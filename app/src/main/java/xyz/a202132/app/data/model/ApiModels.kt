@@ -68,6 +68,9 @@ data class BackendAppSettings(
     @SerializedName("accountBindingExperience")
     val accountBindingExperience: Long = 50L,
 
+    @SerializedName("invitationExperience")
+    val invitationExperience: Long = 50L,
+
     @SerializedName("telegramGroupUrl")
     val telegramGroupUrl: String = "",
 

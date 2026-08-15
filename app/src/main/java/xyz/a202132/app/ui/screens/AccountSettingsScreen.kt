@@ -271,6 +271,13 @@ fun AccountSettingsScreen(
                         label = "已邀请用户",
                         value = "${account.inviteeCount.coerceAtLeast(0)} 人"
                     )
+                    if (account.level > 0) {
+                        Text(
+                            text = "每成功邀请一名用户绑定你的邀请码，可获得 ${backendSettings.invitationExperience.coerceAtLeast(0)} 点经验。",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     AccountInfoRowWithAction(
                         label = "上级邀请码",
                         value = account.invitedByCode.ifBlank { "未绑定" },

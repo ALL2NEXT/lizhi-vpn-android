@@ -56,6 +56,32 @@ export function rewardClaimStatement(db, claim) {
   );
 }
 
+export function invitationRewardClaimStatement(db, claim) {
+  const claimToken = cleanText(claim && claim.claimToken) || crypto.randomUUID();
+  return db.prepare(
+    `INSERT OR IGNORE INTO user_reward_claims_mb
+     (user_id, user_uid, device_row_id, reward_type, period_key, context_key,
+      claim_token, claimed_at, experience_awarded)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+     WHERE EXISTS (
+       SELECT 1 FROM users_mb
+       WHERE id = ? AND invited_by_user_id = ?
+     )`,
+  ).bind(
+    Number(claim.userId),
+    normalizeStoredUid(claim.userUid),
+    Number(claim.deviceRowId),
+    cleanText(claim.rewardType),
+    cleanText(claim.periodKey),
+    cleanText(claim.contextKey),
+    claimToken,
+    cleanText(claim.claimedAt),
+    normalizeExperience(claim.experienceAwarded),
+    Number(claim.inviteeUserId),
+    Number(claim.userId),
+  );
+}
+
 export async function readSpeedShareStatus(env, userId, deviceRowId, settings = {}) {
   const db = await ensureUserSchema(env);
   const reportHour = usagePeriodKeys(new Date()).hour;

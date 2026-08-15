@@ -8,9 +8,11 @@ export function createAccountRoutes(deps) {
   const {
     MAX_SPEED_SHARE_RESULTS,
     ACCOUNT_BINDING_EXPERIENCE,
+    DEFAULT_INVITATION_EXPERIENCE,
     DEFAULT_TELEGRAM_TASK_EXPERIENCE,
     DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
     REWARD_TYPE_ACCOUNT_BINDING,
+    REWARD_TYPE_INVITATION,
     REWARD_TYPE_SPEED_SHARE,
     REWARD_TYPE_TELEGRAM,
     REWARD_PERIOD_LIFETIME,
@@ -18,6 +20,7 @@ export function createAccountRoutes(deps) {
     speedShareRequestLocation,
     publicAccount,
     rewardClaimStatement,
+    invitationRewardClaimStatement,
     readSpeedShareStatus,
     readTelegramTask,
     publicAdminSpeedShareResult,
@@ -168,7 +171,7 @@ async function handleAccount(path, request, env) {
     }
 
     const inviter = await db.prepare(
-      "SELECT id, status FROM users_mb WHERE invite_code = ?",
+      "SELECT id, uid, status FROM users_mb WHERE invite_code = ?",
     ).bind(inviteCode).first();
     if (!inviter || cleanText(inviter.status) !== "active") {
       return json({ ok: false, error: "invite_code_not_found" }, 404);
@@ -177,15 +180,38 @@ async function handleAccount(path, request, env) {
       return json({ ok: false, error: "invite_self_not_allowed" }, 409);
     }
 
-    const result = await db.prepare(
-      "UPDATE users_mb SET invited_by_user_id = ?, invited_at = ? " +
-        "WHERE id = ? AND invited_by_user_id IS NULL",
-    ).bind(Number(inviter.id), beijingTimestamp(), identity.userId).run();
-    if (!result.meta || Number(result.meta.changes) < 1) {
+    const invitedAt = beijingTimestamp();
+    const reward = normalizeExperience(
+      state.settings.invitationExperience,
+      DEFAULT_INVITATION_EXPERIENCE,
+    );
+    const results = await db.batch([
+      db.prepare(
+        "UPDATE users_mb SET invited_by_user_id = ?, invited_at = ? " +
+          "WHERE id = ? AND invited_by_user_id IS NULL",
+      ).bind(Number(inviter.id), invitedAt, identity.userId),
+      invitationRewardClaimStatement(db, {
+        userId: Number(inviter.id),
+        userUid: cleanText(inviter.uid),
+        deviceRowId: identity.deviceRowId,
+        rewardType: REWARD_TYPE_INVITATION,
+        periodKey: REWARD_PERIOD_LIFETIME,
+        contextKey: `invitee-${identity.userId}`,
+        claimedAt: invitedAt,
+        experienceAwarded: reward,
+        inviteeUserId: identity.userId,
+      }),
+    ]);
+    if (!results[0].meta || Number(results[0].meta.changes) < 1) {
       return json({ ok: false, error: "invite_already_bound" }, 409);
     }
     const updated = await readD1User(env, identity.userId, state.settings);
-    return json({ ok: true, account: publicAccount(updated) });
+    return json({
+      ok: true,
+      account: publicAccount(updated),
+      experienceAwarded: reward,
+      rewardedUserUid: cleanText(inviter.uid),
+    });
   }
 
   // 使用邮箱和密码切换账户，同时把当前设备转移到登录账户。

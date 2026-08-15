@@ -1,5 +1,6 @@
 import {
   ACCOUNT_BINDING_EXPERIENCE,
+  DEFAULT_INVITATION_EXPERIENCE,
   DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   DEFAULT_STATE,
   DEFAULT_TELEGRAM_TASK_EXPERIENCE,
@@ -170,6 +171,10 @@ export function normalizeSettings(value) {
     accountBindingExperience: normalizeExperience(
       settings.accountBindingExperience,
       ACCOUNT_BINDING_EXPERIENCE,
+    ),
+    invitationExperience: normalizeExperience(
+      settings.invitationExperience,
+      DEFAULT_INVITATION_EXPERIENCE,
     ),
     telegramGroupUrl: normalizeTelegramGroupUrl(settings.telegramGroupUrl),
     telegramJoinCode: normalizeTelegramJoinCode(settings.telegramJoinCode),

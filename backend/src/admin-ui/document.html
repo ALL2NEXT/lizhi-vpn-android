@@ -332,9 +332,10 @@
       </section>
       <section class="settings-section">
         <h3 class="settings-section-title">经验与社群激励</h3>
-        <p class="settings-section-description">统一配置邮箱绑定、Telegram 进群和智能测速共享的经验奖励；设为 0 可关闭对应奖励。</p>
+        <p class="settings-section-description">统一配置邮箱绑定、邀请成功、Telegram 进群和智能测速共享的经验奖励；设为 0 可关闭对应奖励。</p>
         <div class="grid">
           <div class="field"><label>邮箱绑定经验奖励<input id="accountBindingExperience" type="number" min="0" step="1"></label></div>
+          <div class="field"><label>邀请成功经验奖励<input id="invitationExperience" type="number" min="0" step="1"></label></div>
           <div class="field"><label>TG 群连接<input id="telegramGroupUrl" type="text" placeholder="https://t.me/your_group"></label></div>
           <div class="field"><label>TG 进群口令<input id="telegramJoinCode" type="text" placeholder="例如：FIREFLY2026"></label></div>
           <div class="field"><label>TG 任务经验奖励<input id="telegramTaskExperience" type="number" min="0" step="1"></label></div>
@@ -351,7 +352,7 @@
           <div class="field"><label>Lv4 → Lv5 所需经验<input id="experienceThresholdLv5" type="number" min="1" step="1"></label></div>
           <div class="field"><label>Lv5 → Lv6 所需经验<input id="experienceThresholdLv6" type="number" min="1" step="1"></label></div>
         </div>
-        <small class="hint">绑定邮箱可获得经验，测速共享成功后也会发放经验；Lv0 不会获得经验。超出经验会保留到下一级。</small>
+        <small class="hint">绑定邮箱、邀请成功和测速共享都会按上方配置发放经验；Lv0 不会获得经验。超出经验会保留到下一级。</small>
       </section>
     </div>
     <button type="button" onclick="pushSection('app-settings')">推送</button>
