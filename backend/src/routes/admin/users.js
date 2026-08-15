@@ -33,7 +33,7 @@ export function createAdminUserRoutes(deps) {
           SUM(CASE WHEN substr(usage_day, 1, 7) = ? THEN upload_bytes ELSE 0 END) AS month_upload_bytes,
           SUM(CASE WHEN substr(usage_day, 1, 7) = ? THEN download_bytes ELSE 0 END) AS month_download_bytes,
           MAX(CASE WHEN substr(usage_day, 1, 7) = ? THEN 1 ELSE 0 END) AS active_this_month,
-          MAX(last_ended_at) AS last_report_at,
+          MAX(ended_at) AS last_report_at,
           SUM(upload_bytes) AS total_upload_bytes,
           SUM(download_bytes) AS total_download_bytes
         FROM user_usage_mb
