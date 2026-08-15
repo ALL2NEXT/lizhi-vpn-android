@@ -141,6 +141,24 @@ object DownloadManager {
                     response = client.newCall(buildRequest(downloadedLength)).execute()
                 }
 
+                // A server or proxy may ignore Range and return the complete file with 200.
+                // Never append that body to a partial file, otherwise the APK is corrupted.
+                if (resumed && response.code == 200) {
+                    response.close()
+                    if (targetFile!!.exists() && !targetFile!!.delete()) {
+                        throw Exception("Failed to reset partial download")
+                    }
+                    downloadedLength = 0L
+                    resumed = false
+                    response = client.newCall(buildRequest(downloadedLength)).execute()
+                }
+
+                if (resumed && response.code != 206) {
+                    val responseCode = response.code
+                    response.close()
+                    throw Exception("Server did not honor Range request: $responseCode")
+                }
+
                 if (!response.isSuccessful) {
                     if (response.code == 416) {
                         downloadUrl = ""
@@ -151,6 +169,18 @@ object DownloadManager {
                         return@withContext
                     }
                     throw Exception("Download failed: ${response.code}")
+                }
+
+                if (resumed) {
+                    val contentRange = response.header("Content-Range")
+                    val rangeStart = contentRange
+                        ?.substringAfter("bytes ", "")
+                        ?.substringBefore('-', "")
+                        ?.toLongOrNull()
+                    if (rangeStart != downloadedLength) {
+                        response.close()
+                        throw Exception("Invalid Content-Range for resumed download: $contentRange")
+                    }
                 }
 
                 val body = response.body ?: throw Exception("Response body is null")

@@ -21,7 +21,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 6;
+export const USER_SCHEMA_VERSION = 7;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -273,6 +273,41 @@ export const USER_SCHEMA_MIGRATIONS = {
     `ALTER TABLE speed_share_results_mb DROP COLUMN node_name`,
   ],
   6: [],
+  7: [
+    `DROP INDEX IF EXISTS idx_user_usage_mb_user_ended`,
+    `DROP INDEX IF EXISTS idx_user_usage_mb_day_user`,
+    `ALTER TABLE user_usage_mb RENAME TO user_usage_mb_legacy`,
+    `CREATE TABLE user_usage_mb_new (
+      user_id INTEGER,
+      session_id TEXT NOT NULL CHECK (length(session_id) BETWEEN 1 AND 128),
+      subscription_group_name TEXT NOT NULL DEFAULT '',
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL,
+      reported_at TEXT NOT NULL,
+      usage_day TEXT GENERATED ALWAYS AS (substr(started_at, 1, 10)) VIRTUAL,
+      upload_bytes INTEGER NOT NULL DEFAULT 0
+        CHECK (upload_bytes BETWEEN 0 AND 1000000000000000),
+      download_bytes INTEGER NOT NULL DEFAULT 0
+        CHECK (download_bytes BETWEEN 0 AND 1000000000000000),
+      PRIMARY KEY (user_id, session_id),
+      CHECK (ended_at >= started_at),
+      FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+    )`,
+    `INSERT INTO user_usage_mb_new (
+      user_id, session_id, subscription_group_name, started_at, ended_at,
+      reported_at, upload_bytes, download_bytes
+    )
+    SELECT
+      user_id, session_id, subscription_group_name, started_at, ended_at,
+      reported_at, upload_bytes, download_bytes
+    FROM user_usage_mb_legacy`,
+    `DROP TABLE user_usage_mb_legacy`,
+    `ALTER TABLE user_usage_mb_new RENAME TO user_usage_mb`,
+    `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_user_ended
+      ON user_usage_mb(user_id, ended_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_day_user
+      ON user_usage_mb(usage_day, user_id)`,
+  ],
 };
 export const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";
 export const REWARD_TYPE_SPEED_SHARE = "speed_share";

@@ -63,10 +63,12 @@ object AppConfig {
             "https://$raw"
         }
         val uri = runCatching { URI(candidate) }.getOrNull() ?: return null
-        if (uri.scheme.lowercase() !in setOf("http", "https")) return null
+        val scheme = uri.scheme.lowercase()
+        if (scheme !in setOf("http", "https")) return null
         if (uri.host.isNullOrBlank() || uri.userInfo != null || uri.query != null || uri.fragment != null) {
             return null
         }
+        if (scheme == "http" && uri.host != "127.0.0.1") return null
         return candidate.trimEnd('/')
     }
 

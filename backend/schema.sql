@@ -107,7 +107,7 @@ BEGIN
 END;
 
 CREATE TABLE user_usage_mb (
-  user_id INTEGER NOT NULL,
+  user_id INTEGER,
   session_id TEXT NOT NULL CHECK (length(session_id) BETWEEN 1 AND 128),
   subscription_group_name TEXT NOT NULL DEFAULT '',
   started_at TEXT NOT NULL,
@@ -120,7 +120,7 @@ CREATE TABLE user_usage_mb (
     CHECK (download_bytes BETWEEN 0 AND 1000000000000000),
   PRIMARY KEY (user_id, session_id),
   CHECK (ended_at >= started_at),
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_user_usage_mb_user_ended
@@ -191,4 +191,4 @@ CREATE INDEX idx_speed_share_results_mb_reported
   ON speed_share_results_mb(last_reported_at DESC);
 
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 6, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 7, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

@@ -196,7 +196,6 @@ class BoxVpnService : VpnService() {
                     tunStack = tunStack
                 )
                 deleteLegacyConfigFile()
-                logConfigForDebug(configContent)
 
                 // 初始化 libbox
                 initializeLibbox(
@@ -568,15 +567,6 @@ class BoxVpnService : VpnService() {
         Log.i(TAG, "Traffic statistics source changed: source=${source.name}, reason=$reason")
     }
 
-    private fun logConfigForDebug(config: String) {
-        // 避免日志过长，只打印前1000字符
-        if (config.length > 1000) {
-             Log.d(TAG, "Config content (truncated): ${config.substring(0, 1000)}...")
-        } else {
-             Log.d(TAG, "Config content: $config")
-        }
-    }
-    
     private fun deleteLegacyConfigFile() {
         try {
             val configFile = File(File(filesDir, "sing-box"), "config.json")
@@ -791,7 +781,6 @@ class BoxVpnService : VpnService() {
                         tunStack = tunStack
                     )
                     deleteLegacyConfigFile()
-                    logConfigForDebug(configContent)
 
                     initializeLibbox(
                         configContent,

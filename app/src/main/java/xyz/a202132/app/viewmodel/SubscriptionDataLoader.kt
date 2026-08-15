@@ -46,6 +46,12 @@ internal class SubscriptionDataLoader(
     private val gson = Gson()
     private var cachedSubscriptionList: SubscriptionList? = null
 
+    private data class SubscriptionFetchResult(
+        val nodes: List<Node>,
+        val successfulSourceIds: Set<String>,
+        val failedSourceIds: Set<String>,
+    )
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
@@ -220,7 +226,7 @@ internal class SubscriptionDataLoader(
 
     private suspend fun fetchNodesFromSubscriptions(
         sources: List<SubscriptionSource>
-    ): Result<List<Node>> = coroutineScope {
+    ): Result<SubscriptionFetchResult> = coroutineScope {
         val results = sources.map { subscription ->
             async {
                 val requestUrl = subscriptionRequestUrl(subscription.url)
@@ -249,12 +255,16 @@ internal class SubscriptionDataLoader(
             val mergedNodes = LinkedHashMap<String, Node>()
             var failedCount = 0
             var firstFailure: Throwable? = null
+            val successfulSourceIds = mutableSetOf<String>()
+            val failedSourceIds = mutableSetOf<String>()
             results.forEach { (subscription, result) ->
                 if (result.isFailure) {
                     failedCount++
+                    failedSourceIds += subscription.id
                     firstFailure = firstFailure ?: result.exceptionOrNull()
                     return@forEach
                 }
+                successfulSourceIds += subscription.id
                 result.getOrThrow().forEach { node ->
                     val scopedNodeId = "${subscription.id}:${node.id}"
                     val taggedNode = node.copy(
@@ -274,13 +284,19 @@ internal class SubscriptionDataLoader(
                     ) ?: taggedNode
                 }
             }
-            if (mergedNodes.isEmpty()) {
+            if (successfulSourceIds.isEmpty()) {
                 Result.failure(firstFailure ?: IllegalStateException("订阅列表未返回节点"))
             } else {
                 if (failedCount > 0) {
                     Log.w(TAG, "$failedCount subscription source(s) failed; using successful sources")
                 }
-                Result.success(mergedNodes.values.toList())
+                Result.success(
+                    SubscriptionFetchResult(
+                        nodes = mergedNodes.values.toList(),
+                        successfulSourceIds = successfulSourceIds,
+                        failedSourceIds = failedSourceIds,
+                    )
+                )
             }
         }
     }
@@ -320,17 +336,22 @@ internal class SubscriptionDataLoader(
                 return false
             }
 
-            val fetchedNodes = result.getOrThrow()
+            val fetchedResult = result.getOrThrow()
+            val fetchedNodes = fetchedResult.nodes
             val refreshedSourceIds = sourcesToRefresh.mapTo(mutableSetOf()) { it.id }
-            val fetchedSourceIds = fetchedNodes.mapNotNull { it.subscriptionSourceId }.toSet()
             val retainedNodes = cachedNodes.filter { node ->
                 node.subscriptionSourceId !in refreshedSourceIds ||
-                    node.subscriptionSourceId !in fetchedSourceIds
+                    node.subscriptionSourceId in fetchedResult.failedSourceIds
             }
             val connectedNode = activeNode()?.takeIf { it.source == NodeSource.SUBSCRIPTION }
             val mergedFetchedNodes = (retainedNodes + fetchedNodes).distinctBy(Node::id)
+            val shouldRetainConnectedNode = connectedNode != null && (
+                connectedNode.subscriptionSourceId !in refreshedSourceIds ||
+                    connectedNode.subscriptionSourceId in fetchedResult.failedSourceIds
+            )
             val nodesToPersist = if (
-                connectedNode != null && fetchedNodes.none { it.id == connectedNode.id }
+                shouldRetainConnectedNode &&
+                    connectedNode != null && fetchedNodes.none { it.id == connectedNode.id }
             ) {
                 Log.w(TAG, "Retaining active node missing from refreshed subscription: ${connectedNode.id}")
                 mergedFetchedNodes + connectedNode
@@ -340,7 +361,7 @@ internal class SubscriptionDataLoader(
             nodeDao().replaceSubscriptionNodes(nodesToPersist)
             lastFetchedNodes = nodesToPersist
             settingsRepository.setSubscriptionSourcesUpdatedAt(
-                sourceIds = fetchedSourceIds,
+                sourceIds = fetchedResult.successfulSourceIds,
                 updatedAt = System.currentTimeMillis()
             )
             onNodesPersisted(nodesToPersist)

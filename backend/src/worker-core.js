@@ -238,7 +238,7 @@ const worker = {
         path: new URL(request.url).pathname,
         error: error instanceof Error ? error.message : String(error),
       }));
-      return json({ error: error instanceof Error ? error.message : String(error) }, 500);
+      return json({ error: "internal_error" }, 500);
     }
   },
 };

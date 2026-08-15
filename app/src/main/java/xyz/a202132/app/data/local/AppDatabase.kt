@@ -97,17 +97,17 @@ abstract class AppDatabase : RoomDatabase() {
                 val appContext = context.applicationContext
                 ensureSqlCipherLoaded()
                 deleteLegacyPlaintextDatabaseIfNeeded(appContext)
-                var instance = buildEncryptedDatabase(appContext)
-                runCatching {
+                val instance = buildEncryptedDatabase(appContext)
+                try {
                     // Force open once to validate passphrase/file format, but do not close it here.
                     instance.openHelper.writableDatabase
-                }.onFailure { error ->
-                    Log.w(TAG, "Failed to open encrypted database, recreating.", error)
+                } catch (error: Throwable) {
+                    Log.e(TAG, "Failed to open encrypted database; local data was preserved.", error)
                     runCatching { instance.close() }
-                    deleteDatabaseFiles(appContext)
-                    instance = buildEncryptedDatabase(appContext)
-                    runCatching { instance.openHelper.writableDatabase }
-                        .getOrElse { throw it }
+                    throw IllegalStateException(
+                        "Unable to open encrypted database; local data was preserved.",
+                        error
+                    )
                 }
                 INSTANCE = instance
                 instance
@@ -133,7 +133,6 @@ abstract class AppDatabase : RoomDatabase() {
             )
                 .openHelperFactory(factory)
                 .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
-                .fallbackToDestructiveMigration()
                 .build()
         }
 
