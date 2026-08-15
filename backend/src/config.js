@@ -21,7 +21,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 4;
+export const USER_SCHEMA_VERSION = 6;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -202,7 +202,6 @@ export const USER_SCHEMA_STATEMENTS = [
     node_id TEXT NOT NULL,
     province TEXT NOT NULL DEFAULT '',
     carrier TEXT NOT NULL DEFAULT '',
-    node_name TEXT NOT NULL DEFAULT '',
     server_host TEXT NOT NULL DEFAULT '',
     tcping_latency_ms INTEGER NOT NULL DEFAULT 0
       CHECK (tcping_latency_ms BETWEEN 0 AND 600000),
@@ -270,6 +269,10 @@ export const USER_SCHEMA_MIGRATIONS = {
     `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_day_user
       ON user_usage_mb(usage_day, user_id)`,
   ],
+  5: [
+    `ALTER TABLE speed_share_results_mb DROP COLUMN node_name`,
+  ],
+  6: [],
 };
 export const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";
 export const REWARD_TYPE_SPEED_SHARE = "speed_share";

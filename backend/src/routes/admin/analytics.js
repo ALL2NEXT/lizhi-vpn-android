@@ -119,7 +119,7 @@ export function createAdminAnalyticsRoutes(deps) {
         : 500;
       const db = await ensureUserSchema(env);
       const query = await db.prepare(
-        "SELECT node_id, node_name, server_host, subscription_group_name, province, carrier, " +
+        "SELECT node_id, server_host, subscription_group_name, province, carrier, " +
           "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
           "upload_mbps, updated_at, last_reported_at, report_count " +
           "FROM speed_share_results_mb ORDER BY last_reported_at DESC LIMIT ?",

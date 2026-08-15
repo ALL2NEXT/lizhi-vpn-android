@@ -164,7 +164,6 @@ CREATE TABLE speed_share_results_mb (
   node_id TEXT NOT NULL,
   province TEXT NOT NULL DEFAULT '',
   carrier TEXT NOT NULL DEFAULT '',
-  node_name TEXT NOT NULL DEFAULT '',
   server_host TEXT NOT NULL DEFAULT '',
   tcping_latency_ms INTEGER NOT NULL DEFAULT 0
     CHECK (tcping_latency_ms BETWEEN 0 AND 600000),
@@ -192,4 +191,4 @@ CREATE INDEX idx_speed_share_results_mb_reported
   ON speed_share_results_mb(last_reported_at DESC);
 
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 6, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

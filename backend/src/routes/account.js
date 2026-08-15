@@ -327,7 +327,7 @@ async function handleAccount(path, request, env) {
     }
     const db = await ensureUserSchema(env);
     const query = await db.prepare(
-      "SELECT node_id, node_name, server_host, subscription_group_name, province, carrier, " +
+      "SELECT node_id, server_host, subscription_group_name, province, carrier, " +
         "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
         "upload_mbps, updated_at, last_reported_at, report_count " +
         "FROM speed_share_results_mb ORDER BY last_reported_at DESC LIMIT 1000",
@@ -524,15 +524,14 @@ async function handleSpeedShareSubmission(request, env) {
   });
   const statements = results.map((item) => db.prepare(
     `INSERT INTO speed_share_results_mb
-     (subscription_group_name, node_id, province, carrier, node_name, server_host,
+     (subscription_group_name, node_id, province, carrier, server_host,
       tcping_latency_ms, url_test_latency_ms, download_mbps, upload_mbps,
       updated_at, last_reported_at, last_reporter_user_id, report_count)
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1
      WHERE EXISTS (
        SELECT 1 FROM user_reward_claims_mb WHERE claim_token = ?
      )
      ON CONFLICT(subscription_group_name, node_id, province, carrier) DO UPDATE SET
-       node_name = excluded.node_name,
        server_host = excluded.server_host,
        tcping_latency_ms = excluded.tcping_latency_ms,
        url_test_latency_ms = excluded.url_test_latency_ms,
@@ -547,7 +546,6 @@ async function handleSpeedShareSubmission(request, env) {
     item.nodeId,
     item.province,
     item.carrier,
-    item.nodeName,
     item.serverHost,
     item.tcpingLatencyMs,
     item.urlTestLatencyMs,

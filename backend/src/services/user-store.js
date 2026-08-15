@@ -51,6 +51,8 @@ export async function initializeUserSchema(env) {
 }
 
 export async function initializeUserSchemaDatabase(db) {
+  await restoreUsageCompatibilityColumns(db);
+
   let schema;
   try {
     schema = await db.prepare(
@@ -110,6 +112,27 @@ export async function initializeUserSchemaDatabase(db) {
   }
   await backfillInviteCodes(db);
   return Number(initialized.version);
+}
+
+async function restoreUsageCompatibilityColumns(db) {
+  const tableInfo = await db.prepare("PRAGMA table_info(user_usage_mb)").all();
+  const columns = new Set((tableInfo.results || []).map((row) => String(row.name || "")));
+  if (columns.size === 0) return;
+
+  const statements = [];
+  if (!columns.has("subscription_group_name")) {
+    statements.push(
+      "ALTER TABLE user_usage_mb ADD COLUMN subscription_group_name TEXT NOT NULL DEFAULT ''",
+    );
+  }
+  if (!columns.has("reported_at")) {
+    statements.push(
+      "ALTER TABLE user_usage_mb ADD COLUMN reported_at TEXT NOT NULL DEFAULT ''",
+    );
+  }
+  if (statements.length > 0) {
+    await db.batch(statements.map((statement) => db.prepare(statement)));
+  }
 }
 
 async function backfillInviteCodes(db) {

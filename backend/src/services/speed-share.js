@@ -8,7 +8,6 @@ export function normalizeSpeedShareResult(value, location = {}) {
   }
   const result = {
     nodeId,
-    nodeName: cleanText(value.nodeName || value.name).slice(0, 200),
     serverHost: normalizeSpeedShareServerHost(
       value.serverHost || value.server || value.host,
     ),
@@ -120,7 +119,6 @@ export function normalizeSpeedShareServerHost(value) {
 export function publicAdminSpeedShareResult(row) {
   return {
     nodeId: cleanText(row.node_id),
-    nodeName: cleanText(row.node_name),
     serverHost: cleanText(row.server_host),
     subscriptionGroupName: cleanText(row.subscription_group_name),
     province: cleanText(row.province),

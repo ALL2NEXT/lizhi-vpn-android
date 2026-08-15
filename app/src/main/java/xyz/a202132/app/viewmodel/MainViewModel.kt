@@ -1869,7 +1869,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             SpeedShareNodeResult(
                 nodeId = sharedNodeId(node),
-                nodeName = node.getDisplayName(),
                 serverHost = sharedServerHost(node.server),
                 subscriptionGroupName = node.subscriptionSourceName.orEmpty(),
                 tcpingLatencyMs = tcpingLatency ?: 0,

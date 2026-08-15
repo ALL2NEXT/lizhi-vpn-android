@@ -180,7 +180,6 @@ function renderSpeedShareResults() {
     if (!search) return true;
     return [
       result.nodeId,
-      result.nodeName,
       result.serverHost,
       result.subscriptionGroupName,
       result.province,
@@ -197,7 +196,6 @@ function renderSpeedShareResults() {
   const rows = filtered.map(function(result) {
     return '<tr>' +
       '<td><code>' + esc(result.nodeId || '-') + '</code></td>' +
-      '<td>' + esc(result.nodeName || '-') + '</td>' +
       '<td>' + esc(result.serverHost || '-') + '</td>' +
       '<td>' + esc(result.subscriptionGroupName || '-') + '</td>' +
       '<td>' + esc(result.province || '-') + '</td>' +
@@ -212,7 +210,7 @@ function renderSpeedShareResults() {
       '</tr>';
   }).join('');
   host.innerHTML = '<table class="traffic-detail-table" aria-label="共享测速结果">' +
-    '<thead><tr><th scope="col">节点 ID</th><th scope="col">节点名称</th><th scope="col">服务器</th>' +
+    '<thead><tr><th scope="col">节点 ID</th><th scope="col">服务器</th>' +
     '<th scope="col">订阅分组</th><th scope="col">省份</th><th scope="col">运营商</th>' +
     '<th scope="col">TCPing 延迟</th><th scope="col">URL 延迟</th><th scope="col">下载速度</th>' +
     '<th scope="col">上传速度</th><th scope="col">更新时间</th><th scope="col">最后上报</th>' +
