@@ -40,6 +40,7 @@ import {
 } from "./domain/account.js";
 import {
   buildUserGrowthPoints,
+  buildUserActivityPoints,
   buildUserTrafficPoints,
   normalizeGrowthDateKey,
   normalizeGrowthPeriod,
@@ -151,6 +152,7 @@ const routeDeps = {
   normalizeGrowthPeriod,
   normalizeGrowthDateKey,
   buildUserGrowthPoints,
+  buildUserActivityPoints,
   buildUserTrafficPoints,
   normalizeStoredUid,
   normalizeBatchUserReferences,

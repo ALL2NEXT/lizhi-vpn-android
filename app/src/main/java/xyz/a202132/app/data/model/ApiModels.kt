@@ -65,6 +65,9 @@ data class BackendAppSettings(
     @SerializedName("experienceThresholds")
     val experienceThresholds: List<Long> = listOf(100L, 200L, 400L, 800L, 1600L),
 
+    @SerializedName("accountBindingExperience")
+    val accountBindingExperience: Long = 50L,
+
     @SerializedName("telegramGroupUrl")
     val telegramGroupUrl: String = "",
 

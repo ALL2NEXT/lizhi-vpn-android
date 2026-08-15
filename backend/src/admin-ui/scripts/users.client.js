@@ -136,6 +136,7 @@ async function loadUsers(force) {
     }
     renderUsers(data);
     loadGrowthChart(growthPeriod);
+    loadActivityChart(activityPeriod);
     loadTrafficChart(trafficPeriod);
     return true;
   } catch (error) {
@@ -373,4 +374,3 @@ function exportUsersCsv() {
   setTimeout(function() { URL.revokeObjectURL(downloadUrl); }, 1000);
   show('用户详细表格已导出，可直接使用 Excel 打开');
 }
-

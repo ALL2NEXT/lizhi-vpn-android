@@ -81,9 +81,9 @@
      <div class="dashboard-heading">
        <div>
          <h2>用户趋势</h2>
-         <p>按日、按周、按月查看注册新增用户和累计用户数量。</p>
+         <p>按日、按周、按月查看注册新增、活跃用户和累计用户数量。</p>
        </div>
-       <button class="secondary" type="button" onclick="loadGrowthChart(growthPeriod)">刷新数据</button>
+       <button class="secondary" type="button" onclick="refreshUserTrends()">刷新数据</button>
      </div>
     <article class="growth-card">
       <div class="growth-toolbar">
@@ -105,6 +105,27 @@
       </div>
        <div id="userGrowthChart" class="growth-chart-host"><div class="loading-state">正在读取用户增长数据…</div></div>
        <div id="userGrowthSummary" class="growth-summary" aria-live="polite"></div>
+     </article>
+     <article class="growth-card">
+       <div class="growth-toolbar">
+         <div>
+           <h3>活跃用户</h3>
+           <small>按日、按周、按月统计有流量上报的去重用户数，周/月周期内同一用户只计算一次。</small>
+           <div class="growth-range-controls" aria-label="用户活跃时间范围">
+             <label class="growth-range-field">开始日期<input id="activityStartDate" type="date"></label>
+             <label class="growth-range-field">结束日期<input id="activityEndDate" type="date"></label>
+             <button class="secondary" type="button" onclick="applyActivityRange()">应用范围</button>
+             <button class="secondary" type="button" onclick="clearActivityRange()">全部时间</button>
+           </div>
+         </div>
+         <div class="growth-period-switch" role="group" aria-label="用户活跃统计粒度">
+           <button class="growth-period-button active" type="button" data-activity-period="day" onclick="setActivityPeriod('day')">按日</button>
+           <button class="growth-period-button" type="button" data-activity-period="week" onclick="setActivityPeriod('week')">按周</button>
+           <button class="growth-period-button" type="button" data-activity-period="month" onclick="setActivityPeriod('month')">按月</button>
+         </div>
+       </div>
+       <div id="userActivityChart" class="growth-chart-host"><div class="loading-state">正在读取用户活跃数据…</div></div>
+       <div id="userActivitySummary" class="growth-summary" aria-live="polite"></div>
      </article>
    </section>
 
@@ -311,8 +332,9 @@
       </section>
       <section class="settings-section">
         <h3 class="settings-section-title">经验与社群激励</h3>
-        <p class="settings-section-description">配置 Telegram 进群任务和共享测速奖励。</p>
+        <p class="settings-section-description">统一配置邮箱绑定、Telegram 进群和智能测速共享的经验奖励；设为 0 可关闭对应奖励。</p>
         <div class="grid">
+          <div class="field"><label>邮箱绑定经验奖励<input id="accountBindingExperience" type="number" min="0" step="1"></label></div>
           <div class="field"><label>TG 群连接<input id="telegramGroupUrl" type="text" placeholder="https://t.me/your_group"></label></div>
           <div class="field"><label>TG 进群口令<input id="telegramJoinCode" type="text" placeholder="例如：FIREFLY2026"></label></div>
           <div class="field"><label>TG 任务经验奖励<input id="telegramTaskExperience" type="number" min="0" step="1"></label></div>

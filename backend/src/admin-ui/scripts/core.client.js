@@ -22,7 +22,7 @@
   const DASHBOARD_AI_CONTEXT = {
     'user-trends': {
       title: 'AI 助手 · 用户趋势',
-      task: '预测明天的新增用户量和累计用户量',
+      task: '分析新增用户和活跃用户趋势，预测明天的用户变化',
     },
     'traffic-trends': {
       title: 'AI 助手 · 流量趋势',
@@ -37,8 +37,10 @@
   let trafficDetailsSortDirection = 'asc';
   const trafficZeroFilters = {today: false, month: false, total: false};
   let draggedSourceRow = null;
-  let growthPeriod = 'day';
+ let growthPeriod = 'day';
  let growthRequestId = 0;
+ let activityPeriod = 'day';
+ let activityRequestId = 0;
  let trafficPeriod = 'day';
  let trafficRequestId = 0;
  const dirtyUserIds = new Set();

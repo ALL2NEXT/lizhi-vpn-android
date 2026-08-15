@@ -333,6 +333,7 @@ export const DEFAULT_STATE = {
     githubUrl: "",
     nodeRequestTimeoutMs: 25000,
     experienceThresholds: DEFAULT_EXPERIENCE_THRESHOLDS,
+    accountBindingExperience: ACCOUNT_BINDING_EXPERIENCE,
     telegramGroupUrl: "",
     telegramJoinCode: "",
     telegramTaskExperience: DEFAULT_TELEGRAM_TASK_EXPERIENCE,

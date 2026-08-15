@@ -112,6 +112,10 @@ async function handleAccount(path, request, env) {
 
     const passwordHash = await hashAccountPassword(password);
     const boundAt = beijingTimestamp();
+    const reward = normalizeExperience(
+      state.settings.accountBindingExperience,
+      ACCOUNT_BINDING_EXPERIENCE,
+    );
     const results = await db.batch([
       db.prepare(
         "UPDATE users_mb SET email = ?, password_hash = ? " +
@@ -126,14 +130,18 @@ async function handleAccount(path, request, env) {
         periodKey: REWARD_PERIOD_LIFETIME,
         contextKey: "email-v1",
         claimedAt: boundAt,
-        experienceAwarded: ACCOUNT_BINDING_EXPERIENCE,
+        experienceAwarded: reward,
       }),
     ]);
     if (!results[0].meta || Number(results[0].meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
     const updated = await readD1User(env, identity.userId, state.settings);
-    return json({ ok: true, account: publicAccount(updated) });
+    return json({
+      ok: true,
+      account: publicAccount(updated),
+      experienceAwarded: reward,
+    });
   }
 
   // 每个账户只能绑定一次上级邀请码，绑定关系用于统计邀请来源。

@@ -129,6 +129,88 @@ function renderGrowthChart(data) {
       '<span class="growth-legend"><i></i>累计用户</span>';
   }
 }
+function renderActivityChart(data) {
+  const host = el('userActivityChart');
+  const summary = el('userActivitySummary');
+  if (!host) return;
+  const period = data && (data.period === 'week' || data.period === 'month')
+    ? data.period
+    : 'day';
+  const points = data && Array.isArray(data.points)
+    ? data.points.map(function(point) {
+      return {
+        key: String(point.key || ''),
+        activeUsers: Math.max(0, Number(point.activeUsers) || 0)
+      };
+    }).filter(function(point) { return /^\d{4}-\d{2}(-\d{2})?$/.test(point.key); })
+    : [];
+  if (points.length === 0) {
+    host.innerHTML = '<div class="loading-state growth-empty">当前范围暂无活跃用户数据</div>';
+    if (summary) summary.textContent = '';
+    return;
+  }
+
+  const width = 920;
+  const height = 330;
+  const padding = {top: 20, right: 24, bottom: 48, left: 54};
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const maxValue = Math.max(1, points.reduce(function(maximum, point) {
+    return Math.max(maximum, point.activeUsers);
+  }, 0));
+  const tickStep = Math.max(1, Math.ceil(maxValue / 4));
+  const chartMax = tickStep * 4;
+  const xFor = function(index) {
+    return points.length === 1
+      ? padding.left + plotWidth / 2
+      : padding.left + index / (points.length - 1) * plotWidth;
+  };
+  const yFor = function(value) {
+    return padding.top + plotHeight - value / chartMax * plotHeight;
+  };
+  const linePath = points.map(function(point, index) {
+    return (index === 0 ? 'M' : 'L') + ' ' + xFor(index).toFixed(2) + ' ' + yFor(point.activeUsers).toFixed(2);
+  }).join(' ');
+  const grid = Array.from({length: 5}, function(_, index) {
+    const value = tickStep * index;
+    const y = yFor(value).toFixed(2);
+    return '<line x1="' + padding.left + '" y1="' + y + '" x2="' + (width - padding.right) +
+      '" y2="' + y + '" stroke="#374151" stroke-width="1" />' +
+      '<text x="' + (padding.left - 10) + '" y="' + (Number(y) + 4) +
+      '" text-anchor="end" fill="#94a3b8" font-size="12">' + value + '</text>';
+  }).join('');
+  const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+  const labels = points.map(function(point, index) {
+    const isLast = index === points.length - 1;
+    if (index !== 0 && !isLast && index % labelEvery !== 0) return '';
+    return '<text x="' + xFor(index).toFixed(2) + '" y="' + (height - 16) +
+      '" text-anchor="middle" fill="#94a3b8" font-size="12">' +
+      esc(growthPointLabel(point.key, period)) + '</text>';
+  }).join('');
+  const circles = points.map(function(point, index) {
+    const label = growthPointLabel(point.key, period);
+    return '<circle cx="' + xFor(index).toFixed(2) + '" cy="' + yFor(point.activeUsers).toFixed(2) +
+      '" r="4" fill="#22c55e" stroke="#0f172a" stroke-width="2"><title>' +
+      esc(label + '：活跃用户 ' + point.activeUsers) + '</title></circle>';
+  }).join('');
+  host.innerHTML = '<svg class="growth-chart" viewBox="0 0 ' + width + ' ' + height +
+    '" role="img" aria-label="' + esc('活跃用户趋势图，按' + (period === 'day' ? '日' : period === 'week' ? '周' : '月') + '统计') + '">' +
+    grid +
+    '<line x1="' + padding.left + '" y1="' + (padding.top + plotHeight) + '" x2="' +
+    (width - padding.right) + '" y2="' + (padding.top + plotHeight) + '" stroke="#64748b" stroke-width="1" />' +
+    '<path d="' + linePath + '" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
+    circles + labels +
+    '</svg>';
+  if (summary) {
+    const latest = points[points.length - 1];
+    const peak = points.reduce(function(maximum, point) {
+      return Math.max(maximum, point.activeUsers);
+    }, 0);
+    summary.innerHTML = '<span>当前周期活跃 <strong>' + latest.activeUsers + '</strong> 个用户</span>' +
+      '<span>范围峰值 <strong>' + peak + '</strong> 个用户</span>' +
+      '<span class="growth-legend"><i style="background:#22c55e"></i>活跃用户</span>';
+  }
+}
 function renderTrafficChart(data) {
   const host = el('trafficChart');
   const summary = el('trafficSummary');
@@ -279,6 +361,36 @@ function growthRequestQuery(period) {
   if (end) params.set('end', end);
   return params.toString();
 }
+function initializeActivityRange() {
+  const today = growthTodayDateKey();
+  ['activityStartDate', 'activityEndDate'].forEach(function(id) {
+    const input = el(id);
+    if (input) input.max = today;
+  });
+}
+function applyActivityRange() {
+  const start = value('activityStartDate');
+  const end = value('activityEndDate');
+  if (start && end && start > end) {
+    show('开始日期不能晚于结束日期', true);
+    return;
+  }
+  loadActivityChart(activityPeriod);
+}
+function clearActivityRange() {
+  setValue('activityStartDate', '');
+  setValue('activityEndDate', '');
+  loadActivityChart(activityPeriod);
+}
+function activityRequestQuery(period) {
+  const params = new URLSearchParams();
+  params.set('period', period);
+  const start = value('activityStartDate');
+  const end = value('activityEndDate');
+  if (start) params.set('start', start);
+  if (end) params.set('end', end);
+  return params.toString();
+}
 function initializeTrafficRange() {
   const today = growthTodayDateKey();
   ['trafficStartDate', 'trafficEndDate'].forEach(function(id) {
@@ -316,6 +428,39 @@ function setTrafficPeriod(period) {
     button.classList.toggle('active', button.dataset.trafficPeriod === period);
   });
   loadTrafficChart(period);
+}
+function setActivityPeriod(period) {
+  if (period !== 'day' && period !== 'week' && period !== 'month') return;
+  activityPeriod = period;
+  document.querySelectorAll('[data-activity-period]').forEach(function(button) {
+    button.classList.toggle('active', button.dataset.activityPeriod === period);
+  });
+  loadActivityChart(period);
+}
+function refreshUserTrends() {
+  loadGrowthChart(growthPeriod);
+  loadActivityChart(activityPeriod);
+}
+async function loadActivityChart(period) {
+  const host = el('userActivityChart');
+  const summary = el('userActivitySummary');
+  const requestId = ++activityRequestId;
+  if (host) host.innerHTML = '<div class="loading-state">正在读取用户活跃数据…</div>';
+  if (summary) summary.textContent = '';
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/users/activity?' + activityRequestQuery(period), {
+      headers: headers()
+    });
+    const responseText = await response.text();
+    let data = {};
+    try { data = JSON.parse(responseText); } catch (_) {}
+    if (!response.ok) throw new Error(data.error || ('用户活跃数据读取失败（HTTP ' + response.status + '）'));
+    if (requestId === activityRequestId) renderActivityChart(data);
+  } catch (error) {
+    if (requestId !== activityRequestId || !host) return;
+    host.innerHTML = '<div class="error-state growth-empty">用户活跃数据读取失败</div>';
+    if (summary) summary.textContent = '';
+  }
 }
 async function loadTrafficChart(period) {
   const host = el('trafficChart');
@@ -380,12 +525,14 @@ async function loadGrowthChart(period) {
   }
 }
  function setDashboardState(className, message) {
-   ['brandDistribution', 'androidDistribution', 'appVersionDistribution', 'userGrowthChart', 'trafficChart'].forEach(function(id) {
+   ['brandDistribution', 'androidDistribution', 'appVersionDistribution', 'userGrowthChart', 'userActivityChart', 'trafficChart'].forEach(function(id) {
     const host = el(id);
     if (host) host.innerHTML = '<div class="' + className + '">' + esc(message) + '</div>';
   });
   const summary = el('userGrowthSummary');
   if (summary) summary.textContent = '';
+  const activitySummary = el('userActivitySummary');
+  if (activitySummary) activitySummary.textContent = '';
   const trafficSummary = el('trafficSummary');
   if (trafficSummary) trafficSummary.textContent = '';
 }

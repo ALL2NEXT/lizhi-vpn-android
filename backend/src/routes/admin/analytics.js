@@ -6,6 +6,7 @@ export function createAdminAnalyticsRoutes(deps) {
   const {
     beijingTimestamp,
     buildUserGrowthPoints,
+    buildUserActivityPoints,
     buildUserTrafficPoints,
     cleanText,
     ensureUserSchema,
@@ -94,6 +95,58 @@ export function createAdminAnalyticsRoutes(deps) {
         ? await trafficStatement.bind(...filterValues).all()
         : await trafficStatement.all();
       const points = buildUserTrafficPoints(
+        query.results || [],
+        period,
+        new Date(),
+        startDate,
+        endDate,
+      );
+
+      return json({
+        ok: true,
+        period,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        points,
+        generatedAt: beijingTimestamp(),
+      });
+    }
+
+    if (path === "/api/users/activity" && request.method === "GET") {
+      const requestUrl = new URL(request.url);
+      const period = normalizeGrowthPeriod(requestUrl.searchParams.get("period"));
+      const startDate = normalizeGrowthDateKey(requestUrl.searchParams.get("start"));
+      const endDate = normalizeGrowthDateKey(requestUrl.searchParams.get("end"));
+      if (startDate === null || endDate === null) {
+        return json({ ok: false, error: "invalid_activity_date_range" }, 400);
+      }
+      if (startDate && endDate && startDate > endDate) {
+        return json({ ok: false, error: "invalid_activity_date_order" }, 400);
+      }
+
+      const db = await ensureUserSchema(env);
+      const filters = [];
+      const filterValues = [];
+      if (startDate) {
+        filters.push("usage_day >= ?");
+        filterValues.push(startDate);
+      }
+      if (endDate) {
+        filters.push("usage_day <= ?");
+        filterValues.push(endDate);
+      }
+      const activityStatement = db.prepare(
+        `SELECT usage_day AS date_key, user_id
+         FROM user_usage_mb
+         WHERE user_id IS NOT NULL
+           ${filters.length > 0 ? `AND ${filters.join(" AND ")}` : ""}
+         GROUP BY usage_day, user_id
+         ORDER BY usage_day ASC`,
+      );
+      const query = filterValues.length > 0
+        ? await activityStatement.bind(...filterValues).all()
+        : await activityStatement.all();
+      const points = buildUserActivityPoints(
         query.results || [],
         period,
         new Date(),

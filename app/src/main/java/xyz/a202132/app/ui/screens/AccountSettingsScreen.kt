@@ -236,6 +236,13 @@ fun AccountSettingsScreen(
                             showBindDialog = true
                         }
                     )
+                    if (account.email.isBlank() && account.level > 0) {
+                        Text(
+                            text = "完成邮箱绑定可获得 ${backendSettings.accountBindingExperience.coerceAtLeast(0)} 点经验。",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     AccountLevelRow(
                         accountInfo = account,
                         thresholds = backendSettings.experienceThresholds

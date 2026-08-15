@@ -129,6 +129,60 @@ export function buildUserTrafficPoints(
   return points;
 }
 
+export function buildUserActivityPoints(
+  rows,
+  period,
+  now = new Date(),
+  rangeStart = "",
+  rangeEnd = "",
+) {
+  const records = rows.map((row) => {
+    const day = normalizeGrowthDateKey(row && row.date_key);
+    const userId = Number(row && row.user_id);
+    if (!day || !Number.isInteger(userId) || userId <= 0) return null;
+    return {
+      day,
+      key: userGrowthPeriodKey(dayKeyToUtcDate(day), period),
+      userId,
+    };
+  }).filter(Boolean);
+
+  if (records.length === 0) return [];
+  const firstDataKey = records.map((record) => record.key).sort()[0];
+  const todayKey = usagePeriodKeys(now).day;
+  const firstDataDay = records.map((record) => record.day).sort()[0];
+  const startDay = rangeStart || firstDataDay;
+  const requestedEndDay = rangeEnd || todayKey;
+  const endDay = requestedEndDay < todayKey ? requestedEndDay : todayKey;
+  if (startDay > endDay) return [];
+
+  const currentKey = userGrowthPeriodKey(now, period);
+  const requestedStartKey = userGrowthPeriodKey(dayKeyToUtcDate(startDay), period);
+  const requestedEndKey = userGrowthPeriodKey(dayKeyToUtcDate(endDay), period);
+  const firstKey = requestedStartKey > firstDataKey ? requestedStartKey : firstDataKey;
+  const lastKey = requestedEndKey < currentKey ? requestedEndKey : currentKey;
+  if (firstKey > lastKey) return [];
+
+  const counts = new Map();
+  records.forEach((record) => {
+    if (record.day < startDay || record.day > endDay) return;
+    const users = counts.get(record.key) || new Set();
+    users.add(record.userId);
+    counts.set(record.key, users);
+  });
+
+  const points = [];
+  let key = firstKey;
+  while (key <= lastKey) {
+    points.push({
+      key,
+      activeUsers: (counts.get(key) || new Set()).size,
+    });
+    key = nextUserGrowthPeriodKey(key, period);
+  }
+  return points;
+}
+
 export function userGrowthPeriodKey(date, period) {
   const { day, month } = usagePeriodKeys(date);
   if (period === "month") return month;
@@ -162,4 +216,3 @@ export function dayKeyToUtcDate(dayKey) {
 export function utcDateKey(date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
-
