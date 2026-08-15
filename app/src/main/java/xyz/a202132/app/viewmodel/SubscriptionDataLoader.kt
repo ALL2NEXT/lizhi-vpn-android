@@ -68,7 +68,22 @@ internal class SubscriptionDataLoader(
         return parsed?.also { cachedSubscriptionList = it }
     }
 
-    suspend fun initialize(forceRefresh: Boolean = false): Boolean = coroutineScope {
+    suspend fun initialize(
+        forceRefresh: Boolean = false,
+        sourceId: String? = null
+    ): Boolean {
+        _isLoading.value = true
+        return try {
+            initializeInternal(forceRefresh, sourceId)
+        } finally {
+            _isLoading.value = false
+        }
+    }
+
+    private suspend fun initializeInternal(
+        forceRefresh: Boolean = false,
+        sourceId: String? = null
+    ): Boolean = coroutineScope {
         val listRequest = async { fetchSubscriptionList(forceRefresh) }
         val accountRequest = async { registerAccountForSession() }
         val listResult = listRequest.await()
@@ -105,15 +120,26 @@ internal class SubscriptionDataLoader(
 
         val cachedNodes = nodeDao().getSubscriptionNodes().first()
         val accessibleSourceIds = accessibleSources.mapTo(mutableSetOf()) { it.id }
-        val sourcesToRefresh = if (forceRefresh) {
+        val targetSources = if (sourceId.isNullOrBlank()) {
             accessibleSources
         } else {
-            accessibleSources.filter { source ->
+            accessibleSources.filter { it.id == sourceId }
+        }
+        val sourcesToRefresh = if (forceRefresh) {
+            targetSources
+        } else {
+            targetSources.filter { source ->
                 source.refreshOnAppOpen || cachedNodes.none { it.subscriptionSourceId == source.id }
             }
         }
         val cachedAccessibleNodes = cachedNodes.filter {
             it.subscriptionSourceId in accessibleSourceIds
+        }
+        if (targetSources.isEmpty()) {
+            nodeDao().replaceSubscriptionNodes(cachedAccessibleNodes)
+            lastFetchedNodes = cachedAccessibleNodes
+            onNodesPersisted(cachedAccessibleNodes)
+            return@coroutineScope true
         }
         if (sourcesToRefresh.isEmpty()) {
             nodeDao().replaceSubscriptionNodes(cachedAccessibleNodes)
@@ -274,7 +300,6 @@ internal class SubscriptionDataLoader(
         }
 
         GlobalTestExecution.beginFetching("请求节点中")
-        _isLoading.value = true
         try {
             if (!NetworkUtils.isNetworkAvailable(context)) {
                 onMessage("当前无网络连接，无法获取节点")
@@ -314,6 +339,10 @@ internal class SubscriptionDataLoader(
             }
             nodeDao().replaceSubscriptionNodes(nodesToPersist)
             lastFetchedNodes = nodesToPersist
+            settingsRepository.setSubscriptionSourcesUpdatedAt(
+                sourceIds = fetchedSourceIds,
+                updatedAt = System.currentTimeMillis()
+            )
             onNodesPersisted(nodesToPersist)
             Log.d(TAG, "Fetched ${fetchedNodes.size} nodes, persisted ${nodesToPersist.size}")
             return true
@@ -322,7 +351,6 @@ internal class SubscriptionDataLoader(
             onMessage("网络错误")
             return false
         } finally {
-            _isLoading.value = false
             GlobalTestExecution.endFetching()
         }
     }

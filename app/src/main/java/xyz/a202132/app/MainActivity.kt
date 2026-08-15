@@ -51,6 +51,7 @@ import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.TaskCenterScreen
 import xyz.a202132.app.ui.theme.FireflyVPNTheme
+import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.viewmodel.MainViewModel
 import xyz.a202132.app.viewmodel.NodeImportResult
 
@@ -271,6 +272,9 @@ class MainActivity : ComponentActivity() {
                                 val skipFavoriteRemovalConfirmation by
                                     viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
                                 val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
+                                val isRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()
+                                val subscriptionSourceUpdatedAt by
+                                    viewModel.subscriptionSourceUpdatedAt.collectAsStateWithLifecycle()
                                 val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
 
                                 NodeListScreen(
@@ -282,6 +286,8 @@ class MainActivity : ComponentActivity() {
                                     favoriteSourceNodeIds = favoriteSourceNodeIds,
                                     skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
                                     isTesting = isTesting,
+                                    isRefreshing = isRefreshing,
+                                    subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
                                     testingLabel = testingLabel,
                                     onNodeSelected = { node ->
                                         navController.popBackStack(AppRoute.MAIN, false)
@@ -299,7 +305,12 @@ class MainActivity : ComponentActivity() {
                                     onScanQrCode = { navigateTo(AppRoute.QR_SCANNER) },
                                     onTcpingTest = { viewModel.testAllNodes() },
                                     onUrlTest = { viewModel.urlTestAllNodes() },
-                                    onRefresh = { viewModel.refreshNodes() },
+                                    onRefresh = {
+                                        if (nodeListCategory == NodeListCategory.PRIMARY) {
+                                            selectedSubscriptionSourceId?.let(viewModel::refreshNodes)
+                                        }
+                                    },
+                                    onRefreshAll = { viewModel.refreshNodes() },
                                     onBack = { navController.popBackStack() }
                                 )
                             }

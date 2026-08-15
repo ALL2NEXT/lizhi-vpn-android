@@ -29,14 +29,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -48,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -64,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
@@ -71,6 +77,7 @@ import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.SubscriptionGroup
 import xyz.a202132.app.ui.theme.Primary
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun NodeListScreen(
     nodes: List<Node>,
@@ -81,6 +88,8 @@ fun NodeListScreen(
     favoriteSourceNodeIds: Set<String>,
     skipFavoriteRemovalConfirmation: Boolean,
     isTesting: Boolean,
+    isRefreshing: Boolean,
+    subscriptionSourceUpdatedAt: Map<String, Long>,
     testingLabel: String? = null,
     onNodeSelected: (Node) -> Unit,
     onCategoryChange: (NodeListCategory) -> Unit,
@@ -92,6 +101,7 @@ fun NodeListScreen(
     onTcpingTest: () -> Unit,
     onUrlTest: () -> Unit,
     onRefresh: () -> Unit,
+    onRefreshAll: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -156,7 +166,7 @@ fun NodeListScreen(
                 enabled = !isClosing,
                 onTcpingTest = onTcpingTest,
                 onUrlTest = onUrlTest,
-                onRefresh = onRefresh
+                onRefresh = onRefreshAll
             )
         }
     ) {
@@ -168,6 +178,9 @@ fun NodeListScreen(
             selectedSubscriptionSourceId = selectedSubscriptionSourceId,
             favoriteSourceNodeIds = favoriteSourceNodeIds,
             isTesting = isTesting,
+            isRefreshing = isRefreshing,
+            subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
+            onRefresh = onRefresh,
             onImportFromClipboard = handleImportFromClipboard,
             onScanQrCode = handleScanQrCode,
             onNodeSelected = handleNodeSelected,
@@ -283,6 +296,7 @@ private fun NodeListTopActions(
     }
 }
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun NodeListContent(
     nodes: List<Node>,
@@ -292,6 +306,9 @@ private fun NodeListContent(
     selectedSubscriptionSourceId: String?,
     favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
+    isRefreshing: Boolean,
+    subscriptionSourceUpdatedAt: Map<String, Long>,
+    onRefresh: () -> Unit,
     onImportFromClipboard: () -> Unit,
     onScanQrCode: () -> Unit,
     onNodeSelected: (Node) -> Unit,
@@ -308,9 +325,50 @@ private fun NodeListContent(
     val subscriptionSwipeThresholdPx = with(density) { 72.dp.toPx() }
     var subscriptionSwipeOffsetPx by remember { mutableFloatStateOf(0f) }
     var isSubscriptionSwiping by remember { mutableStateOf(false) }
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var pullRefreshRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(subscriptionSourceUpdatedAt[selectedSubscriptionSourceId]) {
+        while (true) {
+            delay(60_000L)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+    LaunchedEffect(isRefreshing) {
+        if (!isRefreshing) pullRefreshRequested = false
+    }
     val currentSubscriptionIndex = subscriptionGroups.indexOfFirst {
         it.sourceId == selectedSubscriptionSourceId
     }.takeIf { it >= 0 } ?: 0
+    val lastUpdatedAt = selectedSubscriptionSourceId?.let(subscriptionSourceUpdatedAt::get)
+    val canPullRefresh =
+        interactionEnabled &&
+            !isTesting &&
+            category == NodeListCategory.PRIMARY &&
+            !selectedSubscriptionSourceId.isNullOrBlank()
+    val pullRefreshing = isRefreshing && pullRefreshRequested
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = pullRefreshing,
+        onRefresh = {
+            if (!isRefreshing) {
+                pullRefreshRequested = true
+                onRefresh()
+            }
+        }
+    )
+    val pullRefreshContentOffsetPx = with(density) {
+        val offset = if (pullRefreshing) {
+            56.dp.toPx()
+        } else {
+            80.dp.toPx() * pullRefreshState.progress.coerceIn(0f, 1f)
+        }
+        offset
+    }
+    val showPullRefreshStatus =
+        canPullRefresh && (pullRefreshing || pullRefreshState.progress > 0f)
+    val pullRefreshModifier = Modifier.pullRefresh(
+        state = pullRefreshState,
+        enabled = canPullRefresh
+    )
     val canSwipeSubscriptions =
         interactionEnabled &&
             !isTesting &&
@@ -464,6 +522,7 @@ private fun NodeListContent(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .then(pullRefreshModifier)
                         .then(subscriptionSwipeModifier)
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
@@ -473,34 +532,59 @@ private fun NodeListContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 16.sp
                     )
+                    PullRefreshStatus(
+                        visible = showPullRefreshStatus,
+                        refreshing = pullRefreshing,
+                        contentOffsetPx = pullRefreshContentOffsetPx,
+                        lastUpdatedAt = lastUpdatedAt,
+                        nowMillis = nowMillis,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
                 }
             }
 
             else -> {
-                LazyColumn(
-                    state = listState,
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(subscriptionSwipeModifier),
-                    contentPadding = PaddingValues(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .then(pullRefreshModifier)
+                        .then(subscriptionSwipeModifier)
                 ) {
-                    items(
-                        items = displayNodes,
-                        key = { it.id }
-                    ) { node ->
-                        val isFavorite =
-                            node.source == NodeSource.FAVORITE ||
-                                favoriteSourceNodeIds.contains(node.id)
-                        NodeListItem(
-                            node = node,
-                            isSelected = node.id == selectedNodeId,
-                            isFavorite = isFavorite,
-                            enabled = interactionEnabled,
-                            onClick = { onNodeSelected(node) },
-                            onToggleFavorite = { onToggleFavorite(node, isFavorite) }
-                        )
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                translationY = pullRefreshContentOffsetPx
+                            },
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            items = displayNodes,
+                            key = { it.id }
+                        ) { node ->
+                            val isFavorite =
+                                node.source == NodeSource.FAVORITE ||
+                                    favoriteSourceNodeIds.contains(node.id)
+                            NodeListItem(
+                                node = node,
+                                isSelected = node.id == selectedNodeId,
+                                isFavorite = isFavorite,
+                                enabled = interactionEnabled,
+                                onClick = { onNodeSelected(node) },
+                                onToggleFavorite = { onToggleFavorite(node, isFavorite) }
+                            )
+                        }
                     }
+                    PullRefreshStatus(
+                        visible = showPullRefreshStatus,
+                        refreshing = pullRefreshing,
+                        contentOffsetPx = pullRefreshContentOffsetPx,
+                        lastUpdatedAt = lastUpdatedAt,
+                        nowMillis = nowMillis,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
                 }
             }
         }
@@ -672,4 +756,60 @@ private fun NodeListCategorySegment(
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
+}
+
+@Composable
+private fun PullRefreshStatus(
+    visible: Boolean,
+    refreshing: Boolean,
+    contentOffsetPx: Float,
+    lastUpdatedAt: Long?,
+    nowMillis: Long,
+    modifier: Modifier = Modifier
+) {
+    if (!visible) return
+    val density = LocalDensity.current
+    val statusHeightPx = with(density) { 28.dp.toPx() }
+    Surface(
+        modifier = modifier.graphicsLayer {
+            translationY = (contentOffsetPx - statusHeightPx).coerceAtLeast(0f)
+        },
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (refreshing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = formatSubscriptionUpdatedText(lastUpdatedAt, nowMillis),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+private fun formatSubscriptionUpdatedText(updatedAt: Long?, nowMillis: Long): String {
+    if (updatedAt == null || updatedAt <= 0L) {
+        return "\u6682\u65e0\u8bb0\u5f55"
+    }
+    val minutes = (nowMillis - updatedAt).coerceAtLeast(0L) / 60_000L
+    return "${minutes}\u5206\u949f\u524d"
 }

@@ -174,6 +174,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val subscriptionGroups = nodeDaoFlow.flatMapLatest { it.getSubscriptionGroups() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val subscriptionSourceUpdatedAt = settingsRepository.subscriptionSourceUpdatedAt
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
     private val storedSubscriptionSourceId = settingsRepository.selectedSubscriptionSourceId
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -1748,8 +1751,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun refreshNodes() {
+    /** Refresh all subscriptions when no source is specified, otherwise only the selected source. */
+    fun refreshNodes(sourceId: String? = null) {
         viewModelScope.launch {
+            if (subscriptionDataLoader.isLoading.value) return@launch
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
@@ -1758,7 +1763,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _error.value = GlobalTestExecution.busyHint()
                 return@launch
             }
-            val fetchOk = subscriptionDataLoader.initialize(forceRefresh = true)
+            val fetchOk = subscriptionDataLoader.initialize(
+                forceRefresh = true,
+                sourceId = sourceId
+            )
             if (!fetchOk) return@launch
         }
     }

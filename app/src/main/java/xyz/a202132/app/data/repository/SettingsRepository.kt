@@ -48,6 +48,7 @@ class SettingsRepository(private val context: Context) {
 
         // 订阅列表缓存
         private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
+        private const val SUBSCRIPTION_SOURCE_UPDATED_AT_PREFIX = "subscription_source_updated_at_"
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
@@ -178,9 +179,38 @@ class SettingsRepository(private val context: Context) {
         preferences[SUBSCRIPTION_LIST_JSON]
     }
 
+    /** Last successful node fetch time for each remote subscription source. */
+    val subscriptionSourceUpdatedAt: Flow<Map<String, Long>> = context.dataStore.data.map { preferences ->
+        preferences.asMap().mapNotNull { (key, value) ->
+            val sourceId = key.name.removePrefix(SUBSCRIPTION_SOURCE_UPDATED_AT_PREFIX)
+                .takeIf { key.name.startsWith(SUBSCRIPTION_SOURCE_UPDATED_AT_PREFIX) }
+                ?: return@mapNotNull null
+            val updatedAt = when (value) {
+                is Long -> value
+                is String -> value.toLongOrNull()
+                else -> null
+            } ?: return@mapNotNull null
+            sourceId to updatedAt
+        }.toMap()
+    }
+
     suspend fun setSubscriptionList(json: String) {
         context.dataStore.edit { preferences ->
             preferences[SUBSCRIPTION_LIST_JSON] = json
+        }
+    }
+
+    suspend fun setSubscriptionSourcesUpdatedAt(sourceIds: Set<String>, updatedAt: Long) {
+        if (sourceIds.isEmpty()) return
+        context.dataStore.edit { preferences ->
+            sourceIds.forEach { sourceId ->
+                val normalizedId = sourceId.trim()
+                if (normalizedId.isNotEmpty()) {
+                    preferences[longPreferencesKey(
+                        SUBSCRIPTION_SOURCE_UPDATED_AT_PREFIX + normalizedId
+                    )] = updatedAt
+                }
+            }
         }
     }
 
