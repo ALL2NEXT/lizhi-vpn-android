@@ -85,7 +85,7 @@ export function createAdminAnalyticsRoutes(deps) {
         `SELECT usage_day AS date_key,
                 SUM(upload_bytes) AS upload_bytes,
                 SUM(download_bytes) AS download_bytes
-         FROM user_usage_daily_mb
+         FROM user_usage_mb
          ${filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : ""}
          GROUP BY usage_day
          ORDER BY usage_day ASC`,

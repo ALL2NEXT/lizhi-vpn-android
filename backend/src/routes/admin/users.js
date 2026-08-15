@@ -36,7 +36,7 @@ export function createAdminUserRoutes(deps) {
           MAX(last_ended_at) AS last_report_at,
           SUM(upload_bytes) AS total_upload_bytes,
           SUM(download_bytes) AS total_download_bytes
-        FROM user_usage_daily_mb
+        FROM user_usage_mb
         GROUP BY user_id
       )
       SELECT

@@ -37,13 +37,13 @@ Authorization: Bearer <ADMIN_TOKEN>
 
 ## 数据库初始化
 
-首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。返回结果中的 `database.schemaVersion` 应为 `1`。
+首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。当前用户数据库 schema 版本为 `4`。
 
 如果绑定的 D1 已有数据但缺少版本标记，Worker 会拒绝自动覆盖，并返回 `users_db_unversioned_schema_detected`，请先备份并完成迁移。
 
 ## 兼容性说明
 
-本次重构只调整代码组织，不改变现有 API 路径、请求字段、响应字段、D1 表名或 KV 状态格式。部署时仍指向 `backend/serverless.js`。
+本次优化保持现有 API 路径、请求字段、响应字段和 KV 状态格式不变。流量统计改为从 `user_usage_mb` 查询时按日汇总，并通过 schema v4 移除旧的 `user_usage_daily_mb` 汇总表。部署时仍指向 `backend/serverless.js`。
 
 ## 本地验证
 

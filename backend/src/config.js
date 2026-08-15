@@ -21,7 +21,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 3;
+export const USER_SCHEMA_VERSION = 4;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -144,47 +144,8 @@ export const USER_SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_user_ended
     ON user_usage_mb(user_id, ended_at DESC)`,
-  `CREATE TABLE IF NOT EXISTS user_usage_daily_mb (
-    user_id INTEGER NOT NULL,
-    usage_day TEXT NOT NULL CHECK (
-      length(usage_day) = 10 AND
-      usage_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-    ),
-    upload_bytes INTEGER NOT NULL DEFAULT 0
-      CHECK (upload_bytes BETWEEN 0 AND 9000000000000000000),
-    download_bytes INTEGER NOT NULL DEFAULT 0
-      CHECK (download_bytes BETWEEN 0 AND 9000000000000000000),
-    last_ended_at TEXT NOT NULL,
-    last_reported_at TEXT NOT NULL,
-    PRIMARY KEY (user_id, usage_day),
-    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_user_usage_daily_mb_day
-    ON user_usage_daily_mb(usage_day, user_id)`,
-  `CREATE TRIGGER IF NOT EXISTS trg_user_usage_daily_insert_mb
-  AFTER INSERT ON user_usage_mb
-  BEGIN
-    INSERT INTO user_usage_daily_mb
-      (user_id, usage_day, upload_bytes, download_bytes, last_ended_at, last_reported_at)
-    VALUES
-      (NEW.user_id, NEW.usage_day, NEW.upload_bytes, NEW.download_bytes,
-       NEW.ended_at, NEW.reported_at)
-    ON CONFLICT(user_id, usage_day) DO UPDATE SET
-      upload_bytes = user_usage_daily_mb.upload_bytes + excluded.upload_bytes,
-      download_bytes = user_usage_daily_mb.download_bytes + excluded.download_bytes,
-      last_ended_at = MAX(user_usage_daily_mb.last_ended_at, excluded.last_ended_at),
-      last_reported_at = MAX(user_usage_daily_mb.last_reported_at, excluded.last_reported_at);
-  END`,
-  `CREATE TRIGGER IF NOT EXISTS trg_user_usage_daily_update_mb
-  AFTER UPDATE OF ended_at, reported_at, upload_bytes, download_bytes ON user_usage_mb
-  BEGIN
-    UPDATE user_usage_daily_mb
-    SET upload_bytes = upload_bytes + (NEW.upload_bytes - OLD.upload_bytes),
-        download_bytes = download_bytes + (NEW.download_bytes - OLD.download_bytes),
-        last_ended_at = MAX(last_ended_at, NEW.ended_at),
-        last_reported_at = MAX(last_reported_at, NEW.reported_at)
-    WHERE user_id = NEW.user_id AND usage_day = NEW.usage_day;
-  END`,
+  `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_day_user
+    ON user_usage_mb(usage_day, user_id)`,
   `CREATE TABLE IF NOT EXISTS user_reward_claims_mb (
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
@@ -301,6 +262,13 @@ export const USER_SCHEMA_MIGRATIONS = {
       )
       WHERE id = NEW.user_id AND status = 'active';
     END`,
+  ],
+  4: [
+    `DROP TRIGGER IF EXISTS trg_user_usage_daily_insert_mb`,
+    `DROP TRIGGER IF EXISTS trg_user_usage_daily_update_mb`,
+    `DROP TABLE IF EXISTS user_usage_daily_mb`,
+    `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_day_user
+      ON user_usage_mb(usage_day, user_id)`,
   ],
 };
 export const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";

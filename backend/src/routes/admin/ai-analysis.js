@@ -123,7 +123,7 @@ export function createAdminAiRoutes(deps) {
              COUNT(DISTINCT user_id) AS active_users,
              COALESCE(SUM(upload_bytes), 0) AS upload_bytes,
              COALESCE(SUM(download_bytes), 0) AS download_bytes
-           FROM user_usage_daily_mb
+           FROM user_usage_mb
            WHERE usage_day >= ?`,
         ).bind(startDate),
         db.prepare(
@@ -131,7 +131,7 @@ export function createAdminAiRoutes(deps) {
                   COUNT(DISTINCT user_id) AS active_users,
                   COALESCE(SUM(upload_bytes), 0) AS upload_bytes,
                   COALESCE(SUM(download_bytes), 0) AS download_bytes
-           FROM user_usage_daily_mb
+           FROM user_usage_mb
            WHERE usage_day >= ?
            GROUP BY usage_day
            ORDER BY usage_day ASC`,
