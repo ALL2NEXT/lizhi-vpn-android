@@ -27,7 +27,6 @@ import xyz.a202132.app.network.SubscriptionParser
 import xyz.a202132.app.network.DownloadManager
 import xyz.a202132.app.network.NodeLocationResolver
 import xyz.a202132.app.network.AccountManager
-import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
@@ -70,9 +69,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // 节流控制
     private val THROTTLE_INTERVAL = 5000L // 5秒节流间隔
     private var lastCheckUpdateTime = 0L
-    private var trafficSessionId: String? = null
-    private var trafficSessionStartedAt: Long? = null
-    private var trafficSubscriptionGroupName: String = ""
     private var nodeLocationEnrichmentJob: Job? = null
     private val subscriptionDataLoader = SubscriptionDataLoader(
         context = application,
@@ -348,50 +344,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         
-        observeTrafficDisconnects()
-    }
-
-    private fun observeTrafficDisconnects() {
-        viewModelScope.launch {
-            var previousState = VpnState.DISCONNECTED
-            ServiceManager.vpnState.collect { state ->
-                if (state == VpnState.CONNECTED && previousState != VpnState.CONNECTED) {
-                    trafficSessionId = UUID.randomUUID().toString()
-                    trafficSessionStartedAt = System.currentTimeMillis()
-                    trafficSubscriptionGroupName =
-                        ServiceManager.currentNode.value?.subscriptionSourceName.orEmpty()
-                }
-                if (state == VpnState.DISCONNECTING) {
-                    reportTrafficOnDisconnect()
-                }
-                previousState = state
-            }
-        }
-    }
-
-    private fun reportTrafficOnDisconnect() {
-        val sessionId = trafficSessionId ?: return
-        val startedAt = trafficSessionStartedAt ?: System.currentTimeMillis()
-        val endedAt = System.currentTimeMillis()
-        val subscriptionGroupName = trafficSubscriptionGroupName
-        trafficSessionId = null
-        trafficSessionStartedAt = null
-        trafficSubscriptionGroupName = ""
-        // Read the service counters directly before the stop routine resets them.
-        val uploadBytes = BoxVpnService.uploadTotal.coerceAtLeast(0L)
-        val downloadBytes = BoxVpnService.downloadTotal.coerceAtLeast(0L)
-        viewModelScope.launch(Dispatchers.IO) {
-            accountManager.reportTraffic(
-                sessionId = sessionId,
-                subscriptionGroupName = subscriptionGroupName,
-                startedAt = startedAt,
-                endedAt = endedAt,
-                uploadBytes = uploadBytes,
-                downloadBytes = downloadBytes
-            ).onFailure { error ->
-                Log.w(tag, "Traffic report failed", error)
-            }
-        }
     }
 
     private fun scheduleNodeLocationEnrichment(nodes: List<Node>) {

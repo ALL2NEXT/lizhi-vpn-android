@@ -7,6 +7,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import xyz.a202132.app.service.DailyTrafficReportScheduler
+import xyz.a202132.app.service.DailyTrafficReporter
 import xyz.a202132.app.util.RuleManager
 import xyz.a202132.app.util.SignatureVerifier
 
@@ -16,6 +18,19 @@ class VpnApplication : Application() {
     
     override fun onCreate() {
         super.onCreate()
+
+        AppConfig.initialize(this)
+        DailyTrafficReportScheduler.schedule(this)
+
+        // Retry pending traffic as soon as the app process starts. This covers
+        // users who do not open the app around the scheduled 23:00 upload.
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                DailyTrafficReporter.reportPending(this@VpnApplication)
+            } catch (e: Exception) {
+                Log.w("VpnApplication", "Startup traffic report retry failed", e)
+            }
+        }
         
         // 签名校验 - 如果 APK 被篡改，APP 会立即 Crash
         SignatureVerifier.verifySignature(this)

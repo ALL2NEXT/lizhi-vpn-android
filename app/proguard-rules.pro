@@ -11,6 +11,7 @@
 # Keep data models for Gson
 -keep class xyz.a202132.app.data.model.** { *; }
 -keep interface xyz.a202132.app.data.model.** { *; }
+-keep class xyz.a202132.app.data.local.PendingDailyTrafficRecord { *; }
 -keepattributes Signature
 -keepattributes *Annotation*
 

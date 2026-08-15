@@ -28,10 +28,6 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
 
     fun build(
         nodeName: String,
-        uploadSpeed: Long,
-        downloadSpeed: Long,
-        uploadTotal: Long,
-        downloadTotal: Long
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
             service,
@@ -43,18 +39,9 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
         )
         val stopIntent = serviceAction(1, BoxVpnService.ACTION_STOP)
         val restartIntent = serviceAction(2, BoxVpnService.ACTION_RESTART)
-        val upSpeedText = ServiceManager.formatSpeed(uploadSpeed)
-        val downSpeedText = ServiceManager.formatSpeed(downloadSpeed)
-
         return NotificationCompat.Builder(service, AppConfig.NOTIFICATION_CHANNEL_ID)
             .setContentTitle(nodeName)
-            .setContentText("上传 $upSpeedText  下载 $downSpeedText")
-            .setStyle(
-                NotificationCompat.BigTextStyle().bigText(
-                    "上传 $upSpeedText   累计 ${ServiceManager.formatTraffic(uploadTotal)}\n" +
-                        "下载 $downSpeedText   累计 ${ServiceManager.formatTraffic(downloadTotal)}"
-                )
-            )
+            .setContentText("VPN 服务运行中")
             .setSmallIcon(R.drawable.ic_vpn_key)
             .setContentIntent(contentIntent)
             .addAction(R.drawable.ic_vpn_key, "断开连接", stopIntent)

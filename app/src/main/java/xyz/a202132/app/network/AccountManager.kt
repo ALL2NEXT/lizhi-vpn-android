@@ -31,7 +31,7 @@ import java.security.MessageDigest
 import java.util.UUID
 
 /**
- * Registers this installation with the Worker and reports one traffic total at disconnect time.
+ * Registers this installation with the Worker and uploads acknowledged daily traffic batches.
  * Android 10+ does not expose a reliable Wi-Fi MAC to ordinary apps, so the account key is a
  * SHA-256 hash of ANDROID_ID (with a persisted UUID fallback). The raw identifier never leaves
  * the device.

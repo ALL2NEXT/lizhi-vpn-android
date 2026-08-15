@@ -1,14 +1,13 @@
 package xyz.a202132.app.service
 
 import android.app.Notification
-import android.app.NotificationManager
 import android.content.Intent
 import android.net.VpnService
-import android.os.SystemClock
 import android.util.Log
 import io.nekohasekai.libbox.Libbox
 import kotlinx.coroutines.*
 import xyz.a202132.app.AppConfig
+import xyz.a202132.app.data.local.LocalTrafficUsageStore
 import xyz.a202132.app.data.local.NodeDao
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
@@ -35,7 +34,8 @@ class BoxVpnService : VpnService() {
         private const val TAG = "BoxVpnService"
         private const val CORE_STATUS_FRESH_MS = 3_500L
         private const val CORE_STATUS_STARTUP_GRACE_MS = 6_000L
-        private const val NOTIFICATION_UPDATE_INTERVAL_MS = 2_000L
+        // Reduce disk I/O while keeping normal stop/switch paths force-flushed.
+        private const val LOCAL_TRAFFIC_PERSIST_INTERVAL_MS = 60_000L
         
         const val ACTION_START = "xyz.a202132.app.START_VPN"
         const val ACTION_STOP = "xyz.a202132.app.STOP_VPN"
@@ -51,13 +51,9 @@ class BoxVpnService : VpnService() {
             private set
             
         // 褰撳墠娴侀噺缁熻
-        var uploadSpeed: Long = 0L
+        @Volatile var uploadTotal: Long = 0L
             private set
-        var downloadSpeed: Long = 0L
-            private set
-        var uploadTotal: Long = 0L
-            private set
-        var downloadTotal: Long = 0L
+        @Volatile var downloadTotal: Long = 0L
             private set
 
         @Volatile private var currentInternalSocksPort: Int? = null
@@ -315,8 +311,6 @@ class BoxVpnService : VpnService() {
     private var trafficMonitorStartedAt = 0L
     private var fallbackUploadTotalOffset = 0L
     private var fallbackDownloadTotalOffset = 0L
-    private var lastNotificationUpdateAt = 0L
-    private var lastNotificationSnapshot: String? = null
     
     private fun startCommandClient() {
         commandClientJob = serviceScope.launch {
@@ -393,11 +387,16 @@ class BoxVpnService : VpnService() {
     // 上次流量记录（用于计算速度）
     private var lastTxBytes = 0L
     private var lastRxBytes = 0L
-    private var lastUpdateTime = 0L
 
     // 连接开始时的流量基准
     private var baseTxBytes = 0L
     private var baseRxBytes = 0L
+
+    // Local daily storage baseline. The backend is contacted only by the 23:00 receiver.
+    private val trafficPersistenceLock = Any()
+    private var lastPersistedUploadTotal = 0L
+    private var lastPersistedDownloadTotal = 0L
+    private var lastTrafficPersistAt = 0L
     
     private fun startTrafficMonitor() {
         currentTrafficSource = TrafficSource.WAITING_FOR_CORE
@@ -406,12 +405,11 @@ class BoxVpnService : VpnService() {
         trafficMonitorStartedAt = System.currentTimeMillis()
         fallbackUploadTotalOffset = 0L
         fallbackDownloadTotalOffset = 0L
-        lastNotificationUpdateAt = 0L
-        lastNotificationSnapshot = null
-        uploadSpeed = 0L
-        downloadSpeed = 0L
         uploadTotal = 0L
         downloadTotal = 0L
+        lastPersistedUploadTotal = 0L
+        lastPersistedDownloadTotal = 0L
+        lastTrafficPersistAt = 0L
         Log.i(TAG, "Traffic source -> ${TrafficSource.WAITING_FOR_CORE.name}")
         // 记录连接开始时的流量基准
         val uid = android.os.Process.myUid()
@@ -419,7 +417,6 @@ class BoxVpnService : VpnService() {
         baseRxBytes = android.net.TrafficStats.getUidRxBytes(uid)
         lastTxBytes = baseTxBytes
         lastRxBytes = baseRxBytes
-        lastUpdateTime = System.currentTimeMillis()
         
         trafficMonitorJob = serviceScope.launch {
             while (isActive) {
@@ -442,7 +439,6 @@ class BoxVpnService : VpnService() {
                             // 保持基准更新，避免切回 TrafficStats 时速度突刺
                             lastTxBytes = currentTxBytes
                             lastRxBytes = currentRxBytes
-                            lastUpdateTime = currentTime
                             trafficStatsFallbackActive = false
                             continue
                         }
@@ -453,7 +449,6 @@ class BoxVpnService : VpnService() {
                             baseRxBytes = currentRxBytes
                             lastTxBytes = currentTxBytes
                             lastRxBytes = currentRxBytes
-                            lastUpdateTime = currentTime
                             continue
                         }
 
@@ -463,11 +458,8 @@ class BoxVpnService : VpnService() {
                             baseRxBytes = currentRxBytes
                             lastTxBytes = currentTxBytes
                             lastRxBytes = currentRxBytes
-                            lastUpdateTime = currentTime
                             fallbackUploadTotalOffset = uploadTotal
                             fallbackDownloadTotalOffset = downloadTotal
-                            uploadSpeed = 0L
-                            downloadSpeed = 0L
                             trafficStatsFallbackActive = true
                             updateTrafficSource(TrafficSource.TRAFFIC_STATS, "sing-box status stale")
                             continue
@@ -477,40 +469,18 @@ class BoxVpnService : VpnService() {
                         val activeNetwork = cm.activeNetwork
                         val isConnected = activeNetwork != null
                         
-                        val timeDelta = (currentTime - lastUpdateTime) / 1000.0
-                        if (timeDelta > 0) {
-                            // 计算速度 (bytes per second)
-                            val txSpeed = ((currentTxBytes - lastTxBytes) / timeDelta).toLong()
-                            val rxSpeed = ((currentRxBytes - lastRxBytes) / timeDelta).toLong()
+                        // 仅在有网络时计算总流量（避免断网重连产生的无效流量被计入）。
+                        if (isConnected) {
+                            val txTotal = currentTxBytes - baseTxBytes
+                            val rxTotal = currentRxBytes - baseRxBytes
 
-                            // 避免显示负数，且如果网络断开则强制为0 (避免 Loopback/Retry 流量被计入)
-                            if (isConnected) {
-                                uploadSpeed = if (txSpeed >= 0) txSpeed else 0
-                                downloadSpeed = if (rxSpeed >= 0) rxSpeed else 0
+                            uploadTotal = fallbackUploadTotalOffset + txTotal.coerceAtLeast(0L)
+                            downloadTotal = fallbackDownloadTotalOffset + rxTotal.coerceAtLeast(0L)
+                            persistTrafficProgress(currentTime)
 
-                                // 仅在有网络时计算总流量（避免断网重连产生的无效流量被计入）
-                                val txTotal = currentTxBytes - baseTxBytes
-                                val rxTotal = currentRxBytes - baseRxBytes
-                                 
-                                uploadTotal = fallbackUploadTotalOffset + txTotal.coerceAtLeast(0L)
-                                downloadTotal = fallbackDownloadTotalOffset + rxTotal.coerceAtLeast(0L)
-
-                                // 仅在有网络时更新基准值
-                                lastTxBytes = currentTxBytes
-                                lastRxBytes = currentRxBytes
-                                lastUpdateTime = currentTime
-                            } else {
-                                uploadSpeed = 0
-                                downloadSpeed = 0
-                                // 无网络时：不更新 lastBytes/baseBytes，这样断网期间的"幽灵流量"不会被计入
-                                // 同时重置基准到当前值，确保恢复网络后从0开始计算新增流量（可选）
-                                // 如果希望恢复网络后继续累加，可以注释掉下面两行
-                                // baseTxBytes = currentTxBytes
-                                // baseRxBytes = currentRxBytes
-                            }
-
-                            // 流量仅展示在通知栏，直接在服务后台更新，避免每秒唤醒主页 UI。
-                            currentNodeName?.let { updateNotification(it) }
+                            // 仅在有网络时更新基准值。
+                            lastTxBytes = currentTxBytes
+                            lastRxBytes = currentRxBytes
                         }
                     }
                 } catch (e: Exception) {
@@ -542,14 +512,52 @@ class BoxVpnService : VpnService() {
             trafficStatsFallbackActive = false
             updateTrafficSource(TrafficSource.SING_BOX_STATUS, "writeStatus")
 
-            uploadSpeed = message.uplink.coerceAtLeast(0L)
-            downloadSpeed = message.downlink.coerceAtLeast(0L)
             uploadTotal = message.uplinkTotal.coerceAtLeast(0L)
             downloadTotal = message.downlinkTotal.coerceAtLeast(0L)
+            persistTrafficProgress(System.currentTimeMillis())
 
-            currentNodeName?.let { updateNotification(it) }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse sing-box status traffic, fallback TrafficStats: ${e.message}")
+        }
+    }
+
+    private fun persistTrafficProgress(timestamp: Long, force: Boolean = false) {
+        if (!force && !isRunning) return
+
+        synchronized(trafficPersistenceLock) {
+            if (!force && timestamp - lastTrafficPersistAt < LOCAL_TRAFFIC_PERSIST_INTERVAL_MS) {
+                return
+            }
+
+            val currentUpload = uploadTotal.coerceAtLeast(0L)
+            val currentDownload = downloadTotal.coerceAtLeast(0L)
+            val uploadDelta = if (currentUpload >= lastPersistedUploadTotal) {
+                currentUpload - lastPersistedUploadTotal
+            } else {
+                currentUpload
+            }
+            val downloadDelta = if (currentDownload >= lastPersistedDownloadTotal) {
+                currentDownload - lastPersistedDownloadTotal
+            } else {
+                currentDownload
+            }
+
+            val persisted = if (uploadDelta > 0L || downloadDelta > 0L) {
+                LocalTrafficUsageStore.addDelta(
+                    context = applicationContext,
+                    timestamp = timestamp,
+                    uploadBytes = uploadDelta,
+                    downloadBytes = downloadDelta,
+                )
+            } else {
+                true
+            }
+
+            if (persisted) {
+                lastPersistedUploadTotal = currentUpload
+                lastPersistedDownloadTotal = currentDownload
+                lastTrafficPersistAt = timestamp
+            }
         }
     }
 
@@ -661,6 +669,7 @@ class BoxVpnService : VpnService() {
 
             // 先停掉监控与命令通道，避免关闭阶段仍有后台任务继续占用核心资源。
             stopCommandClient()
+            persistTrafficProgress(System.currentTimeMillis(), force = true)
             stopTrafficMonitor()
 
             // 先解除底层网络绑定，帮助系统更早感知 VPN 已经开始 teardown。
@@ -723,7 +732,6 @@ class BoxVpnService : VpnService() {
             if (savedNodeName != null) {
                 // 通知 UI 更新
                 withContext(Dispatchers.Main) {
-                    updateNotification(savedNodeName)
                 }
 
                 // 获取节点信息并重新连接
@@ -818,6 +826,7 @@ class BoxVpnService : VpnService() {
             }
 
             // 1. 停止流量监控
+            persistTrafficProgress(System.currentTimeMillis(), force = true)
             stopTrafficMonitor()
             stopCommandClient()
 
@@ -856,8 +865,6 @@ class BoxVpnService : VpnService() {
                 isRunning = false
                 isStopping = false
                 currentNodeName = null
-                uploadSpeed = 0L
-                downloadSpeed = 0L
                 uploadTotal = 0L
                 downloadTotal = 0L
 
@@ -903,31 +910,7 @@ class BoxVpnService : VpnService() {
     }
     
     private fun createNotification(nodeName: String): Notification {
-        return notificationFactory.build(
-            nodeName,
-            uploadSpeed,
-            downloadSpeed,
-            uploadTotal,
-            downloadTotal
-        )
-    }
-    
-    /**
-     * 更新通知内容（带宽信息）
-     */
-    private fun updateNotification(nodeName: String) {
-        if (!isRunning) return
-
-        val now = SystemClock.elapsedRealtime()
-        val snapshot = "$nodeName:$uploadSpeed:$downloadSpeed:$uploadTotal:$downloadTotal"
-        if (snapshot == lastNotificationSnapshot) return
-        if (now - lastNotificationUpdateAt < NOTIFICATION_UPDATE_INTERVAL_MS) return
-        lastNotificationUpdateAt = now
-        lastNotificationSnapshot = snapshot
-
-        val notification = createNotification(nodeName)
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager.notify(AppConfig.NOTIFICATION_ID, notification)
+        return notificationFactory.build(nodeName)
     }
     
     /**
