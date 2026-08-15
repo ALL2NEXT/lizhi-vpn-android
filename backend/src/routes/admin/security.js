@@ -16,6 +16,69 @@ export function createAdminSecurityRoutes(deps) {
   } = deps;
 
   return async function handleAdminSecurity(path, request, env) {
+  if (path === "/api/device-relations" && request.method === "GET") {
+      const requestUrl = new URL(request.url);
+      const requestedLimit = Number(requestUrl.searchParams.get("limit"));
+      const limit = Number.isInteger(requestedLimit)
+        ? Math.min(Math.max(requestedLimit, 1), 1000)
+        : 500;
+      const db = await ensureUserSchema(env);
+      const query = await db.prepare(
+        `SELECT
+           l.user_id,
+           l.user_uid AS account_uid,
+           u.nickname AS account_nickname,
+           u.status AS account_status,
+           d.device_id,
+           d.brand,
+           d.model,
+           d.android_version,
+           d.android_sdk,
+           d.app_version,
+           l.first_bound_at,
+           l.last_bound_at,
+           d.last_seen_at,
+           CASE WHEN d.user_id = l.user_id THEN 1 ELSE 0 END AS is_current,
+           EXISTS (
+             SELECT 1 FROM device_bans_mb b
+             WHERE b.device_row_id = d.id AND b.lifted_at IS NULL
+           ) AS blocked,
+           EXISTS (
+             SELECT 1 FROM device_bans_mb b
+             WHERE b.device_row_id = d.id
+               AND b.source_uid = l.user_uid
+               AND b.reason = 'account_banned'
+               AND b.lifted_at IS NULL
+           ) AS blocked_by_account
+         FROM device_account_links_mb l
+         JOIN user_devices_mb d ON d.id = l.device_row_id
+         LEFT JOIN users_mb u ON u.id = l.user_id
+         ORDER BY l.last_bound_at DESC, d.id DESC
+         LIMIT ?`,
+      ).bind(limit).all();
+      return json({
+        ok: true,
+        relations: (query.results || []).map((row) => ({
+          accountUid: normalizeStoredUid(row.account_uid),
+          accountNickname: cleanText(row.account_nickname),
+          accountStatus: cleanText(row.account_status) || "deleted",
+          deviceId: normalizeAccountId(row.device_id),
+          brand: cleanText(row.brand),
+          model: cleanText(row.model),
+          androidVersion: cleanText(row.android_version),
+          androidSdk: normalizeAndroidSdk(row.android_sdk),
+          appVersion: cleanText(row.app_version),
+          current: Number(row.is_current) === 1,
+          blocked: Number(row.blocked) === 1,
+          blockedByAccount: Number(row.blocked_by_account) === 1,
+          firstBoundAt: cleanText(row.first_bound_at),
+          lastBoundAt: cleanText(row.last_bound_at),
+          lastSeenAt: cleanText(row.last_seen_at),
+        })),
+        generatedAt: beijingTimestamp(),
+      });
+    }
+
   if (path === "/api/devices" && request.method === "GET") {
       const requestUrl = new URL(request.url);
       const requestedLimit = Number(requestUrl.searchParams.get("limit"));

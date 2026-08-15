@@ -4,6 +4,8 @@
   let accountSecurityData = null;
   let accountSecurityLoading = false;
   const accountSecuritySelection = new Set();
+  let deviceRelationsData = null;
+  let deviceRelationsLoading = false;
   let trafficDetailsData = null;
   let trafficDetailsLoading = false;
   let inviteRelationsData = null;
@@ -174,9 +176,12 @@
    currentState = null;
    accountSecurityData = null;
    accountSecuritySelection.clear();
+   deviceRelationsData = null;
+   deviceRelationsLoading = false;
    trafficDetailsData = null;
    inviteRelationsData = null;
    inviteRelationsLoading = false;
+   closeDeviceRelationDetail();
    speedShareResultsData = null;
    adminLoginRecordsData = null;
    adminLoginRecordsLoading = false;
@@ -221,6 +226,9 @@
    if (!isDashboardTab) closeAiAnalysis();
    if (name === 'account-security' && !accountSecurityData && !accountSecurityLoading) {
      loadAccountSecurity();
+   }
+   if (name === 'device-relations' && !deviceRelationsData && !deviceRelationsLoading) {
+     loadDeviceRelations();
    }
    if (name === 'traffic-query' && !trafficDetailsData && !trafficDetailsLoading) {
      loadTrafficDetails();

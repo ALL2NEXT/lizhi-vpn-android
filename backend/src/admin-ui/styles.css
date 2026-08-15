@@ -199,6 +199,21 @@
      .traffic-detail-table td { color: #e5e7eb; }
      .traffic-detail-table code { color: #c4b5fd; }
      .traffic-detail-table tr.banned td { background: #2a171d; }
+     .device-relation-devices { min-width: 440px; max-width: 860px; white-space: normal !important; vertical-align: top !important; }
+     .device-relation-device-list { display: flex; flex-wrap: wrap; gap: 6px; max-width: 840px; }
+     .device-relation-chip { display: inline-flex; flex: 0 1 250px; align-items: center; min-height: 34px; padding: 6px 10px; border: 1px solid #475569; border-radius: 7px; color: #e5e7eb; background: #172033; font: inherit; text-align: left; white-space: normal; cursor: pointer; }
+     .device-relation-chip:hover, .device-relation-chip:focus-visible { border-color: #60a5fa; color: #f8fafc; background: #24324a; outline: none; }
+     .device-relation-modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: rgba(2, 6, 23, .72); }
+     .device-relation-modal[hidden] { display: none; }
+     .device-relation-modal-card { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 20px; border: 1px solid #475569; border-radius: 14px; background: #111827; box-shadow: 0 20px 70px rgba(0, 0, 0, .45); }
+     .device-relation-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+     .device-relation-modal-header h3 { margin: 0; color: #f8fafc; }
+     .device-relation-modal-close { width: 38px; min-width: 38px; margin: 0; padding: 6px; font-size: 22px; line-height: 1; }
+     .device-relation-modal-device-name { margin: 0 0 16px; color: #93c5fd; font-size: 18px; font-weight: 700; }
+     .device-relation-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+     .device-relation-detail-item { min-width: 0; padding: 10px 12px; border: 1px solid #374151; border-radius: 8px; background: #172033; }
+     .device-relation-detail-item span { display: block; margin-bottom: 5px; color: #94a3b8; font-size: 12px; }
+     .device-relation-detail-item strong { display: block; color: #e5e7eb; word-break: break-word; }
      .user-sheet-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
      .user-sheet-toolbar button { margin: 0; }
      .user-sheet-toolbar small { margin-left: auto; }
@@ -275,4 +290,5 @@
        .table-wrap { max-height: calc(100vh - 190px); }
        .source-row-header { align-items: flex-start; flex-direction: column; }
        .source-row-controls { justify-content: flex-start; }
+       .device-relation-detail-grid { grid-template-columns: 1fr; }
      }

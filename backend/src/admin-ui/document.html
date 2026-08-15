@@ -42,7 +42,8 @@
               <span>表单查询</span><span class="nav-chevron" aria-hidden="true">⌄</span>
             </button>
             <div id="form-query-subnav" class="nav-submenu" role="group" aria-label="表单查询子菜单">
-              <button class="tab-button" role="tab" type="button" data-tab="account-security">账户及其设备信息</button>
+              <button class="tab-button" role="tab" type="button" data-tab="account-security">账户基本信息</button>
+              <button class="tab-button" role="tab" type="button" data-tab="device-relations">账户与设备关系</button>
               <button class="tab-button" role="tab" type="button" data-tab="traffic-query">流量汇总表单</button>
               <button class="tab-button" role="tab" type="button" data-tab="speed-share-results">共享测速表单</button>
               <button class="tab-button" role="tab" type="button" data-tab="invite-relations">邀请关系表单</button>
@@ -169,13 +170,13 @@
   <section class="card tab-panel" role="tabpanel" data-panel="account-security">
     <div class="dashboard-heading">
       <div>
-         <h2>账户及其设备信息</h2>
-        <p>封禁账户会同时封禁该账户登录过的全部历史设备；解除后只移除由该账户产生的封禁。</p>
+         <h2>账户基本信息</h2>
+        <p>查看账户基本资料并执行账户封禁管理；封禁账户会同时封禁该账户登录过的全部历史设备。</p>
       </div>
       <button class="secondary" type="button" onclick="loadAccountSecurity(true)">刷新数据</button>
     </div>
     <div class="security-toolbar">
-      <input id="securitySearch" type="search" placeholder="搜索 UID、昵称、邮箱或设备 ID" oninput="renderAccountSecurity()">
+      <input id="securitySearch" type="search" placeholder="搜索 UID、昵称、邮箱或邀请码" oninput="renderAccountSecurity()">
     </div>
     <div id="securityBatchToolbar" class="security-batch-toolbar">
       <label><input id="securitySelectAll" type="checkbox" onchange="toggleAllSecurityAccounts(this.checked)">全选当前筛选结果</label>
@@ -187,6 +188,34 @@
     <div id="securitySummary" class="security-summary"></div>
     <div id="securityAccountList" class="security-account-list">
       <div class="loading-state">打开此模块后读取账户安全数据</div>
+    </div>
+  </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="device-relations">
+    <div class="dashboard-heading">
+      <div>
+        <h2>账户与设备关系</h2>
+        <p>按关系查看账户曾经登录或当前绑定的设备，以及绑定时间和设备封禁状态。</p>
+      </div>
+      <button class="secondary" type="button" onclick="loadDeviceRelations(true)">刷新数据</button>
+    </div>
+    <div class="traffic-detail-toolbar">
+      <div class="traffic-detail-search">
+        <input id="deviceRelationSearch" type="search" placeholder="搜索账户 UID、昵称、设备 ID、品牌或型号" oninput="renderDeviceRelations()">
+        <span id="deviceRelationSummary" class="traffic-detail-summary"></span>
+      </div>
+    </div>
+    <div id="deviceRelationsTable" class="traffic-detail-wrap">
+      <div class="loading-state">打开此模块后读取账户与设备关系</div>
+    </div>
+    <div id="deviceRelationDetailModal" class="device-relation-modal" hidden role="dialog" aria-modal="true" aria-labelledby="deviceRelationDetailTitle" onclick="if (event.target === this) closeDeviceRelationDetail()">
+      <div class="device-relation-modal-card">
+        <div class="device-relation-modal-header">
+          <h3 id="deviceRelationDetailTitle">设备详情</h3>
+          <button class="secondary device-relation-modal-close" type="button" onclick="closeDeviceRelationDetail()" aria-label="关闭设备详情">×</button>
+        </div>
+        <div id="deviceRelationDetailBody"></div>
+      </div>
     </div>
   </section>
 

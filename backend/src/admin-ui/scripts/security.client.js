@@ -1,34 +1,12 @@
-function securityDeviceRows(devices) {
-  if (!Array.isArray(devices) || devices.length === 0) {
-    return '<div class="security-device-empty">该账户暂无历史登录设备</div>';
-  }
-  const rows = devices.map(function(device) {
-    const blockState = device.blockedByAccount
-      ? '被此账户封禁'
-      : device.blocked ? '被其他账户封禁' : '正常';
-    return '<tr>' +
-      '<td><code>' + esc(device.deviceId || '') + '</code></td>' +
-      '<td>' + esc([device.brand, device.model].filter(Boolean).join(' ') || '未登记') + '</td>' +
-      '<td>' + esc(device.androidVersion || '未登记') + ' / SDK ' + esc(device.androidSdk || '-') + '</td>' +
-      '<td>' + esc(device.appVersion || '未登记') + '</td>' +
-      '<td>' + (device.current ? '当前登录' : '历史登录') + '</td>' +
-      '<td>' + esc(blockState) + '</td>' +
-      '<td>' + esc(device.lastSeenAt || device.lastBoundAt || '暂无') + '</td>' +
-      '</tr>';
-  }).join('');
-  return '<div class="security-device-wrap"><table class="security-device-table">' +
-    '<thead><tr><th>设备 ID</th><th>设备</th><th>Android</th><th>App</th>' +
-    '<th>关联状态</th><th>封禁状态</th><th>最后活动</th></tr></thead>' +
-    '<tbody>' + rows + '</tbody></table></div>';
-}
+let deviceRelationDetailData = [];
+
 function securityFilteredAccounts() {
   const accounts = accountSecurityData && Array.isArray(accountSecurityData.accounts)
     ? accountSecurityData.accounts : [];
   const search = String(value('securitySearch') || '').toLowerCase();
   return accounts.filter(function(account) {
     if (!search) return true;
-    const deviceIds = (account.devices || []).map(function(device) { return device.deviceId; });
-    return [account.uid, account.nickname, account.email, account.inviteCode, account.invitedByCode].concat(deviceIds)
+    return [account.uid, account.nickname, account.email, account.inviteCode, account.invitedByCode]
       .join(' ').toLowerCase().indexOf(search) >= 0;
   });
 }
@@ -81,12 +59,9 @@ function renderAccountSecurity() {
   const filtered = securityFilteredAccounts();
   updateSecuritySelectionControls(filtered);
   const bannedAccounts = accounts.filter(function(account) { return account.status === 'banned'; }).length;
-  const historicalDevices = accounts.reduce(function(total, account) {
-    return total + Number(account.historicalDeviceCount || 0);
-  }, 0);
   const search = String(value('securitySearch') || '').toLowerCase();
   summary.textContent = '账户 ' + accounts.length + ' 个 · 已封禁 ' + bannedAccounts +
-    ' 个 · 历史登录设备关联 ' + historicalDevices + ' 条' +
+    ' 个' +
     (search ? ' · 当前匹配 ' + filtered.length + ' 个' : '');
   if (filtered.length === 0) {
     host.innerHTML = '<div class="security-device-empty">没有匹配的账户</div>';
@@ -95,14 +70,7 @@ function renderAccountSecurity() {
   const rows = filtered.map(function(account) {
     const banned = account.status === 'banned';
     const email = account.email || '游客账户';
-    const deviceCount = Number(account.historicalDeviceCount || 0);
-    const bannedDeviceCount = Number(account.bannedDeviceCount || 0);
-    const devices = Array.isArray(account.devices) ? account.devices : [];
     const uid = String(account.uid || '');
-    const deviceCell = devices.length
-      ? '<details class="security-account-devices"><summary>' + deviceCount + ' 台设备</summary>' +
-        securityDeviceRows(devices) + '</details>'
-      : '<span class="security-account-devices">' + deviceCount + ' 台设备</span>';
     return '<tr class="' + (banned ? 'banned' : '') + '">' +
       '<td><input class="security-account-checkbox" type="checkbox" data-security-select-uid="' +
       esc(uid) + '"' + (accountSecuritySelection.has(uid) ? ' checked' : '') +
@@ -116,13 +84,11 @@ function renderAccountSecurity() {
       '<td>' + esc(account.inviteeCount == null ? 0 : account.inviteeCount) + ' 人</td>' +
       '<td>Lv' + esc(account.level == null ? '-' : account.level) + '</td>' +
       '<td>' + esc(account.experienceTotal == null ? '-' : account.experienceTotal) + '</td>' +
-      '<td>' + deviceCell + '</td>' +
-      '<td>' + bannedDeviceCount + ' 台</td>' +
       '<td>' + esc(account.createdAt || '暂无') + '</td></tr>';
   }).join('');
-  host.innerHTML = '<table class="security-account-table" aria-label="账户安全信息">' +
+  host.innerHTML = '<table class="security-account-table" aria-label="账户基本信息">' +
     '<thead><tr><th>选择</th><th>状态</th><th>昵称</th><th>UID</th><th>邮箱</th><th>邀请码</th>' +
-    '<th>邀请人数</th><th>等级</th><th>累计经验</th><th>历史设备</th><th>本账户封禁设备</th>' +
+    '<th>邀请人数</th><th>等级</th><th>累计经验</th>' +
     '<th>注册时间</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-security-select-uid]').forEach(function(input) {
@@ -142,7 +108,7 @@ async function loadAccountSecurity(force) {
   }
   const host = el('securityAccountList');
   accountSecurityLoading = true;
-  if (host) host.innerHTML = '<div class="loading-state">正在读取账户与历史设备…</div>';
+  if (host) host.innerHTML = '<div class="loading-state">正在读取账户基本信息…</div>';
   try {
     const response = await fetch(ADMIN_API_BASE + '/security/accounts', {headers: headers()});
     const responseText = await response.text();
@@ -236,5 +202,152 @@ async function setAccountBan(uid, shouldBan) {
     }
   } catch (error) {
     show((shouldBan ? '封禁失败：' : '解除封禁失败：') + (error.message || error), true);
+  }
+}
+
+function renderDeviceRelations() {
+  const host = el('deviceRelationsTable');
+  const summary = el('deviceRelationSummary');
+  if (!host || !summary) return;
+  const relations = deviceRelationsData && Array.isArray(deviceRelationsData.relations)
+    ? deviceRelationsData.relations : [];
+  const search = String(value('deviceRelationSearch') || '').toLowerCase();
+  const filtered = relations.filter(function(relation) {
+    if (!search) return true;
+    return [
+      relation.accountUid,
+      relation.accountNickname,
+      relation.deviceId,
+      relation.brand,
+      relation.model,
+      relation.androidVersion,
+      relation.appVersion
+    ].join(' ').toLowerCase().indexOf(search) >= 0;
+  });
+  const grouped = new Map();
+  filtered.forEach(function(relation) {
+    const key = String(relation.accountUid || relation.accountNickname || 'unknown-account');
+    const group = grouped.get(key) || {account: relation, devices: []};
+    group.devices.push(relation);
+    grouped.set(key, group);
+  });
+  const accountGroups = Array.from(grouped.values());
+  deviceRelationDetailData = [];
+  const currentCount = filtered.filter(function(relation) { return relation.current; }).length;
+  const blockedCount = filtered.filter(function(relation) { return relation.blocked; }).length;
+  summary.textContent = '共 ' + relations.length + ' 条关系 · 当前匹配 ' + accountGroups.length +
+    ' 个账户、' + filtered.length + ' 台设备 · 当前关联 ' + currentCount +
+    ' 条 · 已封禁设备 ' + blockedCount + ' 条';
+  if (filtered.length === 0) {
+    host.innerHTML = '<div class="user-table-empty">暂无匹配的账户与设备关系</div>';
+    return;
+  }
+  const rows = accountGroups.map(function(group) {
+    const account = group.account;
+    const devices = group.devices;
+    const accountStatus = account.accountStatus === 'banned'
+      ? '账户已封禁' : account.accountStatus === 'deleted' ? '账户已删除' : '正常';
+    const firstBoundAt = devices.map(function(relation) { return relation.firstBoundAt || ''; })
+      .filter(Boolean).sort()[0] || '-';
+    const lastBoundAt = devices.map(function(relation) { return relation.lastBoundAt || ''; })
+      .filter(Boolean).sort().reverse()[0] || '-';
+    const lastSeenAt = devices.map(function(relation) { return relation.lastSeenAt || ''; })
+      .filter(Boolean).sort().reverse()[0] || '-';
+    const deviceChips = devices.map(function(relation) {
+      const deviceName = [relation.brand, relation.model].filter(Boolean).join(' ') || '未登记设备';
+      const detailIndex = deviceRelationDetailData.push(relation) - 1;
+      return '<button class="device-relation-chip" type="button" data-device-relation-index="' +
+        detailIndex + '" aria-label="' + esc(deviceName) + '，点击查看设备详情">' +
+        esc(deviceName) + '</button>';
+    }).join('');
+    return '<tr>' +
+      '<td><code>' + esc(account.accountUid || '-') + '</code></td>' +
+      '<td>' + esc(account.accountNickname || '-') + '</td>' +
+      '<td>' + esc(accountStatus) + '</td>' +
+      '<td>' + devices.length + ' 台</td>' +
+      '<td class="device-relation-devices"><div class="device-relation-device-list">' + deviceChips + '</div></td>' +
+      '<td>' + esc(firstBoundAt) + '</td>' +
+      '<td>' + esc(lastBoundAt) + '</td>' +
+      '<td>' + esc(lastSeenAt) + '</td>' +
+      '</tr>';
+  }).join('');
+  host.innerHTML = '<table class="traffic-detail-table" aria-label="账户与设备关系">' +
+    '<thead><tr><th scope="col">账户 UID</th><th scope="col">账户昵称</th>' +
+    '<th scope="col">账户状态</th><th scope="col">设备数量</th><th scope="col">设备列表</th>' +
+    '<th scope="col">首次绑定</th><th scope="col">最后绑定</th>' +
+    '<th scope="col">最后活动</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  host.querySelectorAll('[data-device-relation-index]').forEach(function(button) {
+    button.onclick = function() {
+      openDeviceRelationDetail(Number(button.dataset.deviceRelationIndex));
+    };
+  });
+}
+
+function closeDeviceRelationDetail() {
+  const modal = el('deviceRelationDetailModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function openDeviceRelationDetail(index) {
+  const relation = deviceRelationDetailData[index];
+  const modal = el('deviceRelationDetailModal');
+  const body = el('deviceRelationDetailBody');
+  if (!relation || !modal || !body) return;
+  const accountStatus = relation.accountStatus === 'banned'
+    ? '账户已封禁' : relation.accountStatus === 'deleted' ? '账户已删除' : '正常';
+  const relationStatus = relation.current ? '当前关联' : '历史关联';
+  const blockStatus = relation.blocked
+    ? (relation.blockedByAccount ? '本账户封禁' : '其他来源封禁') : '正常';
+  const deviceName = [relation.brand, relation.model].filter(Boolean).join(' ') || '未登记设备';
+  const fields = [
+    ['账户 UID', relation.accountUid || '-'],
+    ['账户昵称', relation.accountNickname || '-'],
+    ['账户状态', accountStatus],
+    ['设备厂商', relation.brand || '未登记'],
+    ['设备型号', relation.model || '未登记'],
+    ['设备 ID', relation.deviceId || '-'],
+    ['Android 版本', (relation.androidVersion || '未登记') + ' / SDK ' + (relation.androidSdk || '-')],
+    ['App 版本', relation.appVersion || '未登记'],
+    ['关联状态', relationStatus],
+    ['设备封禁状态', blockStatus],
+    ['首次绑定', relation.firstBoundAt || '-'],
+    ['最后绑定', relation.lastBoundAt || '-'],
+    ['最后活动', relation.lastSeenAt || '-']
+  ];
+  body.innerHTML = '<p class="device-relation-modal-device-name">' + esc(deviceName) + '</p>' +
+    '<div class="device-relation-detail-grid">' +
+    fields.map(function(field) {
+      return '<div class="device-relation-detail-item"><span>' + esc(field[0]) +
+        '</span><strong>' + esc(field[1]) + '</strong></div>';
+    }).join('') + '</div>';
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+async function loadDeviceRelations(force) {
+  if (deviceRelationsLoading) return false;
+  if (deviceRelationsData && !force) {
+    renderDeviceRelations();
+    return true;
+  }
+  const host = el('deviceRelationsTable');
+  deviceRelationsLoading = true;
+  if (host) host.innerHTML = '<div class="loading-state">正在读取账户与设备关系…</div>';
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/device-relations?limit=1000', {headers: headers()});
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    deviceRelationsData = data;
+    renderDeviceRelations();
+    return true;
+  } catch (error) {
+    if (host) host.innerHTML = '<div class="error-state">账户与设备关系读取失败</div>';
+    show('账户与设备关系读取失败：' + (error.message || error), true);
+    return false;
+  } finally {
+    deviceRelationsLoading = false;
   }
 }
