@@ -1,5 +1,6 @@
 package xyz.a202132.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +38,66 @@ fun ProxyModeSelector(
             isSelected = !isGlobalMode,
             onClick = { onModeChange(false) },
             modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun ProxyModeToggle(
+    isGlobalMode: Boolean,
+    onModeChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(50),
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ProxyModeToggleOption(
+                label = "全局",
+                selected = isGlobalMode,
+                onClick = { onModeChange(true) }
+            )
+            ProxyModeToggleOption(
+                label = "智能",
+                selected = !isGlobalMode,
+                onClick = { onModeChange(false) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProxyModeToggleOption(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .clickable(onClick = onClick),
+        color = if (selected) Primary else MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(50)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+            color = if (selected) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
         )
     }
 }

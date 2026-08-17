@@ -41,6 +41,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.a202132.app.AppConfig
+import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.network.NetworkClient
 import xyz.a202132.app.ui.components.*
@@ -121,6 +122,7 @@ fun MainScreen(
     
     // Collect状态
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
+    val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
@@ -214,6 +216,15 @@ fun MainScreen(
                         )
                     },
                     actions = {
+                        ProxyModeToggle(
+                            isGlobalMode = proxyMode == ProxyMode.GLOBAL,
+                            onModeChange = { isGlobal ->
+                                viewModel.setProxyMode(
+                                    if (isGlobal) ProxyMode.GLOBAL else ProxyMode.SMART
+                                )
+                            }
+                        )
+
                         // 工具菜单按钮
                         var showToolsMenu by remember { mutableStateOf(false) }
                         Box {

@@ -210,7 +210,6 @@ class MainActivity : ComponentActivity() {
 
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     ProxyScopeScreen(
-                                        mainViewModel = viewModel,
                                         onBack = { hasChanges ->
                                             if (isLeavingProxyScope) return@ProxyScopeScreen
                                             isLeavingProxyScope = true
