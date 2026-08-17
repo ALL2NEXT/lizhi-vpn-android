@@ -53,6 +53,8 @@ fun OtherConfigScreen(
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
+    val simplifiedNodeTestDisplayEnabled by
+        viewModel.simplifiedNodeTestDisplayEnabled.collectAsStateWithLifecycle()
 
     var tcpingTimeoutInput by remember(tcpingTestTimeoutMs) { mutableStateOf(tcpingTestTimeoutMs.toString()) }
     var urlTestTimeoutInput by remember(urlTestTimeoutMs) { mutableStateOf(urlTestTimeoutMs.toString()) }
@@ -203,6 +205,35 @@ fun OtherConfigScreen(
                     Switch(
                         checked = autoDeleteTimeoutNodes,
                         onCheckedChange = { viewModel.setAutoDeleteTimeoutNodes(it) },
+                        colors = visibleSwitchColors()
+                    )
+                }
+            }
+
+            OtherConfigSection(
+                title = "节点列表显示",
+                description = "开启后，将 TCPing、204 URLTest 和带宽测试结果显示为三段横向状态色块。按延迟或带宽分级，超时和未测速显示为灰色。"
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "简化测速数据",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "仅显示绿、黄、红、灰四种状态色块，减少节点列表信息量。",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = simplifiedNodeTestDisplayEnabled,
+                        onCheckedChange = { viewModel.setSimplifiedNodeTestDisplayEnabled(it) },
                         colors = visibleSwitchColors()
                     )
                 }

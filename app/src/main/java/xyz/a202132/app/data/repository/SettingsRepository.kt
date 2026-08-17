@@ -74,6 +74,8 @@ class SettingsRepository(private val context: Context) {
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
+        private val SIMPLIFIED_NODE_TEST_DISPLAY_ENABLED =
+            booleanPreferencesKey("simplified_node_test_display_enabled")
         private val SPEED_SHARE_MODE = stringPreferencesKey("speed_share_mode")
         private val SPEED_SHARE_SMART_REPORTED_GROUPS =
             stringSetPreferencesKey("speed_share_smart_reported_groups")
@@ -527,6 +529,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoDeleteTimeoutNodes(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[AUTO_DELETE_TIMEOUT_NODES] = enabled
+        }
+    }
+
+    val simplifiedNodeTestDisplayEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SIMPLIFIED_NODE_TEST_DISPLAY_ENABLED] ?: false
+    }
+
+    suspend fun setSimplifiedNodeTestDisplayEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SIMPLIFIED_NODE_TEST_DISPLAY_ENABLED] = enabled
         }
     }
 
