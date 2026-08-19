@@ -236,6 +236,8 @@ class MainActivity : ComponentActivity() {
                                 val isRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()
                                 val simplifiedNodeTestDisplayEnabled by
                                     viewModel.simplifiedNodeTestDisplayEnabled.collectAsStateWithLifecycle()
+                                val hideFavoriteNodeGroup by
+                                    viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
                                 val subscriptionSourceUpdatedAt by
                                     viewModel.subscriptionSourceUpdatedAt.collectAsStateWithLifecycle()
                                 val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
@@ -251,6 +253,7 @@ class MainActivity : ComponentActivity() {
                                     isTesting = isTesting,
                                     isRefreshing = isRefreshing,
                                     simplifiedNodeTestDisplayEnabled = simplifiedNodeTestDisplayEnabled,
+                                    hideFavoriteNodeGroup = hideFavoriteNodeGroup,
                                     subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
                                     testingLabel = testingLabel,
                                     onNodeSelected = { node ->

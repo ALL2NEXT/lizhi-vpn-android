@@ -63,6 +63,7 @@ fun OtherConfigScreen(
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
     val simplifiedNodeTestDisplayEnabled by
         viewModel.simplifiedNodeTestDisplayEnabled.collectAsStateWithLifecycle()
+    val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
 
     var tcpingTimeoutInput by remember(tcpingTestTimeoutMs) { mutableStateOf(tcpingTestTimeoutMs.toString()) }
     var urlTestTimeoutInput by remember(urlTestTimeoutMs) { mutableStateOf(urlTestTimeoutMs.toString()) }
@@ -191,6 +192,22 @@ fun OtherConfigScreen(
                     Switch(
                         checked = simplifiedNodeTestDisplayEnabled,
                         onCheckedChange = { viewModel.setSimplifiedNodeTestDisplayEnabled(it) },
+                        colors = visibleSwitchColors()
+                    )
+                }
+            }
+
+            OtherConfigSection(
+                title = "隐藏节点列表中的“收藏节点”订阅组"
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = hideFavoriteNodeGroup,
+                        onCheckedChange = { viewModel.setHideFavoriteNodeGroup(it) },
                         colors = visibleSwitchColors()
                     )
                 }

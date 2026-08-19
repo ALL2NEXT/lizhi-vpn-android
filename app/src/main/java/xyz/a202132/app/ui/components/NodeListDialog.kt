@@ -90,6 +90,7 @@ fun NodeListScreen(
     isTesting: Boolean,
     isRefreshing: Boolean,
     simplifiedNodeTestDisplayEnabled: Boolean,
+    hideFavoriteNodeGroup: Boolean,
     subscriptionSourceUpdatedAt: Map<String, Long>,
     testingLabel: String? = null,
     onNodeSelected: (Node) -> Unit,
@@ -181,6 +182,7 @@ fun NodeListScreen(
             isTesting = isTesting,
             isRefreshing = isRefreshing,
             simplifiedNodeTestDisplayEnabled = simplifiedNodeTestDisplayEnabled,
+            hideFavoriteNodeGroup = hideFavoriteNodeGroup,
             subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
             onRefresh = onRefresh,
             onImportFromClipboard = handleImportFromClipboard,
@@ -310,6 +312,7 @@ private fun NodeListContent(
     isTesting: Boolean,
     isRefreshing: Boolean,
     simplifiedNodeTestDisplayEnabled: Boolean,
+    hideFavoriteNodeGroup: Boolean,
     subscriptionSourceUpdatedAt: Map<String, Long>,
     onRefresh: () -> Unit,
     onImportFromClipboard: () -> Unit,
@@ -491,6 +494,7 @@ private fun NodeListContent(
             category = category,
             subscriptionGroups = subscriptionGroups,
             selectedSubscriptionSourceId = selectedSubscriptionSourceId,
+            hideFavoriteNodeGroup = hideFavoriteNodeGroup,
             enabled = interactionEnabled && !isTesting,
             onCategoryChange = onCategoryChange,
             onSubscriptionSourceChange = onSubscriptionSourceChange
@@ -658,6 +662,7 @@ private fun NodeListCategorySwitch(
     category: NodeListCategory,
     subscriptionGroups: List<SubscriptionGroup>,
     selectedSubscriptionSourceId: String?,
+    hideFavoriteNodeGroup: Boolean,
     enabled: Boolean,
     onCategoryChange: (NodeListCategory) -> Unit,
     onSubscriptionSourceChange: (String) -> Unit
@@ -667,7 +672,8 @@ private fun NodeListCategorySwitch(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(10.dp)
     ) {
-        val segmentCount = (if (subscriptionGroups.isEmpty()) 1 else subscriptionGroups.size) + 1
+        val subscriptionSegmentCount = if (subscriptionGroups.isEmpty()) 1 else subscriptionGroups.size
+        val segmentCount = subscriptionSegmentCount + if (hideFavoriteNodeGroup) 0 else 1
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val segmentGap = 4.dp
             val availableWidth = maxWidth - 8.dp - segmentGap * (segmentCount - 1)
@@ -679,7 +685,7 @@ private fun NodeListCategorySwitch(
             val categoryScrollState = rememberScrollState()
             val density = LocalDensity.current
             val selectedSegmentIndex = when {
-                category == NodeListCategory.FAVORITES -> segmentCount - 1
+                category == NodeListCategory.FAVORITES && !hideFavoriteNodeGroup -> segmentCount - 1
                 subscriptionGroups.isEmpty() -> 0
                 else -> subscriptionGroups.indexOfFirst {
                     it.sourceId == selectedSubscriptionSourceId
@@ -724,13 +730,15 @@ private fun NodeListCategorySwitch(
                         )
                     }
                 }
-                NodeListCategorySegment(
-                    text = "\u6536\u85cf\u8282\u70b9",
-                    selected = category == NodeListCategory.FAVORITES,
-                    enabled = enabled,
-                    modifier = Modifier.width(segmentWidth),
-                    onClick = { onCategoryChange(NodeListCategory.FAVORITES) }
-                )
+                if (!hideFavoriteNodeGroup) {
+                    NodeListCategorySegment(
+                        text = "\u6536\u85cf\u8282\u70b9",
+                        selected = category == NodeListCategory.FAVORITES,
+                        enabled = enabled,
+                        modifier = Modifier.width(segmentWidth),
+                        onClick = { onCategoryChange(NodeListCategory.FAVORITES) }
+                    )
+                }
             }
         }
     }

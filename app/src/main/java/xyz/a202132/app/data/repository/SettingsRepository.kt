@@ -78,6 +78,8 @@ class SettingsRepository(private val context: Context) {
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val SIMPLIFIED_NODE_TEST_DISPLAY_ENABLED =
             booleanPreferencesKey("simplified_node_test_display_enabled")
+        private val HIDE_FAVORITE_NODE_GROUP =
+            booleanPreferencesKey("hide_favorite_node_group")
 
     }
     
@@ -501,6 +503,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSimplifiedNodeTestDisplayEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SIMPLIFIED_NODE_TEST_DISPLAY_ENABLED] = enabled
+        }
+    }
+
+    val hideFavoriteNodeGroup: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[HIDE_FAVORITE_NODE_GROUP] ?: false
+    }
+
+    suspend fun setHideFavoriteNodeGroup(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HIDE_FAVORITE_NODE_GROUP] = enabled
         }
     }
 

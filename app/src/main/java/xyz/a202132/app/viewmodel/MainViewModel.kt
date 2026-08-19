@@ -253,6 +253,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
     val simplifiedNodeTestDisplayEnabled = settingsRepository.simplifiedNodeTestDisplayEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val hideFavoriteNodeGroup = settingsRepository.hideFavoriteNodeGroup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
     val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_UP_MBPS)
     val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_DOWN_MBPS)
@@ -636,6 +637,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSimplifiedNodeTestDisplayEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setSimplifiedNodeTestDisplayEnabled(enabled)
+        }
+    }
+
+    fun setHideFavoriteNodeGroup(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHideFavoriteNodeGroup(enabled)
+            if (enabled && nodeListCategory.value == NodeListCategory.FAVORITES) {
+                settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+            }
         }
     }
 
