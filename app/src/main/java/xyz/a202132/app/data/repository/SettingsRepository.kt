@@ -40,6 +40,9 @@ class SettingsRepository(private val context: Context) {
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
         private val USER_AGREEMENT_ACCEPTED = booleanPreferencesKey("user_agreement_accepted")
+        private val USER_AGREEMENT_VERSION = stringPreferencesKey("user_agreement_version")
+        private val USER_AGREEMENT_ACCEPTED_AT = longPreferencesKey("user_agreement_accepted_at")
+        private const val CURRENT_USER_AGREEMENT_VERSION = "2026-08-19-v2"
         
         // 分应用代理设置
         private val PER_APP_PROXY_ENABLED = booleanPreferencesKey("per_app_proxy_enabled")
@@ -298,12 +301,20 @@ class SettingsRepository(private val context: Context) {
     }
     
     val isUserAgreementAccepted: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[USER_AGREEMENT_ACCEPTED] ?: false
+        preferences[USER_AGREEMENT_ACCEPTED] == true &&
+                preferences[USER_AGREEMENT_VERSION] == CURRENT_USER_AGREEMENT_VERSION
     }
     
     suspend fun setUserAgreementAccepted(accepted: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[USER_AGREEMENT_ACCEPTED] = accepted
+            if (accepted) {
+                preferences[USER_AGREEMENT_VERSION] = CURRENT_USER_AGREEMENT_VERSION
+                preferences[USER_AGREEMENT_ACCEPTED_AT] = System.currentTimeMillis()
+            } else {
+                preferences.remove(USER_AGREEMENT_VERSION)
+                preferences.remove(USER_AGREEMENT_ACCEPTED_AT)
+            }
         }
     }
 
