@@ -112,6 +112,8 @@
     .source-row-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #374151; }
     .source-row-heading { min-width: 0; }
     .source-row-title { display: block; overflow: hidden; color: #f8fafc; font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .source-row-remark { display: block; margin-top: 3px; overflow: hidden; color: #94a3b8; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .source-row-remark[hidden] { display: none; }
     .source-row-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .source-row-controls button { margin: 0; padding: 7px 10px; }
     .source-drag-handle { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; color: #cbd5e1; border: 1px dashed #64748b; border-radius: 7px; cursor: grab; user-select: none; }

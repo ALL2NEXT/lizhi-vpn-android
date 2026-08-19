@@ -7,13 +7,13 @@ function addSource(source) {
     ? source.minAccountType
     : 'guest';
   row.innerHTML = '<div class="source-row-header">' +
-    '<div class="source-row-heading"><span class="source-row-title" data-source-title>线路</span></div>' +
+    '<div class="source-row-heading"><span class="source-row-title" data-source-title>线路</span><span class="source-row-remark" data-source-remark hidden></span></div>' +
     '<div class="source-row-controls" role="group" aria-label="线路排序和折叠操作">' +
       '<span class="source-drag-handle" data-drag-handle draggable="true" role="button" aria-label="拖动线路排序" title="拖动线路排序">☷</span>' +
-      '<button class="secondary" type="button" data-action="collapse" aria-expanded="true">折叠</button>' +
+      '<button class="secondary" type="button" data-action="collapse" aria-expanded="false">展开</button>' +
     '</div>' +
   '</div>' +
-  '<div class="source-row-body" data-source-body>' +
+  '<div class="source-row-body" data-source-body hidden>' +
   '<section class="source-section source-identity-section">' +
     '<div class="grid source-identity-grid">' +
       '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
@@ -55,6 +55,7 @@ function addSource(source) {
   };
   row.querySelector('[data-field="sourceType"]').onchange = function() { updateSourceMode(row); };
   row.querySelector('[data-field="name"]').oninput = function() { updateSourceRowsMeta(); };
+  row.querySelector('[data-field="remark"]').oninput = function() { updateSourceRowsMeta(); };
   row.querySelector('[data-action="collapse"]').onclick = function() {
     toggleSourceRow(row);
   };
@@ -110,9 +111,16 @@ function updateSourceRowsMeta() {
   const rows = getSourceRows();
   rows.forEach(function(row, index) {
     const nameInput = row.querySelector('[data-field="name"]');
+    const remarkInput = row.querySelector('[data-field="remark"]');
     const title = row.querySelector('[data-source-title]');
+    const remark = row.querySelector('[data-source-remark]');
     const name = nameInput ? nameInput.value.trim() : '';
+    const remarkText = remarkInput ? remarkInput.value.trim() : '';
     if (title) title.textContent = name || '线路' + (index + 1);
+    if (remark) {
+      remark.textContent = remarkText ? '备注：' + remarkText : '';
+      remark.hidden = !remarkText;
+    }
   });
 }
 function toggleSourceRow(row) {
