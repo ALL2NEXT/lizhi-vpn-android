@@ -165,20 +165,13 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
-                title = "节点清理"
+                title = "自动删除超时节点"
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "自动删除超时节点",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
                     Switch(
                         checked = autoDeleteTimeoutNodes,
                         onCheckedChange = { viewModel.setAutoDeleteTimeoutNodes(it) },
@@ -188,20 +181,13 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
-                title = "节点列表显示"
+                title = "简化测速数据"
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "简化测速数据",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
                     Switch(
                         checked = simplifiedNodeTestDisplayEnabled,
                         onCheckedChange = { viewModel.setSimplifiedNodeTestDisplayEnabled(it) },
