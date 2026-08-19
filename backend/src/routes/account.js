@@ -97,6 +97,9 @@ async function handleAccount(path, request, env) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
     const state = await readState(env);
+    if (!state.settings.formalRegistrationEnabled) {
+      return json({ ok: false, error: "formal_registration_closed" }, 409);
+    }
     const user = await readD1User(env, identity.userId, state.settings);
     if (!user) {
       return json({ ok: false, error: "account_not_found" }, 404);

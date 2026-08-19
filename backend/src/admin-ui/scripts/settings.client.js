@@ -146,7 +146,8 @@ function fillState(state) {
   setValue('feedbackUrl', settings.feedbackUrl);
    setValue('githubUrl', settings.githubUrl);
    setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
-   setValue('accountBindingExperience', settings.accountBindingExperience == null ? 50 : settings.accountBindingExperience);
+   checked('formalRegistrationEnabled', settings.formalRegistrationEnabled !== false);
+   setValue('accountBindingExperience', settings.accountBindingExperience == null ? 100 : settings.accountBindingExperience);
    setValue('invitationExperience', settings.invitationExperience == null ? 50 : settings.invitationExperience);
    setValue('telegramGroupUrl', settings.telegramGroupUrl);
    setValue('telegramJoinCode', settings.telegramJoinCode);
@@ -226,9 +227,10 @@ function formState() {
     settings: {
       websiteUrl: value('websiteUrl'),
       feedbackEmail: value('feedbackEmail'),
-      feedbackUrl: value('feedbackUrl'),
+       feedbackUrl: value('feedbackUrl'),
        githubUrl: value('githubUrl'),
        nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
+       formalRegistrationEnabled: el('formalRegistrationEnabled').checked,
        accountBindingExperience: Number(value('accountBindingExperience') || 0),
        invitationExperience: Number(value('invitationExperience') || 0),
        telegramGroupUrl: value('telegramGroupUrl'),

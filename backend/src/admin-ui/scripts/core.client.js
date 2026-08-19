@@ -97,6 +97,7 @@
    return new URL(ADMIN_API_BASE + path, window.location.origin).toString();
  }
  function adminErrorMessage(error, fallback) {
+   if (error === 'formal_registration_closed') return '正式用户注册暂未开放';
    if (error === 'invalid_experience_award') return '请填写正整数经验值和审核说明';
    if (error === 'account_not_found') return '用户不存在，请检查 UID';
    if (error === 'account_banned') return '账户已封禁，无法发放经验';

@@ -141,6 +141,14 @@ export function visibleNotice(notice, now = Date.now()) {
 
 export function normalizeSettings(value) {
   const settings = plainObject(value) ? value : {};
+  // 旧版状态没有正式用户开关，升级时采用新的邮箱绑定经验默认值。
+  const isLegacySettings = !Object.prototype.hasOwnProperty.call(
+    settings,
+    "formalRegistrationEnabled",
+  );
+  const configuredAccountBindingExperience = isLegacySettings
+    ? ACCOUNT_BINDING_EXPERIENCE
+    : settings.accountBindingExperience;
   const timeout = Number(settings.nodeRequestTimeoutMs);
   const aiAnalysis = plainObject(settings.aiAnalysis) ? settings.aiAnalysis : {};
   const aiMaxOutputTokens = Number(aiAnalysis.maxOutputTokens);
@@ -167,9 +175,10 @@ export function normalizeSettings(value) {
     nodeRequestTimeoutMs: Number.isFinite(timeout)
       ? Math.round(Math.min(Math.max(timeout, 5000), 60000))
       : 25000,
+    formalRegistrationEnabled: parseFlag(settings.formalRegistrationEnabled, true),
     experienceThresholds: normalizeExperienceThresholds(settings.experienceThresholds),
     accountBindingExperience: normalizeExperience(
-      settings.accountBindingExperience,
+      configuredAccountBindingExperience,
       ACCOUNT_BINDING_EXPERIENCE,
     ),
     invitationExperience: normalizeExperience(

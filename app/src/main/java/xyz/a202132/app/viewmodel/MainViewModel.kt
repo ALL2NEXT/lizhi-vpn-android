@@ -1595,6 +1595,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun accountBindingErrorMessage(error: Throwable): String {
         return when (error.message) {
+            "formal_registration_closed" -> "正式用户注册暂未开放"
             "invalid_bind_credentials" -> "邮箱或密码格式无效"
             "account_banned" -> "账户已被封禁，无法绑定"
             "account_already_bound" -> "账户已经绑定邮箱"

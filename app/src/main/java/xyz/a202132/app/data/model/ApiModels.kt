@@ -62,11 +62,14 @@ data class BackendAppSettings(
     @SerializedName("nodeRequestTimeoutMs")
     val nodeRequestTimeoutMs: Long = 25000L,
 
+    @SerializedName("formalRegistrationEnabled")
+    val formalRegistrationEnabled: Boolean = true,
+
     @SerializedName("experienceThresholds")
     val experienceThresholds: List<Long> = listOf(100L, 200L, 400L, 800L, 1600L),
 
     @SerializedName("accountBindingExperience")
-    val accountBindingExperience: Long = 50L,
+    val accountBindingExperience: Long = 100L,
 
     @SerializedName("invitationExperience")
     val invitationExperience: Long = 50L,

@@ -129,6 +129,7 @@ fun AccountSettingsScreen(
     val canOpenBindDialog = account != null &&
         account.email.isBlank() &&
         account.level > 0 &&
+        backendSettings.formalRegistrationEnabled &&
         !isSyncingAccount &&
         !isBindingAccount &&
         !isSwitchingAccount &&
@@ -137,6 +138,7 @@ fun AccountSettingsScreen(
     val canBindAccount = account != null &&
         account.email.isBlank() &&
         account.level > 0 &&
+        backendSettings.formalRegistrationEnabled &&
         android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches() &&
         password.length in 8..128 &&
         password == confirmPassword &&
@@ -226,7 +228,7 @@ fun AccountSettingsScreen(
                     AccountInfoRowWithAction(
                         label = "邮箱",
                         value = account.email.displayOrUnknown(),
-                        actionLabel = "绑定邮箱",
+                        actionLabel = if (backendSettings.formalRegistrationEnabled) "注册正式用户" else "正式注册未开放",
                         showAction = account.email.isBlank(),
                         actionEnabled = canOpenBindDialog,
                         onAction = {
@@ -238,7 +240,12 @@ fun AccountSettingsScreen(
                     )
                     if (account.email.isBlank() && account.level > 0) {
                         Text(
-                            text = "完成邮箱绑定可获得 ${backendSettings.accountBindingExperience.coerceAtLeast(0)} 点经验。",
+                            text = if (backendSettings.formalRegistrationEnabled) {
+                                val reward = backendSettings.accountBindingExperience.coerceAtLeast(0)
+                                "绑定邮箱后成为正式用户，可获得 $reward 点经验。"
+                            } else {
+                                "正式用户注册暂未开放。"
+                            },
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -434,10 +441,10 @@ fun AccountSettingsScreen(
     if (showBindDialog && account != null) {
         AlertDialog(
             onDismissRequest = { if (!isBindingAccount) showBindDialog = false },
-            title = { Text("绑定邮箱") },
+            title = { Text("注册正式用户") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("请输入要绑定的邮箱和密码。")
+                    Text("请输入邮箱和密码，注册成功后可获得邮箱绑定经验奖励。")
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
@@ -484,7 +491,7 @@ fun AccountSettingsScreen(
                             strokeWidth = 2.dp
                         )
                     }
-                    Text(if (isBindingAccount) "绑定中…" else "确认绑定")
+                    Text(if (isBindingAccount) "注册中…" else "确认注册")
                 }
             },
             dismissButton = {
