@@ -26,6 +26,7 @@ import { adminHtml } from "./admin-ui.js";
 import {
   experienceTotalForLevel,
   hashAccountPassword,
+  isEmailBoundAccount,
   normalizeAccountEmail,
   normalizeAccountId,
   normalizeAccountPassword,
@@ -145,6 +146,7 @@ const routeDeps = {
   normalizeAccountPassword,
   normalizeTelegramJoinCode,
   hashAccountPassword,
+  isEmailBoundAccount,
   verifyAccountPassword,
   normalizeUid,
   reportBytes,

@@ -22,6 +22,11 @@ export function normalizeLevel(value, fallback = 1) {
   return Number.isInteger(level) && level >= 0 && level <= 6 ? level : fallback;
 }
 
+/** Only accounts with an email credential are formal accounts eligible for experience. */
+export function isEmailBoundAccount(user) {
+  return Boolean(user && cleanText(user.email));
+}
+
 export function normalizeExperience(value, fallback = 0) {
   const experience = Number(value);
   if (Number.isInteger(experience) && experience >= 0 && experience <= MAX_ACCOUNT_EXPERIENCE) {

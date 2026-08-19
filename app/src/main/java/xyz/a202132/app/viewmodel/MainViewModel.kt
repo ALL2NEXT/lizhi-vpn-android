@@ -1607,6 +1607,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun speedShareErrorMessage(error: Throwable): String {
         val message = error.message.orEmpty()
         return when {
+            message == "email_binding_required" -> "绑定邮箱后才能共享测速结果"
             message == "speed_share_already_reported_this_hour_group" -> "本小时该订阅组的智能测速结果已经共享过了"
             message == "speed_share_results_empty" -> "没有可共享的有效测速结果"
             message == "account_banned" -> "账户已被封禁，无法共享测速结果"
@@ -1616,6 +1617,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun telegramTaskErrorMessage(error: Throwable): String {
         return when (error.message) {
+            "email_binding_required" -> "绑定邮箱后才能完成任务"
             "invalid_telegram_task_code" -> "请输入有效的 TG 进群口令"
             "telegram_task_claim_failed" -> "TG 任务领取失败，请稍后重试"
             "telegram_task_disabled" -> "后台暂未配置 TG 群任务"
@@ -1875,6 +1877,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val reportHour = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH"))
                 val accountUid = accountManager.currentAccount()?.uid ?: return@launch
+                if (accountManager.currentAccount()?.email.isNullOrBlank()) return@launch
                 val subscriptionGroupName = results.firstOrNull()?.subscriptionGroupName
                     .orEmpty()
                     .trim()

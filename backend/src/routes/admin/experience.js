@@ -8,6 +8,7 @@ export function createAdminExperienceRoutes(deps) {
     beijingTimestamp,
     cleanText,
     ensureUserSchema,
+    isEmailBoundAccount,
     json,
     readD1User,
     readState,
@@ -65,6 +66,9 @@ export function createAdminExperienceRoutes(deps) {
       }
       if (user.status === "banned") {
         return json({ ok: false, error: "account_banned" }, 403);
+      }
+      if (!isEmailBoundAccount(user)) {
+        return json({ ok: false, error: "email_binding_required" }, 403);
       }
 
       const inserted = await db.prepare(

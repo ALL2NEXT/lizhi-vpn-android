@@ -42,6 +42,7 @@ export function createAccountRoutes(deps) {
     normalizeAccountPassword,
     normalizeTelegramJoinCode,
     hashAccountPassword,
+    isEmailBoundAccount,
     verifyAccountPassword,
     normalizeUid,
     reportBytes,
@@ -171,7 +172,7 @@ async function handleAccount(path, request, env) {
     }
 
     const inviter = await db.prepare(
-      "SELECT id, uid, status FROM users_mb WHERE invite_code = ?",
+      "SELECT id, uid, status, email FROM users_mb WHERE invite_code = ?",
     ).bind(inviteCode).first();
     if (!inviter || cleanText(inviter.status) !== "active") {
       return json({ ok: false, error: "invite_code_not_found" }, 404);
@@ -185,6 +186,7 @@ async function handleAccount(path, request, env) {
       state.settings.invitationExperience,
       DEFAULT_INVITATION_EXPERIENCE,
     );
+    const inviterCanEarnExperience = isEmailBoundAccount(inviter);
     const results = await db.batch([
       db.prepare(
         "UPDATE users_mb SET invited_by_user_id = ?, invited_at = ? " +
@@ -209,7 +211,7 @@ async function handleAccount(path, request, env) {
     return json({
       ok: true,
       account: publicAccount(updated),
-      experienceAwarded: reward,
+      experienceAwarded: inviterCanEarnExperience ? reward : 0,
       rewardedUserUid: cleanText(inviter.uid),
     });
   }
@@ -402,6 +404,9 @@ async function handleAccount(path, request, env) {
     if (user.level === 0) {
       return json({ ok: false, error: "account_banned" }, 403);
     }
+    if (!isEmailBoundAccount(user)) {
+      return json({ ok: false, error: "email_binding_required" }, 403);
+    }
     if (telegramCode !== state.settings.telegramJoinCode) {
       return json({ ok: false, error: "telegram_task_invalid_code" }, 403);
     }
@@ -517,6 +522,9 @@ async function handleSpeedShareSubmission(request, env) {
   }
   if (user.level === 0) {
     return json({ ok: false, error: "account_banned" }, 403);
+  }
+  if (!isEmailBoundAccount(user)) {
+    return json({ ok: false, error: "email_binding_required" }, 403);
   }
 
   const requestLocation = speedShareRequestLocation(request);

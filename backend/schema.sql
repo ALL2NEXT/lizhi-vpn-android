@@ -156,7 +156,35 @@ BEGIN
     experience_total + NEW.experience_awarded,
     1000000000000
   )
-  WHERE id = NEW.user_id AND status = 'active';
+  WHERE id = NEW.user_id AND status = 'active'
+    AND email IS NOT NULL AND email <> '';
+END;
+
+CREATE TABLE user_experience_awards_mb (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER,
+  user_uid TEXT NOT NULL,
+  experience_awarded INTEGER NOT NULL
+    CHECK (experience_awarded BETWEEN 1 AND 1000000000000),
+  reason TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_user_experience_awards_created_at
+  ON user_experience_awards_mb(created_at DESC, id DESC);
+
+CREATE TRIGGER trg_user_experience_award_mb
+AFTER INSERT ON user_experience_awards_mb
+WHEN NEW.experience_awarded > 0
+BEGIN
+  UPDATE users_mb
+  SET experience_total = MIN(
+    experience_total + NEW.experience_awarded,
+    1000000000000
+  )
+  WHERE id = NEW.user_id AND status = 'active'
+    AND email IS NOT NULL AND email <> '';
 END;
 
 CREATE TABLE speed_share_results_mb (
@@ -191,4 +219,4 @@ CREATE INDEX idx_speed_share_results_mb_reported
   ON speed_share_results_mb(last_reported_at DESC);
 
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 7, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 8, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

@@ -37,7 +37,9 @@ Authorization: Bearer <ADMIN_TOKEN>
 
 ## 数据库初始化
 
-首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。当前用户数据库 schema 版本为 `4`。
+首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。当前用户数据库 schema 版本为 `8`。
+
+经验奖励仅发放给已绑定邮箱的正式用户；游客账户必须先绑定邮箱，邮箱绑定本身的首次奖励除外。数据库触发器也会拦截未绑定邮箱账户的经验增加。
 
 如果绑定的 D1 已有数据但缺少版本标记，Worker 会拒绝自动覆盖，并返回 `users_db_unversioned_schema_detected`，请先备份并完成迁移。
 

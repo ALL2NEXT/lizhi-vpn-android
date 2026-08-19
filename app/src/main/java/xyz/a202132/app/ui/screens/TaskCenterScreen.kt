@@ -68,8 +68,10 @@ fun TaskCenterScreen(
     }
     val context = LocalContext.current
     val isBanned = account?.level == 0
+    val isFormal = account?.email?.isNotBlank() == true
     val canSubmit = account != null &&
         !isBanned &&
+        isFormal &&
         taskStatus?.status != "claimed" &&
         telegramCode.trim().isNotBlank() &&
         telegramCode.trim().length <= 128 &&
@@ -153,6 +155,7 @@ fun TaskCenterScreen(
                         )
                         Switch(
                             checked = speedShareMode == SpeedShareMode.SMART,
+                            enabled = isFormal && !isBanned,
                             onCheckedChange = { enabled ->
                                 viewModel.setSpeedShareMode(
                                     if (enabled) SpeedShareMode.SMART else SpeedShareMode.OFF
@@ -284,7 +287,7 @@ fun TaskCenterScreen(
                                         telegramCode = ""
                                         showTelegramCodeDialog = true
                                     },
-                                    enabled = !isBanned && taskStatus?.status != "claimed"
+                                    enabled = isFormal && !isBanned && taskStatus?.status != "claimed"
                                 ) {
                                     Text("我已加入")
                                 }

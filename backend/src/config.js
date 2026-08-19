@@ -22,7 +22,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 7;
+export const USER_SCHEMA_VERSION = 8;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -173,7 +173,8 @@ export const USER_SCHEMA_STATEMENTS = [
       experience_total + NEW.experience_awarded,
       1000000000000
     )
-    WHERE id = NEW.user_id AND status = 'active';
+    WHERE id = NEW.user_id AND status = 'active'
+      AND email IS NOT NULL AND email <> '';
   END`,
   `CREATE TABLE IF NOT EXISTS user_experience_awards_mb (
     id INTEGER PRIMARY KEY,
@@ -196,7 +197,8 @@ export const USER_SCHEMA_STATEMENTS = [
       experience_total + NEW.experience_awarded,
       1000000000000
     )
-    WHERE id = NEW.user_id AND status = 'active';
+    WHERE id = NEW.user_id AND status = 'active'
+      AND email IS NOT NULL AND email <> '';
   END`,
   `CREATE TABLE IF NOT EXISTS speed_share_results_mb (
     subscription_group_name TEXT NOT NULL,
@@ -308,6 +310,34 @@ export const USER_SCHEMA_MIGRATIONS = {
       ON user_usage_mb(user_id, ended_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_day_user
       ON user_usage_mb(usage_day, user_id)`,
+  ],
+  8: [
+    `DROP TRIGGER IF EXISTS trg_user_reward_claim_award_mb`,
+    `CREATE TRIGGER trg_user_reward_claim_award_mb
+     AFTER INSERT ON user_reward_claims_mb
+     WHEN NEW.experience_awarded > 0
+     BEGIN
+       UPDATE users_mb
+       SET experience_total = MIN(
+         experience_total + NEW.experience_awarded,
+         1000000000000
+       )
+       WHERE id = NEW.user_id AND status = 'active'
+         AND email IS NOT NULL AND email <> '';
+     END`,
+    `DROP TRIGGER IF EXISTS trg_user_experience_award_mb`,
+    `CREATE TRIGGER trg_user_experience_award_mb
+     AFTER INSERT ON user_experience_awards_mb
+     WHEN NEW.experience_awarded > 0
+     BEGIN
+       UPDATE users_mb
+       SET experience_total = MIN(
+         experience_total + NEW.experience_awarded,
+         1000000000000
+       )
+       WHERE id = NEW.user_id AND status = 'active'
+         AND email IS NOT NULL AND email <> '';
+     END`,
   ],
 };
 export const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";

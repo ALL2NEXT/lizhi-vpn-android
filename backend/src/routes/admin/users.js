@@ -9,6 +9,7 @@ export function createAdminUserRoutes(deps) {
     cleanText,
     ensureUserSchema,
     experienceTotalForLevel,
+    isEmailBoundAccount,
     json,
     normalizeBatchUserReferences,
     normalizeNickname,
@@ -96,6 +97,23 @@ export function createAdminUserRoutes(deps) {
       const state = await readState(env);
       const status = level === 0 ? "banned" : "active";
       const experienceTotal = experienceTotalForLevel(level, state.settings.experienceThresholds);
+      if (level > 1) {
+        const unbound = await db.prepare(
+          `WITH refs(value) AS (SELECT value FROM json_each(?)),
+           target_users(user_id) AS (
+             SELECT id FROM users_mb WHERE uid IN (SELECT value FROM refs)
+             UNION
+             SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
+           )
+           SELECT COUNT(*) AS count
+           FROM users_mb
+           WHERE id IN (SELECT user_id FROM target_users)
+             AND (email IS NULL OR email = '')`,
+        ).bind(JSON.stringify(accountIds)).first();
+        if (Number(unbound && unbound.count) > 0) {
+          return json({ ok: false, error: "email_binding_required" }, 403);
+        }
+      }
       const result = await db.prepare(
         `WITH refs(value) AS (SELECT value FROM json_each(?)),
          target_users(user_id) AS (
@@ -229,6 +247,13 @@ export function createAdminUserRoutes(deps) {
           return json({ ok: false, error: "invalid_level" }, 400);
         }
         const state = await readState(env);
+        if (level > 1) {
+          const user = await readD1User(env, identity.userId, state.settings);
+          if (!user) return json({ ok: false, error: "account_not_found" }, 404);
+          if (!isEmailBoundAccount(user)) {
+            return json({ ok: false, error: "email_binding_required" }, 403);
+          }
+        }
         userAssignments.push("status = ?");
         userValues.push(level === 0 ? "banned" : "active");
         if (level > 0) {

@@ -143,6 +143,9 @@ class AccountManager(private val context: Context) {
         if (registered.level == 0) {
             return Result.failure(IllegalStateException("account_banned"))
         }
+        if (registered.email.isBlank()) {
+            return Result.failure(IllegalStateException("email_binding_required"))
+        }
         if (results.isEmpty()) {
             return Result.failure(IllegalArgumentException("speed_share_results_empty"))
         }
@@ -173,6 +176,9 @@ class AccountManager(private val context: Context) {
             ?: return Result.failure(IllegalStateException("account_not_synced"))
         if (registered.level == 0) {
             return Result.failure(IllegalStateException("account_banned"))
+        }
+        if (registered.email.isBlank()) {
+            return Result.failure(IllegalStateException("email_binding_required"))
         }
 
         return runCatching {

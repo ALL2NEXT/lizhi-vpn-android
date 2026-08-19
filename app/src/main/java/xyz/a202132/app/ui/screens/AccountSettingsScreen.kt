@@ -856,6 +856,7 @@ private fun accountExperienceText(
 ): String {
     val experience = accountInfo.experience.coerceAtLeast(0L)
     return when {
+        accountInfo.email.isBlank() && accountInfo.level > 0 -> "$experience · 绑定邮箱后可获取经验"
         accountInfo.level == 0 -> "$experience · Lv0 不可获取经验"
         accountInfo.level >= 6 -> "$experience · 已达最高等级"
         else -> {
