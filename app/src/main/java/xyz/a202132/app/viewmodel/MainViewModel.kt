@@ -236,7 +236,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isUserAgreementAccepted = settingsRepository.isUserAgreementAccepted.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        false
+        null
     )
 
     // 自动化测试设置

@@ -659,7 +659,7 @@ fun MainScreen(
     }
     
     // 用户协议弹窗 (仅在未同意时显示)
-    if (!isUserAgreementAccepted) {
+    if (isUserAgreementAccepted == false) {
         UserAgreementDialog(
             onAgree = { viewModel.acceptUserAgreement() },
             onDisagree = { (context as? android.app.Activity)?.finish() }
