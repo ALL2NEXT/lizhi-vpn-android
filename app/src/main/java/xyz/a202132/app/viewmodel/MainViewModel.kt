@@ -1469,7 +1469,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return runCatching { OffsetDateTime.parse(this).toInstant() }.getOrNull()
     }
 
-    fun bindEmailPassword(email: String, password: String) {
+    fun bindEmailPassword(
+        email: String,
+        password: String,
+        inviteCode: String = "",
+        registrationCode: String = "",
+    ) {
         if (_isBindingAccount.value) return
         viewModelScope.launch {
             _isBindingAccount.value = true
@@ -1478,6 +1483,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 accountManager.bindEmailPassword(
                     email = email,
                     password = password,
+                    inviteCode = inviteCode,
+                    registrationCode = registrationCode,
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess {
                     _accountMessage.value = "绑定成功，已获得绑定经验"
@@ -1595,6 +1602,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun accountBindingErrorMessage(error: Throwable): String {
         return when (error.message) {
+            "registration_disabled" -> "用户注册暂未开放"
+            "registration_invite_required" -> "必须使用他人的邀请码注册"
+            "registration_code_required" -> "必须使用管理员发放的一次性注册码注册"
+            "invalid_registration_code" -> "注册码无效或已使用"
             "formal_registration_closed" -> "正式用户注册暂未开放"
             "invalid_bind_credentials" -> "邮箱或密码格式无效"
             "account_banned" -> "账户已被封禁，无法绑定"

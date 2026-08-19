@@ -28,6 +28,19 @@ CREATE UNIQUE INDEX idx_users_mb_email
   ON users_mb(email)
   WHERE email IS NOT NULL AND email <> '';
 
+CREATE TABLE registration_codes_mb (
+  id INTEGER PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  used_at TEXT,
+  used_by_user_id INTEGER,
+  used_by_uid TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY (used_by_user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_registration_codes_mb_status
+  ON registration_codes_mb(used_at, created_at DESC, id DESC);
+
 CREATE TABLE user_devices_mb (
   id INTEGER PRIMARY KEY,
   user_id INTEGER,
@@ -219,4 +232,4 @@ CREATE INDEX idx_speed_share_results_mb_reported
   ON speed_share_results_mb(last_reported_at DESC);
 
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 8, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 9, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

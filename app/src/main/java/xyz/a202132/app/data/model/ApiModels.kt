@@ -62,8 +62,14 @@ data class BackendAppSettings(
     @SerializedName("nodeRequestTimeoutMs")
     val nodeRequestTimeoutMs: Long = 25000L,
 
-    @SerializedName("formalRegistrationEnabled")
-    val formalRegistrationEnabled: Boolean = true,
+    @SerializedName("registrationEnabled")
+    val registrationEnabled: Boolean = true,
+
+    @SerializedName("requireInviteForRegistration")
+    val requireInviteForRegistration: Boolean = false,
+
+    @SerializedName("requireAdminRegistrationCode")
+    val requireAdminRegistrationCode: Boolean = false,
 
     @SerializedName("experienceThresholds")
     val experienceThresholds: List<Long> = listOf(100L, 200L, 400L, 800L, 1600L),
@@ -126,7 +132,13 @@ data class AccountBindingRequest(
     val email: String,
 
     @SerializedName("password")
-    val password: String
+    val password: String,
+
+    @SerializedName("inviteCode")
+    val inviteCode: String = "",
+
+    @SerializedName("registrationCode")
+    val registrationCode: String = ""
 )
 
 data class AccountInviteRequest(

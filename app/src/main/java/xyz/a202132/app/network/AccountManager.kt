@@ -267,6 +267,8 @@ class AccountManager(private val context: Context) {
     suspend fun bindEmailPassword(
         email: String,
         password: String,
+        inviteCode: String = "",
+        registrationCode: String = "",
         timeoutMs: Long = 10000L
     ): Result<AccountInfo> {
         val registered = currentAccount()
@@ -279,6 +281,9 @@ class AccountManager(private val context: Context) {
             return Result.failure(IllegalArgumentException("密码长度需要在 8～128 个字符之间"))
         }
 
+        val normalizedInviteCode = inviteCode.trim().uppercase().replace("-", "").replace(" ", "")
+        val normalizedRegistrationCode = registrationCode.trim().uppercase().replace("-", "").replace(" ", "")
+
         return runCatching {
             val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
                 NetworkClient.apiService.bindAccount(
@@ -287,7 +292,9 @@ class AccountManager(private val context: Context) {
                         deviceId = accountId(),
                         uid = registered.uid,
                         email = normalizedEmail,
-                        password = password
+                        password = password,
+                        inviteCode = normalizedInviteCode,
+                        registrationCode = normalizedRegistrationCode
                     )
                 )
             }

@@ -324,11 +324,26 @@
         </div>
       </section>
       <section class="settings-section">
+        <h3 class="settings-section-title">注册控制</h3>
+        <p class="settings-section-description">控制用户是否可以注册正式账户，以及注册时是否必须提供邀请码或管理员一次性注册码。</p>
+        <div class="grid">
+          <label class="check"><input id="registrationEnabled" type="checkbox">用户注册总开关</label>
+          <label class="check"><input id="requireInviteForRegistration" type="checkbox">必须使用他人邀请码才可以注册</label>
+          <label class="check"><input id="requireAdminRegistrationCode" type="checkbox">必须使用管理员发放的一次性注册码才可以注册</label>
+        </div>
+        <div class="grid">
+          <div class="field"><label>一次发放数量<input id="registrationCodeCount" type="number" min="1" max="100" step="1" value="1"></label></div>
+          <div class="field"><button class="secondary" type="button" onclick="issueRegistrationCodes()">发放一次性注册码</button></div>
+        </div>
+        <div id="registrationCodesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取注册码</div></div>
+        <small class="hint">注册码每次成功注册后立即失效，只能使用一次。</small>
+        <button type="button" onclick="pushSection('app-settings')">保存注册控制</button>
+      </section>
+      <section class="settings-section">
         <h3 class="settings-section-title">服务请求设置</h3>
         <p class="settings-section-description">设置后台请求超时时间，避免外部服务响应过慢。</p>
         <div class="grid">
           <div class="field"><label>后台请求超时（毫秒）<input id="nodeRequestTimeoutMs" type="number" min="5000" max="60000" step="1000"></label></div>
-          <label class="check"><input id="formalRegistrationEnabled" type="checkbox">开放正式用户注册（绑定邮箱）</label>
         </div>
       </section>
       <section class="settings-section">

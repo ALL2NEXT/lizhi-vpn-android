@@ -22,7 +22,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 8;
+export const USER_SCHEMA_VERSION = 9;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -57,6 +57,17 @@ export const USER_SCHEMA_STATEMENTS = [
     WHERE invite_code IS NOT NULL AND invite_code <> ''`,
   `CREATE INDEX IF NOT EXISTS idx_users_mb_invited_by
     ON users_mb(invited_by_user_id)`,
+  `CREATE TABLE IF NOT EXISTS registration_codes_mb (
+    id INTEGER PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    used_at TEXT,
+    used_by_user_id INTEGER,
+    used_by_uid TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (used_by_user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_registration_codes_mb_status
+    ON registration_codes_mb(used_at, created_at DESC, id DESC)`,
   `CREATE TABLE IF NOT EXISTS user_devices_mb (
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
@@ -337,7 +348,20 @@ export const USER_SCHEMA_MIGRATIONS = {
        )
        WHERE id = NEW.user_id AND status = 'active'
          AND email IS NOT NULL AND email <> '';
-     END`,
+      END`,
+  ],
+  9: [
+    `CREATE TABLE IF NOT EXISTS registration_codes_mb (
+      id INTEGER PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      used_at TEXT,
+      used_by_user_id INTEGER,
+      used_by_uid TEXT NOT NULL DEFAULT '',
+      FOREIGN KEY (used_by_user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_registration_codes_mb_status
+      ON registration_codes_mb(used_at, created_at DESC, id DESC)`,
   ],
 };
 export const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";
@@ -365,7 +389,9 @@ export const DEFAULT_STATE = {
     githubUrl: "",
     nodeRequestTimeoutMs: 25000,
     // 后台可关闭游客注册正式用户；默认保持现有注册流程开放。
-    formalRegistrationEnabled: true,
+    registrationEnabled: true,
+    requireInviteForRegistration: false,
+    requireAdminRegistrationCode: false,
     experienceThresholds: DEFAULT_EXPERIENCE_THRESHOLDS,
     accountBindingExperience: ACCOUNT_BINDING_EXPERIENCE,
     invitationExperience: DEFAULT_INVITATION_EXPERIENCE,

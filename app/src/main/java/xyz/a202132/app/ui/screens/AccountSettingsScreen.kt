@@ -71,6 +71,8 @@ fun AccountSettingsScreen(
     var email by remember(accountInfo?.uid, accountInfo?.email) {
         mutableStateOf(accountInfo?.email.orEmpty())
     }
+    var registrationInviteCode by remember(accountInfo?.uid) { mutableStateOf("") }
+    var registrationCode by remember(accountInfo?.uid) { mutableStateOf("") }
     var password by remember(accountInfo?.uid) { mutableStateOf("") }
     var confirmPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchEmail by remember(accountInfo?.uid) { mutableStateOf("") }
@@ -101,6 +103,8 @@ fun AccountSettingsScreen(
         switchEmail = ""
         switchPassword = ""
         deletePassword = ""
+        registrationInviteCode = ""
+        registrationCode = ""
         showBindDialog = false
         showInviteDialog = false
         showNicknameDialog = false
@@ -129,17 +133,25 @@ fun AccountSettingsScreen(
     val canOpenBindDialog = account != null &&
         account.email.isBlank() &&
         account.level > 0 &&
-        backendSettings.formalRegistrationEnabled &&
+        backendSettings.registrationEnabled &&
         !isSyncingAccount &&
         !isBindingAccount &&
         !isSwitchingAccount &&
         !isDeletingAccount
     val normalizedEmail = email.trim().lowercase()
+    val normalizedRegistrationInviteCode = registrationInviteCode.trim().uppercase()
+        .replace("-", "").replace(" ", "")
+    val normalizedRegistrationCode = registrationCode.trim().uppercase()
+        .replace("-", "").replace(" ", "")
     val canBindAccount = account != null &&
         account.email.isBlank() &&
         account.level > 0 &&
-        backendSettings.formalRegistrationEnabled &&
+        backendSettings.registrationEnabled &&
         android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches() &&
+        (normalizedRegistrationInviteCode.isBlank() || normalizedRegistrationInviteCode.matches(Regex("^[A-HJ-NP-Z2-9]{8}$"))) &&
+        (normalizedRegistrationCode.isBlank() || normalizedRegistrationCode.matches(Regex("^[A-HJ-NP-Z2-9]{15}$"))) &&
+        (!backendSettings.requireInviteForRegistration || normalizedRegistrationInviteCode.isNotBlank()) &&
+        (!backendSettings.requireAdminRegistrationCode || normalizedRegistrationCode.isNotBlank()) &&
         password.length in 8..128 &&
         password == confirmPassword &&
         !isBindingAccount
@@ -228,7 +240,7 @@ fun AccountSettingsScreen(
                     AccountInfoRowWithAction(
                         label = "邮箱",
                         value = account.email.displayOrUnknown(),
-                        actionLabel = if (backendSettings.formalRegistrationEnabled) "注册正式用户" else "正式注册未开放",
+                        actionLabel = if (backendSettings.registrationEnabled) "注册正式用户" else "正式注册未开放",
                         showAction = account.email.isBlank(),
                         actionEnabled = canOpenBindDialog,
                         onAction = {
@@ -240,7 +252,7 @@ fun AccountSettingsScreen(
                     )
                     if (account.email.isBlank() && account.level > 0) {
                         Text(
-                            text = if (backendSettings.formalRegistrationEnabled) {
+                            text = if (backendSettings.registrationEnabled) {
                                 val reward = backendSettings.accountBindingExperience.coerceAtLeast(0)
                                 "绑定邮箱后成为正式用户，可获得 $reward 点经验。"
                             } else {
@@ -446,6 +458,22 @@ fun AccountSettingsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("请输入邮箱和密码，注册成功后可获得邮箱绑定经验奖励。")
                     OutlinedTextField(
+                        value = registrationInviteCode,
+                        onValueChange = { if (it.length <= 32) registrationInviteCode = it },
+                        label = { Text(if (backendSettings.requireInviteForRegistration) "他人邀请码（必填）" else "他人邀请码（可选）") },
+                        singleLine = true,
+                        enabled = !isBindingAccount,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = registrationCode,
+                        onValueChange = { if (it.length <= 32) registrationCode = it },
+                        label = { Text(if (backendSettings.requireAdminRegistrationCode) "管理员一次性注册码（必填）" else "管理员一次性注册码（可选）") },
+                        singleLine = true,
+                        enabled = !isBindingAccount,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
                         label = { Text("邮箱") },
@@ -481,7 +509,12 @@ fun AccountSettingsScreen(
                 TextButton(
                     enabled = canBindAccount,
                     onClick = {
-                        viewModel.bindEmailPassword(normalizedEmail, password)
+                        viewModel.bindEmailPassword(
+                            normalizedEmail,
+                            password,
+                            normalizedRegistrationInviteCode,
+                            normalizedRegistrationCode,
+                        )
                     }
                 ) {
                     if (isBindingAccount) {

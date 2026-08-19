@@ -34,6 +34,7 @@ export function createAccountRoutes(deps) {
     normalizeNickname,
     normalizeExperience,
     normalizeInviteCode,
+    normalizeRegistrationCode,
     usagePeriodKeys,
     beijingTimestamp,
     normalizeReportTimestamp,
@@ -87,8 +88,18 @@ async function handleAccount(path, request, env) {
     const requestedUid = normalizeUid(body && body.uid);
     const email = normalizeAccountEmail(body && body.email);
     const password = normalizeAccountPassword(body && body.password);
+    const rawInviteCode = cleanText(body && body.inviteCode);
+    const registrationInviteCode = normalizeInviteCode(rawInviteCode);
+    const rawRegistrationCode = cleanText(body && body.registrationCode);
+    const registrationCode = normalizeRegistrationCode(rawRegistrationCode);
     if (!deviceId || !email || !password) {
       return json({ ok: false, error: "invalid_bind_credentials" }, 400);
+    }
+    if (rawInviteCode && !registrationInviteCode) {
+      return json({ ok: false, error: "invalid_invite_code" }, 400);
+    }
+    if (rawRegistrationCode && !registrationCode) {
+      return json({ ok: false, error: "invalid_registration_code" }, 400);
     }
 
     const db = await ensureUserSchema(env);
@@ -97,8 +108,11 @@ async function handleAccount(path, request, env) {
       return json({ ok: false, error: "account_not_found" }, 404);
     }
     const state = await readState(env);
-    if (!state.settings.formalRegistrationEnabled) {
-      return json({ ok: false, error: "formal_registration_closed" }, 409);
+    if (!state.settings.registrationEnabled) {
+      return json({ ok: false, error: "registration_disabled" }, 409);
+    }
+    if (state.settings.requireAdminRegistrationCode && !registrationCode) {
+      return json({ ok: false, error: "registration_code_required" }, 400);
     }
     const user = await readD1User(env, identity.userId, state.settings);
     if (!user) {
@@ -110,11 +124,40 @@ async function handleAccount(path, request, env) {
     if (user.email) {
       return json({ ok: false, error: "account_already_bound" }, 409);
     }
+    if (state.settings.requireInviteForRegistration &&
+        !registrationInviteCode && !user.invitedByCode) {
+      return json({ ok: false, error: "registration_invite_required" }, 400);
+    }
+    if (registrationInviteCode && user.invitedByCode) {
+      return json({ ok: false, error: "invite_already_bound" }, 409);
+    }
     const emailOwner = await db.prepare(
       "SELECT id FROM users_mb WHERE email = ? AND id <> ?",
     ).bind(email, identity.userId).first();
     if (emailOwner) {
       return json({ ok: false, error: "email_already_bound" }, 409);
+    }
+
+    let inviter = null;
+    if (registrationInviteCode) {
+      inviter = await db.prepare(
+        "SELECT id, uid, status, email FROM users_mb WHERE invite_code = ?",
+      ).bind(registrationInviteCode).first();
+      if (!inviter || cleanText(inviter.status) !== "active") {
+        return json({ ok: false, error: "invite_code_not_found" }, 404);
+      }
+      if (Number(inviter.id) === identity.userId) {
+        return json({ ok: false, error: "invite_self_not_allowed" }, 409);
+      }
+    }
+
+    if (registrationCode) {
+      const codeRow = await db.prepare(
+        "SELECT id FROM registration_codes_mb WHERE code = ? AND used_at IS NULL",
+      ).bind(registrationCode).first();
+      if (!codeRow) {
+        return json({ ok: false, error: "invalid_registration_code" }, 409);
+      }
     }
 
     const passwordHash = await hashAccountPassword(password);
@@ -123,7 +166,11 @@ async function handleAccount(path, request, env) {
       state.settings.accountBindingExperience,
       ACCOUNT_BINDING_EXPERIENCE,
     );
-    const results = await db.batch([
+    const invitationReward = normalizeExperience(
+      state.settings.invitationExperience,
+      DEFAULT_INVITATION_EXPERIENCE,
+    );
+    const bindingStatements = [
       db.prepare(
         "UPDATE users_mb SET email = ?, password_hash = ? " +
           "WHERE id = ? AND (email IS NULL OR email = '')",
@@ -139,15 +186,56 @@ async function handleAccount(path, request, env) {
         claimedAt: boundAt,
         experienceAwarded: reward,
       }),
-    ]);
+    ];
+    if (inviter) {
+      bindingStatements.push(
+        db.prepare(
+          "UPDATE users_mb SET invited_by_user_id = ?, invited_at = ? " +
+            "WHERE id = ? AND invited_by_user_id IS NULL",
+        ).bind(Number(inviter.id), boundAt, identity.userId),
+        invitationRewardClaimStatement(db, {
+          userId: Number(inviter.id),
+          userUid: cleanText(inviter.uid),
+          deviceRowId: identity.deviceRowId,
+          rewardType: REWARD_TYPE_INVITATION,
+          periodKey: REWARD_PERIOD_LIFETIME,
+          contextKey: `invitee-${identity.userId}`,
+          claimedAt: boundAt,
+          experienceAwarded: invitationReward,
+          inviteeUserId: identity.userId,
+        }),
+      );
+    }
+    if (registrationCode) {
+      bindingStatements.push(
+        db.prepare(
+          "UPDATE registration_codes_mb " +
+            "SET used_at = ?, used_by_user_id = ?, used_by_uid = ? " +
+            "WHERE code = ? AND used_at IS NULL",
+        ).bind(boundAt, identity.userId, identity.uid, registrationCode),
+      );
+    }
+    const results = await db.batch(bindingStatements);
     if (!results[0].meta || Number(results[0].meta.changes) < 1) {
       return json({ ok: false, error: "account_not_found" }, 404);
+    }
+    if (inviter && (!results[2].meta || Number(results[2].meta.changes) < 1)) {
+      return json({ ok: false, error: "invite_already_bound" }, 409);
+    }
+    const registrationCodeResultIndex = inviter ? 4 : 2;
+    if (registrationCode &&
+        (!results[registrationCodeResultIndex].meta ||
+          Number(results[registrationCodeResultIndex].meta.changes) < 1)) {
+      return json({ ok: false, error: "invalid_registration_code" }, 409);
     }
     const updated = await readD1User(env, identity.userId, state.settings);
     return json({
       ok: true,
       account: publicAccount(updated),
       experienceAwarded: reward,
+      invitationExperienceAwarded: inviter && isEmailBoundAccount(inviter)
+        ? invitationReward
+        : 0,
     });
   }
 

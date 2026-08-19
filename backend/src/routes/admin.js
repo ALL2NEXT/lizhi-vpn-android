@@ -7,6 +7,7 @@ import { createAdminAccessRoutes } from "./admin/access.js";
 import { createAdminAnalyticsRoutes } from "./admin/analytics.js";
 import { createAdminExperienceRoutes } from "./admin/experience.js";
 import { createAdminInviteRoutes } from "./admin/invites.js";
+import { createAdminRegistrationCodeRoutes } from "./admin/registration-codes.js";
 import { createAdminSecurityRoutes } from "./admin/security.js";
 import { createAdminStateRoutes } from "./admin/state.js";
 import { createAdminUserRoutes } from "./admin/users.js";
@@ -19,6 +20,7 @@ export function createAdminRoutes(deps) {
     createAdminAiRoutes(deps),
     createAdminExperienceRoutes(deps),
     createAdminInviteRoutes(deps),
+    createAdminRegistrationCodeRoutes(deps),
     createAdminUserRoutes(deps),
     createAdminStateRoutes(deps),
   ];

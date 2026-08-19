@@ -146,7 +146,9 @@ function fillState(state) {
   setValue('feedbackUrl', settings.feedbackUrl);
    setValue('githubUrl', settings.githubUrl);
    setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
-   checked('formalRegistrationEnabled', settings.formalRegistrationEnabled !== false);
+   checked('registrationEnabled', settings.registrationEnabled !== false);
+   checked('requireInviteForRegistration', settings.requireInviteForRegistration === true);
+   checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
    setValue('accountBindingExperience', settings.accountBindingExperience == null ? 100 : settings.accountBindingExperience);
    setValue('invitationExperience', settings.invitationExperience == null ? 50 : settings.invitationExperience);
    setValue('telegramGroupUrl', settings.telegramGroupUrl);
@@ -181,6 +183,7 @@ function fillState(state) {
   setValue('appDownloadUrl', update.downloadUrl);
   setValue('appChangelog', update.changelog);
   checked('appForce', update.is_force === 1 || update.isForce === 1);
+  loadRegistrationCodes();
 }
 function noticeDateTimeValue(data) {
   const text = String(data == null ? '' : data).trim();
@@ -230,7 +233,9 @@ function formState() {
        feedbackUrl: value('feedbackUrl'),
        githubUrl: value('githubUrl'),
        nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
-       formalRegistrationEnabled: el('formalRegistrationEnabled').checked,
+       registrationEnabled: el('registrationEnabled').checked,
+       requireInviteForRegistration: el('requireInviteForRegistration').checked,
+       requireAdminRegistrationCode: el('requireAdminRegistrationCode').checked,
        accountBindingExperience: Number(value('accountBindingExperience') || 0),
        invitationExperience: Number(value('invitationExperience') || 0),
        telegramGroupUrl: value('telegramGroupUrl'),
@@ -255,6 +260,57 @@ function formState() {
     notice: notice,
     appUpdate: appUpdate
   };
+}
+
+function renderRegistrationCodes(codes) {
+  const host = el('registrationCodesTable');
+  if (!host) return;
+  const rows = Array.isArray(codes) ? codes : [];
+  if (!rows.length) {
+    host.innerHTML = '<div class="loading-state">暂无管理员注册码</div>';
+    return;
+  }
+  host.innerHTML = '<table class="security-account-table" aria-label="一次性注册码">' +
+    '<thead><tr><th>注册码</th><th>状态</th><th>发放时间</th><th>使用时间</th><th>使用账户 UID</th></tr></thead>' +
+    '<tbody>' + rows.map(function(row) {
+      return '<tr><td><code>' + esc(row.code) + '</code></td>' +
+        '<td>' + (row.used ? '已使用' : '未使用') + '</td>' +
+        '<td>' + esc(row.createdAt || '-') + '</td>' +
+        '<td>' + esc(row.usedAt || '-') + '</td>' +
+        '<td><code>' + esc(row.usedByUid || '-') + '</code></td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+async function loadRegistrationCodes() {
+  const host = el('registrationCodesTable');
+  if (!host || !adminToken) return;
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/registration-codes?limit=200', {
+      headers: headers(),
+      cache: 'no-store'
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    renderRegistrationCodes(data.codes);
+  } catch (error) {
+    host.innerHTML = '<div class="error-state">注册码读取失败</div>';
+  }
+}
+
+async function issueRegistrationCodes() {
+  const count = Number(value('registrationCodeCount') || 1);
+  if (!Number.isInteger(count) || count < 1 || count > 100) {
+    return show('一次最多发放 100 个注册码', true);
+  }
+  const response = await fetch(ADMIN_API_BASE + '/registration-codes', {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({count: count})
+  });
+  const data = await response.json();
+  if (!response.ok) return show(adminErrorMessage(data.error, '注册码发放失败'), true);
+  show('已发放 ' + (data.codes || []).length + ' 个一次性注册码');
+  await loadRegistrationCodes();
 }
 async function pushSection(section) {
   if (section === 'users') {
