@@ -154,7 +154,6 @@ function fillState(state) {
    setValue('telegramGroupUrl', settings.telegramGroupUrl);
    setValue('telegramJoinCode', settings.telegramJoinCode);
    setValue('telegramTaskExperience', settings.telegramTaskExperience == null ? 50 : settings.telegramTaskExperience);
-   setValue('speedShareSmartExperience', settings.speedShareSmartExperience == null ? 5 : settings.speedShareSmartExperience);
   const aiAnalysis = settings.aiAnalysis || {};
   setValue('aiAnalysisModel', aiAnalysis.model || 'gemini-flash-latest');
   setValue('aiAnalysisThinkingLevel', aiAnalysis.thinkingLevel || 'low');
@@ -241,7 +240,6 @@ function formState() {
        telegramGroupUrl: value('telegramGroupUrl'),
        telegramJoinCode: value('telegramJoinCode'),
        telegramTaskExperience: Number(value('telegramTaskExperience') || 0),
-       speedShareSmartExperience: Number(value('speedShareSmartExperience') || 0),
        aiAnalysis: {
         model: value('aiAnalysisModel') || 'gemini-flash-latest',
         thinkingLevel: value('aiAnalysisThinkingLevel') || 'low',

@@ -6,24 +6,17 @@
 
 export function createAccountRoutes(deps) {
   const {
-    MAX_SPEED_SHARE_RESULTS,
     ACCOUNT_BINDING_EXPERIENCE,
     DEFAULT_INVITATION_EXPERIENCE,
     DEFAULT_TELEGRAM_TASK_EXPERIENCE,
-    DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
     REWARD_TYPE_ACCOUNT_BINDING,
     REWARD_TYPE_INVITATION,
-    REWARD_TYPE_SPEED_SHARE,
     REWARD_TYPE_TELEGRAM,
     REWARD_PERIOD_LIFETIME,
-    normalizeSpeedShareResult,
-    speedShareRequestLocation,
     publicAccount,
     rewardClaimStatement,
     invitationRewardClaimStatement,
-    readSpeedShareStatus,
     readTelegramTask,
-    publicAdminSpeedShareResult,
     usersDb,
     ensureUserSchema,
     resolveDeviceIdentity,
@@ -35,7 +28,6 @@ export function createAccountRoutes(deps) {
     normalizeExperience,
     normalizeInviteCode,
     normalizeRegistrationCode,
-    usagePeriodKeys,
     beijingTimestamp,
     normalizeReportTimestamp,
     normalizeAccountId,
@@ -428,49 +420,9 @@ async function handleAccount(path, request, env) {
     return json({
       ok: true,
       account: publicAccount(user),
-      speedShare: await readSpeedShareStatus(
-        env, identity.userId, identity.deviceRowId, state.settings),
       telegram: await readTelegramTask(
         env, identity.userId, identity.deviceRowId, state.settings),
     });
-  }
-
-  if (path === "/api/account/tasks/speed-share-results" && request.method === "GET") {
-    const requestUrl = new URL(request.url);
-    const identity = await resolveDeviceIdentity(
-      env,
-      requestUrl.searchParams.get("deviceId"),
-    );
-    if (!identity) {
-      return json({ ok: false, error: "account_not_found" }, 404);
-    }
-    const state = await readState(env);
-    const user = await readD1User(env, identity.userId, state.settings);
-    if (!user) {
-      return json({ ok: false, error: "account_not_found" }, 404);
-    }
-    if (user.level === 0) {
-      return json({ ok: false, error: "account_banned" }, 403);
-    }
-    const db = await ensureUserSchema(env);
-    const query = await db.prepare(
-      "SELECT node_id, server_host, subscription_group_name, province, carrier, " +
-        "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
-        "upload_mbps, updated_at, last_reported_at, report_count " +
-        "FROM speed_share_results_mb ORDER BY last_reported_at DESC LIMIT 1000",
-    ).all();
-    const clientLocation = speedShareRequestLocation(request);
-    return json({
-      ok: true,
-      clientProvince: clientLocation.province,
-      clientCarrier: clientLocation.carrier,
-      results: (query.results || []).map(publicAdminSpeedShareResult),
-      generatedAt: beijingTimestamp(),
-    });
-  }
-
-  if (path === "/api/account/tasks/speed-share" && request.method === "POST") {
-    return handleSpeedShareSubmission(request, env);
   }
 
   if (path === "/api/account/tasks/telegram" && request.method === "POST") {
@@ -594,122 +546,5 @@ async function handleAccount(path, request, env) {
   return json({ error: "account_route_not_found" }, 404);
 }
 
-async function handleSpeedShareSubmission(request, env) {
-  const body = await request.json();
-  const deviceId = normalizeAccountId(body && body.deviceId);
-  if (!Array.isArray(body && body.results) || body.results.length === 0 ||
-      body.results.length > MAX_SPEED_SHARE_RESULTS) {
-    return json({ ok: false, error: "invalid_speed_share_results" }, 400);
-  }
-
-  const identity = await resolveDeviceIdentity(env, deviceId);
-  if (!identity) {
-    return json({ ok: false, error: "account_not_found" }, 404);
-  }
-  const state = await readState(env);
-  const user = await readD1User(env, identity.userId, state.settings);
-  if (!user) {
-    return json({ ok: false, error: "account_not_found" }, 404);
-  }
-  if (user.level === 0) {
-    return json({ ok: false, error: "account_banned" }, 403);
-  }
-  if (!isEmailBoundAccount(user)) {
-    return json({ ok: false, error: "email_binding_required" }, 403);
-  }
-
-  const requestLocation = speedShareRequestLocation(request);
-  let results;
-  try {
-    results = body.results
-      .map((value) => normalizeSpeedShareResult(value, requestLocation))
-      .filter(Boolean);
-  } catch (error) {
-    return json({
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    }, 400);
-  }
-  if (results.length === 0) {
-    return json({ ok: false, error: "speed_share_results_empty" }, 400);
-  }
-
-  const db = await ensureUserSchema(env);
-  const now = new Date();
-  const reportHour = usagePeriodKeys(now).hour;
-  const subscriptionGroupName = cleanText(results[0].subscriptionGroupName).slice(0, 200) || "__default__";
-  const reportedAt = beijingTimestamp(now);
-  const reward = normalizeExperience(
-    state.settings.speedShareSmartExperience,
-    DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
-  );
-  const claimToken = crypto.randomUUID();
-  const claim = rewardClaimStatement(db, {
-    userId: identity.userId,
-    userUid: identity.uid,
-    deviceRowId: identity.deviceRowId,
-    rewardType: REWARD_TYPE_SPEED_SHARE,
-    periodKey: reportHour,
-    contextKey: subscriptionGroupName,
-    claimToken,
-    claimedAt: reportedAt,
-    experienceAwarded: reward,
-  });
-  const statements = results.map((item) => db.prepare(
-    `INSERT INTO speed_share_results_mb
-     (subscription_group_name, node_id, province, carrier, server_host,
-      tcping_latency_ms, url_test_latency_ms, download_mbps, upload_mbps,
-      updated_at, last_reported_at, last_reporter_user_id, report_count)
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1
-     WHERE EXISTS (
-       SELECT 1 FROM user_reward_claims_mb WHERE claim_token = ?
-     )
-     ON CONFLICT(subscription_group_name, node_id, province, carrier) DO UPDATE SET
-       server_host = excluded.server_host,
-       tcping_latency_ms = excluded.tcping_latency_ms,
-       url_test_latency_ms = excluded.url_test_latency_ms,
-       download_mbps = excluded.download_mbps,
-       upload_mbps = excluded.upload_mbps,
-       updated_at = excluded.updated_at,
-       last_reported_at = excluded.last_reported_at,
-       last_reporter_user_id = excluded.last_reporter_user_id,
-       report_count = speed_share_results_mb.report_count + 1`,
-  ).bind(
-    subscriptionGroupName,
-    item.nodeId,
-    item.province,
-    item.carrier,
-    item.serverHost,
-    item.tcpingLatencyMs,
-    item.urlTestLatencyMs,
-    item.downloadMbps,
-    item.uploadMbps,
-    reportedAt,
-    reportedAt,
-    identity.userId,
-    claimToken,
-  ));
-  const batchResults = await db.batch([claim, ...statements]);
-  const claimResult = batchResults[0];
-  if (!claimResult || !claimResult.meta || Number(claimResult.meta.changes) < 1) {
-    return json({
-      ok: false,
-      error: "speed_share_already_reported_this_hour_group",
-      speedShare: await readSpeedShareStatus(
-        env, identity.userId, identity.deviceRowId, state.settings),
-    });
-  }
-  const updated = await readD1User(env, identity.userId, state.settings);
-
-  return json({
-    ok: true,
-    acceptedResults: results.length,
-    account: publicAccount(updated),
-    experienceAwarded: reward,
-    speedShare: await readSpeedShareStatus(
-      env, identity.userId, identity.deviceRowId, state.settings),
-  });
-}
-
-  return { handleAccount, handleSpeedShareSubmission };
+  return { handleAccount };
 }

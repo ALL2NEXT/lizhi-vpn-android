@@ -200,36 +200,5 @@ BEGIN
     AND email IS NOT NULL AND email <> '';
 END;
 
-CREATE TABLE speed_share_results_mb (
-  subscription_group_name TEXT NOT NULL,
-  node_id TEXT NOT NULL,
-  province TEXT NOT NULL DEFAULT '',
-  carrier TEXT NOT NULL DEFAULT '',
-  server_host TEXT NOT NULL DEFAULT '',
-  tcping_latency_ms INTEGER NOT NULL DEFAULT 0
-    CHECK (tcping_latency_ms BETWEEN 0 AND 600000),
-  url_test_latency_ms INTEGER NOT NULL DEFAULT 0
-    CHECK (url_test_latency_ms BETWEEN 0 AND 600000),
-  download_mbps REAL NOT NULL DEFAULT 0
-    CHECK (download_mbps BETWEEN 0 AND 1000000),
-  upload_mbps REAL NOT NULL DEFAULT 0
-    CHECK (upload_mbps BETWEEN 0 AND 1000000),
-  updated_at TEXT NOT NULL,
-  last_reported_at TEXT NOT NULL,
-  last_reporter_user_id INTEGER,
-  report_count INTEGER NOT NULL DEFAULT 1 CHECK (report_count > 0),
-  PRIMARY KEY (
-    subscription_group_name,
-    node_id,
-    province,
-    carrier
-  ),
-  FOREIGN KEY (last_reporter_user_id)
-    REFERENCES users_mb(id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_speed_share_results_mb_reported
-  ON speed_share_results_mb(last_reported_at DESC);
-
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 9, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 10, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

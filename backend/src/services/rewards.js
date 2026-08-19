@@ -1,8 +1,6 @@
 import {
-  DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   DEFAULT_TELEGRAM_TASK_EXPERIENCE,
   REWARD_PERIOD_LIFETIME,
-  REWARD_TYPE_SPEED_SHARE,
   REWARD_TYPE_TELEGRAM,
 } from "../config.js";
 import {
@@ -13,7 +11,6 @@ import {
   normalizeLevel,
   normalizeStoredUid,
 } from "../domain/account.js";
-import { usagePeriodKeys } from "../domain/time.js";
 import { cleanText } from "../lib/values.js";
 import { ensureUserSchema, rowToUser } from "./user-store.js";
 
@@ -89,35 +86,6 @@ export function invitationRewardClaimStatement(db, claim) {
     Number(claim.userId),
     Number(claim.userId),
   );
-}
-
-export async function readSpeedShareStatus(env, userId, deviceRowId, settings = {}) {
-  const db = await ensureUserSchema(env);
-  const reportHour = usagePeriodKeys(new Date()).hour;
-  const hourlyGroups = await db.prepare(
-    "SELECT COUNT(DISTINCT context_key) AS reported_group_count, " +
-      "MAX(claimed_at) AS reported_at " +
-      "FROM user_reward_claims_mb " +
-      "WHERE (user_id = ? OR device_row_id = ?) AND reward_type = ? AND period_key = ?",
-  ).bind(userId, deviceRowId, REWARD_TYPE_SPEED_SHARE, reportHour).first();
-  const latest = await db.prepare(
-    "SELECT MAX(last_reported_at) AS last_reported_at FROM speed_share_results_mb",
-  ).first();
-  const count = await db.prepare(
-    "SELECT COUNT(*) AS retained_count FROM speed_share_results_mb",
-  ).first();
-  return {
-    enabled: true,
-    smartReportedThisHour: Number(hourlyGroups && hourlyGroups.reported_group_count) > 0,
-    smartReportedGroupCount: Number(hourlyGroups && hourlyGroups.reported_group_count) || 0,
-    smartReportedAt: cleanText(hourlyGroups && hourlyGroups.reported_at),
-    smartRewardExperience: normalizeExperience(
-      settings && settings.speedShareSmartExperience,
-      DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
-    ),
-    lastReportedAt: cleanText(latest && latest.last_reported_at),
-    retainedResultCount: Number(count && count.retained_count) || 0,
-  };
 }
 
 export async function readTelegramTask(env, userId, deviceRowId, settings) {

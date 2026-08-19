@@ -10,8 +10,6 @@
   let trafficDetailsLoading = false;
   let inviteRelationsData = null;
   let inviteRelationsLoading = false;
-  let speedShareResultsData = null;
-  let speedShareResultsLoading = false;
   let adminLoginRecordsData = null;
   let adminLoginRecordsLoading = false;
   let aiAnalysisLoading = false;
@@ -187,7 +185,6 @@
    inviteRelationsData = null;
    inviteRelationsLoading = false;
    closeDeviceRelationDetail();
-   speedShareResultsData = null;
    adminLoginRecordsData = null;
    adminLoginRecordsLoading = false;
    aiAnalysisLoading = false;
@@ -240,9 +237,6 @@
    }
    if (name === 'invite-relations' && !inviteRelationsData && !inviteRelationsLoading) {
      loadInviteRelations();
-   }
-   if (name === 'speed-share-results' && !speedShareResultsData && !speedShareResultsLoading) {
-     loadSpeedShareResults();
    }
    if (name === 'admin-login-records' && !adminLoginRecordsData && !adminLoginRecordsLoading) {
      loadAdminLoginRecords();

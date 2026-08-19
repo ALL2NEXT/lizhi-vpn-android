@@ -45,7 +45,6 @@
               <button class="tab-button" role="tab" type="button" data-tab="account-security">账户基本信息</button>
               <button class="tab-button" role="tab" type="button" data-tab="device-relations">账户与设备关系</button>
               <button class="tab-button" role="tab" type="button" data-tab="traffic-query">流量汇总表单</button>
-              <button class="tab-button" role="tab" type="button" data-tab="speed-share-results">共享测速表单</button>
               <button class="tab-button" role="tab" type="button" data-tab="invite-relations">邀请关系表单</button>
             </div>
           </div>
@@ -283,25 +282,6 @@
     </div>
   </section>
 
-  <section class="card tab-panel" role="tabpanel" data-panel="speed-share-results">
-    <div class="dashboard-heading">
-      <div>
-        <h2>共享测速表单</h2>
-        <p>查看当前数据库中各节点最近一次共享测速结果和累计上报次数。</p>
-      </div>
-      <button class="secondary" type="button" onclick="loadSpeedShareResults(true)">刷新数据</button>
-    </div>
-    <div class="traffic-detail-toolbar">
-      <div class="traffic-detail-search">
-        <input id="speedShareSearch" type="search" placeholder="搜索节点、服务器、分组、省份或运营商" oninput="renderSpeedShareResults()">
-        <span id="speedShareSummary" class="traffic-detail-summary"></span>
-      </div>
-    </div>
-    <div id="speedShareResultsTable" class="traffic-detail-wrap">
-      <div class="loading-state">打开此模块后读取共享测速结果</div>
-    </div>
-  </section>
-
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
@@ -451,7 +431,6 @@
           <div class="field"><label>邀请成功经验奖励<input id="invitationExperience" type="number" min="0" step="1"></label></div>
           <div class="field"><label>TG 进群口令<input id="telegramJoinCode" type="text" placeholder="例如：FIREFLY2026"></label></div>
           <div class="field"><label>TG 任务经验奖励<input id="telegramTaskExperience" type="number" min="0" step="1"></label></div>
-          <div class="field"><label>智能测速共享经验奖励<input id="speedShareSmartExperience" type="number" min="0" step="1"></label></div>
         </div>
       </section>
       <section class="settings-section">

@@ -1,7 +1,6 @@
 import {
   ACCOUNT_BINDING_EXPERIENCE,
   DEFAULT_INVITATION_EXPERIENCE,
-  DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
   DEFAULT_STATE,
   DEFAULT_TELEGRAM_TASK_EXPERIENCE,
   STATE_KEY,
@@ -201,10 +200,6 @@ export function normalizeSettings(value) {
     telegramTaskExperience: normalizeExperience(
       settings.telegramTaskExperience,
       DEFAULT_TELEGRAM_TASK_EXPERIENCE,
-    ),
-    speedShareSmartExperience: normalizeExperience(
-      settings.speedShareSmartExperience,
-      DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
     ),
     aiAnalysis: {
       model: aiModel,

@@ -1,5 +1,5 @@
 /*
- * Dashboard growth, traffic, device and speed-share read routes.
+ * Dashboard growth, traffic and device read routes.
  */
 
 export function createAdminAnalyticsRoutes(deps) {
@@ -14,7 +14,6 @@ export function createAdminAnalyticsRoutes(deps) {
     normalizeGrowthDateKey,
     normalizeGrowthPeriod,
     normalizeStoredUid,
-    publicAdminSpeedShareResult,
     usagePeriodKeys,
   } = deps;
 
@@ -160,26 +159,6 @@ export function createAdminAnalyticsRoutes(deps) {
         startDate: startDate || null,
         endDate: endDate || null,
         points,
-        generatedAt: beijingTimestamp(),
-      });
-    }
-
-    if (path === "/api/speed-share-results" && request.method === "GET") {
-      const requestUrl = new URL(request.url);
-      const requestedLimit = Number(requestUrl.searchParams.get("limit"));
-      const limit = Number.isInteger(requestedLimit)
-        ? Math.min(Math.max(requestedLimit, 1), 1000)
-        : 500;
-      const db = await ensureUserSchema(env);
-      const query = await db.prepare(
-        "SELECT node_id, server_host, subscription_group_name, province, carrier, " +
-          "tcping_latency_ms, url_test_latency_ms, download_mbps, " +
-          "upload_mbps, updated_at, last_reported_at, report_count " +
-          "FROM speed_share_results_mb ORDER BY last_reported_at DESC LIMIT ?",
-      ).bind(limit).all();
-      return json({
-        ok: true,
-        results: (query.results || []).map(publicAdminSpeedShareResult),
         generatedAt: beijingTimestamp(),
       });
     }

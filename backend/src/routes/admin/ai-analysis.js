@@ -165,22 +165,11 @@ export function createAdminAiRoutes(deps) {
            ORDER BY count DESC, label ASC
            LIMIT 8`,
         ),
-        db.prepare(
-          `SELECT
-             COUNT(*) AS result_count,
-             COALESCE(SUM(report_count), 0) AS report_count,
-             COALESCE(AVG(tcping_latency_ms), 0) AS average_tcping_latency_ms,
-             COALESCE(AVG(url_test_latency_ms), 0) AS average_url_test_latency_ms,
-             COALESCE(AVG(download_mbps), 0) AS average_download_mbps,
-             COALESCE(AVG(upload_mbps), 0) AS average_upload_mbps
-           FROM speed_share_results_mb`,
-        ),
       ]);
 
       const users = aggregate[0] && aggregate[0].results && aggregate[0].results[0] || {};
       const traffic = aggregate[1] && aggregate[1].results && aggregate[1].results[0] || {};
       const devices = aggregate[4] && aggregate[4].results && aggregate[4].results[0] || {};
-      const speed = aggregate[7] && aggregate[7].results && aggregate[7].results[0] || {};
       const trafficDaily = (aggregate[2] && aggregate[2].results || []).map((row) => ({
         date: cleanText(row.date_key),
         activeUsers: positiveNumber(row.active_users),

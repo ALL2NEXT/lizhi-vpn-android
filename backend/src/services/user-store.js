@@ -92,8 +92,7 @@ export async function initializeUserSchemaDatabase(db) {
        'device_bans_mb',
        'user_usage_mb',
        'user_reward_claims_mb',
-       'user_experience_awards_mb',
-       'speed_share_results_mb'
+       'user_experience_awards_mb'
      )
      LIMIT 1`,
   ).first();

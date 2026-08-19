@@ -16,11 +16,6 @@ import xyz.a202132.app.data.model.AccountInviteRequest
 import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
-import xyz.a202132.app.data.model.SpeedShareNodeResult
-import xyz.a202132.app.data.model.SpeedShareRequest
-import xyz.a202132.app.data.model.SpeedShareResponse
-import xyz.a202132.app.data.model.SpeedShareResultsResponse
-import xyz.a202132.app.data.model.SpeedShareStatus
 import xyz.a202132.app.data.model.TelegramTaskResponse
 import xyz.a202132.app.data.model.TelegramTaskStatus
 import xyz.a202132.app.data.model.TelegramTaskSubmitRequest
@@ -126,73 +121,10 @@ class AccountManager(private val context: Context) {
             }
             response.account?.let(::persistAccount)
             TaskCenterStatus(
-                speedShare = response.speedShare ?: SpeedShareStatus(),
                 telegram = response.telegram ?: throw IllegalStateException(
                     response.error ?: "后台未返回 TG 任务状态"
                 )
             )
-        }
-    }
-
-    suspend fun reportSpeedResults(
-        results: List<SpeedShareNodeResult>,
-        timeoutMs: Long = 15000L
-    ): Result<SpeedShareResponse> {
-        val registered = currentAccount()
-            ?: return Result.failure(IllegalStateException("璐︽埛灏氭湭鍚屾"))
-        if (registered.level == 0) {
-            return Result.failure(IllegalStateException("account_banned"))
-        }
-        if (registered.email.isBlank()) {
-            return Result.failure(IllegalStateException("email_binding_required"))
-        }
-        if (results.isEmpty()) {
-            return Result.failure(IllegalArgumentException("speed_share_results_empty"))
-        }
-
-        return runCatching {
-            val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
-                NetworkClient.apiService.shareSpeedResults(
-                    accountEndpoint("/api/account/tasks/speed-share"),
-                    SpeedShareRequest(
-                        deviceId = accountId(),
-                        results = results.take(1)
-                    )
-                )
-            }
-            if (!response.ok) {
-                val error = response.error ?: "speed_share_submission_failed"
-                throw IllegalStateException(error)
-            }
-            response.account?.let(::persistAccount)
-            response
-        }
-    }
-
-    suspend fun getSpeedShareResults(
-        timeoutMs: Long = 10000L
-    ): Result<SpeedShareResultsResponse> {
-        val registered = currentAccount()
-            ?: return Result.failure(IllegalStateException("account_not_synced"))
-        if (registered.level == 0) {
-            return Result.failure(IllegalStateException("account_banned"))
-        }
-        if (registered.email.isBlank()) {
-            return Result.failure(IllegalStateException("email_binding_required"))
-        }
-
-        return runCatching {
-            val response: SpeedShareResultsResponse = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
-                NetworkClient.apiService.getSpeedShareResults(
-                    accountEndpoint(
-                        "/api/account/tasks/speed-share-results?deviceId=${accountId()}"
-                    )
-                )
-            }
-            if (!response.ok) {
-                throw IllegalStateException(response.error ?: "speed_share_results_load_failed")
-            }
-            response
         }
     }
 

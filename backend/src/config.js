@@ -7,13 +7,11 @@ export const STATE_KEY = "fireflyvpn:state:v1";
 export const CLIENT_IP_HEADER = "X-Firefly-Client-IP";
 export const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 export const MAX_BATCH_USER_COUNT = 100;
-export const MAX_SPEED_SHARE_RESULTS = 1;
 export const MAX_TRAFFIC_BYTES = 1e15;
 export const MAX_ACCOUNT_EXPERIENCE = 1e12;
 export const ACCOUNT_BINDING_EXPERIENCE = 100;
 export const DEFAULT_INVITATION_EXPERIENCE = 50;
 export const DEFAULT_TELEGRAM_TASK_EXPERIENCE = 50;
-export const DEFAULT_SPEED_SHARE_SMART_EXPERIENCE = 5;
 export const DEFAULT_EXPERIENCE_THRESHOLDS = [100, 200, 400, 800, 1600];
 export const SUBSCRIPTION_CACHE_KEY_PREFIX = "fireflyvpn:subscription-cache:v1:";
 export const DEFAULT_SUBSCRIPTION_CACHE_MINUTES = 30;
@@ -22,7 +20,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 9;
+export const USER_SCHEMA_VERSION = 10;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -211,31 +209,6 @@ export const USER_SCHEMA_STATEMENTS = [
     WHERE id = NEW.user_id AND status = 'active'
       AND email IS NOT NULL AND email <> '';
   END`,
-  `CREATE TABLE IF NOT EXISTS speed_share_results_mb (
-    subscription_group_name TEXT NOT NULL,
-    node_id TEXT NOT NULL,
-    province TEXT NOT NULL DEFAULT '',
-    carrier TEXT NOT NULL DEFAULT '',
-    server_host TEXT NOT NULL DEFAULT '',
-    tcping_latency_ms INTEGER NOT NULL DEFAULT 0
-      CHECK (tcping_latency_ms BETWEEN 0 AND 600000),
-
-    url_test_latency_ms INTEGER NOT NULL DEFAULT 0
-      CHECK (url_test_latency_ms BETWEEN 0 AND 600000),
-    download_mbps REAL NOT NULL DEFAULT 0
-      CHECK (download_mbps BETWEEN 0 AND 1000000),
-    upload_mbps REAL NOT NULL DEFAULT 0
-      CHECK (upload_mbps BETWEEN 0 AND 1000000),
-    updated_at TEXT NOT NULL,
-    last_reported_at TEXT NOT NULL,
-    last_reporter_user_id INTEGER,
-    report_count INTEGER NOT NULL DEFAULT 1 CHECK (report_count > 0),
-    PRIMARY KEY (subscription_group_name, node_id, province, carrier),
-    FOREIGN KEY (last_reporter_user_id)
-      REFERENCES users_mb(id) ON DELETE SET NULL
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_speed_share_results_mb_reported
-    ON speed_share_results_mb(last_reported_at DESC)`,
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
@@ -283,9 +256,7 @@ export const USER_SCHEMA_MIGRATIONS = {
     `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_day_user
       ON user_usage_mb(usage_day, user_id)`,
   ],
-  5: [
-    `ALTER TABLE speed_share_results_mb DROP COLUMN node_name`,
-  ],
+  5: [],
   6: [],
   7: [
     `DROP INDEX IF EXISTS idx_user_usage_mb_user_ended`,
@@ -363,10 +334,14 @@ export const USER_SCHEMA_MIGRATIONS = {
     `CREATE INDEX IF NOT EXISTS idx_registration_codes_mb_status
       ON registration_codes_mb(used_at, created_at DESC, id DESC)`,
   ],
+  10: [
+    `DELETE FROM user_reward_claims_mb WHERE reward_type = 'speed_share'`,
+    `DROP INDEX IF EXISTS idx_speed_share_results_mb_reported`,
+    `DROP TABLE IF EXISTS speed_share_results_mb`,
+  ],
 };
 export const REWARD_TYPE_ACCOUNT_BINDING = "account_binding";
 export const REWARD_TYPE_INVITATION = "invitation";
-export const REWARD_TYPE_SPEED_SHARE = "speed_share";
 export const REWARD_TYPE_TELEGRAM = "telegram";
 export const REWARD_TYPE_ADMIN_MANUAL = "admin_manual";
 export const REWARD_PERIOD_LIFETIME = "lifetime";
@@ -398,7 +373,6 @@ export const DEFAULT_STATE = {
     telegramGroupUrl: "",
     telegramJoinCode: "",
     telegramTaskExperience: DEFAULT_TELEGRAM_TASK_EXPERIENCE,
-    speedShareSmartExperience: DEFAULT_SPEED_SHARE_SMART_EXPERIENCE,
     aiAnalysis: {
       model: "gemini-flash-latest",
       thinkingLevel: "low",

@@ -11,7 +11,6 @@ import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.PerAppProxyMode
 import xyz.a202132.app.data.model.ProxyMode
-import xyz.a202132.app.data.model.SpeedShareMode
 import xyz.a202132.app.data.model.TunStack
 
 data class PerAppProxySettings(
@@ -79,71 +78,11 @@ class SettingsRepository(private val context: Context) {
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val SIMPLIFIED_NODE_TEST_DISPLAY_ENABLED =
             booleanPreferencesKey("simplified_node_test_display_enabled")
-        private val SPEED_SHARE_MODE = stringPreferencesKey("speed_share_mode")
-        private val SPEED_SHARE_SMART_REPORTED_GROUPS =
-            stringSetPreferencesKey("speed_share_smart_reported_groups")
-        private val USE_SHARED_SPEED_RESULTS_ENABLED =
-            booleanPreferencesKey("use_shared_speed_results_enabled")
-        // 兼容旧版本“共享数据直连”的开关设置。
-        private val LEGACY_SHARED_DATA_DIRECT_CONNECT_ENABLED =
-            booleanPreferencesKey("shared_data_direct_connect_enabled")
 
     }
     
     val selectedNodeId: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[SELECTED_NODE_ID]
-    }
-
-    val speedShareMode: Flow<SpeedShareMode> = context.dataStore.data.map { preferences ->
-        val storedMode = runCatching {
-            SpeedShareMode.valueOf(preferences[SPEED_SHARE_MODE] ?: SpeedShareMode.OFF.name)
-        }.getOrDefault(SpeedShareMode.OFF)
-        val sharedResultsEnabled = preferences[USE_SHARED_SPEED_RESULTS_ENABLED]
-            ?: preferences[LEGACY_SHARED_DATA_DIRECT_CONNECT_ENABLED]
-            ?: (storedMode == SpeedShareMode.SMART)
-        if (sharedResultsEnabled) SpeedShareMode.SMART else SpeedShareMode.OFF
-    }
-
-    val speedShareSmartReportedGroups: Flow<Set<String>> = context.dataStore.data.map { preferences ->
-        preferences[SPEED_SHARE_SMART_REPORTED_GROUPS] ?: emptySet()
-    }
-
-    val useSharedSpeedResultsEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[USE_SHARED_SPEED_RESULTS_ENABLED]
-            ?: preferences[LEGACY_SHARED_DATA_DIRECT_CONNECT_ENABLED]
-            ?: runCatching {
-                SpeedShareMode.valueOf(preferences[SPEED_SHARE_MODE] ?: SpeedShareMode.OFF.name)
-            }.getOrDefault(SpeedShareMode.OFF).let { it == SpeedShareMode.SMART }
-    }
-
-    suspend fun setSpeedShareMode(mode: SpeedShareMode) {
-        context.dataStore.edit { preferences ->
-            preferences[SPEED_SHARE_MODE] = mode.name
-            preferences[USE_SHARED_SPEED_RESULTS_ENABLED] = mode == SpeedShareMode.SMART
-        }
-    }
-
-    suspend fun addSpeedShareSmartReportedGroup(reportKey: String) {
-        context.dataStore.edit { preferences ->
-            val reportedGroups = (preferences[SPEED_SHARE_SMART_REPORTED_GROUPS] ?: emptySet())
-                .toMutableSet()
-            reportedGroups += reportKey
-            if (reportedGroups.size > 200) {
-                reportedGroups.remove(reportedGroups.first())
-            }
-            preferences[SPEED_SHARE_SMART_REPORTED_GROUPS] = reportedGroups
-        }
-    }
-
-    suspend fun setUseSharedSpeedResultsEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[USE_SHARED_SPEED_RESULTS_ENABLED] = enabled
-            preferences[SPEED_SHARE_MODE] = if (enabled) {
-                SpeedShareMode.SMART.name
-            } else {
-                SpeedShareMode.OFF.name
-            }
-        }
     }
 
     val nodeListCategory: Flow<NodeListCategory> = context.dataStore.data.map { preferences ->

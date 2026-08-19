@@ -39,7 +39,6 @@ fun FeatureScreen(
     val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsStateWithLifecycle()
     val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsStateWithLifecycle()
     val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsStateWithLifecycle()
-    val useSharedSpeedResultsEnabled by viewModel.useSharedSpeedResultsEnabled.collectAsStateWithLifecycle()
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
@@ -120,17 +119,6 @@ fun FeatureScreen(
                     }
                 )
             }
-
-            FeatureSection(
-                title = "使用共享测速结果",
-                titleAction = {
-                    Switch(
-                        checked = useSharedSpeedResultsEnabled,
-                        onCheckedChange = { viewModel.setUseSharedSpeedResultsEnabled(it) },
-                        colors = featureSwitchColors()
-                    )
-                }
-            ) {}
 
             FeatureSection(
                 title = "断线恢复",

@@ -86,8 +86,6 @@ data class BackendAppSettings(
     @SerializedName("telegramTaskExperience")
     val telegramTaskExperience: Long = 50L,
 
-    @SerializedName("speedShareSmartExperience")
-    val speedShareSmartExperience: Long = 5L
 )
 
 data class AccountRegisterRequest(
@@ -254,108 +252,6 @@ data class TelegramTaskSubmitRequest(
     val code: String
 )
 
-enum class SpeedShareMode {
-    OFF,
-    SMART
-}
-
-data class SpeedShareNodeResult(
-    @SerializedName("nodeId")
-    val nodeId: String,
-
-    @SerializedName("serverHost")
-    val serverHost: String = "",
-
-    @SerializedName("subscriptionGroupName")
-    val subscriptionGroupName: String = "",
-
-    @SerializedName("tcpingLatencyMs")
-    val tcpingLatencyMs: Int = 0,
-
-    @SerializedName("urlTestLatencyMs")
-    val urlTestLatencyMs: Int = 0,
-
-    @SerializedName("downloadMbps")
-    val downloadMbps: Float = 0f,
-
-    @SerializedName("uploadMbps")
-    val uploadMbps: Float = 0f,
-
-    @SerializedName("province")
-    val province: String = "",
-
-    @SerializedName("carrier")
-    val carrier: String = ""
-)
-
-data class SpeedShareRequest(
-    @SerializedName("deviceId")
-    val deviceId: String,
-
-    @SerializedName("results")
-    val results: List<SpeedShareNodeResult>
-)
-
-data class SpeedShareStatus(
-    @SerializedName("enabled")
-    val enabled: Boolean = true,
-
-    @SerializedName("smartReportedThisHour")
-    val smartReportedThisHour: Boolean = false,
-
-    @SerializedName("smartReportedGroupCount")
-    val smartReportedGroupCount: Int = 0,
-
-    @SerializedName("smartReportedAt")
-    val smartReportedAt: String = "",
-
-    @SerializedName("smartRewardExperience")
-    val smartRewardExperience: Long = 5L,
-
-    @SerializedName("lastReportedAt")
-    val lastReportedAt: String = "",
-
-    @SerializedName("retainedResultCount")
-    val retainedResultCount: Int = 0
-)
-
-data class SpeedShareResponse(
-    @SerializedName("ok")
-    val ok: Boolean = false,
-
-    @SerializedName("acceptedResults")
-    val acceptedResults: Int = 0,
-
-    @SerializedName("account")
-    val account: AccountInfo? = null,
-
-    @SerializedName("experienceAwarded")
-    val experienceAwarded: Long = 0L,
-
-    @SerializedName("speedShare")
-    val speedShare: SpeedShareStatus? = null,
-
-    @SerializedName("error")
-    val error: String? = null
-)
-
-data class SpeedShareResultsResponse(
-    @SerializedName("ok")
-    val ok: Boolean = false,
-
-    @SerializedName("clientProvince")
-    val clientProvince: String = "",
-
-    @SerializedName("clientCarrier")
-    val clientCarrier: String = "",
-
-    @SerializedName("results")
-    val results: List<SpeedShareNodeResult> = emptyList(),
-
-    @SerializedName("error")
-    val error: String? = null
-)
-
 data class TelegramTaskStatus(
     @SerializedName("enabled")
     val enabled: Boolean = false,
@@ -383,9 +279,6 @@ data class TelegramTaskResponse(
     @SerializedName("account")
     val account: AccountInfo? = null,
 
-    @SerializedName("speedShare")
-    val speedShare: SpeedShareStatus? = null,
-
     @SerializedName("telegram")
     val telegram: TelegramTaskStatus? = null,
 
@@ -394,7 +287,6 @@ data class TelegramTaskResponse(
 )
 
 data class TaskCenterStatus(
-    val speedShare: SpeedShareStatus = SpeedShareStatus(),
     val telegram: TelegramTaskStatus
 )
 

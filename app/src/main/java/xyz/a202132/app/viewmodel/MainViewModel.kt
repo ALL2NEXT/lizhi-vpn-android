@@ -33,20 +33,15 @@ import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.DatabasePassphraseManager
 import java.io.File
 import java.time.Instant
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.time.OffsetDateTime
-import java.time.ZoneId
 import kotlin.math.ceil
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
 
 enum class NodeImportResult {
     IMPORTED,
     DUPLICATE,
     INVALID
 }
-
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
@@ -122,11 +117,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isLoadingTelegramTask = _isLoadingTelegramTask.asStateFlow()
     private val _isSubmittingTelegramTask = MutableStateFlow(false)
     val isSubmittingTelegramTask = _isSubmittingTelegramTask.asStateFlow()
-    private val _speedShareStatus = MutableStateFlow<SpeedShareStatus?>(null)
-    val speedShareStatus = _speedShareStatus.asStateFlow()
-    private val _speedShareMessage = MutableStateFlow<String?>(null)
-    val speedShareMessage = _speedShareMessage.asStateFlow()
-    private val smartSpeedShareInFlight = AtomicBoolean(false)
     private val _telegramTaskMessage = MutableStateFlow<String?>(null)
     val telegramTaskMessage = _telegramTaskMessage.asStateFlow()
     
@@ -270,8 +260,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_TCPING_PERCENT)
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
-    val speedShareMode = settingsRepository.speedShareMode.stateIn(viewModelScope, SharingStarted.Eagerly, SpeedShareMode.OFF)
-    val useSharedSpeedResultsEnabled = settingsRepository.useSharedSpeedResultsEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
     val simplifiedNodeTestDisplayEnabled = settingsRepository.simplifiedNodeTestDisplayEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -469,14 +457,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 settingsRepository.setSelectedNodeId(bestNode.id)
-                scheduleSmartSpeedShare(
-                    buildSpeedShareResults(
-                        nodes = listOf(bestNode),
-                        tcpingResults = tcpingResults,
-                        urlTestResults = urlTestResults,
-                        bandwidthResults = speedResults.associate { it.first.id to it.second }
-                    )
-                )
                 Log.i(tag, "Smart connection selected node: ${bestNode.getDisplayName()}")
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
             } catch (e: Exception) {
@@ -496,12 +476,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val selectedId = settingsRepository.selectedNodeId.first()
             val selectedNode = selectedId?.let { nodeDao().getNodeById(it) }
             val subscriptionNodes = currentSubscriptionNodeSnapshot()
-            val sharedBestNode = if (useSharedSpeedResultsEnabled.value) {
-                findBestSharedNode(subscriptionNodes)
-            } else {
-                null
-            }
-            val node = sharedBestNode ?: selectedNode ?: subscriptionNodes.firstOrNull()
+            val node = selectedNode ?: subscriptionNodes.firstOrNull()
             if (node == null) {
                 _error.value = "没有可用节点"
                 return@launch
@@ -510,11 +485,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setSelectedNodeId(node.id)
             Log.i(
                 tag,
-                if (sharedBestNode != null) {
-                    "Connecting to shared speed result best node: ${node.getDisplayName()}"
-                } else {
-                    "Connecting to selected/default node: ${node.getDisplayName()}"
-                }
+                "Connecting to selected/default node: ${node.getDisplayName()}"
             )
             if (!NetworkUtils.isNetworkAvailable(getApplication())) {
                 Log.w(tag, "Default VPN start requested while network is unavailable")
@@ -1392,31 +1363,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setSpeedShareMode(mode: SpeedShareMode) {
-        viewModelScope.launch {
-            settingsRepository.setSpeedShareMode(mode)
-        }
-    }
-
-    fun setUseSharedSpeedResultsEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setUseSharedSpeedResultsEnabled(enabled)
-        }
-    }
-
     fun loadTelegramTask() {
         if (_isLoadingTelegramTask.value) return
         viewModelScope.launch {
             _isLoadingTelegramTask.value = true
             _telegramTaskStatus.value = null
-            _speedShareStatus.value = null
             _telegramTaskMessage.value = null
-            _speedShareMessage.value = null
             try {
                 accountManager.getTaskCenterStatus(
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess { status ->
-                    _speedShareStatus.value = status.speedShare
                     _telegramTaskStatus.value = status.telegram
                 }.onFailure { error ->
                     Log.w(tag, "Failed to load task center", error)
@@ -1452,7 +1408,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearTelegramTaskMessage() {
         _telegramTaskMessage.value = null
-        _speedShareMessage.value = null
     }
 
     /** 客户端再次校验公告时间，避免配置缓存导致过期公告继续显示。 */
@@ -1616,17 +1571,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun speedShareErrorMessage(error: Throwable): String {
-        val message = error.message.orEmpty()
-        return when {
-            message == "email_binding_required" -> "绑定邮箱后才能共享测速结果"
-            message == "speed_share_already_reported_this_hour_group" -> "本小时该订阅组的智能测速结果已经共享过了"
-            message == "speed_share_results_empty" -> "没有可共享的有效测速结果"
-            message == "account_banned" -> "账户已被封禁，无法共享测速结果"
-            else -> message.ifBlank { "测速结果共享失败" }
-        }
-    }
-
     private fun telegramTaskErrorMessage(error: Throwable): String {
         return when (error.message) {
             "email_binding_required" -> "绑定邮箱后才能完成任务"
@@ -1739,182 +1683,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         _error.value = "${requestName}请求失败，自动重试后仍失败，请稍后再试"
         return Result.failure(second.exceptionOrNull() ?: first.exceptionOrNull() ?: IllegalStateException("${requestName}请求失败"))
-    }
-
-    private suspend fun findBestSharedNode(nodes: List<Node>): Node? {
-        if (nodes.isEmpty()) return null
-        val sharedResponse = accountManager.getSpeedShareResults(
-            timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-        ).getOrElse { error ->
-            Log.w(tag, "Failed to load shared speed results; falling back to normal direct connect", error)
-            return null
-        }
-        val sharedResults = sharedResponse.results
-        val resultsByNodeId = sharedResults.associateBy { it.nodeId }
-        val sharedResultComparator = compareBy<SpeedShareNodeResult> {
-            sharedLocationPriority(
-                result = it,
-                clientProvince = sharedResponse.clientProvince,
-                clientCarrier = sharedResponse.clientCarrier
-            )
-        }
-            .thenBy { sharedLatencyScore(it) }
-            .thenByDescending { it.downloadMbps }
-            .thenByDescending { it.uploadMbps }
-            .thenBy { it.nodeId }
-        val resultsByServerHost = sharedResults
-            .filter { sharedServerHost(it.serverHost).isNotBlank() }
-            .groupBy { sharedServerHost(it.serverHost) }
-            .mapValues { (_, results) -> results.minWithOrNull(sharedResultComparator) }
-        return nodes.asSequence()
-            .mapNotNull { node ->
-                val result = resultsByNodeId[sharedNodeId(node)]
-                    ?.takeIf(::hasSharedSpeedMetrics)
-                    ?: resultsByServerHost[sharedServerHost(node.server)]
-                        ?.takeIf(::hasSharedSpeedMetrics)
-                    ?: return@mapNotNull null
-                node to result
-            }
-            .sortedWith(
-                compareBy<Pair<Node, SpeedShareNodeResult>> {
-                    sharedLocationPriority(
-                        result = it.second,
-                        clientProvince = sharedResponse.clientProvince,
-                        clientCarrier = sharedResponse.clientCarrier
-                    )
-                }
-                    .thenBy { sharedLatencyScore(it.second) }
-                    .thenByDescending { it.second.downloadMbps }
-                    .thenByDescending { it.second.uploadMbps }
-                    .thenBy { it.first.id }
-            )
-            .firstOrNull()
-            ?.first
-    }
-
-    private fun sharedLocationPriority(
-        result: SpeedShareNodeResult,
-        clientProvince: String,
-        clientCarrier: String
-    ): Int {
-        val provinceMatches = clientProvince.isNotBlank() &&
-            sameSharedLocation(result.province, clientProvince)
-        val carrierMatches = clientCarrier.isNotBlank() &&
-            sameSharedLocation(result.carrier, clientCarrier)
-        return when {
-            provinceMatches && carrierMatches -> 0
-            provinceMatches -> 1
-            carrierMatches -> 2
-            else -> 3
-        }
-    }
-
-    private fun sameSharedLocation(left: String, right: String): Boolean =
-        left.trim().replace(" ", "")
-            .equals(right.trim().replace(" ", ""), ignoreCase = true)
-
-    private fun sharedLatencyScore(result: SpeedShareNodeResult): Int {
-        val tcping = result.tcpingLatencyMs.takeIf { it > 0 }
-        val urlTest = result.urlTestLatencyMs.takeIf { it > 0 }
-        return when {
-            tcping != null && urlTest != null ->
-                (tcping * 0.4f + urlTest * 0.6f).toInt()
-            urlTest != null -> urlTest
-            tcping != null -> tcping
-            else -> Int.MAX_VALUE
-        }
-    }
-
-    private fun sharedNodeId(node: Node): String = node.favoriteSourceNodeId ?: node.id
-
-    private fun hasSharedSpeedMetrics(result: SpeedShareNodeResult): Boolean =
-        result.tcpingLatencyMs > 0 ||
-            result.urlTestLatencyMs > 0 ||
-            result.downloadMbps > 0f ||
-            result.uploadMbps > 0f
-
-    private fun sharedServerHost(value: String): String {
-        var host = value.trim()
-        if (host.isBlank()) return ""
-        if (host.startsWith("[")) {
-            val closingBracket = host.indexOf(']')
-            if (closingBracket > 1) host = host.substring(1, closingBracket)
-        } else {
-            val firstColon = host.indexOf(':')
-            val lastColon = host.lastIndexOf(':')
-            if (firstColon == lastColon && lastColon > 0 &&
-                host.substring(lastColon + 1).all { it.isDigit() }
-            ) {
-                host = host.substring(0, lastColon)
-            }
-        }
-        return host.trim().trimEnd('.').lowercase()
-    }
-
-    private fun buildSpeedShareResults(
-        nodes: List<Node>,
-        tcpingResults: List<LatencyTester.LatencyResult> = emptyList(),
-        urlTestResults: List<LatencyTester.LatencyResult> = emptyList(),
-        bandwidthResults: Map<String, Float> = emptyMap()
-    ): List<SpeedShareNodeResult> {
-        val tcpingById = tcpingResults.associateBy { it.nodeId }
-        val urlTestById = urlTestResults.associateBy { it.nodeId }
-        return nodes.mapNotNull { node ->
-            val tcpingLatency = tcpingById[node.id]?.latency?.takeIf { it > 0 }
-                ?: node.tcpingLatency.takeIf { it > 0 }
-                ?: node.latency.takeIf { it > 0 }
-            val urlTestLatency = urlTestById[node.id]?.latency?.takeIf { it > 0 }
-                ?: node.urlTestLatency.takeIf { it > 0 }
-            val downloadMbps = bandwidthResults[node.id]?.takeIf { it.isFinite() && it > 0f }
-                ?: node.downloadMbps.takeIf { it.isFinite() && it > 0f }
-            if (tcpingLatency == null && urlTestLatency == null && downloadMbps == null) {
-                return@mapNotNull null
-            }
-            SpeedShareNodeResult(
-                nodeId = sharedNodeId(node),
-                serverHost = sharedServerHost(node.server),
-                subscriptionGroupName = node.subscriptionSourceName.orEmpty(),
-                tcpingLatencyMs = tcpingLatency ?: 0,
-                urlTestLatencyMs = urlTestLatency ?: 0,
-                downloadMbps = downloadMbps ?: 0f
-            )
-        }
-    }
-
-    private fun scheduleSmartSpeedShare(results: List<SpeedShareNodeResult>) {
-        if (speedShareMode.value != SpeedShareMode.SMART || results.isEmpty()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            if (!smartSpeedShareInFlight.compareAndSet(false, true)) return@launch
-            try {
-                val reportHour = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
-                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH"))
-                val accountUid = accountManager.currentAccount()?.uid ?: return@launch
-                if (accountManager.currentAccount()?.email.isNullOrBlank()) return@launch
-                val subscriptionGroupName = results.firstOrNull()?.subscriptionGroupName
-                    .orEmpty()
-                    .trim()
-                val reportGroupKey = subscriptionGroupName.ifBlank { "__default__" }
-                val reportKey = "$accountUid:$reportHour:$reportGroupKey"
-                if (settingsRepository.speedShareSmartReportedGroups.first().contains(reportKey)) {
-                    return@launch
-                }
-                accountManager.reportSpeedResults(
-                    results = results,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-                ).onSuccess { response ->
-                    settingsRepository.addSpeedShareSmartReportedGroup(reportKey)
-                    _speedShareStatus.value = response.speedShare ?: _speedShareStatus.value
-                }.onFailure { error ->
-                    if (error.message == "speed_share_already_reported_this_hour_group") {
-                        settingsRepository.addSpeedShareSmartReportedGroup(reportKey)
-                    } else {
-                        Log.w(tag, "Smart speed share failed", error)
-                    }
-                }
-            } finally {
-                smartSpeedShareInFlight.set(false)
-            }
-        }
     }
 
     private suspend fun testNodeDownloadBandwidthMbps(node: Node, sizeMb: Int): Float =
