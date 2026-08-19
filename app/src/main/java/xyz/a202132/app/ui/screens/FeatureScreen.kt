@@ -45,7 +45,6 @@ fun FeatureScreen(
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
     val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
-    val hysteriaBandwidthAdaptiveStatus by viewModel.hysteriaBandwidthAdaptiveStatus.collectAsStateWithLifecycle()
 
     var tcpingPercentInput by remember(smartConnectTcpingPercent) {
         mutableStateOf(smartConnectTcpingPercent.toString())
@@ -88,8 +87,7 @@ fun FeatureScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             FeatureSection(
-                title = "智能连接",
-                description = "主页短按默认使用已选节点；未选择时使用当前订阅第一个节点。长按执行 TCPing → URL Test 204 → 5MB 下载测速并连接最优节点。"
+                title = "智能连接"
             ) {
                 FeatureNumberField(
                     label = "TCPing 节点比例 (%)",
@@ -125,7 +123,6 @@ fun FeatureScreen(
 
             FeatureSection(
                 title = "使用共享测速结果",
-                description = "开启后，主页点击直接连接会优先使用本地省份和运营商匹配的共享测速结果，再按测速质量选择节点。没有匹配结果或读取失败时会回退到原有直连逻辑。",
                 titleAction = {
                     Switch(
                         checked = useSharedSpeedResultsEnabled,
@@ -133,21 +130,10 @@ fun FeatureScreen(
                         colors = featureSwitchColors()
                     )
                 }
-            ) {
-                Text(
-                    text = if (useSharedSpeedResultsEnabled) {
-                        "主页短按已启用共享测速结果选优"
-                    } else {
-                        "主页短按仍使用已选节点或当前订阅第一个节点"
-                    },
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            ) {}
 
             FeatureSection(
                 title = "断线恢复",
-                description = "VPN 连接后每 5 秒检测一次 204；连续三次失败时刷新当前订阅，并按 IP、名称的顺序匹配原节点后自动重连（忽略端口）。",
                 titleAction = {
                     Switch(
                         checked = disconnectRecoveryEnabled,
@@ -155,17 +141,10 @@ fun FeatureScreen(
                         colors = featureSwitchColors()
                     )
                 }
-            ) {
-                Text(
-                    text = "首次失败后会每隔 1 秒再确认两次，避免网络抖动触发重连。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            ) {}
 
             FeatureSection(
                 title = "Hy2 加速",
-                description = "设置 Hysteria2 节点的最大上下行带宽；自适应使用直连网络测速，并按 10 Mbps 向上取整。",
                 titleAction = {
                     Switch(
                         checked = hysteriaBandwidthEnabled,
@@ -209,13 +188,6 @@ fun FeatureScreen(
                         Text(if (isHysteriaBandwidthAdapting) "测试中..." else "自适应")
                     }
                 }
-                hysteriaBandwidthAdaptiveStatus?.let { status ->
-                    Text(
-                        text = status,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         }
     }
@@ -224,7 +196,6 @@ fun FeatureScreen(
 @Composable
 private fun FeatureSection(
     title: String,
-    description: String,
     titleAction: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
@@ -244,13 +215,6 @@ private fun FeatureSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
             titleAction?.invoke()
-        }
-        if (description.isNotBlank()) {
-            Text(
-                text = description,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
         content()
     }

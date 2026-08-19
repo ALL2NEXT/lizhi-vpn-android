@@ -92,9 +92,13 @@ class SettingsRepository(private val context: Context) {
     }
 
     val speedShareMode: Flow<SpeedShareMode> = context.dataStore.data.map { preferences ->
-        runCatching {
+        val storedMode = runCatching {
             SpeedShareMode.valueOf(preferences[SPEED_SHARE_MODE] ?: SpeedShareMode.OFF.name)
         }.getOrDefault(SpeedShareMode.OFF)
+        val sharedResultsEnabled = preferences[USE_SHARED_SPEED_RESULTS_ENABLED]
+            ?: preferences[LEGACY_SHARED_DATA_DIRECT_CONNECT_ENABLED]
+            ?: (storedMode == SpeedShareMode.SMART)
+        if (sharedResultsEnabled) SpeedShareMode.SMART else SpeedShareMode.OFF
     }
 
     val speedShareSmartReportedGroups: Flow<Set<String>> = context.dataStore.data.map { preferences ->
@@ -104,12 +108,15 @@ class SettingsRepository(private val context: Context) {
     val useSharedSpeedResultsEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[USE_SHARED_SPEED_RESULTS_ENABLED]
             ?: preferences[LEGACY_SHARED_DATA_DIRECT_CONNECT_ENABLED]
-            ?: false
+            ?: runCatching {
+                SpeedShareMode.valueOf(preferences[SPEED_SHARE_MODE] ?: SpeedShareMode.OFF.name)
+            }.getOrDefault(SpeedShareMode.OFF).let { it == SpeedShareMode.SMART }
     }
 
     suspend fun setSpeedShareMode(mode: SpeedShareMode) {
         context.dataStore.edit { preferences ->
             preferences[SPEED_SHARE_MODE] = mode.name
+            preferences[USE_SHARED_SPEED_RESULTS_ENABLED] = mode == SpeedShareMode.SMART
         }
     }
 
@@ -128,6 +135,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setUseSharedSpeedResultsEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[USE_SHARED_SPEED_RESULTS_ENABLED] = enabled
+            preferences[SPEED_SHARE_MODE] = if (enabled) {
+                SpeedShareMode.SMART.name
+            } else {
+                SpeedShareMode.OFF.name
+            }
         }
     }
 

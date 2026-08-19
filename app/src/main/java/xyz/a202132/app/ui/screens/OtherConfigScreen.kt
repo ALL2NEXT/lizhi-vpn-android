@@ -1,14 +1,23 @@
 package xyz.a202132.app.ui.screens
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -22,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -30,7 +40,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.TunStack
-import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.ui.theme.Primary
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -49,7 +58,6 @@ fun OtherConfigScreen(
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val vpnMtu by viewModel.vpnMtu.collectAsStateWithLifecycle()
-    val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
@@ -83,7 +91,7 @@ fun OtherConfigScreen(
     }
 
     AppScreenScaffold(
-        title = "其他配置",
+        title = "基础设定",
         onBack = onBack
     ) {
         Column(
@@ -93,8 +101,7 @@ fun OtherConfigScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             OtherConfigSection(
-                title = "网络配置",
-                description = ""
+                title = "网络配置"
             ) {
                 Text(
                     text = "IPV6路由",
@@ -103,54 +110,35 @@ fun OtherConfigScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = ipv6RoutingMode == IPv6RoutingMode.ONLY,
-                        onClick = { viewModel.setIPv6RoutingMode(IPv6RoutingMode.ONLY) },
-                        label = { Text("仅") }
-                    )
-                    FilterChip(
-                        selected = ipv6RoutingMode == IPv6RoutingMode.PREFER,
-                        onClick = { viewModel.setIPv6RoutingMode(IPv6RoutingMode.PREFER) },
-                        label = { Text("优先") }
-                    )
-                    FilterChip(
-                        selected = ipv6RoutingMode == IPv6RoutingMode.ENABLED,
-                        onClick = { viewModel.setIPv6RoutingMode(IPv6RoutingMode.ENABLED) },
-                        label = { Text("启用") }
-                    )
-                    FilterChip(
-                        selected = ipv6RoutingMode == IPv6RoutingMode.DISABLED,
-                        onClick = { viewModel.setIPv6RoutingMode(IPv6RoutingMode.DISABLED) },
-                        label = { Text("禁用") }
-                    )
-                }
-
+                MultiPositionSwitch(
+                    options = listOf("仅", "优先", "启用", "禁用"),
+                    selectedIndex = when (ipv6RoutingMode) {
+                        IPv6RoutingMode.ONLY -> 0
+                        IPv6RoutingMode.PREFER -> 1
+                        IPv6RoutingMode.ENABLED -> 2
+                        IPv6RoutingMode.DISABLED -> 3
+                    },
+                    onOptionSelected = { index ->
+                        viewModel.setIPv6RoutingMode(
+                            when (index) {
+                                0 -> IPv6RoutingMode.ONLY
+                                1 -> IPv6RoutingMode.PREFER
+                                2 -> IPv6RoutingMode.ENABLED
+                                else -> IPv6RoutingMode.DISABLED
+                            }
+                        )
+                    }
+                )
             }
 
             OtherConfigSection(
-                title = "TUN实现",
-                description = "gvisor兼容性最佳；system更省电；mixed为混合模式。修改后重连VPN生效。"
+                title = "TUN实现"
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    TunStack.values().forEach { stack ->
-                        FilterChip(
-                            selected = tunStack == stack,
-                            onClick = { viewModel.setTunStack(stack) },
-                            label = { Text(stack.displayName, maxLines = 1) }
-                        )
-                    }
-                }
-                Text(
-                    text = tunStack.description,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                val tunStacks = TunStack.values()
+                MultiPositionSwitch(
+                    options = tunStacks.map(TunStack::configValue),
+                    selectedIndex = tunStacks.indexOf(tunStack),
+                    onOptionSelected = { index -> viewModel.setTunStack(tunStacks[index]) }
                 )
             }
 
@@ -166,11 +154,6 @@ fun OtherConfigScreen(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = "APP 启动后自动恢复上次选择的节点；若节点已不存在则不恢复。",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                     Switch(
                         checked = rememberLastSelectedNodeEnabled,
@@ -182,8 +165,7 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
-                title = "节点清理",
-                description = "开启后，TCPing 或 URL Test 超时的节点会在测试完成后从本地删除；默认关闭。"
+                title = "节点清理"
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -196,11 +178,6 @@ fun OtherConfigScreen(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = "仅处理测试结果为超时的节点，不影响未测试节点。",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                     Switch(
                         checked = autoDeleteTimeoutNodes,
@@ -211,8 +188,7 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
-                title = "节点列表显示",
-                description = "开启后，将 TCPing、204 URLTest 和带宽测试结果显示为三段横向状态色块。按延迟或带宽分级，超时和未测速显示为灰色。"
+                title = "节点列表显示"
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -225,11 +201,6 @@ fun OtherConfigScreen(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = "仅显示绿、黄、红、灰四种状态色块，减少节点列表信息量。",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                     Switch(
                         checked = simplifiedNodeTestDisplayEnabled,
@@ -240,8 +211,7 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
-                title = "测试超时",
-                description = "单位均为毫秒。下载测速超时设为 0 表示不限制。"
+                title = "测试超时"
             ) {
                 OtherConfigNumberField(
                     label = "TCPing 超时",
@@ -276,8 +246,7 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
-                title = "并发与网络",
-                description = "并发配置对下一次测试生效；MTU需断开并重连VPN生效。"
+                title = "并发与网络"
             ) {
                 OtherConfigNumberField(
                     label = "TCPing 并发数",
@@ -319,13 +288,6 @@ fun OtherConfigScreen(
                         }
                     }
                 )
-                if (vpnState == VpnState.CONNECTED) {
-                    Text(
-                        text = "当前VPN已连接，修改MTU后请断开并重新连接。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
             }
         }
     }
@@ -334,7 +296,6 @@ fun OtherConfigScreen(
 @Composable
 private fun OtherConfigSection(
     title: String? = null,
-    description: String? = null,
     content: @Composable () -> Unit
 ) {
     Column(
@@ -349,14 +310,66 @@ private fun OtherConfigSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
-        if (!description.isNullOrBlank()) {
-            Text(
-                text = description,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
         content()
+    }
+}
+
+@Composable
+private fun MultiPositionSwitch(
+    options: List<String>,
+    selectedIndex: Int,
+    onOptionSelected: (Int) -> Unit
+) {
+    if (options.isEmpty()) return
+
+    val safeSelectedIndex = selectedIndex.coerceIn(options.indices)
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(4.dp)
+    ) {
+        val segmentWidth = maxWidth / options.size
+        val thumbOffset by animateDpAsState(
+            targetValue = segmentWidth * safeSelectedIndex,
+            label = "multi-position-switch"
+        )
+
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset)
+                .width(segmentWidth)
+                .fillMaxHeight()
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+                .background(Primary)
+        )
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, option ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onOptionSelected(index) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = option,
+                        maxLines = 1,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (index == safeSelectedIndex) {
+                            Color.White
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 
