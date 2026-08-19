@@ -321,7 +321,7 @@ async function pushSection(section) {
   const form = formState();
   const state = {
     subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,
-    settings: section === 'app-settings' || section === 'ai-config'
+    settings: section === 'app-settings' || section === 'ai-config' || section === 'experience-rewards'
       ? form.settings
       : currentState.settings,
     notice: section === 'notice' ? form.notice : currentState.notice,
