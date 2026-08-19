@@ -24,9 +24,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,8 +37,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import kotlinx.coroutines.delay
-import xyz.a202132.app.ui.components.StartupSplashOverlay
 import xyz.a202132.app.ui.components.NodeListScreen
 import xyz.a202132.app.ui.navigation.AppRoute
 import xyz.a202132.app.ui.screens.FeatureScreen
@@ -87,39 +83,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
-                    val startupUpdateCheckCompleted by viewModel.startupUpdateCheckCompleted.collectAsStateWithLifecycle()
-                    val splashDurationSeconds = AppConfig.STARTUP_SPLASH_DURATION_SECONDS.coerceAtLeast(0)
-                    var splashCountdownSeconds by remember(splashDurationSeconds) {
-                        mutableIntStateOf(splashDurationSeconds)
-                    }
-                    var splashTimedOut by remember(splashDurationSeconds) {
-                        mutableStateOf(splashDurationSeconds == 0)
-                    }
-                    var splashSkipped by remember { mutableStateOf(false) }
-                    val showStartupSplash =
-                        splashDurationSeconds > 0 &&
-                            !splashSkipped &&
-                            !splashTimedOut &&
-                            !startupUpdateCheckCompleted
-
-                    LaunchedEffect(splashDurationSeconds) {
-                        if (splashDurationSeconds == 0) return@LaunchedEffect
-                        splashCountdownSeconds = splashDurationSeconds
-                        splashTimedOut = false
-                        repeat(splashDurationSeconds) {
-                            delay(1000)
-                            splashCountdownSeconds = (splashCountdownSeconds - 1).coerceAtLeast(0)
-                        }
-                        splashTimedOut = true
-                    }
-
-                    if (showStartupSplash) {
-                        StartupSplashOverlay(
-                            countdownSeconds = splashCountdownSeconds,
-                            onSkip = { splashSkipped = true }
-                        )
-                    } else {
-                        val navigateTo: (String) -> Unit = { route ->
+                    val navigateTo: (String) -> Unit = { route ->
                             navController.navigate(route) {
                                 launchSingleTop = true
                             }
@@ -359,7 +323,6 @@ class MainActivity : ComponentActivity() {
                             }
 
                         }
-                    }
                 }
             }
         }

@@ -132,10 +132,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
     val updateInfo = _updateInfo.asStateFlow()
-    private val _startupUpdateCheckCompleted =
-        MutableStateFlow(AppConfig.STARTUP_SPLASH_DURATION_SECONDS <= 0)
-    val startupUpdateCheckCompleted = _startupUpdateCheckCompleted.asStateFlow()
-    
     private val _error = MutableStateFlow<String?>(null)
 
     val error = _error.asStateFlow()
@@ -307,15 +303,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     init {
         viewModelScope.launch {
-            _startupUpdateCheckCompleted.value = false
             try {
                 // Keep the cached selection available immediately; refreshing
                 // data should not blank and rewrite DataStore on every launch.
                 _isInitialized.value = true
 
-                // Preload cached and remote data while the startup splash is
-                // visible. User-agreement presentation must not serialize the
-                // resource-loading pipeline.
+                // Preload cached and remote data during startup. User-agreement
+                // presentation must not serialize the resource-loading pipeline.
                 subscriptionDataLoader.loadCachedSubscriptionList()
                 if (subscriptionDataLoader.initialize()) {
                     restoreRememberedLastSelectedNodeIfNeeded(
@@ -330,8 +324,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 checkUpdateInternal(isAuto = true)
             } catch (error: Exception) {
                 Log.e(tag, "Startup preload failed", error)
-            } finally {
-                _startupUpdateCheckCompleted.value = true
             }
         }
         
@@ -1180,23 +1172,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * 检查更新
      * @param isAuto 是否为自动检查 (不显示"已是最新"提示)
      */
-    fun checkUpdate(isAuto: Boolean = false, trackStartupSplash: Boolean = false) {
+    fun checkUpdate(isAuto: Boolean = false) {
         viewModelScope.launch {
-            checkUpdateInternal(isAuto, trackStartupSplash)
+            checkUpdateInternal(isAuto)
         }
     }
 
     private suspend fun checkUpdateInternal(
-        isAuto: Boolean,
-        trackStartupSplash: Boolean = false
+        isAuto: Boolean
     ) {
-        if (trackStartupSplash) {
-            _startupUpdateCheckCompleted.value = false
+        if (subscriptionDataLoader.updateInfo == null) {
+            return
         }
-        try {
-            if (subscriptionDataLoader.updateInfo == null) {
-                return
-            }
             // 节流检查 (自动检查可跳过)
             if (!isAuto) {
                 val now = System.currentTimeMillis()
@@ -1244,11 +1231,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(tag, "Failed to check update", e)
                 Log.w(tag, "Failed to check update", e)
             }
-        } finally {
-            if (trackStartupSplash) {
-                _startupUpdateCheckCompleted.value = true
-            }
-        }
     }
     
     // 下载状态

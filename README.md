@@ -77,7 +77,6 @@
 - 🔔 **公告系统**：支持远程推送公告通知
 - ℹ️ **关于页面**：展示应用版本信息、开源协议、GitHub 仓库链接和免责声明
 - ⚙️ **其他配置**：侧边栏可进入“其他配置”页面，集中管理 IPv6 路由、智能连接比例、超时时间、并发数、VPN MTU 等参数
-- 🚀 **启动画面**：可配置启动倒计时时长（支持跳过），可在 `AppConfig.kt` 中设置 `STARTUP_SPLASH_DURATION_SECONDS`
 - 💾 **记住上次选择节点**：默认开启，退出 APP 前选择的节点会在下次启动后恢复
 - 🎨 **现代 UI**：基于 Jetpack Compose，Material Design 3 风格，页面使用 NavHost + NavController 路由管理
 - 🔧 **开源可定制**：易于修改 API、品牌和配置
@@ -166,7 +165,6 @@ app/
 
 ```kotlin
 object AppConfig {
-    const val STARTUP_SPLASH_DURATION_SECONDS = 10 // 启动图倒计时时长，设为0则不启用
 
     // Cloudflare Worker 统一后台入口
     const val BACKEND_URL = "https://your-worker.workers.dev"
@@ -270,7 +268,6 @@ app/src/main/java/xyz/a202132/app/
 │   │   ├── DrawerContent.kt     # 侧边栏内容
 │   │   ├── NodeListDialog.kt    # 节点列表页面（文件名沿用旧命名，主入口已改为 NodeListScreen）
 │   │   ├── NodeSelector.kt      # 节点选择器
-│   │   ├── StartupSplashOverlay.kt  # 启动画面覆盖层（可配置倒计时）
 │   │   └── TrafficStatsRow.kt   # 流量统计展示
 │   ├── dialogs/                  # 对话框
 │   │   ├── AboutDialog.kt       # 关于页面弹窗

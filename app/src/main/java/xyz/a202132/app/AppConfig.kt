@@ -7,8 +7,6 @@ import java.net.URI
  * 应用配置常量
  */
 object AppConfig {
-    const val STARTUP_SPLASH_DURATION_SECONDS = 10 // 启动图倒计时时长，设为0则不启用
-
     // Cloudflare Worker 默认地址；主页连续点击标题五次可以切换到其他后端。
     const val DEFAULT_BACKEND_URL = "https://liuying.11145149.xyz"
 
