@@ -11,6 +11,20 @@ function csvMegabytes(megabytes) {
   return Math.round((Number(megabytes) || 0) * 10000) / 10000;
 }
 function usageTotal(usage) { return formatMegabytes(usage && usage.totalMb); }
+function loadUserColumnWidths() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(USER_COLUMN_WIDTHS_KEY) || '{}');
+    return stored && typeof stored === 'object' ? stored : {};
+  } catch (_) {
+    return {};
+  }
+}
+function persistUserColumnWidths() {
+  try { localStorage.setItem(USER_COLUMN_WIDTHS_KEY, JSON.stringify(userColumnWidths)); } catch (_) {}
+}
+function userColumnDefinition(columnKey) {
+  return USER_SHEET_COLUMNS.find(function(column) { return column.key === columnKey; });
+}
 function resolvedUserColumnWidth(column) {
   const storedWidth = Number(userColumnWidths[column.key]);
   return Number.isFinite(storedWidth)
@@ -329,4 +343,3 @@ function clearUserSearch() {
   applyUserSearch();
   input.focus();
 }
-
