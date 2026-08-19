@@ -7,6 +7,7 @@
 export function createClientRoutes(deps) {
   const {
     CLIENT_IP_HEADER,
+    canAccessAccountType,
     resolveAccountAccess,
     beijingTimestamp,
     normalizeAccountId,
@@ -35,6 +36,7 @@ async function handleClient(request, env) {
         enabled: source.enabled,
         encrypted: true,
         refreshOnAppOpen: source.refreshOnAppOpen,
+        minAccountType: source.minAccountType,
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
       })),
     notice: visibleNotice(state.notice),
@@ -62,8 +64,13 @@ async function handleManagedSubscription(path, request, env) {
     return json({ ok: false, error: "device_id_required" }, 401);
   }
   const access = await resolveAccountAccess(env, deviceId);
-  if (access.accountType !== "guest" && access.accountType !== "formal") {
-    return json({ ok: false, error: "account_access_denied" }, 403);
+  if (!canAccessAccountType(access.accountType, source.minAccountType)) {
+    return json({
+      ok: false,
+      error: "account_access_denied",
+      requiredAccountType: source.minAccountType,
+      accountType: access.accountType,
+    }, 403);
   }
   if (source.minAppVersion && !isAppVersionAtLeast(access.appVersion, source.minAppVersion)) {
     return json({

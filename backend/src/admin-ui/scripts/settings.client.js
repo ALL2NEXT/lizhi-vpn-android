@@ -3,6 +3,9 @@ function addSource(source) {
   const row = document.createElement('div');
   row.className = 'source-row';
   const sourceType = source.content ? 'content' : 'url';
+  const minAccountType = ['banned', 'guest', 'formal'].includes(source.minAccountType)
+    ? source.minAccountType
+    : 'guest';
   row.innerHTML = '<div class="source-row-header">' +
     '<div class="source-row-heading"><span class="source-row-title" data-source-title>线路</span></div>' +
     '<div class="source-row-controls" role="group" aria-label="线路排序和折叠操作">' +
@@ -21,6 +24,11 @@ function addSource(source) {
       '<h3 class="source-section-title">线路权限控制</h3>' +
       '<div class="grid source-permissions-grid">' +
         '<div class="field"><label>最低应用版本<input data-field="minAppVersion" type="text" value="' + esc(source.minAppVersion) + '" placeholder="例如 2.40（留空不限制）"></label></div>' +
+        '<div class="field"><label>最低账户等级<select data-field="minAccountType">' +
+          '<option value="banned" ' + (minAccountType === 'banned' ? 'selected' : '') + '>被封禁账户</option>' +
+          '<option value="guest" ' + (minAccountType === 'guest' ? 'selected' : '') + '>游客</option>' +
+          '<option value="formal" ' + (minAccountType === 'formal' ? 'selected' : '') + '>正式用户</option>' +
+        '</select></label></div>' +
         '<label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
       '</div>' +
     '</section>' +
@@ -184,6 +192,7 @@ function formState() {
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: sourceType === 'url' ? url : '',
       enabled: row.querySelector('[data-field="enabled"]').checked,
+      minAccountType: row.querySelector('[data-field="minAccountType"]').value,
       minAppVersion: row.querySelector('[data-field="minAppVersion"]').value.trim(),
       cacheMinutes: sourceType === 'url'
         ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 0)

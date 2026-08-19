@@ -1,4 +1,5 @@
 import { DEFAULT_STATE, STATE_KEY } from "../config.js";
+import { normalizeAccountType } from "../domain/account.js";
 import { beijingTimestamp } from "../domain/time.js";
 import { cleanText, parseFlag, plainObject } from "../lib/values.js";
 import {
@@ -49,6 +50,10 @@ export function normalizeState(input) {
           item.refreshOnAppOpen ?? item.openAppImmediateUpdate ?? item.updateOnAppOpen,
           true,
         ),
+        minAccountType: normalizeAccountType(
+          item.minAccountType ?? item.requiredAccountType ?? item.minimumAccountType,
+          "guest",
+        ),
         minAppVersion: normalizeMinimumAppVersion(
           item.minAppVersion ?? item.minimumAppVersion,
         ),
@@ -64,6 +69,7 @@ export function normalizeState(input) {
       url: item.url,
       enabled: item.enabled,
       refreshOnAppOpen: item.refreshOnAppOpen,
+      minAccountType: item.minAccountType,
       minAppVersion: item.minAppVersion,
       cacheMinutes: item.cacheMinutes,
       content: item.content,

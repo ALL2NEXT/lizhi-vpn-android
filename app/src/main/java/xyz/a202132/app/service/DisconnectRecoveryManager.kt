@@ -22,6 +22,8 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SubscriptionSource
+import xyz.a202132.app.data.model.ACCOUNT_TYPE_BANNED
+import xyz.a202132.app.data.model.canBeRequestedBy
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.network.NetworkClient
@@ -133,6 +135,14 @@ internal class DisconnectRecoveryManager(
         }
         val source = loadSubscriptionSource(sourceId) ?: run {
             Log.w(TAG, "Disconnect recovery skipped: subscription source $sourceId is unavailable")
+            return false
+        }
+        val accountType = accountManager.currentAccount()?.accountType ?: ACCOUNT_TYPE_BANNED
+        if (!source.canBeRequestedBy(accountType)) {
+            Log.w(
+                TAG,
+                "Disconnect recovery skipped: $accountType is below ${source.minAccountType}"
+            )
             return false
         }
         val directClient = createPhysicalNetworkClient()

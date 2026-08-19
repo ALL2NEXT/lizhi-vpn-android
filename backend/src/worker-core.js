@@ -17,6 +17,7 @@ import {
   normalizeAccountEmail,
   normalizeAccountId,
   normalizeAccountPassword,
+  canAccessAccountType,
   normalizeAndroidSdk,
   normalizeBatchUserReferences,
   normalizeRegistrationCode,
@@ -74,6 +75,7 @@ import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.js";
 
 const routeDeps = {
   CLIENT_IP_HEADER,
+  canAccessAccountType,
   resolveAccountAccess,
   beijingTimestamp,
   normalizeAccountId,
@@ -93,6 +95,8 @@ const routeDeps = {
   readD1User,
   attachDeviceToUser,
   registerOrTouchUser,
+  // 账户注册成功后需要用统一格式返回账户信息。
+  publicAccount,
   normalizeNickname,
   normalizeRegistrationCode,
   usagePeriodKeys,

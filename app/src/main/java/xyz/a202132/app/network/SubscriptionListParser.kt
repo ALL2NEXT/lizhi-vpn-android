@@ -3,8 +3,10 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import xyz.a202132.app.data.model.DEFAULT_MIN_ACCOUNT_TYPE
 import xyz.a202132.app.data.model.SubscriptionList
 import xyz.a202132.app.data.model.SubscriptionSource
+import xyz.a202132.app.data.model.normalizeSubscriptionAccountType
 
 /**
  * Parses the subscription contents returned by the unified Worker backend.
@@ -62,6 +64,9 @@ class SubscriptionListParser {
         val encrypted = source.get("encrypted")?.let { readBoolean(it) }
             ?: source.get("isEncrypted")?.let { readBoolean(it) }
             ?: false
+        val minAccountType = normalizeSubscriptionAccountType(
+            readString(source, "minAccountType", "requiredAccountType", "minimumAccountType")
+        )
         val refreshOnAppOpen = source.get("refreshOnAppOpen")?.let { readBoolean(it) }
             ?: source.get("openAppImmediateUpdate")?.let { readBoolean(it) }
             ?: source.get("updateOnAppOpen")?.let { readBoolean(it) }
@@ -72,6 +77,7 @@ class SubscriptionListParser {
             url = url,
             enabled = enabled,
             encrypted = encrypted,
+            minAccountType = minAccountType.ifBlank { DEFAULT_MIN_ACCOUNT_TYPE },
             refreshOnAppOpen = refreshOnAppOpen
         )
     }

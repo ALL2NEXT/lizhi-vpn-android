@@ -16,12 +16,14 @@ import kotlinx.coroutines.withTimeout
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.local.NodeDao
 import xyz.a202132.app.data.model.BackendAppSettings
+import xyz.a202132.app.data.model.ACCOUNT_TYPE_BANNED
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.NoticeInfo
 import xyz.a202132.app.data.model.SubscriptionList
 import xyz.a202132.app.data.model.SubscriptionSource
 import xyz.a202132.app.data.model.UpdateInfo
+import xyz.a202132.app.data.model.canBeRequestedBy
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.network.NetworkClient
@@ -91,7 +93,7 @@ internal class SubscriptionDataLoader(
         val listRequest = async { fetchSubscriptionList(forceRefresh) }
         val accountRequest = async { registerAccountForSession() }
         val listResult = listRequest.await()
-        accountRequest.await()
+        val account = accountRequest.await()
         val subscriptionList = listResult.getOrNull()
 
         if (subscriptionList == null) {
@@ -99,7 +101,29 @@ internal class SubscriptionDataLoader(
             return@coroutineScope false
         }
 
-        val accessibleSources = subscriptionList.sources
+        val accountType = account?.accountType
+            ?: accountManager.currentAccount()?.accountType
+            ?: ACCOUNT_TYPE_BANNED
+        val accessibleSources = subscriptionList.sources.filter { source ->
+            source.canBeRequestedBy(accountType)
+        }
+        val skippedSources = subscriptionList.sources - accessibleSources.toSet()
+        if (skippedSources.isNotEmpty()) {
+            Log.i(
+                TAG,
+                "Skipped inaccessible subscription sources for $accountType: " +
+                    skippedSources.joinToString { "${it.name}(min=${it.minAccountType})" }
+            )
+        }
+        if (accessibleSources.isEmpty()) {
+            nodeDao().replaceSubscriptionNodes(emptyList())
+            lastFetchedNodes = emptyList()
+            onNodesPersisted(emptyList())
+            if (subscriptionList.sources.isNotEmpty()) {
+                onMessage("当前账户等级为$accountType，暂无可用线路")
+            }
+            return@coroutineScope true
+        }
 
         val cachedNodes = nodeDao().getSubscriptionNodes().first()
         val accessibleSourceIds = accessibleSources.mapTo(mutableSetOf()) { it.id }

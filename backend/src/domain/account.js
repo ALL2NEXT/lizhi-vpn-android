@@ -16,6 +16,30 @@ export const ACCOUNT_TYPE_BANNED = "banned";
 export const ACCOUNT_TYPE_GUEST = "guest";
 export const ACCOUNT_TYPE_FORMAL = "formal";
 
+export function normalizeAccountType(value, fallback = ACCOUNT_TYPE_GUEST) {
+  const normalized = cleanText(value);
+  return [ACCOUNT_TYPE_BANNED, ACCOUNT_TYPE_GUEST, ACCOUNT_TYPE_FORMAL].includes(normalized)
+    ? normalized
+    : fallback;
+}
+
+export function accountTypeRank(value) {
+  switch (cleanText(value)) {
+    case ACCOUNT_TYPE_BANNED:
+      return 0;
+    case ACCOUNT_TYPE_GUEST:
+      return 1;
+    case ACCOUNT_TYPE_FORMAL:
+      return 2;
+    default:
+      return 0;
+  }
+}
+
+export function canAccessAccountType(accountType, minimumAccountType) {
+  return accountTypeRank(accountType) >= accountTypeRank(minimumAccountType);
+}
+
 export function isFormalAccount(user) {
   return Boolean(user && cleanText(user.email));
 }
