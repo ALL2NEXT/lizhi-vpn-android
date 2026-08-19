@@ -33,61 +33,6 @@ function renderUsers(data) {
   currentUsersData = data;
   renderDashboard(data);
   return;
-  dirtyUserIds.clear();
-  selectedUserIds.clear();
-  const batchLevel = el('batchLevel');
-  if (batchLevel) batchLevel.value = '';
-  const rows = (data.users || []).map(function(user) {
-    return '<tr class="user-row" data-user-row="' + esc(user.uid) + '">' +
-      '<td class="selection-cell"><input type="checkbox" data-user-select="' + esc(user.uid) +
-        '" aria-label="选择用户"></td>' +
-      '<td><code title="' + esc(user.uid) + '">' + esc(user.uid.slice(0, 16) + '…') + '</code></td>' +
-      '<td><input class="sheet-input" data-user-field="nickname" maxlength="24" value="' + esc(user.nickname) + '"></td>' +
-      '<td><select class="sheet-select" data-user-field="level">' + userLevelOptions(user.level) + '</select></td>' +
-      '<td><input class="sheet-input" data-user-field="brand" maxlength="80" value="' + esc(user.brand) + '"></td>' +
-      '<td><input class="sheet-input" data-user-field="model" maxlength="120" value="' + esc(user.model) + '"></td>' +
-      '<td><input class="sheet-input" data-user-field="androidVersion" maxlength="80" value="' + esc(user.androidVersion) + '"></td>' +
-      '<td><input class="sheet-input" data-user-field="appVersion" maxlength="40" value="' + esc(user.appVersion) + '"></td>' +
-      '<td class="readonly">' + (user.activeToday ? '是' : '否') + '</td>' +
-      '<td class="readonly">' + (user.activeThisMonth ? '是' : '否') + '</td>' +
-      '<td class="readonly">' + formatMegabytes(user.today && user.today.uploadMb) + '</td>' +
-      '<td class="readonly">' + formatMegabytes(user.today && user.today.downloadMb) + '</td>' +
-      '<td class="readonly">' + usageTotal(user.today) + '</td>' +
-      '<td class="readonly">' + formatMegabytes(user.month && user.month.uploadMb) + '</td>' +
-      '<td class="readonly">' + formatMegabytes(user.month && user.month.downloadMb) + '</td>' +
-      '<td class="readonly">' + usageTotal(user.month) + '</td>' +
-      '<td class="readonly">' + formatMegabytes(user.totalUploadMb) + '</td>' +
-      '<td class="readonly">' + formatMegabytes(user.totalDownloadMb) + '</td>' +
-      '<td class="readonly">' + usageTotal(user) + '</td>' +
-      '<td class="readonly">' + esc(user.createdAt || '暂无') + '</td>' +
-      '<td class="readonly">' + esc(user.lastReportAt || '暂无') + '</td>' +
-      '<td><button class="sheet-save" type="button" data-save-user="' + esc(user.uid) + '">保存</button>' +
-        '<button class="sheet-delete danger" type="button" data-delete-user="' + esc(user.uid) + '">删除</button></td>' +
-      '</tr>';
-  }).join('');
-  el('usersTable').innerHTML = rows
-    ? '<table class="user-sheet">' + userSheetColgroup() + '<thead><tr>' +
-      userSheetHeader() + '</tr></thead><tbody>' + rows + '</tbody></table>'
-    : '<small>暂无注册用户。</small>';
-  attachUserColumnResizers();
-  el('usersTable').querySelectorAll('[data-user-field]').forEach(function(control) {
-    control.oninput = function() { markUserDirty(control); applyUserSearch(false); };
-    control.onchange = function() { markUserDirty(control); applyUserSearch(false); };
-
-  });
-  el('usersTable').querySelectorAll('[data-user-select]').forEach(function(control) {
-    control.onchange = function() {
-      toggleUserSelection(control.dataset.userSelect, control.checked);
-    };
-  });
-  el('usersTable').querySelectorAll('[data-save-user]').forEach(function(button) {
-    button.onclick = function() { saveUser(button.dataset.saveUser); };
-  });
-  el('usersTable').querySelectorAll('[data-delete-user]').forEach(function(button) {
-    button.onclick = function() { deleteUser(button.dataset.deleteUser); };
-  });
-  updateUserToolbar();
-  applyUserSearch();
 }
 function markUserDirty(control) {
   const row = control.closest('[data-user-row]');
@@ -106,12 +51,8 @@ function updateUserToolbar() {
     ? '保存全部修改（' + dirtyUserIds.size + '）'
     : '保存全部修改';
   const hasSelection = selectedUserIds.size > 0;
-  const batchLevel = el('batchLevel');
-  const batchSetLevelButton = el('batchSetLevelButton');
   const batchBanUsersButton = el('batchBanUsersButton');
   const batchDeleteUsersButton = el('batchDeleteUsersButton');
-  if (batchLevel) batchLevel.disabled = savingAllUsers || !hasSelection;
-  if (batchSetLevelButton) batchSetLevelButton.disabled = savingAllUsers || !hasSelection;
   if (batchBanUsersButton) batchBanUsersButton.disabled = savingAllUsers || !hasSelection;
   if (batchDeleteUsersButton) batchDeleteUsersButton.disabled = savingAllUsers || !hasSelection;
 }
@@ -150,7 +91,6 @@ async function saveUser(accountId, silent) {
   if (!row) return false;
   const payload = {
     nickname: userFieldValue(row, 'nickname'),
-    level: Number(userFieldValue(row, 'level')),
     brand: userFieldValue(row, 'brand'),
     model: userFieldValue(row, 'model'),
     androidVersion: userFieldValue(row, 'androidVersion'),
@@ -230,46 +170,6 @@ function selectedUserAccountIds() {
   }
   return accountIds;
 }
-async function batchSetUserLevel(level, successMessage) {
-  const accountIds = selectedUserAccountIds();
-  if (!accountIds) return false;
-  try {
-    const response = await fetch(ADMIN_API_BASE + '/users/batch', {
-      method: 'PATCH',
-      headers: headers(),
-      body: JSON.stringify({accountIds: accountIds, level: level})
-    });
-    const responseText = await response.text();
-    let data = {};
-    try { data = JSON.parse(responseText); } catch (_) {}
-    if (!response.ok) {
-      show(adminErrorMessage(data.error, '批量修改失败（HTTP ' + response.status + '）'), true);
-      return false;
-    }
-    const refreshed = await loadUsers(true);
-    show(refreshed ? successMessage : '批量修改成功，但用户列表刷新失败', !refreshed);
-    return true;
-  } catch (error) {
-    show('批量修改失败，请检查网络', true);
-    return false;
-  }
-}
-async function batchSetLevel() {
-  const rawLevel = el('batchLevel').value;
-  const level = Number(rawLevel);
-  if (rawLevel === '' || !Number.isInteger(level) || level < 0 || level > 6) {
-    show('请选择要设置的等级', true);
-    return;
-  }
-  if (level === 0 && !confirm('确定将选中的用户全部封禁吗？')) return;
-  await batchSetUserLevel(level, '已批量修改用户等级');
-}
-async function batchBanUsers() {
-  const accountIds = selectedUserAccountIds();
-  if (!accountIds) return;
-  if (!confirm('确定封禁选中的 ' + accountIds.length + ' 个用户吗？')) return;
-  await batchSetUserLevel(0, '已批量封禁 ' + accountIds.length + ' 个用户');
-}
 async function batchDeleteUsers() {
   const accountIds = selectedUserAccountIds();
   if (!accountIds) return;
@@ -329,7 +229,7 @@ function exportUsersCsv() {
     return;
   }
   const headers = [
-    '账户哈希', '昵称', '等级', '品牌', '型号', 'Android', 'App版本',
+    '账户哈希', '昵称', '用户类型', '品牌', '型号', 'Android', 'App版本',
     '今日活跃', '本月活跃', '今日上传(MB)', '今日下载(MB)', '今日总量(MB)',
     '本月上传(MB)', '本月下载(MB)', '本月总量(MB)',
     '累计上传(MB)', '累计下载(MB)', '累计总量(MB)',
@@ -339,7 +239,7 @@ function exportUsersCsv() {
     return [
       user.uid,
       user.nickname,
-      user.level,
+      user.accountType,
       user.brand,
       user.model,
       user.androidVersion,

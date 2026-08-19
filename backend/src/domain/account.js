@@ -1,9 +1,4 @@
-import {
-  DEFAULT_EXPERIENCE_THRESHOLDS,
-  MAX_ACCOUNT_EXPERIENCE,
-  MAX_TRAFFIC_BYTES,
-  TEXT_ENCODER,
-} from "../config.js";
+import { MAX_TRAFFIC_BYTES, TEXT_ENCODER } from "../config.js";
 import { cleanText } from "../lib/values.js";
 
 const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -18,61 +13,19 @@ export function normalizeNickname(value, fallback = "") {
   return nickname || fallback;
 }
 
-export function normalizeLevel(value, fallback = 1) {
-  const level = Number(value);
-  return Number.isInteger(level) && level >= 0 && level <= 6 ? level : fallback;
-}
+export const ACCOUNT_TYPE_BANNED = "banned";
+export const ACCOUNT_TYPE_GUEST = "guest";
+export const ACCOUNT_TYPE_FORMAL = "formal";
 
-/** Only accounts with an email credential are formal accounts eligible for experience. */
-export function isEmailBoundAccount(user) {
+export function isFormalAccount(user) {
   return Boolean(user && cleanText(user.email));
 }
 
-export function normalizeExperience(value, fallback = 0) {
-  const experience = Number(value);
-  if (Number.isInteger(experience) && experience >= 0 && experience <= MAX_ACCOUNT_EXPERIENCE) {
-    return experience;
+export function accountTypeForUser(user) {
+  if (cleanText(user && user.status) === "banned" || Boolean(user && user.deviceBlocked)) {
+    return ACCOUNT_TYPE_BANNED;
   }
-  const fallbackExperience = Number(fallback);
-  return Number.isInteger(fallbackExperience) && fallbackExperience >= 0
-    ? Math.min(fallbackExperience, MAX_ACCOUNT_EXPERIENCE)
-    : 0;
-}
-
-export function normalizeExperienceThresholds(value) {
-  const values = Array.isArray(value) ? value : [];
-  return DEFAULT_EXPERIENCE_THRESHOLDS.map((fallback, index) => {
-    const threshold = Number(values[index]);
-    return Number.isInteger(threshold) && threshold > 0 && threshold <= MAX_ACCOUNT_EXPERIENCE
-      ? threshold
-      : fallback;
-  });
-}
-
-export function accountProgress(experienceTotalValue, thresholds, status = "active") {
-  const experienceTotal = normalizeExperience(experienceTotalValue);
-  if (status === "banned") {
-    return { level: 0, experience: experienceTotal, experienceTotal, status: "banned" };
-  }
-
-  let level = 1;
-  let experience = experienceTotal;
-  const normalizedThresholds = normalizeExperienceThresholds(thresholds);
-  while (level < 6) {
-    const required = normalizedThresholds[level - 1];
-    if (experience < required) break;
-    experience -= required;
-    level += 1;
-  }
-  return { level, experience, experienceTotal, status: "active" };
-}
-
-export function experienceTotalForLevel(levelValue, thresholds) {
-  const level = normalizeLevel(levelValue, 1);
-  if (level <= 1) return 0;
-  return normalizeExperienceThresholds(thresholds)
-    .slice(0, Math.min(level - 1, 5))
-    .reduce((total, threshold) => total + threshold, 0);
+  return isFormalAccount(user) ? ACCOUNT_TYPE_FORMAL : ACCOUNT_TYPE_GUEST;
 }
 
 export function normalizeAndroidSdk(value, fallback = 0) {
@@ -103,11 +56,6 @@ export function normalizeAccountEmail(value) {
 export function normalizeAccountPassword(value) {
   if (typeof value !== "string") return "";
   return value.length >= 8 && value.length <= 128 ? value : "";
-}
-
-export function normalizeTelegramJoinCode(value) {
-  const code = cleanText(value).replace(/[\u0000-\u001f\u007f]/g, "");
-  return code.length >= 1 && code.length <= 128 ? code : "";
 }
 
 export function normalizeInviteCode(value) {

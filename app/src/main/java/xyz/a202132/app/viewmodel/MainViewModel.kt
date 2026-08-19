@@ -1,5 +1,4 @@
 package xyz.a202132.app.viewmodel
-
 import android.app.Application
 import android.content.Intent
 import android.util.Log
@@ -98,6 +97,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val accountInfo = accountManager.accountInfo
     private val _isUpdatingNickname = MutableStateFlow(false)
+
     val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
     private val _isSyncingAccount = MutableStateFlow(false)
     val isSyncingAccount = _isSyncingAccount.asStateFlow()
@@ -111,15 +111,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isDeletingAccount = _isDeletingAccount.asStateFlow()
     private val _accountMessage = MutableStateFlow<String?>(null)
     val accountMessage = _accountMessage.asStateFlow()
-    private val _telegramTaskStatus = MutableStateFlow<TelegramTaskStatus?>(null)
-    val telegramTaskStatus = _telegramTaskStatus.asStateFlow()
-    private val _isLoadingTelegramTask = MutableStateFlow(false)
-    val isLoadingTelegramTask = _isLoadingTelegramTask.asStateFlow()
-    private val _isSubmittingTelegramTask = MutableStateFlow(false)
-    val isSubmittingTelegramTask = _isSubmittingTelegramTask.asStateFlow()
-    private val _telegramTaskMessage = MutableStateFlow<String?>(null)
-    val telegramTaskMessage = _telegramTaskMessage.asStateFlow()
-    
     private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
     val updateInfo = _updateInfo.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
@@ -198,6 +189,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         subscriptionNodes,
         favoriteNodes,
         nodeListCategory
+
     ) { subscription, favorites, category ->
         if (category == NodeListCategory.FAVORITES) favorites else subscription
     }
@@ -298,6 +290,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Preload cached and remote data during startup. User-agreement
                 // presentation must not serialize the resource-loading pipeline.
+
                 subscriptionDataLoader.loadCachedSubscriptionList()
                 if (subscriptionDataLoader.initialize()) {
                     restoreRememberedLastSelectedNodeIfNeeded(
@@ -398,6 +391,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val allNodes = currentSmartConnectNodes()
                 if (allNodes.isEmpty()) {
+
                     _error.value = "没有可用节点"
                     return@launch
                 }
@@ -498,6 +492,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * URL Test 所有节点延迟 (通过 ClashAPI)
      * VPN 运行中 → 用现有 ClashAPI (port 9090)
+
      * VPN 未运行 → 启动临时无头 sing-box 实例 (port 19090)
      */
     fun urlTestAllNodes(targetNodes: List<Node>? = null) {
@@ -598,6 +593,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setDisconnectRecoveryEnabled(enabled: Boolean) {
+
         viewModelScope.launch {
             settingsRepository.setDisconnectRecoveryEnabled(enabled)
         }
@@ -697,6 +693,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setVpnMtu(value)
         }
     }
+
 
     private suspend fun runUrlTestNodes(
         nodes: List<Node>,
@@ -798,6 +795,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun applyUrlTestResults(results: List<LatencyTester.LatencyResult>) {
+
         val updates = results.map { result ->
             NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
         }
@@ -898,6 +896,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setSelectedNodeId(node.id)
             Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
             when (vpnState.value) {
+
                 VpnState.DISCONNECTED -> {
                     if (!NetworkUtils.isNetworkAvailable(getApplication())) {
                         Log.w(tag, "Direct VPN start requested while network is unavailable")
@@ -997,6 +996,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val result = importResult.first
             val importedCount = importResult.second
+
 
             if (result == NodeImportResult.IMPORTED) {
                 settingsRepository.setNodeListCategory(NodeListCategory.FAVORITES)
@@ -1098,6 +1098,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun setIPv6RoutingMode(mode: IPv6RoutingMode) {
         viewModelScope.launch {
+
             settingsRepository.setIPv6RoutingMode(mode)
             // 如果 VPN 正在运行，重启以应用新设置
             restartVpnIfNeeded()
@@ -1198,6 +1199,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         _error.value = "已是最新版本"
                     }
                 }
+
             }.onFailure { e ->
                 Log.e(tag, "Failed to check update", e)
                 Log.w(tag, "Failed to check update", e)
@@ -1298,6 +1300,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val info = _updateInfo.value ?: return
         if (info.isForce == 1) return
 
+
         _updateInfo.value = null
         viewModelScope.launch {
             settingsRepository.setIgnoredUpdateVersionCode(info.versionCode)
@@ -1363,54 +1366,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun loadTelegramTask() {
-        if (_isLoadingTelegramTask.value) return
-        viewModelScope.launch {
-            _isLoadingTelegramTask.value = true
-            _telegramTaskStatus.value = null
-            _telegramTaskMessage.value = null
-            try {
-                accountManager.getTaskCenterStatus(
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-                ).onSuccess { status ->
-                    _telegramTaskStatus.value = status.telegram
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to load task center", error)
-                    _telegramTaskMessage.value = telegramTaskErrorMessage(error)
-                }
-            } finally {
-                _isLoadingTelegramTask.value = false
-            }
-        }
-    }
-
-    fun submitTelegramTask(telegramCode: String) {
-        if (_isSubmittingTelegramTask.value) return
-        viewModelScope.launch {
-            _isSubmittingTelegramTask.value = true
-            _telegramTaskMessage.value = null
-            try {
-                accountManager.submitTelegramTask(
-                    telegramCode = telegramCode,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-                ).onSuccess { status ->
-                    _telegramTaskStatus.value = status
-                    _telegramTaskMessage.value = "口令正确，TG 加群任务已完成"
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to submit Telegram task", error)
-                    _telegramTaskMessage.value = telegramTaskErrorMessage(error)
-                }
-            } finally {
-                _isSubmittingTelegramTask.value = false
-            }
-        }
-    }
-
-    fun clearTelegramTaskMessage() {
-        _telegramTaskMessage.value = null
-    }
-
-    /** 客户端再次校验公告时间，避免配置缓存导致过期公告继续显示。 */
     private fun isNoticeWithinTimeRange(noticeInfo: NoticeInfo): Boolean {
         val now = Instant.now()
         val startAt = noticeInfo.startAt.toInstantOrNull()
@@ -1463,7 +1418,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     code = code,
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess {
-                    _accountMessage.value = "邀请码绑定成功，邀请人可获得 ${backendSettings.value.invitationExperience.coerceAtLeast(0)} 点经验"
                 }.onFailure { error ->
                     Log.w(tag, "Failed to bind invite code", error)
                     _accountMessage.value = accountActionErrorMessage(error)
@@ -1498,6 +1452,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _accountMessage.value = accountActionErrorMessage(error)
                 }
                 if (result.isSuccess) {
+
                     val refreshed = subscriptionDataLoader.initialize(forceRefresh = true)
                     _accountMessage.value = if (refreshed) {
                         "账户切换成功"
@@ -1571,19 +1526,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun telegramTaskErrorMessage(error: Throwable): String {
-        return when (error.message) {
-            "email_binding_required" -> "绑定邮箱后才能完成任务"
-            "invalid_telegram_task_code" -> "请输入有效的 TG 进群口令"
-            "telegram_task_claim_failed" -> "TG 任务领取失败，请稍后重试"
-            "telegram_task_disabled" -> "后台暂未配置 TG 群任务"
-            "telegram_task_invalid_code" -> "TG 进群口令错误"
-            "telegram_task_already_claimed" -> "TG 加群任务已经完成"
-            "account_banned" -> "账户已被封禁，无法提交任务"
-            else -> error.message ?: "任务操作失败"
-        }
-    }
-
     private fun accountActionErrorMessage(error: Throwable): String {
         return when (error.message) {
             "invalid_login_credentials" -> "邮箱或密码错误"
@@ -1597,6 +1539,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             else -> error.message ?: "账户操作失败"
         }
     }
+
 
     fun acceptUserAgreement() {
         viewModelScope.launch {

@@ -8,15 +8,12 @@ export function createAdminUserRoutes(deps) {
     beijingTimestamp,
     cleanText,
     ensureUserSchema,
-    experienceTotalForLevel,
-    isEmailBoundAccount,
     json,
     normalizeBatchUserReferences,
     normalizeNickname,
     publicAccount,
     publicAdminUser,
     readD1User,
-    readState,
     resolveUserIdentity,
     usagePeriodKeys,
   } = deps;
@@ -66,9 +63,8 @@ export function createAdminUserRoutes(deps) {
         LEFT JOIN users_mb inviter ON inviter.id = u.invited_by_user_id
         LEFT JOIN usage_stats s ON s.user_id = u.id
         ORDER BY u.created_at DESC`).bind(day, day, day, month, month, month).all();
-      const state = await readState(env);
       const publicUsers = (query.results || []).map((row) =>
-        publicAdminUser(row, state.settings));
+        publicAdminUser(row));
 
       return json({
         ok: true,
@@ -82,38 +78,16 @@ export function createAdminUserRoutes(deps) {
     if (path === "/api/users/batch" && request.method === "PATCH") {
       const body = await request.json();
       const accountIds = normalizeBatchUserReferences(body && (body.uids || body.accountIds));
-      const level = Number(body && body.level);
+      const accountType = cleanText(body && body.accountType);
       if (
         accountIds.length === 0 ||
         accountIds.length > MAX_BATCH_USER_COUNT ||
-        !Number.isInteger(level) ||
-        level < 0 ||
-        level > 6
+        !["banned", "active"].includes(accountType)
       ) {
-        return json({ ok: false, error: "invalid_batch_user_update" }, 400);
+        return json({ ok: false, error: "invalid_batch_account_update" }, 400);
       }
 
       const db = await ensureUserSchema(env);
-      const state = await readState(env);
-      const status = level === 0 ? "banned" : "active";
-      const experienceTotal = experienceTotalForLevel(level, state.settings.experienceThresholds);
-      if (level > 1) {
-        const unbound = await db.prepare(
-          `WITH refs(value) AS (SELECT value FROM json_each(?)),
-           target_users(user_id) AS (
-             SELECT id FROM users_mb WHERE uid IN (SELECT value FROM refs)
-             UNION
-             SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
-           )
-           SELECT COUNT(*) AS count
-           FROM users_mb
-           WHERE id IN (SELECT user_id FROM target_users)
-             AND (email IS NULL OR email = '')`,
-        ).bind(JSON.stringify(accountIds)).first();
-        if (Number(unbound && unbound.count) > 0) {
-          return json({ ok: false, error: "email_binding_required" }, 403);
-        }
-      }
       const result = await db.prepare(
         `WITH refs(value) AS (SELECT value FROM json_each(?)),
          target_users(user_id) AS (
@@ -121,13 +95,11 @@ export function createAdminUserRoutes(deps) {
            UNION
            SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
          )
-         UPDATE users_mb
-         SET status = ?,
-             experience_total = CASE WHEN ? = 'active' THEN ? ELSE experience_total END
+         UPDATE users_mb SET status = ?
          WHERE id IN (SELECT user_id FROM target_users)`,
-      ).bind(JSON.stringify(accountIds), status, status, experienceTotal).run();
+      ).bind(JSON.stringify(accountIds), accountType).run();
       const changed = Number(result.meta && result.meta.changes) || 0;
-      return json({ ok: true, accountIds, level, changed });
+      return json({ ok: true, accountIds, accountType, changed });
     }
 
     if (path === "/api/users/batch" && request.method === "DELETE") {
@@ -241,26 +213,6 @@ export function createAdminUserRoutes(deps) {
         userAssignments.push("nickname = ?");
         userValues.push(nickname);
       }
-      if (Object.prototype.hasOwnProperty.call(body || {}, "level")) {
-        const level = Number(body.level);
-        if (!Number.isInteger(level) || level < 0 || level > 6) {
-          return json({ ok: false, error: "invalid_level" }, 400);
-        }
-        const state = await readState(env);
-        if (level > 1) {
-          const user = await readD1User(env, identity.userId, state.settings);
-          if (!user) return json({ ok: false, error: "account_not_found" }, 404);
-          if (!isEmailBoundAccount(user)) {
-            return json({ ok: false, error: "email_binding_required" }, 403);
-          }
-        }
-        userAssignments.push("status = ?");
-        userValues.push(level === 0 ? "banned" : "active");
-        if (level > 0) {
-          userAssignments.push("experience_total = ?");
-          userValues.push(experienceTotalForLevel(level, state.settings.experienceThresholds));
-        }
-      }
       const editableTextFields = [
         ["brand", "brand", 80],
         ["model", "model", 120],
@@ -299,10 +251,9 @@ export function createAdminUserRoutes(deps) {
       if (changed < 1) {
         return json({ ok: false, error: "account_not_found" }, 404);
       }
-      const state = await readState(env);
       return json({
         ok: true,
-        user: publicAccount(await readD1User(env, identity.userId, state.settings)),
+        user: publicAccount(await readD1User(env, identity.userId)),
       });
     }
 

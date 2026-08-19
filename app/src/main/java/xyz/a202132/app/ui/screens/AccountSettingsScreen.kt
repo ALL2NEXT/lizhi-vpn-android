@@ -1,5 +1,4 @@
 package xyz.a202132.app.ui.screens
-
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -7,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,7 +21,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -122,7 +119,7 @@ fun AccountSettingsScreen(
         normalizedNickname.isNotBlank() &&
         normalizedNickname.length <= 24 &&
         normalizedNickname != account.nickname &&
-        account.level > 0 &&
+        account.accountType != "banned" &&
         !isUpdatingNickname
     val canSyncAccount = !isSyncingAccount &&
         !isUpdatingNickname &&
@@ -132,7 +129,7 @@ fun AccountSettingsScreen(
         !isDeletingAccount
     val canOpenBindDialog = account != null &&
         account.email.isBlank() &&
-        account.level > 0 &&
+        account.accountType != "banned" &&
         backendSettings.registrationEnabled &&
         !isSyncingAccount &&
         !isBindingAccount &&
@@ -145,7 +142,7 @@ fun AccountSettingsScreen(
         .replace("-", "").replace(" ", "")
     val canBindAccount = account != null &&
         account.email.isBlank() &&
-        account.level > 0 &&
+        account.accountType != "banned" &&
         backendSettings.registrationEnabled &&
         android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches() &&
         (normalizedRegistrationInviteCode.isBlank() || normalizedRegistrationInviteCode.matches(Regex("^[A-HJ-NP-Z2-9]{8}$"))) &&
@@ -156,20 +153,20 @@ fun AccountSettingsScreen(
         password == confirmPassword &&
         !isBindingAccount
     val canSwitchAccount = account != null &&
-        account.level > 0 &&
+        account.accountType != "banned" &&
         !account.deviceBlocked &&
         android.util.Patterns.EMAIL_ADDRESS.matcher(switchEmail.trim()).matches() &&
         switchPassword.length in 8..128 &&
         !isSwitchingAccount &&
         !isDeletingAccount
     val canStartDeleteAccount = account != null &&
-        account.level > 0 &&
+        account.accountType != "banned" &&
         !isDeletingAccount &&
         !isSwitchingAccount
     val normalizedInviteCode = inviteCode.trim().uppercase().replace("-", "").replace(" ", "")
     val canBindInviteCode = account != null &&
         account.invitedByCode.isBlank() &&
-        account.level > 0 &&
+        account.accountType != "banned" &&
         normalizedInviteCode.matches(Regex("^[A-HJ-NP-Z2-9]{8}$")) &&
         !isBindingInviteCode
     AppScreenScaffold(
@@ -226,7 +223,7 @@ fun AccountSettingsScreen(
                     AccountInfoRowWithIconAction(
                         label = "昵称",
                         value = account.nickname.displayOrUnknown(),
-                        actionEnabled = account.level > 0 && !isUpdatingNickname,
+                        actionEnabled = account.accountType != "banned" && !isUpdatingNickname,
                         onAction = {
                             nickname = account.nickname
                             showNicknameDialog = true
@@ -250,28 +247,11 @@ fun AccountSettingsScreen(
                             showBindDialog = true
                         }
                     )
-                    if (account.email.isBlank() && account.level > 0) {
-                        Text(
-                            text = if (backendSettings.registrationEnabled) {
-                                val reward = backendSettings.accountBindingExperience.coerceAtLeast(0)
-                                "绑定邮箱后成为正式用户，可获得 $reward 点经验。"
-                            } else {
-                                "正式用户注册暂未开放。"
-                            },
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    AccountLevelRow(
-                        accountInfo = account,
-                        thresholds = backendSettings.experienceThresholds
-                    )
                     AccountInfoRow(
-                        label = "当前经验",
-                        value = accountExperienceText(account, backendSettings.experienceThresholds)
+                        label = "账户类型",
+                        value = accountIdentityText(account)
                     )
                 }
-
                 AccountSettingsSection(title = "邀请关系") {
                     AccountInfoRowWithAction(
                         label = "我的邀请码",
@@ -290,19 +270,12 @@ fun AccountSettingsScreen(
                         label = "已邀请用户",
                         value = "${account.inviteeCount.coerceAtLeast(0)} 人"
                     )
-                    if (account.level > 0) {
-                        Text(
-                            text = "每成功邀请一名用户绑定你的邀请码，可获得 ${backendSettings.invitationExperience.coerceAtLeast(0)} 点经验。",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                     AccountInfoRowWithAction(
                         label = "上级邀请码",
                         value = account.invitedByCode.ifBlank { "未绑定" },
                         actionLabel = "填写邀请码",
                         showAction = account.invitedByCode.isBlank(),
-                        actionEnabled = account.level > 0 && !isBindingInviteCode,
+                        actionEnabled = account.accountType != "banned" && !isBindingInviteCode,
                         onAction = {
                             inviteCode = ""
                             showInviteDialog = true
@@ -315,13 +288,6 @@ fun AccountSettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-
-                AccountSettingsSection(title = "当前权益") {
-                    AccountInfoRow(
-                        label = "线路权益",
-                        value = accountEntitlementText(account)
-                    )
                 }
 
                 AccountSettingsSection(title = "客户端信息") {
@@ -376,7 +342,7 @@ fun AccountSettingsScreen(
                     Text(
                         text = if (account.deviceBlocked) {
                             "当前设备已被封禁，不能切换或注销账户。"
-                        } else if (account.level == 0) {
+                        } else if (account.accountType == "banned") {
                             "当前账户已被封禁，不能注销账户。"
                         } else {
                             "注销账户会永久删除账户、邮箱绑定和全部流量记录，操作不可恢复。"
@@ -403,7 +369,7 @@ fun AccountSettingsScreen(
                         Text(
                             when {
                                 account.deviceBlocked -> "封禁设备不可注销"
-                                account.level == 0 -> "封禁账户不可注销"
+                                account.accountType == "banned" -> "封禁账户不可注销"
                                 isDeletingAccount -> "注销中…"
                                 else -> "注销账户并清除数据后退出"
                             }
@@ -456,7 +422,6 @@ fun AccountSettingsScreen(
             title = { Text("注册正式用户") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("请输入邮箱和密码，注册成功后可获得邮箱绑定经验奖励。")
                     OutlinedTextField(
                         value = registrationInviteCode,
                         onValueChange = { if (it.length <= 32) registrationInviteCode = it },
@@ -827,94 +792,12 @@ private fun AccountInfoRowWithIconAction(
     }
 }
 
-@Composable
-private fun AccountLevelRow(
-    accountInfo: AccountInfo,
-    thresholds: List<Long>
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "账户等级",
-            modifier = Modifier.weight(0.34f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp
-        )
-        Row(
-            modifier = Modifier.weight(0.66f),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = accountLevelText(accountInfo),
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 14.sp
-            )
-            LinearProgressIndicator(
-                progress = accountExperienceProgress(accountInfo, thresholds),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(6.dp),
-                color = if (accountInfo.level == 0) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-                trackColor = MaterialTheme.colorScheme.surface
-            )
-        }
-    }
-}
-
-private fun accountLevelText(accountInfo: AccountInfo): String {
-    return when {
-        accountInfo.deviceBlocked -> "Lv0 · 设备已封禁"
-        accountInfo.level == 0 -> "Lv0 · 账户已封禁"
-        else -> "Lv${accountInfo.level.coerceIn(1, 6)}"
-    }
-}
-
 private fun accountIdentityText(accountInfo: AccountInfo): String {
     return when {
-        accountInfo.deviceBlocked -> "受限设备"
-        accountInfo.level == 0 -> "受限账户"
-        accountInfo.email.isBlank() -> "游客"
-        else -> "正式用户"
+        accountInfo.deviceBlocked || accountInfo.accountType == "banned" -> "被封禁用户"
+        accountInfo.accountType == "formal" -> "正式用户"
+        else -> "游客"
     }
-}
-
-private fun accountEntitlementText(accountInfo: AccountInfo): String {
-    return "Lv${accountInfo.level.coerceIn(0, 6)}尊享线路"
-}
-
-private fun accountExperienceText(
-    accountInfo: AccountInfo,
-    thresholds: List<Long>
-): String {
-    val experience = accountInfo.experience.coerceAtLeast(0L)
-    return when {
-        accountInfo.email.isBlank() && accountInfo.level > 0 -> "$experience · 绑定邮箱后可获取经验"
-        accountInfo.level == 0 -> "$experience · Lv0 不可获取经验"
-        accountInfo.level >= 6 -> "$experience · 已达最高等级"
-        else -> {
-            val required = thresholds.getOrNull(accountInfo.level - 1)
-            if (required == null) "$experience" else "$experience / $required"
-        }
-    }
-}
-
-private fun accountExperienceProgress(
-    accountInfo: AccountInfo,
-    thresholds: List<Long>
-): Float {
-    if (accountInfo.level >= 6) return 1f
-    if (accountInfo.level <= 0) return 0f
-    val required = thresholds.getOrNull(accountInfo.level - 1) ?: return 0f
-    if (required <= 0L) return 0f
-    return (accountInfo.experience.toFloat() / required.toFloat()).coerceIn(0f, 1f)
 }
 
 private fun String.displayOrUnknown(): String = trim().ifBlank { "未登记" }

@@ -11,34 +11,6 @@ function csvMegabytes(megabytes) {
   return Math.round((Number(megabytes) || 0) * 10000) / 10000;
 }
 function usageTotal(usage) { return formatMegabytes(usage && usage.totalMb); }
-function levelOptions(selectedLevel) {
-  const selected = Number(selectedLevel);
-  return [0, 1, 2, 3, 4, 5, 6].map(function(level) {
-    return '<option value="' + level + '" ' + (level === selected ? 'selected' : '') +
-      '>Lv' + level + (level === 0 ? '（最低）' : '') + '</option>';
-  }).join('');
-}
-function userLevelOptions(selectedLevel) {
-  const selected = Number(selectedLevel);
-  return [0, 1, 2, 3, 4, 5, 6].map(function(level) {
-    return '<option value="' + level + '" ' + (level === selected ? 'selected' : '') +
-      '>Lv' + level + (level === 0 ? '（封禁）' : '') + '</option>';
-  }).join('');
-}
-function loadUserColumnWidths() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(USER_COLUMN_WIDTHS_KEY) || '{}');
-    return stored && typeof stored === 'object' ? stored : {};
-  } catch (_) {
-    return {};
-  }
-}
-function persistUserColumnWidths() {
-  try { localStorage.setItem(USER_COLUMN_WIDTHS_KEY, JSON.stringify(userColumnWidths)); } catch (_) {}
-}
-function userColumnDefinition(columnKey) {
-  return USER_SHEET_COLUMNS.find(function(column) { return column.key === columnKey; });
-}
 function resolvedUserColumnWidth(column) {
   const storedWidth = Number(userColumnWidths[column.key]);
   return Number.isFinite(storedWidth)
@@ -78,7 +50,7 @@ function userSortValue(row, columnKey) {
   switch (columnKey) {
     case 'accountId': return user.uid;
     case 'nickname': return field('nickname', user.nickname);
-    case 'level': return Number(field('level', user.level)) || 0;
+    case 'accountType': return String(field('accountType', user.accountType));
     case 'brand': return field('brand', user.brand);
     case 'model': return field('model', user.model);
     case 'androidVersion': return field('androidVersion', user.androidVersion);
@@ -101,13 +73,12 @@ function userSortValue(row, columnKey) {
 }
 function compareUserSortValues(left, right, columnKey) {
   const numericColumns = [
-    'level', 'activeToday', 'activeMonth',
+    'accountType', 'activeToday', 'activeMonth',
     'trafficTodayUpload', 'trafficTodayDownload', 'trafficToday',
     'trafficMonthUpload', 'trafficMonthDownload', 'trafficMonth',
     'trafficTotalUpload', 'trafficTotalDownload', 'trafficTotal',
   ];
   if (numericColumns.includes(columnKey)) return Number(left) - Number(right);
-
   const leftText = String(left == null ? '' : left);
   const rightText = String(right == null ? '' : right);
   if (!leftText && rightText) return 1;
@@ -294,7 +265,6 @@ function userRowSearchText(row) {
   const values = [row.dataset.userRow || ''];
   row.querySelectorAll('[data-user-field]').forEach(function(control) {
     values.push(control.value || '');
-    if (control.dataset.userField === 'level') values.push('lv' + control.value);
   });
   row.querySelectorAll('td.readonly').forEach(function(cell) {
     values.push(cell.textContent || '');

@@ -1,5 +1,4 @@
 # 流萤加速器 (FireflyVPN)
-
 <p align="center">
   <img src="./images/firefly.jpg" width="100" alt="Logo">
 </p>
@@ -426,150 +425,7 @@ app/src/main/
 - 日志来源为 APP 内部专用 `RuntimeLog`，不直接导出 Android logcat
 - 默认最多保留最新 1000 条日志；单条消息会截断，旧日志会自动滚动清理
 - 仅记录脱敏后的关键 Info / Warn / Error，例如 APP 启动、VPN 启停、核心兼容校验、自动测试摘要、导入结果、更新/公告请求失败、sing-box warn/error 等
-- 不输出节点链接、生成的 sing-box 配置、server/IP/domain/port、UUID/password/token/key、分应用代理包名列表等敏感信息
-
-**设置位置**：侧边栏 → 运行日志
-
----
-
-### IPv6 路由
-
-IPv6 路由功能允许用户控制 VPN 对 IPv6 网络的处理方式。
-
-**四种模式**：
-
-| 模式 | 说明 | 适用场景 |
-|------|------|----------|
-| **禁用** (默认) | 不使用 IPv6，所有流量走 IPv4 | 网络环境不支持 IPv6 时 |
-| **启用** | 同时支持 IPv4 和 IPv6，优先 IPv4 | 需要 IPv6 但追求稳定性 |
-| **优先** | 同时支持 IPv4 和 IPv6，优先 IPv6 | 希望尽量使用 IPv6 网络 |
-| **仅** | 仅使用 IPv6 (实验性) | 测试纯 IPv6 环境 |
-
-> ⚠️ **注意**：
-> - 「仅」模式下，不支持 IPv6 的网站/服务将无法访问
-> - 节点本身需要支持 IPv6 才能正常使用 IPv6 路由功能
-> - 可通过 [test-ipv6.com](https://test-ipv6.com) 测试 IPv6 连通性
-
-**设置位置**：侧边栏 → 其他配置 → 网络 → IPv6 路由
-
----
-
-### 订阅列表与多线路
-
-APP 先请求 Cloudflare Worker 的 `/api/client` 获取订阅线路元数据，再由 APP 直接请求每条线路的 `url` 并解析节点。Worker 不拉取、不缓存详细节点内容。
-
-订阅列表示例：
-
-```json
-{
-  "subscriptions": [
-    {"id": "1", "name": "线路1", "url": "https://game.11145149.xyz/", "enabled": true, "minLevel": 1},
-    {"id": "2", "name": "线路2", "url": "https://example.com/subscription", "enabled": true, "minLevel": 6}
-  ],
-  "notice": null,
-  "appUpdate": null
-}
-```
-
-- 首次获取线路列表时，APP 会拉取所有已启用且账户等级满足要求的线路
-- APP 会先根据当前账户等级过滤线路；例如 Lv1 不会请求最低要求 Lv6 的订阅接口
-- 未同步到本地账户资料时按 Lv0 比较；只要 `0 >= minLevel` 仍会请求，且不会因托管地址额外拦截
-- 订阅内容支持明文或普通 Base64 节点列表解析
-- `id` 由 Worker 按有效线路顺序自动生成 `1、2、3…`，管理后台不再配置线路 ID
-- 重复节点会自动去重，节点卡片会显示其所属线路名称
-
----
-
-### 数据模型与本地存储变更
-
-`Node` 模型保留了节点测速结果字段；其中历史自动化测试字段仅用于兼容已有本地数据库：
-
-- `downloadMbps`：下载带宽（Mbps）
-- `uploadMbps`：上传带宽（Mbps，预留）
-- `autoTestStatus`：历史自动化测试状态（兼容字段）
-- `autoTestedAt`：历史自动化测试时间戳（兼容字段）
-- `source`：节点来源（`SUBSCRIPTION` / `FAVORITE`）
-- `subscriptionSourceId`：远程订阅线路自动序号（由 Worker 按 `1、2、3…` 生成）
-- `subscriptionSourceName`：远程订阅线路名称
-- `favoriteSourceNodeId`：从订阅节点收藏而来的来源节点 ID
-- `favoriteCreatedAt`：收藏节点创建时间，用于收藏列表排序
-
-`SettingsRepository` 节点列表配置项：
-
-- `nodeListCategory`（当前节点列表视图：订阅线路或收藏节点）
-- `selectedSubscriptionSourceId`（当前选中的订阅线路）
-
-`SettingsRepository` 用户可配置项（"其他配置"页面）：
-
-- `tcpingTestTimeoutMs` — TCPing 超时（毫秒）
-- `urlTestTimeoutMs` — URL Test 超时（毫秒）
-- `speedTestDownloadTimeoutMs` — 单次下载测速超时（毫秒）
-- `tcpingConcurrency` — TCPing 并发数
-- `urlTestConcurrency` — URL Test 并发数
-- `bandwidthTestConcurrency` — 带宽测试并发数（1~3，默认 1）
-- `smartConnectTcpingPercent` — 智能连接第一阶段 TCPing 节点比例（1~100，默认 100）
-- `smartConnectUrlTestPercent` — 智能连接第二阶段 URL Test 候选比例（1~100，默认 50）
-- `smartConnectSpeedTestPercent` — 智能连接第三阶段 5MB 测速候选比例（1~100，默认 50）
-- `hysteriaUpMbps` — Hysteria2 上行最大带宽（Mbps，默认 1000，设为 0 表示不设置）
-- `hysteriaDownMbps` — Hysteria2 下行最大带宽（Mbps，默认 1000，设为 0 表示不设置）
-- `vpnMtu` — VPN MTU 值（修改后需断开重连）
-- `rememberLastSelectedNodeEnabled` — 是否记住上次选择的节点（默认开启）
-- `lastSelectedNodeId` — 上次选择节点 ID
-
-> ⚠️ 当前数据库使用 SQLCipher 加密存储（version 3），并配置了 `fallbackToDestructiveMigration()`。当 Room 版本升级时，会清空本地节点数据后重建。旧版明文数据库会在升级时自动检测并删除重建。
-
----
-
-## 安全特性
-
-本项目内置多层安全防护机制，防止 APK 被逆向分析、篡改或抓包复制订阅。
-
-### 1. 字符串混淆 (StringFog)
-
-使用 [StringFog](https://github.com/niceyun/gradle-stringfog-plugin) 插件对代码中的硬编码字符串进行加密混淆。
-
-**效果**：反编译后无法直接看到 API 地址、密钥等敏感字符串。
-
-**配置位置**：`app/build.gradle.kts`
-
-```kotlin
-configure<com.github.megatronking.stringfog.plugin.StringFogExtension> {
-    implementation = "com.github.megatronking.stringfog.xor.StringFogImpl"
-    enable = true
-    fogPackages = arrayOf("xyz.a202132.app") // 只加密我们自己的代码
-    kg = com.github.megatronking.stringfog.plugin.kg.RandomKeyGenerator()
-    mode = com.github.megatronking.stringfog.plugin.StringFogMode.base64
-}
-```
-
----
-
-### 2. 签名校验 (Signature Verification)
-
-APP 启动时在 Native 层校验 APK 签名。如果签名不匹配（说明被重新签名/篡改），APP 会立即 Crash。
-
-**签名文件**：`app/src/main/cpp/native-lib.cpp`
-
-#### 如何设置签名 SHA-256
-
-1. 获取你的 Release 签名证书 SHA-256 值：
-
-```powershell
-# 使用 Android Studio 自带的 JDK
-& "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -list -v -keystore your-release-key.jks -alias your-alias
-```
-
-2. 复制输出中的 `SHA256:` 值（格式如 `95:CA:C5:8A:...`），去掉冒号得到 64 位十六进制字符串
-
-3. 使用以下 Python 脚本生成混淆后的双数组：
-
-```python
-import os
-
-# 将 SHA-256 输出的冒号去掉，转成大写
-sha256_hex = "95CAC58A..."  # 替换为你的完整 64 位十六进制字符串
-sha256_bytes = bytes.fromhex(sha256_hex)
-assert len(sha256_bytes) == 32
+- 不输出节点链接、生成的 sing-box …1542 tokens truncated…(sha256_bytes) == 32
 
 kXor = 0x5D  # XOR 常量，可自定义
 partB = list(os.urandom(32))  # 随机生成 partB
@@ -698,7 +554,7 @@ App 使用的唯一公开接口是 `GET /api/client`：
 ```json
 {
   "subscriptions": [
-    {"id": "1", "name": "线路1", "enabled": true, "encrypted": false, "minLevel": 1, "url": "https://game.11145149.xyz/"}
+    {"id": "1", "name": "线路1", "enabled": true, "encrypted": false, "url": "https://game.11145149.xyz/"}
   ],
   "settings": {
     "websiteUrl": "https://example.com",
@@ -712,7 +568,6 @@ App 使用的唯一公开接口是 `GET /api/client`：
 }
 ```
 
-APP 手动刷新时会重新请求 `/api/client`，先按账户等级与 `minLevel` 过滤无权访问的线路，再请求其余线路 URL。`refresh=1` 参数仅为兼容旧版本保留，Worker 不执行上游刷新。`encrypted` 标记该线路正文是否需要客户端 Native 解码；外部订阅仍由 App 直接获取，Worker 只会自动加密后台导入并由其自身托管的纯文本节点。公告配置放在 `notice`，版本更新配置放在 `appUpdate`，格式沿用项目现有 `NoticeInfo` 和 `UpdateInfo` 字段。
 
 管理后台的每条线路也支持直接粘贴纯文本节点（每行一个）。填写纯文本后，该内容会随后台状态保存在 `CONFIG` KV 中，单条线路最多 2 MiB；Worker 会忽略该线路填写的外部 URL，并在 `/api/client` 中自动下发自身的 `/api/subscription/<id>` 地址及 `encrypted: true`。App 请求这个地址时，Worker 才按照当前请求 IP 动态编码返回，公开的 `/api/client` 不包含节点明文。清空纯文本后，线路恢复使用外部订阅地址和手动加密标记。
 
@@ -752,7 +607,6 @@ APP 手动刷新时会重新请求 `/api/client`，先按账户等级与 `minLev
 | `subscriptions[].url` | String | ✅ | 实际节点订阅地址 |
 | `subscriptions[].enabled` | Boolean / Int | ❌ | 是否启用该线路，默认启用 |
 | `subscriptions[].encrypted` | Boolean / Int | ❌ | 是否按 Native 私有格式解码，默认关闭 |
-| `subscriptions[].minLevel` | Int (0~6) | ❌ | 请求线路所需最低账户等级，默认 Lv1 |
 
 APP 会先过滤当前账户等级不足的线路，再并发获取其余启用线路，并按 `id` 保持每条线路独立；节点列表按 `name` 分组展示，切换线路后测速只作用于当前线路。`subscriptions` 也兼容 `sources`、`list`、`data` 字段名。
 

@@ -1,5 +1,4 @@
 package xyz.a202132.app.viewmodel
-
 import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
@@ -23,7 +22,6 @@ import xyz.a202132.app.data.model.NoticeInfo
 import xyz.a202132.app.data.model.SubscriptionList
 import xyz.a202132.app.data.model.SubscriptionSource
 import xyz.a202132.app.data.model.UpdateInfo
-import xyz.a202132.app.data.model.canBeRequestedBy
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.network.NetworkClient
@@ -93,7 +91,7 @@ internal class SubscriptionDataLoader(
         val listRequest = async { fetchSubscriptionList(forceRefresh) }
         val accountRequest = async { registerAccountForSession() }
         val listResult = listRequest.await()
-        val account = accountRequest.await()
+        accountRequest.await()
         val subscriptionList = listResult.getOrNull()
 
         if (subscriptionList == null) {
@@ -101,28 +99,7 @@ internal class SubscriptionDataLoader(
             return@coroutineScope false
         }
 
-        val accountLevel = account?.level
-            ?: accountManager.currentAccount()?.level
-            ?: UNKNOWN_ACCOUNT_LEVEL
-        val accessibleSources = subscriptionList.sources.filter { source ->
-            source.canBeRequestedBy(accountLevel)
-        }
-        val skippedSources = subscriptionList.sources - accessibleSources.toSet()
-        if (skippedSources.isNotEmpty()) {
-            Log.i(
-                TAG,
-                "Skipped ${skippedSources.size} inaccessible subscription source(s): " +
-                    skippedSources.joinToString { "${it.name}(minLevel=${it.minLevel})" }
-            )
-        }
-        if (accessibleSources.isEmpty()) {
-            nodeDao().replaceSubscriptionNodes(emptyList())
-            lastFetchedNodes = emptyList()
-            if (subscriptionList.sources.isNotEmpty()) {
-                onMessage("当前账户 Lv$accountLevel 未达到可用订阅线路的最低等级")
-            }
-            return@coroutineScope true
-        }
+        val accessibleSources = subscriptionList.sources
 
         val cachedNodes = nodeDao().getSubscriptionNodes().first()
         val accessibleSourceIds = accessibleSources.mapTo(mutableSetOf()) { it.id }
@@ -391,6 +368,5 @@ internal class SubscriptionDataLoader(
 
     private companion object {
         const val TAG = "SubscriptionDataLoader"
-        const val UNKNOWN_ACCOUNT_LEVEL = 0
     }
 }

@@ -53,7 +53,7 @@
    {key: 'select', label: '选择', width: 48, min: 44},
    {key: 'accountId', label: '用户 UID', width: 150, min: 110},
    {key: 'nickname', label: '昵称', width: 110, min: 70},
-   {key: 'level', label: '等级', width: 80, min: 65},
+   {key: 'accountType', label: '用户类型', width: 90, min: 70},
    {key: 'brand', label: '品牌', width: 90, min: 60},
    {key: 'model', label: '型号', width: 120, min: 70},
    {key: 'androidVersion', label: 'Android', width: 85, min: 65},
@@ -97,11 +97,8 @@
  function adminErrorMessage(error, fallback) {
    if (error === 'invalid_registration_code_count') return '注册码数量必须是 1 到 100 之间的整数';
    if (error === 'formal_registration_closed') return '正式用户注册暂未开放';
-   if (error === 'invalid_experience_award') return '请填写正整数经验值和审核说明';
    if (error === 'account_not_found') return '用户不存在，请检查 UID';
-   if (error === 'account_banned') return '账户已封禁，无法发放经验';
-   if (error === 'email_binding_required') return '该账户尚未绑定邮箱，无法获取经验';
-    if (error === 'invalid_batch_user_update') return '批量修改参数无效，最多选择 100 个用户，等级范围为 Lv0～Lv6';
+   if (error === 'account_banned') return '账户已被封禁';
      if (error === 'invalid_batch_user_delete') return '批量删除参数无效，最多选择 100 个用户';
     if (error === 'subscription_must_be_plaintext_nodes') return '订阅必须返回可识别的明文节点，不能使用已加密接口';
     if (error === 'invalid_min_app_version') return '最低应用版本格式无效，请填写类似 2.40 的数字版本';
@@ -241,9 +238,6 @@
    if (name === 'admin-login-records' && !adminLoginRecordsData && !adminLoginRecordsLoading) {
      loadAdminLoginRecords();
    }
-   if (name === 'experience-rewards' && !experienceAwardsData && !experienceAwardsLoading) {
-     loadExperienceAwards();
-   }
  }
    document.querySelectorAll('.tab-button[data-tab]').forEach(function(button) {
    button.onclick = function() {
@@ -263,7 +257,6 @@
  document.addEventListener('keydown', function(event) {
    if (event.key === 'Escape') closeAiAnalysis();
  });
-
 function clampAiAnalysisFabPosition(left, top) {
   const fab = el('aiAnalysisFab');
   if (!fab) return;

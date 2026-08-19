@@ -58,7 +58,7 @@ function renderTrafficDetails() {
     ? trafficDetailsData.users : [];
   const search = String(value('trafficDetailSearch') || '').toLowerCase();
   const filtered = users.filter(function(user) {
-    if (search && [user.uid, user.nickname, user.email, user.status].join(' ')
+    if (search && [user.uid, user.nickname, user.email, user.accountType].join(' ')
       .toLowerCase().indexOf(search) < 0) return false;
     return Object.keys(trafficZeroFilters).every(function(filterKey) {
       if (!trafficZeroFilters[filterKey]) return true;
@@ -98,15 +98,13 @@ function renderTrafficDetails() {
   }
   const rows = sorted.map(function(item) {
     const user = item.user;
-    const banned = user.status === 'banned';
+    const banned = user.accountType === 'banned';
     const today = user.today || {};
     const month = user.month || {};
     return '<tr class="' + (banned ? 'banned' : '') + '">' +
       '<td><code>' + esc(user.uid) + '</code></td>' +
       '<td>' + esc(user.nickname || user.uid) + '</td>' +
       '<td>' + esc(user.email || '游客账户') + '</td>' +
-      '<td>' + (banned ? '已封禁' : '正常') + '</td>' +
-      '<td>Lv' + esc(user.level == null ? '-' : user.level) + '</td>' +
       '<td>' + formatMegabytes(today.uploadMb) + '</td>' +
       '<td>' + formatMegabytes(today.downloadMb) + '</td>' +
       '<td>' + formatMegabytes(today.totalMb) + '</td>' +

@@ -15,8 +15,6 @@ import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
 import xyz.a202132.app.data.model.AccountRegisterResponse
-import xyz.a202132.app.data.model.TelegramTaskResponse
-import xyz.a202132.app.data.model.TelegramTaskSubmitRequest
 import xyz.a202132.app.data.model.TrafficReportRequest
 import xyz.a202132.app.data.model.TrafficReportResponse
 
@@ -63,17 +61,6 @@ interface ApiService {
         @Url url: String,
         @Body request: AccountProfileUpdateRequest
     ): AccountRegisterResponse
-
-    @GET
-    suspend fun getTelegramTask(
-        @Url url: String
-    ): TelegramTaskResponse
-
-    @POST
-    suspend fun submitTelegramTask(
-        @Url url: String,
-        @Body request: TelegramTaskSubmitRequest
-    ): TelegramTaskResponse
 
     @POST
     suspend fun reportTraffic(

@@ -45,7 +45,6 @@ import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
-import xyz.a202132.app.ui.screens.TaskCenterScreen
 import xyz.a202132.app.ui.theme.FireflyVPNTheme
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -164,7 +163,6 @@ class MainActivity : ComponentActivity() {
                                     onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
                                     onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
                                     onOpenFeatures = { navigateTo(AppRoute.FEATURES) },
-                                    onOpenTaskCenter = { navigateTo(AppRoute.TASK_CENTER) },
                                     onOpenAccountSettings = { navigateTo(AppRoute.ACCOUNT_SETTINGS) }
                                 )
                             }
@@ -309,16 +307,6 @@ class MainActivity : ComponentActivity() {
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() },
                                     onAccountDeleted = { finishAndRemoveTask() }
-                                )
-                            }
-
-                            composable(AppRoute.TASK_CENTER) {
-                                TaskCenterScreen(
-                                    viewModel = viewModel,
-                                    onOpenAccountSettings = {
-                                        navigateTo(AppRoute.ACCOUNT_SETTINGS)
-                                    },
-                                    onBack = { navController.popBackStack() }
                                 )
                             }
 

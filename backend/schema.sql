@@ -10,8 +10,6 @@ CREATE TABLE users_mb (
   nickname TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'banned')),
-  experience_total INTEGER NOT NULL DEFAULT 0
-    CHECK (experience_total BETWEEN 0 AND 1000000000000),
   email TEXT COLLATE NOCASE,
   password_hash TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
@@ -142,63 +140,5 @@ CREATE INDEX idx_user_usage_mb_user_ended
 CREATE INDEX idx_user_usage_mb_day_user
   ON user_usage_mb(usage_day, user_id);
 
-CREATE TABLE user_reward_claims_mb (
-  id INTEGER PRIMARY KEY,
-  user_id INTEGER,
-  user_uid TEXT NOT NULL,
-  device_row_id INTEGER NOT NULL,
-  reward_type TEXT NOT NULL,
-  period_key TEXT NOT NULL,
-  context_key TEXT NOT NULL DEFAULT '',
-  claim_token TEXT NOT NULL UNIQUE,
-  claimed_at TEXT NOT NULL,
-  experience_awarded INTEGER NOT NULL DEFAULT 0
-    CHECK (experience_awarded BETWEEN 0 AND 1000000000000),
-  UNIQUE (user_id, reward_type, period_key, context_key),
-  UNIQUE (device_row_id, reward_type, period_key, context_key),
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL,
-  FOREIGN KEY (device_row_id) REFERENCES user_devices_mb(id) ON DELETE CASCADE
-);
-
-CREATE TRIGGER trg_user_reward_claim_award_mb
-AFTER INSERT ON user_reward_claims_mb
-WHEN NEW.experience_awarded > 0
-BEGIN
-  UPDATE users_mb
-  SET experience_total = MIN(
-    experience_total + NEW.experience_awarded,
-    1000000000000
-  )
-  WHERE id = NEW.user_id AND status = 'active'
-    AND email IS NOT NULL AND email <> '';
-END;
-
-CREATE TABLE user_experience_awards_mb (
-  id INTEGER PRIMARY KEY,
-  user_id INTEGER,
-  user_uid TEXT NOT NULL,
-  experience_awarded INTEGER NOT NULL
-    CHECK (experience_awarded BETWEEN 1 AND 1000000000000),
-  reason TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_user_experience_awards_created_at
-  ON user_experience_awards_mb(created_at DESC, id DESC);
-
-CREATE TRIGGER trg_user_experience_award_mb
-AFTER INSERT ON user_experience_awards_mb
-WHEN NEW.experience_awarded > 0
-BEGIN
-  UPDATE users_mb
-  SET experience_total = MIN(
-    experience_total + NEW.experience_awarded,
-    1000000000000
-  )
-  WHERE id = NEW.user_id AND status = 'active'
-    AND email IS NOT NULL AND email <> '';
-END;
-
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 10, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 11, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

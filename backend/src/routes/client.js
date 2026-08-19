@@ -34,7 +34,6 @@ async function handleClient(request, env) {
         name: source.name,
         enabled: source.enabled,
         encrypted: true,
-        minLevel: source.minLevel,
         refreshOnAppOpen: source.refreshOnAppOpen,
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
       })),
@@ -62,9 +61,9 @@ async function handleManagedSubscription(path, request, env) {
   if (!deviceId) {
     return json({ ok: false, error: "device_id_required" }, 401);
   }
-  const access = await resolveAccountAccess(env, deviceId, state.settings);
-  if (source.minLevel > access.level) {
-    return json({ ok: false, error: "insufficient_level" }, 403);
+  const access = await resolveAccountAccess(env, deviceId);
+  if (access.accountType !== "guest" && access.accountType !== "formal") {
+    return json({ ok: false, error: "account_access_denied" }, 403);
   }
   if (source.minAppVersion && !isAppVersionAtLeast(access.appVersion, source.minAppVersion)) {
     return json({
@@ -90,4 +89,3 @@ async function handleManagedSubscription(path, request, env) {
 
   return { handleClient, handleManagedSubscription };
 }
-

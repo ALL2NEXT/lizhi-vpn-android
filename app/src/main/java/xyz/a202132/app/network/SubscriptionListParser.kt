@@ -1,5 +1,4 @@
 package xyz.a202132.app.network
-
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -13,7 +12,6 @@ import xyz.a202132.app.data.model.SubscriptionSource
  * Supported object format:
  * {
  *   "subscriptions": [
- *     {"name": "线路1", "url": "https://example.com/sub", "minLevel": 1}
  *   ]
  * }
  *
@@ -64,9 +62,6 @@ class SubscriptionListParser {
         val encrypted = source.get("encrypted")?.let { readBoolean(it) }
             ?: source.get("isEncrypted")?.let { readBoolean(it) }
             ?: false
-        val minLevel = readInt(source, "minLevel")
-            ?.takeIf { it in MIN_ACCOUNT_LEVEL..MAX_ACCOUNT_LEVEL }
-            ?: DEFAULT_MIN_LEVEL
         val refreshOnAppOpen = source.get("refreshOnAppOpen")?.let { readBoolean(it) }
             ?: source.get("openAppImmediateUpdate")?.let { readBoolean(it) }
             ?: source.get("updateOnAppOpen")?.let { readBoolean(it) }
@@ -77,7 +72,6 @@ class SubscriptionListParser {
             url = url,
             enabled = enabled,
             encrypted = encrypted,
-            minLevel = minLevel,
             refreshOnAppOpen = refreshOnAppOpen
         )
     }
@@ -95,21 +89,5 @@ class SubscriptionListParser {
         return primitive.asString.trim().lowercase() !in setOf("0", "false", "off", "no")
     }
 
-    private fun readInt(objectValue: JsonObject, vararg keys: String): Int? =
-        keys.asSequence()
-            .mapNotNull { key ->
-                objectValue.get(key)
-                    ?.takeIf { it.isJsonPrimitive }
-                    ?.asString
-                    ?.trim()
-                    ?.toIntOrNull()
-            }
-            .firstOrNull()
-
-    private companion object {
-        const val MIN_ACCOUNT_LEVEL = 0
-        const val MAX_ACCOUNT_LEVEL = 6
-        const val DEFAULT_MIN_LEVEL = 1
-    }
 
 }

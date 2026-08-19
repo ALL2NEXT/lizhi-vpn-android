@@ -20,7 +20,6 @@ function addSource(source) {
     '<section class="source-section source-permissions-section">' +
       '<h3 class="source-section-title">线路权限控制</h3>' +
       '<div class="grid source-permissions-grid">' +
-        '<div class="field"><label>最低账户等级<select data-field="minLevel">' + levelOptions(source.minLevel == null ? 1 : source.minLevel) + '</select></label></div>' +
         '<div class="field"><label>最低应用版本<input data-field="minAppVersion" type="text" value="' + esc(source.minAppVersion) + '" placeholder="例如 2.40（留空不限制）"></label></div>' +
         '<label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
       '</div>' +
@@ -149,24 +148,12 @@ function fillState(state) {
    checked('registrationEnabled', settings.registrationEnabled !== false);
    checked('requireInviteForRegistration', settings.requireInviteForRegistration === true);
    checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
-   setValue('accountBindingExperience', settings.accountBindingExperience == null ? 100 : settings.accountBindingExperience);
-   setValue('invitationExperience', settings.invitationExperience == null ? 50 : settings.invitationExperience);
-   setValue('telegramGroupUrl', settings.telegramGroupUrl);
-   setValue('telegramJoinCode', settings.telegramJoinCode);
-   setValue('telegramTaskExperience', settings.telegramTaskExperience == null ? 50 : settings.telegramTaskExperience);
   const aiAnalysis = settings.aiAnalysis || {};
   setValue('aiAnalysisModel', aiAnalysis.model || 'gemini-flash-latest');
   setValue('aiAnalysisThinkingLevel', aiAnalysis.thinkingLevel || 'low');
   setValue('aiAnalysisMaxOutputTokens', aiAnalysis.maxOutputTokens || 4096);
   setValue('aiAnalysisStyle', aiAnalysis.analysisStyle || 'standard');
   setValue('aiAnalysisInstruction', aiAnalysis.customInstruction || '');
-  const experienceThresholds = Array.isArray(settings.experienceThresholds)
-    ? settings.experienceThresholds
-    : [100, 200, 400, 800, 1600];
-  ['experienceThresholdLv2', 'experienceThresholdLv3', 'experienceThresholdLv4',
-    'experienceThresholdLv5', 'experienceThresholdLv6'].forEach(function(id, index) {
-    setValue(id, experienceThresholds[index]);
-  });
   const notice = currentState.notice || {};
   checked('noticeEnabled', Boolean(currentState.notice && notice.hasNotice !== false));
   setValue('noticeTitle', notice.title);
@@ -198,7 +185,6 @@ function formState() {
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: sourceType === 'url' ? url : '',
       enabled: row.querySelector('[data-field="enabled"]').checked,
-      minLevel: Number(row.querySelector('[data-field="minLevel"]').value || 1),
       minAppVersion: row.querySelector('[data-field="minAppVersion"]').value.trim(),
       cacheMinutes: sourceType === 'url'
         ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 0)
@@ -235,11 +221,6 @@ function formState() {
        registrationEnabled: el('registrationEnabled').checked,
        requireInviteForRegistration: el('requireInviteForRegistration').checked,
        requireAdminRegistrationCode: el('requireAdminRegistrationCode').checked,
-       accountBindingExperience: Number(value('accountBindingExperience') || 0),
-       invitationExperience: Number(value('invitationExperience') || 0),
-       telegramGroupUrl: value('telegramGroupUrl'),
-       telegramJoinCode: value('telegramJoinCode'),
-       telegramTaskExperience: Number(value('telegramTaskExperience') || 0),
        aiAnalysis: {
         model: value('aiAnalysisModel') || 'gemini-flash-latest',
         thinkingLevel: value('aiAnalysisThinkingLevel') || 'low',
@@ -247,19 +228,11 @@ function formState() {
         analysisStyle: value('aiAnalysisStyle') || 'standard',
         customInstruction: value('aiAnalysisInstruction').slice(0, 1000)
        },
-       experienceThresholds: [
-        Number(value('experienceThresholdLv2') || 100),
-        Number(value('experienceThresholdLv3') || 200),
-        Number(value('experienceThresholdLv4') || 400),
-        Number(value('experienceThresholdLv5') || 800),
-        Number(value('experienceThresholdLv6') || 1600)
-      ]
-    },
+       },
     notice: notice,
     appUpdate: appUpdate
   };
 }
-
 function renderRegistrationCodes(codes) {
   const host = el('registrationCodesTable');
   if (!host) return;
@@ -319,7 +292,7 @@ async function pushSection(section) {
   const form = formState();
   const state = {
     subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,
-    settings: section === 'app-settings' || section === 'ai-config' || section === 'experience-rewards'
+    settings: section === 'app-settings' || section === 'ai-config'
       ? form.settings
       : currentState.settings,
     notice: section === 'notice' ? form.notice : currentState.notice,

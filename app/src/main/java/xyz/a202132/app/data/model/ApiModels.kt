@@ -71,21 +71,6 @@ data class BackendAppSettings(
     @SerializedName("requireAdminRegistrationCode")
     val requireAdminRegistrationCode: Boolean = false,
 
-    @SerializedName("experienceThresholds")
-    val experienceThresholds: List<Long> = listOf(100L, 200L, 400L, 800L, 1600L),
-
-    @SerializedName("accountBindingExperience")
-    val accountBindingExperience: Long = 100L,
-
-    @SerializedName("invitationExperience")
-    val invitationExperience: Long = 50L,
-
-    @SerializedName("telegramGroupUrl")
-    val telegramGroupUrl: String = "",
-
-    @SerializedName("telegramTaskExperience")
-    val telegramTaskExperience: Long = 50L,
-
 )
 
 data class AccountRegisterRequest(
@@ -199,11 +184,8 @@ data class AccountInfo(
     @SerializedName("nickname")
     val nickname: String = "流萤用户",
 
-    @SerializedName("level")
-    val level: Int = 1,
-
-    @SerializedName("experience")
-    val experience: Long = 0L,
+    @SerializedName("accountType")
+    val accountType: String = "guest",
 
     @SerializedName("email")
     val email: String = "",
@@ -242,52 +224,6 @@ data class AccountProfileUpdateRequest(
 
     @SerializedName("nickname")
     val nickname: String
-)
-
-data class TelegramTaskSubmitRequest(
-    @SerializedName("deviceId")
-    val deviceId: String,
-
-    @SerializedName("code")
-    val code: String
-)
-
-data class TelegramTaskStatus(
-    @SerializedName("enabled")
-    val enabled: Boolean = false,
-
-    @SerializedName("groupUrl")
-    val groupUrl: String = "",
-
-    @SerializedName("rewardExperience")
-    val rewardExperience: Long = 50L,
-
-    @SerializedName("status")
-    val status: String = "not_claimed",
-
-    @SerializedName("claimedAt")
-    val claimedAt: String = "",
-
-    @SerializedName("experienceAwarded")
-    val experienceAwarded: Long = 0L
-)
-
-data class TelegramTaskResponse(
-    @SerializedName("ok")
-    val ok: Boolean = false,
-
-    @SerializedName("account")
-    val account: AccountInfo? = null,
-
-    @SerializedName("telegram")
-    val telegram: TelegramTaskStatus? = null,
-
-    @SerializedName("error")
-    val error: String? = null
-)
-
-data class TaskCenterStatus(
-    val telegram: TelegramTaskStatus
 )
 
 data class TrafficReportRequest(

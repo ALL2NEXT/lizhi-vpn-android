@@ -1,5 +1,4 @@
 let deviceRelationDetailData = [];
-
 function securityFilteredAccounts() {
   const accounts = accountSecurityData && Array.isArray(accountSecurityData.accounts)
     ? accountSecurityData.accounts : [];
@@ -58,7 +57,7 @@ function renderAccountSecurity() {
   });
   const filtered = securityFilteredAccounts();
   updateSecuritySelectionControls(filtered);
-  const bannedAccounts = accounts.filter(function(account) { return account.status === 'banned'; }).length;
+  const bannedAccounts = accounts.filter(function(account) { return account.accountType === 'banned'; }).length;
   const search = String(value('securitySearch') || '').toLowerCase();
   summary.textContent = '账户 ' + accounts.length + ' 个 · 已封禁 ' + bannedAccounts +
     ' 个' +
@@ -68,7 +67,7 @@ function renderAccountSecurity() {
     return;
   }
   const rows = filtered.map(function(account) {
-    const banned = account.status === 'banned';
+    const banned = account.accountType === 'banned';
     const email = account.email || '游客账户';
     const uid = String(account.uid || '');
     return '<tr class="' + (banned ? 'banned' : '') + '">' +
@@ -82,13 +81,12 @@ function renderAccountSecurity() {
       '<td><span class="security-account-email">' + esc(email) + '</span></td>' +
       '<td><code>' + esc(account.inviteCode || '未生成') + '</code></td>' +
       '<td>' + esc(account.inviteeCount == null ? 0 : account.inviteeCount) + ' 人</td>' +
-      '<td>Lv' + esc(account.level == null ? '-' : account.level) + '</td>' +
-      '<td>' + esc(account.experienceTotal == null ? '-' : account.experienceTotal) + '</td>' +
+      '<td>' + esc(account.accountType === 'banned' ? '被封禁用户' : account.accountType === 'formal' ? '正式用户' : '游客') + '</td>' +
       '<td>' + esc(account.createdAt || '暂无') + '</td></tr>';
   }).join('');
   host.innerHTML = '<table class="security-account-table" aria-label="账户基本信息">' +
     '<thead><tr><th>选择</th><th>状态</th><th>昵称</th><th>UID</th><th>邮箱</th><th>邀请码</th>' +
-    '<th>邀请人数</th><th>等级</th><th>累计经验</th>' +
+    '<th>账户类型</th>' +
     '<th>注册时间</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-security-select-uid]').forEach(function(input) {

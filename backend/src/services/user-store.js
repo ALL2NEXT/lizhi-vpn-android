@@ -4,7 +4,8 @@ import {
   USER_SCHEMA_VERSION,
 } from "../config.js";
 import {
-  accountProgress,
+  accountTypeForUser,
+  bytesToMegabytes,
   defaultNickname,
   normalizeAccountId,
   normalizeAndroidSdk,
@@ -90,9 +91,7 @@ export async function initializeUserSchemaDatabase(db) {
        'user_devices_mb',
        'device_account_links_mb',
        'device_bans_mb',
-       'user_usage_mb',
-       'user_reward_claims_mb',
-       'user_experience_awards_mb'
+       'user_usage_mb'
      )
      LIMIT 1`,
   ).first();
@@ -235,26 +234,21 @@ export async function readDeviceContextFromDb(db, deviceId) {
   };
 }
 
-export async function resolveAccountAccess(env, deviceId, settings) {
+export async function resolveAccountAccess(env, deviceId) {
   const identity = await resolveDeviceIdentity(env, deviceId);
-  if (!identity) return { level: 0, appVersion: "" };
+  if (!identity) return { accountType: "banned", appVersion: "" };
   const db = await ensureUserSchema(env);
   const row = await db.prepare(
-    "SELECT u.status, u.experience_total, COALESCE(d.app_version, '') AS app_version " +
+    "SELECT u.status, u.email, COALESCE(d.app_version, '') AS app_version " +
       "FROM users_mb u JOIN user_devices_mb d ON d.user_id = u.id " +
       "WHERE u.id = ? AND d.device_id = ?",
   ).bind(identity.userId, identity.deviceId).first();
-  const progress = accountProgress(
-    row && row.experience_total,
-    settings && settings.experienceThresholds,
-    cleanText(row && row.status),
-  );
   return row
     ? {
-      level: progress.level,
+      accountType: accountTypeForUser(row),
       appVersion: cleanText(row.app_version),
     }
-    : { level: 0, appVersion: "" };
+    : { accountType: "banned", appVersion: "" };
 }
 
 export async function readD1User(env, userId, settings) {
@@ -276,18 +270,10 @@ export async function readD1User(env, userId, settings) {
 
 export function rowToUser(row, settings) {
   const uid = normalizeStoredUid(row.uid);
-  const progress = accountProgress(
-    row.experience_total,
-    settings && settings.experienceThresholds,
-    cleanText(row.status),
-  );
   return {
     uid,
     nickname: normalizeNickname(row.nickname, defaultNickname(uid)),
-    level: progress.level,
-    experience: progress.experience,
-    experienceTotal: progress.experienceTotal,
-    status: progress.status,
+    accountType: accountTypeForUser(row),
     email: cleanText(row.email),
     brand: cleanText(row.device_brand ?? row.brand),
     model: cleanText(row.device_model ?? row.model),
@@ -298,6 +284,58 @@ export function rowToUser(row, settings) {
     invitedByCode: normalizeInviteCode(row.invited_by_code),
     inviteeCount: Math.max(0, Number(row.invitee_count) || 0),
     createdAt: cleanText(row.created_at),
+  };
+}
+
+export function publicAccount(user) {
+  const accountType = user.deviceBlocked
+    ? "banned"
+    : ["banned", "guest", "formal"].includes(cleanText(user.accountType))
+    ? cleanText(user.accountType)
+    : accountTypeForUser(user);
+  return {
+    uid: user.uid,
+    nickname: user.nickname,
+    accountType,
+    email: cleanText(user.email),
+    brand: user.brand,
+    model: user.model,
+    androidVersion: user.androidVersion,
+    androidSdk: normalizeAndroidSdk(user.androidSdk),
+    appVersion: user.appVersion,
+    inviteCode: normalizeInviteCode(user.inviteCode),
+    invitedByCode: normalizeInviteCode(user.invitedByCode),
+    inviteeCount: Math.max(0, Number(user.inviteeCount) || 0),
+    deviceBlocked: Boolean(user.deviceBlocked),
+  };
+}
+
+export function publicAdminUser(row, settings) {
+  const todayUpload = bytesToMegabytes(row.today_upload_bytes);
+  const todayDownload = bytesToMegabytes(row.today_download_bytes);
+  const monthUpload = bytesToMegabytes(row.month_upload_bytes);
+  const monthDownload = bytesToMegabytes(row.month_download_bytes);
+  const totalUpload = bytesToMegabytes(row.total_upload_bytes);
+  const totalDownload = bytesToMegabytes(row.total_download_bytes);
+  return {
+    ...publicAccount(rowToUser(row, settings)),
+    createdAt: cleanText(row.created_at),
+    lastReportAt: cleanText(row.last_report_at) || null,
+    totalUploadMb: totalUpload,
+    totalDownloadMb: totalDownload,
+    totalMb: totalUpload + totalDownload,
+    activeToday: Number(row.active_today) === 1,
+    activeThisMonth: Number(row.active_this_month) === 1,
+    today: {
+      uploadMb: todayUpload,
+      downloadMb: todayDownload,
+      totalMb: todayUpload + todayDownload,
+    },
+    month: {
+      uploadMb: monthUpload,
+      downloadMb: monthDownload,
+      totalMb: monthUpload + monthDownload,
+    },
   };
 }
 

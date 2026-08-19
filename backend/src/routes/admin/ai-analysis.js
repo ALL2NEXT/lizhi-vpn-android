@@ -113,8 +113,7 @@ export function createAdminAiRoutes(deps) {
              COUNT(*) AS total_users,
              SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_users,
              SUM(CASE WHEN status = 'banned' THEN 1 ELSE 0 END) AS banned_users,
-             SUM(CASE WHEN created_day >= ? THEN 1 ELSE 0 END) AS new_users_last_30_days,
-             COALESCE(AVG(experience_total), 0) AS average_experience
+             SUM(CASE WHEN created_day >= ? THEN 1 ELSE 0 END) AS new_users_last_30_days
            FROM users_mb`,
         ).bind(startDate),
         db.prepare(
@@ -196,7 +195,6 @@ export function createAdminAiRoutes(deps) {
             active: positiveNumber(users.active_users),
             banned: positiveNumber(users.banned_users),
             newLast30Days: positiveNumber(users.new_users_last_30_days),
-            averageExperience: roundedNumber(users.average_experience, 1),
           },
           userGrowthDaily,
         };

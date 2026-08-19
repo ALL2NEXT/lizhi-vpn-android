@@ -41,7 +41,6 @@ fun DrawerContent(
     onOpenProxyScope: () -> Unit,
     onOpenOtherConfig: () -> Unit,
     onOpenFeatures: () -> Unit,
-    onOpenTaskCenter: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
     onClose: () -> Unit,
     websiteUrl: String = "",
@@ -109,14 +108,6 @@ fun DrawerContent(
                 title = "特色功能",
                 onClick = {
                     onOpenFeatures()
-                }
-            )
-
-            DrawerMenuItem(
-                icon = Icons.Outlined.CheckCircle,
-                title = "任务中心",
-                onClick = {
-                    onOpenTaskCenter()
                 }
             )
 
@@ -189,12 +180,12 @@ private fun UserAccountCard(
     accountInfo: AccountInfo?,
     onClick: () -> Unit
 ) {
-    val isBanned = accountInfo?.level == 0
-    val levelText = when {
+    val isBanned = accountInfo?.accountType == "banned" || accountInfo?.deviceBlocked == true
+    val accountTypeText = when {
         accountInfo == null -> "账户同步中"
-        accountInfo.deviceBlocked -> "Lv0 · 设备已封禁"
-        isBanned -> "Lv0 · 已封禁"
-        else -> "Lv${accountInfo.level.coerceIn(1, 6)}"
+        isBanned -> "被封禁用户"
+        accountInfo.accountType == "formal" -> "正式用户"
+        else -> "游客"
     }
     Surface(
         modifier = Modifier
@@ -225,7 +216,7 @@ private fun UserAccountCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = levelText,
+                    text = accountTypeText,
                     fontSize = 12.sp,
                     color = if (isBanned) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.primary

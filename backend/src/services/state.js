@@ -1,16 +1,4 @@
-import {
-  ACCOUNT_BINDING_EXPERIENCE,
-  DEFAULT_INVITATION_EXPERIENCE,
-  DEFAULT_STATE,
-  DEFAULT_TELEGRAM_TASK_EXPERIENCE,
-  STATE_KEY,
-} from "../config.js";
-import {
-  normalizeExperience,
-  normalizeExperienceThresholds,
-  normalizeLevel,
-  normalizeTelegramJoinCode,
-} from "../domain/account.js";
+import { DEFAULT_STATE, STATE_KEY } from "../config.js";
 import { beijingTimestamp } from "../domain/time.js";
 import { cleanText, parseFlag, plainObject } from "../lib/values.js";
 import {
@@ -61,7 +49,6 @@ export function normalizeState(input) {
           item.refreshOnAppOpen ?? item.openAppImmediateUpdate ?? item.updateOnAppOpen,
           true,
         ),
-        minLevel: normalizeLevel(item.minLevel ?? item.requiredLevel),
         minAppVersion: normalizeMinimumAppVersion(
           item.minAppVersion ?? item.minimumAppVersion,
         ),
@@ -77,7 +64,6 @@ export function normalizeState(input) {
       url: item.url,
       enabled: item.enabled,
       refreshOnAppOpen: item.refreshOnAppOpen,
-      minLevel: item.minLevel,
       minAppVersion: item.minAppVersion,
       cacheMinutes: item.cacheMinutes,
       content: item.content,
@@ -144,10 +130,6 @@ export function normalizeSettings(value) {
   const hasRegistrationControl =
     Object.prototype.hasOwnProperty.call(settings, "registrationEnabled") ||
     Object.prototype.hasOwnProperty.call(settings, "formalRegistrationEnabled");
-  const isLegacySettings = !hasRegistrationControl;
-  const configuredAccountBindingExperience = isLegacySettings
-    ? ACCOUNT_BINDING_EXPERIENCE
-    : settings.accountBindingExperience;
   const timeout = Number(settings.nodeRequestTimeoutMs);
   const aiAnalysis = plainObject(settings.aiAnalysis) ? settings.aiAnalysis : {};
   const aiMaxOutputTokens = Number(aiAnalysis.maxOutputTokens);
@@ -186,21 +168,6 @@ export function normalizeSettings(value) {
       settings.requireAdminRegistrationCode,
       false,
     ),
-    experienceThresholds: normalizeExperienceThresholds(settings.experienceThresholds),
-    accountBindingExperience: normalizeExperience(
-      configuredAccountBindingExperience,
-      ACCOUNT_BINDING_EXPERIENCE,
-    ),
-    invitationExperience: normalizeExperience(
-      settings.invitationExperience,
-      DEFAULT_INVITATION_EXPERIENCE,
-    ),
-    telegramGroupUrl: normalizeTelegramGroupUrl(settings.telegramGroupUrl),
-    telegramJoinCode: normalizeTelegramJoinCode(settings.telegramJoinCode),
-    telegramTaskExperience: normalizeExperience(
-      settings.telegramTaskExperience,
-      DEFAULT_TELEGRAM_TASK_EXPERIENCE,
-    ),
     aiAnalysis: {
       model: aiModel,
       thinkingLevel: aiThinkingLevel,
@@ -215,11 +182,6 @@ export function normalizeSettings(value) {
 
 export function publicClientSettings(settings) {
   const value = normalizeSettings(settings);
-  const { telegramJoinCode, aiAnalysis, ...publicSettings } = value;
+  const { aiAnalysis, ...publicSettings } = value;
   return publicSettings;
-}
-
-export function normalizeTelegramGroupUrl(value) {
-  const url = cleanText(value).slice(0, 500);
-  return /^(?:https?:\/\/|tg:\/\/)/i.test(url) ? url : "";
 }

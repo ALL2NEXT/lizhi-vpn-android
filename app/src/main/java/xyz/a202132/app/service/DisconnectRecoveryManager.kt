@@ -22,7 +22,6 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SubscriptionSource
-import xyz.a202132.app.data.model.canBeRequestedBy
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.network.NetworkClient
@@ -136,16 +135,6 @@ internal class DisconnectRecoveryManager(
             Log.w(TAG, "Disconnect recovery skipped: subscription source $sourceId is unavailable")
             return false
         }
-        val accountLevel = accountManager.currentAccount()?.level ?: UNKNOWN_ACCOUNT_LEVEL
-        if (!source.canBeRequestedBy(accountLevel)) {
-            Log.w(
-                TAG,
-                "Disconnect recovery skipped: account level $accountLevel " +
-                    "is below source minimum ${source.minLevel}"
-            )
-            return false
-        }
-
         val directClient = createPhysicalNetworkClient()
         val requestUrl = subscriptionRequestUrl(source.url)
         var result = subscriptionParser.fetchAndParseWithClient(requestUrl, directClient, source.encrypted)
@@ -239,6 +228,5 @@ internal class DisconnectRecoveryManager(
 
     private companion object {
         const val TAG = "DisconnectRecovery"
-        const val UNKNOWN_ACCOUNT_LEVEL = 0
     }
 }
