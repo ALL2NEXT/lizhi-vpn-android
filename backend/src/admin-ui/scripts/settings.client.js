@@ -146,7 +146,6 @@ function fillState(state) {
    setValue('githubUrl', settings.githubUrl);
    setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
    checked('registrationEnabled', settings.registrationEnabled !== false);
-   checked('requireInviteForRegistration', settings.requireInviteForRegistration === true);
    checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
   const aiAnalysis = settings.aiAnalysis || {};
   setValue('aiAnalysisModel', aiAnalysis.model || 'gemini-flash-latest');
@@ -219,7 +218,6 @@ function formState() {
        githubUrl: value('githubUrl'),
        nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
        registrationEnabled: el('registrationEnabled').checked,
-       requireInviteForRegistration: el('requireInviteForRegistration').checked,
        requireAdminRegistrationCode: el('requireAdminRegistrationCode').checked,
        aiAnalysis: {
         model: value('aiAnalysisModel') || 'gemini-flash-latest',

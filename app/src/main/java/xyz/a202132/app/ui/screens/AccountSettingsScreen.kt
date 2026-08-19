@@ -1,7 +1,4 @@
 package xyz.a202132.app.ui.screens
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -55,30 +51,25 @@ fun AccountSettingsScreen(
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val isSyncingAccount by viewModel.isSyncingAccount.collectAsStateWithLifecycle()
     val isBindingAccount by viewModel.isBindingAccount.collectAsStateWithLifecycle()
-    val isBindingInviteCode by viewModel.isBindingInviteCode.collectAsStateWithLifecycle()
     val isSwitchingAccount by viewModel.isSwitchingAccount.collectAsStateWithLifecycle()
     val isDeletingAccount by viewModel.isDeletingAccount.collectAsStateWithLifecycle()
     val accountMessage by viewModel.accountMessage.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
     val account = accountInfo
-    val context = LocalContext.current
     var nickname by remember(accountInfo?.uid, accountInfo?.nickname) {
         mutableStateOf(accountInfo?.nickname.orEmpty())
     }
     var email by remember(accountInfo?.uid, accountInfo?.email) {
         mutableStateOf(accountInfo?.email.orEmpty())
     }
-    var registrationInviteCode by remember(accountInfo?.uid) { mutableStateOf("") }
     var registrationCode by remember(accountInfo?.uid) { mutableStateOf("") }
     var password by remember(accountInfo?.uid) { mutableStateOf("") }
     var confirmPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchEmail by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var deletePassword by remember(accountInfo?.uid) { mutableStateOf("") }
-    var inviteCode by remember(accountInfo?.uid) { mutableStateOf("") }
     var showNicknameDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showBindDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
-    var showInviteDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showSwitchDialog by remember(accountInfo?.uid) { mutableStateOf(false) }
     var showDeleteConfirmation by remember(accountInfo?.uid) { mutableStateOf(false) }
 
@@ -100,18 +91,11 @@ fun AccountSettingsScreen(
         switchEmail = ""
         switchPassword = ""
         deletePassword = ""
-        registrationInviteCode = ""
         registrationCode = ""
         showBindDialog = false
-        showInviteDialog = false
         showNicknameDialog = false
         showSwitchDialog = false
         showDeleteConfirmation = false
-    }
-
-    LaunchedEffect(accountInfo?.uid, accountInfo?.invitedByCode) {
-        inviteCode = ""
-        showInviteDialog = false
     }
 
     val normalizedNickname = nickname.trim()
@@ -124,7 +108,6 @@ fun AccountSettingsScreen(
     val canSyncAccount = !isSyncingAccount &&
         !isUpdatingNickname &&
         !isBindingAccount &&
-        !isBindingInviteCode &&
         !isSwitchingAccount &&
         !isDeletingAccount
     val canOpenBindDialog = account != null &&
@@ -136,8 +119,6 @@ fun AccountSettingsScreen(
         !isSwitchingAccount &&
         !isDeletingAccount
     val normalizedEmail = email.trim().lowercase()
-    val normalizedRegistrationInviteCode = registrationInviteCode.trim().uppercase()
-        .replace("-", "").replace(" ", "")
     val normalizedRegistrationCode = registrationCode.trim().uppercase()
         .replace("-", "").replace(" ", "")
     val canBindAccount = account != null &&
@@ -145,9 +126,7 @@ fun AccountSettingsScreen(
         account.accountType != "banned" &&
         backendSettings.registrationEnabled &&
         android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches() &&
-        (normalizedRegistrationInviteCode.isBlank() || normalizedRegistrationInviteCode.matches(Regex("^[A-HJ-NP-Z2-9]{8}$"))) &&
         (normalizedRegistrationCode.isBlank() || normalizedRegistrationCode.matches(Regex("^[A-HJ-NP-Z2-9]{15}$"))) &&
-        (!backendSettings.requireInviteForRegistration || normalizedRegistrationInviteCode.isNotBlank()) &&
         (!backendSettings.requireAdminRegistrationCode || normalizedRegistrationCode.isNotBlank()) &&
         password.length in 8..128 &&
         password == confirmPassword &&
@@ -163,12 +142,6 @@ fun AccountSettingsScreen(
         account.accountType != "banned" &&
         !isDeletingAccount &&
         !isSwitchingAccount
-    val normalizedInviteCode = inviteCode.trim().uppercase().replace("-", "").replace(" ", "")
-    val canBindInviteCode = account != null &&
-        account.invitedByCode.isBlank() &&
-        account.accountType != "banned" &&
-        normalizedInviteCode.matches(Regex("^[A-HJ-NP-Z2-9]{8}$")) &&
-        !isBindingInviteCode
     AppScreenScaffold(
         title = "账户设置",
         onBack = onBack,
@@ -252,44 +225,6 @@ fun AccountSettingsScreen(
                         value = accountIdentityText(account)
                     )
                 }
-                AccountSettingsSection(title = "邀请关系") {
-                    AccountInfoRowWithAction(
-                        label = "我的邀请码",
-                        value = account.inviteCode.displayOrUnknown(),
-                        actionLabel = "复制",
-                        showAction = account.inviteCode.isNotBlank(),
-                        actionEnabled = account.inviteCode.isNotBlank(),
-                        onAction = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                            clipboard?.setPrimaryClip(
-                                ClipData.newPlainText("邀请码", account.inviteCode)
-                            )
-                        }
-                    )
-                    AccountInfoRow(
-                        label = "已邀请用户",
-                        value = "${account.inviteeCount.coerceAtLeast(0)} 人"
-                    )
-                    AccountInfoRowWithAction(
-                        label = "上级邀请码",
-                        value = account.invitedByCode.ifBlank { "未绑定" },
-                        actionLabel = "填写邀请码",
-                        showAction = account.invitedByCode.isBlank(),
-                        actionEnabled = account.accountType != "banned" && !isBindingInviteCode,
-                        onAction = {
-                            inviteCode = ""
-                            showInviteDialog = true
-                        }
-                    )
-                    if (account.invitedByCode.isBlank()) {
-                        Text(
-                            text = "每个账户只能绑定一次上级邀请码。",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
                 AccountSettingsSection(title = "客户端信息") {
                     AccountInfoRow(
                         label = "设备厂商",
@@ -423,14 +358,6 @@ fun AccountSettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
-                        value = registrationInviteCode,
-                        onValueChange = { if (it.length <= 32) registrationInviteCode = it },
-                        label = { Text(if (backendSettings.requireInviteForRegistration) "他人邀请码（必填）" else "他人邀请码（可选）") },
-                        singleLine = true,
-                        enabled = !isBindingAccount,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
                         value = registrationCode,
                         onValueChange = { if (it.length <= 32) registrationCode = it },
                         label = { Text(if (backendSettings.requireAdminRegistrationCode) "管理员一次性注册码（必填）" else "管理员一次性注册码（可选）") },
@@ -477,7 +404,6 @@ fun AccountSettingsScreen(
                         viewModel.bindEmailPassword(
                             normalizedEmail,
                             password,
-                            normalizedRegistrationInviteCode,
                             normalizedRegistrationCode,
                         )
                     }
@@ -496,52 +422,6 @@ fun AccountSettingsScreen(
                 TextButton(
                     enabled = !isBindingAccount,
                     onClick = { showBindDialog = false }
-                ) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-
-    if (showInviteDialog && account != null) {
-        AlertDialog(
-            onDismissRequest = { if (!isBindingInviteCode) showInviteDialog = false },
-            title = { Text("绑定邀请码") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("填写邀请人的 8 位邀请码，绑定后不能更换。")
-                    OutlinedTextField(
-                        value = inviteCode,
-                        onValueChange = { value ->
-                            if (value.length <= 12) inviteCode = value.uppercase()
-                        },
-                        label = { Text("邀请码") },
-                        supportingText = { Text("8 位大写字母或数字") },
-                        singleLine = true,
-                        enabled = !isBindingInviteCode,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = canBindInviteCode,
-                    onClick = { viewModel.bindInviteCode(normalizedInviteCode) }
-                ) {
-                    if (isBindingInviteCode) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(end = 8.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 2.dp
-                        )
-                    }
-                    Text(if (isBindingInviteCode) "绑定中…" else "确认绑定")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !isBindingInviteCode,
-                    onClick = { showInviteDialog = false }
                 ) {
                     Text("取消")
                 }

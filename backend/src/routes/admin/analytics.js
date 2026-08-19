@@ -168,9 +168,6 @@ export function createAdminAnalyticsRoutes(deps) {
       const query = await db.prepare(
         `SELECT
            u.uid,
-           u.invite_code,
-           inviter.invite_code AS invited_by_code,
-           (SELECT COUNT(*) FROM users_mb invited WHERE invited.invited_by_user_id = u.id) AS invitee_count,
            COALESCE(d.brand, '') AS brand,
            COALESCE(d.android_version, '') AS android_version,
            COALESCE(d.app_version, '') AS app_version
@@ -180,16 +177,12 @@ export function createAdminAnalyticsRoutes(deps) {
            WHERE user_id = u.id
            ORDER BY last_seen_at DESC, id DESC LIMIT 1
          )
-         LEFT JOIN users_mb inviter ON inviter.id = u.invited_by_user_id
          ORDER BY u.created_at DESC`,
       ).all();
       return json({
         ok: true,
         users: (query.results || []).map((row) => ({
           uid: normalizeStoredUid(row.uid),
-          inviteCode: cleanText(row.invite_code),
-          invitedByCode: cleanText(row.invited_by_code),
-          inviteeCount: Number(row.invitee_count) || 0,
           brand: cleanText(row.brand),
           androidVersion: cleanText(row.android_version),
           appVersion: cleanText(row.app_version),

@@ -44,7 +44,6 @@
               <button class="tab-button" role="tab" type="button" data-tab="account-security">账户基本信息</button>
               <button class="tab-button" role="tab" type="button" data-tab="device-relations">账户与设备关系</button>
               <button class="tab-button" role="tab" type="button" data-tab="traffic-query">流量汇总表单</button>
-              <button class="tab-button" role="tab" type="button" data-tab="invite-relations">邀请关系表单</button>
             </div>
           </div>
           <div class="nav-group" data-nav-group="app-settings">
@@ -194,7 +193,7 @@
       <button class="secondary" type="button" onclick="loadAccountSecurity(true)">刷新数据</button>
     </div>
     <div class="security-toolbar">
-      <input id="securitySearch" type="search" placeholder="搜索 UID、昵称、邮箱或邀请码" oninput="renderAccountSecurity()">
+      <input id="securitySearch" type="search" placeholder="搜索 UID、昵称或邮箱" oninput="renderAccountSecurity()">
     </div>
     <div id="securityBatchToolbar" class="security-batch-toolbar">
       <label><input id="securitySelectAll" type="checkbox" onchange="toggleAllSecurityAccounts(this.checked)">全选当前筛选结果</label>
@@ -261,25 +260,6 @@
     </div>
   </section>
 
-  <section class="card tab-panel" role="tabpanel" data-panel="invite-relations">
-    <div class="dashboard-heading">
-      <div>
-        <h2>邀请关系表单</h2>
-        <p>查看邀请码邀请人与被邀请账户之间的绑定关系。</p>
-      </div>
-      <button class="secondary" type="button" onclick="loadInviteRelations(true)">刷新数据</button>
-    </div>
-    <div class="traffic-detail-toolbar">
-      <div class="traffic-detail-search">
-        <input id="inviteRelationSearch" type="search" placeholder="搜索邀请人、被邀请人 UID、昵称或邀请码" oninput="renderInviteRelations()">
-        <span id="inviteRelationSummary" class="traffic-detail-summary"></span>
-      </div>
-    </div>
-    <div id="inviteRelationsTable" class="traffic-detail-wrap">
-      <div class="loading-state">打开此模块后读取邀请关系</div>
-    </div>
-  </section>
-
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <h2>订阅线路</h2>
     <div id="subscriptionRows"></div>
@@ -303,10 +283,8 @@
       </section>
       <section class="settings-section">
         <h3 class="settings-section-title">注册控制</h3>
-        <p class="settings-section-description">控制用户是否可以注册正式账户，以及注册时是否必须提供邀请码或管理员一次性注册码。</p>
         <div class="grid">
           <label class="check"><input id="registrationEnabled" type="checkbox">用户注册总开关</label>
-          <label class="check"><input id="requireInviteForRegistration" type="checkbox">必须使用他人邀请码才可以注册</label>
           <label class="check"><input id="requireAdminRegistrationCode" type="checkbox">必须使用管理员发放的一次性注册码才可以注册</label>
         </div>
         <div class="grid">

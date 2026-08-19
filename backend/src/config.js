@@ -15,7 +15,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 11;
+export const USER_SCHEMA_VERSION = 12;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -28,9 +28,6 @@ export const USER_SCHEMA_STATEMENTS = [
     nickname TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active'
       CHECK (status IN ('active', 'banned')),
-    invite_code TEXT NOT NULL UNIQUE,
-    invited_by_user_id INTEGER,
-    invited_at TEXT,
     email TEXT COLLATE NOCASE,
     password_hash TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
@@ -43,11 +40,6 @@ export const USER_SCHEMA_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_email
     ON users_mb(email)
     WHERE email IS NOT NULL AND email <> ''`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_invite_code
-    ON users_mb(invite_code)
-    WHERE invite_code IS NOT NULL AND invite_code <> ''`,
-  `CREATE INDEX IF NOT EXISTS idx_users_mb_invited_by
-    ON users_mb(invited_by_user_id)`,
   `CREATE TABLE IF NOT EXISTS registration_codes_mb (
     id INTEGER PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
@@ -152,18 +144,8 @@ export const USER_SCHEMA_STATEMENTS = [
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
-// 采用增量迁移，保证已存在的 D1 用户数据可以平滑增加邀请码字段。
 export const USER_SCHEMA_MIGRATIONS = {
-  2: [
-    `ALTER TABLE users_mb ADD COLUMN invite_code TEXT`,
-    `ALTER TABLE users_mb ADD COLUMN invited_by_user_id INTEGER`,
-    `ALTER TABLE users_mb ADD COLUMN invited_at TEXT`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_invite_code
-      ON users_mb(invite_code)
-      WHERE invite_code IS NOT NULL AND invite_code <> ''`,
-    `CREATE INDEX IF NOT EXISTS idx_users_mb_invited_by
-      ON users_mb(invited_by_user_id)`,
-  ],
+  2: [],
   3: [],
   4: [
     `DROP TRIGGER IF EXISTS trg_user_usage_daily_insert_mb`,
@@ -234,6 +216,65 @@ export const USER_SCHEMA_MIGRATIONS = {
     `DROP TABLE IF EXISTS user_experience_awards_mb`,
     `ALTER TABLE users_mb DROP COLUMN experience_total`,
   ],
+  12: [
+    `PRAGMA defer_foreign_keys = ON`,
+    `DROP TABLE IF EXISTS users_mb_new`,
+    `CREATE TABLE users_mb_new (
+      id INTEGER PRIMARY KEY,
+      uid TEXT NOT NULL UNIQUE,
+      nickname TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'banned')),
+      email TEXT COLLATE NOCASE,
+      password_hash TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      created_day TEXT GENERATED ALWAYS AS (substr(created_at, 1, 10)) VIRTUAL
+    )`,
+    `INSERT INTO users_mb_new (
+      id, uid, nickname, status, email, password_hash, created_at
+    )
+    SELECT
+      id, uid, nickname, status, email, password_hash, created_at
+    FROM users_mb`,
+    `DROP TABLE users_mb`,
+    `ALTER TABLE users_mb_new RENAME TO users_mb`,
+    `CREATE INDEX IF NOT EXISTS idx_users_mb_created_at
+      ON users_mb(created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_users_mb_created_day
+      ON users_mb(created_day)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mb_email
+      ON users_mb(email)
+      WHERE email IS NOT NULL AND email <> ''`,
+    `CREATE TRIGGER IF NOT EXISTS trg_users_ban_devices_mb
+    AFTER UPDATE OF status ON users_mb
+    WHEN NEW.status = 'banned'
+    BEGIN
+      INSERT INTO device_bans_mb
+        (device_row_id, source_uid, reason, banned_at, lifted_at)
+      SELECT
+        device_row_id,
+        NEW.uid,
+        'account_banned',
+        strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+        NULL
+      FROM device_account_links_mb
+      WHERE user_id = NEW.id
+      ON CONFLICT(device_row_id, source_uid, reason) DO UPDATE SET
+        banned_at = excluded.banned_at,
+        lifted_at = NULL;
+    END`,
+    `CREATE TRIGGER IF NOT EXISTS trg_users_unban_devices_mb
+    AFTER UPDATE OF status ON users_mb
+    WHEN NEW.status = 'active'
+    BEGIN
+      UPDATE device_bans_mb
+      SET lifted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE source_uid = NEW.uid
+        AND reason = 'account_banned'
+        AND lifted_at IS NULL;
+    END`,
+    `PRAGMA defer_foreign_keys = OFF`,
+  ],
 };
 export function resolveAdminBasePath(value) {
   const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");
@@ -255,7 +296,6 @@ export const DEFAULT_STATE = {
     nodeRequestTimeoutMs: 25000,
     // 后台可关闭游客注册正式用户；默认保持现有注册流程开放。
     registrationEnabled: true,
-    requireInviteForRegistration: false,
     requireAdminRegistrationCode: false,
     aiAnalysis: {
       model: "gemini-flash-latest",

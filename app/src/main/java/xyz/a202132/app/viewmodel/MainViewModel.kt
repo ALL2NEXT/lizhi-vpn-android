@@ -103,8 +103,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isSyncingAccount = _isSyncingAccount.asStateFlow()
     private val _isBindingAccount = MutableStateFlow(false)
     val isBindingAccount = _isBindingAccount.asStateFlow()
-    private val _isBindingInviteCode = MutableStateFlow(false)
-    val isBindingInviteCode = _isBindingInviteCode.asStateFlow()
     private val _isSwitchingAccount = MutableStateFlow(false)
     val isSwitchingAccount = _isSwitchingAccount.asStateFlow()
     private val _isDeletingAccount = MutableStateFlow(false)
@@ -1344,7 +1342,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isSyncingAccount.value ||
             _isUpdatingNickname.value ||
             _isBindingAccount.value ||
-            _isBindingInviteCode.value ||
             _isSwitchingAccount.value ||
             _isDeletingAccount.value
         ) return
@@ -1382,7 +1379,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun bindEmailPassword(
         email: String,
         password: String,
-        inviteCode: String = "",
         registrationCode: String = "",
     ) {
         if (_isBindingAccount.value) return
@@ -1393,7 +1389,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 accountManager.bindEmailPassword(
                     email = email,
                     password = password,
-                    inviteCode = inviteCode,
                     registrationCode = registrationCode,
                     timeoutMs = backendSettings.value.nodeRequestTimeoutMs
                 ).onSuccess {
@@ -1404,26 +1399,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } finally {
                 _isBindingAccount.value = false
-            }
-        }
-    }
-
-    fun bindInviteCode(code: String) {
-        if (_isBindingInviteCode.value) return
-        viewModelScope.launch {
-            _isBindingInviteCode.value = true
-            _accountMessage.value = null
-            try {
-                accountManager.bindInviteCode(
-                    code = code,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
-                ).onSuccess {
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to bind invite code", error)
-                    _accountMessage.value = accountActionErrorMessage(error)
-                }
-            } finally {
-                _isBindingInviteCode.value = false
             }
         }
     }
@@ -1513,7 +1488,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun accountBindingErrorMessage(error: Throwable): String {
         return when (error.message) {
             "registration_disabled" -> "用户注册暂未开放"
-            "registration_invite_required" -> "必须使用他人的邀请码注册"
             "registration_code_required" -> "必须使用管理员发放的一次性注册码注册"
             "invalid_registration_code" -> "注册码无效或已使用"
             "formal_registration_closed" -> "正式用户注册暂未开放"
@@ -1532,10 +1506,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "invalid_account_password" -> "当前账户密码错误"
             "account_banned" -> "账户已被封禁，无法切换"
             "account_not_found" -> "账户不存在，请重新同步账户"
-            "invalid_invite_code" -> "请输入 8 位有效邀请码"
-            "invite_code_not_found" -> "邀请码不存在或所属账户不可用"
-            "invite_self_not_allowed" -> "不能绑定自己的邀请码"
-            "invite_already_bound" -> "当前账户已经绑定过邀请码"
             else -> error.message ?: "账户操作失败"
         }
     }

@@ -1,7 +1,6 @@
 import { MAX_TRAFFIC_BYTES, TEXT_ENCODER } from "../config.js";
 import { cleanText } from "../lib/values.js";
 
-const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const REGISTRATION_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function normalizeUserReference(value) {
@@ -58,20 +57,9 @@ export function normalizeAccountPassword(value) {
   return value.length >= 8 && value.length <= 128 ? value : "";
 }
 
-export function normalizeInviteCode(value) {
-  const code = cleanText(value).toUpperCase().replace(/[\s-]/g, "");
-  return /^[A-HJ-NP-Z2-9]{8}$/.test(code) ? code : "";
-}
-
 export function normalizeRegistrationCode(value) {
   const code = cleanText(value).toUpperCase().replace(/[\s-]/g, "");
   return /^[A-HJ-NP-Z2-9]{15}$/.test(code) ? code : "";
-}
-
-export function randomInviteCode() {
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => INVITE_CODE_ALPHABET[byte % INVITE_CODE_ALPHABET.length]).join("");
 }
 
 export function randomRegistrationCode() {

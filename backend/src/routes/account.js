@@ -15,7 +15,6 @@ export function createAccountRoutes(deps) {
     attachDeviceToUser,
     registerOrTouchUser,
     normalizeNickname,
-    normalizeInviteCode,
     normalizeRegistrationCode,
     beijingTimestamp,
     normalizeReportTimestamp,
@@ -64,15 +63,10 @@ export function createAccountRoutes(deps) {
       const requestedUid = normalizeUid(body && body.uid);
       const email = normalizeAccountEmail(body && body.email);
       const password = normalizeAccountPassword(body && body.password);
-      const rawInviteCode = cleanText(body && body.inviteCode);
-      const registrationInviteCode = normalizeInviteCode(rawInviteCode);
       const rawRegistrationCode = cleanText(body && body.registrationCode);
       const registrationCode = normalizeRegistrationCode(rawRegistrationCode);
       if (!deviceId || !email || !password) {
         return json({ ok: false, error: "invalid_bind_credentials" }, 400);
-      }
-      if (rawInviteCode && !registrationInviteCode) {
-        return json({ ok: false, error: "invalid_invite_code" }, 400);
       }
       if (rawRegistrationCode && !registrationCode) {
         return json({ ok: false, error: "invalid_registration_code" }, 400);
@@ -98,31 +92,10 @@ export function createAccountRoutes(deps) {
       if (user.email) {
         return json({ ok: false, error: "account_already_bound" }, 409);
       }
-      if (state.settings.requireInviteForRegistration &&
-          !registrationInviteCode && !user.invitedByCode) {
-        return json({ ok: false, error: "registration_invite_required" }, 400);
-      }
-      if (registrationInviteCode && user.invitedByCode) {
-        return json({ ok: false, error: "invite_already_bound" }, 409);
-      }
-
       const emailOwner = await db.prepare(
         "SELECT id FROM users_mb WHERE email = ? AND id <> ?",
       ).bind(email, identity.userId).first();
       if (emailOwner) return json({ ok: false, error: "email_already_bound" }, 409);
-
-      let inviter = null;
-      if (registrationInviteCode) {
-        inviter = await db.prepare(
-          "SELECT id, uid, status FROM users_mb WHERE invite_code = ?",
-        ).bind(registrationInviteCode).first();
-        if (!inviter || cleanText(inviter.status) !== "active") {
-          return json({ ok: false, error: "invite_code_not_found" }, 404);
-        }
-        if (Number(inviter.id) === identity.userId) {
-          return json({ ok: false, error: "invite_self_not_allowed" }, 409);
-        }
-      }
 
       if (registrationCode) {
         const codeRow = await db.prepare(
@@ -139,14 +112,6 @@ export function createAccountRoutes(deps) {
             "WHERE id = ? AND (email IS NULL OR email = '')",
         ).bind(email, passwordHash, identity.userId),
       ];
-      if (inviter) {
-        bindingStatements.push(
-          db.prepare(
-            "UPDATE users_mb SET invited_by_user_id = ?, invited_at = ? " +
-              "WHERE id = ? AND invited_by_user_id IS NULL",
-          ).bind(Number(inviter.id), boundAt, identity.userId),
-        );
-      }
       if (registrationCode) {
         bindingStatements.push(
           db.prepare(
@@ -161,58 +126,13 @@ export function createAccountRoutes(deps) {
       if (!results[0].meta || Number(results[0].meta.changes) < 1) {
         return json({ ok: false, error: "account_not_found" }, 404);
       }
-      if (inviter && (!results[1].meta || Number(results[1].meta.changes) < 1)) {
-        return json({ ok: false, error: "invite_already_bound" }, 409);
-      }
-      const registrationCodeResultIndex = inviter ? 2 : 1;
       if (registrationCode &&
-          (!results[registrationCodeResultIndex].meta ||
-            Number(results[registrationCodeResultIndex].meta.changes) < 1)) {
+          (!results[1].meta || Number(results[1].meta.changes) < 1)) {
         return json({ ok: false, error: "invalid_registration_code" }, 409);
       }
 
       const updated = await readD1User(env, identity.userId);
       return json({ ok: true, account: publicAccount(updated) });
-    }
-
-    if (path === "/api/account/invite" && request.method === "POST") {
-      const body = await request.json();
-      const deviceId = normalizeAccountId(body && body.deviceId);
-      const inviteCode = normalizeInviteCode(body && body.code);
-      if (!deviceId || !inviteCode) {
-        return json({ ok: false, error: "invalid_invite_code" }, 400);
-      }
-
-      const identity = await resolveDeviceIdentity(env, deviceId);
-      if (!identity) return json({ ok: false, error: "account_not_found" }, 404);
-      const db = await ensureUserSchema(env);
-      const user = await readD1User(env, identity.userId);
-      if (!user) return json({ ok: false, error: "account_not_found" }, 404);
-      if (user.invitedByCode) {
-        return json({ ok: false, error: "invite_already_bound" }, 409);
-      }
-
-      const inviter = await db.prepare(
-        "SELECT id, uid, status FROM users_mb WHERE invite_code = ?",
-      ).bind(inviteCode).first();
-      if (!inviter || cleanText(inviter.status) !== "active") {
-        return json({ ok: false, error: "invite_code_not_found" }, 404);
-      }
-      if (Number(inviter.id) === identity.userId) {
-        return json({ ok: false, error: "invite_self_not_allowed" }, 409);
-      }
-
-      const result = await db.prepare(
-        "UPDATE users_mb SET invited_by_user_id = ?, invited_at = ? " +
-          "WHERE id = ? AND invited_by_user_id IS NULL",
-      ).bind(Number(inviter.id), beijingTimestamp(), identity.userId).run();
-      if (!result.meta || Number(result.meta.changes) < 1) {
-        return json({ ok: false, error: "invite_already_bound" }, 409);
-      }
-      return json({
-        ok: true,
-        account: publicAccount(await readD1User(env, identity.userId)),
-      });
     }
 
     if (path === "/api/account/login" && request.method === "POST") {
@@ -270,14 +190,9 @@ export function createAccountRoutes(deps) {
         return json({ ok: false, error: "invalid_account_password" }, 401);
       }
 
-      const deleteResults = await db.batch([
-        db.prepare(
-          "UPDATE users_mb SET invited_by_user_id = NULL, invited_at = NULL " +
-            "WHERE invited_by_user_id = ?",
-        ).bind(identity.userId),
-        db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
-      ]);
-      if (!deleteResults[1].meta || Number(deleteResults[1].meta.changes) < 1) {
+      const deleteResult = await db.prepare("DELETE FROM users_mb WHERE id = ?")
+        .bind(identity.userId).run();
+      if (!deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
         return json({ ok: false, error: "account_not_found" }, 404);
       }
       return json({ ok: true });

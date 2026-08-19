@@ -159,9 +159,6 @@ export function createAdminSecurityRoutes(deps) {
              u.nickname,
              u.status,
              u.email,
-             u.invite_code,
-             inviter.invite_code AS invited_by_code,
-             (SELECT COUNT(*) FROM users_mb invited WHERE invited.invited_by_user_id = u.id) AS invitee_count,
              u.created_at,
              COUNT(DISTINCT l.device_row_id) AS historical_device_count,
              COUNT(DISTINCT CASE WHEN b.device_row_id IS NOT NULL AND b.lifted_at IS NULL
@@ -169,7 +166,6 @@ export function createAdminSecurityRoutes(deps) {
                AS banned_device_count
            FROM users_mb u
            LEFT JOIN device_account_links_mb l ON l.user_id = u.id
-           LEFT JOIN users_mb inviter ON inviter.id = u.invited_by_user_id
            LEFT JOIN device_bans_mb b
              ON b.device_row_id = l.device_row_id
             AND b.source_uid = u.uid
@@ -237,9 +233,6 @@ export function createAdminSecurityRoutes(deps) {
             nickname: user.nickname,
             email: user.email,
             accountType: user.accountType,
-            inviteCode: user.inviteCode,
-            invitedByCode: user.invitedByCode,
-            inviteeCount: user.inviteeCount,
             createdAt: user.createdAt,
             historicalDeviceCount: Number(row.historical_device_count) || 0,
             bannedDeviceCount: Number(row.banned_device_count) || 0,

@@ -141,4 +141,4 @@ CREATE INDEX idx_user_usage_mb_day_user
   ON user_usage_mb(usage_day, user_id);
 
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 11, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 12, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

@@ -5,7 +5,6 @@
 import { createAdminAiRoutes } from "./admin/ai-analysis.js";
 import { createAdminAccessRoutes } from "./admin/access.js";
 import { createAdminAnalyticsRoutes } from "./admin/analytics.js";
-import { createAdminInviteRoutes } from "./admin/invites.js";
 import { createAdminRegistrationCodeRoutes } from "./admin/registration-codes.js";
 import { createAdminSecurityRoutes } from "./admin/security.js";
 import { createAdminStateRoutes } from "./admin/state.js";
@@ -17,7 +16,6 @@ export function createAdminRoutes(deps) {
     createAdminSecurityRoutes(deps),
     createAdminAnalyticsRoutes(deps),
     createAdminAiRoutes(deps),
-    createAdminInviteRoutes(deps),
     createAdminRegistrationCodeRoutes(deps),
     createAdminUserRoutes(deps),
     createAdminStateRoutes(deps),

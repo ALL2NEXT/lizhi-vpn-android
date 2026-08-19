@@ -12,7 +12,6 @@ import xyz.a202132.app.data.model.AccountActionResponse
 import xyz.a202132.app.data.model.AccountBindingRequest
 import xyz.a202132.app.data.model.AccountDeleteRequest
 import xyz.a202132.app.data.model.AccountInfo
-import xyz.a202132.app.data.model.AccountInviteRequest
 import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
@@ -124,7 +123,6 @@ class AccountManager(private val context: Context) {
     suspend fun bindEmailPassword(
         email: String,
         password: String,
-        inviteCode: String = "",
         registrationCode: String = "",
         timeoutMs: Long = 10000L
     ): Result<AccountInfo> {
@@ -146,7 +144,6 @@ class AccountManager(private val context: Context) {
                         uid = registered.uid,
                         email = normalizedEmail,
                         password = password,
-                        inviteCode = inviteCode.trim().uppercase().replace("-", "").replace(" ", ""),
                         registrationCode = registrationCode.trim().uppercase()
                             .replace("-", "").replace(" ", "")
                     )
@@ -154,31 +151,6 @@ class AccountManager(private val context: Context) {
             }
             val account = response.account ?: throw IllegalStateException(
                 response.error ?: "account_binding_failed"
-            )
-            persistAccount(account)
-            account
-        }
-    }
-
-    suspend fun bindInviteCode(code: String, timeoutMs: Long = 10000L): Result<AccountInfo> {
-        val registered = currentAccount()
-            ?: return Result.failure(IllegalStateException("account_not_synced"))
-        val normalizedCode = code.trim().uppercase().replace("-", "").replace(" ", "")
-        if (!Regex("^[A-HJ-NP-Z2-9]{8}$").matches(normalizedCode)) {
-            return Result.failure(IllegalArgumentException("invalid_invite_code"))
-        }
-        if (registered.accountType == "banned") {
-            return Result.failure(IllegalStateException("account_banned"))
-        }
-        return runCatching {
-            val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
-                NetworkClient.apiService.bindInviteCode(
-                    accountEndpoint("/api/account/invite"),
-                    AccountInviteRequest(accountId(), normalizedCode)
-                )
-            }
-            val account = response.account ?: throw IllegalStateException(
-                response.error ?: "invite_binding_failed"
             )
             persistAccount(account)
             account

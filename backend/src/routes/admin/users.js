@@ -44,8 +44,6 @@ export function createAdminUserRoutes(deps) {
         d.android_version AS device_android_version,
         d.android_sdk AS device_android_sdk,
         d.app_version AS device_app_version,
-        inviter.invite_code AS invited_by_code,
-        (SELECT COUNT(*) FROM users_mb invited WHERE invited.invited_by_user_id = u.id) AS invitee_count,
         COALESCE(s.today_upload_bytes, 0) AS today_upload_bytes,
         COALESCE(s.today_download_bytes, 0) AS today_download_bytes,
         COALESCE(s.active_today, 0) AS active_today,
@@ -60,7 +58,6 @@ export function createAdminUserRoutes(deps) {
           SELECT id FROM user_devices_mb WHERE user_id = u.id
           ORDER BY last_seen_at DESC, id DESC LIMIT 1
         )
-        LEFT JOIN users_mb inviter ON inviter.id = u.invited_by_user_id
         LEFT JOIN usage_stats s ON s.user_id = u.id
         ORDER BY u.created_at DESC`).bind(day, day, day, month, month, month).all();
       const publicUsers = (query.results || []).map((row) =>
@@ -111,29 +108,16 @@ export function createAdminUserRoutes(deps) {
 
       const db = await ensureUserSchema(env);
       const references = JSON.stringify(accountIds);
-      const results = await db.batch([
-        db.prepare(
-          `WITH refs(value) AS (SELECT value FROM json_each(?)),
-           target_users(user_id) AS (
-             SELECT id FROM users_mb WHERE uid IN (SELECT value FROM refs)
-             UNION
-             SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
-           )
-           UPDATE users_mb
-           SET invited_by_user_id = NULL, invited_at = NULL
-           WHERE invited_by_user_id IN (SELECT user_id FROM target_users)`,
-        ).bind(references),
-        db.prepare(
-          `WITH refs(value) AS (SELECT value FROM json_each(?)),
-           target_users(user_id) AS (
-             SELECT id FROM users_mb WHERE uid IN (SELECT value FROM refs)
-             UNION
-             SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
-           )
-           DELETE FROM users_mb WHERE id IN (SELECT user_id FROM target_users)`,
-        ).bind(references),
-      ]);
-      const changed = Number(results[1].meta && results[1].meta.changes) || 0;
+      const result = await db.prepare(
+        `WITH refs(value) AS (SELECT value FROM json_each(?)),
+         target_users(user_id) AS (
+           SELECT id FROM users_mb WHERE uid IN (SELECT value FROM refs)
+           UNION
+           SELECT user_id FROM user_devices_mb WHERE device_id IN (SELECT value FROM refs)
+         )
+         DELETE FROM users_mb WHERE id IN (SELECT user_id FROM target_users)`,
+      ).bind(references).run();
+      const changed = Number(result.meta && result.meta.changes) || 0;
       return json({ ok: true, accountIds, changed });
 
     }
@@ -184,14 +168,9 @@ export function createAdminUserRoutes(deps) {
       const identity = await resolveUserIdentity(env, decodeURIComponent(userMatch[1]));
       if (!identity) return json({ ok: false, error: "account_not_found" }, 404);
       const db = await ensureUserSchema(env);
-      const deleteResults = await db.batch([
-        db.prepare(
-          "UPDATE users_mb SET invited_by_user_id = NULL, invited_at = NULL " +
-            "WHERE invited_by_user_id = ?",
-        ).bind(identity.userId),
-        db.prepare("DELETE FROM users_mb WHERE id = ?").bind(identity.userId),
-      ]);
-      if (!deleteResults[1].meta || Number(deleteResults[1].meta.changes) < 1) {
+      const deleteResult = await db.prepare("DELETE FROM users_mb WHERE id = ?")
+        .bind(identity.userId).run();
+      if (!deleteResult.meta || Number(deleteResult.meta.changes) < 1) {
         return json({ ok: false, error: "account_not_found" }, 404);
       }
       return json({ ok: true, uid: identity.uid });

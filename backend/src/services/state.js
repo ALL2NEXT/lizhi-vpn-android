@@ -160,10 +160,6 @@ export function normalizeSettings(value) {
       settings.registrationEnabled ?? settings.formalRegistrationEnabled,
       true,
     ),
-    requireInviteForRegistration: parseFlag(
-      settings.requireInviteForRegistration,
-      false,
-    ),
     requireAdminRegistrationCode: parseFlag(
       settings.requireAdminRegistrationCode,
       false,

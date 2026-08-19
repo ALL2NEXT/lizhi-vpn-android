@@ -8,8 +8,6 @@
   let deviceRelationsLoading = false;
   let trafficDetailsData = null;
   let trafficDetailsLoading = false;
-  let inviteRelationsData = null;
-  let inviteRelationsLoading = false;
   let adminLoginRecordsData = null;
   let adminLoginRecordsLoading = false;
   let aiAnalysisLoading = false;
@@ -179,8 +177,6 @@
    deviceRelationsData = null;
    deviceRelationsLoading = false;
    trafficDetailsData = null;
-   inviteRelationsData = null;
-   inviteRelationsLoading = false;
    closeDeviceRelationDetail();
    adminLoginRecordsData = null;
    adminLoginRecordsLoading = false;
@@ -231,9 +227,6 @@
    }
    if (name === 'traffic-query' && !trafficDetailsData && !trafficDetailsLoading) {
      loadTrafficDetails();
-   }
-   if (name === 'invite-relations' && !inviteRelationsData && !inviteRelationsLoading) {
-     loadInviteRelations();
    }
    if (name === 'admin-login-records' && !adminLoginRecordsData && !adminLoginRecordsLoading) {
      loadAdminLoginRecords();

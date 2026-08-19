@@ -569,8 +569,7 @@ const USER_TABLE_DEFINITIONS = [
     key: 'users_mb',
     title: 'users_mb（用户表）',
     columns: [
-      'id', 'uid', 'nickname', 'accountType', 'invite_code',
-      'invited_by_user_id', 'invited_at', 'email', 'created_at',
+      'id', 'uid', 'nickname', 'accountType', 'email', 'created_at',
     ],
   },
   {

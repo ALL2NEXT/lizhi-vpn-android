@@ -5,7 +5,7 @@ function securityFilteredAccounts() {
   const search = String(value('securitySearch') || '').toLowerCase();
   return accounts.filter(function(account) {
     if (!search) return true;
-    return [account.uid, account.nickname, account.email, account.inviteCode, account.invitedByCode]
+    return [account.uid, account.nickname, account.email]
       .join(' ').toLowerCase().indexOf(search) >= 0;
   });
 }
@@ -79,15 +79,12 @@ function renderAccountSecurity() {
       '<td><span class="security-account-name">' + esc(account.nickname || account.uid) + '</span></td>' +
       '<td><code>' + esc(account.uid) + '</code></td>' +
       '<td><span class="security-account-email">' + esc(email) + '</span></td>' +
-      '<td><code>' + esc(account.inviteCode || '未生成') + '</code></td>' +
-      '<td>' + esc(account.inviteeCount == null ? 0 : account.inviteeCount) + ' 人</td>' +
       '<td>' + esc(account.accountType === 'banned' ? '被封禁用户' : account.accountType === 'formal' ? '正式用户' : '游客') + '</td>' +
       '<td>' + esc(account.createdAt || '暂无') + '</td></tr>';
   }).join('');
-  host.innerHTML = '<table class="security-account-table" aria-label="账户基本信息">' +
-    '<thead><tr><th>选择</th><th>状态</th><th>昵称</th><th>UID</th><th>邮箱</th><th>邀请码</th>' +
-    '<th>账户类型</th>' +
-    '<th>注册时间</th></tr></thead>' +
+  host.innerHTML = '<table class="security-account-table" aria-label="Account security">' +
+    '<thead><tr><th>Select</th><th>Status</th><th>Nickname</th><th>UID</th><th>Email</th>' +
+    '<th>Account type</th><th>Created at</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-security-select-uid]').forEach(function(input) {
     input.onchange = function() {

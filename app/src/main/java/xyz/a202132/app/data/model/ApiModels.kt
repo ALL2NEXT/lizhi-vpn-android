@@ -65,9 +65,6 @@ data class BackendAppSettings(
     @SerializedName("registrationEnabled")
     val registrationEnabled: Boolean = true,
 
-    @SerializedName("requireInviteForRegistration")
-    val requireInviteForRegistration: Boolean = false,
-
     @SerializedName("requireAdminRegistrationCode")
     val requireAdminRegistrationCode: Boolean = false,
 
@@ -117,19 +114,8 @@ data class AccountBindingRequest(
     @SerializedName("password")
     val password: String,
 
-    @SerializedName("inviteCode")
-    val inviteCode: String = "",
-
     @SerializedName("registrationCode")
     val registrationCode: String = ""
-)
-
-data class AccountInviteRequest(
-    @SerializedName("deviceId")
-    val deviceId: String,
-
-    @SerializedName("code")
-    val code: String
 )
 
 data class AccountLoginRequest(
@@ -204,15 +190,6 @@ data class AccountInfo(
 
     @SerializedName("appVersion")
     val appVersion: String = "",
-
-    @SerializedName("inviteCode")
-    val inviteCode: String = "",
-
-    @SerializedName("invitedByCode")
-    val invitedByCode: String = "",
-
-    @SerializedName("inviteeCount")
-    val inviteeCount: Int = 0,
 
     @SerializedName("deviceBlocked")
     val deviceBlocked: Boolean = false
