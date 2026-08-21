@@ -39,6 +39,12 @@ class DesktopAppStateTest {
         assertEquals(listOf("one", "local"), state.visibleNodes.map(DesktopNode::id))
     }
 
+    @Test
+    fun `node flag is inferred from country code or node name`() {
+        assertEquals("\uD83C\uDDEF\uD83C\uDDF5", node("JP Tokyo", "source-1").flagEmoji())
+        assertEquals("\uD83C\uDDE8\uD83C\uDDF3", node("Singapore CN", "source-1").copy(countryCode = "CN").flagEmoji())
+    }
+
     private fun node(id: String, sourceId: String?, favorite: Boolean = false) = DesktopNode(
         id = id,
         name = id,

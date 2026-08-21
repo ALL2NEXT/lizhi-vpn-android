@@ -75,9 +75,11 @@ data class DesktopNode(
     fun displayName(): String = name.removeFlagEmoji().ifBlank { "$server:$port" }
 
     fun flagEmoji(): String {
-        val embedded = FLAG_PAIR.find(name)?.value
+        val embedded = name.findFlagEmoji()
         if (embedded != null) return embedded
-        val normalized = countryCode?.uppercase()?.takeIf { it.length == 2 } ?: return "🌐"
+        val normalized = CountryCodeResolver.normalizeCountryCode(countryCode)
+            ?: CountryCodeResolver.fromNodeName(name)
+            ?: return "\uD83C\uDF10"
         return normalized.map { char ->
             String(Character.toChars(0x1F1E6 + char.code - 'A'.code))
         }.joinToString("")
@@ -86,9 +88,46 @@ data class DesktopNode(
     companion object {
         const val UNTESTED = -1
         const val FAILED = -2
-        private val FLAG_PAIR = Regex("[🇦-🇿]{2}")
 
-        private fun String.removeFlagEmoji(): String = replace(FLAG_PAIR, "").trim()
+        private fun String.findFlagEmoji(): String? {
+            var index = 0
+            while (index < length) {
+                val codePoint = codePointAt(index)
+                val charCount = Character.charCount(codePoint)
+                if (codePoint in 0x1F1E6..0x1F1FF && index + charCount < length) {
+                    val nextCodePoint = codePointAt(index + charCount)
+                    if (nextCodePoint in 0x1F1E6..0x1F1FF) {
+                        return String(Character.toChars(codePoint)) +
+                            String(Character.toChars(nextCodePoint))
+                    }
+                }
+                index += charCount
+            }
+            return null
+        }
+
+        private fun String.removeFlagEmoji(): String {
+            val result = StringBuilder()
+            var index = 0
+            while (index < length) {
+                val codePoint = codePointAt(index)
+                val charCount = Character.charCount(codePoint)
+                if (codePoint in 0x1F1E6..0x1F1FF) {
+                    if (index + charCount < length) {
+                        val nextCodePoint = codePointAt(index + charCount)
+                        if (nextCodePoint in 0x1F1E6..0x1F1FF) {
+                            index += charCount + Character.charCount(nextCodePoint)
+                            continue
+                        }
+                    }
+                    index += charCount
+                    continue
+                }
+                result.append(String(Character.toChars(codePoint)))
+                index += charCount
+            }
+            return result.toString().trim()
+        }
     }
 }
 

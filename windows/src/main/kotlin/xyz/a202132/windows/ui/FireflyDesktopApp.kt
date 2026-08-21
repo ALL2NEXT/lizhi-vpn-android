@@ -19,7 +19,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -99,6 +100,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -610,47 +613,91 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
                     subscriptionSwipeThresholdPx
                 ) {
                     if (!canSwipeSubscriptions) return@pointerInput
-                    detectHorizontalDragGestures(
-                        onDragStart = {
+                    val gestureStartThresholdPx = with(density) { 12.dp.toPx() }
+                    awaitEachGesture {
+                        val down = awaitFirstDown(
+                            requireUnconsumed = false,
+                            pass = PointerEventPass.Final
+                        )
+                            var horizontalDrag = false
+                            var cancelled = false
+                            var totalX = 0f
+                            var totalY = 0f
+                            var activePointerId = down.id
+
+                            while (!cancelled) {
+                                val event = awaitPointerEvent(PointerEventPass.Final)
+                                val change = event.changes.firstOrNull { it.id == activePointerId }
+                                if (change == null) {
+                                    cancelled = true
+                                    continue
+                                }
+                                if (!change.pressed) {
+                                    if (horizontalDrag) {
+                                        val targetIndex = when {
+                                            subscriptionSwipeOffsetPx <= -subscriptionSwipeThresholdPx &&
+                                                currentSubscriptionIndex < state.subscriptionGroups.lastIndex ->
+                                                currentSubscriptionIndex + 1
+                                            subscriptionSwipeOffsetPx >= subscriptionSwipeThresholdPx &&
+                                                currentSubscriptionIndex > 0 -> currentSubscriptionIndex - 1
+                                            else -> currentSubscriptionIndex
+                                        }
+                                        isSubscriptionSwiping = false
+                                        subscriptionSwipeOffsetPx = 0f
+                                        if (targetIndex != currentSubscriptionIndex) {
+                                            controller.setSubscriptionSource(
+                                                state.subscriptionGroups[targetIndex].first
+                                            )
+                                        }
+                                    }
+                                    cancelled = true
+                                    continue
+                                }
+
+                                val delta = change.positionChange()
+                                totalX += delta.x
+                                totalY += delta.y
+                                if (!horizontalDrag) {
+                                    if (abs(totalY) >= gestureStartThresholdPx &&
+                                        abs(totalY) > abs(totalX)
+                                    ) {
+                                        // Let LazyColumn own vertical dragging and scrolling.
+                                        cancelled = true
+                                        continue
+                                    }
+                                    if (abs(totalX) < gestureStartThresholdPx ||
+                                        abs(totalX) <= abs(totalY)
+                                    ) {
+                                        continue
+                                    }
+                                    horizontalDrag = true
+                                    subscriptionSwipeOffsetPx = 0f
+                                    isSubscriptionSwiping = true
+                                }
+
+                                val requestedOffset = subscriptionSwipeOffsetPx + delta.x
+                                val hasTarget = when {
+                                    requestedOffset < 0f ->
+                                        currentSubscriptionIndex < state.subscriptionGroups.lastIndex
+                                    requestedOffset > 0f -> currentSubscriptionIndex > 0
+                                    else -> true
+                                }
+                                val adjustedDrag = if (hasTarget) delta.x else delta.x * 0.25f
+                                subscriptionSwipeOffsetPx =
+                                    (subscriptionSwipeOffsetPx + adjustedDrag).coerceIn(
+                                        -subscriptionSwipeThresholdPx * 1.2f,
+                                        subscriptionSwipeThresholdPx * 1.2f
+                                    )
+                                change.consume()
+                            }
+
+                        if (horizontalDrag && !isSubscriptionSwiping) {
                             subscriptionSwipeOffsetPx = 0f
-                            isSubscriptionSwiping = true
-                        },
-                        onHorizontalDrag = { change, dragAmount ->
-                            val requestedOffset = subscriptionSwipeOffsetPx + dragAmount
-                            val hasTarget = when {
-                                requestedOffset < 0f ->
-                                    currentSubscriptionIndex < state.subscriptionGroups.lastIndex
-                                requestedOffset > 0f -> currentSubscriptionIndex > 0
-                                else -> true
-                            }
-                            val adjustedDrag = if (hasTarget) dragAmount else dragAmount * 0.25f
-                            subscriptionSwipeOffsetPx =
-                                (subscriptionSwipeOffsetPx + adjustedDrag).coerceIn(
-                                    -subscriptionSwipeThresholdPx * 1.2f,
-                                    subscriptionSwipeThresholdPx * 1.2f
-                                )
-                            change.consume()
-                        },
-                        onDragEnd = {
-                            val targetIndex = when {
-                                subscriptionSwipeOffsetPx <= -subscriptionSwipeThresholdPx &&
-                                    currentSubscriptionIndex < state.subscriptionGroups.lastIndex ->
-                                    currentSubscriptionIndex + 1
-                                subscriptionSwipeOffsetPx >= subscriptionSwipeThresholdPx &&
-                                    currentSubscriptionIndex > 0 -> currentSubscriptionIndex - 1
-                                else -> currentSubscriptionIndex
-                            }
-                            isSubscriptionSwiping = false
-                            subscriptionSwipeOffsetPx = 0f
-                            if (targetIndex != currentSubscriptionIndex) {
-                                controller.setSubscriptionSource(state.subscriptionGroups[targetIndex].first)
-                            }
-                        },
-                        onDragCancel = {
+                        } else if (!horizontalDrag) {
                             isSubscriptionSwiping = false
                             subscriptionSwipeOffsetPx = 0f
                         }
-                    )
+                    }
                 }
             if (state.isTesting || state.isLoadingNodes) {
                 LinearProgressIndicator(Modifier.fillMaxWidth(), color = Primary)
