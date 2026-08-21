@@ -8,6 +8,9 @@ import com.google.zxing.Result
 import com.google.zxing.client.j2se.BufferedImageLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import java.awt.Dimension
+import java.awt.GraphicsEnvironment
+import java.awt.Rectangle
+import java.awt.Robot
 import java.awt.image.BufferedImage
 import java.io.File
 import java.util.EnumMap
@@ -124,6 +127,24 @@ object DesktopQrCode {
         ImageIO.read(file)?.let(::decode)?.text?.trim()?.takeIf(String::isNotEmpty)
     }.getOrNull()
 
+    fun captureScreenAndDecode(): QrImageSelection {
+        val screenshot = runCatching {
+            val devices = GraphicsEnvironment
+                .getLocalGraphicsEnvironment()
+                .screenDevices
+            require(devices.isNotEmpty()) { "未找到可截图的屏幕" }
+            val bounds = devices
+                .map { it.defaultConfiguration.bounds }
+                .reduce(::union)
+            Robot().createScreenCapture(bounds)
+        }.getOrNull()
+        return if (screenshot == null) {
+            QrImageSelection(selected = false, text = null)
+        } else {
+            QrImageSelection(selected = true, text = decode(screenshot)?.text?.trim())
+        }
+    }
+
     /** Opens a native Windows file chooser from the AWT event thread. */
     fun chooseImageAndDecode(): QrImageSelection {
         var selectedFile: File? = null
@@ -155,6 +176,9 @@ object DesktopQrCode {
         val file = selectedFile ?: return QrImageSelection(selected = false, text = null)
         return QrImageSelection(selected = true, text = decodeFile(file))
     }
+
+    private fun union(first: Rectangle, second: Rectangle): Rectangle =
+        first.union(second)
 }
 
 private fun BufferedImage.copy(): BufferedImage {

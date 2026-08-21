@@ -564,7 +564,7 @@ private fun NodeSwipeHint(progress: Float, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
-    var showQrScanner by remember { mutableStateOf(false) }
+    var showQrImport by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -741,7 +741,7 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
                         "二维码导入",
                         Modifier.weight(1f),
                         enabled = !state.isTesting
-                    ) { showQrScanner = true }
+                    ) { showQrImport = true }
                 }
                 Spacer(Modifier.height(12.dp))
             }
@@ -781,12 +781,132 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
         }
     }
 
-    if (showQrScanner) {
-        DesktopQrScannerDialog(
-            onDismiss = { showQrScanner = false },
+    if (showQrImport) {
+        DesktopQrImportDialog(
+            onDismiss = { showQrImport = false },
             onQrCodeScanned = { text ->
                 controller.importNodes(text)
-                showQrScanner = false
+                showQrImport = false
+            }
+        )
+    }
+}
+
+private enum class QrImportMode {
+    OPTIONS,
+    CAMERA,
+    SCREENSHOT,
+    IMAGE
+}
+
+@Composable
+private fun DesktopQrImportDialog(
+    onDismiss: () -> Unit,
+    onQrCodeScanned: (String) -> Unit
+) {
+    var mode by remember { mutableStateOf(QrImportMode.OPTIONS) }
+    when (mode) {
+        QrImportMode.OPTIONS -> QrImportOptionsDialog(
+            onDismiss = onDismiss,
+            onCamera = { mode = QrImportMode.CAMERA },
+            onScreenshot = { mode = QrImportMode.SCREENSHOT },
+            onImage = { mode = QrImportMode.IMAGE }
+        )
+        QrImportMode.CAMERA -> DesktopQrScannerDialog(
+            onDismiss = onDismiss,
+            onQrCodeScanned = onQrCodeScanned
+        )
+        QrImportMode.SCREENSHOT -> DesktopQrCaptureDialog(
+            title = "屏幕截图",
+            captureScreen = true,
+            onDismiss = { mode = QrImportMode.OPTIONS },
+            onQrCodeScanned = onQrCodeScanned
+        )
+        QrImportMode.IMAGE -> DesktopQrCaptureDialog(
+            title = "选择图片",
+            captureScreen = false,
+            onDismiss = { mode = QrImportMode.OPTIONS },
+            onQrCodeScanned = onQrCodeScanned
+        )
+    }
+}
+
+@Composable
+private fun QrImportOptionsDialog(
+    onDismiss: () -> Unit,
+    onCamera: () -> Unit,
+    onScreenshot: () -> Unit,
+    onImage: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("二维码导入") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("请选择二维码来源", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = onCamera, modifier = Modifier.fillMaxWidth()) {
+                    Text("摄像头")
+                }
+                Button(onClick = onScreenshot, modifier = Modifier.fillMaxWidth()) {
+                    Text("屏幕截图")
+                }
+                Button(onClick = onImage, modifier = Modifier.fillMaxWidth()) {
+                    Text("选择图片")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+@Composable
+private fun DesktopQrCaptureDialog(
+    title: String,
+    captureScreen: Boolean,
+    onDismiss: () -> Unit,
+    onQrCodeScanned: (String) -> Unit
+) {
+    var status by remember { mutableStateOf("正在准备…") }
+    var busy by remember { mutableStateOf(true) }
+    var resultReady by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val result = withContext(Dispatchers.IO) {
+            if (captureScreen) {
+                DesktopQrCode.captureScreenAndDecode()
+            } else {
+                DesktopQrCode.chooseImageAndDecode()
+            }
+        }
+        busy = false
+        resultReady = true
+        status = when {
+            !result.selected -> "未选择来源"
+            result.text.isNullOrBlank() -> "未识别到二维码，请重试"
+            else -> {
+                onQrCodeScanned(result.text)
+                "识别成功，正在导入…"
+            }
+        }
+    }
+
+    // Hide every Compose dialog while taking a screen capture so the import
+    // UI itself cannot cover the QR code the user wants to scan.
+    if (!captureScreen || resultReady) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(title) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (busy) CircularProgressIndicator()
+                    Spacer(Modifier.height(12.dp))
+                    Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss, enabled = !busy) { Text("关闭") }
             }
         )
     }
