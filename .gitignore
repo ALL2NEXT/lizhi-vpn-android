@@ -75,6 +75,10 @@ firefly签名.txt
 .DS_Store
 Thumbs.db
 
+# Windows core build outputs (rebuilt from the pinned source submodule)
+windows-app/runtime/windows-x64/*.exe
+windows-app/runtime/windows-x64/*.dll
+
 # Others
 编译/
 脚本/
