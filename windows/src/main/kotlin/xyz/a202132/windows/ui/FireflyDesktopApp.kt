@@ -106,6 +106,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -138,6 +140,11 @@ private val WEB_SPEED_TESTS = listOf(
     "Netflix 测速" to "https://fast.com/",
     "Google 测速" to "https://fiber.google.com/speedtest/"
 )
+
+// Compose Desktop's default fallback can render regional indicators as `US`/`JP`.
+// Segoe UI Emoji contains the Windows flag ligatures, so keep flag rendering explicit.
+@OptIn(ExperimentalTextApi::class)
+private val WINDOWS_FLAG_FONT = FontFamily("Segoe UI Emoji")
 
 @Composable
 fun FireflyDesktopApp(controller: VpnController) {
@@ -370,7 +377,7 @@ private fun CurrentNode(node: DesktopNode?, isLoading: Boolean) {
         Text("当前节点", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(node.flagEmoji(), fontSize = 24.sp)
+            Text(node.flagEmoji(), fontFamily = WINDOWS_FLAG_FONT, fontSize = 24.sp)
             Spacer(Modifier.width(8.dp))
             Text(
                 node.displayName(),
@@ -867,7 +874,12 @@ private fun NodeListItem(
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(node.flagEmoji(), fontSize = 24.sp, modifier = Modifier.padding(end = 12.dp))
+                Text(
+                    node.flagEmoji(),
+                    fontFamily = WINDOWS_FLAG_FONT,
+                    fontSize = 24.sp,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
                 Text(
                     node.displayName(),
                     modifier = Modifier.weight(1f),
