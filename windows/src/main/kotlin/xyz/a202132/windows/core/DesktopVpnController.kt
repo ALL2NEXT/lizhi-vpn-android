@@ -31,6 +31,7 @@ import xyz.a202132.windows.model.VpnState
 import xyz.a202132.windows.model.UrlTestTargets
 import xyz.a202132.windows.network.BackendClient
 import xyz.a202132.windows.network.DirectBandwidthTestManager
+import xyz.a202132.windows.network.NodeLocationResolver
 
 class DesktopVpnController(
     private val locator: SingBoxLocator = SingBoxLocator(),
@@ -45,6 +46,7 @@ class DesktopVpnController(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val storedPreferences = preferencesStore.snapshot()
     private var refreshJob: Job? = null
+    private var nodeLocationJob: Job? = null
     private var backendGeneration: Long = 0L
     private var recoveryJob: Job? = null
     private var trafficJob: Job? = null
@@ -221,6 +223,7 @@ class DesktopVpnController(
                 .onSuccess { result ->
                     if (generation != backendGeneration) return@onSuccess
                     val preferences = preferencesStore.snapshot()
+                    var nodesForLocation = emptyList<DesktopNode>()
                     mutableState.update { current ->
                         val localFavorites = current.nodes.filter {
                             it.subscriptionSourceId == null && it.isFavorite
@@ -239,6 +242,7 @@ class DesktopVpnController(
                         if (selected != preferences.selectedNodeId && current.settings.rememberLastSelectedNode) {
                             preferencesStore.update { it.copy(selectedNodeId = selected) }
                         }
+                        nodesForLocation = nodes
                         current.copy(
                             nodes = nodes,
                             selectedNodeId = selected,
@@ -251,6 +255,7 @@ class DesktopVpnController(
                             message = if (nodes.isEmpty()) "当前账户暂无可用节点" else null
                         )
                     }
+                    scheduleNodeLocationEnrichment(nodesForLocation, generation)
                 }
                 .onFailure { error ->
                     if (generation != backendGeneration) return@onFailure
@@ -275,6 +280,8 @@ class DesktopVpnController(
         backendGeneration += 1
         refreshJob?.cancel()
         refreshJob = null
+        nodeLocationJob?.cancel()
+        nodeLocationJob = null
         preferencesStore.update { it.copy(backendUrl = normalized) }
         mutableState.update {
             it.copy(
@@ -289,6 +296,21 @@ class DesktopVpnController(
         }
         refreshNodes()
         return true
+    }
+
+    private fun scheduleNodeLocationEnrichment(nodes: List<DesktopNode>, generation: Long) {
+        if (nodes.isEmpty()) return
+        nodeLocationJob?.cancel()
+        nodeLocationJob = scope.launch {
+            delay(1_500)
+            val enrichedNodes = NodeLocationResolver.enrichNodes(nodes)
+            if (generation != backendGeneration) return@launch
+            val byId = enrichedNodes.associateBy(DesktopNode::id)
+            mutableState.update { current ->
+                current.copy(nodes = current.nodes.map { byId[it.id] ?: it })
+            }
+            nodeLocationJob = null
+        }
     }
 
     override fun updateSettings(settings: DesktopSettings) {
