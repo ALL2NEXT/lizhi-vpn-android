@@ -19,6 +19,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -100,6 +101,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -112,6 +114,7 @@ import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.net.URI
+import kotlin.math.abs
 import org.jetbrains.skia.Image as SkiaImage
 import xyz.a202132.windows.core.VpnController
 import xyz.a202132.windows.model.AppScreen
@@ -572,6 +575,83 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
         Column(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
+            val density = LocalDensity.current
+            val subscriptionSwipeThresholdPx = with(density) { 72.dp.toPx() }
+            val currentSubscriptionIndex = state.subscriptionGroups.indexOfFirst {
+                it.first == state.selectedSubscriptionSourceId
+            }.coerceAtLeast(0)
+            val canSwipeSubscriptions =
+                !state.isTesting &&
+                    state.nodeCategory == NodeCategory.SUBSCRIPTION &&
+                    state.subscriptionGroups.size > 1
+            var subscriptionSwipeOffsetPx by remember { mutableFloatStateOf(0f) }
+            var isSubscriptionSwiping by remember { mutableStateOf(false) }
+            val subscriptionSwipeVisualOffsetPx by animateFloatAsState(
+                targetValue = if (isSubscriptionSwiping) subscriptionSwipeOffsetPx else 0f,
+                animationSpec = if (isSubscriptionSwiping) {
+                    tween(0)
+                } else {
+                    tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                },
+                label = "subscriptionSwipeOffset"
+            )
+            val subscriptionSwipeProgress =
+                (abs(subscriptionSwipeVisualOffsetPx) / subscriptionSwipeThresholdPx)
+                    .coerceIn(0f, 1f)
+            val subscriptionSwipeModifier = Modifier
+                .graphicsLayer {
+                    translationX = subscriptionSwipeVisualOffsetPx
+                    alpha = 1f - subscriptionSwipeProgress * 0.12f
+                }
+                .pointerInput(
+                    canSwipeSubscriptions,
+                    currentSubscriptionIndex,
+                    state.subscriptionGroups,
+                    subscriptionSwipeThresholdPx
+                ) {
+                    if (!canSwipeSubscriptions) return@pointerInput
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            subscriptionSwipeOffsetPx = 0f
+                            isSubscriptionSwiping = true
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            val requestedOffset = subscriptionSwipeOffsetPx + dragAmount
+                            val hasTarget = when {
+                                requestedOffset < 0f ->
+                                    currentSubscriptionIndex < state.subscriptionGroups.lastIndex
+                                requestedOffset > 0f -> currentSubscriptionIndex > 0
+                                else -> true
+                            }
+                            val adjustedDrag = if (hasTarget) dragAmount else dragAmount * 0.25f
+                            subscriptionSwipeOffsetPx =
+                                (subscriptionSwipeOffsetPx + adjustedDrag).coerceIn(
+                                    -subscriptionSwipeThresholdPx * 1.2f,
+                                    subscriptionSwipeThresholdPx * 1.2f
+                                )
+                            change.consume()
+                        },
+                        onDragEnd = {
+                            val targetIndex = when {
+                                subscriptionSwipeOffsetPx <= -subscriptionSwipeThresholdPx &&
+                                    currentSubscriptionIndex < state.subscriptionGroups.lastIndex ->
+                                    currentSubscriptionIndex + 1
+                                subscriptionSwipeOffsetPx >= subscriptionSwipeThresholdPx &&
+                                    currentSubscriptionIndex > 0 -> currentSubscriptionIndex - 1
+                                else -> currentSubscriptionIndex
+                            }
+                            isSubscriptionSwiping = false
+                            subscriptionSwipeOffsetPx = 0f
+                            if (targetIndex != currentSubscriptionIndex) {
+                                controller.setSubscriptionSource(state.subscriptionGroups[targetIndex].first)
+                            }
+                        },
+                        onDragCancel = {
+                            isSubscriptionSwiping = false
+                            subscriptionSwipeOffsetPx = 0f
+                        }
+                    )
+                }
             if (state.isTesting || state.isLoadingNodes) {
                 LinearProgressIndicator(Modifier.fillMaxWidth(), color = Primary)
                 Spacer(Modifier.height(10.dp))
@@ -597,7 +677,10 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
             }
 
             if (state.visibleNodes.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.fillMaxSize().then(subscriptionSwipeModifier),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             if (state.isLoadingNodes) "正在获取节点..." else "暂无可用节点",
@@ -607,19 +690,21 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(state.visibleNodes, key = DesktopNode::id) { node ->
-                        NodeListItem(
-                            node = node,
-                            selected = node.id == state.selectedNodeId,
-                            enabled = !state.isTesting,
-                            onSelect = { controller.selectAndConnectNode(node.id) },
-                            onFavorite = { controller.toggleFavorite(node.id) }
-                        )
+                Box(Modifier.fillMaxSize().then(subscriptionSwipeModifier)) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(state.visibleNodes, key = DesktopNode::id) { node ->
+                            NodeListItem(
+                                node = node,
+                                selected = node.id == state.selectedNodeId,
+                                enabled = !state.isTesting,
+                                onSelect = { controller.selectAndConnectNode(node.id) },
+                                onFavorite = { controller.toggleFavorite(node.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -634,33 +719,43 @@ private fun NodeCategorySwitch(state: DesktopAppState, controller: VpnController
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(10.dp)
     ) {
-        Row(
-            Modifier.padding(4.dp).horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
             val groups = state.subscriptionGroups.ifEmpty {
                 listOf("" to "订阅节点")
             }
-            groups.forEach { (sourceId, name) ->
-                CategoryOption(
-                    name,
-                    state.nodeCategory == NodeCategory.SUBSCRIPTION &&
-                        (sourceId.isEmpty() || sourceId == state.selectedSubscriptionSourceId),
-                    Modifier.width(150.dp)
-                ) {
-                    if (sourceId.isEmpty()) {
-                        controller.setNodeCategory(NodeCategory.SUBSCRIPTION)
-                    } else {
-                        controller.setSubscriptionSource(sourceId)
+            val segmentCount = groups.size + if (state.settings.hideFavoriteNodeGroup) 0 else 1
+            val segmentGap = 4.dp
+            val availableWidth = maxWidth - 8.dp - segmentGap * (segmentCount - 1)
+            val segmentWidth = if (segmentCount <= 4) {
+                (availableWidth / segmentCount).coerceIn(96.dp, 136.dp)
+            } else {
+                112.dp
+            }
+            Row(
+                Modifier.padding(4.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(segmentGap)
+            ) {
+                groups.forEach { (sourceId, name) ->
+                    CategoryOption(
+                        name,
+                        state.nodeCategory == NodeCategory.SUBSCRIPTION &&
+                            (sourceId.isEmpty() || sourceId == state.selectedSubscriptionSourceId),
+                        Modifier.width(segmentWidth)
+                    ) {
+                        if (sourceId.isEmpty()) {
+                            controller.setNodeCategory(NodeCategory.SUBSCRIPTION)
+                        } else {
+                            controller.setSubscriptionSource(sourceId)
+                        }
                     }
                 }
-            }
-            if (!state.settings.hideFavoriteNodeGroup) {
-                CategoryOption(
-                    "收藏节点",
-                    state.nodeCategory == NodeCategory.FAVORITES,
-                    Modifier.width(150.dp)
-                ) { controller.setNodeCategory(NodeCategory.FAVORITES) }
+                if (!state.settings.hideFavoriteNodeGroup) {
+                    CategoryOption(
+                        "收藏节点",
+                        state.nodeCategory == NodeCategory.FAVORITES,
+                        Modifier.width(segmentWidth)
+                    ) { controller.setNodeCategory(NodeCategory.FAVORITES) }
+                }
             }
         }
     }
