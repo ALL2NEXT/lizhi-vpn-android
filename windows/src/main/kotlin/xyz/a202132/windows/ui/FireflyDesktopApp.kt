@@ -922,7 +922,6 @@ private fun DesktopQrScannerDialog(
     val uiScope = rememberCoroutineScope()
     var preview by remember { mutableStateOf<ImageBitmap?>(null) }
     var status by remember { mutableStateOf("正在启动摄像头…") }
-    var selectingImage by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         scanner.start(
@@ -936,7 +935,7 @@ private fun DesktopQrScannerDialog(
                 val bitmap = withContext(Dispatchers.Default) { frame.toImageBitmap() }
                 if (bitmap != null) {
                     preview = bitmap
-                    if (!selectingImage) status = "请将二维码对准摄像头"
+                    status = "请将二维码对准摄像头"
                 }
             }
         } finally {
@@ -979,27 +978,6 @@ private fun DesktopQrScannerDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
-                        onClick = {
-                            selectingImage = true
-                            status = "请选择二维码图片…"
-                            uiScope.launch(Dispatchers.IO) {
-                                val result = DesktopQrCode.chooseImageAndDecode()
-                                withContext(Dispatchers.Main.immediate) {
-                                    selectingImage = false
-                                    when {
-                                        !result.selected -> status = "未选择图片"
-                                        result.text.isNullOrBlank() -> status = "图片中未识别到二维码"
-                                        else -> onQrCodeScanned(result.text)
-                                    }
-                                }
-                            }
-                        },
-                        enabled = !selectingImage
-                    ) {
-                        Text(if (selectingImage) "读取中…" else "选择图片")
-                    }
-                    Spacer(Modifier.width(10.dp))
                     TextButton(onClick = onDismiss) { Text("关闭") }
                 }
             }
