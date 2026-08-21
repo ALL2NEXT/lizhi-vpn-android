@@ -128,12 +128,16 @@ class DesktopVpnController(
                 return@launch
             }
             mutableState.update { current ->
-                val existing = current.nodes.associateBy(DesktopNode::id)
-                val merged = (current.nodes + imported.map { node ->
-                    existing[node.id]?.let { old -> node.copy(isFavorite = old.isFavorite) } ?: node
-                }).distinctBy(DesktopNode::id)
+                val merged = mergeImportedNodes(current.nodes, imported)
+                val favoriteIds = merged
+                    .filter(DesktopNode::isFavorite)
+                    .mapTo(mutableSetOf(), DesktopNode::id)
+                preferencesStore.update { preferences ->
+                    preferences.copy(favoriteNodeIds = favoriteIds)
+                }
                 current.copy(
                     nodes = merged,
+                    nodeCategory = NodeCategory.FAVORITES,
                     selectedNodeId = current.selectedNodeId ?: imported.first().id,
                     message = "已导入 ${imported.size} 个节点"
                 )
@@ -846,4 +850,17 @@ class DesktopVpnController(
         val downloadBytes: Long = 0L
     )
 
+}
+
+internal fun mergeImportedNodes(
+    existing: List<DesktopNode>,
+    imported: List<DesktopNode>
+): List<DesktopNode> {
+    val importedIds = imported.mapTo(hashSetOf(), DesktopNode::id)
+    val existingIds = existing.mapTo(hashSetOf(), DesktopNode::id)
+    return existing.map { node ->
+        if (node.id in importedIds) node.copy(isFavorite = true) else node
+    } + imported
+        .filterNot { it.id in existingIds }
+        .map { it.copy(isFavorite = true) }
 }
