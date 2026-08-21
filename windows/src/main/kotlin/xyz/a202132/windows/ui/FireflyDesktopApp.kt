@@ -93,6 +93,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -122,7 +123,15 @@ import java.awt.Desktop
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.net.URI
+import javax.imageio.ImageIO
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
@@ -141,6 +150,8 @@ import xyz.a202132.windows.model.ProxyMode
 import xyz.a202132.windows.model.TunStack
 import xyz.a202132.windows.model.UrlTestTargets
 import xyz.a202132.windows.model.VpnState
+import xyz.a202132.windows.qr.DesktopQrCode
+import xyz.a202132.windows.qr.DesktopQrScanner
 
 private val WEB_SPEED_TESTS = listOf(
     "中科大测速" to "https://test.ustc.edu.cn/",
@@ -553,6 +564,8 @@ private fun NodeSwipeHint(progress: Float, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
+    var showQrScanner by remember { mutableStateOf(false) }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
@@ -728,7 +741,7 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
                         "二维码导入",
                         Modifier.weight(1f),
                         enabled = !state.isTesting
-                    ) { controller.importNodes("") }
+                    ) { showQrScanner = true }
                 }
                 Spacer(Modifier.height(12.dp))
             }
@@ -763,6 +776,111 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if (showQrScanner) {
+        DesktopQrScannerDialog(
+            onDismiss = { showQrScanner = false },
+            onQrCodeScanned = { text ->
+                controller.importNodes(text)
+                showQrScanner = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun DesktopQrScannerDialog(
+    onDismiss: () -> Unit,
+    onQrCodeScanned: (String) -> Unit
+) {
+    val scanner = remember { DesktopQrScanner() }
+    val frames = remember { Channel<BufferedImage>(capacity = Channel.CONFLATED) }
+    val uiScope = rememberCoroutineScope()
+    var preview by remember { mutableStateOf<ImageBitmap?>(null) }
+    var status by remember { mutableStateOf("正在启动摄像头…") }
+    var selectingImage by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        scanner.start(
+            onFrame = { frame -> frames.trySend(frame) },
+            onCode = { code -> uiScope.launch { onQrCodeScanned(code) } },
+            onError = { error -> uiScope.launch { status = error } }
+        )
+        try {
+            while (isActive) {
+                val frame = frames.receive()
+                val bitmap = withContext(Dispatchers.Default) { frame.toImageBitmap() }
+                if (bitmap != null) {
+                    preview = bitmap
+                    if (!selectingImage) status = "请将二维码对准摄像头"
+                }
+            }
+        } finally {
+            scanner.close()
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.width(560.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(Modifier.padding(22.dp)) {
+                Text("二维码导入", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(14.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    preview?.let { bitmap ->
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = "摄像头画面",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                    } ?: CircularProgressIndicator(color = Color.White)
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(18.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            selectingImage = true
+                            status = "请选择二维码图片…"
+                            uiScope.launch(Dispatchers.IO) {
+                                val result = DesktopQrCode.chooseImageAndDecode()
+                                withContext(Dispatchers.Main.immediate) {
+                                    selectingImage = false
+                                    when {
+                                        !result.selected -> status = "未选择图片"
+                                        result.text.isNullOrBlank() -> status = "图片中未识别到二维码"
+                                        else -> onQrCodeScanned(result.text)
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !selectingImage
+                    ) {
+                        Text(if (selectingImage) "读取中…" else "选择图片")
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    TextButton(onClick = onDismiss) { Text("关闭") }
                 }
             }
         }
@@ -1941,6 +2059,13 @@ private fun browse(url: String) {
 private fun readClipboard(): String = runCatching {
     Toolkit.getDefaultToolkit().systemClipboard.getData(DataFlavor.stringFlavor) as? String
 }.getOrNull().orEmpty()
+
+private fun BufferedImage.toImageBitmap(): ImageBitmap? = runCatching {
+    ByteArrayOutputStream().use { output ->
+        ImageIO.write(this, "png", output)
+        SkiaImage.makeFromEncoded(output.toByteArray()).toComposeImageBitmap()
+    }
+}.getOrNull()
 
 private fun writeClipboard(value: String) {
     runCatching {

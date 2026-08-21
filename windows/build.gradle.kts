@@ -23,6 +23,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
     implementation("com.google.code.gson:gson:2.13.2")
+    implementation("com.github.sarxos:webcam-capture:0.3.12")
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:javase:3.5.3")
 
     testImplementation(kotlin("test-junit5"))
 }
