@@ -6,7 +6,6 @@ import securityScript from "./admin-ui/scripts/security.client.js";
 import userTableScript from "./admin-ui/scripts/user-table.client.js";
 import dashboardChartsScript from "./admin-ui/scripts/dashboard-charts.client.js";
 import dashboardTablesScript from "./admin-ui/scripts/dashboard-tables.client.js";
-import aiAnalysisScript from "./admin-ui/scripts/ai-analysis.client.js";
 import usersScript from "./admin-ui/scripts/users.client.js";
 import settingsScript from "./admin-ui/scripts/settings.client.js";
 
@@ -17,7 +16,6 @@ const adminScript = [
   userTableScript,
   dashboardChartsScript,
   dashboardTablesScript,
-  aiAnalysisScript,
   usersScript,
   settingsScript,
 ].join("\n");

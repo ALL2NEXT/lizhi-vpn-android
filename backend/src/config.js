@@ -297,12 +297,5 @@ export const DEFAULT_STATE = {
     // 后台可关闭游客注册正式用户；默认保持现有注册流程开放。
     registrationEnabled: true,
     requireAdminRegistrationCode: false,
-    aiAnalysis: {
-      model: "gemini-flash-latest",
-      thinkingLevel: "low",
-      maxOutputTokens: 4096,
-      analysisStyle: "standard",
-      customInstruction: "",
-    },
   },
 };

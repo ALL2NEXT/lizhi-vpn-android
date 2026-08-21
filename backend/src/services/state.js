@@ -137,23 +137,6 @@ export function normalizeSettings(value) {
     Object.prototype.hasOwnProperty.call(settings, "registrationEnabled") ||
     Object.prototype.hasOwnProperty.call(settings, "formalRegistrationEnabled");
   const timeout = Number(settings.nodeRequestTimeoutMs);
-  const aiAnalysis = plainObject(settings.aiAnalysis) ? settings.aiAnalysis : {};
-  const aiMaxOutputTokens = Number(aiAnalysis.maxOutputTokens);
-  const aiModel = ["gemini-flash-latest", "gemini-flash-lite-latest"].includes(
-    cleanText(aiAnalysis.model),
-  )
-    ? cleanText(aiAnalysis.model)
-    : "gemini-flash-latest";
-  const aiThinkingLevel = ["minimal", "low", "medium", "high"].includes(
-    cleanText(aiAnalysis.thinkingLevel),
-  )
-    ? cleanText(aiAnalysis.thinkingLevel)
-    : "low";
-  const aiAnalysisStyle = ["concise", "standard", "detailed"].includes(
-    cleanText(aiAnalysis.analysisStyle),
-  )
-    ? cleanText(aiAnalysis.analysisStyle)
-    : "standard";
   return {
     websiteUrl: cleanText(settings.websiteUrl),
     feedbackEmail: cleanText(settings.feedbackEmail),
@@ -170,20 +153,9 @@ export function normalizeSettings(value) {
       settings.requireAdminRegistrationCode,
       false,
     ),
-    aiAnalysis: {
-      model: aiModel,
-      thinkingLevel: aiThinkingLevel,
-      maxOutputTokens: Number.isFinite(aiMaxOutputTokens)
-        ? Math.min(Math.max(Math.round(aiMaxOutputTokens), 256), 65536)
-        : 4096,
-      analysisStyle: aiAnalysisStyle,
-      customInstruction: cleanText(aiAnalysis.customInstruction).slice(0, 1000),
-    },
   };
 }
 
 export function publicClientSettings(settings) {
-  const value = normalizeSettings(settings);
-  const { aiAnalysis, ...publicSettings } = value;
-  return publicSettings;
+  return normalizeSettings(settings);
 }

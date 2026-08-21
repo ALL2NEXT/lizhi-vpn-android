@@ -2,7 +2,6 @@
  * Admin route composition.
  */
 
-import { createAdminAiRoutes } from "./admin/ai-analysis.js";
 import { createAdminAccessRoutes } from "./admin/access.js";
 import { createAdminAnalyticsRoutes } from "./admin/analytics.js";
 import { createAdminRegistrationCodeRoutes } from "./admin/registration-codes.js";
@@ -15,7 +14,6 @@ export function createAdminRoutes(deps) {
     createAdminAccessRoutes(deps),
     createAdminSecurityRoutes(deps),
     createAdminAnalyticsRoutes(deps),
-    createAdminAiRoutes(deps),
     createAdminRegistrationCodeRoutes(deps),
     createAdminUserRoutes(deps),
     createAdminStateRoutes(deps),

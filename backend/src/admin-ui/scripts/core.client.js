@@ -10,25 +10,6 @@
   let trafficDetailsLoading = false;
   let adminLoginRecordsData = null;
   let adminLoginRecordsLoading = false;
-  let aiAnalysisLoading = false;
-  let aiFabDragState = null;
-  let aiFabDragMoved = false;
-  const AI_ANALYSIS_FAB_POSITION_KEY = 'firefly:ai-analysis-fab-position:v1';
-  let activeDashboardTab = 'user-trends';
-  const DASHBOARD_AI_CONTEXT = {
-    'user-trends': {
-      title: 'AI 助手 · 用户趋势',
-      task: '分析新增用户和活跃用户趋势，预测明天的用户变化',
-    },
-    'traffic-trends': {
-      title: 'AI 助手 · 流量趋势',
-      task: '预测明天的上传、下载和总流量',
-    },
-    'profile-ratio': {
-      title: 'AI 助手 · 占比画像',
-      task: '分析是否需要更新客户端版本',
-    },
-  };
   let trafficDetailsSortKey = '';
   let trafficDetailsSortDirection = 'asc';
   const trafficZeroFilters = {today: false, month: false, total: false};
@@ -104,12 +85,6 @@
    if (error === 'invalid_notice_start_at') return '公告开始时间格式无效';
    if (error === 'invalid_notice_end_at') return '公告结束时间格式无效';
    if (error === 'invalid_notice_time_order') return '公告结束时间不能早于开始时间';
-   if (error === 'gemini_not_configured') return '尚未配置 Cloudflare Secret：GEMINI_API_KEY';
-   if (error === 'gemini_auth_failed') return 'Gemini API 密钥无效，或该密钥没有 Gemini API 权限';
-   if (error === 'gemini_model_unavailable') return '当前 Gemini 模型不可用，请检查 API 项目权限或模型名称';
-   if (error === 'gemini_quota_exceeded') return 'Gemini API 配额已用尽或触发限流，请检查配额后重试';
-   if (error === 'gemini_request_failed') return 'Gemini 请求失败，请检查 API 密钥、模型权限或稍后重试';
-   if (error === 'gemini_empty_response') return 'Gemini 未返回有效分析内容，请稍后重试';
    if (error === 'external_subscription_url_required') return '请填写外部明文订阅地址';
    if (String(error || '').indexOf('external_subscription_http_') === 0) {
      return '外部明文订阅接口请求失败（HTTP ' + String(error).slice('external_subscription_http_'.length) + '）';
@@ -180,8 +155,6 @@
    closeDeviceRelationDetail();
    adminLoginRecordsData = null;
    adminLoginRecordsLoading = false;
-   aiAnalysisLoading = false;
-   closeAiAnalysis();
    trafficZeroFilters.today = false;
    trafficZeroFilters.month = false;
    trafficZeroFilters.total = false;
@@ -211,14 +184,6 @@
    document.querySelectorAll('.tab-panel').forEach(function(panel) {
      panel.classList.toggle('active', panel.dataset.panel === name);
    });
-   const isDashboardTab = name === 'user-trends' || name === 'traffic-trends' || name === 'profile-ratio';
-   const aiAnalysisFab = el('aiAnalysisFab');
-   if (aiAnalysisFab) aiAnalysisFab.hidden = !isDashboardTab;
-   if (isDashboardTab) {
-     activeDashboardTab = name;
-     updateAiAnalysisContext(true);
-   }
-   if (!isDashboardTab) closeAiAnalysis();
    if (name === 'account-security' && !accountSecurityData && !accountSecurityLoading) {
      loadAccountSecurity();
    }
@@ -247,122 +212,3 @@
    if (submenu) submenu.hidden = expanded;
    };
   });
- document.addEventListener('keydown', function(event) {
-   if (event.key === 'Escape') closeAiAnalysis();
- });
-function clampAiAnalysisFabPosition(left, top) {
-  const fab = el('aiAnalysisFab');
-  if (!fab) return;
-  const width = fab.offsetWidth || 48;
-  const height = fab.offsetHeight || 48;
-  const maxLeft = Math.max(8, window.innerWidth - width - 8);
-  const maxTop = Math.max(8, window.innerHeight - height - 8);
-  const nextLeft = Math.min(Math.max(Number(left) || 0, 8), maxLeft);
-  const nextTop = Math.min(Math.max(Number(top) || 0, 8), maxTop);
-  fab.style.left = Math.round(nextLeft) + 'px';
-  fab.style.top = Math.round(nextTop) + 'px';
-  fab.style.right = 'auto';
-  fab.style.bottom = 'auto';
-}
-function saveAiAnalysisFabPosition() {
-  const fab = el('aiAnalysisFab');
-  if (!fab || !fab.style.left || !fab.style.top) return;
-  try {
-    localStorage.setItem(AI_ANALYSIS_FAB_POSITION_KEY, JSON.stringify({
-      left: parseFloat(fab.style.left),
-      top: parseFloat(fab.style.top),
-    }));
-  } catch (_) {
-    // 忽略浏览器禁用本地存储的情况。
-  }
-}
-function restoreAiAnalysisFabPosition() {
-  const fab = el('aiAnalysisFab');
-  if (!fab) return;
-  try {
-    const saved = JSON.parse(localStorage.getItem(AI_ANALYSIS_FAB_POSITION_KEY) || 'null');
-    if (saved && Number.isFinite(Number(saved.left)) && Number.isFinite(Number(saved.top))) {
-      clampAiAnalysisFabPosition(saved.left, saved.top);
-    }
-  } catch (_) {
-    // 忽略无效或不可用的本地存储数据。
-  }
-}
-function positionAiAnalysisDialog() {
-  const overlay = el('aiAnalysisOverlay');
-  const fab = el('aiAnalysisFab');
-  const dialog = overlay && overlay.querySelector('.ai-analysis-dialog');
-  if (!overlay || !fab || !dialog || overlay.hidden || fab.hidden) return;
-  const fabRect = fab.getBoundingClientRect();
-  const dialogRect = dialog.getBoundingClientRect();
-  const margin = 12;
-  const maxLeft = Math.max(margin, window.innerWidth - dialogRect.width - margin);
-  const maxTop = Math.max(margin, window.innerHeight - dialogRect.height - margin);
-  let left = fabRect.left;
-  let top = fabRect.bottom + margin;
-  if (top > maxTop) top = fabRect.top - dialogRect.height - margin;
-  left = Math.min(Math.max(left, margin), maxLeft);
-  top = Math.min(Math.max(top, margin), maxTop);
-  dialog.style.left = Math.round(left) + 'px';
-  dialog.style.top = Math.round(top) + 'px';
-  dialog.style.right = 'auto';
-  dialog.style.bottom = 'auto';
-}
-function setupAiAnalysisFabDrag() {
-  const fab = el('aiAnalysisFab');
-  if (!fab) return;
-  fab.addEventListener('pointerdown', function(event) {
-    if (event.button !== undefined && event.button !== 0) return;
-    aiFabDragMoved = false;
-    const rect = fab.getBoundingClientRect();
-    aiFabDragState = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startLeft: rect.left,
-      startTop: rect.top,
-    };
-    fab.classList.remove('is-dragging');
-    if (fab.setPointerCapture) fab.setPointerCapture(event.pointerId);
-  });
-  fab.addEventListener('pointermove', function(event) {
-    if (!aiFabDragState || event.pointerId !== aiFabDragState.pointerId) return;
-    const deltaX = event.clientX - aiFabDragState.startX;
-    const deltaY = event.clientY - aiFabDragState.startY;
-    if (!aiFabDragMoved && Math.hypot(deltaX, deltaY) < 5) return;
-    aiFabDragMoved = true;
-    fab.classList.add('is-dragging');
-    clampAiAnalysisFabPosition(
-      aiFabDragState.startLeft + deltaX,
-      aiFabDragState.startTop + deltaY,
-    );
-    positionAiAnalysisDialog();
-    event.preventDefault();
-  });
-  function finishDrag(event) {
-    if (!aiFabDragState || event.pointerId !== aiFabDragState.pointerId) return;
-    if (fab.releasePointerCapture && fab.hasPointerCapture && fab.hasPointerCapture(event.pointerId)) {
-      fab.releasePointerCapture(event.pointerId);
-    }
-    fab.classList.remove('is-dragging');
-    if (aiFabDragMoved) saveAiAnalysisFabPosition();
-    aiFabDragState = null;
-  }
-  fab.addEventListener('pointerup', finishDrag);
-  fab.addEventListener('pointercancel', finishDrag);
-  fab.addEventListener('click', function(event) {
-    if (!aiFabDragMoved) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    aiFabDragMoved = false;
-  }, true);
-  restoreAiAnalysisFabPosition();
-  window.addEventListener('resize', function() {
-    if (fab.style.left && !fab.hidden) {
-      clampAiAnalysisFabPosition(fab.style.left, fab.style.top);
-      saveAiAnalysisFabPosition();
-    }
-    positionAiAnalysisDialog();
-  });
-}
-setupAiAnalysisFabDrag();

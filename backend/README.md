@@ -12,7 +12,7 @@
 - `src/http/`、`src/lib/`：HTTP 响应、安全校验和通用值处理。
 - `src/routes/client.js`：客户端配置、订阅中转路由。
 - `src/routes/account.js`：注册、绑定、登录、账户和任务路由。
-- `src/routes/admin.js`：管理 API 组合器，具体路由按安全、统计、AI、用户和状态拆在 `src/routes/admin/`。
+- `src/routes/admin.js`：管理 API 组合器，具体路由按安全、统计、用户和状态拆在 `src/routes/admin/`。
 - `src/admin-ui.js`：管理页资源组合器；HTML、CSS 和浏览器脚本位于 `src/admin-ui/`，脚本继续按业务模块拆分。
 - `schema.sql`：D1 schema 的可读副本。
 - `migrations/`：后续 D1 增量迁移目录。
@@ -21,7 +21,7 @@
 
 - KV 命名空间绑定：`CONFIG`
 - D1 数据库绑定：`USERS_DB`
-- Worker Secret：`ADMIN_TOKEN`；启用 AI 看板分析时还需 `GEMINI_API_KEY`。
+- Worker Secret：`ADMIN_TOKEN`。
 
 管理后台地址：
 

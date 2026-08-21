@@ -160,15 +160,9 @@ function fillState(state) {
   setValue('feedbackEmail', settings.feedbackEmail);
   setValue('feedbackUrl', settings.feedbackUrl);
    setValue('githubUrl', settings.githubUrl);
-   setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
-   checked('registrationEnabled', settings.registrationEnabled !== false);
-   checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
-  const aiAnalysis = settings.aiAnalysis || {};
-  setValue('aiAnalysisModel', aiAnalysis.model || 'gemini-flash-latest');
-  setValue('aiAnalysisThinkingLevel', aiAnalysis.thinkingLevel || 'low');
-  setValue('aiAnalysisMaxOutputTokens', aiAnalysis.maxOutputTokens || 4096);
-  setValue('aiAnalysisStyle', aiAnalysis.analysisStyle || 'standard');
-  setValue('aiAnalysisInstruction', aiAnalysis.customInstruction || '');
+  setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
+  checked('registrationEnabled', settings.registrationEnabled !== false);
+  checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
   const notice = currentState.notice || {};
   checked('noticeEnabled', Boolean(currentState.notice && notice.hasNotice !== false));
   setValue('noticeTitle', notice.title);
@@ -236,13 +230,6 @@ function formState() {
        nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
        registrationEnabled: el('registrationEnabled').checked,
        requireAdminRegistrationCode: el('requireAdminRegistrationCode').checked,
-       aiAnalysis: {
-        model: value('aiAnalysisModel') || 'gemini-flash-latest',
-        thinkingLevel: value('aiAnalysisThinkingLevel') || 'low',
-        maxOutputTokens: Number(value('aiAnalysisMaxOutputTokens') || 4096),
-        analysisStyle: value('aiAnalysisStyle') || 'standard',
-        customInstruction: value('aiAnalysisInstruction').slice(0, 1000)
-       },
        },
     notice: notice,
     appUpdate: appUpdate
@@ -307,7 +294,7 @@ async function pushSection(section) {
   const form = formState();
   const state = {
     subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,
-    settings: section === 'app-settings' || section === 'ai-config'
+    settings: section === 'app-settings'
       ? form.settings
       : currentState.settings,
     notice: section === 'notice' ? form.notice : currentState.notice,
