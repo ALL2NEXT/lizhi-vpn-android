@@ -38,12 +38,10 @@
           </div>
            <div class="nav-group" data-nav-group="form-query">
             <button class="tab-button nav-parent" type="button" aria-expanded="true" aria-controls="form-query-subnav">
-              <span>表单查询</span><span class="nav-chevron" aria-hidden="true">⌄</span>
+              <span>用户数据</span><span class="nav-chevron" aria-hidden="true">⌄</span>
             </button>
-            <div id="form-query-subnav" class="nav-submenu" role="group" aria-label="表单查询子菜单">
-              <button class="tab-button" role="tab" type="button" data-tab="account-security">账户基本信息</button>
-              <button class="tab-button" role="tab" type="button" data-tab="device-relations">账户与设备关系</button>
-              <button class="tab-button" role="tab" type="button" data-tab="traffic-query">流量汇总表单</button>
+            <div id="form-query-subnav" class="nav-submenu" role="group" aria-label="用户数据子菜单">
+              <button class="tab-button" role="tab" type="button" data-tab="users">用户总表</button>
             </div>
           </div>
           <div class="nav-group" data-nav-group="app-settings">
@@ -96,10 +94,10 @@
         <div class="growth-period-switch" role="group" aria-label="用户增长统计粒度">
           <button class="growth-period-button active" type="button" data-growth-period="day" onclick="setGrowthPeriod('day')">按日</button>
           <button class="growth-period-button" type="button" data-growth-period="week" onclick="setGrowthPeriod('week')">按周</button>
-          <button class="growth-period-button" type="button" data-growth-period="month" onclick="setGrowthPeriod('month')">按月</button>
-        </div>
-      </div>
-       <div id="userGrowthChart" class="growth-chart-host"><div class="loading-state">正在读取用户增长数据…</div></div>
+           <button class="growth-period-button" type="button" data-growth-period="month" onclick="setGrowthPeriod('month')">按月</button>
+         </div>
+       </div>
+        <div id="userGrowthChart" class="growth-chart-host"><div class="loading-state">正在读取用户增长数据…</div></div>
        <div id="userGrowthSummary" class="growth-summary" aria-live="polite"></div>
      </article>
      <article class="growth-card">
@@ -184,79 +182,49 @@
      </div>
    </section>
 
-  <section class="card tab-panel" role="tabpanel" data-panel="account-security">
+  <section class="card tab-panel" role="tabpanel" data-panel="users">
     <div class="dashboard-heading">
       <div>
-         <h2>账户基本信息</h2>
-        <p>查看账户基本资料并执行账户封禁管理；封禁账户会同时封禁该账户登录过的全部历史设备。</p>
-      </div>
-      <button class="secondary" type="button" onclick="loadAccountSecurity(true)">刷新数据</button>
-    </div>
-    <div class="security-toolbar">
-      <input id="securitySearch" type="search" placeholder="搜索 UID、昵称或邮箱" oninput="renderAccountSecurity()">
-    </div>
-    <div id="securityBatchToolbar" class="security-batch-toolbar">
-      <label><input id="securitySelectAll" type="checkbox" onchange="toggleAllSecurityAccounts(this.checked)">全选当前筛选结果</label>
-      <span id="securitySelectionCount" class="security-selection-count">已选择 0 个账户</span>
-      <button id="securityBatchBan" class="danger" type="button" disabled onclick="batchSetAccountBan(true)">批量封禁</button>
-      <button id="securityBatchUnban" class="secondary" type="button" disabled onclick="batchSetAccountBan(false)">批量解除封禁</button>
-      <button class="secondary" type="button" onclick="clearSecuritySelection()">清除选择</button>
-    </div>
-    <div id="securitySummary" class="security-summary"></div>
-    <div id="securityAccountList" class="security-account-list">
-      <div class="loading-state">打开此模块后读取账户安全数据</div>
-    </div>
-  </section>
-
-  <section class="card tab-panel" role="tabpanel" data-panel="device-relations">
-    <div class="dashboard-heading">
-      <div>
-        <h2>账户与设备关系</h2>
-        <p>按关系查看账户曾经登录或当前绑定的设备，以及绑定时间和设备封禁状态。</p>
-      </div>
-      <button class="secondary" type="button" onclick="loadDeviceRelations(true)">刷新数据</button>
-    </div>
-    <div class="traffic-detail-toolbar">
-      <div class="traffic-detail-search">
-        <input id="deviceRelationSearch" type="search" placeholder="搜索账户 UID、昵称、设备 ID、品牌或型号" oninput="renderDeviceRelations()">
-        <span id="deviceRelationSummary" class="traffic-detail-summary"></span>
+        <h2>用户总表</h2>
+        <p>账户、安全、设备和流量统一展示在一张表中。支持编辑资料、批量封禁/解封和导出；不提供永久删除，避免误删历史关联数据。</p>
       </div>
     </div>
-    <div id="deviceRelationsTable" class="traffic-detail-wrap">
-      <div class="loading-state">打开此模块后读取账户与设备关系</div>
-    </div>
-    <div id="deviceRelationDetailModal" class="device-relation-modal" hidden role="dialog" aria-modal="true" aria-labelledby="deviceRelationDetailTitle" onclick="if (event.target === this) closeDeviceRelationDetail()">
-      <div class="device-relation-modal-card">
-        <div class="device-relation-modal-header">
-          <h3 id="deviceRelationDetailTitle">设备详情</h3>
-          <button class="secondary device-relation-modal-close" type="button" onclick="closeDeviceRelationDetail()" aria-label="关闭设备详情">×</button>
+    <div class="user-admin-control-grid">
+      <section class="user-admin-control-panel">
+        <h3>筛选</h3>
+        <div class="user-admin-filter-controls">
+          <input id="userAdminSearch" type="search" placeholder="搜索 UID、昵称、邮箱、品牌或型号" oninput="renderAdminUsers()">
+          <select id="userAdminStatusFilter" aria-label="筛选用户状态" onchange="renderAdminUsers()">
+            <option value="">全部状态</option>
+            <option value="active">正常</option>
+            <option value="banned">封禁</option>
+            <option value="formal">正式用户</option>
+            <option value="guest">游客</option>
+          </select>
+          <div class="traffic-zero-filters" role="group" aria-label="流量过滤">
+            <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="today" aria-pressed="false" onclick="toggleAdminUserZeroFilter('today')">过滤今日零流量</button>
+            <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="month" aria-pressed="false" onclick="toggleAdminUserZeroFilter('month')">过滤本月零流量</button>
+            <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="total" aria-pressed="false" onclick="toggleAdminUserZeroFilter('total')">过滤累计零流量</button>
+          </div>
+          <span id="userAdminSummary" class="traffic-detail-summary"></span>
         </div>
-        <div id="deviceRelationDetailBody"></div>
-      </div>
+      </section>
+      <section class="user-admin-control-panel">
+        <h3>操作</h3>
+        <div class="user-admin-operation-controls">
+          <button id="userAdminUidToggle" class="secondary" type="button" aria-pressed="true" onclick="toggleAdminUserUidVisibility()">显示 UID</button>
+          <button class="secondary" type="button" onclick="loadAdminUsers(true)">刷新用户</button>
+          <label><input id="userAdminSelectAll" type="checkbox" onchange="toggleAllAdminUsers(this.checked)">全选当前结果</label>
+          <span id="userAdminSelectionCount" class="security-selection-count">已选择 0 个用户</span>
+          <button id="userAdminSaveSelected" class="secondary" type="button" disabled onclick="saveSelectedAdminUsers()">保存选中修改</button>
+          <button id="userAdminBatchBan" class="danger" type="button" disabled onclick="batchSetAdminUserBan(true)">批量封禁</button>
+          <button id="userAdminBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminUserBan(false)">批量解封</button>
+          <button class="secondary" type="button" onclick="exportAdminUsersCsv()">导出当前结果</button>
+        </div>
+      </section>
     </div>
-  </section>
-
-  <section class="card tab-panel" role="tabpanel" data-panel="traffic-query">
-    <div class="dashboard-heading">
-      <div>
-        <h2>流量汇总表单</h2>
-        <p>按账户查看今日、本月及累计上传、下载和总流量。</p>
-      </div>
-      <button class="secondary" type="button" onclick="loadTrafficDetails(true)">刷新数据</button>
-    </div>
-    <div class="traffic-detail-toolbar">
-      <div class="traffic-zero-filters" role="group" aria-label="零流量用户过滤">
-        <button class="secondary traffic-filter-button" type="button" data-traffic-zero-filter="today" aria-pressed="false" onclick="toggleTrafficZeroFilter('today')">过滤日流量为零</button>
-        <button class="secondary traffic-filter-button" type="button" data-traffic-zero-filter="month" aria-pressed="false" onclick="toggleTrafficZeroFilter('month')">过滤月流量为零</button>
-        <button class="secondary traffic-filter-button" type="button" data-traffic-zero-filter="total" aria-pressed="false" onclick="toggleTrafficZeroFilter('total')">过滤总流量为零</button>
-      </div>
-      <div class="traffic-detail-search">
-        <input id="trafficDetailSearch" type="search" placeholder="搜索 UID、昵称或邮箱" oninput="renderTrafficDetails()">
-        <span id="trafficDetailSummary" class="traffic-detail-summary"></span>
-      </div>
-    </div>
-    <div id="trafficDetailsTable" class="traffic-detail-wrap">
-      <div class="loading-state">打开此模块后读取流量汇总表单</div>
+    <div id="userAdminTable" class="traffic-detail-wrap">
+      <div class="loading-state">打开此模块后读取用户数据</div>
     </div>
   </section>
 

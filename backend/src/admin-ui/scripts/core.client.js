@@ -147,6 +147,7 @@
  function logout() {
    adminToken = '';
    currentState = null;
+   if (typeof resetAdminUsers === 'function') resetAdminUsers();
    accountSecurityData = null;
    accountSecuritySelection.clear();
    deviceRelationsData = null;
@@ -186,6 +187,9 @@
    });
    if (name === 'account-security' && !accountSecurityData && !accountSecurityLoading) {
      loadAccountSecurity();
+   }
+   if (name === 'users' && typeof loadAdminUsers === 'function' && !adminUserData && !adminUserLoading) {
+     loadAdminUsers();
    }
    if (name === 'device-relations' && !deviceRelationsData && !deviceRelationsLoading) {
      loadDeviceRelations();

@@ -7,6 +7,7 @@ import userTableScript from "./admin-ui/scripts/user-table.client.js";
 import dashboardChartsScript from "./admin-ui/scripts/dashboard-charts.client.js";
 import dashboardTablesScript from "./admin-ui/scripts/dashboard-tables.client.js";
 import usersScript from "./admin-ui/scripts/users.client.js";
+import userManagementScript from "./admin-ui/scripts/user-management.client.js";
 import settingsScript from "./admin-ui/scripts/settings.client.js";
 
 const adminScript = [
@@ -17,6 +18,7 @@ const adminScript = [
   dashboardChartsScript,
   dashboardTablesScript,
   usersScript,
+  userManagementScript,
   settingsScript,
 ].join("\n");
 

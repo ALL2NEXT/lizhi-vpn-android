@@ -105,6 +105,8 @@ function renderTrafficDetails() {
       '<td><code>' + esc(user.uid) + '</code></td>' +
       '<td>' + esc(user.nickname || user.uid) + '</td>' +
       '<td>' + esc(user.email || '游客账户') + '</td>' +
+      '<td>' + (banned ? '封禁' : '正常') + '</td>' +
+      '<td>' + (user.accountType === 'formal' ? '正式用户' : user.accountType === 'guest' ? '游客' : user.accountType === 'banned' ? '封禁' : esc(user.accountType || '未知')) + '</td>' +
       '<td>' + formatMegabytes(today.uploadMb) + '</td>' +
       '<td>' + formatMegabytes(today.downloadMb) + '</td>' +
       '<td>' + formatMegabytes(today.totalMb) + '</td>' +

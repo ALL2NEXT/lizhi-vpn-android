@@ -148,6 +148,7 @@ export async function readExternalSubscription(env, source) {
 
 export async function validateAndWarmSubscriptionSources(env, subscriptions) {
   for (const source of subscriptions) {
+    if (source.enabled === false) continue;
     if (source.content) {
       assertPlainSubscriptionContent(source.content);
     } else if (source.url) {
