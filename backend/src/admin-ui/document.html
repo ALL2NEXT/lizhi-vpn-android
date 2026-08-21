@@ -52,6 +52,7 @@
             </button>
              <div id="app-settings-subnav" class="nav-submenu" role="group" aria-label="应用设置子菜单">
                <button class="tab-button" role="tab" type="button" data-tab="app-settings">应用基础设置</button>
+               <button class="tab-button" role="tab" type="button" data-tab="registration-control">注册控制</button>
                <button class="tab-button" role="tab" type="button" data-tab="subscriptions">订阅线路</button>
                <button class="tab-button" role="tab" type="button" data-tab="notice">公告</button>
               <button class="tab-button" role="tab" type="button" data-tab="app-update">版本更新</button>
@@ -280,6 +281,21 @@
           <div class="field"><label>项目源码链接<input id="githubUrl" type="url" placeholder="https://github.com/.../..."></label></div>
         </div>
       </section>
+
+      <section class="settings-section">
+        <h3 class="settings-section-title">服务请求设置</h3>
+        <p class="settings-section-description">设置后台请求超时时间，避免外部服务响应过慢。</p>
+        <div class="grid">
+          <div class="field"><label>后台请求超时（毫秒）<input id="nodeRequestTimeoutMs" type="number" min="5000" max="60000" step="1000"></label></div>
+        </div>
+      </section>
+    </div>
+    <button type="button" onclick="pushSection('app-settings')">推送</button>
+   </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="registration-control">
+    <h2>注册控制</h2>
+    <div class="settings-sections">
       <section class="settings-section">
         <h3 class="settings-section-title">注册控制</h3>
         <div class="grid">
@@ -292,19 +308,10 @@
         </div>
         <div id="registrationCodesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取注册码</div></div>
         <small class="hint">注册码每次成功注册后立即失效，只能使用一次。</small>
-        <button type="button" onclick="pushSection('app-settings')">保存注册控制</button>
-      </section>
-      <section class="settings-section">
-        <h3 class="settings-section-title">服务请求设置</h3>
-        <p class="settings-section-description">设置后台请求超时时间，避免外部服务响应过慢。</p>
-        <div class="grid">
-          <div class="field"><label>后台请求超时（毫秒）<input id="nodeRequestTimeoutMs" type="number" min="5000" max="60000" step="1000"></label></div>
-        </div>
+        <button type="button" onclick="pushSection('registration-control')">保存注册控制</button>
       </section>
     </div>
-    <button type="button" onclick="pushSection('app-settings')">推送</button>
-   </section>
-
+  </section>
   <section class="card tab-panel" role="tabpanel" data-panel="notice">
     <h2>公告</h2>
     <label class="check"><input id="noticeEnabled" type="checkbox">显示公告</label>

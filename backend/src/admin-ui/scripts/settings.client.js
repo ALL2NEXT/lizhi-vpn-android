@@ -292,11 +292,20 @@ async function pushSection(section) {
   }
 
   const form = formState();
+  const settings = section === 'app-settings'
+    ? Object.assign({}, form.settings, {
+      registrationEnabled: currentState.settings.registrationEnabled,
+      requireAdminRegistrationCode: currentState.settings.requireAdminRegistrationCode
+    })
+    : section === 'registration-control'
+      ? Object.assign({}, currentState.settings, {
+        registrationEnabled: form.settings.registrationEnabled,
+        requireAdminRegistrationCode: form.settings.requireAdminRegistrationCode
+      })
+      : currentState.settings;
   const state = {
     subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,
-    settings: section === 'app-settings'
-      ? form.settings
-      : currentState.settings,
+    settings: settings,
     notice: section === 'notice' ? form.notice : currentState.notice,
     appUpdate: section === 'app-update' ? form.appUpdate : currentState.appUpdate
   };
