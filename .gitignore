@@ -76,8 +76,8 @@ firefly签名.txt
 Thumbs.db
 
 # Windows core build outputs (rebuilt from the pinned source submodule)
-windows-app/runtime/windows-x64/*.exe
-windows-app/runtime/windows-x64/*.dll
+windows/runtime/windows-x64/*.exe
+windows/runtime/windows-x64/*.dll
 
 # Others
 编译/

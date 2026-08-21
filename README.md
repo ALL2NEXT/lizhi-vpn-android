@@ -34,6 +34,18 @@
 
 ---
 
+## 工程目录
+
+```text
+android/    # Android 客户端（独立 Gradle 工程）
+windows/    # Windows 客户端（独立 Compose Desktop 工程）
+backend/    # Cloudflare Worker 后台
+```
+
+仓库根目录仅保留三端共享的说明、许可证、图片和部署辅助文件。
+
+---
+
 ## 功能特性
 
 ### 核心功能
@@ -120,7 +132,7 @@
 
 ### 核心依赖
 
-项目依赖 `libbox.aar`（sing-box Android 库），需放置于 `app/libs/` 目录。
+项目依赖 `libbox.aar`（sing-box Android 库），需放置于 `android/app/libs/` 目录。
 
 > **获取 libbox.aar**：
 >
@@ -142,17 +154,17 @@ cd FireflyVPN
 
 ### 2. 配置 libbox
 
-将 `libbox.aar` 文件放入 `app/libs/` 目录：
+将 `libbox.aar` 文件放入 `android/app/libs/` 目录：
 
 ```
-app/
+android/app/
 └── libs/
     └── libbox.aar
 ```
 
 ### 3. 配置 API 地址
 
-编辑 `app/src/main/java/xyz/a202132/app/AppConfig.kt`，修改为你的后端地址：
+编辑 `android/app/src/main/java/xyz/a202132/app/AppConfig.kt`，修改为你的后端地址：
 
 ```kotlin
 object AppConfig {
@@ -164,7 +176,7 @@ object AppConfig {
 
     // 延迟测试 (TCPing & URL Test)
     const val TCPING_TEST_TIMEOUT = 3000L // 超时默认3秒
-    const val URL_TEST_URL = "https://www.google.com/generate_204"
+    const val URL_TEST_URL = UrlTestTargets.DEFAULT_URL // 用户可在基础设定中修改
     const val URL_TEST_TIMEOUT = 3000L // 超时默认3秒
     const val URL_TEST_RETRY_COUNT = 1 // URL Test 自动重试次数，仅对503/504或异常生效
     
@@ -192,7 +204,7 @@ object AppConfig {
 }
 ```
 
-同时修改 `app/src/main/java/xyz/a202132/app/network/NetworkClient.kt` 中的 baseUrl：
+同时修改 `android/app/src/main/java/xyz/a202132/app/network/NetworkClient.kt` 中的 baseUrl：
 
 ```kotlin
 private val retrofit = Retrofit.Builder()
@@ -200,7 +212,7 @@ private val retrofit = Retrofit.Builder()
     // ...
 ```
 
-同时修改 `app/src/main/res/xml/network_security_config.xml` ：
+同时修改 `android/app/src/main/res/xml/network_security_config.xml` ：
 
 ```xml
 <domain includeSubdomains="true">example.com</domain> <!-- 修改为你的域名 -->
@@ -210,6 +222,7 @@ private val retrofit = Retrofit.Builder()
 
 ```bash
 # 使用 Gradle 构建
+cd android
 ./gradlew assembleDebug
 
 # 或在 Android Studio 中直接运行
@@ -222,7 +235,7 @@ private val retrofit = Retrofit.Builder()
 ### 项目结构
 
 ```
-app/src/main/java/xyz/a202132/app/
+android/app/src/main/java/xyz/a202132/app/
 ├── AppConfig.kt                  # 全局配置常量（API地址、测试参数等）
 ├── MainActivity.kt               # 主 Activity
 ├── VpnApplication.kt             # Application 类
@@ -292,8 +305,8 @@ app/src/main/java/xyz/a202132/app/
 ### 资源文件结构
 
 ```
-app/libs/libbox.aar               # sing-box 核心库
-app/src/main/
+android/app/libs/libbox.aar       # sing-box 核心库
+android/app/src/main/
 ├── assets/
 │   └── rule-sets/                # 智能分流规则集
 │       ├── geoip-cn.srs
@@ -360,7 +373,7 @@ app/src/main/
 显示应用版本信息、开源协议声明、项目链接等。
 
 **配置位置**：  
-- 版本号：`app/build.gradle.kts` → `versionName` / `versionCode`  
+- 版本号：`android/app/build.gradle.kts` → `versionName` / `versionCode`
 - GitHub 链接：Worker 管理后台 → 应用基础设置（留空则隐藏相关按钮）
 - 反馈链接：Worker 管理后台 → 应用基础设置
 
@@ -384,12 +397,13 @@ app/src/main/
 
 ### 其他配置
 
-"其他配置"页面集中管理网络开关、智能连接比例、Hysteria2 带宽、测试超时、并发数和 VPN 参数。IPv6 路由点击后立即生效，其余配置修改后立即写入设置。
+“基础设定”页面集中管理网络开关、204 测速地址、测试超时、并发数和 VPN 参数；智能连接比例与 Hysteria2 带宽位于“特色功能”。IPv6 路由和预设地址点击后立即生效，自定义 204 地址校验并保存后生效。
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | IPv6 路由 | 禁用 | 可选仅 / 优先 / 启用 / 禁用，位于其他配置顶部 |
 | 记住上次选择的节点 | 开启 | 退出 APP 前选择的节点会在下次启动后恢复 |
+| 204 测速地址 | Google generate_204 | 可输入自定义 HTTP(S) 地址，或从 Cloudflare、Google、Gstatic、Google Play、Android 等 7 个预设中选择 |
 | TCPing 节点比例 | 100% | 智能连接第一阶段候选比例，默认测试全部节点 |
 | URL Test 候选比例 | 50% | 智能连接第二阶段从 TCPing 结果中选取的比例 |
 | 5MB 测速候选比例 | 50% | 智能连接第三阶段从 URL Test 结果中选取的比例 |
@@ -402,7 +416,7 @@ app/src/main/
 | 带宽测试并发数 | 1 | 范围 1~3，默认保持串行；提高并发可加快粗筛但会增加测速竞争 |
 | VPN MTU | 9000 | 范围 576~9000，修改后需断开重连 |
 
-**设置位置**：侧边栏 → 其他配置
+**设置位置**：侧边栏 → 基础设定
 
 ---
 
@@ -701,7 +715,7 @@ ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
 
 ### 修改应用主题颜色
 
-**文件**: `app/src/main/java/xyz/a202132/app/ui/theme/Color.kt`
+**文件**: `android/app/src/main/java/xyz/a202132/app/ui/theme/Color.kt`
 
 项目使用青绿色系主题，修改 `Color.kt` 中的颜色变量即可全局更改主题色：
 
@@ -717,7 +731,7 @@ val Secondary = Color(0xFF26C6DA)        // 亮青色
 
 ### 修改应用名称
 
-**文件**: `app/src/main/res/values/strings.xml`
+**文件**: `android/app/src/main/res/values/strings.xml`
 
 ```xml
 <string name="app_name">你的应用名称</string>
@@ -742,7 +756,7 @@ text = "流萤加速器"; 替换成你的应用名称
 | `btn_connecting.png` | 连接中/断开中 | 带脉冲动画 |
 | `btn_connected.png` | 已连接 | VPN 已开启 |
 
-**图片位置**: `app/src/main/res/drawable/`
+**图片位置**: `android/app/src/main/res/drawable/`
 
 #### 替换按钮图片
 
@@ -756,7 +770,7 @@ text = "流萤加速器"; 替换成你的应用名称
 
 **图标文件位置**:
 ```
-app/src/main/res/
+android/app/src/main/res/
 ├── drawable/
 │   ├── ic_launcher_background.xml  # 图标背景
 │   └── ic_launcher_foreground.xml  # 图标前景
@@ -778,7 +792,7 @@ app/src/main/res/
 
 需要修改以下位置：
 
-1. **`app/build.gradle.kts`**:
+1. **`android/app/build.gradle.kts`**:
 ```kotlin
 android {
     namespace = "com.your.package"
@@ -790,7 +804,7 @@ android {
 
 2. **`AndroidManifest.xml`**: 确保 package 声明正确
 
-3. **源代码目录**: 重构 `app/src/main/java/xyz/a202132/app/` 为新包名路径
+3. **源代码目录**: 重构 `android/app/src/main/java/xyz/a202132/app/` 为新包名路径
 
 4. **所有 Kotlin 文件**: 更新 `package` 声明
 
@@ -798,7 +812,7 @@ android {
 
 ### 修改应用版本号
 
-**文件**:**`app/build.gradle.kts`**:
+**文件**:**`android/app/build.gradle.kts`**:
 
 ```kotlin
 versionCode = 15
@@ -813,7 +827,7 @@ versionName — 字符串，格式通常为 主版本.次版本.修订号（如 
 
 ### 修改主题颜色
 
-**文件**: `app/src/main/res/values/themes.xml`
+**文件**: `android/app/src/main/res/values/themes.xml`
 
 ```xml
 <style name="Theme.FireflyVPN" parent="android:Theme.Material.Light.NoActionBar">
@@ -833,10 +847,11 @@ versionName — 字符串，格式通常为 主版本.次版本.修订号（如 
 Debug 模式已配置使用 Release 签名（防止 Native 签名验证失败）：
 
 ```bash
+cd android
 ./gradlew assembleDebug
 ```
 
-输出: `app/build/outputs/apk/debug/app-debug.apk`
+输出: `android/app/build/outputs/apk/debug/app-debug.apk`
 
 > ⚠️ **注意**: 由于 Native 层有签名校验，Debug 和 Release 构建均需使用相同的签名密钥。`build.gradle.kts` 中已配置 `debug { signingConfig = signingConfigs.getByName("release") }`。
 
@@ -845,10 +860,10 @@ Debug 模式已配置使用 Release 签名（防止 Native 签名验证失败）
 > ⚠️ **注意**: `keystore.properties` 和 `*.jks` 签名文件已被 `.gitignore` 忽略，构建 Release 版本需要你配置自己的签名。
 
 1. **准备签名文件**:
-   生成一个新的 `.jks` 签名文件（或使用现有的），放在项目根目录。
+   生成一个新的 `.jks` 签名文件（或使用现有的），放在 `android/` 工程目录。
 
 2. **创建配置文件**:
-   在项目根目录创建 `keystore.properties` 文件：
+   在 `android/` 工程目录创建 `keystore.properties` 文件：
 
 ```properties
 keyAlias=你的KeyAlias
@@ -859,9 +874,10 @@ storePassword=你的StorePassword
 
 3. **执行构建**:
 ```bash
+cd android
 ./gradlew assembleRelease
 # Windows PowerShell:
-.\gradlew assembleRelease
+.\gradlew.bat assembleRelease
 ```
 
 **备选方法 (IDE 界面操作)**:
@@ -870,7 +886,7 @@ storePassword=你的StorePassword
 3. 选择密钥库并输入密码
 4. 选择 **release** -> **Create**
 
-输出: `app/build/outputs/apk/release/app-release.apk`
+输出: `android/app/build/outputs/apk/release/app-release.apk`
 
 ### 16 KB 页面对齐
 
