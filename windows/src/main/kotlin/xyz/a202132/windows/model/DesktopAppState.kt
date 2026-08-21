@@ -74,12 +74,13 @@ data class DesktopNode(
 ) {
     fun displayName(): String = name.removeFlagEmoji().ifBlank { "$server:$port" }
 
+    fun resolvedCountryCode(): String? = CountryCodeResolver.normalizeCountryCode(countryCode)
+        ?: CountryCodeResolver.fromNodeName(name)
+
     fun flagEmoji(): String {
         val embedded = name.findFlagEmoji()
         if (embedded != null) return embedded
-        val normalized = CountryCodeResolver.normalizeCountryCode(countryCode)
-            ?: CountryCodeResolver.fromNodeName(name)
-            ?: return "\uD83C\uDF10"
+        val normalized = resolvedCountryCode() ?: return "\uD83C\uDF10"
         return normalized.map { char ->
             String(Character.toChars(0x1F1E6 + char.code - 'A'.code))
         }.joinToString("")

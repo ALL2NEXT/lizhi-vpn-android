@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -96,8 +97,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -106,8 +112,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -120,6 +124,10 @@ import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.net.URI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.PI
+import kotlin.math.sin
 import org.jetbrains.skia.Image as SkiaImage
 import xyz.a202132.windows.core.VpnController
 import xyz.a202132.windows.model.AppScreen
@@ -140,11 +148,6 @@ private val WEB_SPEED_TESTS = listOf(
     "Netflix 测速" to "https://fast.com/",
     "Google 测速" to "https://fiber.google.com/speedtest/"
 )
-
-// Compose Desktop's default fallback can render regional indicators as `US`/`JP`.
-// Segoe UI Emoji contains the Windows flag ligatures, so keep flag rendering explicit.
-@OptIn(ExperimentalTextApi::class)
-private val WINDOWS_FLAG_FONT = FontFamily("Segoe UI Emoji")
 
 @Composable
 fun FireflyDesktopApp(controller: VpnController) {
@@ -377,7 +380,7 @@ private fun CurrentNode(node: DesktopNode?, isLoading: Boolean) {
         Text("当前节点", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(node.flagEmoji(), fontFamily = WINDOWS_FLAG_FONT, fontSize = 24.sp)
+            NodeFlag(node)
             Spacer(Modifier.width(8.dp))
             Text(
                 node.displayName(),
@@ -834,6 +837,202 @@ private fun CategoryOption(text: String, selected: Boolean, modifier: Modifier, 
 }
 
 @Composable
+private fun NodeFlag(node: DesktopNode, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(width = 30.dp, height = 20.dp)) {
+        drawCountryFlag(node.resolvedCountryCode())
+    }
+}
+
+private fun DrawScope.drawCountryFlag(countryCode: String?) {
+    val width = size.width
+    val height = size.height
+    val code = countryCode?.uppercase()
+    val red = Color(0xFFD32F2F)
+    val darkRed = Color(0xFFBC002D)
+    val blue = Color(0xFF1E4D8F)
+    val darkBlue = Color(0xFF1B3F8B)
+    val yellow = Color(0xFFFFD54F)
+    val white = Color.White
+
+    when (code) {
+        "JP" -> {
+            drawRect(white)
+            drawCircle(darkRed, min(width, height) * 0.30f, Offset(width / 2f, height / 2f))
+        }
+        "CN", "VN" -> {
+            drawRect(red)
+            drawStar(Offset(width * 0.28f, height * 0.36f), height * 0.24f, yellow)
+        }
+        "US" -> {
+            drawHorizontalStripes(listOf(red, white, red, white, red, white, red, white, red))
+            drawRect(darkBlue, size = Size(width * 0.43f, height * 0.54f))
+            repeat(3) { row ->
+                repeat(4) { column ->
+                    drawCircle(
+                        white,
+                        height * 0.025f,
+                        Offset(width * (0.08f + column * 0.08f), height * (0.10f + row * 0.14f))
+                    )
+                }
+            }
+        }
+        "DE" -> drawHorizontalStripes(listOf(Color.Black, red, yellow))
+        "RU" -> drawHorizontalStripes(listOf(white, blue, red))
+        "NL" -> drawHorizontalStripes(listOf(red, white, blue))
+        "PL" -> drawHorizontalStripes(listOf(white, red))
+        "UA" -> drawHorizontalStripes(listOf(Color(0xFF1976D2), yellow))
+        "ES" -> drawHorizontalStripes(listOf(red, yellow, red), listOf(0.25f, 0.5f, 0.25f))
+        "FR" -> drawVerticalStripes(listOf(Color(0xFF0055A4), white, red))
+        "IT" -> drawVerticalStripes(listOf(Color(0xFF009246), white, Color(0xFFCE2B37)))
+        "IE" -> drawVerticalStripes(listOf(Color(0xFF169B62), white, Color(0xFFFF883E)))
+        "BE" -> drawVerticalStripes(listOf(Color.Black, yellow, red))
+        "RO" -> drawVerticalStripes(listOf(Color(0xFF002B7F), yellow, Color(0xFFCE1126)))
+        "CH" -> {
+            drawRect(red)
+            drawRect(white, topLeft = Offset(width * 0.40f, height * 0.18f), size = Size(width * 0.20f, height * 0.64f))
+            drawRect(white, topLeft = Offset(width * 0.23f, height * 0.40f), size = Size(width * 0.54f, height * 0.20f))
+        }
+        "SE" -> drawScandinavianCross(Color(0xFF006AA7), yellow, vertical = width * 0.36f, horizontal = height * 0.48f)
+        "DK" -> drawScandinavianCross(red, white, vertical = width * 0.36f, horizontal = height * 0.48f)
+        "NO" -> {
+            drawRect(red)
+            drawRect(white, topLeft = Offset(width * 0.32f, 0f), size = Size(width * 0.18f, height))
+            drawRect(white, topLeft = Offset(0f, height * 0.39f), size = Size(width, height * 0.22f))
+            drawRect(blue, topLeft = Offset(width * 0.36f, 0f), size = Size(width * 0.10f, height))
+            drawRect(blue, topLeft = Offset(0f, height * 0.44f), size = Size(width, height * 0.12f))
+        }
+        "FI" -> drawScandinavianCross(white, Color(0xFF003580), vertical = width * 0.36f, horizontal = height * 0.48f)
+        "GB" -> drawUnitedKingdomFlag()
+        "CA" -> {
+            drawVerticalStripes(listOf(red, white, red), listOf(0.25f, 0.50f, 0.25f))
+            drawStar(Offset(width / 2f, height / 2f), height * 0.27f, red)
+        }
+        "IN" -> {
+            drawHorizontalStripes(listOf(Color(0xFFFF9933), white, Color(0xFF138808)))
+            drawCircle(Color(0xFF000080), height * 0.18f, Offset(width / 2f, height / 2f), style = Stroke(1f))
+            drawLine(Color(0xFF000080), Offset(width / 2f, height * 0.30f), Offset(width / 2f, height * 0.70f), 1f)
+            drawLine(Color(0xFF000080), Offset(width * 0.40f, height / 2f), Offset(width * 0.60f, height / 2f), 1f)
+        }
+        "SG" -> {
+            drawHorizontalStripes(listOf(red, white))
+            drawCircle(white, height * 0.26f, Offset(width * 0.23f, height * 0.25f))
+            drawCircle(red, height * 0.22f, Offset(width * 0.29f, height * 0.25f))
+        }
+        "HK" -> {
+            drawRect(red)
+            drawCircle(white, height * 0.25f, Offset(width / 2f, height / 2f), style = Stroke(2f))
+            drawCircle(white, height * 0.07f, Offset(width / 2f, height / 2f))
+        }
+        "TW" -> {
+            drawRect(red)
+            drawRect(darkBlue, size = Size(width * 0.50f, height * 0.58f))
+            drawCircle(white, height * 0.17f, Offset(width * 0.25f, height * 0.29f))
+        }
+        "KR" -> {
+            drawRect(white)
+            drawCircle(Color(0xFFCD2E3A), height * 0.25f, Offset(width / 2f, height * 0.43f))
+            drawCircle(Color(0xFF0047A0), height * 0.25f, Offset(width / 2f, height * 0.57f))
+        }
+        "TR" -> {
+            drawRect(red)
+            drawCircle(white, height * 0.27f, Offset(width * 0.43f, height / 2f))
+            drawCircle(red, height * 0.22f, Offset(width * 0.49f, height / 2f))
+            drawStar(Offset(width * 0.66f, height / 2f), height * 0.14f, white)
+        }
+        "BR" -> {
+            drawRect(Color(0xFF009B3A))
+            drawDiamond(yellow)
+            drawCircle(darkBlue, height * 0.25f, Offset(width / 2f, height / 2f))
+        }
+        "MX" -> drawVerticalStripes(listOf(Color(0xFF006847), white, Color(0xFFCE1126)))
+        "AR" -> drawHorizontalStripes(listOf(Color(0xFF74ACDF), white, Color(0xFF74ACDF)))
+        "CL" -> {
+            drawHorizontalStripes(listOf(white, red), listOf(0.50f, 0.50f))
+            drawRect(darkBlue, size = Size(width * 0.42f, height * 0.50f))
+            drawStar(Offset(width * 0.21f, height * 0.25f), height * 0.13f, white)
+        }
+        "CO" -> drawHorizontalStripes(listOf(yellow, Color(0xFF003893), red), listOf(0.50f, 0.25f, 0.25f))
+        "ID", "MC" -> drawHorizontalStripes(listOf(red, white))
+        "AU", "NZ" -> {
+            drawRect(darkBlue)
+            drawStar(Offset(width * 0.72f, height * 0.30f), height * 0.12f, white)
+            drawStar(Offset(width * 0.78f, height * 0.68f), height * 0.08f, white)
+            drawStar(Offset(width * 0.58f, height * 0.73f), height * 0.07f, white)
+        }
+        else -> drawFallbackFlag()
+    }
+    drawRect(Color.Black.copy(alpha = 0.18f), style = Stroke(width = 1f))
+}
+
+private fun DrawScope.drawHorizontalStripes(colors: List<Color>, proportions: List<Float>? = null) {
+    val stripeProportions = proportions ?: List(colors.size) { 1f / colors.size }
+    var top = 0f
+    colors.forEachIndexed { index, color ->
+        val stripeHeight = size.height * stripeProportions[index]
+        drawRect(color, topLeft = Offset(0f, top), size = Size(size.width, stripeHeight + 1f))
+        top += stripeHeight
+    }
+}
+
+private fun DrawScope.drawVerticalStripes(colors: List<Color>, proportions: List<Float>? = null) {
+    val stripeProportions = proportions ?: List(colors.size) { 1f / colors.size }
+    var left = 0f
+    colors.forEachIndexed { index, color ->
+        val stripeWidth = size.width * stripeProportions[index]
+        drawRect(color, topLeft = Offset(left, 0f), size = Size(stripeWidth + 1f, size.height))
+        left += stripeWidth
+    }
+}
+
+private fun DrawScope.drawScandinavianCross(background: Color, cross: Color, vertical: Float, horizontal: Float) {
+    drawRect(background)
+    drawRect(cross, topLeft = Offset(vertical - size.width * 0.07f, 0f), size = Size(size.width * 0.14f, size.height))
+    drawRect(cross, topLeft = Offset(0f, horizontal - size.height * 0.12f), size = Size(size.width, size.height * 0.24f))
+}
+
+private fun DrawScope.drawUnitedKingdomFlag() {
+    drawRect(Color(0xFF012169))
+    drawRect(Color.White, topLeft = Offset(size.width * 0.42f, 0f), size = Size(size.width * 0.16f, size.height))
+    drawRect(Color.White, topLeft = Offset(0f, size.height * 0.38f), size = Size(size.width, size.height * 0.24f))
+    drawRect(Color(0xFFC8102E), topLeft = Offset(size.width * 0.46f, 0f), size = Size(size.width * 0.08f, size.height))
+    drawRect(Color(0xFFC8102E), topLeft = Offset(0f, size.height * 0.44f), size = Size(size.width, size.height * 0.12f))
+}
+
+private fun DrawScope.drawDiamond(color: Color) {
+    val path = Path().apply {
+        moveTo(size.width / 2f, 0f)
+        lineTo(size.width, size.height / 2f)
+        lineTo(size.width / 2f, size.height)
+        lineTo(0f, size.height / 2f)
+        close()
+    }
+    drawPath(path, color)
+}
+
+private fun DrawScope.drawStar(center: Offset, outerRadius: Float, color: Color) {
+    val path = Path()
+    repeat(10) { index ->
+        val angle = -PI / 2.0 + index * PI / 5.0
+        val radius = if (index % 2 == 0) outerRadius else outerRadius * 0.42f
+        val point = Offset(
+            center.x + cos(angle).toFloat() * radius,
+            center.y + sin(angle).toFloat() * radius
+        )
+        if (index == 0) path.moveTo(point.x, point.y) else path.lineTo(point.x, point.y)
+    }
+    path.close()
+    drawPath(path, color)
+}
+
+private fun DrawScope.drawFallbackFlag() {
+    val center = Offset(size.width / 2f, size.height / 2f)
+    drawRect(Color(0xFFE2E8F0))
+    drawCircle(Color(0xFF64748B), size.height * 0.34f, center, style = Stroke(width = 1.2f))
+    drawLine(Color(0xFF64748B), Offset(center.x, center.y - size.height * 0.34f), Offset(center.x, center.y + size.height * 0.34f), 1f)
+    drawLine(Color(0xFF64748B), Offset(center.x - size.width * 0.34f, center.y), Offset(center.x + size.width * 0.34f, center.y), 1f)
+}
+
+@Composable
 private fun NodeImportAction(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
@@ -874,12 +1073,7 @@ private fun NodeListItem(
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    node.flagEmoji(),
-                    fontFamily = WINDOWS_FLAG_FONT,
-                    fontSize = 24.sp,
-                    modifier = Modifier.padding(end = 12.dp)
-                )
+                NodeFlag(node, Modifier.padding(end = 12.dp))
                 Text(
                     node.displayName(),
                     modifier = Modifier.weight(1f),
