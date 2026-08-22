@@ -76,7 +76,7 @@ fun NoticeDialog(
                         .heightIn(max = 360.dp)
                         .verticalScroll(rememberScrollState()),
                     textColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    linkColor = Primary,
+                    linkColor = MaterialTheme.colorScheme.primary,
                     textSizeSp = 15f
                 )
                 
@@ -86,7 +86,9 @@ fun NoticeDialog(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
                 ) {
                     Text(
                         text = "我知道了",
@@ -142,7 +144,7 @@ fun UpdateDialog(
                 Text(
                     text = stringResource(id = R.string.version) + ": $version",
                     fontSize = 16.sp,
-                    color = Primary,
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
                 )
                 
@@ -156,7 +158,7 @@ fun UpdateDialog(
                             .heightIn(max = 360.dp)
                             .verticalScroll(rememberScrollState()),
                         textColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        linkColor = Primary,
+                        linkColor = MaterialTheme.colorScheme.primary,
                         textSizeSp = 14f
                     )
                 }
@@ -206,7 +208,9 @@ fun UpdateDialog(
                         onClick = onUpdate,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
                     ) {
                         Text(
                             text = stringResource(id = R.string.update_now),
@@ -414,8 +418,8 @@ fun DownloadDialog(
                             .fillMaxWidth()
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp)),
-                        color = Primary,
-                        trackColor = Primary.copy(alpha = 0.2f)
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                     )
                     
                     Spacer(modifier = Modifier.height(12.dp))
@@ -457,7 +461,9 @@ fun DownloadDialog(
                             onClick = onRetry,
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
                         ) {
                             Text("重试")
                         }
@@ -467,7 +473,9 @@ fun DownloadDialog(
                             onClick = if (isPaused) onResume else onPause,
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
                         ) {
                             Text(if (isPaused) "继续" else "暂停")
                         }
@@ -530,7 +538,9 @@ fun PermissionDialog(
                         onClick = onOpenSettings,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
                     ) {
                         Text("去设置")
                     }

@@ -45,6 +45,8 @@ import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
+import xyz.a202132.app.ui.screens.SkinScreen
+import xyz.a202132.app.ui.screens.SkinSchemeEditorScreen
 import xyz.a202132.app.ui.theme.FireflyVPNTheme
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -76,7 +78,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val viewModel: MainViewModel = viewModel()
-            FireflyVPNTheme {
+            val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
+            FireflyVPNTheme(skinSettings = skinSettings) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -163,7 +166,8 @@ class MainActivity : ComponentActivity() {
                                     onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
                                     onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
                                     onOpenFeatures = { navigateTo(AppRoute.FEATURES) },
-                                    onOpenAccountSettings = { navigateTo(AppRoute.ACCOUNT_SETTINGS) }
+                                    onOpenAccountSettings = { navigateTo(AppRoute.ACCOUNT_SETTINGS) },
+                                    onOpenSkin = { navigateTo(AppRoute.SKIN) }
                                 )
                             }
 
@@ -307,6 +311,24 @@ class MainActivity : ComponentActivity() {
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() },
                                     onAccountDeleted = { finishAndRemoveTask() }
+                                )
+                            }
+
+                            composable(AppRoute.SKIN) {
+                                SkinScreen(
+                                    viewModel = viewModel,
+                                    onOpenEditor = { schemeId ->
+                                        navigateTo(AppRoute.skinEditor(schemeId))
+                                    },
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.SKIN_EDITOR) { backStackEntry ->
+                                SkinSchemeEditorScreen(
+                                    viewModel = viewModel,
+                                    schemeId = backStackEntry.arguments?.getString("schemeId").orEmpty(),
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
 

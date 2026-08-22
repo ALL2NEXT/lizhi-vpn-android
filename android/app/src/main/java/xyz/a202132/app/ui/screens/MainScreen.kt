@@ -64,7 +64,8 @@ fun MainScreen(
     onOpenNodeList: () -> Unit = {},
     onOpenOtherConfig: () -> Unit = {},
     onOpenFeatures: () -> Unit = {},
-    onOpenAccountSettings: () -> Unit = {}
+    onOpenAccountSettings: () -> Unit = {},
+    onOpenSkin: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -114,6 +115,7 @@ fun MainScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsStateWithLifecycle()
+    val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
     
     // 自动化测试设置/状态
     // val showBackupFailedDialog by viewModel.showBackupFailedDialog.collectAsState() // Removed
@@ -149,6 +151,7 @@ fun MainScreen(
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
                     onOpenFeatures = { closeDrawerThen(onOpenFeatures) },
                     onOpenAccountSettings = { closeDrawerThen(onOpenAccountSettings) },
+                    onOpenSkin = { closeDrawerThen(onOpenSkin) },
                     onOpenBackendDialog = {
                         closeDrawerThen {
                             backendUrlDraft = AppConfig.BACKEND_URL
@@ -160,7 +163,8 @@ fun MainScreen(
                     feedbackUrl = backendSettings.feedbackUrl,
                     githubUrl = backendSettings.githubUrl,
                     telegramUrl = backendSettings.telegramUrl,
-                    accountInfo = accountInfo
+                    accountInfo = accountInfo,
+                    customImagePath = skinSettings.customImagePath
                 )
             }
         },
@@ -301,6 +305,9 @@ fun MainScreen(
                     vpnState = vpnState,
                     enabled = !isTesting,
                     isTesting = isTesting,
+                    customDisconnectedImagePath = skinSettings.homeDisconnectedImagePath,
+                    customConnectingImagePath = skinSettings.homeConnectingImagePath,
+                    customConnectedImagePath = skinSettings.homeConnectedImagePath,
                     onClick = {
                         when (vpnState) {
                             VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
@@ -335,7 +342,7 @@ fun MainScreen(
                 // 节点列表改由主页上划打开；提示跟随手势提供实时反馈。
                 val nodeSwipeHintColor = lerp(
                     MaterialTheme.colorScheme.onSurfaceVariant,
-                    Primary,
+                    MaterialTheme.colorScheme.primary,
                     nodeSwipeVisualProgress
                 )
                 Column(
@@ -382,7 +389,7 @@ fun MainScreen(
                                 .fillMaxHeight()
                                 .fillMaxWidth(nodeSwipeVisualProgress)
                                 .clip(CircleShape)
-                                .background(Primary)
+                                .background(MaterialTheme.colorScheme.primary)
                         )
                     }
                 }
@@ -595,7 +602,9 @@ fun MainScreen(
                             },
                             modifier = Modifier.weight(1f),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
                         ) {
                             Text("去官网")
                         }

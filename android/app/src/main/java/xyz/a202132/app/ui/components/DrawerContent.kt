@@ -1,5 +1,6 @@
 package xyz.a202132.app.ui.components
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -12,10 +13,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -23,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.R
 import xyz.a202132.app.data.model.AccountInfo
@@ -35,15 +41,27 @@ fun DrawerContent(
     onOpenOtherConfig: () -> Unit,
     onOpenFeatures: () -> Unit,
     onOpenAccountSettings: () -> Unit = {},
+    onOpenSkin: () -> Unit = {},
     onOpenBackendDialog: () -> Unit = {},
     websiteUrl: String = "",
     feedbackEmail: String = "",
     feedbackUrl: String = "",
     githubUrl: String = "",
     telegramUrl: String = "",
-    accountInfo: AccountInfo? = null
+    accountInfo: AccountInfo? = null,
+    customImagePath: String? = null
 ) {
     var showAboutDialog by remember { mutableStateOf(false) }
+    val customImage by produceState<ImageBitmap?>(
+        initialValue = null,
+        key1 = customImagePath
+    ) {
+        value = withContext(Dispatchers.IO) {
+            customImagePath
+                ?.takeIf { it.isNotBlank() }
+                ?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
+        }
+    }
     
     Column(
         modifier = Modifier
@@ -51,14 +69,26 @@ fun DrawerContent(
             .width(280.dp)
             .padding(bottom = 24.dp)
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.drawer_wallpaper),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(150.dp)
-        )
+        val drawerImage = customImage
+        if (drawerImage != null) {
+            Image(
+                bitmap = drawerImage,
+                contentDescription = "自定义皮肤图片",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+            )
+        } else {
+            Image(
+                painter = painterResource(id = R.drawable.drawer_wallpaper),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+            )
+        }
         
         Divider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 8.dp))
         
@@ -76,6 +106,13 @@ fun DrawerContent(
                 onClick = {
                     onOpenOtherConfig()
                 }
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.Palette,
+                title = "皮肤",
+                subtitle = "自定义图片与基础颜色",
+                onClick = onOpenSkin
             )
 
             DrawerMenuItem(

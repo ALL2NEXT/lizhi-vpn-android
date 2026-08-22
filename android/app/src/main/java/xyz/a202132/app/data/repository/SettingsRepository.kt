@@ -7,9 +7,13 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.SkinScheme
+import xyz.a202132.app.data.model.SkinSettings
 import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.UrlTestTargets
 
@@ -77,6 +81,11 @@ class SettingsRepository(private val context: Context) {
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val HIDE_FAVORITE_NODE_GROUP =
             booleanPreferencesKey("hide_favorite_node_group")
+        private val SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
+        private val ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
+        // 兼容早期单皮肤版本的数据。
+        private val SKIN_BASE_COLOR_ARGB = longPreferencesKey("skin_base_color_argb")
+        private val SKIN_CUSTOM_IMAGE_PATH = stringPreferencesKey("skin_custom_image_path")
 
     }
     
@@ -97,6 +106,26 @@ class SettingsRepository(private val context: Context) {
         } catch (e: Exception) {
             ProxyMode.SMART
         }
+    }
+
+    /** 皮肤配置，未设置时保持当前内置默认皮肤。 */
+    val skinSettings: Flow<SkinSettings> = context.dataStore.data.map { preferences ->
+        val schemes = decodeSkinSchemes(preferences)
+        val activeId = preferences[ACTIVE_SKIN_SCHEME_ID]
+            ?.takeIf { id -> schemes.any { it.id == id } }
+            ?: schemes.firstOrNull { !it.isDefault }?.id
+            ?: SkinScheme.DEFAULT_SCHEME_ID
+        val activeScheme = schemes.firstOrNull { it.id == activeId }
+            ?: SkinScheme.default()
+        SkinSettings(
+            baseColorArgb = activeScheme.baseColorArgb,
+            customImagePath = activeScheme.customImagePath,
+            homeDisconnectedImagePath = activeScheme.homeDisconnectedImagePath,
+            homeConnectingImagePath = activeScheme.homeConnectingImagePath,
+            homeConnectedImagePath = activeScheme.homeConnectedImagePath,
+            activeSchemeId = activeScheme.id,
+            schemes = schemes
+        )
     }
     
     val lastNoticeId: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -210,6 +239,44 @@ class SettingsRepository(private val context: Context) {
     suspend fun setProxyMode(mode: ProxyMode) {
         context.dataStore.edit { preferences ->
             preferences[PROXY_MODE] = mode.name
+        }
+    }
+
+    suspend fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {
+        context.dataStore.edit { preferences ->
+            if (!scheme.isDefault) {
+                val schemes = decodeSkinSchemes(preferences)
+                    .filterNot { it.id == scheme.id } + scheme.copy(
+                    name = scheme.name.trim().ifBlank { "我的方案" },
+                    baseColorArgb = normalizeSkinColor(scheme.baseColorArgb)
+                )
+                preferences[SKIN_SCHEMES_JSON] = encodeSkinSchemes(schemes)
+                if (activate) {
+                    preferences[ACTIVE_SKIN_SCHEME_ID] = scheme.id
+                }
+            }
+        }
+    }
+
+    suspend fun setActiveSkinScheme(schemeId: String) {
+        context.dataStore.edit { preferences ->
+            if (decodeSkinSchemes(preferences).any { it.id == schemeId }) {
+                preferences[ACTIVE_SKIN_SCHEME_ID] = schemeId
+            }
+        }
+    }
+
+    suspend fun deleteSkinScheme(schemeId: String) {
+        if (schemeId == SkinScheme.DEFAULT_SCHEME_ID) return
+        context.dataStore.edit { preferences ->
+            val schemes = decodeSkinSchemes(preferences)
+            if (schemes.none { it.id == schemeId }) return@edit
+            preferences[SKIN_SCHEMES_JSON] = encodeSkinSchemes(
+                schemes.filterNot { it.id == schemeId }
+            )
+            if (preferences[ACTIVE_SKIN_SCHEME_ID] == schemeId) {
+                preferences[ACTIVE_SKIN_SCHEME_ID] = SkinScheme.DEFAULT_SCHEME_ID
+            }
         }
     }
     
@@ -493,6 +560,90 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences[HIDE_FAVORITE_NODE_GROUP] = enabled
         }
+    }
+
+    private fun normalizeSkinColor(argb: Long): Long {
+        return 0xFF000000L or (argb and 0x00FFFFFFL)
+    }
+
+    private fun decodeSkinSchemes(preferences: Preferences): List<SkinScheme> {
+        val storedJson = preferences[SKIN_SCHEMES_JSON]
+        if (!storedJson.isNullOrBlank()) {
+            val storedSchemes = runCatching {
+                val array = JSONArray(storedJson)
+                buildList {
+                    for (index in 0 until array.length()) {
+                        val item = array.optJSONObject(index) ?: continue
+                        val id = item.optString("id").trim()
+                        if (id.isBlank() || id == SkinScheme.DEFAULT_SCHEME_ID) continue
+                        add(
+                            SkinScheme(
+                                id = id,
+                                name = item.optString("name", "我的方案")
+                                    .trim()
+                                    .ifBlank { "我的方案" },
+                                baseColorArgb = normalizeSkinColor(
+                                    item.optLong(
+                                        "baseColorArgb",
+                                        SkinSettings.DEFAULT_BASE_COLOR_ARGB
+                                    )
+                                ),
+                                customImagePath = item.optString("customImagePath")
+                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
+                                homeDisconnectedImagePath = item.optString("homeDisconnectedImagePath")
+                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
+                                homeConnectingImagePath = item.optString("homeConnectingImagePath")
+                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
+                                homeConnectedImagePath = item.optString("homeConnectedImagePath")
+                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() }
+                            )
+                        )
+                    }
+                }
+            }.getOrDefault(emptyList())
+            return listOf(SkinScheme.default()) + storedSchemes.distinctBy { it.id }
+        }
+
+        val legacyColor = preferences[SKIN_BASE_COLOR_ARGB]
+        val legacyImage = preferences[SKIN_CUSTOM_IMAGE_PATH]
+            ?.takeIf { it.isNotBlank() }
+        val legacyScheme = if (
+            legacyImage != null ||
+            legacyColor != null && normalizeSkinColor(legacyColor) != SkinSettings.DEFAULT_BASE_COLOR_ARGB
+        ) {
+            SkinScheme(
+                id = "legacy_custom",
+                name = "我的皮肤",
+                baseColorArgb = normalizeSkinColor(
+                    legacyColor ?: SkinSettings.DEFAULT_BASE_COLOR_ARGB
+                ),
+                customImagePath = legacyImage
+            )
+        } else {
+            null
+        }
+        return listOfNotNull(SkinScheme.default(), legacyScheme)
+    }
+
+    private fun encodeSkinSchemes(schemes: List<SkinScheme>): String {
+        val array = JSONArray()
+        schemes
+            .filterNot { it.isDefault }
+            .distinctBy { it.id }
+            .forEach { scheme ->
+                array.put(
+                    JSONObject().apply {
+                        put("id", scheme.id)
+                        put("name", scheme.name)
+                        put("baseColorArgb", normalizeSkinColor(scheme.baseColorArgb))
+                        scheme.customImagePath?.let { put("customImagePath", it) }
+                        scheme.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }
+                        scheme.homeConnectingImagePath?.let { put("homeConnectingImagePath", it) }
+                        scheme.homeConnectedImagePath?.let { put("homeConnectedImagePath", it) }
+                    }
+                )
+            }
+        return array.toString()
     }
 
     val vpnMtu: Flow<Int> = context.dataStore.data.map { preferences ->

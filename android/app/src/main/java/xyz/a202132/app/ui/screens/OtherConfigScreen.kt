@@ -46,7 +46,6 @@ import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.ui.components.AppScreenScaffold
-import xyz.a202132.app.ui.theme.Primary
 import xyz.a202132.app.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -405,7 +404,7 @@ private fun MultiPositionSwitch(
                 .width(segmentWidth)
                 .fillMaxHeight()
                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
-                .background(Primary)
+                .background(MaterialTheme.colorScheme.primary)
         )
 
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -437,7 +436,7 @@ private fun MultiPositionSwitch(
 @Composable
 private fun visibleSwitchColors() = SwitchDefaults.colors(
     checkedThumbColor = Color.White,
-    checkedTrackColor = Primary,
+    checkedTrackColor = MaterialTheme.colorScheme.primary,
     uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
     uncheckedTrackColor = MaterialTheme.colorScheme.surface,
     uncheckedBorderColor = MaterialTheme.colorScheme.outline,

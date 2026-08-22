@@ -14,7 +14,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import xyz.a202132.app.ui.theme.Primary
 
 @Composable
 fun ProxyModeSelector(
@@ -85,7 +84,7 @@ private fun ProxyModeToggleOption(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .clickable(onClick = onClick),
-        color = if (selected) Primary else MaterialTheme.colorScheme.surfaceVariant,
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(50)
     ) {
         Text(
@@ -109,7 +108,11 @@ private fun ProxyModeButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = if (isSelected) Primary else MaterialTheme.colorScheme.surfaceVariant
+    val backgroundColor = if (isSelected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
     val textColor = if (isSelected) {
         MaterialTheme.colorScheme.onPrimary
     } else {

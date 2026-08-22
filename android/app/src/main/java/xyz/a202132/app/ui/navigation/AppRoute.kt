@@ -7,5 +7,9 @@ object AppRoute {
     const val OTHER_CONFIG = "other_config"
     const val FEATURES = "features"
     const val ACCOUNT_SETTINGS = "account_settings"
+    const val SKIN = "skin"
+    const val SKIN_EDITOR = "skin_editor/{schemeId}"
     const val QR_SCANNER = "qr_scanner"
+
+    fun skinEditor(schemeId: String): String = "skin_editor/$schemeId"
 }

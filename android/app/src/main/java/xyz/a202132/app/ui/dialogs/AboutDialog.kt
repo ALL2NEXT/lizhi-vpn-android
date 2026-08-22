@@ -36,7 +36,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import android.widget.Toast
 import xyz.a202132.app.R
-import xyz.a202132.app.ui.theme.Primary
 
 @Composable
 fun AboutDialog(
@@ -341,7 +340,9 @@ fun AboutDialog(
                         onClick = onDismiss,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
                     ) {
                         Text(
                             text = "关闭",
@@ -378,14 +379,14 @@ private fun AboutIconAction(
                     Icon(
                         imageVector = icon,
                         contentDescription = contentDescription,
-                        tint = Primary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
                 } else if (painter != null) {
                     Icon(
                         painter = painter,
                         contentDescription = contentDescription,
-                        tint = Primary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
                 }

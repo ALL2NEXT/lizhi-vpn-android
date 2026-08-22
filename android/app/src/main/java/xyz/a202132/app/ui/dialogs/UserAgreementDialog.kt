@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
-import xyz.a202132.app.ui.theme.Primary
 
 private const val AGREEMENT_WAIT_SECONDS = 10
 
@@ -123,7 +122,9 @@ fun UserAgreementDialog(
             Button(
                 onClick = onAgree,
                 enabled = remainingSeconds.intValue == 0 && agreementChecked.value,
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             ) {
                 Text(
                     text = if (remainingSeconds.intValue == 0) {

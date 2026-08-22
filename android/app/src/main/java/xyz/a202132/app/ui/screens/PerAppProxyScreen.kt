@@ -35,7 +35,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import xyz.a202132.app.ui.theme.Primary
 import xyz.a202132.app.viewmodel.AppInfo
 import xyz.a202132.app.viewmodel.PerAppProxyViewModel
 
@@ -111,7 +110,7 @@ fun ProxyScopeScreen(
                             onCheckedChange = { viewModel.setEnabled(it) },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = Primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
                                 uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 uncheckedTrackColor = MaterialTheme.colorScheme.surface,
                                 uncheckedBorderColor = MaterialTheme.colorScheme.outline
@@ -208,7 +207,7 @@ fun ProxyScopeScreen(
                         onCheckedChange = { viewModel.showSystemApps.value = it },
                         enabled = isEnabled,
                         colors = CheckboxDefaults.colors(
-                            checkedColor = Primary
+                            checkedColor = MaterialTheme.colorScheme.primary
                         )
                     )
                     Text(
@@ -242,8 +241,8 @@ fun ProxyScopeScreen(
                 enabled = isEnabled,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Primary,
-                    cursorColor = Primary
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    cursorColor = MaterialTheme.colorScheme.primary
                 )
             )
             
@@ -279,7 +278,7 @@ fun ProxyScopeScreen(
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = Primary)
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             } else {
                 LazyColumn(
@@ -328,12 +327,12 @@ private fun AppListItem(
             .clickable(enabled = enabled) { onToggle() },
         shape = RoundedCornerShape(12.dp),
         color = if (isSelected && enabled) {
-            Primary.copy(alpha = 0.1f)
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         },
         border = if (isSelected && enabled) {
-            androidx.compose.foundation.BorderStroke(1.dp, Primary)
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
         } else null
     ) {
         Row(
@@ -378,7 +377,7 @@ private fun AppListItem(
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .background(Primary, CircleShape),
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -394,7 +393,7 @@ private fun AppListItem(
                     onCheckedChange = null,
                     enabled = enabled,
                     colors = CheckboxDefaults.colors(
-                        checkedColor = Primary
+                        checkedColor = MaterialTheme.colorScheme.primary
                     )
                 )
             }

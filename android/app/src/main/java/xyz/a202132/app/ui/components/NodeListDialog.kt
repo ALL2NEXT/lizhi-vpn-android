@@ -75,7 +75,6 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.SubscriptionGroup
-import xyz.a202132.app.ui.theme.Primary
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable

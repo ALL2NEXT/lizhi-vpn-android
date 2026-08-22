@@ -1,5 +1,6 @@
 package xyz.a202132.app.ui.components
 
+import android.graphics.BitmapFactory
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -22,7 +23,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.painterResource
@@ -30,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import xyz.a202132.app.R
 import xyz.a202132.app.data.model.VpnState
 
@@ -42,7 +48,11 @@ fun ConnectButton(
     onLongClick: (() -> Unit)? = null,
     customLabel: String? = null,
     enabled: Boolean = true,
-    isTesting: Boolean = false
+    isTesting: Boolean = false,
+    /** 三种连接状态的图片均可按当前皮肤方案单独覆盖，未设置时使用内置图片。 */
+    customDisconnectedImagePath: String? = null,
+    customConnectingImagePath: String? = null,
+    customConnectedImagePath: String? = null
 ) {
     val isConnecting = vpnState == VpnState.CONNECTING || vpnState == VpnState.DISCONNECTING
 
@@ -93,6 +103,21 @@ fun ConnectButton(
         VpnState.CONNECTING, VpnState.DISCONNECTING -> R.drawable.btn_connecting
         VpnState.CONNECTED -> R.drawable.btn_connected
     }
+    val customImagePath = when (vpnState) {
+        VpnState.DISCONNECTED -> customDisconnectedImagePath
+        VpnState.CONNECTING, VpnState.DISCONNECTING -> customConnectingImagePath
+        VpnState.CONNECTED -> customConnectedImagePath
+    }
+    val customImage by produceState<ImageBitmap?>(
+        initialValue = null,
+        key1 = customImagePath
+    ) {
+        value = withContext(Dispatchers.IO) {
+            customImagePath
+                ?.takeIf { it.isNotBlank() }
+                ?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
+        }
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -133,6 +158,29 @@ fun ConnectButton(
                             onClick = onClick
                         )
                 )
+                // 自定义图片叠加在默认资源上方；图片加载失败时仍保留默认按钮。
+                customImage?.let { image ->
+                    Image(
+                        bitmap = image,
+                        contentDescription = "自定义连接状态图片",
+                        // 连接按钮图片通常包含透明留白，保持完整显示以免裁切主体。
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val scale = pulseScale * pressScale
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                            .combinedClickable(
+                                enabled = enabled && !isConnecting,
+                                indication = rememberRipple(bounded = true),
+                                interactionSource = remember { MutableInteractionSource() },
+                                onLongClick = onLongClick,
+                                onClick = onClick
+                            )
+                    )
+                }
                 if (isTesting) {
                     // 智能连接启动后继续显示旋转进度，避免长按进度圈停在满格。
                     CircularProgressIndicator(

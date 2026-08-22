@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.ui.components.AppScreenScaffold
-import xyz.a202132.app.ui.theme.Primary
 import xyz.a202132.app.viewmodel.MainViewModel
 
 @Composable
@@ -211,7 +210,7 @@ private fun FeatureSection(
 @Composable
 private fun featureSwitchColors() = SwitchDefaults.colors(
     checkedThumbColor = Color.White,
-    checkedTrackColor = Primary,
+    checkedTrackColor = MaterialTheme.colorScheme.primary,
     uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
     uncheckedTrackColor = MaterialTheme.colorScheme.surface,
     uncheckedBorderColor = MaterialTheme.colorScheme.outline,

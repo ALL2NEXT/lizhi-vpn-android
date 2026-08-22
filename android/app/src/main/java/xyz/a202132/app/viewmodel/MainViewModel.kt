@@ -259,6 +259,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_DOWN_MBPS)
     val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.VPN_MTU)
     val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Eagerly, TunStack.GVISOR)
+    val skinSettings = settingsRepository.skinSettings.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SkinSettings()
+    )
     private val selectedNodeFromDatabase = selectedNodeId
         .flatMapLatest { selectedId ->
             if (selectedId == null) {
@@ -699,6 +704,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setVpnMtu(value: Int) {
         viewModelScope.launch {
             settingsRepository.setVpnMtu(value)
+        }
+    }
+
+    fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {
+        viewModelScope.launch {
+            settingsRepository.upsertSkinScheme(scheme, activate)
+        }
+    }
+
+    fun setActiveSkinScheme(schemeId: String) {
+        viewModelScope.launch {
+            settingsRepository.setActiveSkinScheme(schemeId)
+        }
+    }
+
+    fun deleteSkinScheme(schemeId: String) {
+        viewModelScope.launch {
+            settingsRepository.deleteSkinScheme(schemeId)
         }
     }
 

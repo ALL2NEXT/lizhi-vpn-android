@@ -33,7 +33,6 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.ui.theme.LatencyBad
 import xyz.a202132.app.ui.theme.LatencyGood
 import xyz.a202132.app.ui.theme.LatencyMedium
-import xyz.a202132.app.ui.theme.Primary
 
 @Composable
 internal fun NodeListItem(
@@ -45,8 +44,16 @@ internal fun NodeListItem(
     onToggleFavorite: () -> Unit
 ) {
     val backgroundColor =
-        if (isSelected) Primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-    val borderColor = if (isSelected) Primary else Color.Transparent
+        if (isSelected) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        }
+    val borderColor = if (isSelected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        Color.Transparent
+    }
 
     Surface(
         modifier = Modifier
@@ -99,7 +106,7 @@ internal fun NodeListItem(
                         imageVector = Icons.Default.Star,
                         contentDescription = "收藏节点",
                         tint = if (isFavorite) {
-                            Primary
+                            MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                         },
