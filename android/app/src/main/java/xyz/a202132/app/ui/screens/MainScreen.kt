@@ -354,6 +354,7 @@ fun MainScreen(
                 ConnectButton(
                     vpnState = vpnState,
                     enabled = !isTesting,
+                    isTesting = isTesting,
                     onClick = {
                         when (vpnState) {
                             VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }

@@ -2,6 +2,7 @@ package xyz.a202132.app.ui.components
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -15,6 +16,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -22,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,7 +41,8 @@ fun ConnectButton(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     customLabel: String? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    isTesting: Boolean = false
 ) {
     val isConnecting = vpnState == VpnState.CONNECTING || vpnState == VpnState.DISCONNECTING
 
@@ -69,6 +73,19 @@ fun ConnectButton(
         animationSpec = tween(durationMillis = if (isPressed) 90 else 140),
         label = "pressScale"
     )
+    val longPressEnabled = onLongClick != null && enabled && !isConnecting
+    val longPressProgress by animateFloatAsState(
+        targetValue = if (isPressed && longPressEnabled) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (isPressed) {
+                LocalViewConfiguration.current.longPressTimeoutMillis.toInt()
+            } else {
+                120
+            },
+            easing = if (isPressed) LinearEasing else FastOutSlowInEasing
+        ),
+        label = "smartConnectionLongPressProgress"
+    )
 
     // 根据状态选择图片
     val imageRes = when (vpnState) {
@@ -87,31 +104,51 @@ fun ConnectButton(
             animationSpec = tween(220),
             label = "buttonImage"
         ) { currentImage ->
-            Image(
-                painter = painterResource(id = currentImage),
-                contentDescription = when (vpnState) {
-                    VpnState.CONNECTED -> "已连接"
-                    VpnState.CONNECTING -> "连接中"
-                    VpnState.DISCONNECTING -> "断开中"
-                    VpnState.DISCONNECTED -> "点击连接"
-                },
-                modifier = Modifier
-                    .size(buttonSize.dp)
-                    .graphicsLayer {
-                        val scale = pulseScale * pressScale
-                        scaleX = scale
-                        scaleY = scale
-                    }
-                    .combinedClickable(
-                        enabled = enabled && !isConnecting,
-                        indication = rememberRipple(bounded = true),
-                        interactionSource = interactionSource,
-                        onClickLabel = if (vpnState == VpnState.DISCONNECTED) "普通连接" else null,
-                        onLongClickLabel = if (onLongClick != null) "智能连接" else null,
-                        onLongClick = onLongClick,
-                        onClick = onClick
+            Box(
+                modifier = Modifier.size(buttonSize.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = currentImage),
+                    contentDescription = when (vpnState) {
+                        VpnState.CONNECTED -> "已连接"
+                        VpnState.CONNECTING -> "连接中"
+                        VpnState.DISCONNECTING -> "断开中"
+                        VpnState.DISCONNECTED -> "点击连接"
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val scale = pulseScale * pressScale
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .combinedClickable(
+                            enabled = enabled && !isConnecting,
+                            indication = rememberRipple(bounded = true),
+                            interactionSource = interactionSource,
+                            onClickLabel = if (vpnState == VpnState.DISCONNECTED) "普通连接" else null,
+                            onLongClickLabel = if (onLongClick != null) "智能连接" else null,
+                            onLongClick = onLongClick,
+                            onClick = onClick
+                        )
+                )
+                if (isTesting) {
+                    // 智能连接启动后继续显示旋转进度，避免长按进度圈停在满格。
+                    CircularProgressIndicator(
+                        modifier = Modifier.fillMaxSize().padding(3.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 5.dp
                     )
-            )
+                } else if (longPressEnabled && longPressProgress > 0f) {
+                    CircularProgressIndicator(
+                        progress = longPressProgress,
+                        modifier = Modifier.fillMaxSize().padding(3.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 5.dp
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
