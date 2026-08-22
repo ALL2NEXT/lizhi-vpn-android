@@ -253,7 +253,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
-    val simplifiedNodeTestDisplayEnabled = settingsRepository.simplifiedNodeTestDisplayEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val hideFavoriteNodeGroup = settingsRepository.hideFavoriteNodeGroup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
     val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_UP_MBPS)
@@ -638,12 +637,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setAutoDeleteTimeoutNodes(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setAutoDeleteTimeoutNodes(enabled)
-        }
-    }
-
-    fun setSimplifiedNodeTestDisplayEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setSimplifiedNodeTestDisplayEnabled(enabled)
         }
     }
 

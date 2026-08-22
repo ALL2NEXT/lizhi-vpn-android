@@ -23,8 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,7 +40,6 @@ internal fun NodeListItem(
     node: Node,
     isSelected: Boolean,
     isFavorite: Boolean,
-    simplifiedTestDisplay: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
@@ -93,13 +90,6 @@ internal fun NodeListItem(
                     )
                 }
 
-                if (simplifiedTestDisplay) {
-                    NodeMetricStatusStrip(
-                        node = node,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                }
-
                 IconButton(
                     onClick = onToggleFavorite,
                     enabled = enabled,
@@ -118,11 +108,8 @@ internal fun NodeListItem(
                 }
             }
 
-            if (!simplifiedTestDisplay) {
-                Spacer(modifier = Modifier.height(10.dp))
-            }
+            Spacer(modifier = Modifier.height(10.dp))
 
-            if (!simplifiedTestDisplay) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -149,52 +136,9 @@ internal fun NodeListItem(
                     },
                     modifier = Modifier.weight(1f)
                 )
-                }
             }
         }
     }
-}
-
-@Composable
-private fun NodeMetricStatusStrip(
-    node: Node,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        NodeStatusIndicator(
-            color = nodeLatencyStatusColor(node.tcpingLatency, node.isAvailable),
-            description = "TCPing 测试状态",
-            modifier = Modifier.size(8.dp)
-        )
-        NodeStatusIndicator(
-            color = nodeLatencyStatusColor(node.urlTestLatency, node.isAvailable),
-            description = "204 URLTest 测试状态",
-            modifier = Modifier.size(8.dp)
-        )
-        NodeStatusIndicator(
-            color = nodeBandwidthStatusColor(node.downloadMbps),
-            description = "带宽测试状态",
-            modifier = Modifier.size(8.dp)
-        )
-    }
-}
-
-@Composable
-private fun NodeStatusIndicator(
-    color: Color,
-    description: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier
-            .semantics { contentDescription = description },
-        color = color,
-        shape = RoundedCornerShape(50)
-    ) {}
 }
 
 @Composable
@@ -240,23 +184,6 @@ private fun nodeMetricColor(latency: Int): Color = when {
     latency < 0 -> MaterialTheme.colorScheme.onSurfaceVariant
     latency <= 200 -> LatencyGood
     latency <= 400 -> LatencyMedium
-    else -> LatencyBad
-}
-
-@Composable
-private fun nodeLatencyStatusColor(latency: Int, isAvailable: Boolean): Color = when {
-    !isAvailable || latency < 0 -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-    latency <= 200 -> LatencyGood
-    latency <= 400 -> LatencyMedium
-    else -> LatencyBad
-}
-
-@Composable
-private fun nodeBandwidthStatusColor(downloadMbps: Float): Color = when {
-    !downloadMbps.isFinite() || downloadMbps <= 0f ->
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-    downloadMbps >= 20f -> LatencyGood
-    downloadMbps >= 5f -> LatencyMedium
     else -> LatencyBad
 }
 

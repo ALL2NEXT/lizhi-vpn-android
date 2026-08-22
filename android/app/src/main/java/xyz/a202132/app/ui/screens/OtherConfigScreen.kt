@@ -67,8 +67,6 @@ fun OtherConfigScreen(
     val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
-    val simplifiedNodeTestDisplayEnabled by
-        viewModel.simplifiedNodeTestDisplayEnabled.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
 
     var tcpingTimeoutInput by remember(tcpingTestTimeoutMs) { mutableStateOf(tcpingTestTimeoutMs.toString()) }
@@ -184,22 +182,6 @@ fun OtherConfigScreen(
                     Switch(
                         checked = autoDeleteTimeoutNodes,
                         onCheckedChange = { viewModel.setAutoDeleteTimeoutNodes(it) },
-                        colors = visibleSwitchColors()
-                    )
-                }
-            }
-
-            OtherConfigSection(
-                title = "简化测速数据"
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Switch(
-                        checked = simplifiedNodeTestDisplayEnabled,
-                        onCheckedChange = { viewModel.setSimplifiedNodeTestDisplayEnabled(it) },
                         colors = visibleSwitchColors()
                     )
                 }
