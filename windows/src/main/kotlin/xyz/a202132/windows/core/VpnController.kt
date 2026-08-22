@@ -11,6 +11,7 @@ interface VpnController : AutoCloseable {
     val state: StateFlow<DesktopAppState>
 
     fun refreshCore()
+    fun setTunEnabled(enabled: Boolean)
     fun setProxyMode(mode: ProxyMode)
     fun openDrawer()
     fun closeDrawer()

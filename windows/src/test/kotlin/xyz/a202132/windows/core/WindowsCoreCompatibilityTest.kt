@@ -55,6 +55,42 @@ class WindowsCoreCompatibilityTest {
     }
 
     @Test
+    fun `generated local proxy config passes the pinned Windows core`() {
+        val executable = Paths.get("runtime", "windows-x64", "sing-box.exe").toAbsolutePath()
+        assumeTrue(Files.isRegularFile(executable), "Run buildSingBox to enable the core compatibility test")
+
+        val workDirectory = Files.createTempDirectory("firefly-core-local-proxy")
+        val geoSite = copyResource("rule-sets/geosite-cn.srs", workDirectory)
+        val geoIp = copyResource("rule-sets/geoip-cn.srs", workDirectory)
+        val node = requireNotNull(
+            NodeLinkParser().parseNodeLink(
+                "vless://00000000-0000-0000-0000-000000000000@example.com:443?security=tls&sni=example.com#Tokyo"
+            )
+        )
+        val config = WindowsSingBoxConfigGenerator().generate(
+            nodes = listOf(node),
+            selectedNodeId = node.id,
+            proxyMode = ProxyMode.SMART,
+            geoSiteCn = geoSite,
+            geoIpCn = geoIp,
+            tunEnabled = false,
+            proxyPort = 18_080
+        )
+        val configFile = workDirectory.resolve("local-proxy-config.json")
+        Files.writeString(configFile, config)
+
+        val process = ProcessBuilder(
+            executable.toString(),
+            "check",
+            "-c",
+            configFile.toString()
+        ).directory(workDirectory.toFile()).redirectErrorStream(true).start()
+        assumeTrue(process.waitFor(15, TimeUnit.SECONDS), "sing-box check timed out")
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, process.exitValue(), output)
+    }
+
+    @Test
     fun `dns detour starts with the pinned Windows core`() {
         val executable = Paths.get("runtime", "windows-x64", "sing-box.exe").toAbsolutePath()
         assumeTrue(Files.isRegularFile(executable), "Run buildSingBox to enable the core compatibility test")

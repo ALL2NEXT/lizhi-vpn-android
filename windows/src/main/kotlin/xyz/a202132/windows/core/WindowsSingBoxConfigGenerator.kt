@@ -25,7 +25,9 @@ class WindowsSingBoxConfigGenerator {
         geoSiteCn: Path,
         geoIpCn: Path,
         settings: DesktopSettings = DesktopSettings(),
-        clashApiPort: Int = 9090
+        clashApiPort: Int = 9090,
+        tunEnabled: Boolean = true,
+        proxyPort: Int = 0
     ): String {
         require(nodes.isNotEmpty()) { "没有可用于生成配置的节点" }
         val selected = nodes.firstOrNull { it.id == selectedNodeId } ?: nodes.first()
@@ -39,23 +41,33 @@ class WindowsSingBoxConfigGenerator {
             })
             add("dns", createDns(proxyMode, serverDomains, settings.ipv6RoutingMode))
             add("inbounds", JsonArray().apply {
-                add(JsonObject().apply {
-                    addProperty("type", "tun")
-                    addProperty("tag", "tun-in")
-                    addProperty("interface_name", "FireflyVPN")
-                    add("address", JsonArray().apply {
-                        if (settings.ipv6RoutingMode != Ipv6RoutingMode.ONLY) add("172.19.0.1/30")
-                        if (settings.ipv6RoutingMode != Ipv6RoutingMode.DISABLED) add("fdfe:dcba:9876::1/126")
+                if (tunEnabled) {
+                    add(JsonObject().apply {
+                        addProperty("type", "tun")
+                        addProperty("tag", "tun-in")
+                        addProperty("interface_name", "FireflyVPN")
+                        add("address", JsonArray().apply {
+                            if (settings.ipv6RoutingMode != Ipv6RoutingMode.ONLY) add("172.19.0.1/30")
+                            if (settings.ipv6RoutingMode != Ipv6RoutingMode.DISABLED) add("fdfe:dcba:9876::1/126")
+                        })
+                        addProperty("mtu", settings.vpnMtu.coerceIn(576, 9_000))
+                        addProperty("auto_route", true)
+                        addProperty("strict_route", true)
+                        add("route_address", JsonArray().apply {
+                            if (settings.ipv6RoutingMode != Ipv6RoutingMode.ONLY) add("0.0.0.0/0")
+                            if (settings.ipv6RoutingMode != Ipv6RoutingMode.DISABLED) add("::/0")
+                        })
+                        addProperty("stack", settings.tunStack.configValue)
                     })
-                    addProperty("mtu", settings.vpnMtu.coerceIn(576, 9_000))
-                    addProperty("auto_route", true)
-                    addProperty("strict_route", true)
-                    add("route_address", JsonArray().apply {
-                        if (settings.ipv6RoutingMode != Ipv6RoutingMode.ONLY) add("0.0.0.0/0")
-                        if (settings.ipv6RoutingMode != Ipv6RoutingMode.DISABLED) add("::/0")
+                } else {
+                    require(proxyPort in 1..65_535) { "本地代理端口无效：$proxyPort" }
+                    add(JsonObject().apply {
+                        addProperty("type", "mixed")
+                        addProperty("tag", "mixed-in")
+                        addProperty("listen", "127.0.0.1")
+                        addProperty("listen_port", proxyPort)
                     })
-                    addProperty("stack", settings.tunStack.configValue)
-                })
+                }
             })
             add("outbounds", createOutbounds(nodes, selected, settings))
             add("route", createRoute(proxyMode, serverDomains, serverIps, geoSiteCn, geoIpCn))

@@ -14,6 +14,7 @@ import xyz.a202132.windows.model.UrlTestTargets
 data class DesktopPreferences(
     val installId: String = UUID.randomUUID().toString(),
     val backendUrl: String = DesktopPreferencesStore.DEFAULT_BACKEND_URL,
+    val tunEnabled: Boolean = true,
     val proxyMode: ProxyMode = ProxyMode.SMART,
     val selectedNodeId: String? = null,
     val favoriteNodeIds: Set<String> = emptySet(),

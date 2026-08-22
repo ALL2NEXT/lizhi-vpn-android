@@ -68,4 +68,29 @@ class WindowsSingBoxConfigGeneratorTest {
         }.asJsonObject
         assertTrue(direct.get("udp_fragment").asBoolean)
     }
+
+    @Test
+    fun `generates a local mixed proxy without tun`() {
+        val node = requireNotNull(
+            NodeLinkParser().parseNodeLink(
+                "vless://00000000-0000-0000-0000-000000000000@example.com:443?security=tls#Tokyo"
+            )
+        )
+        val json = JsonParser.parseString(
+            WindowsSingBoxConfigGenerator().generate(
+                nodes = listOf(node),
+                selectedNodeId = node.id,
+                proxyMode = ProxyMode.SMART,
+                geoSiteCn = Paths.get("geosite-cn.srs"),
+                geoIpCn = Paths.get("geoip-cn.srs"),
+                tunEnabled = false,
+                proxyPort = 18_080
+            )
+        ).asJsonObject
+        val mixed = json.getAsJsonArray("inbounds")[0].asJsonObject
+
+        assertEquals("mixed", mixed.get("type").asString)
+        assertEquals("127.0.0.1", mixed.get("listen").asString)
+        assertEquals(18_080, mixed.get("listen_port").asInt)
+    }
 }

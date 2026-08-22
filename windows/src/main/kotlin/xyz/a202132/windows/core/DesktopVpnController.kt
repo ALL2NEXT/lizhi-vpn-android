@@ -53,6 +53,7 @@ class DesktopVpnController(
     private var trafficSession: TrafficSession? = null
     private val mutableState = MutableStateFlow(
         DesktopAppState(
+            tunEnabled = storedPreferences.tunEnabled,
             proxyMode = storedPreferences.proxyMode,
             selectedNodeId = storedPreferences.selectedNodeId,
             backendUrl = storedPreferences.backendUrl,
@@ -94,6 +95,16 @@ class DesktopVpnController(
         preferencesStore.update { it.copy(proxyMode = mode) }
         if (shouldRestart) {
             mutableState.value.selectedNodeId?.let(::startNode)
+        }
+    }
+
+    override fun setTunEnabled(enabled: Boolean) {
+        val current = mutableState.value
+        if (current.tunEnabled == enabled) return
+        mutableState.update { it.copy(tunEnabled = enabled) }
+        preferencesStore.update { it.copy(tunEnabled = enabled) }
+        if (current.vpnState == VpnState.CONNECTED) {
+            current.selectedNodeId?.let(::startNode)
         }
     }
 
@@ -682,6 +693,7 @@ class DesktopVpnController(
                     nodes = mutableState.value.nodes,
                     selectedNodeId = node.id,
                     mode = mutableState.value.proxyMode,
+                    tunEnabled = mutableState.value.tunEnabled,
                     settings = mutableState.value.settings
                 )
             ) {

@@ -130,6 +130,7 @@ import java.awt.datatransfer.StringSelection
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.net.URI
+import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -229,6 +230,15 @@ fun FireflyDesktopApp(controller: VpnController) {
 @Composable
 private fun MainScreen(state: DesktopAppState, controller: VpnController) {
     var showToolsMenu by remember { mutableStateOf(false) }
+    var showTunAdminDialog by remember { mutableStateOf(false) }
+
+    fun runWithTunPermission(action: () -> Unit) {
+        if (state.tunEnabled && !isWindowsElevated()) {
+            showTunAdminDialog = true
+        } else {
+            action()
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -240,12 +250,37 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
                     }
                 },
                 title = {
-                    Text(
-                        "FireflyVPN",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "FireflyVPN",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            if (state.tunEnabled) "TUN" else "系统代理",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Switch(
+                            checked = state.tunEnabled,
+                            onCheckedChange = { enabled ->
+                                if (!enabled) {
+                                    controller.setTunEnabled(false)
+                                } else if (isWindowsElevated()) {
+                                    controller.setTunEnabled(true)
+                                } else {
+                                    showTunAdminDialog = true
+                                }
+                            },
+                            enabled = !state.isTesting &&
+                                state.vpnState != VpnState.CONNECTING &&
+                                state.vpnState != VpnState.DISCONNECTING,
+                            modifier = Modifier.padding(start = 2.dp)
+                        )
+                    }
                 },
                 actions = {
                     ProxyModeToggle(
@@ -306,9 +341,9 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
                 } else {
                     null
                 },
-                onClick = controller::startSelectedOrFirstConnection,
+                onClick = { runWithTunPermission(controller::startSelectedOrFirstConnection) },
                 onLongClick = if (state.vpnState == VpnState.DISCONNECTED) {
-                    controller::startSmartConnection
+                    { runWithTunPermission(controller::startSmartConnection) }
                 } else {
                     null
                 }
@@ -319,6 +354,30 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
         }
     }
 
+    if (showTunAdminDialog) {
+        AlertDialog(
+            onDismissRequest = { showTunAdminDialog = false },
+            title = { Text("TUN 模式需要管理员权限") },
+            text = {
+                Text(
+                    "TUN 模式会接管整机网络，需要以管理员身份运行 FireflyVPN。请关闭程序后右键选择“以管理员身份运行”，再重新连接。"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showTunAdminDialog = false }) {
+                    Text("知道了")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showTunAdminDialog = false
+                    controller.setTunEnabled(false)
+                }) {
+                    Text("切换系统代理")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -2118,6 +2177,23 @@ private fun writeClipboard(value: String) {
     runCatching {
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(value), null)
     }
+}
+
+/** Windows 的 fltmc 需要管理员权限，适合在启动 TUN 前做轻量权限检查。 */
+private fun isWindowsElevated(): Boolean {
+    if (!System.getProperty("os.name").contains("Windows", ignoreCase = true)) return true
+    val process = runCatching {
+        ProcessBuilder("fltmc.exe").redirectErrorStream(true).start()
+    }.getOrNull() ?: return false
+    return runCatching {
+        if (!process.waitFor(2, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            false
+        } else {
+            process.inputStream.close()
+            process.exitValue() == 0
+        }
+    }.getOrDefault(false)
 }
 
 private fun loadBitmapResource(name: String): ImageBitmap? = runCatching {

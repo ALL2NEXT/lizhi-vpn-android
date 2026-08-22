@@ -195,6 +195,7 @@ sealed interface CoreStatus {
 data class DesktopAppState(
     val vpnState: VpnState = VpnState.DISCONNECTED,
     val coreStatus: CoreStatus = CoreStatus.Checking,
+    val tunEnabled: Boolean = true,
     val proxyMode: ProxyMode = ProxyMode.SMART,
     val screen: AppScreen = AppScreen.MAIN,
     val drawerOpen: Boolean = false,

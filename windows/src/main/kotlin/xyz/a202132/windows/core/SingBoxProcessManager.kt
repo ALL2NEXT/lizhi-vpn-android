@@ -26,6 +26,7 @@ class SingBoxProcessManager(
     private val configGenerator: WindowsSingBoxConfigGenerator = WindowsSingBoxConfigGenerator(),
     private val stateDirectory: Path = defaultStateDirectory()
 ) : AutoCloseable {
+    private val systemProxyManager = WindowsSystemProxyManager()
     private val outputLock = Any()
     private val outputLines = ArrayDeque<String>()
     private var process: Process? = null
@@ -36,6 +37,7 @@ class SingBoxProcessManager(
         nodes: List<DesktopNode>,
         selectedNodeId: String,
         mode: ProxyMode,
+        tunEnabled: Boolean = true,
         settings: DesktopSettings = DesktopSettings()
     ): CoreStartResult {
         stop()
@@ -45,6 +47,7 @@ class SingBoxProcessManager(
             val geoIp = copyResource("rule-sets/geoip-cn.srs")
             val configFile = stateDirectory.resolve("config.json")
             val apiPort = ServerSocket(0).use { it.localPort }
+            val proxyPort = if (tunEnabled) 0 else ServerSocket(0).use { it.localPort }
             val config = configGenerator.generate(
                 nodes,
                 selectedNodeId,
@@ -52,7 +55,9 @@ class SingBoxProcessManager(
                 geoSite,
                 geoIp,
                 settings,
-                apiPort
+                apiPort,
+                tunEnabled,
+                proxyPort
             )
             Files.writeString(configFile, config, Charsets.UTF_8)
 
@@ -74,9 +79,23 @@ class SingBoxProcessManager(
             ).start()
             process = runningProcess
             clashApiPort = apiPort
+            try {
+                if (!tunEnabled) systemProxyManager.enable(proxyPort)
+            } catch (error: Exception) {
+                stop()
+                return CoreStartResult.Failed(error.message ?: "设置 Windows 系统代理失败")
+            }
             thread(name = "sing-box-output", isDaemon = true) {
-                runningProcess.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
-                    lines.forEach(::appendOutput)
+                try {
+                    runningProcess.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                        lines.forEach(::appendOutput)
+                    }
+                } finally {
+                    systemProxyManager.disable()
+                    if (process === runningProcess) {
+                        process = null
+                        clashApiPort = null
+                    }
                 }
             }
 
@@ -85,6 +104,7 @@ class SingBoxProcessManager(
                 val exitCode = runningProcess.exitValue()
                 process = null
                 clashApiPort = null
+                systemProxyManager.disable()
                 return CoreStartResult.Failed(
                     recentOutput().ifBlank { "sing-box 已退出（代码 $exitCode）" }.lastMeaningfulLine()
                 )
@@ -96,14 +116,17 @@ class SingBoxProcessManager(
     }
 
     fun stop() {
-        val running = process ?: return
+        val running = process
         process = null
-        running.destroy()
-        if (!running.waitFor(3, TimeUnit.SECONDS)) {
-            running.destroyForcibly()
-            running.waitFor(2, TimeUnit.SECONDS)
+        if (running != null) {
+            running.destroy()
+            if (!running.waitFor(3, TimeUnit.SECONDS)) {
+                running.destroyForcibly()
+                running.waitFor(2, TimeUnit.SECONDS)
+            }
         }
         clashApiPort = null
+        systemProxyManager.disable()
     }
 
     fun isRunning(): Boolean = process?.isAlive == true
