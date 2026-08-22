@@ -105,7 +105,7 @@ backend/    # Cloudflare Worker 后台
 | **本地存储** | Room Database (SQLCipher 加密) + DataStore |
 | **二维码扫描** | CameraX + ML Kit Barcode Scanning |
 | **运行日志** | 应用内专用 RuntimeLog（私有文件 + FileProvider 分享） |
-| **VPN 核心** | [sing-box](https://github.com/SagerNet/sing-box) (libbox.aar) |
+| **VPN 核心** | [sing-box](https://github.com/SagerNet/sing-box) 源码构建的 libbox |
 | **并发处理** | Kotlin Coroutines |
 
 ---
@@ -117,11 +117,12 @@ backend/    # Cloudflare Worker 后台
 | 工具 | 版本要求 |
 |------|---------| 
 | **Android Studio** | Koala 2024.1.1 或更高 |
+| **Go** | 1.24.7 或更高 |
 | **JDK** | 17 |
 | **Kotlin** | 1.9.21 |
 | **Gradle** | 8.7+ |
 | **Android Gradle Plugin** | 8.6.1 |
-| **NDK** | 25.1.8937393 |
+| **NDK** | 28.0.13004108 |
 
 ### 运行环境
 
@@ -132,12 +133,15 @@ backend/    # Cloudflare Worker 后台
 
 ### 核心依赖
 
-项目依赖 `libbox.aar`（sing-box Android 库），需放置于 `android/app/libs/` 目录。
+Android 不再依赖 `android/app/libs/libbox.aar`。项目通过根目录下的 `sing-box` 子模块锁定 sing-box 源码版本，Gradle 构建时调用官方 `cmd/internal/build_libbox` 自动生成本次构建使用的 `libbox.aar`，生成文件位于 `android/app/build/generated/sing-box/`，不会提交到版本库。
 
-> **获取 libbox.aar**：
->
-> - 从 [sing-box Releases](https://github.com/SagerNet/sing-box/releases) 下载预编译版本
-> - 或参考 [libbox 构建指南](https://sing-box.sagernet.org/installation/build-from-source/#build-libbox-for-android) 自行编译
+首次获取源码后执行：
+
+```bash
+git submodule update --init --recursive
+```
+
+源码构建需要 Go、JDK 17、Android SDK 和 NDK 28.0.13004108。协议扩展或核心修改直接在根目录 `sing-box` 中进行，重新构建 Android 或 Windows 项目即可生效。
 
 项目还依赖 [SQLCipher for Android](https://github.com/niceyun/sqlcipher-android)（`net.zetetic:sqlcipher-android:4.13.0`）用于本地数据库加密，Gradle 会自动下载，无需手动配置。
 
@@ -152,17 +156,7 @@ git clone https://github.com/Iskongkongyo/FireflyVPN.git
 cd FireflyVPN
 ```
 
-### 2. 配置 libbox
-
-将 `libbox.aar` 文件放入 `android/app/libs/` 目录：
-
-```
-android/app/
-└── libs/
-    └── libbox.aar
-```
-
-### 3. 配置 API 地址
+### 2. 配置 API 地址
 
 编辑 `android/app/src/main/java/xyz/a202132/app/AppConfig.kt`，修改为你的后端地址：
 
@@ -218,7 +212,7 @@ private val retrofit = Retrofit.Builder()
 <domain includeSubdomains="true">example.com</domain> <!-- 修改为你的域名 -->
 ```
 
-### 4. 构建运行
+### 3. 构建运行
 
 ```bash
 # 使用 Gradle 构建
@@ -305,7 +299,8 @@ android/app/src/main/java/xyz/a202132/app/
 ### 资源文件结构
 
 ```
-android/app/libs/libbox.aar       # sing-box 核心库
+sing-box                           # sing-box 源码子模块（Android/Windows 构建输入）
+android/app/build/generated/      # Gradle 生成的 libbox.aar（不提交）
 android/app/src/main/
 ├── assets/
 │   └── rule-sets/                # 智能分流规则集

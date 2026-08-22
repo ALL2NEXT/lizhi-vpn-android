@@ -1,10 +1,137 @@
-import java.util.Properties
+import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
+import java.util.Properties
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+}
+
+val singBoxNdkVersion = "28.0.13004108"
+
+// The repository root pins the sing-box source revision in this submodule.
+// Android builds it directly instead of consuming a checked-in/prebuilt
+// libbox.aar.
+val singBoxSourceDir = rootProject.file("../sing-box")
+val generatedLibboxAar = layout.buildDirectory.file("generated/sing-box/libbox.aar")
+
+val buildLibbox = tasks.register("buildLibbox") {
+    group = "sing-box"
+    description = "Build libbox.aar from the pinned sing-box source submodule"
+
+    inputs.files(fileTree(singBoxSourceDir) {
+        exclude(".git/**")
+        exclude("build/**")
+        exclude("bin/**")
+        exclude("dist/**")
+        exclude("libbox*.aar")
+    })
+    outputs.file(generatedLibboxAar)
+
+    doLast {
+        val goExecutable = if (System.getProperty("os.name").startsWith("Windows")) "go.exe" else "go"
+        check(singBoxSourceDir.resolve("go.mod").isFile) {
+            "sing-box source is missing at ${singBoxSourceDir.absolutePath}. " +
+                "Run `git submodule update --init --recursive`."
+        }
+
+        val localProperties = Properties()
+        rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use {
+            localProperties.load(it)
+        }
+        val sdkPath = localProperties.getProperty("sdk.dir")
+            ?: System.getenv("ANDROID_HOME")
+            ?: error("Android SDK not found. Set sdk.dir in android/local.properties or ANDROID_HOME.")
+        val sdkDir = File(sdkPath)
+        val ndkDir = sdkDir.resolve("ndk").resolve(singBoxNdkVersion)
+        check(ndkDir.resolve("source.properties").isFile) {
+            "Android NDK $singBoxNdkVersion not found at ${ndkDir.absolutePath}. " +
+                "Install it from Android Studio SDK Manager or with `sdkmanager \"ndk;$singBoxNdkVersion\"`."
+        }
+
+        fun commandOutput(vararg command: String): String {
+            val output = ByteArrayOutputStream()
+            exec {
+                commandLine(*command)
+                standardOutput = output
+                errorOutput = output
+                isIgnoreExitValue = true
+            }
+            return output.toString(Charsets.UTF_8.name())
+        }
+
+        val goPath = commandOutput(goExecutable, "env", "GOPATH").trim()
+        check(goPath.isNotEmpty()) { "Unable to determine GOPATH for gomobile." }
+        val goBinDir = File(goPath).resolve("bin")
+        val executableSuffix = if (System.getProperty("os.name").startsWith("Windows")) ".exe" else ""
+        val gomobile = goBinDir.resolve("gomobile$executableSuffix")
+        val gobind = goBinDir.resolve("gobind$executableSuffix")
+
+        fun isExpectedGomobile(binary: File, commandPackage: String): Boolean {
+            if (!binary.isFile) return false
+            val info = commandOutput(goExecutable, "version", "-m", binary.absolutePath)
+            return info.contains("path $commandPackage") &&
+                info.contains("mod github.com/sagernet/gomobile v0.1.11")
+        }
+
+        // sing-box's build helper requires the SagerNet gomobile fork. Install
+        // it only when the local Go tool does not already provide that exact
+        // version (a different gomobile fork is not compatible).
+        if (!isExpectedGomobile(gomobile, "github.com/sagernet/gomobile/cmd/gomobile") ||
+            !isExpectedGomobile(gobind, "github.com/sagernet/gomobile/cmd/gobind")) {
+            exec {
+                commandLine(goExecutable, "install", "github.com/sagernet/gomobile/cmd/gomobile@v0.1.11")
+            }
+            exec {
+                commandLine(goExecutable, "install", "github.com/sagernet/gomobile/cmd/gobind@v0.1.11")
+            }
+        }
+
+        val javaHome = System.getenv("JAVA_HOME") ?: System.getProperty("java.home")
+        exec {
+            workingDir(singBoxSourceDir)
+            environment("ANDROID_HOME", sdkDir.absolutePath)
+            environment("ANDROID_SDK_HOME", sdkDir.absolutePath)
+            environment("ANDROID_NDK_HOME", ndkDir.absolutePath)
+            environment("NDK", ndkDir.absolutePath)
+            if (!javaHome.isNullOrBlank()) {
+                environment("JAVA_HOME", javaHome)
+            }
+            commandLine(
+                goExecutable,
+                "run",
+                "./cmd/internal/build_libbox",
+                "-target",
+                "android",
+                "-platform",
+                "android"
+            )
+        }
+
+        val sourceAar = singBoxSourceDir.resolve("libbox.aar")
+        check(sourceAar.isFile) {
+            "sing-box build completed without producing ${sourceAar.absolutePath}."
+        }
+        val outputAar = generatedLibboxAar.get().asFile
+        outputAar.parentFile.mkdirs()
+        sourceAar.copyTo(outputAar, overwrite = true)
+
+        // build_libbox also creates the legacy artifact. The Android app uses
+        // the main API-23 artifact and must not leave build products in the
+        // source submodule after Gradle finishes.
+        sourceAar.delete()
+        singBoxSourceDir.resolve("libbox-legacy.aar").delete()
+    }
+}
+
+// All Android variants resolve the generated AAR before compiling Kotlin or
+// packaging the APK. This also covers unit-test variants such as
+// preDebugUnitTestBuild.
+tasks.configureEach {
+    if (name.startsWith("pre") && name.endsWith("Build")) {
+        dependsOn(buildLibbox)
+    }
 }
 
 android {
@@ -113,7 +240,7 @@ android {
             version = "3.22.1"
         }
     }
-    ndkVersion = "25.1.8937393"
+    ndkVersion = singBoxNdkVersion
 }
 
 dependencies {
@@ -163,8 +290,9 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     
-    // sing-box core (libbox)
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+    // sing-box core is compiled from the pinned source submodule for every
+    // clean build; no prebuilt AAR is consumed from app/libs.
+    implementation(files(generatedLibboxAar))
     
     // Testing
     testImplementation("junit:junit:4.13.2")

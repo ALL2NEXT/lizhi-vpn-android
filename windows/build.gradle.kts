@@ -52,7 +52,7 @@ val buildSingBox by tasks.registering(Exec::class) {
         "-File",
         file("scripts/build-sing-box.ps1").absolutePath
     )
-    inputs.dir("vendor/sing-box")
+    inputs.dir("../sing-box")
     inputs.file("scripts/build-sing-box.ps1")
     outputs.files(
         "runtime/windows-x64/sing-box.exe",
