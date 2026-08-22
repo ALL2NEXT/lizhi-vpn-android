@@ -312,9 +312,12 @@
     <div class="dashboard-heading">
       <div>
         <h2>后台登录记录</h2>
-        <p>记录真实后台登录结果和常见路径蜜罐命中，最多保留 200 条；不会保存密码。</p>
+        <p>记录真实后台登录结果和常见路径蜜罐命中，最多保留 200 条；不会保存密码。清理只影响这些记录。</p>
       </div>
-      <button class="secondary" type="button" onclick="loadAdminLoginRecords(true)">刷新记录</button>
+      <div class="admin-login-actions">
+        <button class="danger" type="button" onclick="clearAdminLoginRecords()">清理记录</button>
+        <button class="secondary" type="button" onclick="loadAdminLoginRecords(true)">刷新记录</button>
+      </div>
     </div>
     <div id="adminLoginRecordsTable" class="admin-login-record-wrap">
       <div class="loading-state">打开此模块后读取登录记录</div>

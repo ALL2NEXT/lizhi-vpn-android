@@ -123,6 +123,8 @@
      .admin-login-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
      .admin-login-badge.success { color: #bbf7d0; background: #14532d; }
      .admin-login-badge.failed { color: #fecaca; background: #7f1d1d; }
+     .admin-login-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+     .admin-login-actions button { margin: 0; }
      .admin-login-empty { padding: 22px; color: #94a3b8; text-align: center; }
      .source-row .row-actions { display: flex; align-items: center; justify-content: space-between; }
      .source-row small { display: block; margin-top: 8px; }

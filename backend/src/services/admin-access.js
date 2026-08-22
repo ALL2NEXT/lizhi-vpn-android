@@ -53,3 +53,9 @@ export async function readAdminLoginRecords(env) {
   const stored = await env.CONFIG.get(ADMIN_LOGIN_RECORDS_KEY, "json");
   return Array.isArray(stored) ? stored.slice(0, MAX_ADMIN_LOGIN_RECORDS) : [];
 }
+
+// 仅清理后台登录与蜜罐记录，不触碰用户、设备或流量数据。
+export async function clearAdminLoginRecords(env) {
+  if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
+  await env.CONFIG.delete(ADMIN_LOGIN_RECORDS_KEY);
+}

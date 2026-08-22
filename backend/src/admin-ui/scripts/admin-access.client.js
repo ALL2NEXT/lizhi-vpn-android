@@ -51,3 +51,25 @@ async function loadAdminLoginRecords(force) {
     adminLoginRecordsLoading = false;
   }
 }
+
+async function clearAdminLoginRecords() {
+  if (adminLoginRecordsLoading) return;
+  const count = Array.isArray(adminLoginRecordsData) ? adminLoginRecordsData.length : 0;
+  if (!confirm('确定清理当前 ' + count + ' 条后台登录记录吗？此操作不可恢复。')) return;
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/admin-login-records', {
+      method: 'DELETE',
+      headers: headers(),
+    });
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok) {
+      throw new Error(adminErrorMessage(data.error, '后台登录记录清理失败（HTTP ' + response.status + '）'));
+    }
+    adminLoginRecordsData = [];
+    renderAdminLoginRecords();
+    show('后台登录记录已清理');
+  } catch (error) {
+    show(error.message || '后台登录记录清理失败', true);
+  }
+}

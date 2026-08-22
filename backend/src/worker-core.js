@@ -70,7 +70,11 @@ import {
   rowToUser,
   usersDb,
 } from "./services/user-store.js";
-import { readAdminLoginRecords, recordAdminLogin } from "./services/admin-access.js";
+import {
+  clearAdminLoginRecords,
+  readAdminLoginRecords,
+  recordAdminLogin,
+} from "./services/admin-access.js";
 import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.js";
 
 const routeDeps = {
@@ -124,6 +128,7 @@ const routeDeps = {
   validateAndWarmSubscriptionSources,
   writeState,
   normalizeState,
+  clearAdminLoginRecords,
   readAdminLoginRecords,
 };
 
