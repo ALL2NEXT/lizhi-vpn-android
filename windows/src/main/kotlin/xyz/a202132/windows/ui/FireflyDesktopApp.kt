@@ -3,6 +3,7 @@ package xyz.a202132.windows.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -112,6 +113,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -321,11 +323,21 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(32.dp))
-            CurrentNode(node = state.currentNode, isLoading = state.isLoadingNodes)
+            // 主页直接复用节点列表卡片，避免额外显示当前节点、节点名和测速提示文字。
+            state.currentNode?.let { node ->
+                NodeListItem(
+                    node = node,
+                    selected = node.id == state.selectedNodeId,
+                    enabled = !state.isTesting,
+                    onSelect = { controller.navigate(AppScreen.NODE_LIST) },
+                    onFavorite = { controller.toggleFavorite(node.id) }
+                )
+            }
             Spacer(Modifier.weight(1f))
             ConnectButton(
                 vpnState = state.vpnState,
                 enabled = !state.isTesting,
+                isTesting = state.isTesting,
                 customLabel = if (state.vpnState == VpnState.DISCONNECTED) {
                     state.testingLabel ?: "点击直接连接\n长按智能连接"
                 } else {
@@ -376,48 +388,6 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
 }
 
 @Composable
-private fun CurrentNode(node: DesktopNode?, isLoading: Boolean) {
-    if (node == null) {
-        if (isLoading) {
-            Text(
-                "正在获取节点...",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 16.sp
-            )
-        }
-        return
-    }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("当前节点", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            NodeFlag(node)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                node.displayName(),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        if (node.tcpingLatency > 0) {
-            Spacer(Modifier.height(6.dp))
-            LatencyBadge(node.tcpingLatency)
-        }
-        if (node.downloadMbps > 0f) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "带宽: %.1f Mbps".format(node.downloadMbps),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
 private fun ProxyModeToggle(mode: ProxyMode, onModeSelected: (ProxyMode) -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -453,6 +423,7 @@ private fun ProxyModeOption(label: String, selected: Boolean, onClick: () -> Uni
 private fun ConnectButton(
     vpnState: VpnState,
     enabled: Boolean,
+    isTesting: Boolean = false,
     customLabel: String?,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?
@@ -470,6 +441,19 @@ private fun ConnectButton(
         if (pressed && enabled && !transitioning) 0.97f else 1f,
         tween(if (pressed) 90 else 140),
         label = "press"
+    )
+    val longPressEnabled = onLongClick != null && enabled && !transitioning
+    val longPressProgress by animateFloatAsState(
+        targetValue = if (pressed && longPressEnabled) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (pressed) {
+                LocalViewConfiguration.current.longPressTimeoutMillis.toInt()
+            } else {
+                120
+            },
+            easing = if (pressed) LinearEasing else FastOutSlowInEasing
+        ),
+        label = "smartConnectionLongPressProgress"
     )
     val pulseScale = if (transitioning) {
         val transition = rememberInfiniteTransition(label = "connectionPulse")
@@ -491,23 +475,43 @@ private fun ConnectButton(
                 label = "buttonImage"
             ) { bitmap ->
                 if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap,
-                        contentDescription = connectionLabel(vpnState),
-                        modifier = Modifier
-                            .size(buttonSize)
-                            .graphicsLayer {
-                                scaleX = pulseScale * pressScale
-                                scaleY = pulseScale * pressScale
-                            }
-                            .combinedClickable(
-                                enabled = enabled && !transitioning,
-                                interactionSource = interactionSource,
-                                indication = null,
-                                onClick = onClick,
-                                onLongClick = onLongClick
+                    Box(
+                        modifier = Modifier.size(buttonSize),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = connectionLabel(vpnState),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = pulseScale * pressScale
+                                    scaleY = pulseScale * pressScale
+                                }
+                                .combinedClickable(
+                                    enabled = enabled && !transitioning,
+                                    interactionSource = interactionSource,
+                                    indication = null,
+                                    onClick = onClick,
+                                    onLongClick = onLongClick
+                                )
+                        )
+                        if (isTesting) {
+                            // 智能连接开始后继续显示旋转进度，避免长按进度圈停在满格。
+                            CircularProgressIndicator(
+                                modifier = Modifier.fillMaxSize().padding(3.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 5.dp
                             )
-                    )
+                        } else if (longPressEnabled && longPressProgress > 0f) {
+                            CircularProgressIndicator(
+                                progress = { longPressProgress },
+                                modifier = Modifier.fillMaxSize().padding(3.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 5.dp
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1327,20 +1331,6 @@ private fun NodeMetric(label: String, value: String, color: Color, modifier: Mod
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         Text(value, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = color, maxLines = 1)
-    }
-}
-
-@Composable
-private fun LatencyBadge(latency: Int) {
-    val color = latencyColor(latency)
-    Surface(color = color.copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
-        Text(
-            "$latency ms",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = color,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
     }
 }
 
