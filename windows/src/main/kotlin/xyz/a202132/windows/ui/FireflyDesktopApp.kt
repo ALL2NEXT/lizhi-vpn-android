@@ -61,7 +61,6 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
@@ -1330,9 +1329,6 @@ private fun AppDrawer(state: DesktopAppState, controller: VpnController) {
                 DrawerItem(Icons.Outlined.Tune, "基础设定") {
                     controller.navigate(AppScreen.BASIC_SETTINGS)
                 }
-                DrawerItem(Icons.Outlined.Apps, "分应用代理") {
-                    controller.navigate(AppScreen.PROXY_SCOPE)
-                }
                 DrawerItem(Icons.Outlined.Star, "特色功能") {
                     controller.navigate(AppScreen.FEATURES)
                 }
@@ -1422,7 +1418,6 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
     val title = when (screen) {
         AppScreen.ACCOUNT_SETTINGS -> "账户设置"
         AppScreen.BASIC_SETTINGS -> "基础设定"
-        AppScreen.PROXY_SCOPE -> "分应用代理"
         AppScreen.FEATURES -> "特色功能"
         AppScreen.ABOUT -> "关于应用"
         else -> "FireflyVPN"
@@ -1449,10 +1444,6 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                 AppScreen.ACCOUNT_SETTINGS -> AccountSettingsContent(state, controller)
                 AppScreen.BASIC_SETTINGS -> {
                     BasicSettingsContent(state.settings, controller::updateSettings)
-                }
-                AppScreen.PROXY_SCOPE -> {
-                    InfoCard("当前范围", "整机 TUN")
-                    InfoCard("按应用代理", "Windows Filtering Platform 适配待接入")
                 }
                 AppScreen.FEATURES -> {
                     FeatureSettingsContent(

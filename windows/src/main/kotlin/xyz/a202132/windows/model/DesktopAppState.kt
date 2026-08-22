@@ -32,7 +32,6 @@ enum class AppScreen {
     NODE_LIST,
     ACCOUNT_SETTINGS,
     BASIC_SETTINGS,
-    PROXY_SCOPE,
     FEATURES,
     ABOUT
 }
