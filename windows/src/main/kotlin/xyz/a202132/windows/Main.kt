@@ -58,6 +58,8 @@ fun main() = application {
         title = "FireflyVPN",
         icon = painterResource("firefly.png"),
         state = windowState,
+        // Windows 端保持 Android 风格的固定比例，避免拉伸后布局无法恢复。
+        resizable = false,
         onCloseRequest = {
             if (trayAvailable) {
                 windowVisible = false
@@ -68,7 +70,10 @@ fun main() = application {
     ) {
         awtWindow.value = window
         LaunchedEffect(Unit) {
-            window.minimumSize = Dimension(390, 680)
+            // 使用窗口实际尺寸锁定最小和最大值，避免高 DPI 缩放下的尺寸偏差。
+            val fixedSize = Dimension(window.width, window.height)
+            window.minimumSize = fixedSize
+            window.maximumSize = fixedSize
         }
 
         FireflyTheme {
