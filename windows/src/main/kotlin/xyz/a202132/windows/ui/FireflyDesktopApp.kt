@@ -21,9 +21,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -43,6 +42,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,9 +50,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -112,11 +113,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -138,7 +136,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.PI
@@ -232,8 +229,6 @@ fun FireflyDesktopApp(controller: VpnController) {
 @Composable
 private fun MainScreen(state: DesktopAppState, controller: VpnController) {
     var showToolsMenu by remember { mutableStateOf(false) }
-    var swipeDistance by remember { mutableFloatStateOf(0f) }
-    val swipeProgress = (swipeDistance / 72f).coerceIn(0f, 1f)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -287,23 +282,7 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onVerticalDrag = { change, dragAmount ->
-                            if (dragAmount < 0f) {
-                                swipeDistance = (swipeDistance - dragAmount).coerceAtMost(90f)
-                                change.consume()
-                            }
-                        },
-                        onDragEnd = {
-                            if (swipeDistance >= 72f) controller.navigate(AppScreen.NODE_LIST)
-                            swipeDistance = 0f
-                        },
-                        onDragCancel = { swipeDistance = 0f }
-                    )
-                }
-                .padding(horizontal = 24.dp)
-                .graphicsLayer { translationY = -14f * swipeProgress },
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(32.dp))
@@ -335,10 +314,7 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
                 }
             )
             Spacer(Modifier.weight(1f))
-            NodeSwipeHint(
-                progress = swipeProgress,
-                onClick = { controller.navigate(AppScreen.NODE_LIST) }
-            )
+            NodeListEntry(onClick = { controller.navigate(AppScreen.NODE_LIST) })
             Spacer(Modifier.height(14.dp))
         }
     }
@@ -493,32 +469,55 @@ private fun connectionLabel(state: VpnState): String = when (state) {
 }
 
 @Composable
-private fun NodeSwipeHint(progress: Float, onClick: () -> Unit) {
-    val tint = Color(
-        red = TextSecondaryLight.red + (Primary.red - TextSecondaryLight.red) * progress,
-        green = TextSecondaryLight.green + (Primary.green - TextSecondaryLight.green) * progress,
-        blue = TextSecondaryLight.blue + (Primary.blue - TextSecondaryLight.blue) * progress
-    )
-    Column(
+private fun NodeListEntry(onClick: () -> Unit) {
+    Surface(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
     ) {
-        Icon(Icons.Default.KeyboardArrowUp, null, tint = tint, modifier = Modifier.size(24.dp))
-        Text(
-            if (progress >= 1f) "松开打开节点列表" else "向上滑动选择节点",
-            color = tint,
-            fontSize = 14.sp,
-            fontWeight = if (progress >= 1f) FontWeight.SemiBold else FontWeight.Normal
-        )
-        Spacer(Modifier.height(8.dp))
-        Box(
-            Modifier.width(96.dp).height(3.dp).clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f))
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(progress).background(Primary))
+            Surface(
+                modifier = Modifier.size(40.dp),
+                color = Primary.copy(alpha = 0.12f),
+                shape = CircleShape
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.List,
+                        contentDescription = null,
+                        tint = Primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "节点列表",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "点击选择节点",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = "打开节点列表",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
         }
     }
 }
@@ -563,127 +562,6 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
         Column(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
-            val density = LocalDensity.current
-            val subscriptionSwipeThresholdPx = with(density) { 72.dp.toPx() }
-            val currentSubscriptionIndex = state.subscriptionGroups.indexOfFirst {
-                it.first == state.selectedSubscriptionSourceId
-            }.coerceAtLeast(0)
-            val canSwipeSubscriptions =
-                !state.isTesting &&
-                    state.nodeCategory == NodeCategory.SUBSCRIPTION &&
-                    state.subscriptionGroups.size > 1
-            var subscriptionSwipeOffsetPx by remember { mutableFloatStateOf(0f) }
-            var isSubscriptionSwiping by remember { mutableStateOf(false) }
-            val subscriptionSwipeVisualOffsetPx by animateFloatAsState(
-                targetValue = if (isSubscriptionSwiping) subscriptionSwipeOffsetPx else 0f,
-                animationSpec = if (isSubscriptionSwiping) {
-                    tween(0)
-                } else {
-                    tween(durationMillis = 180, easing = FastOutSlowInEasing)
-                },
-                label = "subscriptionSwipeOffset"
-            )
-            val subscriptionSwipeProgress =
-                (abs(subscriptionSwipeVisualOffsetPx) / subscriptionSwipeThresholdPx)
-                    .coerceIn(0f, 1f)
-            val subscriptionSwipeModifier = Modifier
-                .graphicsLayer {
-                    translationX = subscriptionSwipeVisualOffsetPx
-                    alpha = 1f - subscriptionSwipeProgress * 0.12f
-                }
-                .pointerInput(
-                    canSwipeSubscriptions,
-                    currentSubscriptionIndex,
-                    state.subscriptionGroups,
-                    subscriptionSwipeThresholdPx
-                ) {
-                    if (!canSwipeSubscriptions) return@pointerInput
-                    val gestureStartThresholdPx = with(density) { 12.dp.toPx() }
-                    awaitEachGesture {
-                        val down = awaitFirstDown(
-                            requireUnconsumed = false,
-                            pass = PointerEventPass.Final
-                        )
-                            var horizontalDrag = false
-                            var cancelled = false
-                            var totalX = 0f
-                            var totalY = 0f
-                            var activePointerId = down.id
-
-                            while (!cancelled) {
-                                val event = awaitPointerEvent(PointerEventPass.Final)
-                                val change = event.changes.firstOrNull { it.id == activePointerId }
-                                if (change == null) {
-                                    cancelled = true
-                                    continue
-                                }
-                                if (!change.pressed) {
-                                    if (horizontalDrag) {
-                                        val targetIndex = when {
-                                            subscriptionSwipeOffsetPx <= -subscriptionSwipeThresholdPx &&
-                                                currentSubscriptionIndex < state.subscriptionGroups.lastIndex ->
-                                                currentSubscriptionIndex + 1
-                                            subscriptionSwipeOffsetPx >= subscriptionSwipeThresholdPx &&
-                                                currentSubscriptionIndex > 0 -> currentSubscriptionIndex - 1
-                                            else -> currentSubscriptionIndex
-                                        }
-                                        isSubscriptionSwiping = false
-                                        subscriptionSwipeOffsetPx = 0f
-                                        if (targetIndex != currentSubscriptionIndex) {
-                                            controller.setSubscriptionSource(
-                                                state.subscriptionGroups[targetIndex].first
-                                            )
-                                        }
-                                    }
-                                    cancelled = true
-                                    continue
-                                }
-
-                                val delta = change.positionChange()
-                                totalX += delta.x
-                                totalY += delta.y
-                                if (!horizontalDrag) {
-                                    if (abs(totalY) >= gestureStartThresholdPx &&
-                                        abs(totalY) > abs(totalX)
-                                    ) {
-                                        // Let LazyColumn own vertical dragging and scrolling.
-                                        cancelled = true
-                                        continue
-                                    }
-                                    if (abs(totalX) < gestureStartThresholdPx ||
-                                        abs(totalX) <= abs(totalY)
-                                    ) {
-                                        continue
-                                    }
-                                    horizontalDrag = true
-                                    subscriptionSwipeOffsetPx = 0f
-                                    isSubscriptionSwiping = true
-                                }
-
-                                val requestedOffset = subscriptionSwipeOffsetPx + delta.x
-                                val hasTarget = when {
-                                    requestedOffset < 0f ->
-                                        currentSubscriptionIndex < state.subscriptionGroups.lastIndex
-                                    requestedOffset > 0f -> currentSubscriptionIndex > 0
-                                    else -> true
-                                }
-                                val adjustedDrag = if (hasTarget) delta.x else delta.x * 0.25f
-                                subscriptionSwipeOffsetPx =
-                                    (subscriptionSwipeOffsetPx + adjustedDrag).coerceIn(
-                                        -subscriptionSwipeThresholdPx * 1.2f,
-                                        subscriptionSwipeThresholdPx * 1.2f
-                                    )
-                                change.consume()
-                            }
-
-                        if (horizontalDrag && !isSubscriptionSwiping) {
-                            subscriptionSwipeOffsetPx = 0f
-                        } else if (!horizontalDrag) {
-                            isSubscriptionSwiping = false
-                            subscriptionSwipeOffsetPx = 0f
-                        }
-                    }
-                }
             if (state.isTesting || state.isLoadingNodes) {
                 LinearProgressIndicator(Modifier.fillMaxWidth(), color = Primary)
                 Spacer(Modifier.height(10.dp))
@@ -710,7 +588,7 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
 
             if (state.visibleNodes.isEmpty()) {
                 Box(
-                    Modifier.fillMaxSize().then(subscriptionSwipeModifier),
+                    Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -722,21 +600,33 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
                     }
                 }
             } else {
-                Box(Modifier.fillMaxSize().then(subscriptionSwipeModifier)) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(state.visibleNodes, key = DesktopNode::id) { node ->
-                            NodeListItem(
-                                node = node,
-                                selected = node.id == state.selectedNodeId,
-                                enabled = !state.isTesting,
-                                onSelect = { controller.selectAndConnectNode(node.id) },
-                                onFavorite = { controller.toggleFavorite(node.id) }
+                val listState = rememberLazyListState()
+                val listScrollScope = rememberCoroutineScope()
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    listScrollScope.launch {
+                                        listState.scrollBy(-dragAmount)
+                                    }
+                                }
                             )
-                        }
+                        },
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(state.visibleNodes, key = DesktopNode::id) { node ->
+                        NodeListItem(
+                            node = node,
+                            selected = node.id == state.selectedNodeId,
+                            enabled = !state.isTesting,
+                            onSelect = { controller.selectAndConnectNode(node.id) },
+                            onFavorite = { controller.toggleFavorite(node.id) }
+                        )
                     }
                 }
             }
