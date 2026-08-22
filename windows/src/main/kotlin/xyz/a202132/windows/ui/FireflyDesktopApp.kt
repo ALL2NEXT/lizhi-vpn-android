@@ -1381,7 +1381,7 @@ private fun AppDrawer(state: DesktopAppState, controller: VpnController) {
                 DrawerItem(Icons.Outlined.Tune, "基础设定") {
                     controller.navigate(AppScreen.BASIC_SETTINGS)
                 }
-                DrawerItem(Icons.Outlined.Apps, "代理作用域") {
+                DrawerItem(Icons.Outlined.Apps, "分应用代理") {
                     controller.navigate(AppScreen.PROXY_SCOPE)
                 }
                 DrawerItem(Icons.Outlined.Star, "特色功能") {
@@ -1467,7 +1467,7 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
     val title = when (screen) {
         AppScreen.ACCOUNT_SETTINGS -> "账户设置"
         AppScreen.BASIC_SETTINGS -> "基础设定"
-        AppScreen.PROXY_SCOPE -> "代理作用域"
+        AppScreen.PROXY_SCOPE -> "分应用代理"
         AppScreen.FEATURES -> "特色功能"
         AppScreen.ABOUT -> "关于应用"
         else -> "FireflyVPN"

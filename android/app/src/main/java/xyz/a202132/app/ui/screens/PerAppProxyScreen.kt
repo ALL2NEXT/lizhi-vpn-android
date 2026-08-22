@@ -15,8 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Deselect
+import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +35,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import xyz.a202132.app.data.model.PerAppProxyMode
 import xyz.a202132.app.ui.theme.Primary
 import xyz.a202132.app.viewmodel.AppInfo
 import xyz.a202132.app.viewmodel.PerAppProxyViewModel
@@ -68,7 +67,6 @@ fun ProxyScopeScreen(
     BackHandler { onBack(hasChanges) }
 
     val isEnabled by viewModel.isEnabled.collectAsStateWithLifecycle()
-    val mode by viewModel.mode.collectAsStateWithLifecycle()
     val selectedPackages by viewModel.selectedPackages.collectAsStateWithLifecycle()
     val filteredApps by viewModel.filteredApps.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -104,7 +102,23 @@ fun ProxyScopeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("代理作用域") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("分应用代理")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = isEnabled,
+                            onCheckedChange = { viewModel.setEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Primary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surface,
+                                uncheckedBorderColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { onBack(viewModel.hasChanges.value) }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
@@ -113,11 +127,11 @@ fun ProxyScopeScreen(
                 actions = {
                     // 反选按钮
                     IconButton(onClick = { viewModel.invertSelection() }) {
-                        Icon(Icons.Filled.SwapVert, contentDescription = "反选")
+                        Icon(Icons.Filled.Flip, contentDescription = "反选")
                     }
                     // 取消全选按钮
                     IconButton(onClick = { viewModel.deselectAll() }) {
-                        Icon(Icons.Filled.Clear, contentDescription = "取消全选")
+                        Icon(Icons.Filled.Deselect, contentDescription = "取消选择")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -176,84 +190,6 @@ fun ProxyScopeScreen(
                 }
             }
 
-            // 设置区域
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    // 启用开关
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "启用分应用代理",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Switch(
-                            checked = isEnabled,
-                            onCheckedChange = { viewModel.setEnabled(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = Primary,
-                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                uncheckedTrackColor = MaterialTheme.colorScheme.surface,
-                                uncheckedBorderColor = MaterialTheme.colorScheme.outline
-                            )
-                        )
-                    }
-                    
-                    // 分隔线
-                    Divider(
-                        modifier = Modifier.padding(vertical = 12.dp),
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                    )
-                    
-                    // 模式选择
-                    Text(
-                        text = "分应用代理模式",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // 代理模式按钮
-                        ModeButton(
-                            title = "代理模式",
-                            subtitle = "仅代理选中",
-                            isSelected = mode == PerAppProxyMode.WHITELIST,
-                            enabled = isEnabled,
-                            onClick = { viewModel.setMode(PerAppProxyMode.WHITELIST) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        
-                        // 绕过模式按钮
-                        ModeButton(
-                            title = "绕过模式",
-                            subtitle = "绕过选中",
-                            isSelected = mode == PerAppProxyMode.BLACKLIST,
-                            enabled = isEnabled,
-                            onClick = { viewModel.setMode(PerAppProxyMode.BLACKLIST) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-            
             // 过滤选项
             Row(
                 modifier = Modifier
@@ -369,80 +305,8 @@ fun ProxyScopeScreen(
                 }
             }
             
-            // 提示信息 (如果没显示权限警告，则显示普通提示)
-            if (isEnabled && !isPermissionDenied) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Primary.copy(alpha = 0.1f)
-                    )
-                ) {
-                    Text(
-                        text = if (mode == PerAppProxyMode.WHITELIST) {
-                            "💡 代理模式：只有选中的应用流量会经过 VPN"
-                        } else {
-                            "💡 绕过模式：选中的应用流量会绕过 VPN 直连"
-                        },
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
         }
 
-    }
-}
-
-/**
- * 模式选择按钮
- */
-@Composable
-private fun ModeButton(
-    title: String,
-    subtitle: String,
-    isSelected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled) { onClick() },
-        shape = RoundedCornerShape(12.dp),
-        color = if (isSelected && enabled) Primary else MaterialTheme.colorScheme.surface,
-        border = if (!isSelected && enabled) {
-            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-        } else null
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = when {
-                    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-                    isSelected -> Color.White
-                    else -> MaterialTheme.colorScheme.onSurface
-                }
-            )
-            Text(
-                text = subtitle,
-                fontSize = 12.sp,
-                color = when {
-                    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    isSelected -> Color.White.copy(alpha = 0.8f)
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-        }
     }
 }
 

@@ -259,7 +259,7 @@ class BoxPlatformInterface(
             builder.addRoute("::", 0)
         }
         
-        // 分应用代理 - 返回是否使用了白名单模式
+        // 分应用代理固定为仅代理选中应用，并返回是否使用了白名单模式
         val usedWhitelistMode = applyPerAppProxy(builder)
         
         // 排除自身应用（仅在非白名单模式时）
@@ -285,7 +285,6 @@ class BoxPlatformInterface(
      */
     private fun applyPerAppProxy(builder: android.net.VpnService.Builder): Boolean {
         val isPerAppEnabled = perAppProxySettings.enabled
-        val mode = perAppProxySettings.mode
         val selectedPackages = perAppProxySettings.selectedPackages
         
         if (!isPerAppEnabled) {
@@ -293,37 +292,19 @@ class BoxPlatformInterface(
             return false
         }
         
-        Log.d(TAG, "Per-app proxy enabled, mode: $mode, selected: ${selectedPackages.size} apps")
-        
-        when (mode) {
-            xyz.a202132.app.data.model.PerAppProxyMode.WHITELIST -> {
-                // 代理模式：只允许选中的应用使用 VPN
-                if (selectedPackages.isEmpty()) {
-                    Log.w(TAG, "Whitelist mode but no apps selected - no apps will use VPN")
-                }
-                selectedPackages.forEach { pkg ->
-                    try {
-                        builder.addAllowedApplication(pkg)
-                        Log.d(TAG, "Allowed app: $pkg")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to allow app: $pkg", e)
-                    }
-                }
-                return true // 使用了白名单模式
-            }
-            xyz.a202132.app.data.model.PerAppProxyMode.BLACKLIST -> {
-                // 绕过模式：排除选中的应用
-                selectedPackages.forEach { pkg ->
-                    try {
-                        builder.addDisallowedApplication(pkg)
-                        Log.d(TAG, "Disallowed app: $pkg")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to disallow app: $pkg", e)
-                    }
-                }
-                return false // 未使用白名单模式
+        Log.d(TAG, "Per-app proxy enabled, selected: ${selectedPackages.size} apps")
+        if (selectedPackages.isEmpty()) {
+            Log.w(TAG, "Per-app proxy enabled but no apps selected - no apps will use VPN")
+        }
+        selectedPackages.forEach { pkg ->
+            try {
+                builder.addAllowedApplication(pkg)
+                Log.d(TAG, "Allowed app: $pkg")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to allow app: $pkg", e)
             }
         }
+        return true // 固定使用仅代理选中的白名单模式
     }
     
     override fun useProcFS(): Boolean {

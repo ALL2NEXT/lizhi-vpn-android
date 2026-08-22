@@ -11,7 +11,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import xyz.a202132.app.data.model.PerAppProxyMode
 import xyz.a202132.app.data.repository.SettingsRepository
 
 /**
@@ -50,9 +49,6 @@ class PerAppProxyViewModel(application: Application) : AndroidViewModel(applicat
     // 设置状态
     val isEnabled: StateFlow<Boolean> = settingsRepository.perAppProxyEnabled
         .stateIn(viewModelScope, SharingStarted.Lazily, false)
-    
-    val mode: StateFlow<PerAppProxyMode> = settingsRepository.perAppProxyMode
-        .stateIn(viewModelScope, SharingStarted.Lazily, PerAppProxyMode.WHITELIST)
     
     val selectedPackages: StateFlow<Set<String>> = settingsRepository.selectedPackages
         .stateIn(viewModelScope, SharingStarted.Lazily, emptySet())
@@ -177,16 +173,6 @@ class PerAppProxyViewModel(application: Application) : AndroidViewModel(applicat
     fun setEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setPerAppProxyEnabled(enabled)
-            _hasChanges.value = true
-        }
-    }
-    
-    /**
-     * 设置代理模式
-     */
-    fun setMode(mode: PerAppProxyMode) {
-        viewModelScope.launch {
-            settingsRepository.setPerAppProxyMode(mode)
             _hasChanges.value = true
         }
     }

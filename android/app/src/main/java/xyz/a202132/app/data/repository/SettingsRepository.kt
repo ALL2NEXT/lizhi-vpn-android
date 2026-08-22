@@ -9,14 +9,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
-import xyz.a202132.app.data.model.PerAppProxyMode
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.UrlTestTargets
 
 data class PerAppProxySettings(
     val enabled: Boolean,
-    val mode: PerAppProxyMode,
     val selectedPackages: Set<String>
 )
 
@@ -46,7 +44,6 @@ class SettingsRepository(private val context: Context) {
         
         // 分应用代理设置
         private val PER_APP_PROXY_ENABLED = booleanPreferencesKey("per_app_proxy_enabled")
-        private val PER_APP_PROXY_MODE = stringPreferencesKey("per_app_proxy_mode")
         private val SELECTED_PACKAGES = stringSetPreferencesKey("selected_packages")
 
         // 订阅列表缓存
@@ -115,15 +112,6 @@ class SettingsRepository(private val context: Context) {
         preferences[PER_APP_PROXY_ENABLED] ?: false
     }
     
-    val perAppProxyMode: Flow<PerAppProxyMode> = context.dataStore.data.map { preferences ->
-        val mode = preferences[PER_APP_PROXY_MODE] ?: PerAppProxyMode.WHITELIST.name
-        try {
-            PerAppProxyMode.valueOf(mode)
-        } catch (e: Exception) {
-            PerAppProxyMode.WHITELIST
-        }
-    }
-    
     // 分应用代理 - 选中的应用包名列表
     val selectedPackages: Flow<Set<String>> = context.dataStore.data.map { preferences ->
         preferences[SELECTED_PACKAGES] ?: emptySet()
@@ -190,10 +178,6 @@ class SettingsRepository(private val context: Context) {
                 ?: xyz.a202132.app.AppConfig.HYSTERIA_DOWN_MBPS).coerceAtLeast(0),
             perAppProxy = PerAppProxySettings(
                 enabled = preferences[PER_APP_PROXY_ENABLED] ?: false,
-                mode = enumValueOrDefault(
-                    preferences[PER_APP_PROXY_MODE],
-                    PerAppProxyMode.WHITELIST
-                ),
                 selectedPackages = preferences[SELECTED_PACKAGES] ?: emptySet()
             )
         )
@@ -270,12 +254,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPerAppProxyEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PER_APP_PROXY_ENABLED] = enabled
-        }
-    }
-    
-    suspend fun setPerAppProxyMode(mode: PerAppProxyMode) {
-        context.dataStore.edit { preferences ->
-            preferences[PER_APP_PROXY_MODE] = mode.name
         }
     }
     

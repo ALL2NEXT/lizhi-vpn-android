@@ -97,7 +97,7 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Apps,
-                title = "代理作用域",
+                title = "分应用代理",
                 onClick = {
                     onOpenProxyScope()
                 }
