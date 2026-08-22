@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,7 @@ import xyz.a202132.app.R
 import xyz.a202132.app.data.model.AccountInfo
 import xyz.a202132.app.ui.dialogs.AboutDialog
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DrawerContent(
     onCheckUpdate: () -> Unit,
@@ -67,6 +69,8 @@ fun DrawerContent(
         modifier = Modifier
             .fillMaxHeight()
             .width(280.dp)
+            // 全面屏模式下避开状态栏，避免顶部自定义图片被系统状态栏遮挡。
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
             .padding(bottom = 24.dp)
     ) {
         val drawerImage = customImage
