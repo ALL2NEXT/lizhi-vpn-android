@@ -41,6 +41,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.a202132.app.AppConfig
+import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.network.NetworkClient
@@ -121,9 +122,10 @@ fun MainScreen(
     
     // Collect状态
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
+    val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
+    val favoriteSourceNodeIds by viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
@@ -299,52 +301,16 @@ fun MainScreen(
             ) {
                 Spacer(modifier = Modifier.height(32.dp))
                 
-                // 当前节点信息
-                if (currentNode != null) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "当前节点",
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = currentNode!!.getFlagEmoji(),
-                                fontSize = 24.sp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = currentNode!!.getDisplayName(),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        
-                        if (currentNode!!.latency > 0) {
-                            LatencyBadge(node = currentNode!!)
-                        }
-
-                        if (currentNode!!.downloadMbps > 0f) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "带宽: %.1f Mbps".format(currentNode!!.downloadMbps),
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                } else if (isLoading) {
-                    Text(
-                        text = "正在获取节点...",
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                // 主页直接复用节点列表卡片，避免额外的当前节点、节点名和测速提示文字。
+                currentNode?.let { node ->
+                    NodeListItem(
+                        node = node,
+                        isSelected = node.id == selectedNodeId,
+                        isFavorite = node.source == NodeSource.FAVORITE ||
+                            favoriteSourceNodeIds.contains(node.id),
+                        enabled = !isTesting,
+                        onClick = onOpenNodeList,
+                        onToggleFavorite = { viewModel.toggleFavoriteNode(node) }
                     )
                 }
                 
