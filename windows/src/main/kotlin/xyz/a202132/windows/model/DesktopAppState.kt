@@ -149,6 +149,7 @@ data class DesktopBackendSettings(
     val feedbackEmail: String = "",
     val feedbackUrl: String = "",
     val githubUrl: String = "",
+    val telegramUrl: String = "",
     val registrationEnabled: Boolean = true,
     val requireAdminRegistrationCode: Boolean = false
 )

@@ -236,6 +236,7 @@ class BackendClient(
             feedbackEmail = settings?.string("feedbackEmail").orEmpty(),
             feedbackUrl = settings?.string("feedbackUrl").orEmpty(),
             githubUrl = settings?.string("githubUrl").orEmpty(),
+            telegramUrl = settings?.string("telegramUrl").orEmpty(),
             registrationEnabled = settings?.get("registrationEnabled")?.asBoolean ?: true,
             requireAdminRegistrationCode =
                 settings?.get("requireAdminRegistrationCode")?.asBoolean ?: false

@@ -50,6 +50,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Language
@@ -61,8 +62,11 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -107,6 +111,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.positionChange
@@ -228,27 +233,8 @@ fun FireflyDesktopApp(controller: VpnController) {
 @Composable
 private fun MainScreen(state: DesktopAppState, controller: VpnController) {
     var showToolsMenu by remember { mutableStateOf(false) }
-    var showBackendDialog by remember { mutableStateOf(false) }
-    var backendUrlDraft by remember(state.backendUrl) { mutableStateOf(state.backendUrl) }
-    var titleClickCount by remember { mutableStateOf(0) }
-    var lastTitleClickAt by remember { mutableStateOf(0L) }
     var swipeDistance by remember { mutableFloatStateOf(0f) }
     val swipeProgress = (swipeDistance / 72f).coerceIn(0f, 1f)
-
-    fun handleBackendTitleClick() {
-        val now = System.currentTimeMillis()
-        titleClickCount = if (lastTitleClickAt > 0L && now - lastTitleClickAt <= 1_500L) {
-            titleClickCount + 1
-        } else {
-            1
-        }
-        lastTitleClickAt = now
-        if (titleClickCount >= 5) {
-            titleClickCount = 0
-            backendUrlDraft = state.backendUrl
-            showBackendDialog = true
-        }
-    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -262,7 +248,6 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
                 title = {
                     Text(
                         "FireflyVPN",
-                        modifier = Modifier.clickable(onClick = ::handleBackendTitleClick),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
@@ -359,32 +344,6 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
         }
     }
 
-    if (showBackendDialog) {
-        AlertDialog(
-            onDismissRequest = { showBackendDialog = false },
-            title = { Text("切换后台") },
-            text = {
-                OutlinedTextField(
-                    value = backendUrlDraft,
-                    onValueChange = { backendUrlDraft = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("后端地址") },
-                    placeholder = { Text("https://example.com") }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (controller.updateBackendUrl(backendUrlDraft)) showBackendDialog = false
-                }) {
-                    Text("保存并刷新")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBackendDialog = false }) { Text("取消") }
-            }
-        )
-    }
 }
 
 @Composable
@@ -1377,25 +1336,6 @@ private fun AppDrawer(state: DesktopAppState, controller: VpnController) {
                 DrawerItem(Icons.Outlined.Star, "特色功能") {
                     controller.navigate(AppScreen.FEATURES)
                 }
-                if (state.backendSettings.websiteUrl.isNotBlank()) {
-                    DrawerItem(Icons.Default.Language, "官方网站") {
-                        browse(state.backendSettings.websiteUrl)
-                        controller.closeDrawer()
-                    }
-                }
-                if (state.backendSettings.feedbackEmail.isNotBlank() ||
-                    state.backendSettings.feedbackUrl.isNotBlank()
-                ) {
-                    DrawerItem(Icons.Outlined.Info, "问题反馈") {
-                        if (state.backendSettings.feedbackEmail.isNotBlank()) {
-                            writeClipboard(state.backendSettings.feedbackEmail)
-                        }
-                        if (state.backendSettings.feedbackUrl.isNotBlank()) {
-                            browse(state.backendSettings.feedbackUrl)
-                        }
-                        controller.closeDrawer()
-                    }
-                }
                 DrawerItem(Icons.Outlined.Info, "关于应用") {
                     controller.navigate(AppScreen.ABOUT)
                 }
@@ -1454,6 +1394,31 @@ private fun DrawerItem(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controller: VpnController) {
+    var showBackendDialog by remember { mutableStateOf(false) }
+    var backendUrlDraft by remember(state.backendUrl) { mutableStateOf(state.backendUrl) }
+    var iconClickCount by remember { mutableStateOf(0) }
+    var lastIconClickAt by remember { mutableStateOf(0L) }
+    val appIcon = remember { loadBitmapResource("firefly.png") }
+
+    LaunchedEffect(screen) {
+        if (screen != AppScreen.ABOUT) showBackendDialog = false
+    }
+
+    fun handleAppIconClick() {
+        val now = System.currentTimeMillis()
+        iconClickCount = if (lastIconClickAt > 0L && now - lastIconClickAt <= 1_500L) {
+            iconClickCount + 1
+        } else {
+            1
+        }
+        lastIconClickAt = now
+        if (iconClickCount >= 5) {
+            iconClickCount = 0
+            backendUrlDraft = state.backendUrl
+            showBackendDialog = true
+        }
+    }
+
     val title = when (screen) {
         AppScreen.ACCOUNT_SETTINGS -> "账户设置"
         AppScreen.BASIC_SETTINGS -> "基础设定"
@@ -1498,8 +1463,69 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                     )
                 }
                 AppScreen.ABOUT -> {
+                    appIcon?.let {
+                        Image(
+                            bitmap = it,
+                            contentDescription = "FireflyVPN 应用图标",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .size(88.dp)
+                                .align(Alignment.CenterHorizontally)
+                                .clickable(onClick = ::handleAppIconClick)
+                        )
+                    }
                     Text("FireflyVPN", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Primary)
                     Text("Windows 原生客户端 3.0.2", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val updateUrl = state.backendSettings.githubUrl.ifBlank {
+                        state.backendSettings.websiteUrl
+                    }
+                    val hasFeedbackAction = state.backendSettings.feedbackEmail.isNotBlank() ||
+                        state.backendSettings.feedbackUrl.isNotBlank()
+                    if (
+                        updateUrl.isNotBlank() ||
+                        state.backendSettings.websiteUrl.isNotBlank() ||
+                        hasFeedbackAction ||
+                        state.backendSettings.githubUrl.isNotBlank() ||
+                        state.backendSettings.telegramUrl.isNotBlank()
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            if (updateUrl.isNotBlank()) {
+                                AboutIconAction(Icons.Outlined.SystemUpdate, "检查更新") {
+                                    // Windows 暂无独立更新包，先打开项目发布页检查新版本。
+                                    browse(updateUrl)
+                                }
+                            }
+                            if (state.backendSettings.websiteUrl.isNotBlank()) {
+                                AboutIconAction(Icons.Default.Language, "官网") {
+                                    browse(state.backendSettings.websiteUrl)
+                                }
+                            }
+                            if (hasFeedbackAction) {
+                                AboutIconAction(Icons.Outlined.Email, "邮箱") {
+                                    if (state.backendSettings.feedbackEmail.isNotBlank()) {
+                                        writeClipboard(state.backendSettings.feedbackEmail)
+                                    }
+                                    if (state.backendSettings.feedbackUrl.isNotBlank()) {
+                                        browse(state.backendSettings.feedbackUrl)
+                                    }
+                                }
+                            }
+                            if (state.backendSettings.githubUrl.isNotBlank()) {
+                                AboutIconAction(Icons.Outlined.Code, "GitHub") {
+                                    browse(state.backendSettings.githubUrl)
+                                }
+                            }
+                            if (state.backendSettings.telegramUrl.isNotBlank()) {
+                                AboutIconAction(Icons.AutoMirrored.Outlined.Send, "Telegram") {
+                                    browse(state.backendSettings.telegramUrl)
+                                }
+                            }
+                        }
+                    }
                     InfoCard("sing-box", coreLabel(state.coreStatus))
                     InfoCard(
                         "后台",
@@ -1509,19 +1535,71 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                             "未连接"
                         }
                     )
-                    TextButton(onClick = {
-                        browse(
-                            state.backendSettings.githubUrl.ifBlank {
-                                "https://github.com/SagerNet/sing-box"
-                            }
-                        )
-                    }) {
-                        Text("查看项目主页")
-                    }
                 }
                 else -> Unit
             }
         }
+    }
+
+    if (screen == AppScreen.ABOUT && showBackendDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackendDialog = false },
+            title = { Text("切换后台") },
+            text = {
+                OutlinedTextField(
+                    value = backendUrlDraft,
+                    onValueChange = { backendUrlDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("后端地址") },
+                    placeholder = { Text("https://example.com") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (controller.updateBackendUrl(backendUrlDraft)) showBackendDialog = false
+                }) {
+                    Text("保存并刷新")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackendDialog = false }) { Text("取消") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun AboutIconAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(60.dp)
+    ) {
+        Surface(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onClick),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+            shape = CircleShape
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = Primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
