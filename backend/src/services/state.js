@@ -142,6 +142,7 @@ export function normalizeSettings(value) {
     feedbackEmail: cleanText(settings.feedbackEmail),
     feedbackUrl: cleanText(settings.feedbackUrl),
     githubUrl: cleanText(settings.githubUrl),
+    telegramUrl: cleanText(settings.telegramUrl),
     nodeRequestTimeoutMs: Number.isFinite(timeout)
       ? Math.round(Math.min(Math.max(timeout, 5000), 60000))
       : 25000,

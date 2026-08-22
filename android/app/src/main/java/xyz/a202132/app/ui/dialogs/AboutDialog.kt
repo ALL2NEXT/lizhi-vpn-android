@@ -1,42 +1,76 @@
 package xyz.a202132.app.ui.dialogs
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import xyz.a202132.app.BuildConfig
+import android.widget.Toast
+import xyz.a202132.app.R
 import xyz.a202132.app.ui.theme.Primary
 
 @Composable
 fun AboutDialog(
     githubUrl: String = "",
+    websiteUrl: String = "",
+    feedbackEmail: String = "",
+    feedbackUrl: String = "",
+    showUpdateAction: Boolean = false,
+    onCheckUpdate: () -> Unit = {},
+    onOpenBackendDialog: () -> Unit = {},
+    telegramUrl: String = "",
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val releasesUrl = if (githubUrl.isNotBlank()) "$githubUrl/releases" else ""
+    val hasFeedbackAction = feedbackEmail.isNotBlank() || feedbackUrl.isNotBlank()
+    var iconClickCount by remember { mutableIntStateOf(0) }
+    var lastIconClickAt by remember { mutableLongStateOf(0L) }
+
+    fun handleAppIconClick() {
+        val now = SystemClock.elapsedRealtime()
+        iconClickCount = if (
+            lastIconClickAt > 0L && now - lastIconClickAt <= 1_500L
+        ) {
+            iconClickCount + 1
+        } else {
+            1
+        }
+        lastIconClickAt = now
+        if (iconClickCount >= 5) {
+            iconClickCount = 0
+            onDismiss()
+            onOpenBackendDialog()
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -52,11 +86,6 @@ fun AboutDialog(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                )
                 .padding(
                     start = 14.dp,
                     top = verticalSafePadding,
@@ -73,6 +102,16 @@ fun AboutDialog(
             val iconSize = if (isLargeScreen) 88.dp else 64.dp
             val sectionSpacer = if (isLargeScreen) 24.dp else 14.dp
             val itemSpacer = if (isLargeScreen) 16.dp else 10.dp
+
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss
+                    )
+            )
 
             Surface(
                 modifier = Modifier
@@ -113,10 +152,11 @@ fun AboutDialog(
                     }
                     Image(
                         bitmap = iconBitmap,
-                        contentDescription = "App Icon",
+                        contentDescription = "FireflyVPN 应用图标",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .size(iconSize)
+                            .clickable(onClick = ::handleAppIconClick)
                     )
 
                     Spacer(modifier = Modifier.height(if (isLargeScreen) 16.dp else 10.dp))
@@ -148,6 +188,99 @@ fun AboutDialog(
                         textAlign = TextAlign.Center,
                         lineHeight = 22.sp
                     )
+
+                    if (
+                        showUpdateAction ||
+                        websiteUrl.isNotBlank() ||
+                        hasFeedbackAction ||
+                        githubUrl.isNotBlank() ||
+                        telegramUrl.isNotBlank()
+                    ) {
+                        Spacer(modifier = Modifier.height(if (isLargeScreen) 20.dp else 14.dp))
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (showUpdateAction) {
+                                AboutIconAction(
+                                    icon = Icons.Outlined.SystemUpdate,
+                                    contentDescription = "检查更新",
+                                    onClick = {
+                                        onDismiss()
+                                        onCheckUpdate()
+                                    }
+                                )
+                            }
+
+                            if (websiteUrl.isNotBlank()) {
+                                AboutIconAction(
+                                    icon = Icons.Outlined.Language,
+                                    contentDescription = "官网",
+                                    onClick = {
+                                        onDismiss()
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
+                                        )
+                                    }
+                                )
+                            }
+
+                            if (hasFeedbackAction) {
+                                AboutIconAction(
+                                    icon = Icons.Outlined.Email,
+                                    contentDescription = "邮箱",
+                                    onClick = {
+                                        if (feedbackEmail.isNotBlank()) {
+                                            val clipboard = context.getSystemService(
+                                                Context.CLIPBOARD_SERVICE
+                                            ) as ClipboardManager
+                                            clipboard.setPrimaryClip(
+                                                ClipData.newPlainText("email", feedbackEmail)
+                                            )
+                                            Toast.makeText(
+                                                context,
+                                                "邮箱已复制",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                        onDismiss()
+                                        if (feedbackUrl.isNotBlank()) {
+                                            context.startActivity(
+                                                Intent(Intent.ACTION_VIEW, Uri.parse(feedbackUrl))
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+
+                            if (githubUrl.isNotBlank()) {
+                                AboutIconAction(
+                                    painter = painterResource(id = R.drawable.ic_github),
+                                    contentDescription = "GitHub",
+                                    onClick = {
+                                        onDismiss()
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse(githubUrl))
+                                        )
+                                    }
+                                )
+                            }
+
+                            if (telegramUrl.isNotBlank()) {
+                                AboutIconAction(
+                                    painter = painterResource(id = R.drawable.ic_telegram),
+                                    contentDescription = "Telegram",
+                                    onClick = {
+                                        onDismiss()
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse(telegramUrl))
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(sectionSpacer))
 
@@ -201,88 +334,6 @@ fun AboutDialog(
 
                     Spacer(modifier = Modifier.height(itemSpacer))
 
-                    // 版本 - 可点击查看发布版本（仅当设置了 GitHub URL 时）
-                    if (releasesUrl.isNotBlank()) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(releasesUrl))
-                                    context.startActivity(intent)
-                                },
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.NewReleases,
-                                    contentDescription = null,
-                                    tint = Primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = "版本 ${BuildConfig.VERSION_NAME}",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = "查看更新 →",
-                                    fontSize = 12.sp,
-                                    color = Primary
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(if (isLargeScreen) 10.dp else 8.dp))
-                    }
-
-                    // 源代码 - 可点击跳转至 GitHub（仅当已设置 GitHub URL 时）
-                    if (githubUrl.isNotBlank()) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(githubUrl))
-                                    context.startActivity(intent)
-                                },
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Code,
-                                    contentDescription = null,
-                                    tint = Primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = "项目源代码",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = "GitHub →",
-                                    fontSize = 12.sp,
-                                    color = Primary
-                                )
-                            }
-                        }
-                    }
-
                     Spacer(modifier = Modifier.height(sectionSpacer))
 
                     // Close button
@@ -302,5 +353,49 @@ fun AboutDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AboutIconAction(
+    icon: ImageVector? = null,
+    painter: Painter? = null,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            modifier = Modifier
+                .size(52.dp)
+                .clickable(onClick = onClick),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+            shape = CircleShape
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = contentDescription,
+                        tint = Primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else if (painter != null) {
+                    Icon(
+                        painter = painter,
+                        contentDescription = contentDescription,
+                        tint = Primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = contentDescription,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

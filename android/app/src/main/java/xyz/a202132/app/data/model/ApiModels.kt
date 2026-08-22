@@ -59,6 +59,9 @@ data class BackendAppSettings(
     @SerializedName("githubUrl")
     val githubUrl: String = "",
 
+    @SerializedName("telegramUrl")
+    val telegramUrl: String = "",
+
     @SerializedName("nodeRequestTimeoutMs")
     val nodeRequestTimeoutMs: Long = 25000L,
 

@@ -4,7 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -12,7 +11,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
@@ -72,8 +70,6 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     var showBackendDialog by remember { mutableStateOf(false) }
     var backendUrlDraft by remember { mutableStateOf(AppConfig.BACKEND_URL) }
-    var titleClickCount by remember { mutableIntStateOf(0) }
-    var lastTitleClickAt by remember { mutableLongStateOf(0L) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val drawerAnimationSpec = remember {
         tween<Float>(durationMillis = 250, easing = FastOutSlowInEasing)
@@ -95,23 +91,6 @@ fun MainScreen(
         },
         label = "nodeSwipeProgress"
     )
-
-    fun handleBackendTitleClick() {
-        val now = SystemClock.elapsedRealtime()
-        titleClickCount = if (
-            lastTitleClickAt > 0L && now - lastTitleClickAt <= 1_500L
-        ) {
-            titleClickCount + 1
-        } else {
-            1
-        }
-        lastTitleClickAt = now
-        if (titleClickCount >= 5) {
-            titleClickCount = 0
-            backendUrlDraft = AppConfig.BACKEND_URL
-            showBackendDialog = true
-        }
-    }
 
     fun closeDrawerThen(action: () -> Unit) {
         scope.launch {
@@ -170,15 +149,17 @@ fun MainScreen(
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
                     onOpenFeatures = { closeDrawerThen(onOpenFeatures) },
                     onOpenAccountSettings = { closeDrawerThen(onOpenAccountSettings) },
-                    onClose = {
-                        scope.launch {
-                            drawerState.animateTo(DrawerValue.Closed, drawerAnimationSpec)
+                    onOpenBackendDialog = {
+                        closeDrawerThen {
+                            backendUrlDraft = AppConfig.BACKEND_URL
+                            showBackendDialog = true
                         }
                     },
                     websiteUrl = backendSettings.websiteUrl,
                     feedbackEmail = backendSettings.feedbackEmail,
                     feedbackUrl = backendSettings.feedbackUrl,
                     githubUrl = backendSettings.githubUrl,
+                    telegramUrl = backendSettings.telegramUrl,
                     accountInfo = accountInfo
                 )
             }
@@ -209,7 +190,6 @@ fun MainScreen(
                     title = {
                         Text(
                             text = "FireflyVPN",
-                            modifier = Modifier.clickable(onClick = ::handleBackendTitleClick),
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground

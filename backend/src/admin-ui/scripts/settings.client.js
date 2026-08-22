@@ -160,6 +160,7 @@ function fillState(state) {
   setValue('feedbackEmail', settings.feedbackEmail);
   setValue('feedbackUrl', settings.feedbackUrl);
    setValue('githubUrl', settings.githubUrl);
+  setValue('telegramUrl', settings.telegramUrl);
   setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
   checked('registrationEnabled', settings.registrationEnabled !== false);
   checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
@@ -227,6 +228,7 @@ function formState() {
       feedbackEmail: value('feedbackEmail'),
        feedbackUrl: value('feedbackUrl'),
        githubUrl: value('githubUrl'),
+       telegramUrl: value('telegramUrl'),
        nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
        registrationEnabled: el('registrationEnabled').checked,
        requireAdminRegistrationCode: el('requireAdminRegistrationCode').checked,
