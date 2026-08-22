@@ -54,7 +54,13 @@ fun ConnectButton(
     customConnectingImagePath: String? = null,
     customConnectedImagePath: String? = null
 ) {
-    val isConnecting = vpnState == VpnState.CONNECTING || vpnState == VpnState.DISCONNECTING
+    // 智能连接测试期间底层状态仍可能是 DISCONNECTED，主页视觉上应展示“连接中”。
+    val displayState = if (isTesting && vpnState == VpnState.DISCONNECTED) {
+        VpnState.CONNECTING
+    } else {
+        vpnState
+    }
+    val isConnecting = displayState == VpnState.CONNECTING || displayState == VpnState.DISCONNECTING
 
     // 自适应按钮大小：取屏幕宽度的 65%，但不超过 250dp
     val configuration = LocalConfiguration.current
@@ -98,12 +104,12 @@ fun ConnectButton(
     )
 
     // 根据状态选择图片
-    val imageRes = when (vpnState) {
+    val imageRes = when (displayState) {
         VpnState.DISCONNECTED -> R.drawable.btn_disconnected
         VpnState.CONNECTING, VpnState.DISCONNECTING -> R.drawable.btn_connecting
         VpnState.CONNECTED -> R.drawable.btn_connected
     }
-    val customImagePath = when (vpnState) {
+    val customImagePath = when (displayState) {
         VpnState.DISCONNECTED -> customDisconnectedImagePath
         VpnState.CONNECTING, VpnState.DISCONNECTING -> customConnectingImagePath
         VpnState.CONNECTED -> customConnectedImagePath
@@ -135,7 +141,7 @@ fun ConnectButton(
             ) {
                 Image(
                     painter = painterResource(id = currentImage),
-                    contentDescription = when (vpnState) {
+                    contentDescription = when (displayState) {
                         VpnState.CONNECTED -> "已连接"
                         VpnState.CONNECTING -> "连接中"
                         VpnState.DISCONNECTING -> "断开中"
