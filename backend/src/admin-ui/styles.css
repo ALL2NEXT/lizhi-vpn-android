@@ -184,9 +184,12 @@
      .user-admin-control-panel { min-width: 0; padding: 14px; background: #172033; border: 1px solid #374151; border-radius: 10px; }
      .user-admin-control-panel h3 { margin: 0 0 10px; color: #f8fafc; font-size: 15px; }
      .user-admin-filter-controls, .user-admin-operation-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+     .user-admin-control-group { display: flex; align-items: center; flex: 1 1 280px; flex-wrap: wrap; gap: 8px; min-width: 0; }
+     .user-admin-control-group-filter { flex-basis: 100%; }
+     .user-admin-control-label { flex: 0 0 auto; color: #cbd5e1; font-size: 13px; font-weight: 700; }
      .user-admin-filter-controls input { flex: 1 1 220px; min-width: 160px; }
-     .user-admin-filter-controls select { flex: 0 1 150px; }
-     .user-admin-filter-controls .traffic-zero-filters { flex-basis: 100%; }
+     .user-admin-filter-controls select { flex: 0 1 190px; }
+     .user-admin-control-group .traffic-zero-filters { flex-basis: 100%; }
      .user-admin-filter-controls .traffic-detail-summary { flex-basis: 100%; }
      .user-admin-operation-controls button { margin: 0; }
      .user-admin-operation-controls label { display: inline-flex; align-items: center; margin: 0; white-space: nowrap; }

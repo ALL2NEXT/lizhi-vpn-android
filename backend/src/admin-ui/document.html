@@ -191,21 +191,43 @@
     </div>
     <div class="user-admin-control-grid">
       <section class="user-admin-control-panel">
-        <h3>筛选</h3>
+        <h3>过滤、搜索、排序</h3>
         <div class="user-admin-filter-controls">
-          <input id="userAdminSearch" type="search" placeholder="搜索 UID、昵称、邮箱、品牌或型号" oninput="renderAdminUsers()">
-          <select id="userAdminStatusFilter" aria-label="筛选用户状态" onchange="renderAdminUsers()">
-            <option value="">全部状态</option>
-            <option value="active">正常</option>
-            <option value="banned">封禁</option>
-            <option value="formal">正式用户</option>
-            <option value="guest">游客</option>
-          </select>
-          <div class="traffic-zero-filters" role="group" aria-label="流量过滤">
-            <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="today" aria-pressed="false" onclick="toggleAdminUserZeroFilter('today')">过滤今日零流量</button>
-            <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="month" aria-pressed="false" onclick="toggleAdminUserZeroFilter('month')">过滤本月零流量</button>
-            <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="total" aria-pressed="false" onclick="toggleAdminUserZeroFilter('total')">过滤累计零流量</button>
+          <div class="user-admin-control-group user-admin-control-group-filter">
+            <span class="user-admin-control-label">过滤</span>
+            <select id="userAdminStatusFilter" aria-label="筛选用户状态" onchange="renderAdminUsers()">
+              <option value="">全部状态</option>
+              <option value="active">正常</option>
+              <option value="banned">封禁</option>
+              <option value="formal">正式用户</option>
+              <option value="guest">游客</option>
+            </select>
+            <div class="traffic-zero-filters" role="group" aria-label="流量过滤">
+              <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="today" aria-pressed="false" onclick="toggleAdminUserZeroFilter('today')">过滤今日零流量</button>
+              <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="month" aria-pressed="false" onclick="toggleAdminUserZeroFilter('month')">过滤本月零流量</button>
+              <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="total" aria-pressed="false" onclick="toggleAdminUserZeroFilter('total')">过滤累计零流量</button>
+            </div>
           </div>
+          <label class="user-admin-control-group">
+            <span class="user-admin-control-label">搜索</span>
+            <input id="userAdminSearch" type="search" placeholder="搜索 UID、昵称、邮箱、品牌或型号" oninput="renderAdminUsers()">
+          </label>
+          <label class="user-admin-control-group">
+            <span class="user-admin-control-label">排序</span>
+            <select id="userAdminSort" aria-label="排序用户" onchange="renderAdminUsers()">
+              <option value="created_desc">注册时间（新到旧）</option>
+              <option value="created_asc">注册时间（旧到新）</option>
+              <option value="today_desc">今日流量（高到低）</option>
+              <option value="today_asc">今日流量（低到高）</option>
+              <option value="month_desc">本月流量（高到低）</option>
+              <option value="month_asc">本月流量（低到高）</option>
+              <option value="total_desc">累计流量（高到低）</option>
+              <option value="total_asc">累计流量（低到高）</option>
+              <option value="last_report_desc">最后上报（新到旧）</option>
+              <option value="last_report_asc">最后上报（旧到新）</option>
+              <option value="nickname_asc">昵称（A-Z）</option>
+            </select>
+          </label>
           <span id="userAdminSummary" class="traffic-detail-summary"></span>
         </div>
       </section>

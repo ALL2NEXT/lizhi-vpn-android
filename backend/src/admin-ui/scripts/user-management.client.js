@@ -6,6 +6,19 @@ const adminUserSelection = new Set();
 const adminUserDirty = new Set();
 const adminUserDrafts = new Map();
 const adminUserZeroFilters = {today: false, month: false, total: false};
+const ADMIN_USER_SORTS = {
+  created_desc: {valueKey: 'createdAt', direction: -1, label: '注册时间（新到旧）'},
+  created_asc: {valueKey: 'createdAt', direction: 1, label: '注册时间（旧到新）'},
+  today_desc: {valueKey: 'todayMb', direction: -1, label: '今日流量（高到低）'},
+  today_asc: {valueKey: 'todayMb', direction: 1, label: '今日流量（低到高）'},
+  month_desc: {valueKey: 'monthMb', direction: -1, label: '本月流量（高到低）'},
+  month_asc: {valueKey: 'monthMb', direction: 1, label: '本月流量（低到高）'},
+  total_desc: {valueKey: 'totalMb', direction: -1, label: '累计流量（高到低）'},
+  total_asc: {valueKey: 'totalMb', direction: 1, label: '累计流量（低到高）'},
+  last_report_desc: {valueKey: 'lastReportAt', direction: -1, label: '最后上报（新到旧）'},
+  last_report_asc: {valueKey: 'lastReportAt', direction: 1, label: '最后上报（旧到新）'},
+  nickname_asc: {valueKey: 'nickname', direction: 1, label: '昵称（A-Z）'},
+};
 
 function resetAdminUsers() {
   adminUserData = null;
@@ -42,12 +55,31 @@ function adminUserDevices(user) {
   return Array.isArray(security.devices) ? security.devices : [];
 }
 
+function adminUserSortValue(user, key) {
+  switch (key) {
+    case 'todayMb': return Number(user.today && user.today.totalMb || 0);
+    case 'monthMb': return Number(user.month && user.month.totalMb || 0);
+    case 'totalMb': return Number(user.totalMb || 0);
+    case 'nickname': return String(user.nickname || '').toLowerCase();
+    case 'lastReportAt': return String(user.lastReportAt || '');
+    case 'createdAt': return String(user.createdAt || '');
+    default: return '';
+  }
+}
+
+function compareAdminUserSortValues(left, right) {
+  if (typeof left === 'number' && typeof right === 'number') {
+    return left === right ? 0 : (left < right ? -1 : 1);
+  }
+  return String(left).localeCompare(String(right));
+}
+
 function adminUserList() {
   const users = adminUserData && Array.isArray(adminUserData.users)
     ? adminUserData.users : [];
   const search = String(value('userAdminSearch') || '').toLowerCase();
   const filter = value('userAdminStatusFilter');
-  return users.filter(function(user) {
+  const filtered = users.filter(function(user) {
     const security = adminUserSecurity(user);
     const deviceSearch = adminUserDevices(user).map(function(device) {
       return [device.deviceId, device.brand, device.model, device.androidVersion, device.appVersion].join(' ');
@@ -65,6 +97,18 @@ function adminUserList() {
     if (adminUserZeroFilters.month && monthTotal === 0) return false;
     if (adminUserZeroFilters.total && total === 0) return false;
     return true;
+  });
+  const sort = ADMIN_USER_SORTS[value('userAdminSort')] || ADMIN_USER_SORTS.created_desc;
+  return filtered.map(function(user, index) {
+    return {user: user, index: index};
+  }).sort(function(left, right) {
+    const result = compareAdminUserSortValues(
+      adminUserSortValue(left.user, sort.valueKey),
+      adminUserSortValue(right.user, sort.valueKey),
+    );
+    return (result * sort.direction) || left.index - right.index;
+  }).map(function(item) {
+    return item.user;
   });
 }
 
@@ -145,7 +189,8 @@ function renderAdminUsers() {
     ? adminUserData.users : [];
   const filtered = adminUserList();
   updateAdminUserSelectionControls(filtered);
-  summary.textContent = '共 ' + users.length + ' 个用户 · 当前显示 ' + filtered.length + ' 个 · 已选择 ' + adminUserSelection.size + ' 个';
+  const sort = ADMIN_USER_SORTS[value('userAdminSort')] || ADMIN_USER_SORTS.created_desc;
+  summary.textContent = '共 ' + users.length + ' 个用户 · 当前显示 ' + filtered.length + ' 个 · 已选择 ' + adminUserSelection.size + ' 个 · ' + sort.label;
   if (filtered.length === 0) {
     host.innerHTML = '<div class="user-table-empty">没有匹配的用户</div>';
     return;
