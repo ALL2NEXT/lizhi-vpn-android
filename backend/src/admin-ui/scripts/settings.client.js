@@ -10,7 +10,7 @@ function addSource(source) {
     '<div class="source-row-heading"><span class="source-row-title" data-source-title>线路</span><span class="source-row-remark" data-source-remark hidden></span></div>' +
     '<div class="source-row-controls" role="group" aria-label="线路排序和折叠操作">' +
       '<span class="source-drag-handle" data-drag-handle draggable="true" role="button" aria-label="拖动线路排序" title="拖动线路排序">☷</span>' +
-      '<button class="secondary" type="button" data-action="collapse" aria-expanded="false">展开</button>' +
+      '<button class="secondary source-edit-button" type="button" data-action="collapse" aria-expanded="false" aria-label="编辑订阅线路" title="编辑订阅线路">🖊</button>' +
     '</div>' +
   '</div>' +
   '<div class="source-row-body" data-source-body hidden>' +
@@ -131,7 +131,9 @@ function toggleSourceRow(row) {
   body.hidden = collapsed;
   row.classList.toggle('collapsed', collapsed);
   button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-  button.textContent = collapsed ? '展开' : '折叠';
+  button.textContent = '🖊';
+  button.setAttribute('aria-label', collapsed ? '编辑订阅线路' : '收起订阅线路');
+  button.title = collapsed ? '编辑订阅线路' : '收起订阅线路';
 }
 function clearSourceDragState() {
   getSourceRows().forEach(function(row) {
