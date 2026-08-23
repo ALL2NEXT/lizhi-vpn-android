@@ -64,6 +64,214 @@ export function assertPlainSubscriptionContent(value) {
   return content;
 }
 
+/** 外部订阅同时兼容明文、标准 Base64 和 URL-safe Base64。 */
+export function decodeExternalSubscriptionContent(value) {
+  const content = normalizeManagedContent(value).replace(/^\uFEFF/, "");
+  if (PLAINTEXT_NODE_PATTERN.test(content)) return content;
+
+  const compact = content.replace(/\s+/g, "");
+  if (!compact || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(compact)) {
+    throw new Error("subscription_must_be_plaintext_nodes");
+  }
+
+  try {
+    const normalized = compact.replace(/-/g, "+").replace(/_/g, "/");
+    if (normalized.length % 4 === 1) {
+      throw new Error("invalid_base64_length");
+    }
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    const decoded = normalizeManagedContent(
+      new TextDecoder().decode(bytes).replace(/^\uFEFF/, ""),
+    );
+    return assertPlainSubscriptionContent(decoded);
+  } catch (_) {
+    throw new Error("subscription_must_be_plaintext_nodes");
+  }
+}
+
+// 常见节点命名中的国家别名，用于把外部订阅节点统一整理成“国家+编号”。
+const COUNTRY_DEFINITIONS = [
+  ["CN", "中国", ["中国大陆", "中国", "china", "chn", "cn"]],
+  ["US", "美国", ["美国", "usa", "united states", "united states of america", "us"]],
+  ["JP", "日本", ["日本", "japan", "jpn", "jp"]],
+  ["KR", "韩国", ["韩国", "南韩", "korea", "south korea", "kor", "kr"]],
+  ["KP", "朝鲜", ["朝鲜", "north korea", "kp"]],
+  ["TW", "台湾", ["台湾", "台灣", "taiwan", "twn", "tw"]],
+  ["HK", "香港", ["香港", "hong kong", "hkg", "hk"]],
+  ["MO", "澳门", ["澳门", "澳門", "macao", "macau", "mo"]],
+  ["SG", "新加坡", ["新加坡", "singapore", "sgp", "sg"]],
+  ["GB", "英国", ["英国", "英國", "uk", "united kingdom", "great britain", "gb"]],
+  ["DE", "德国", ["德国", "德國", "germany", "deu", "de"]],
+  ["FR", "法国", ["法国", "法國", "france", "fra", "fr"]],
+  ["RU", "俄罗斯", ["俄罗斯", "俄羅斯", "russia", "rus", "ru"]],
+  ["CA", "加拿大", ["加拿大", "canada", "can"]],
+  ["AU", "澳大利亚", ["澳大利亚", "澳洲", "australia", "aus", "au"]],
+  ["NL", "荷兰", ["荷兰", "荷蘭", "netherlands", "holland", "nld", "nl"]],
+  ["IN", "印度", ["印度", "india", "ind"]],
+  ["TH", "泰国", ["泰国", "泰國", "thailand", "tha", "th"]],
+  ["VN", "越南", ["越南", "vietnam", "vnm", "vn"]],
+  ["PH", "菲律宾", ["菲律宾", "菲律賓", "philippines", "phl", "ph"]],
+  ["MY", "马来西亚", ["马来西亚", "馬來西亞", "malaysia", "mys", "my"]],
+  ["ID", "印度尼西亚", ["印度尼西亚", "印度尼西亞", "indonesia", "idn", "id"]],
+  ["TR", "土耳其", ["土耳其", "土耳其", "turkey", "turkiye", "tur", "tr"]],
+  ["CH", "瑞士", ["瑞士", "switzerland", "che", "ch"]],
+  ["SE", "瑞典", ["瑞典", "sweden", "swe", "se"]],
+  ["NO", "挪威", ["挪威", "norway", "nor", "no"]],
+  ["FI", "芬兰", ["芬兰", "芬蘭", "finland", "fin", "fi"]],
+  ["DK", "丹麦", ["丹麦", "丹麥", "denmark", "dnk", "dk"]],
+  ["PL", "波兰", ["波兰", "波蘭", "poland", "pol", "pl"]],
+  ["UA", "乌克兰", ["乌克兰", "烏克蘭", "ukraine", "ukr", "ua"]],
+  ["IL", "以色列", ["以色列", "israel", "isr", "il"]],
+  ["ZA", "南非", ["南非", "south africa", "zaf", "za"]],
+  ["MX", "墨西哥", ["墨西哥", "mexico", "mex", "mx"]],
+  ["BR", "巴西", ["巴西", "brazil", "bra", "br"]],
+  ["CL", "智利", ["智利", "chile", "chl", "cl"]],
+  ["AR", "阿根廷", ["阿根廷", "argentina", "arg", "ar"]],
+  ["NZ", "新西兰", ["新西兰", "紐西蘭", "new zealand", "nzl", "nz"]],
+  ["IE", "爱尔兰", ["爱尔兰", "愛爾蘭", "ireland", "irl", "ie"]],
+  ["ES", "西班牙", ["西班牙", "spain", "esp", "es"]],
+  ["IT", "意大利", ["意大利", "意大利", "italy", "ita", "it"]],
+  ["PT", "葡萄牙", ["葡萄牙", "portugal", "prt", "pt"]],
+  ["AT", "奥地利", ["奥地利", "奧地利", "austria", "aut", "at"]],
+  ["BE", "比利时", ["比利时", "比利時", "belgium", "bel", "be"]],
+  ["CZ", "捷克", ["捷克", "czech", "czechia", "cze", "cz"]],
+  ["RO", "罗马尼亚", ["罗马尼亚", "羅馬尼亞", "romania", "rou", "ro"]],
+  ["HU", "匈牙利", ["匈牙利", "hungary", "hun", "hu"]],
+  ["IS", "冰岛", ["冰岛", "冰島", "iceland", "isl", "is"]],
+  ["AE", "阿联酋", ["阿联酋", "阿聯酋", "uae", "united arab emirates", "are", "ae"]],
+  ["SA", "沙特阿拉伯", ["沙特阿拉伯", "沙特", "saudi arabia", "sau", "sa"]],
+  ["PK", "巴基斯坦", ["巴基斯坦", "pakistan", "pak", "pk"]],
+  ["BD", "孟加拉国", ["孟加拉国", "孟加拉國", "bangladesh", "bgd", "bd"]],
+  ["KH", "柬埔寨", ["柬埔寨", "cambodia", "khm", "kh"]],
+  ["LA", "老挝", ["老挝", "老撾", "laos", "lao", "la"]],
+  ["MM", "缅甸", ["缅甸", "緬甸", "myanmar", "mmr", "mm"]],
+];
+
+const COUNTRY_BY_CODE = new Map(
+  COUNTRY_DEFINITIONS.map(([code, name]) => [code, { code, name }]),
+);
+const COUNTRY_ALIASES = COUNTRY_DEFINITIONS
+  .flatMap(([code, name, aliases]) => aliases.map((alias) => ({ code, name, alias })));
+const UNKNOWN_COUNTRY = { code: "UN", name: "未知" };
+const NODE_LINK_PATTERN = /^(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive|naive\+https|wireguard|ss|socks|socks5|socks4|socks4a|https?):\/\/\S+$/i;
+
+function normalizeNodeName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchesCountryAlias(name, alias) {
+  if (/^[a-z]+$/i.test(alias)) {
+    const pattern = new RegExp(
+      `(^|[^a-z])${escapeRegExp(alias)}(?=$|[^a-z]|\\d)`,
+      "i",
+    );
+    return pattern.test(name);
+  }
+  return name.includes(alias);
+}
+
+function countryFromFlag(name) {
+  const match = String(name || "").match(/([\u{1F1E6}-\u{1F1FF}]){2}/u);
+  if (!match) return null;
+  const code = Array.from(match[0])
+    .map((character) => String.fromCharCode(character.codePointAt(0) - 0x1f1e6 + 65))
+    .join("");
+  return COUNTRY_BY_CODE.get(code) || null;
+}
+
+function findCountry(name) {
+  const flagCountry = countryFromFlag(name);
+  if (flagCountry) return flagCountry;
+
+  const normalized = normalizeNodeName(name);
+  if (!normalized) return UNKNOWN_COUNTRY;
+  const match = COUNTRY_ALIASES
+    .filter(({ alias }) => matchesCountryAlias(normalized, alias))
+    .sort((left, right) => right.alias.length - left.alias.length)[0];
+  return match ? { code: match.code, name: match.name } : UNKNOWN_COUNTRY;
+}
+
+function decodeBase64Utf8(value) {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function encodeBase64Utf8(value) {
+  const bytes = TEXT_ENCODER.encode(value);
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function decodeUriFragment(value) {
+  try {
+    return decodeURIComponent(value.replace(/\+/g, " "));
+  } catch (_) {
+    return value;
+  }
+}
+
+function extractNodeName(link) {
+  const trimmed = link.trim();
+  if (/^vmess:\/\//i.test(trimmed)) {
+    try {
+      const payload = trimmed.slice(trimmed.indexOf("://") + 3).split("#", 1)[0];
+      const value = JSON.parse(decodeBase64Utf8(payload));
+      return String(value.ps || value.name || "");
+    } catch (_) {
+      // 兼容损坏或非标准 VMess 节点，继续尝试读取 URL 片段。
+    }
+  }
+  const hashIndex = trimmed.indexOf("#");
+  return hashIndex >= 0 ? decodeUriFragment(trimmed.slice(hashIndex + 1)) : "";
+}
+
+function renameNodeLink(link, name) {
+  const trimmed = link.trim();
+  if (/^vmess:\/\//i.test(trimmed)) {
+    try {
+      const prefixEnd = trimmed.indexOf("://") + 3;
+      const payload = trimmed.slice(prefixEnd).split("#", 1)[0];
+      const value = JSON.parse(decodeBase64Utf8(payload));
+      value.ps = name;
+      return `${trimmed.slice(0, prefixEnd)}${encodeBase64Utf8(JSON.stringify(value))}`;
+    } catch (_) {
+      // 无法解码时退回到 URL 片段改名，不能让单个异常节点阻断整条订阅。
+    }
+  }
+
+  const hashIndex = trimmed.indexOf("#");
+  const base = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
+  return `${base}#${encodeURIComponent(name)}`;
+}
+
+export function autoRenameSubscriptionContent(content) {
+  const counters = new Map();
+  return String(content || "").split(/\r?\n/).map((line) => {
+    const trimmed = line.trim();
+    if (!NODE_LINK_PATTERN.test(trimmed)) return line;
+
+    const country = findCountry(extractNodeName(trimmed));
+    const nextNumber = (counters.get(country.code) || 0) + 1;
+    counters.set(country.code, nextNumber);
+    return renameNodeLink(trimmed, `${country.name}${nextNumber}`);
+  }).join("\n");
+}
+
 export function subscriptionCacheKey(source) {
   return `${SUBSCRIPTION_CACHE_KEY_PREFIX}${source.id}`;
 }
@@ -109,7 +317,7 @@ export async function readExternalSubscription(env, source) {
       Number.isFinite(cachedAt) &&
       freshUntil > now
     ) {
-      return assertPlainSubscriptionContent(cached.content);
+      return decodeExternalSubscriptionContent(cached.content);
     }
   }
 
@@ -130,7 +338,7 @@ export async function readExternalSubscription(env, source) {
     throw new Error(`external_subscription_http_${response.status}`);
   }
 
-  const content = assertPlainSubscriptionContent(
+  const content = decodeExternalSubscriptionContent(
     await readManagedSubscriptionBody(response),
   );
   if (cacheMinutes > 0) {

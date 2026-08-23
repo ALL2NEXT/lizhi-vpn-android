@@ -44,7 +44,7 @@ function addSource(source) {
       '<div class="source-mode" data-source-mode="url"><div class="grid">' +
         '<div class="field"><label>外部明文订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/plain-sub"></label></div>' +
         '<div class="field"><label>接口缓存时间（分钟）<input data-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '"></label></div>' +
-      '</div><small>接口必须返回可识别的明文节点，由 Worker 中转并加密；缓存时间设为 0 会每次请求上游。</small></div>' +
+      '</div><label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label><small>按节点名称识别国家，并批量改为“国家+编号”，例如：日本1、日本2。</small><small>接口必须返回可识别的明文节点，由 Worker 中转并加密；缓存时间设为 0 会每次请求上游。</small></div>' +
       '<div class="source-mode" data-source-mode="content"><div class="field"><label>纯文本节点（每行一个）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div><small>保存后由 Worker 直接加密下发，不经过外部接口缓存。</small></div>' +
     '</section>' +
     '<div class="row-actions"><button class="danger" type="button">删除</button></div>' +
@@ -200,6 +200,7 @@ function formState() {
       cacheMinutes: sourceType === 'url'
         ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 0)
         : 0,
+      autoRename: sourceType === 'url' && row.querySelector('[data-field="autoRename"]').checked,
       content: sourceType === 'content' ? content : '',
       refreshOnAppOpen: row.querySelector('[data-field="refreshOnAppOpen"]').checked,
       remark: row.querySelector('[data-field="remark"]').value.trim()

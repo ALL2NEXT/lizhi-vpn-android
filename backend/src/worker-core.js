@@ -43,6 +43,7 @@ import { createAdminRoutes } from "./routes/admin.js";
 import { createClientRoutes } from "./routes/client.js";
 import {
   getClientIp,
+  autoRenameSubscriptionContent,
   isAppVersionAtLeast,
   protectSubscription,
   readExternalSubscription,
@@ -85,6 +86,7 @@ const routeDeps = {
   normalizeAccountId,
   isAppVersionAtLeast,
   readExternalSubscription,
+  autoRenameSubscriptionContent,
   protectSubscription,
   getClientIp,
   readState,

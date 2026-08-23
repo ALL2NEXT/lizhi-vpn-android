@@ -13,6 +13,7 @@ export function createClientRoutes(deps) {
     normalizeAccountId,
     isAppVersionAtLeast,
     readExternalSubscription,
+    autoRenameSubscriptionContent,
     protectSubscription,
     getClientIp,
     readState,
@@ -82,7 +83,11 @@ async function handleManagedSubscription(path, request, env) {
   }
 
   const clientIp = getClientIp(request);
-  const plaintextContent = source.content || await readExternalSubscription(env, source);
+  const fetchedContent = source.content || await readExternalSubscription(env, source);
+  // 纯文本节点由后台直接维护，自动重命名只对外部接口生效。
+  const plaintextContent = source.autoRename && !source.content
+    ? autoRenameSubscriptionContent(fetchedContent)
+    : fetchedContent;
   const protectedContent = protectSubscription(plaintextContent, clientIp);
   return new Response(protectedContent, {
     headers: {

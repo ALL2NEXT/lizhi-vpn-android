@@ -58,6 +58,8 @@ export function normalizeState(input) {
           item.minAppVersion ?? item.minimumAppVersion,
         ),
         cacheMinutes: normalizeSubscriptionCacheMinutes(item.cacheMinutes),
+        // 只有外部订阅允许在 Worker 转发前自动重命名节点。
+        autoRename: !content && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
         content,
         remark: cleanText(item.remark || item.note).slice(0, 500),
       };
@@ -72,6 +74,7 @@ export function normalizeState(input) {
       minAccountType: item.minAccountType,
       minAppVersion: item.minAppVersion,
       cacheMinutes: item.cacheMinutes,
+      autoRename: item.autoRename,
       content: item.content,
       remark: item.remark,
     }));
