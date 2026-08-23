@@ -186,7 +186,7 @@
     <div class="dashboard-heading">
       <div>
         <h2>用户总表</h2>
-        <p>账户、安全、设备和流量统一展示在一张表中。支持编辑资料、批量封禁/解封和导出；不提供永久删除，避免误删历史关联数据。</p>
+        <p>账户、安全、设备和流量统一展示在一张表中。支持编辑资料、批量封禁/解封、删除用户和导出；删除操作不可恢复，请谨慎使用。</p>
       </div>
     </div>
     <div class="user-admin-control-grid">
@@ -219,6 +219,7 @@
           <button id="userAdminSaveSelected" class="secondary" type="button" disabled onclick="saveSelectedAdminUsers()">保存选中修改</button>
           <button id="userAdminBatchBan" class="danger" type="button" disabled onclick="batchSetAdminUserBan(true)">批量封禁</button>
           <button id="userAdminBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminUserBan(false)">批量解封</button>
+          <button id="userAdminBatchDelete" class="danger" type="button" disabled onclick="batchDeleteAdminUsers()">删除用户</button>
           <button class="secondary" type="button" onclick="exportAdminUsersCsv()">导出当前结果</button>
         </div>
       </section>

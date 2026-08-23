@@ -116,6 +116,7 @@ function updateAdminUserSelectionControls(filtered) {
   }
   const banButton = el('userAdminBatchBan');
   const unbanButton = el('userAdminBatchUnban');
+  const deleteButton = el('userAdminBatchDelete');
   const saveButton = el('userAdminSaveSelected');
   const dirtySelected = Array.from(adminUserSelection).some(function(uid) {
     return adminUserDirty.has(uid);
@@ -123,6 +124,7 @@ function updateAdminUserSelectionControls(filtered) {
   if (saveButton) saveButton.disabled = !dirtySelected;
   if (banButton) banButton.disabled = selectedTotal === 0;
   if (unbanButton) unbanButton.disabled = selectedTotal === 0;
+  if (deleteButton) deleteButton.disabled = selectedTotal === 0 || dirtySelected;
   document.querySelectorAll('[data-admin-zero-filter]').forEach(function(button) {
     const active = adminUserZeroFilters[button.dataset.adminZeroFilter] === true;
     button.classList.toggle('active', active);
@@ -370,6 +372,51 @@ async function batchSetAdminUserBan(banned) {
     return true;
   } catch (_) {
     show(action + '失败，请检查网络', true);
+    return false;
+  }
+}
+
+async function batchDeleteAdminUsers() {
+  const uids = Array.from(adminUserSelection);
+  if (uids.length === 0) {
+    show('请先选择用户', true);
+    return false;
+  }
+  if (uids.length > 100) {
+    show('单次最多选择 100 个用户', true);
+    return false;
+  }
+  const dirtySelected = uids.some(function(uid) {
+    return adminUserDirty.has(uid);
+  });
+  if (dirtySelected) {
+    show('请先保存未保存的用户修改，再删除用户', true);
+    return false;
+  }
+  if (!confirm('确定永久删除选中的 ' + uids.length + ' 个用户及其全部流量统计吗？此操作不可恢复。')) {
+    return false;
+  }
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/users/batch', {
+      method: 'DELETE',
+      headers: headers(),
+      body: JSON.stringify({uids: uids}),
+    });
+    const data = parseResponseJson(await response.text());
+    if (!response.ok) {
+      show(adminErrorMessage(data.error, '删除用户失败（HTTP ' + response.status + '）'), true);
+      return false;
+    }
+    adminUserSelection.clear();
+    adminUserDirty.clear();
+    adminUserDrafts.clear();
+    const refreshed = await loadAdminUsers(true);
+    show(refreshed
+      ? '已删除 ' + (Number(data.changed) || 0) + ' 个用户及其流量统计'
+      : '用户删除成功，但用户列表刷新失败', !refreshed);
+    return true;
+  } catch (_) {
+    show('删除用户失败，请检查网络', true);
     return false;
   }
 }
