@@ -29,13 +29,6 @@ function adminUserDisplayUid(uid) {
   return adminUserUidHidden ? '••••••••' : uid;
 }
 
-function adminUserLevel(accountType, user) {
-  const level = user && String(user.email || '').trim() ? '正式用户' : '游客';
-  if (accountType === 'banned') return level;
-  if (accountType === 'formal' || accountType === 'guest') return level;
-  return accountType || '未知';
-}
-
 function adminUserSecurity(user) {
   const accounts = adminUserData && Array.isArray(adminUserData.securityAccounts)
     ? adminUserData.securityAccounts : [];
@@ -167,7 +160,6 @@ function renderAdminUsers() {
       '<td><input class="user-admin-nickname" data-admin-user-field="nickname" value="' + esc(adminUserDraftValue(user, draft, 'nickname')) + '" aria-label="' + esc(adminUserDisplayUid(uid) + ' 昵称') + '"></td>' +
       '<td>' + esc(user.email || '游客账户') + '</td>' +
       '<td>' + (banned ? '封禁' : '正常') + '</td>' +
-      '<td>' + esc(adminUserLevel(user.accountType, user)) + '</td>' +
       '<td class="user-admin-device-cell">' + adminUserDeviceCell(user) + '</td>' +
       '<td><input data-admin-user-field="brand" value="' + esc(adminUserDraftValue(user, draft, 'brand')) + '" aria-label="品牌"></td>' +
       '<td><input data-admin-user-field="model" value="' + esc(adminUserDraftValue(user, draft, 'model')) + '" aria-label="型号"></td>' +
@@ -180,7 +172,7 @@ function renderAdminUsers() {
       '</tr>';
   }).join('');
   host.innerHTML = '<table class="traffic-detail-table user-admin-table' + (adminUserUidHidden ? ' user-admin-hide-uid' : '') + '" aria-label="用户总表">' +
-    '<thead><tr><th>选择</th><th>UID</th><th>昵称</th><th>邮箱</th><th>状态</th><th>账户类型</th><th>设备关系</th><th>品牌</th><th>型号</th><th>Android</th><th>App 版本</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th></tr></thead>' +
+    '<thead><tr><th>选择</th><th>UID</th><th>昵称</th><th>邮箱</th><th>状态</th><th>设备关系</th><th>品牌</th><th>型号</th><th>Android</th><th>App 版本</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
     input.addEventListener('change', function() {
@@ -392,11 +384,11 @@ function exportAdminUsersCsv() {
     show('当前没有可导出的用户', true);
     return;
   }
-  const lines = [['UID', '昵称', '邮箱', '状态', '账户类型', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报']];
+  const lines = [['UID', '昵称', '邮箱', '状态', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报']];
   users.forEach(function(user) {
     const security = adminUserSecurity(user);
     lines.push([user.uid, user.nickname, user.email, user.accountType === 'banned' ? '封禁' : '正常',
-      adminUserLevel(user.accountType, user), security.historicalDeviceCount, security.bannedDeviceCount,
+      security.historicalDeviceCount, security.bannedDeviceCount,
       user.brand, user.model, user.androidVersion, user.appVersion,
       user.today && user.today.totalMb, user.month && user.month.totalMb, user.totalMb, user.lastReportAt]);
   });
