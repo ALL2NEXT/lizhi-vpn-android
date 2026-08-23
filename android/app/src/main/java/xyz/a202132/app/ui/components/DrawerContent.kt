@@ -113,10 +113,11 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Palette,
-                title = "皮肤",
-                subtitle = "自定义图片与基础颜色",
-                onClick = onOpenSkin
+                icon = Icons.Outlined.Star,
+                title = "特色功能",
+                onClick = {
+                    onOpenFeatures()
+                }
             )
 
             DrawerMenuItem(
@@ -128,16 +129,14 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Star,
-                title = "特色功能",
-                onClick = {
-                    onOpenFeatures()
-                }
+                icon = Icons.Outlined.Palette,
+                title = "皮肤",
+                onClick = onOpenSkin
             )
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Info,
-                title = "关于应用",
+                title = "关于",
                 onClick = { showAboutDialog = true }
             )
             
