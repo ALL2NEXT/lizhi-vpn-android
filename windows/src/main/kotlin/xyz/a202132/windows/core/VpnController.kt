@@ -6,6 +6,8 @@ import xyz.a202132.windows.model.DesktopAppState
 import xyz.a202132.windows.model.DesktopSettings
 import xyz.a202132.windows.model.NodeCategory
 import xyz.a202132.windows.model.ProxyMode
+import xyz.a202132.windows.model.NodeType
+import xyz.a202132.windows.model.ProxyCore
 
 interface VpnController : AutoCloseable {
     val state: StateFlow<DesktopAppState>
@@ -30,6 +32,7 @@ interface VpnController : AutoCloseable {
     fun loginAccount(email: String, password: String)
     fun deleteAccount(password: String)
     fun updateSettings(settings: DesktopSettings)
+    fun setProtocolCore(nodeType: NodeType, core: ProxyCore)
     fun adaptHysteriaBandwidth()
     fun startSelectedOrFirstConnection()
     fun startSmartConnection()

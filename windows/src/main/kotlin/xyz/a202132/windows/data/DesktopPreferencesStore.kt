@@ -8,6 +8,7 @@ import java.nio.file.StandardCopyOption
 import java.net.URI
 import java.util.UUID
 import xyz.a202132.windows.model.DesktopSettings
+import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProxyMode
 import xyz.a202132.windows.model.UrlTestTargets
 
@@ -18,7 +19,9 @@ data class DesktopPreferences(
     val proxyMode: ProxyMode = ProxyMode.SMART,
     val selectedNodeId: String? = null,
     val favoriteNodeIds: Set<String> = emptySet(),
-    val settings: DesktopSettings = DesktopSettings()
+    val settings: DesktopSettings = DesktopSettings(),
+    // null 表示旧版本尚未保存过核心选择；空集合表示用户明确全部选择 sing-box。
+    val xrayProtocols: Set<NodeType>? = null
 )
 
 class DesktopPreferencesStore(

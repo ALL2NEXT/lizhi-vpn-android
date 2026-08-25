@@ -75,6 +75,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
@@ -150,7 +151,10 @@ import xyz.a202132.windows.model.DesktopNode
 import xyz.a202132.windows.model.DesktopSettings
 import xyz.a202132.windows.model.Ipv6RoutingMode
 import xyz.a202132.windows.model.NodeCategory
+import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProxyMode
+import xyz.a202132.windows.model.ProtocolCoreSettings
+import xyz.a202132.windows.model.ProxyCore
 import xyz.a202132.windows.model.TunStack
 import xyz.a202132.windows.model.UrlTestTargets
 import xyz.a202132.windows.model.VpnState
@@ -1397,8 +1401,11 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                 AppScreen.FEATURES -> {
                     FeatureSettingsContent(
                         settings = state.settings,
+                        protocolCoreSettings = state.protocolCoreSettings,
+                        xrayCoreStatus = state.xrayCoreStatus,
                         isAdapting = state.isHysteriaBandwidthAdapting,
                         onAdapt = controller::adaptHysteriaBandwidth,
+                        onProtocolCoreChange = controller::setProtocolCore,
                         onSettingsChange = controller::updateSettings
                     )
                 }
@@ -1415,7 +1422,7 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                         )
                     }
                     Text("FireflyVPN", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Primary)
-                    Text("Windows 原生客户端 3.0.2", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Windows 原生客户端 3.0.3", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val updateUrl = state.backendSettings.githubUrl.ifBlank {
                         state.backendSettings.websiteUrl
                     }
@@ -1467,6 +1474,7 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                         }
                     }
                     InfoCard("sing-box", coreLabel(state.coreStatus))
+                    InfoCard("Xray", coreLabel(state.xrayCoreStatus, "Xray"))
                     InfoCard(
                         "后台",
                         if (state.backendConnected) {
@@ -1596,7 +1604,7 @@ private fun AccountSettingsContent(state: DesktopAppState, controller: VpnContro
         AccountInfoRow("设备厂商", account.brand.ifBlank { "Microsoft" })
         AccountInfoRow("设备型号", account.model.ifBlank { System.getProperty("os.name", "Windows") })
         AccountInfoRow("系统版本", account.osVersion.ifBlank { System.getProperty("os.version", "未知") })
-        AccountInfoRow("客户端版本", account.appVersion.ifBlank { "3.0.2" })
+        AccountInfoRow("客户端版本", account.appVersion.ifBlank { "3.0.3" })
     }
 
     AccountSection("账户操作") {
@@ -1988,10 +1996,33 @@ private fun UrlTestUrlSetting(
 @Composable
 private fun FeatureSettingsContent(
     settings: DesktopSettings,
+    protocolCoreSettings: ProtocolCoreSettings,
+    xrayCoreStatus: CoreStatus,
     isAdapting: Boolean,
     onAdapt: () -> Unit,
+    onProtocolCoreChange: (NodeType, ProxyCore) -> Unit,
     onSettingsChange: (DesktopSettings) -> Unit
 ) {
+    SettingSection("协议核心") {
+        Text(
+            "全部协议均在下方展示。灰色 Xray 表示当前内置 Xray 不支持该协议；修改后会自动重连。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp
+        )
+        ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
+            ProtocolCoreRow(
+                label = nodeType.displayName(),
+                selectedCore = protocolCoreSettings.coreFor(nodeType),
+                xrayAvailable = nodeType in ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS,
+                onSelected = { core -> onProtocolCoreChange(nodeType, core) }
+            )
+        }
+        Text(
+            coreLabel(xrayCoreStatus, "Xray"),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp
+        )
+    }
     SettingSection("智能连接") {
         NumberSettingField("TCPing 节点比例 (%)", settings.smartConnectTcpingPercent) {
             onSettingsChange(settings.copy(smartConnectTcpingPercent = it.coerceIn(1, 100)))
@@ -2033,6 +2064,47 @@ private fun FeatureSettingsContent(
             }
         }
     }
+}
+
+@Composable
+private fun ProtocolCoreRow(
+    label: String,
+    selectedCore: ProxyCore,
+    xrayAvailable: Boolean,
+    onSelected: (ProxyCore) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, modifier = Modifier.weight(1f), fontSize = 14.sp)
+        FilterChip(
+            selected = selectedCore == ProxyCore.SING_BOX,
+            onClick = { onSelected(ProxyCore.SING_BOX) },
+            label = { Text("sing-box") }
+        )
+        FilterChip(
+            selected = selectedCore == ProxyCore.XRAY,
+            onClick = { onSelected(ProxyCore.XRAY) },
+            enabled = xrayAvailable,
+            label = { Text("Xray") }
+        )
+    }
+}
+
+private fun NodeType.displayName(): String = when (this) {
+    NodeType.VLESS -> "VLESS"
+    NodeType.VMESS -> "VMess"
+    NodeType.TROJAN -> "Trojan"
+    NodeType.HYSTERIA2 -> "Hysteria2"
+    NodeType.ANYTLS -> "AnyTLS"
+    NodeType.TUIC -> "TUIC"
+    NodeType.NAIVE -> "Naive"
+    NodeType.WIREGUARD -> "WireGuard"
+    NodeType.SHADOWSOCKS -> "Shadowsocks"
+    NodeType.SOCKS -> "SOCKS"
+    NodeType.HTTP -> "HTTP"
 }
 
 @Composable
@@ -2142,11 +2214,11 @@ private fun InfoCard(title: String, value: String) {
     }
 }
 
-private fun coreLabel(status: CoreStatus): String = when (status) {
-    CoreStatus.Checking -> "正在检查核心"
-    CoreStatus.Missing -> "核心未就绪"
-    is CoreStatus.Available -> "sing-box ${status.version}"
-    is CoreStatus.Failed -> "核心异常"
+private fun coreLabel(status: CoreStatus, coreName: String = "sing-box"): String = when (status) {
+    CoreStatus.Checking -> "正在检查 $coreName"
+    CoreStatus.Missing -> "$coreName 未就绪"
+    is CoreStatus.Available -> "$coreName ${status.version}"
+    is CoreStatus.Failed -> "$coreName 异常"
 }
 
 private fun accountTypeLabel(type: String): String = when (type) {

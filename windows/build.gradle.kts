@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "xyz.a202132"
-version = "3.0.2"
+version = "3.0.3"
 
 kotlin {
     compilerOptions {
@@ -60,16 +60,33 @@ val buildSingBox by tasks.registering(Exec::class) {
     )
 }
 
+val buildXray by tasks.registering(Exec::class) {
+    group = "firefly windows"
+    description = "从锁定源码构建 Windows Xray 核心"
+    workingDir(projectDir)
+    commandLine(
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        file("scripts/build-xray.ps1").absolutePath
+    )
+    inputs.dir("../xray-core")
+    inputs.file("scripts/build-xray.ps1")
+    outputs.file("runtime/windows-x64/xray.exe")
+}
+
 tasks.matching { task ->
     task.name == "run" ||
         task.name == "createDistributable" ||
         task.name.startsWith("package", ignoreCase = true)
 }.configureEach {
-    dependsOn(buildSingBox)
+    dependsOn(buildSingBox, buildXray)
 }
 
 tasks.matching { it.name == "prepareAppResources" }.configureEach {
-    dependsOn(buildSingBox)
+    dependsOn(buildSingBox, buildXray)
 }
 
 val verifyRuntimeModules by tasks.registering {
@@ -95,6 +112,7 @@ tasks.matching {
 }
 
 tasks.test {
+    dependsOn(buildXray)
     useJUnitPlatform()
 }
 

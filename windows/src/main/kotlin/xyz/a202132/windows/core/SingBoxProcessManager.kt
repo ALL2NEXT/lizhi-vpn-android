@@ -38,7 +38,8 @@ class SingBoxProcessManager(
         selectedNodeId: String,
         mode: ProxyMode,
         tunEnabled: Boolean = true,
-        settings: DesktopSettings = DesktopSettings()
+        settings: DesktopSettings = DesktopSettings(),
+        xrayBridgePorts: Map<String, Int> = emptyMap()
     ): CoreStartResult {
         stop()
         return runCatching {
@@ -57,7 +58,8 @@ class SingBoxProcessManager(
                 settings,
                 apiPort,
                 tunEnabled,
-                proxyPort
+                proxyPort,
+                xrayBridgePorts
             )
             Files.writeString(configFile, config, Charsets.UTF_8)
 

@@ -27,7 +27,8 @@ class WindowsSingBoxConfigGenerator {
         settings: DesktopSettings = DesktopSettings(),
         clashApiPort: Int = 9090,
         tunEnabled: Boolean = true,
-        proxyPort: Int = 0
+        proxyPort: Int = 0,
+        xrayBridgePorts: Map<String, Int> = emptyMap()
     ): String {
         require(nodes.isNotEmpty()) { "没有可用于生成配置的节点" }
         val selected = nodes.firstOrNull { it.id == selectedNodeId } ?: nodes.first()
@@ -69,7 +70,7 @@ class WindowsSingBoxConfigGenerator {
                     })
                 }
             })
-            add("outbounds", createOutbounds(nodes, selected, settings))
+            add("outbounds", createOutbounds(nodes, selected, settings, xrayBridgePorts))
             add("route", createRoute(proxyMode, serverDomains, serverIps, geoSiteCn, geoIpCn))
             add("experimental", JsonObject().apply {
                 add("cache_file", JsonObject().apply { addProperty("enabled", true) })
@@ -126,7 +127,8 @@ class WindowsSingBoxConfigGenerator {
     private fun createOutbounds(
         nodes: List<DesktopNode>,
         selected: DesktopNode,
-        settings: DesktopSettings
+        settings: DesktopSettings,
+        xrayBridgePorts: Map<String, Int>
     ) = JsonArray().apply {
         add(JsonObject().apply {
             addProperty("type", "selector")
@@ -134,7 +136,16 @@ class WindowsSingBoxConfigGenerator {
             add("outbounds", nodes.map(DesktopNode::id).toJsonArray())
             addProperty("default", selected.id)
         })
-        nodes.forEach { node -> add(createNodeOutbound(node, settings)) }
+        nodes.forEach { node ->
+            val xrayPort = xrayBridgePorts[node.id]
+            add(
+                if (xrayPort != null) {
+                    createXrayBridgeOutbound(node.id, xrayPort)
+                } else {
+                    createNodeOutbound(node, settings)
+                }
+            )
+        }
         add(JsonObject().apply {
             addProperty("type", "direct")
             addProperty("tag", "direct")
@@ -144,6 +155,16 @@ class WindowsSingBoxConfigGenerator {
             // to make this direct route non-empty without changing routing.
             addProperty("udp_fragment", true)
         })
+    }
+
+    /** 将 sing-box 中的节点出站转接到对应的本地 Xray SOCKS 桥。 */
+    private fun createXrayBridgeOutbound(tag: String, port: Int) = JsonObject().apply {
+        require(port in 1..65_535) { "节点 $tag 的 Xray 桥接端口无效" }
+        addProperty("type", "socks")
+        addProperty("tag", tag)
+        addProperty("server", "127.0.0.1")
+        addProperty("server_port", port)
+        addProperty("version", "5")
     }
 
     private fun createNodeOutbound(node: DesktopNode, settings: DesktopSettings): JsonObject {
@@ -391,6 +412,12 @@ class WindowsSingBoxConfigGenerator {
         add("rules", JsonArray().apply {
             add(JsonObject().apply {
                 addProperty("action", "sniff")
+            })
+            // Xray 作为独立桥接进程运行，其上游连接必须绕过代理出站，
+            // 否则无 TLS 可嗅探的节点连接可能被再次送回 Xray，形成流量环路。
+            add(JsonObject().apply {
+                add("process_name", JsonArray().apply { add("xray.exe") })
+                addProperty("outbound", "direct")
             })
             add(JsonObject().apply {
                 addProperty("protocol", "dns")

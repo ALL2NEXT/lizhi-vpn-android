@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import xyz.a202132.windows.model.ProxyMode
+import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.UrlTestTargets
 
 class DesktopPreferencesStoreTest {
@@ -59,5 +60,16 @@ class DesktopPreferencesStoreTest {
             UrlTestTargets.DEFAULT_URL,
             DesktopPreferencesStore(file).snapshot().settings.urlTestUrl
         )
+    }
+
+    @Test
+    fun `preserves an explicit empty xray protocol selection`() {
+        val directory = Files.createTempDirectory("firefly-core-preferences")
+        val file = directory.resolve("preferences.json")
+        val store = DesktopPreferencesStore(file)
+
+        store.update { it.copy(xrayProtocols = emptySet()) }
+
+        assertEquals(emptySet<NodeType>(), DesktopPreferencesStore(file).snapshot().xrayProtocols)
     }
 }

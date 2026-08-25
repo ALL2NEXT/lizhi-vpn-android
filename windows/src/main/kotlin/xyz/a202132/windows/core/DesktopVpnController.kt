@@ -1,6 +1,7 @@
 package xyz.a202132.windows.core
 
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.net.Socket
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -26,7 +27,10 @@ import xyz.a202132.windows.model.DesktopAppState
 import xyz.a202132.windows.model.DesktopNode
 import xyz.a202132.windows.model.DesktopSettings
 import xyz.a202132.windows.model.NodeCategory
+import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProxyMode
+import xyz.a202132.windows.model.ProtocolCoreSettings
+import xyz.a202132.windows.model.ProxyCore
 import xyz.a202132.windows.model.VpnState
 import xyz.a202132.windows.model.UrlTestTargets
 import xyz.a202132.windows.network.BackendClient
@@ -35,8 +39,10 @@ import xyz.a202132.windows.network.NodeLocationResolver
 
 class DesktopVpnController(
     private val locator: SingBoxLocator = SingBoxLocator(),
+    private val xrayLocator: XrayLocator = XrayLocator(),
     private val nodeParser: NodeLinkParser = NodeLinkParser(),
     private val processManager: SingBoxProcessManager = SingBoxProcessManager(),
+    private val xrayProcessManager: XrayProcessManager = XrayProcessManager(),
     private val urlTestManager: SingBoxUrlTestManager = SingBoxUrlTestManager(),
     private val bandwidthTestManager: SingBoxBandwidthTestManager = SingBoxBandwidthTestManager(),
     private val directBandwidthTestManager: DirectBandwidthTestManager = DirectBandwidthTestManager(),
@@ -57,34 +63,33 @@ class DesktopVpnController(
             proxyMode = storedPreferences.proxyMode,
             selectedNodeId = storedPreferences.selectedNodeId,
             backendUrl = storedPreferences.backendUrl,
-            settings = storedPreferences.settings
+            settings = storedPreferences.settings,
+            protocolCoreSettings = ProtocolCoreSettings.fromStored(storedPreferences.xrayProtocols)
         )
     )
 
     override val state: StateFlow<DesktopAppState> = mutableState.asStateFlow()
 
     override fun refreshCore() {
-        mutableState.update { it.copy(coreStatus = CoreStatus.Checking) }
+        mutableState.update {
+            it.copy(coreStatus = CoreStatus.Checking, xrayCoreStatus = CoreStatus.Checking)
+        }
         scope.launch {
-            when (val result = locator.locate()) {
-                is CoreDiscoveryResult.Available -> mutableState.update {
-                    it.copy(
-                        coreStatus = CoreStatus.Available(result.executable, result.version),
-                        message = null
-                    )
-                }
-                is CoreDiscoveryResult.Missing -> mutableState.update {
-                    it.copy(
-                        coreStatus = CoreStatus.Missing,
-                        message = "未找到源码构建的 sing-box.exe"
-                    )
-                }
-                is CoreDiscoveryResult.Failed -> mutableState.update {
-                    it.copy(
-                        coreStatus = CoreStatus.Failed(result.executable, result.reason),
-                        message = "核心不可用：${result.reason}"
-                    )
-                }
+            val singBoxResult = locator.locate()
+            val xrayResult = xrayLocator.locate()
+            val message = when {
+                singBoxResult is CoreDiscoveryResult.Missing -> "未找到源码构建的 sing-box.exe"
+                singBoxResult is CoreDiscoveryResult.Failed -> "sing-box 不可用：${singBoxResult.reason}"
+                xrayResult is CoreDiscoveryResult.Missing -> "未找到源码构建的 xray.exe，Xray 协议暂不可用"
+                xrayResult is CoreDiscoveryResult.Failed -> "Xray 不可用：${xrayResult.reason}"
+                else -> null
+            }
+            mutableState.update {
+                it.copy(
+                    coreStatus = singBoxResult.toCoreStatus(),
+                    xrayCoreStatus = xrayResult.toCoreStatus(),
+                    message = message
+                )
             }
         }
     }
@@ -361,6 +366,20 @@ class DesktopVpnController(
                 recoveryJob = null
             }
         }
+    }
+
+    override fun setProtocolCore(nodeType: NodeType, core: ProxyCore) {
+        if (nodeType !in ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS) return
+        val current = mutableState.value.protocolCoreSettings
+        if (current.coreFor(nodeType) == core) return
+        val selected = current.xrayProtocols.toMutableSet().apply {
+            if (core == ProxyCore.XRAY) add(nodeType) else remove(nodeType)
+        }
+        val updated = ProtocolCoreSettings(selected)
+        val shouldRestart = mutableState.value.vpnState == VpnState.CONNECTED
+        mutableState.update { it.copy(protocolCoreSettings = updated) }
+        preferencesStore.update { it.copy(xrayProtocols = updated.xrayProtocols) }
+        if (shouldRestart) mutableState.value.selectedNodeId?.let(::startNode)
     }
 
     override fun adaptHysteriaBandwidth() {
@@ -645,6 +664,7 @@ class DesktopVpnController(
         scope.launch {
             val traffic = finishTrafficSession()
             processManager.stop()
+            xrayProcessManager.stop()
             traffic?.let { reportTraffic(it) }
             delay(180)
             mutableState.update {
@@ -659,6 +679,7 @@ class DesktopVpnController(
         recoveryJob?.cancel()
         trafficJob?.cancel()
         processManager.close()
+        xrayProcessManager.close()
         scope.cancel()
     }
 
@@ -687,14 +708,32 @@ class DesktopVpnController(
             preferencesStore.update { it.copy(selectedNodeId = node.id) }
         }
         scope.launch {
+            val preparedCores = runCatching {
+                prepareAndStartProtocolCores(
+                    nodes = mutableState.value.nodes,
+                    selectedNodeId = node.id,
+                    coreSettings = mutableState.value.protocolCoreSettings,
+                    xrayStatus = mutableState.value.xrayCoreStatus
+                )
+            }.getOrElse { error ->
+                xrayProcessManager.stop()
+                mutableState.update {
+                    it.copy(
+                        vpnState = VpnState.DISCONNECTED,
+                        message = formatConnectionFailure(error.message ?: "Xray 启动失败")
+                    )
+                }
+                return@launch
+            }
             when (
                 val result = processManager.start(
                     executable = core.executable,
-                    nodes = mutableState.value.nodes,
+                    nodes = preparedCores.nodes,
                     selectedNodeId = node.id,
                     mode = mutableState.value.proxyMode,
                     tunEnabled = mutableState.value.tunEnabled,
-                    settings = mutableState.value.settings
+                    settings = mutableState.value.settings,
+                    xrayBridgePorts = preparedCores.bridgePorts
                 )
             ) {
                 CoreStartResult.Started -> {
@@ -704,12 +743,105 @@ class DesktopVpnController(
                         startRecoveryMonitor(node.id)
                     }
                 }
-                is CoreStartResult.Failed -> mutableState.update {
-                    it.copy(
-                        vpnState = VpnState.DISCONNECTED,
-                        message = formatConnectionFailure(result.reason)
-                    )
+                is CoreStartResult.Failed -> {
+                    xrayProcessManager.stop()
+                    mutableState.update {
+                        it.copy(
+                            vpnState = VpnState.DISCONNECTED,
+                            message = formatConnectionFailure(result.reason)
+                        )
+                    }
                 }
+            }
+        }
+    }
+
+    private fun prepareAndStartProtocolCores(
+        nodes: List<DesktopNode>,
+        selectedNodeId: String,
+        coreSettings: ProtocolCoreSettings,
+        xrayStatus: CoreStatus
+    ): PreparedProtocolCores {
+        xrayProcessManager.stop()
+        val xrayNodes = nodes.filter { coreSettings.usesXray(it.type) }
+        if (xrayNodes.isEmpty()) return PreparedProtocolCores(nodes, emptyMap())
+
+        val selectedUsesXray = xrayNodes.any { it.id == selectedNodeId }
+        val xrayExecutable = (xrayStatus as? CoreStatus.Available)?.executable
+        if (xrayExecutable == null) {
+            require(!selectedUsesXray) { "所选协议需要 Xray，但 Xray 核心尚未就绪" }
+            val singBoxNodes = nodes.filterNot { coreSettings.usesXray(it.type) }
+            require(singBoxNodes.isNotEmpty()) { "没有可由 sing-box 启动的节点" }
+            return PreparedProtocolCores(singBoxNodes, emptyMap())
+        }
+
+        val allocatedPorts = allocateXrayBridgePorts(xrayNodes)
+        val prepared = runCatching {
+            XrayConfigPreparer(xrayProcessManager).prepare(
+                executable = xrayExecutable,
+                nodes = xrayNodes,
+                bridgePorts = allocatedPorts,
+                selectedNodeId = selectedNodeId
+            )
+        }.getOrElse { error ->
+            if (selectedUsesXray) throw error
+            val singBoxNodes = nodes.filterNot { coreSettings.usesXray(it.type) }
+            require(singBoxNodes.isNotEmpty()) { error.message ?: "当前没有可用节点" }
+            return PreparedProtocolCores(singBoxNodes, emptyMap())
+        }
+
+        val compatibleIds = prepared.nodes.mapTo(hashSetOf(), DesktopNode::id)
+        val effectiveNodes = nodes.filter { node ->
+            !coreSettings.usesXray(node.type) || node.id in compatibleIds
+        }
+        xrayProcessManager.start(
+            executable = xrayExecutable,
+            config = prepared.content,
+            bridgePorts = prepared.bridgePorts.values,
+            onUnexpectedExit = ::handleXrayUnexpectedExit
+        ).getOrThrow()
+        return PreparedProtocolCores(effectiveNodes, prepared.bridgePorts)
+    }
+
+    private fun allocateXrayBridgePorts(nodes: List<DesktopNode>): Map<String, Int> {
+        val reservations = mutableListOf<Pair<String, ServerSocket>>()
+        return try {
+            nodes.forEach { node ->
+                val socket = ServerSocket().apply {
+                    reuseAddress = false
+                    bind(InetSocketAddress("127.0.0.1", 0))
+                }
+                reservations += node.id to socket
+            }
+            reservations.associate { (nodeId, socket) -> nodeId to socket.localPort }
+        } finally {
+            reservations.forEach { (_, socket) -> runCatching { socket.close() } }
+        }
+    }
+
+    private fun handleXrayUnexpectedExit(reason: String) {
+        scope.launch {
+            val snapshot = mutableState.value
+            if (snapshot.vpnState == VpnState.DISCONNECTED || snapshot.vpnState == VpnState.DISCONNECTING) {
+                return@launch
+            }
+            recoveryJob?.cancel()
+            recoveryJob = null
+            finishTrafficSession()?.let { reportTraffic(it) }
+            processManager.stop()
+            mutableState.update {
+                it.copy(
+                    vpnState = VpnState.DISCONNECTED,
+                    message = if (snapshot.settings.disconnectRecoveryEnabled) {
+                        "$reason，正在恢复连接"
+                    } else {
+                        reason
+                    }
+                )
+            }
+            if (snapshot.settings.disconnectRecoveryEnabled) {
+                delay(1_000)
+                snapshot.selectedNodeId?.let(::startNode)
             }
         }
     }
@@ -862,6 +994,17 @@ class DesktopVpnController(
         val downloadBytes: Long = 0L
     )
 
+}
+
+private data class PreparedProtocolCores(
+    val nodes: List<DesktopNode>,
+    val bridgePorts: Map<String, Int>
+)
+
+private fun CoreDiscoveryResult.toCoreStatus(): CoreStatus = when (this) {
+    is CoreDiscoveryResult.Available -> CoreStatus.Available(executable, version)
+    is CoreDiscoveryResult.Missing -> CoreStatus.Missing
+    is CoreDiscoveryResult.Failed -> CoreStatus.Failed(executable, reason)
 }
 
 internal fun mergeImportedNodes(

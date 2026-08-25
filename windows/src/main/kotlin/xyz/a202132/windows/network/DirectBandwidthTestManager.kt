@@ -73,6 +73,6 @@ class DirectBandwidthTestManager(
     }
 
     private companion object {
-        const val USER_AGENT = "FireflyVPN/3.0.2 (Windows)"
+        const val USER_AGENT = "FireflyVPN/3.0.3 (Windows)"
     }
 }
