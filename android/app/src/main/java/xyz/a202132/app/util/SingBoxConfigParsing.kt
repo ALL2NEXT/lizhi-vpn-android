@@ -106,13 +106,15 @@ internal fun decodeBase64Compat(rawValue: String): String {
 
 internal fun parseShadowsocksMethodPassword(linkContent: String): String {
     val credentials = linkContent.substringBefore("@")
-    return when {
+    val decoded = when {
         credentials.contains(":") -> credentials
         credentials.isNotBlank() -> runCatching {
             decodeBase64Compat(credentials)
         }.getOrDefault("aes-256-gcm:password")
         else -> "aes-256-gcm:password"
     }
+    // 旧版 SS 链接会将 method:password@server:port 整体编码为 Base64。
+    return decoded.substringBeforeLast("@", decoded)
 }
 
 /** Normalizes subscription transport aliases to values supported by libbox. */

@@ -26,7 +26,8 @@ internal class VpnConfigPreparer(
         internalSocksPort: Int,
         hysteriaUpMbps: Int,
         hysteriaDownMbps: Int,
-        tunStack: TunStack
+        tunStack: TunStack,
+        xrayBridgePorts: Map<String, Int> = emptyMap()
     ): String {
         val candidates = nodes.filter { node ->
             node.type != NodeType.UNKNOWN &&
@@ -44,7 +45,8 @@ internal class VpnConfigPreparer(
             internalSocksPort,
             hysteriaUpMbps,
             hysteriaDownMbps,
-            tunStack
+            tunStack,
+            xrayBridgePorts.filterKeys { id -> source.any { it.id == id } }
         )
 
         val fastConfig = runCatching { generate(candidates) }
@@ -59,7 +61,9 @@ internal class VpnConfigPreparer(
             "Complete config validation failed; isolating incompatible nodes",
             fastConfig.exceptionOrNull()
         )
-        val compatibleNodes = candidates.filter(::isCoreCompatible)
+        val compatibleNodes = candidates.filter { node ->
+            node.id in xrayBridgePorts || isCoreCompatible(node)
+        }
         val skippedCount = candidates.size - compatibleNodes.size
         if (skippedCount > 0) {
             Log.w(TAG, "Skipped $skippedCount core-incompatible nodes before VPN start")

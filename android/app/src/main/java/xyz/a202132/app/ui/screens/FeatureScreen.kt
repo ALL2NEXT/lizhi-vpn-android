@@ -8,6 +8,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -27,6 +29,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import xyz.a202132.app.BuildConfig
+import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.data.model.ProtocolCoreSettings
+import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
@@ -43,6 +49,7 @@ fun FeatureScreen(
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
     val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
+    val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
 
     var tcpingPercentInput by remember(smartConnectTcpingPercent) {
         mutableStateOf(smartConnectTcpingPercent.toString())
@@ -84,6 +91,29 @@ fun FeatureScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            FeatureSection(
+                title = "协议核心"
+            ) {
+                Text(
+                    text = "全部协议均在下方展示。灰色 Xray 表示当前内置 Xray 不支持该协议；修改后会自动重连。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
+                    ProtocolCoreRow(
+                        label = nodeType.displayName(),
+                        selectedCore = protocolCoreSettings.coreFor(nodeType),
+                        xrayAvailable = nodeType in ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS,
+                        onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
+                    )
+                }
+                Text(
+                    text = "内置 Xray ${BuildConfig.XRAY_CORE_VERSION}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
+
             FeatureSection(
                 title = "智能连接"
             ) {
@@ -178,6 +208,53 @@ fun FeatureScreen(
             }
         }
     }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun ProtocolCoreRow(
+    label: String,
+    selectedCore: ProxyCore,
+    xrayAvailable: Boolean,
+    onSelected: (ProxyCore) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        FilterChip(
+            selected = selectedCore == ProxyCore.SING_BOX,
+            onClick = { onSelected(ProxyCore.SING_BOX) },
+            label = { Text("sing-box") }
+        )
+        FilterChip(
+            selected = selectedCore == ProxyCore.XRAY,
+            onClick = { onSelected(ProxyCore.XRAY) },
+            enabled = xrayAvailable,
+            label = { Text("Xray") }
+        )
+    }
+}
+
+private fun NodeType.displayName(): String = when (this) {
+    NodeType.VLESS -> "VLESS"
+    NodeType.VMESS -> "VMess"
+    NodeType.TROJAN -> "Trojan"
+    NodeType.HYSTERIA2 -> "Hysteria2"
+    NodeType.ANYTLS -> "AnyTLS"
+    NodeType.TUIC -> "TUIC"
+    NodeType.NAIVE -> "Naive"
+    NodeType.WIREGUARD -> "WireGuard"
+    NodeType.SHADOWSOCKS -> "Shadowsocks"
+    NodeType.SOCKS -> "SOCKS"
+    NodeType.HTTP -> "HTTP"
+    NodeType.UNKNOWN -> "Unknown"
 }
 
 @Composable

@@ -285,7 +285,9 @@ class BoxPlatformInterface(
      */
     private fun applyPerAppProxy(builder: android.net.VpnService.Builder): Boolean {
         val isPerAppEnabled = perAppProxySettings.enabled
-        val selectedPackages = perAppProxySettings.selectedPackages
+        // VPN 宿主进程同时负责运行 Xray；如果代理自身 UID，Xray 的上游连接会被
+        // 再次送回 TUN，最终形成流量环路。
+        val selectedPackages = perAppProxySettings.selectedPackages - service.packageName
         
         if (!isPerAppEnabled) {
             Log.d(TAG, "Per-app proxy disabled, all apps will use VPN")

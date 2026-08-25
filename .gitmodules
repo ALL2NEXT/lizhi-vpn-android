@@ -1,3 +1,6 @@
 [submodule "sing-box"]
 	path = sing-box
 	url = https://github.com/SagerNet/sing-box.git
+[submodule "xray-core"]
+	path = xray-core
+	url = https://github.com/XTLS/Xray-core.git

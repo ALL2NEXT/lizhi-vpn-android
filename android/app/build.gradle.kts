@@ -15,6 +15,9 @@ val singBoxNdkVersion = "28.0.13004108"
 // libbox.aar.
 val singBoxSourceDir = rootProject.file("../sing-box")
 val generatedLibboxAar = layout.buildDirectory.file("generated/sing-box/libbox.aar")
+val xraySourceDir = rootProject.file("../xray-core")
+val generatedXrayJniDir = layout.buildDirectory.dir("generated/xray/jniLibs")
+val xrayCoreVersion = "26.3.27"
 
 val buildLibbox = tasks.register("buildLibbox") {
     group = "sing-box"
@@ -125,12 +128,90 @@ val buildLibbox = tasks.register("buildLibbox") {
     }
 }
 
+// Xray 特意编译为独立 PIE 可执行文件并打包到 nativeLibraryDir。
+// 如果在进程内再加载一个 gomobile AAR，会在 libbox 旁引入第二套 Go/JNI 运行时。
+// 进程隔离可以避免符号与运行时冲突，并确保 Android TUN 始终只由 sing-box 管理。
+val buildXrayCore = tasks.register("buildXrayCore") {
+    group = "xray"
+    description = "Build the pinned Xray-core source for the Android ABIs"
+
+    inputs.files(fileTree(xraySourceDir) {
+        exclude(".git/**")
+        exclude("build/**")
+        exclude("release/**")
+    })
+    val arm32Output = generatedXrayJniDir.map { it.file("armeabi-v7a/libxray.so") }
+    val arm64Output = generatedXrayJniDir.map { it.file("arm64-v8a/libxray.so") }
+    outputs.files(arm32Output, arm64Output)
+
+    doLast {
+        val goExecutable = if (System.getProperty("os.name").startsWith("Windows")) "go.exe" else "go"
+        check(xraySourceDir.resolve("go.mod").isFile) {
+            "Xray-core source is missing at ${xraySourceDir.absolutePath}. " +
+                "Run `git submodule update --init --recursive`."
+        }
+
+        val localProperties = Properties()
+        rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use {
+            localProperties.load(it)
+        }
+        val sdkPath = localProperties.getProperty("sdk.dir")
+            ?: System.getenv("ANDROID_HOME")
+            ?: error("Android SDK not found. Set sdk.dir in android/local.properties or ANDROID_HOME.")
+        val hostTag = when {
+            System.getProperty("os.name").startsWith("Windows") -> "windows-x86_64"
+            System.getProperty("os.name").startsWith("Mac") -> "darwin-x86_64"
+            else -> "linux-x86_64"
+        }
+        val clangSuffix = if (hostTag.startsWith("windows")) ".cmd" else ""
+        val clangBin = File(sdkPath).resolve("ndk/$singBoxNdkVersion/toolchains/llvm/prebuilt/$hostTag/bin")
+        check(clangBin.isDirectory) { "Android NDK toolchain not found at ${clangBin.absolutePath}" }
+
+        data class XrayAbi(
+            val androidAbi: String,
+            val goArch: String,
+            val clangTarget: String,
+            val goArm: String? = null
+        )
+        val abis = listOf(
+            XrayAbi("armeabi-v7a", "arm", "armv7a-linux-androideabi", "7"),
+            XrayAbi("arm64-v8a", "arm64", "aarch64-linux-android")
+        )
+        abis.forEach { abi ->
+            val output = generatedXrayJniDir.get().file("${abi.androidAbi}/libxray.so").asFile
+            output.parentFile.mkdirs()
+            val clang = clangBin.resolve("${abi.clangTarget}24-clang$clangSuffix")
+            check(clang.isFile) { "Android clang not found at ${clang.absolutePath}" }
+            exec {
+                workingDir(xraySourceDir)
+                environment("GOOS", "android")
+                environment("GOARCH", abi.goArch)
+                environment("CGO_ENABLED", "1")
+                environment("CC", clang.absolutePath)
+                if (abi.goArm != null) environment("GOARM", abi.goArm)
+                commandLine(
+                    goExecutable,
+                    "build",
+                    "-trimpath",
+                    "-buildvcs=false",
+                    "-buildmode=pie",
+                    "-ldflags=-s -w -buildid=",
+                    "-o",
+                    output.absolutePath,
+                    "./main"
+                )
+            }
+        }
+    }
+}
+
 // All Android variants resolve the generated AAR before compiling Kotlin or
 // packaging the APK. This also covers unit-test variants such as
 // preDebugUnitTestBuild.
 tasks.configureEach {
     if (name.startsWith("pre") && name.endsWith("Build")) {
         dependsOn(buildLibbox)
+        dependsOn(buildXrayCore)
     }
 }
 
@@ -144,6 +225,7 @@ android {
         targetSdk = 35
         versionCode = 21
         versionName = "3.0.0"
+        buildConfigField("String", "XRAY_CORE_VERSION", "\"$xrayCoreVersion\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -233,6 +315,8 @@ android {
             useLegacyPackaging = true
         }
     }
+
+    sourceSets.getByName("main").jniLibs.srcDir(generatedXrayJniDir)
 
     externalNativeBuild {
         cmake {

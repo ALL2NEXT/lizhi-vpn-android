@@ -29,6 +29,7 @@ import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.service.ServiceManager
 import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
+import xyz.a202132.app.util.XrayConfigGenerator
 import xyz.a202132.app.util.DatabasePassphraseManager
 import java.io.File
 import java.time.Instant
@@ -58,6 +59,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val subscriptionParser = SubscriptionParser()
     private val accountManager = AccountManager(application)
     private val configGenerator = SingBoxConfigGenerator()
+    private val xrayConfigGenerator = XrayConfigGenerator()
     private val latencyTester = LatencyTester()
     private val bandwidthTester = NodeDownloadBandwidthTester(application)
     // 节流控制
@@ -257,6 +259,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
     val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_UP_MBPS)
     val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_DOWN_MBPS)
+    val protocolCoreSettings = settingsRepository.protocolCoreSettings.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        ProtocolCoreSettings()
+    )
     val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.VPN_MTU)
     val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Eagerly, TunStack.GVISOR)
     val skinSettings = settingsRepository.skinSettings.stateIn(
@@ -707,6 +714,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setProtocolCore(nodeType: NodeType, core: ProxyCore) {
+        if (protocolCoreSettings.value.coreFor(nodeType) == core) return
+        viewModelScope.launch {
+            settingsRepository.setProtocolCore(nodeType, core)
+            restartVpnIfNeeded()
+        }
+    }
+
     fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {
         viewModelScope.launch {
             settingsRepository.upsertSkinScheme(scheme, activate)
@@ -1053,6 +1068,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun isNodeCoreConfigCompatible(node: Node): Boolean {
+        if (protocolCoreSettings.value.usesXray(node.type)) {
+            return runCatching {
+                xrayConfigGenerator.generateTestConfig(node)
+            }.onFailure { error ->
+                Log.w(tag, "Skip malformed Xray node: type=${node.type}, server=${node.server}", error)
+            }.isSuccess
+        }
         return runCatching {
             val config = configGenerator.generateTestConfig(node)
             Libbox.checkConfig(config)

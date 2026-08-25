@@ -42,7 +42,8 @@ class SingBoxConfigGenerator {
         internalSocksPort: Int? = null,
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS,
-        tunStack: TunStack = TunStack.GVISOR
+        tunStack: TunStack = TunStack.GVISOR,
+        xrayBridgePorts: Map<String, Int> = emptyMap()
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
         if (nodes.isEmpty()) {
@@ -62,7 +63,13 @@ class SingBoxConfigGenerator {
             add("inbounds", createInbounds(ipv6Mode, mtu, internalSocksPort, tunStack))
             add(
                 "outbounds",
-                createOutbounds(nodes, selectedNodeId, hysteriaUpMbps, hysteriaDownMbps)
+                createOutbounds(
+                    nodes,
+                    selectedNodeId,
+                    hysteriaUpMbps,
+                    hysteriaDownMbps,
+                    xrayBridgePorts
+                )
             )
             add("route", createRoute(proxyMode, nodeDomains, nodeIPs))
             add("experimental", createExperimental())
@@ -375,7 +382,8 @@ class SingBoxConfigGenerator {
         nodes: List<Node>,
         selectedNodeId: String?,
         hysteriaUpMbps: Int,
-        hysteriaDownMbps: Int
+        hysteriaDownMbps: Int,
+        xrayBridgePorts: Map<String, Int>
     ): JsonArray {
         val outbounds = JsonArray()
         
@@ -395,7 +403,14 @@ class SingBoxConfigGenerator {
         
         // 2. Individual Node Outbounds (具体节点)
         nodes.forEach { node ->
-            outbounds.add(createNodeOutbound(node, node.id, hysteriaUpMbps, hysteriaDownMbps))
+            val xrayPort = xrayBridgePorts[node.id]
+            outbounds.add(
+                if (xrayPort != null) {
+                    createXrayBridgeOutbound(node.id, xrayPort)
+                } else {
+                    createNodeOutbound(node, node.id, hysteriaUpMbps, hysteriaDownMbps)
+                }
+            )
         }
         
         // 3. Other Outbounds (Direct, Block, DNS)
@@ -415,6 +430,15 @@ class SingBoxConfigGenerator {
         })
         
         return outbounds
+    }
+
+    private fun createXrayBridgeOutbound(tag: String, port: Int): JsonObject = JsonObject().apply {
+        require(port in 1..65_535) { "Xray bridge port is invalid for node $tag" }
+        addProperty("type", "socks")
+        addProperty("tag", tag)
+        addProperty("server", "127.0.0.1")
+        addProperty("server_port", port)
+        addProperty("version", "5")
     }
     
     private fun createNodeOutbound(

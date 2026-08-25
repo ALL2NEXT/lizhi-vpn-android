@@ -17,6 +17,7 @@ import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.data.repository.VpnRuntimeSettings
 import xyz.a202132.app.util.RuleManager
 import java.io.File
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import kotlinx.coroutines.flow.first
 
@@ -72,6 +73,18 @@ class BoxVpnService : VpnService() {
     private val configPreparer = VpnConfigPreparer()
     private val notificationFactory = VpnNotificationFactory(this)
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val xrayProcessManager by lazy {
+        XrayProcessManager(applicationContext, serviceScope) { message ->
+            serviceScope.launch(Dispatchers.Main) {
+                if (!isStopping) {
+                    Log.e(TAG, message)
+                    ServiceManager.notifyError(message)
+                    stopVpn()
+                }
+            }
+        }
+    }
+    private val xrayConfigPreparer by lazy { XrayConfigPreparer(xrayProcessManager) }
     private lateinit var disconnectRecoveryManager: DisconnectRecoveryManager
     @Volatile private var isStopping = false
     
@@ -183,17 +196,12 @@ class BoxVpnService : VpnService() {
 
                 // 4. Generate and validate the complete config once. Per-node
                 // validation is only used as a recovery path when it fails.
-                setupLibboxForConfigCheck()
-                val configContent = configPreparer.prepare(
+                val configContent = prepareAndStartProtocolCores(
                     nodes = rawNodes,
                     selectedNodeId = selectedNodeId,
                     proxyMode = proxyMode,
-                    ipv6Mode = ipv6Mode,
-                    vpnMtu = vpnMtu,
+                    runtimeSettings = runtimeSettings,
                     internalSocksPort = internalSocksPort,
-                    hysteriaUpMbps = hysteriaUpMbps,
-                    hysteriaDownMbps = hysteriaDownMbps,
-                    tunStack = tunStack
                 )
                 deleteLegacyConfigFile()
 
@@ -749,11 +757,6 @@ class BoxVpnService : VpnService() {
                 if (rawNodes.isNotEmpty()) {
                     val runtimeSettings = settingsRepo.getVpnRuntimeSettings()
                     val proxyMode = runtimeSettings.proxyMode
-                    val ipv6Mode = runtimeSettings.ipv6RoutingMode
-                    val vpnMtu = runtimeSettings.vpnMtu
-                    val tunStack = runtimeSettings.tunStack
-                    val hysteriaUpMbps = runtimeSettings.hysteriaUpMbps
-                    val hysteriaDownMbps = runtimeSettings.hysteriaDownMbps
                     val internalSocksPort = pickFreeInternalSocksPort()
 
                     // 获取选中的节点
@@ -768,17 +771,12 @@ class BoxVpnService : VpnService() {
 
                     // 确保规则集文件存在
                     RuleManager.ensureRuleSets(application)
-                    setupLibboxForConfigCheck()
-                    val configContent = configPreparer.prepare(
+                    val configContent = prepareAndStartProtocolCores(
                         nodes = rawNodes,
                         selectedNodeId = selectedNodeId,
                         proxyMode = proxyMode,
-                        ipv6Mode = ipv6Mode,
-                        vpnMtu = vpnMtu,
+                        runtimeSettings = runtimeSettings,
                         internalSocksPort = internalSocksPort,
-                        hysteriaUpMbps = hysteriaUpMbps,
-                        hysteriaDownMbps = hysteriaDownMbps,
-                        tunStack = tunStack
                     )
                     deleteLegacyConfigFile()
 
@@ -795,6 +793,73 @@ class BoxVpnService : VpnService() {
 
     private fun pickFreeInternalSocksPort(): Int {
         return ServerSocket(0).use { it.localPort }
+    }
+
+    private suspend fun prepareAndStartProtocolCores(
+        nodes: List<Node>,
+        selectedNodeId: String?,
+        proxyMode: ProxyMode,
+        runtimeSettings: VpnRuntimeSettings,
+        internalSocksPort: Int
+    ): String {
+        xrayProcessManager.stop()
+        val coreSettings = runtimeSettings.protocolCoreSettings
+        val xrayNodes = nodes.filter { node -> coreSettings.usesXray(node.type) }
+        var effectiveNodes = nodes
+        var bridgePorts: Map<String, Int> = emptyMap()
+
+        if (xrayNodes.isNotEmpty()) {
+            val allocatedPorts = allocateXrayBridgePorts(xrayNodes)
+            val selectedUsesXray = xrayNodes.any { it.id == selectedNodeId }
+            val preparedXray = runCatching {
+                xrayConfigPreparer.prepare(xrayNodes, allocatedPorts, selectedNodeId)
+            }.getOrElse { error ->
+                if (selectedUsesXray) throw error
+                Log.w(TAG, "No usable Xray nodes remained; continuing with sing-box nodes", error)
+                null
+            }
+
+            if (preparedXray != null) {
+                val compatibleIds = preparedXray.nodes.mapTo(mutableSetOf(), Node::id)
+                effectiveNodes = nodes.filter { node ->
+                    !coreSettings.usesXray(node.type) || node.id in compatibleIds
+                }
+                bridgePorts = preparedXray.bridgePorts
+                xrayProcessManager.start(preparedXray.content, bridgePorts.values)
+            } else {
+                effectiveNodes = nodes.filterNot { node -> coreSettings.usesXray(node.type) }
+            }
+        }
+
+        setupLibboxForConfigCheck()
+        return configPreparer.prepare(
+            nodes = effectiveNodes,
+            selectedNodeId = selectedNodeId,
+            proxyMode = proxyMode,
+            ipv6Mode = runtimeSettings.ipv6RoutingMode,
+            vpnMtu = runtimeSettings.vpnMtu,
+            internalSocksPort = internalSocksPort,
+            hysteriaUpMbps = runtimeSettings.hysteriaUpMbps,
+            hysteriaDownMbps = runtimeSettings.hysteriaDownMbps,
+            tunStack = runtimeSettings.tunStack,
+            xrayBridgePorts = bridgePorts
+        )
+    }
+
+    private fun allocateXrayBridgePorts(nodes: List<Node>): Map<String, Int> {
+        val reservations = mutableListOf<Pair<String, ServerSocket>>()
+        return try {
+            nodes.forEach { node ->
+                val socket = ServerSocket().apply {
+                    reuseAddress = false
+                    bind(InetSocketAddress("127.0.0.1", 0))
+                }
+                reservations += node.id to socket
+            }
+            reservations.associate { (nodeId, socket) -> nodeId to socket.localPort }
+        } finally {
+            reservations.forEach { (_, socket) -> runCatching { socket.close() } }
+        }
     }
     
     private fun cleanupResources() {
@@ -834,6 +899,7 @@ class BoxVpnService : VpnService() {
                 Log.e(TAG, "Error closing commandServer", e)
             }
             commandServer = null
+            xrayProcessManager.stop()
             deleteLegacyConfigFile()
             
             Log.d(TAG, "Resources cleaned up")

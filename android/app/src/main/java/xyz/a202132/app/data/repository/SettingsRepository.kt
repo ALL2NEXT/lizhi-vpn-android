@@ -11,6 +11,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
+import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.data.model.ProtocolCoreSettings
+import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.SkinSettings
@@ -29,6 +32,7 @@ data class VpnRuntimeSettings(
     val tunStack: TunStack,
     val hysteriaUpMbps: Int,
     val hysteriaDownMbps: Int,
+    val protocolCoreSettings: ProtocolCoreSettings,
     val perAppProxy: PerAppProxySettings
 )
 
@@ -78,6 +82,7 @@ class SettingsRepository(private val context: Context) {
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
+        private val XRAY_CORE_PROTOCOLS = stringSetPreferencesKey("xray_core_protocols")
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val HIDE_FAVORITE_NODE_GROUP =
             booleanPreferencesKey("hide_favorite_node_group")
@@ -205,11 +210,39 @@ class SettingsRepository(private val context: Context) {
                 ?: xyz.a202132.app.AppConfig.HYSTERIA_UP_MBPS).coerceAtLeast(0),
             hysteriaDownMbps = (preferences[HYSTERIA_DOWN_MBPS]
                 ?: xyz.a202132.app.AppConfig.HYSTERIA_DOWN_MBPS).coerceAtLeast(0),
+            protocolCoreSettings = decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS]),
             perAppProxy = PerAppProxySettings(
                 enabled = preferences[PER_APP_PROXY_ENABLED] ?: false,
                 selectedPackages = preferences[SELECTED_PACKAGES] ?: emptySet()
             )
         )
+    }
+
+    val protocolCoreSettings: Flow<ProtocolCoreSettings> = context.dataStore.data.map { preferences ->
+        decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS])
+    }
+
+    suspend fun setProtocolCore(nodeType: NodeType, core: ProxyCore) {
+        if (nodeType !in ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS) return
+        context.dataStore.edit { preferences ->
+            val current = decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS])
+                .xrayProtocols
+                .toMutableSet()
+            if (core == ProxyCore.XRAY) current += nodeType else current -= nodeType
+            preferences[XRAY_CORE_PROTOCOLS] = current.mapTo(mutableSetOf()) { it.protocol }
+        }
+    }
+
+    private fun decodeProtocolCoreSettings(values: Set<String>?): ProtocolCoreSettings {
+        val supported = ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS.toSet()
+        val storedValues = values ?: ProtocolCoreSettings.DEFAULT_XRAY_PROTOCOLS
+            .mapTo(mutableSetOf()) { it.protocol }
+        val selected = storedValues.mapNotNullTo(mutableSetOf()) { value ->
+            NodeType.entries.firstOrNull {
+                it.protocol.equals(value, ignoreCase = true) || it.name.equals(value, ignoreCase = true)
+            }
+        }.intersect(supported)
+        return ProtocolCoreSettings(selected)
     }
 
     private inline fun <reified T : Enum<T>> enumValueOrDefault(
