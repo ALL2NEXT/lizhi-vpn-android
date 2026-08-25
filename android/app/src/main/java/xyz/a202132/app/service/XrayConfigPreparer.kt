@@ -18,11 +18,15 @@ internal class XrayConfigPreparer(
     suspend fun prepare(
         nodes: List<Node>,
         bridgePorts: Map<String, Int>,
-        selectedNodeId: String?
+        selectedNodeId: String?,
+        hysteriaUpMbps: Int = 0,
+        hysteriaDownMbps: Int = 0
     ): PreparedXrayConfig {
         require(nodes.isNotEmpty()) { "没有需要 Xray 处理的节点" }
 
-        val fullGeneration = runCatching { generator.generateConfig(nodes, bridgePorts) }
+        val fullGeneration = runCatching {
+            generator.generateConfig(nodes, bridgePorts, hysteriaUpMbps, hysteriaDownMbps)
+        }
         val fullContent = fullGeneration.getOrNull()
         val fullCheck = if (fullContent != null) {
             processManager.checkConfig(fullContent)
@@ -36,7 +40,9 @@ internal class XrayConfigPreparer(
         Log.w(TAG, "Complete Xray config validation failed; isolating incompatible nodes", fullCheck.exceptionOrNull())
         val compatible = nodes.filter { node ->
             val port = bridgePorts.getValue(node.id)
-            val generated = runCatching { generator.generateTestConfig(node, port) }
+            val generated = runCatching {
+                generator.generateTestConfig(node, port, hysteriaUpMbps, hysteriaDownMbps)
+            }
             val check = generated.getOrNull()?.let { processManager.checkConfig(it) }
                 ?: Result.failure(generated.exceptionOrNull() ?: IllegalArgumentException("Xray 节点配置生成失败"))
             check
@@ -55,7 +61,12 @@ internal class XrayConfigPreparer(
         }
 
         val compatiblePorts = bridgePorts.filterKeys { id -> compatible.any { it.id == id } }
-        val content = generator.generateConfig(compatible, compatiblePorts)
+        val content = generator.generateConfig(
+            compatible,
+            compatiblePorts,
+            hysteriaUpMbps,
+            hysteriaDownMbps
+        )
         processManager.checkConfig(content).getOrThrow()
         return PreparedXrayConfig(content, compatible, compatiblePorts)
     }

@@ -27,10 +27,26 @@ class ProtocolCoreSettingsTest {
 
     @Test
     fun `shows every desktop protocol and ignores unsupported xray selections`() {
-        val settings = ProtocolCoreSettings(setOf(NodeType.VLESS, NodeType.HYSTERIA2))
+        val settings = ProtocolCoreSettings(
+            setOf(NodeType.VLESS, NodeType.HYSTERIA2, NodeType.ANYTLS)
+        )
 
         assertEquals(NodeType.entries, ProtocolCoreSettings.DISPLAY_PROTOCOLS)
+        assertEquals(
+            listOf(
+                NodeType.VLESS,
+                NodeType.VMESS,
+                NodeType.TROJAN,
+                NodeType.HYSTERIA2,
+                NodeType.WIREGUARD,
+                NodeType.SHADOWSOCKS,
+                NodeType.SOCKS,
+                NodeType.HTTP
+            ),
+            ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS
+        )
         assertTrue(settings.usesXray(NodeType.VLESS))
-        assertFalse(settings.usesXray(NodeType.HYSTERIA2))
+        assertTrue(settings.usesXray(NodeType.HYSTERIA2))
+        assertFalse(settings.usesXray(NodeType.ANYTLS))
     }
 }

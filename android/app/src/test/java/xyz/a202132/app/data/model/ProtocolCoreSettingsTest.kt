@@ -23,14 +23,30 @@ class ProtocolCoreSettingsTest {
             ProtocolCoreSettings.DISPLAY_PROTOCOLS
         )
         assertFalse(ProtocolCoreSettings.DISPLAY_PROTOCOLS.contains(NodeType.UNKNOWN))
+        assertEquals(
+            listOf(
+                NodeType.VLESS,
+                NodeType.VMESS,
+                NodeType.TROJAN,
+                NodeType.HYSTERIA2,
+                NodeType.WIREGUARD,
+                NodeType.SHADOWSOCKS,
+                NodeType.SOCKS,
+                NodeType.HTTP
+            ),
+            ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS
+        )
     }
 
     @Test
     fun selectsXrayOnlyForExplicitlySupportedProtocols() {
-        val settings = ProtocolCoreSettings(setOf(NodeType.VLESS, NodeType.HYSTERIA2))
+        val settings = ProtocolCoreSettings(
+            setOf(NodeType.VLESS, NodeType.HYSTERIA2, NodeType.ANYTLS)
+        )
 
         assertTrue(settings.usesXray(NodeType.VLESS))
         assertFalse(settings.usesXray(NodeType.VMESS))
-        assertFalse(settings.usesXray(NodeType.HYSTERIA2))
+        assertTrue(settings.usesXray(NodeType.HYSTERIA2))
+        assertFalse(settings.usesXray(NodeType.ANYTLS))
     }
 }

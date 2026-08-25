@@ -1,8 +1,8 @@
 # FireflyVPN Windows
 
-Windows 客户端的独立 Compose Desktop 工程。UI、后台协议、节点解析和 sing-box 配置均以当前 Android 3.0.0 为兼容基线。
+Windows 客户端的独立 Compose Desktop 工程。UI、后台协议、节点解析和 sing-box 配置均以当前 Android 3.0.1 为兼容基线。
 
-当前 Windows 双核心版为 3.0.3；安装包运行时显式包含后台客户端所需的 `java.net.http` 模块，智能连接仅测试当前节点列表中的订阅组或收藏组。
+当前 Windows 双核心版为 3.0.4；安装包运行时显式包含后台客户端所需的 `java.net.http` 模块，智能连接仅测试当前节点列表中的订阅组或收藏组。
 
 ## 运行
 
@@ -44,7 +44,9 @@ TUN 连接需要管理员权限。开发运行时请先打开“管理员 PowerS
 
 Windows 端与 Android 使用相同的进程隔离方案：sing-box 继续统一管理 TUN、系统代理、DNS、路由和流量统计；Xray 作为独立进程，为选择 Xray 的节点提供仅监听 `127.0.0.1` 的 SOCKS 桥接端口。
 
-首次运行或尚未保存核心设置时，VLESS、VMess 默认使用 Xray；Trojan、Shadowsocks 默认使用 sing-box，但可以在“特色功能 → 协议核心”中切换。Hysteria2、AnyTLS、TUIC、Naive、WireGuard、SOCKS 和 HTTP 会完整显示，但固定由 sing-box 处理。
+首次运行或尚未保存核心设置时，VLESS、VMess 默认使用 Xray；其他协议默认使用 sing-box。VLESS、VMess、Trojan、Hysteria2、WireGuard、Shadowsocks、SOCKS5、HTTP/HTTPS 可在“特色功能 → 协议核心”中切换；AnyTLS、TUIC、Naive 和 SOCKS4/4a 仍由 sing-box 处理。Hysteria2 的 salamander 混淆、端口跳跃及特色功能中的带宽参数会同步转换为 Xray 原生配置。
+
+Xray `v26.3.27` 已移除 `allowInsecure`。自签名证书节点选择 Xray 时必须通过链接提供 `pcs` 或 `pinSHA256` 证书指纹，否则会在连接前给出明确错误。
 
 开发版按以下顺序寻找 `xray.exe`：
 

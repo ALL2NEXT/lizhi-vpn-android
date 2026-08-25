@@ -95,7 +95,7 @@ fun FeatureScreen(
                 title = "协议核心"
             ) {
                 Text(
-                    text = "全部协议均在下方展示。灰色 Xray 表示当前内置 Xray 不支持该协议；修改后会自动重连。",
+                    text = "全部协议均在下方展示；当前有 8 种可选 Xray。灰色 Xray 表示核心不支持；SOCKS 的 Xray 选项仅适用于 SOCKS5。修改后会自动重连。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )

@@ -360,7 +360,7 @@ class BackendClient(
     }
 
     companion object {
-        const val APP_VERSION = "3.0.3"
+        const val APP_VERSION = "3.0.4"
         private const val DEFAULT_TIMEOUT_MS = 25_000L
         private const val CLIENT_IP_HEADER = "X-Firefly-Client-IP"
 

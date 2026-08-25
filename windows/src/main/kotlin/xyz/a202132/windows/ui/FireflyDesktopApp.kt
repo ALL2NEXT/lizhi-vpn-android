@@ -1422,7 +1422,7 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                         )
                     }
                     Text("FireflyVPN", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Primary)
-                    Text("Windows 原生客户端 3.0.3", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Windows 原生客户端 3.0.4", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val updateUrl = state.backendSettings.githubUrl.ifBlank {
                         state.backendSettings.websiteUrl
                     }
@@ -1604,7 +1604,7 @@ private fun AccountSettingsContent(state: DesktopAppState, controller: VpnContro
         AccountInfoRow("设备厂商", account.brand.ifBlank { "Microsoft" })
         AccountInfoRow("设备型号", account.model.ifBlank { System.getProperty("os.name", "Windows") })
         AccountInfoRow("系统版本", account.osVersion.ifBlank { System.getProperty("os.version", "未知") })
-        AccountInfoRow("客户端版本", account.appVersion.ifBlank { "3.0.3" })
+        AccountInfoRow("客户端版本", account.appVersion.ifBlank { "3.0.4" })
     }
 
     AccountSection("账户操作") {
@@ -2005,7 +2005,7 @@ private fun FeatureSettingsContent(
 ) {
     SettingSection("协议核心") {
         Text(
-            "全部协议均在下方展示。灰色 Xray 表示当前内置 Xray 不支持该协议；修改后会自动重连。",
+            "全部协议均在下方展示；当前有 8 种可选 Xray。灰色 Xray 表示核心不支持；SOCKS 的 Xray 选项仅适用于 SOCKS5。修改后会自动重连。",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 13.sp
         )

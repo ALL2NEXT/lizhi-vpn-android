@@ -37,7 +37,11 @@ data class ProtocolCoreSettings(
             NodeType.VLESS,
             NodeType.VMESS,
             NodeType.TROJAN,
-            NodeType.SHADOWSOCKS
+            NodeType.HYSTERIA2,
+            NodeType.WIREGUARD,
+            NodeType.SHADOWSOCKS,
+            NodeType.SOCKS,
+            NodeType.HTTP
         )
 
         fun fromStored(stored: Set<NodeType>?): ProtocolCoreSettings =

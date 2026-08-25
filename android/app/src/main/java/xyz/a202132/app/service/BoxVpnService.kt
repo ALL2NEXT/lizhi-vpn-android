@@ -812,7 +812,13 @@ class BoxVpnService : VpnService() {
             val allocatedPorts = allocateXrayBridgePorts(xrayNodes)
             val selectedUsesXray = xrayNodes.any { it.id == selectedNodeId }
             val preparedXray = runCatching {
-                xrayConfigPreparer.prepare(xrayNodes, allocatedPorts, selectedNodeId)
+                xrayConfigPreparer.prepare(
+                    xrayNodes,
+                    allocatedPorts,
+                    selectedNodeId,
+                    runtimeSettings.hysteriaUpMbps,
+                    runtimeSettings.hysteriaDownMbps
+                )
             }.getOrElse { error ->
                 if (selectedUsesXray) throw error
                 Log.w(TAG, "No usable Xray nodes remained; continuing with sing-box nodes", error)

@@ -10,6 +10,7 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import xyz.a202132.windows.model.DesktopNode
+import xyz.a202132.windows.model.DesktopSettings
 import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProtocolCoreSettings
 
@@ -17,7 +18,11 @@ import xyz.a202132.windows.model.ProtocolCoreSettings
 class WindowsXrayConfigGenerator {
     private val gson = Gson()
 
-    fun generate(nodes: List<DesktopNode>, bridgePorts: Map<String, Int>): String {
+    fun generate(
+        nodes: List<DesktopNode>,
+        bridgePorts: Map<String, Int>,
+        settings: DesktopSettings = DesktopSettings()
+    ): String {
         require(nodes.isNotEmpty()) { "Xray 节点列表为空" }
         require(nodes.all { it.type in XRAY_SUPPORTED_TYPES }) { "包含 Xray 不支持的协议" }
         require(nodes.all { bridgePorts[it.id] in 1..65_535 }) { "Xray 桥接端口无效" }
@@ -28,7 +33,9 @@ class WindowsXrayConfigGenerator {
                 nodes.forEach { node -> add(createBridgeInbound(node, bridgePorts.getValue(node.id))) }
             })
             add("outbounds", JsonArray().apply {
-                nodes.forEach { node -> add(createNodeOutbound(node, outboundTag(node.id))) }
+                nodes.forEach { node ->
+                    add(createNodeOutbound(node, outboundTag(node.id), settings))
+                }
                 add(JsonObject().apply {
                     addProperty("protocol", "freedom")
                     addProperty("tag", DIRECT_TAG)
@@ -53,8 +60,11 @@ class WindowsXrayConfigGenerator {
         })
     }
 
-    fun generateTestConfig(node: DesktopNode, bridgePort: Int = 20_800): String =
-        generate(listOf(node), mapOf(node.id to bridgePort))
+    fun generateTestConfig(
+        node: DesktopNode,
+        bridgePort: Int = 20_800,
+        settings: DesktopSettings = DesktopSettings()
+    ): String = generate(listOf(node), mapOf(node.id to bridgePort), settings)
 
     private fun createBridgeInbound(node: DesktopNode, port: Int) = JsonObject().apply {
         addProperty("listen", "127.0.0.1")
@@ -77,11 +87,19 @@ class WindowsXrayConfigGenerator {
         })
     }
 
-    private fun createNodeOutbound(node: DesktopNode, tag: String): JsonObject = when (node.type) {
+    private fun createNodeOutbound(
+        node: DesktopNode,
+        tag: String,
+        settings: DesktopSettings
+    ): JsonObject = when (node.type) {
         NodeType.VLESS -> createVlessOutbound(node, tag)
         NodeType.VMESS -> createVmessOutbound(node, tag)
         NodeType.TROJAN -> createTrojanOutbound(node, tag)
+        NodeType.HYSTERIA2 -> createHysteria2Outbound(node, tag, settings)
+        NodeType.WIREGUARD -> createWireGuardOutbound(node, tag)
         NodeType.SHADOWSOCKS -> createShadowsocksOutbound(node, tag)
+        NodeType.SOCKS -> createSocksOutbound(node, tag)
+        NodeType.HTTP -> createHttpOutbound(node, tag)
         else -> error("Xray 不支持 ${node.type.protocol} 协议")
     }
 
@@ -198,6 +216,246 @@ class WindowsXrayConfigGenerator {
         }
     }
 
+    /** 按 Xray 的 hysteria 出站 + hysteria 传输格式生成 Hysteria2 配置。 */
+    private fun createHysteria2Outbound(
+        node: DesktopNode,
+        tag: String,
+        settings: DesktopSettings
+    ): JsonObject {
+        val normalizedLink = node.rawLink.replaceFirst(Regex("(?i)^hy2://"), "hysteria2://")
+        val uri = URI(normalizedLink.replace(" ", "%20"))
+        val query = uri.queryParameters()
+        val password = uri.rawUserInfo?.urlDecode().orEmpty()
+        require(password.isNotBlank()) { "Hysteria2 认证信息为空" }
+        val portSpec = query.first("mport", "ports") ?: extractHysteria2PortSpec(normalizedLink)
+        val hasPortHopping = portSpec.contains(',') || portSpec.contains('-')
+        val obfsType = query.first("obfs")
+        val obfsPassword = query.first("obfs-password", "obfs_password", "obfsPassword")
+        require(obfsType.isNullOrBlank() || obfsType.equals("salamander", true)) {
+            "Xray Hysteria2 仅支持 salamander 混淆"
+        }
+        if (!obfsType.isNullOrBlank()) {
+            require(!obfsPassword.isNullOrBlank()) { "Hysteria2 salamander 混淆密码为空" }
+        }
+
+        return JsonObject().apply {
+            addProperty("protocol", "hysteria")
+            addProperty("tag", tag)
+            add("settings", JsonObject().apply {
+                addProperty("version", 2)
+                addProperty("address", node.server)
+                addProperty("port", node.port)
+            })
+            add("streamSettings", JsonObject().apply {
+                addProperty("network", "hysteria")
+                addProperty("security", "tls")
+                add("tlsSettings", createTlsSettings(query, node.server, listOf("h3")))
+                add("hysteriaSettings", JsonObject().apply {
+                    addProperty("version", 2)
+                    addProperty("auth", password)
+                    query.first("udpIdleTimeout", "udp_idle_timeout")
+                        ?.removeSuffix("s")
+                        ?.toIntOrNull()
+                        ?.takeIf { it in 2..600 }
+                        ?.let { addProperty("udpIdleTimeout", it) }
+                })
+
+                val useBandwidth = settings.hysteriaBandwidthEnabled &&
+                    (settings.hysteriaUpMbps > 0 || settings.hysteriaDownMbps > 0)
+                if (!obfsType.isNullOrBlank() || useBandwidth || hasPortHopping) {
+                    add("finalmask", JsonObject().apply {
+                        if (!obfsType.isNullOrBlank()) {
+                            add("udp", JsonArray().apply {
+                                add(JsonObject().apply {
+                                    addProperty("type", "salamander")
+                                    add("settings", JsonObject().apply {
+                                        addProperty("password", obfsPassword)
+                                    })
+                                })
+                            })
+                        }
+                        if (useBandwidth || hasPortHopping) {
+                            add("quicParams", JsonObject().apply {
+                                if (useBandwidth) {
+                                    addProperty("congestion", "brutal")
+                                    if (settings.hysteriaUpMbps > 0) {
+                                        addProperty("brutalUp", "${settings.hysteriaUpMbps} mbps")
+                                    }
+                                    if (settings.hysteriaDownMbps > 0) {
+                                        addProperty("brutalDown", "${settings.hysteriaDownMbps} mbps")
+                                    }
+                                }
+                                if (hasPortHopping) {
+                                    add("udpHop", JsonObject().apply {
+                                        addProperty("ports", portSpec)
+                                        addProperty("interval", parseHysteria2HopInterval(query))
+                                    })
+                                }
+                            })
+                        }
+                    })
+                }
+            })
+            add("mux", JsonObject().apply { addProperty("enabled", false) })
+        }
+    }
+
+    private fun createWireGuardOutbound(node: DesktopNode, tag: String): JsonObject {
+        val uri = node.uri()
+        val query = uri.queryParameters()
+        val secretKey = uri.rawUserInfo?.urlDecode() ?: query.first("private_key", "privateKey")
+        val publicKey = query.first("publickey", "peer_public_key", "peerPublicKey")
+        require(!secretKey.isNullOrBlank()) { "WireGuard 私钥为空" }
+        require(!publicKey.isNullOrBlank()) { "WireGuard 对端公钥为空" }
+        val addresses = parseCsv(query.first("address", "local_address", "localAddress"))
+            .ifEmpty { listOf("10.0.0.2/32") }
+
+        return JsonObject().apply {
+            addProperty("protocol", "wireguard")
+            addProperty("tag", tag)
+            add("settings", JsonObject().apply {
+                addProperty("secretKey", secretKey)
+                add("address", JsonArray().apply { addresses.forEach { add(it) } })
+                addProperty("noKernelTun", true)
+                query.first("mtu")?.toIntOrNull()?.let { addProperty("mtu", it) }
+                query.first("workers")?.toIntOrNull()?.let { addProperty("workers", it) }
+                query.first("reserved")
+                    ?.split(',')
+                    ?.mapNotNull { it.trim().toIntOrNull() }
+                    ?.takeIf { it.size == 3 }
+                    ?.let { reserved ->
+                        add("reserved", JsonArray().apply { reserved.forEach { add(it) } })
+                    }
+                add("peers", JsonArray().apply {
+                    add(JsonObject().apply {
+                        addProperty("publicKey", publicKey)
+                        query.first("presharedkey", "pre_shared_key", "preSharedKey")
+                            ?.let { addProperty("preSharedKey", it) }
+                        addProperty("endpoint", formatEndpoint(node.server, node.port))
+                        query.first("keepalive", "keepAlive", "persistent_keepalive")
+                            ?.toIntOrNull()
+                            ?.takeIf { it >= 0 }
+                            ?.let { addProperty("keepAlive", it) }
+                        parseCsv(query.first("allowed_ips", "allowedIPs"))
+                            .takeIf(List<String>::isNotEmpty)
+                            ?.let { allowed ->
+                                add("allowedIPs", JsonArray().apply { allowed.forEach { add(it) } })
+                            }
+                    })
+                })
+            })
+        }
+    }
+
+    private fun createSocksOutbound(node: DesktopNode, tag: String): JsonObject {
+        require(
+            !node.rawLink.startsWith("socks4://", true) &&
+                !node.rawLink.startsWith("socks4a://", true)
+        ) { "Xray SOCKS 出站仅支持 SOCKS5，SOCKS4/4a 请使用 sing-box" }
+        val credentials = node.uri().rawUserInfo?.urlDecode().orEmpty().split(':', limit = 2)
+        return createSimpleProxyOutbound(
+            "socks",
+            tag,
+            node,
+            credentials.firstOrNull(),
+            credentials.getOrNull(1)
+        )
+    }
+
+    private fun createHttpOutbound(node: DesktopNode, tag: String): JsonObject {
+        val uri = node.uri()
+        val query = uri.queryParameters()
+        val credentials = uri.rawUserInfo?.urlDecode().orEmpty().split(':', limit = 2)
+        return createSimpleProxyOutbound(
+            "http",
+            tag,
+            node,
+            credentials.firstOrNull(),
+            credentials.getOrNull(1)
+        ).apply {
+            if (node.rawLink.startsWith("https://", true)) {
+                add("streamSettings", JsonObject().apply {
+                    addProperty("network", "tcp")
+                    addProperty("security", "tls")
+                    add("tlsSettings", createTlsSettings(query, node.server))
+                })
+            }
+        }
+    }
+
+    private fun createSimpleProxyOutbound(
+        protocol: String,
+        tag: String,
+        node: DesktopNode,
+        username: String?,
+        password: String?
+    ) = JsonObject().apply {
+        addProperty("protocol", protocol)
+        addProperty("tag", tag)
+        add("settings", JsonObject().apply {
+            addProperty("address", node.server)
+            addProperty("port", node.port)
+            username?.takeIf(String::isNotBlank)?.let {
+                addProperty("user", it)
+                addProperty("pass", password.orEmpty())
+            }
+        })
+    }
+
+    private fun createTlsSettings(
+        query: Map<String, List<String>>,
+        server: String,
+        defaultAlpn: List<String> = emptyList()
+    ): JsonObject {
+        val pinnedCertificate = query.first("pinSHA256", "pinnedPeerCertSha256", "pcs")
+        val verifyByName = query.first("verifyPeerCertByName", "vcn")
+        val insecure = query.enabled(
+            "allowInsecure",
+            "allow_insecure",
+            "insecure",
+            "skip-cert-verify"
+        )
+        require(!insecure || !pinnedCertificate.isNullOrBlank() || !verifyByName.isNullOrBlank()) {
+            "当前 Xray 已移除 allowInsecure，请让服务端提供 pcs/pinSHA256 证书指纹"
+        }
+        val alpn = parseCsv(query.first("alpn")).ifEmpty { defaultAlpn }
+        return JsonObject().apply {
+            addProperty("serverName", query.first("sni", "serverName", "host") ?: server)
+            if (alpn.isNotEmpty()) add("alpn", JsonArray().apply { alpn.forEach { add(it) } })
+            query.first("fp", "fingerprint", "client-fingerprint")
+                ?.let { addProperty("fingerprint", it) }
+            pinnedCertificate?.let { addProperty("pinnedPeerCertSha256", it) }
+            verifyByName?.let { addProperty("verifyPeerCertByName", it) }
+        }
+    }
+
+    private fun extractHysteria2PortSpec(link: String): String {
+        val authority = link.substringAfter("//").substringBefore('?').substringBefore('#')
+            .substringAfterLast('@')
+        return if (authority.startsWith("[")) {
+            authority.substringAfter(']', "").removePrefix(":")
+        } else {
+            authority.substringAfterLast(':', "")
+        }
+    }
+
+    private fun parseHysteria2HopInterval(query: Map<String, List<String>>): Int {
+        val raw = query.first("hopInterval", "hop_interval", "interval")
+            ?.trim()
+            ?.lowercase()
+            ?: return 30
+        val seconds = when {
+            raw.endsWith("ms") -> raw.removeSuffix("ms").toDoubleOrNull()?.div(1_000)?.toInt()
+            raw.endsWith("s") -> raw.removeSuffix("s").toDoubleOrNull()?.toInt()
+            raw.endsWith("m") -> raw.removeSuffix("m").toDoubleOrNull()?.times(60)?.toInt()
+            else -> raw.toIntOrNull()
+        }
+        return (seconds ?: 30).coerceAtLeast(5)
+    }
+
+    private fun formatEndpoint(server: String, port: Int): String =
+        if (':' in server && !server.startsWith("[")) "[$server]:$port" else "$server:$port"
+
     private fun createUriStreamSettings(
         uri: URI,
         server: String,
@@ -223,7 +481,9 @@ class WindowsXrayConfigGenerator {
                 query.enabled("allowInsecure", "allow_insecure", "insecure", "skip-cert-verify"),
                 query.first("pbk", "publicKey"),
                 query.first("sid", "shortId"),
-                query.first("spx", "spiderX")
+                query.first("spx", "spiderX"),
+                query.first("pinSHA256", "pinnedPeerCertSha256", "pcs"),
+                query.first("verifyPeerCertByName", "vcn")
             )
         }
     }
@@ -247,7 +507,12 @@ class WindowsXrayConfigGenerator {
                     ?: false,
                 vmess.get("pbk").stringOrNull(),
                 vmess.get("sid").stringOrNull(),
-                vmess.get("spx").stringOrNull()
+                vmess.get("spx").stringOrNull(),
+                vmess.get("pinSHA256").stringOrNull()
+                    ?: vmess.get("pinnedPeerCertSha256").stringOrNull()
+                    ?: vmess.get("pcs").stringOrNull(),
+                vmess.get("verifyPeerCertByName").stringOrNull()
+                    ?: vmess.get("vcn").stringOrNull()
             )
         }
     }
@@ -387,16 +652,26 @@ class WindowsXrayConfigGenerator {
         allowInsecure: Boolean,
         publicKey: String?,
         shortId: String?,
-        spiderX: String?
+        spiderX: String?,
+        pinnedCertificate: String?,
+        verifyByName: String?
     ) {
         when (security) {
             "tls" -> {
                 streamSettings.addProperty("security", "tls")
                 streamSettings.add("tlsSettings", JsonObject().apply {
+                    require(
+                        !allowInsecure ||
+                            !pinnedCertificate.isNullOrBlank() ||
+                            !verifyByName.isNullOrBlank()
+                    ) {
+                        "当前 Xray 已移除 allowInsecure，请让服务端提供 pcs/pinSHA256 证书指纹"
+                    }
                     addProperty("serverName", sni ?: server)
-                    addProperty("allowInsecure", allowInsecure)
                     if (alpn.isNotEmpty()) add("alpn", JsonArray().apply { alpn.forEach { add(it) } })
                     fingerprint?.let { addProperty("fingerprint", it) }
+                    pinnedCertificate?.let { addProperty("pinnedPeerCertSha256", it) }
+                    verifyByName?.let { addProperty("verifyPeerCertByName", it) }
                 })
             }
             "reality" -> {

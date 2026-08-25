@@ -65,6 +65,7 @@ class WindowsXrayCoreCompatibilityTest {
     }
 
     private fun supportedNodes(): List<DesktopNode> {
+        val certificatePin = "00".repeat(32)
         val vmessJson = """{"v":"2","ps":"vmess","add":"example.com","port":"443","id":"00000000-0000-0000-0000-000000000001","aid":"0","scy":"auto","net":"ws","path":"/ws","host":"example.com","tls":"tls","sni":"example.com"}"""
         val vmess = Base64.getUrlEncoder().withoutPadding().encodeToString(vmessJson.toByteArray())
         val ssCredentials = Base64.getUrlEncoder().withoutPadding()
@@ -73,11 +74,27 @@ class WindowsXrayCoreCompatibilityTest {
             node(
                 "vless",
                 NodeType.VLESS,
-                "vless://00000000-0000-0000-0000-000000000000@example.com:443?security=tls&sni=example.com"
+                "vless://00000000-0000-0000-0000-000000000000@example.com:443" +
+                    "?security=tls&sni=example.com&insecure=1&pcs=$certificatePin"
             ),
             node("vmess", NodeType.VMESS, "vmess://$vmess"),
             node("trojan", NodeType.TROJAN, "trojan://password@example.com:443?sni=example.com"),
-            node("ss", NodeType.SHADOWSOCKS, "ss://$ssCredentials@example.com:8388#ss")
+            node(
+                "hy2",
+                NodeType.HYSTERIA2,
+                "hy2://password@example.com:443?obfs=salamander&obfs-password=mask" +
+                    "&mport=443%2C8443&hop_interval=10s&sni=example.com"
+            ),
+            node(
+                "wg",
+                NodeType.WIREGUARD,
+                "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example.com:51820" +
+                    "?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D" +
+                    "&address=10.0.0.2%2F32&reserved=1%2C2%2C3"
+            ),
+            node("ss", NodeType.SHADOWSOCKS, "ss://$ssCredentials@example.com:8388#ss"),
+            node("socks", NodeType.SOCKS, "socks5://user:password@example.com:1080"),
+            node("http", NodeType.HTTP, "https://user:password@example.com:443?sni=example.com")
         )
     }
 
@@ -86,7 +103,12 @@ class WindowsXrayCoreCompatibilityTest {
         name = id,
         type = type,
         server = "example.com",
-        port = if (type == NodeType.SHADOWSOCKS) 8388 else 443,
+        port = when (type) {
+            NodeType.SHADOWSOCKS -> 8388
+            NodeType.SOCKS -> 1080
+            NodeType.WIREGUARD -> 51820
+            else -> 443
+        },
         rawLink = rawLink
     )
 }

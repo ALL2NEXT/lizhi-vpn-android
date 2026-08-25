@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "xyz.a202132"
-version = "3.0.3"
+version = "3.0.4"
 
 kotlin {
     compilerOptions {

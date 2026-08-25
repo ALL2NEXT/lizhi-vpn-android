@@ -713,7 +713,8 @@ class DesktopVpnController(
                     nodes = mutableState.value.nodes,
                     selectedNodeId = node.id,
                     coreSettings = mutableState.value.protocolCoreSettings,
-                    xrayStatus = mutableState.value.xrayCoreStatus
+                    xrayStatus = mutableState.value.xrayCoreStatus,
+                    settings = mutableState.value.settings
                 )
             }.getOrElse { error ->
                 xrayProcessManager.stop()
@@ -760,7 +761,8 @@ class DesktopVpnController(
         nodes: List<DesktopNode>,
         selectedNodeId: String,
         coreSettings: ProtocolCoreSettings,
-        xrayStatus: CoreStatus
+        xrayStatus: CoreStatus,
+        settings: DesktopSettings
     ): PreparedProtocolCores {
         xrayProcessManager.stop()
         val xrayNodes = nodes.filter { coreSettings.usesXray(it.type) }
@@ -781,7 +783,8 @@ class DesktopVpnController(
                 executable = xrayExecutable,
                 nodes = xrayNodes,
                 bridgePorts = allocatedPorts,
-                selectedNodeId = selectedNodeId
+                selectedNodeId = selectedNodeId,
+                settings = settings
             )
         }.getOrElse { error ->
             if (selectedUsesXray) throw error

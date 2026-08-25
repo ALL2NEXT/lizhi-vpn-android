@@ -197,6 +197,8 @@ class SettingsRepository(private val context: Context) {
     /** Reads all settings needed for one VPN start from a single DataStore snapshot. */
     suspend fun getVpnRuntimeSettings(): VpnRuntimeSettings {
         val preferences = context.dataStore.data.first()
+        val hysteriaBandwidthEnabled = preferences[HYSTERIA_BANDWIDTH_ENABLED]
+            ?: xyz.a202132.app.AppConfig.HYSTERIA_BANDWIDTH_ENABLED
         return VpnRuntimeSettings(
             proxyMode = enumValueOrDefault(preferences[PROXY_MODE], ProxyMode.SMART),
             ipv6RoutingMode = enumValueOrDefault(
@@ -206,10 +208,19 @@ class SettingsRepository(private val context: Context) {
             vpnMtu = (preferences[VPN_MTU] ?: xyz.a202132.app.AppConfig.VPN_MTU)
                 .coerceIn(1280, 65_535),
             tunStack = enumValueOrDefault(preferences[TUN_STACK], TunStack.GVISOR),
-            hysteriaUpMbps = (preferences[HYSTERIA_UP_MBPS]
-                ?: xyz.a202132.app.AppConfig.HYSTERIA_UP_MBPS).coerceAtLeast(0),
-            hysteriaDownMbps = (preferences[HYSTERIA_DOWN_MBPS]
-                ?: xyz.a202132.app.AppConfig.HYSTERIA_DOWN_MBPS).coerceAtLeast(0),
+            // 关闭 Hy2 带宽参数时必须向两个核心都传 0，避免运行时仍启用 Brutal。
+            hysteriaUpMbps = if (hysteriaBandwidthEnabled) {
+                (preferences[HYSTERIA_UP_MBPS]
+                    ?: xyz.a202132.app.AppConfig.HYSTERIA_UP_MBPS).coerceAtLeast(0)
+            } else {
+                0
+            },
+            hysteriaDownMbps = if (hysteriaBandwidthEnabled) {
+                (preferences[HYSTERIA_DOWN_MBPS]
+                    ?: xyz.a202132.app.AppConfig.HYSTERIA_DOWN_MBPS).coerceAtLeast(0)
+            } else {
+                0
+            },
             protocolCoreSettings = decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS]),
             perAppProxy = PerAppProxySettings(
                 enabled = preferences[PER_APP_PROXY_ENABLED] ?: false,

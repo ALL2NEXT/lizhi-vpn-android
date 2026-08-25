@@ -100,7 +100,7 @@ class SingBoxBandwidthTestManager(
         val timeout = timeoutMs.coerceAtLeast(1_000)
         connection.connectTimeout = timeout
         connection.readTimeout = timeout
-        connection.setRequestProperty("user-agent", "FireflyVPN/3.0.3 (Windows)")
+        connection.setRequestProperty("user-agent", "FireflyVPN/3.0.4 (Windows)")
         val started = System.nanoTime()
         return runCatching {
             connection.inputStream.use { input ->
