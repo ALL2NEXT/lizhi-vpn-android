@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import java.util.Locale
 import xyz.a202132.app.data.model.LatencyLevel
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.ui.theme.LatencyBad
 import xyz.a202132.app.ui.theme.LatencyGood
 import xyz.a202132.app.ui.theme.LatencyMedium
@@ -42,6 +43,7 @@ internal fun NodeListItem(
     isSelected: Boolean,
     isFavorite: Boolean,
     enabled: Boolean,
+    displaySettings: NodeDisplaySettings,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
@@ -56,8 +58,8 @@ internal fun NodeListItem(
     } else {
         Color.Transparent
     }
-    val protocolDisplay = remember(node.type, node.rawLink) {
-        node.protocolDisplayLabel()
+    val protocolDisplay = remember(node.type, node.rawLink, displaySettings) {
+        node.protocolDisplayLabel(displaySettings)
     }
 
     Surface(
@@ -98,10 +100,12 @@ internal fun NodeListItem(
                     modifier = Modifier.weight(1f)
                 )
 
-                NodeProtocolDetailsBadge(
-                    label = protocolDisplay,
-                    modifier = Modifier.padding(start = 8.dp, end = 4.dp)
-                )
+                if (protocolDisplay.isNotEmpty()) {
+                    NodeProtocolDetailsBadge(
+                        label = protocolDisplay,
+                        modifier = Modifier.padding(start = 8.dp, end = 4.dp)
+                    )
+                }
 
                 IconButton(
                     onClick = onToggleFavorite,

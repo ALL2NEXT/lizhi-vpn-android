@@ -11,6 +11,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
+import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyCore
@@ -83,6 +84,9 @@ class SettingsRepository(private val context: Context) {
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
         private val XRAY_CORE_PROTOCOLS = stringSetPreferencesKey("xray_core_protocols")
+        private val NODE_LABEL_SHOW_PROTOCOL = booleanPreferencesKey("node_label_show_protocol")
+        private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
+        private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val HIDE_FAVORITE_NODE_GROUP =
             booleanPreferencesKey("hide_favorite_node_group")
@@ -231,6 +235,32 @@ class SettingsRepository(private val context: Context) {
 
     val protocolCoreSettings: Flow<ProtocolCoreSettings> = context.dataStore.data.map { preferences ->
         decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS])
+    }
+
+    val nodeDisplaySettings: Flow<NodeDisplaySettings> = context.dataStore.data.map { preferences ->
+        NodeDisplaySettings(
+            showProtocol = preferences[NODE_LABEL_SHOW_PROTOCOL] ?: true,
+            showSecurity = preferences[NODE_LABEL_SHOW_SECURITY] ?: true,
+            showTransport = preferences[NODE_LABEL_SHOW_TRANSPORT] ?: true
+        )
+    }
+
+    suspend fun setNodeLabelShowProtocol(show: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[NODE_LABEL_SHOW_PROTOCOL] = show
+        }
+    }
+
+    suspend fun setNodeLabelShowSecurity(show: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[NODE_LABEL_SHOW_SECURITY] = show
+        }
+    }
+
+    suspend fun setNodeLabelShowTransport(show: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[NODE_LABEL_SHOW_TRANSPORT] = show
+        }
     }
 
     suspend fun setProtocolCore(nodeType: NodeType, core: ProxyCore) {

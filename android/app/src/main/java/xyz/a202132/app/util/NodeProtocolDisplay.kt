@@ -3,11 +3,14 @@ package xyz.a202132.app.util
 import com.google.gson.JsonParser
 import java.net.URLDecoder
 import java.util.Base64
+import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 
 /** 生成“协议+安全层+传输方式”节点标签，存在的层级始终完整展示。 */
-internal fun Node.protocolDisplayLabel(): String {
+internal fun Node.protocolDisplayLabel(
+    settings: NodeDisplaySettings = NodeDisplaySettings()
+): String {
     val rawLink = getRawLinkPlain()
     val protocol = when (type) {
         NodeType.VLESS -> "vless"
@@ -52,7 +55,11 @@ internal fun Node.protocolDisplayLabel(): String {
         NodeType.UNKNOWN -> DisplayLayers()
     }
 
-    return listOfNotNull(protocol, layers.security, layers.transport).joinToString("+")
+    return listOfNotNull(
+        protocol.takeIf { settings.showProtocol },
+        layers.security?.takeIf { settings.showSecurity },
+        layers.transport?.takeIf { settings.showTransport }
+    ).joinToString("+")
 }
 
 private data class DisplayLayers(

@@ -116,6 +116,7 @@ fun MainScreen(
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
+    val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     
     // 自动化测试设置/状态
     // val showBackupFailedDialog by viewModel.showBackupFailedDialog.collectAsState() // Removed
@@ -293,6 +294,7 @@ fun MainScreen(
                         isFavorite = node.source == NodeSource.FAVORITE ||
                             favoriteSourceNodeIds.contains(node.id),
                         enabled = !isTesting,
+                        displaySettings = nodeDisplaySettings,
                         onClick = onOpenNodeList,
                         onToggleFavorite = { viewModel.toggleFavoriteNode(node) }
                     )

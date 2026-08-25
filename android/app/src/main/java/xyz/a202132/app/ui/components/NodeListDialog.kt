@@ -72,6 +72,7 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.SubscriptionGroup
@@ -89,6 +90,7 @@ fun NodeListScreen(
     isTesting: Boolean,
     isRefreshing: Boolean,
     hideFavoriteNodeGroup: Boolean,
+    nodeDisplaySettings: NodeDisplaySettings,
     subscriptionSourceUpdatedAt: Map<String, Long>,
     testingLabel: String? = null,
     onNodeSelected: (Node) -> Unit,
@@ -180,6 +182,7 @@ fun NodeListScreen(
             isTesting = isTesting,
             isRefreshing = isRefreshing,
             hideFavoriteNodeGroup = hideFavoriteNodeGroup,
+            nodeDisplaySettings = nodeDisplaySettings,
             subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
             onRefresh = onRefresh,
             onImportFromClipboard = handleImportFromClipboard,
@@ -309,6 +312,7 @@ private fun NodeListContent(
     isTesting: Boolean,
     isRefreshing: Boolean,
     hideFavoriteNodeGroup: Boolean,
+    nodeDisplaySettings: NodeDisplaySettings,
     subscriptionSourceUpdatedAt: Map<String, Long>,
     onRefresh: () -> Unit,
     onImportFromClipboard: () -> Unit,
@@ -575,6 +579,7 @@ private fun NodeListContent(
                                 isSelected = node.id == selectedNodeId,
                                 isFavorite = isFavorite,
                                 enabled = interactionEnabled,
+                                displaySettings = nodeDisplaySettings,
                                 onClick = { onNodeSelected(node) },
                                 onToggleFavorite = { onToggleFavorite(node, isFavorite) }
                             )

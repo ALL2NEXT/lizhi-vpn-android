@@ -50,6 +50,7 @@ fun FeatureScreen(
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
     val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
+    val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
 
     var tcpingPercentInput by remember(smartConnectTcpingPercent) {
         mutableStateOf(smartConnectTcpingPercent.toString())
@@ -91,6 +92,31 @@ fun FeatureScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            FeatureSection(
+                title = "节点标签显示"
+            ) {
+                Text(
+                    text = "协议、安全层和传输方式可独立显示；全部关闭后隐藏节点标签。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                FeatureSwitchRow(
+                    label = "显示协议",
+                    checked = nodeDisplaySettings.showProtocol,
+                    onCheckedChange = viewModel::setNodeLabelShowProtocol
+                )
+                FeatureSwitchRow(
+                    label = "显示安全层",
+                    checked = nodeDisplaySettings.showSecurity,
+                    onCheckedChange = viewModel::setNodeLabelShowSecurity
+                )
+                FeatureSwitchRow(
+                    label = "显示传输方式",
+                    checked = nodeDisplaySettings.showTransport,
+                    onCheckedChange = viewModel::setNodeLabelShowTransport
+                )
+            }
+
             FeatureSection(
                 title = "协议核心"
             ) {
@@ -281,6 +307,29 @@ private fun FeatureSection(
             titleAction?.invoke()
         }
         content()
+    }
+}
+
+@Composable
+private fun FeatureSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = featureSwitchColors()
+        )
     }
 }
 

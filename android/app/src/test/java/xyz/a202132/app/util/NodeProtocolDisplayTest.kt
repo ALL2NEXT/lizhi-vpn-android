@@ -3,6 +3,7 @@ package xyz.a202132.app.util
 import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 
@@ -70,6 +71,36 @@ class NodeProtocolDisplayTest {
                 NodeType.SHADOWSOCKS,
                 "ss://token@example.com:443?plugin=v2ray-plugin%3Bmode%3Dwebsocket"
             ).protocolDisplayLabel()
+        )
+    }
+
+    @Test
+    fun independentlyControlsEveryDisplayLayer() {
+        val realityNode = node(
+            NodeType.VLESS,
+            "vless://id@example.com:443?security=reality&type=tcp"
+        )
+        assertEquals(
+            "reality+tcp",
+            realityNode.protocolDisplayLabel(NodeDisplaySettings(showProtocol = false))
+        )
+        assertEquals(
+            "vless+tcp",
+            realityNode.protocolDisplayLabel(NodeDisplaySettings(showSecurity = false))
+        )
+        assertEquals(
+            "vless+reality",
+            realityNode.protocolDisplayLabel(NodeDisplaySettings(showTransport = false))
+        )
+        assertEquals(
+            "",
+            realityNode.protocolDisplayLabel(
+                NodeDisplaySettings(
+                    showProtocol = false,
+                    showSecurity = false,
+                    showTransport = false
+                )
+            )
         )
     }
 
