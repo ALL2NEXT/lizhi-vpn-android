@@ -739,6 +739,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsRepository.setNodeLabelShowTransport(show) }
     }
 
+    fun setNodeLabelShowCore(show: Boolean) {
+        viewModelScope.launch { settingsRepository.setNodeLabelShowCore(show) }
+    }
+
     fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {
         viewModelScope.launch {
             settingsRepository.upsertSkinScheme(scheme, activate)

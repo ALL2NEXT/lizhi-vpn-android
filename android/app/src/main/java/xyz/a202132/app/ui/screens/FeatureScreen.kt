@@ -96,7 +96,7 @@ fun FeatureScreen(
                 title = "节点标签显示"
             ) {
                 Text(
-                    text = "协议、安全层和传输方式可独立显示；全部关闭后隐藏节点标签。",
+                    text = "协议、安全层、传输方式和核心可独立显示，默认全部关闭；全部关闭后隐藏节点标签。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
@@ -114,6 +114,11 @@ fun FeatureScreen(
                     label = "显示传输方式",
                     checked = nodeDisplaySettings.showTransport,
                     onCheckedChange = viewModel::setNodeLabelShowTransport
+                )
+                FeatureSwitchRow(
+                    label = "显示核心",
+                    checked = nodeDisplaySettings.showCore,
+                    onCheckedChange = viewModel::setNodeLabelShowCore
                 )
             }
 

@@ -87,6 +87,7 @@ class SettingsRepository(private val context: Context) {
         private val NODE_LABEL_SHOW_PROTOCOL = booleanPreferencesKey("node_label_show_protocol")
         private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
         private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
+        private val NODE_LABEL_SHOW_CORE = booleanPreferencesKey("node_label_show_core")
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val HIDE_FAVORITE_NODE_GROUP =
             booleanPreferencesKey("hide_favorite_node_group")
@@ -239,9 +240,10 @@ class SettingsRepository(private val context: Context) {
 
     val nodeDisplaySettings: Flow<NodeDisplaySettings> = context.dataStore.data.map { preferences ->
         NodeDisplaySettings(
-            showProtocol = preferences[NODE_LABEL_SHOW_PROTOCOL] ?: true,
-            showSecurity = preferences[NODE_LABEL_SHOW_SECURITY] ?: true,
-            showTransport = preferences[NODE_LABEL_SHOW_TRANSPORT] ?: true
+            showProtocol = preferences[NODE_LABEL_SHOW_PROTOCOL] ?: false,
+            showSecurity = preferences[NODE_LABEL_SHOW_SECURITY] ?: false,
+            showTransport = preferences[NODE_LABEL_SHOW_TRANSPORT] ?: false,
+            showCore = preferences[NODE_LABEL_SHOW_CORE] ?: false
         )
     }
 
@@ -260,6 +262,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNodeLabelShowTransport(show: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[NODE_LABEL_SHOW_TRANSPORT] = show
+        }
+    }
+
+    suspend fun setNodeLabelShowCore(show: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[NODE_LABEL_SHOW_CORE] = show
         }
     }
 

@@ -75,6 +75,7 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
+import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.SubscriptionGroup
 
 @OptIn(ExperimentalMaterialApi::class)
@@ -91,6 +92,7 @@ fun NodeListScreen(
     isRefreshing: Boolean,
     hideFavoriteNodeGroup: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
+    protocolCoreSettings: ProtocolCoreSettings,
     subscriptionSourceUpdatedAt: Map<String, Long>,
     testingLabel: String? = null,
     onNodeSelected: (Node) -> Unit,
@@ -183,6 +185,7 @@ fun NodeListScreen(
             isRefreshing = isRefreshing,
             hideFavoriteNodeGroup = hideFavoriteNodeGroup,
             nodeDisplaySettings = nodeDisplaySettings,
+            protocolCoreSettings = protocolCoreSettings,
             subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
             onRefresh = onRefresh,
             onImportFromClipboard = handleImportFromClipboard,
@@ -313,6 +316,7 @@ private fun NodeListContent(
     isRefreshing: Boolean,
     hideFavoriteNodeGroup: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
+    protocolCoreSettings: ProtocolCoreSettings,
     subscriptionSourceUpdatedAt: Map<String, Long>,
     onRefresh: () -> Unit,
     onImportFromClipboard: () -> Unit,
@@ -580,6 +584,7 @@ private fun NodeListContent(
                                 isFavorite = isFavorite,
                                 enabled = interactionEnabled,
                                 displaySettings = nodeDisplaySettings,
+                                coreSettings = protocolCoreSettings,
                                 onClick = { onNodeSelected(node) },
                                 onToggleFavorite = { onToggleFavorite(node, isFavorite) }
                             )

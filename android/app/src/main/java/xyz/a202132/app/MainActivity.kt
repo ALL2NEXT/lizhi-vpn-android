@@ -242,6 +242,8 @@ class MainActivity : ComponentActivity() {
                                     viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
                                 val nodeDisplaySettings by
                                     viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
+                                val protocolCoreSettings by
+                                    viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
                                 val subscriptionSourceUpdatedAt by
                                     viewModel.subscriptionSourceUpdatedAt.collectAsStateWithLifecycle()
                                 val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
@@ -258,6 +260,7 @@ class MainActivity : ComponentActivity() {
                                     isRefreshing = isRefreshing,
                                     hideFavoriteNodeGroup = hideFavoriteNodeGroup,
                                     nodeDisplaySettings = nodeDisplaySettings,
+                                    protocolCoreSettings = protocolCoreSettings,
                                     subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
                                     testingLabel = testingLabel,
                                     onNodeSelected = { node ->

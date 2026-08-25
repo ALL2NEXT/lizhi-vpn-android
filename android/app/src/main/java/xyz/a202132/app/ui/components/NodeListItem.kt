@@ -32,6 +32,7 @@ import java.util.Locale
 import xyz.a202132.app.data.model.LatencyLevel
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeDisplaySettings
+import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.ui.theme.LatencyBad
 import xyz.a202132.app.ui.theme.LatencyGood
 import xyz.a202132.app.ui.theme.LatencyMedium
@@ -44,6 +45,7 @@ internal fun NodeListItem(
     isFavorite: Boolean,
     enabled: Boolean,
     displaySettings: NodeDisplaySettings,
+    coreSettings: ProtocolCoreSettings,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
@@ -58,8 +60,8 @@ internal fun NodeListItem(
     } else {
         Color.Transparent
     }
-    val protocolDisplay = remember(node.type, node.rawLink, displaySettings) {
-        node.protocolDisplayLabel(displaySettings)
+    val protocolDisplay = remember(node.type, node.rawLink, displaySettings, coreSettings) {
+        node.protocolDisplayLabel(displaySettings, coreSettings)
     }
 
     Surface(

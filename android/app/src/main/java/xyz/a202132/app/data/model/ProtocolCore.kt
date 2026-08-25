@@ -32,7 +32,8 @@ data class ProtocolCoreSettings(
 
         val DEFAULT_XRAY_PROTOCOLS: Set<NodeType> = setOf(
             NodeType.VLESS,
-            NodeType.VMESS
+            NodeType.VMESS,
+            NodeType.HYSTERIA2
         )
 
         val XRAY_CAPABLE_PROTOCOLS: List<NodeType> = listOf(

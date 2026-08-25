@@ -6,10 +6,13 @@ import java.util.Base64
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.data.model.ProtocolCoreSettings
+import xyz.a202132.app.data.model.ProxyCore
 
-/** 生成“协议+安全层+传输方式”节点标签，存在的层级始终完整展示。 */
+/** 生成“协议+安全层+传输方式+核心”节点标签，存在的层级始终完整展示。 */
 internal fun Node.protocolDisplayLabel(
-    settings: NodeDisplaySettings = NodeDisplaySettings()
+    settings: NodeDisplaySettings = NodeDisplaySettings(),
+    coreSettings: ProtocolCoreSettings = ProtocolCoreSettings()
 ): String {
     val rawLink = getRawLinkPlain()
     val protocol = when (type) {
@@ -58,8 +61,14 @@ internal fun Node.protocolDisplayLabel(
     return listOfNotNull(
         protocol.takeIf { settings.showProtocol },
         layers.security?.takeIf { settings.showSecurity },
-        layers.transport?.takeIf { settings.showTransport }
+        layers.transport?.takeIf { settings.showTransport },
+        coreSettings.coreFor(type).displayLabel().takeIf { settings.showCore }
     ).joinToString("+")
+}
+
+private fun ProxyCore.displayLabel(): String = when (this) {
+    ProxyCore.SING_BOX -> "sing-box"
+    ProxyCore.XRAY -> "xray"
 }
 
 private data class DisplayLayers(

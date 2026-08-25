@@ -6,71 +6,72 @@ import org.junit.Test
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.data.model.ProtocolCoreSettings
 
 class NodeProtocolDisplayTest {
     @Test
     fun displaysProtocolSecurityAndTransportTogether() {
         assertEquals(
-            "vless+reality+tcp",
+            "vless+reality+tcp+xray",
             node(
                 NodeType.VLESS,
                 "vless://id@example.com:443?security=reality&type=tcp"
-            ).protocolDisplayLabel()
+            ).protocolDisplayLabel(FULL_DISPLAY)
         )
         assertEquals(
-            "hy2+tls+quic",
+            "hy2+tls+quic+xray",
             node(
                 NodeType.HYSTERIA2,
                 "hy2://password@example.com:443?insecure=0"
-            ).protocolDisplayLabel()
+            ).protocolDisplayLabel(FULL_DISPLAY)
         )
     }
 
     @Test
     fun explicitlyDisplaysMissingSecurityForVlessAndVmess() {
         assertEquals(
-            "vless+none+ws",
+            "vless+none+ws+xray",
             node(
                 NodeType.VLESS,
                 "vless://id@example.com:80?security=none&type=websocket"
-            ).protocolDisplayLabel()
+            ).protocolDisplayLabel(FULL_DISPLAY)
         )
         assertEquals(
-            "vless+none+grpc",
+            "vless+none+grpc+xray",
             node(
                 NodeType.VLESS,
                 "vless://id@example.com:80?type=gun"
-            ).protocolDisplayLabel()
+            ).protocolDisplayLabel(FULL_DISPLAY)
         )
         assertEquals(
-            "vmess+tls+ws",
+            "vmess+tls+ws+xray",
             node(
                 NodeType.VMESS,
                 vmessLink("""{"add":"example.com","port":"443","id":"id","tls":"tls","net":"ws"}""")
-            ).protocolDisplayLabel()
+            ).protocolDisplayLabel(FULL_DISPLAY)
         )
     }
 
     @Test
     fun displaysIntrinsicSecurityAndTransportForModernProtocols() {
-        assertEquals("trojan+tls+tcp", node(NodeType.TROJAN, "trojan://password@example.com").protocolDisplayLabel())
-        assertEquals("anytls+tls+tcp", node(NodeType.ANYTLS, "anytls://password@example.com").protocolDisplayLabel())
-        assertEquals("tuic+tls+quic", node(NodeType.TUIC, "tuic://id:password@example.com").protocolDisplayLabel())
-        assertEquals("naive+tls+h2", node(NodeType.NAIVE, "naive+https://user:password@example.com").protocolDisplayLabel())
-        assertEquals("naive+tls+quic", node(NodeType.NAIVE, "naive+https://user:password@example.com?quic=1").protocolDisplayLabel())
-        assertEquals("wg+udp", node(NodeType.WIREGUARD, "wireguard://key@example.com").protocolDisplayLabel())
-        assertEquals("http+tls+tcp", node(NodeType.HTTP, "https://example.com").protocolDisplayLabel())
+        assertEquals("trojan+tls+tcp+sing-box", node(NodeType.TROJAN, "trojan://password@example.com").protocolDisplayLabel(FULL_DISPLAY))
+        assertEquals("anytls+tls+tcp+sing-box", node(NodeType.ANYTLS, "anytls://password@example.com").protocolDisplayLabel(FULL_DISPLAY))
+        assertEquals("tuic+tls+quic+sing-box", node(NodeType.TUIC, "tuic://id:password@example.com").protocolDisplayLabel(FULL_DISPLAY))
+        assertEquals("naive+tls+h2+sing-box", node(NodeType.NAIVE, "naive+https://user:password@example.com").protocolDisplayLabel(FULL_DISPLAY))
+        assertEquals("naive+tls+quic+sing-box", node(NodeType.NAIVE, "naive+https://user:password@example.com?quic=1").protocolDisplayLabel(FULL_DISPLAY))
+        assertEquals("wg+udp+sing-box", node(NodeType.WIREGUARD, "wireguard://key@example.com").protocolDisplayLabel(FULL_DISPLAY))
+        assertEquals("http+tls+tcp+sing-box", node(NodeType.HTTP, "https://example.com").protocolDisplayLabel(FULL_DISPLAY))
     }
 
     @Test
     fun preservesSocksSubtypeAndShadowsocksPluginTransport() {
-        assertEquals("socks4a+none+tcp", node(NodeType.SOCKS, "socks4a://example.com").protocolDisplayLabel())
+        assertEquals("socks4a+none+tcp+sing-box", node(NodeType.SOCKS, "socks4a://example.com").protocolDisplayLabel(FULL_DISPLAY))
         assertEquals(
-            "ss+ws",
+            "ss+ws+sing-box",
             node(
                 NodeType.SHADOWSOCKS,
                 "ss://token@example.com:443?plugin=v2ray-plugin%3Bmode%3Dwebsocket"
-            ).protocolDisplayLabel()
+            ).protocolDisplayLabel(FULL_DISPLAY)
         )
     }
 
@@ -81,16 +82,20 @@ class NodeProtocolDisplayTest {
             "vless://id@example.com:443?security=reality&type=tcp"
         )
         assertEquals(
-            "reality+tcp",
-            realityNode.protocolDisplayLabel(NodeDisplaySettings(showProtocol = false))
+            "reality+tcp+xray",
+            realityNode.protocolDisplayLabel(FULL_DISPLAY.copy(showProtocol = false))
         )
         assertEquals(
-            "vless+tcp",
-            realityNode.protocolDisplayLabel(NodeDisplaySettings(showSecurity = false))
+            "vless+tcp+xray",
+            realityNode.protocolDisplayLabel(FULL_DISPLAY.copy(showSecurity = false))
         )
         assertEquals(
-            "vless+reality",
-            realityNode.protocolDisplayLabel(NodeDisplaySettings(showTransport = false))
+            "vless+reality+xray",
+            realityNode.protocolDisplayLabel(FULL_DISPLAY.copy(showTransport = false))
+        )
+        assertEquals(
+            "vless+reality+tcp",
+            realityNode.protocolDisplayLabel(FULL_DISPLAY.copy(showCore = false))
         )
         assertEquals(
             "",
@@ -98,9 +103,40 @@ class NodeProtocolDisplayTest {
                 NodeDisplaySettings(
                     showProtocol = false,
                     showSecurity = false,
-                    showTransport = false
+                    showTransport = false,
+                    showCore = false
                 )
             )
+        )
+    }
+
+    @Test
+    fun displaysTheCurrentlySelectedCore() {
+        val coreSettings = ProtocolCoreSettings(xrayProtocols = setOf(NodeType.TROJAN))
+        assertEquals(
+            "vless+reality+tcp+sing-box",
+            node(
+                NodeType.VLESS,
+                "vless://id@example.com:443?security=reality&type=tcp"
+            ).protocolDisplayLabel(FULL_DISPLAY, coreSettings)
+        )
+        assertEquals(
+            "trojan+tls+tcp+xray",
+            node(
+                NodeType.TROJAN,
+                "trojan://password@example.com:443"
+            ).protocolDisplayLabel(FULL_DISPLAY, coreSettings)
+        )
+    }
+
+    @Test
+    fun hidesTheLabelByDefault() {
+        assertEquals(
+            "",
+            node(
+                NodeType.VLESS,
+                "vless://id@example.com:443?security=reality&type=tcp"
+            ).protocolDisplayLabel()
         )
     }
 
@@ -115,4 +151,13 @@ class NodeProtocolDisplayTest {
 
     private fun vmessLink(json: String): String =
         "vmess://${Base64.getEncoder().withoutPadding().encodeToString(json.toByteArray())}"
+
+    private companion object {
+        val FULL_DISPLAY = NodeDisplaySettings(
+            showProtocol = true,
+            showSecurity = true,
+            showTransport = true,
+            showCore = true
+        )
+    }
 }
