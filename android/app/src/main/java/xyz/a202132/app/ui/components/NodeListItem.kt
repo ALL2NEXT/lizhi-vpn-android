@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +34,7 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.ui.theme.LatencyBad
 import xyz.a202132.app.ui.theme.LatencyGood
 import xyz.a202132.app.ui.theme.LatencyMedium
+import xyz.a202132.app.util.protocolDisplayLabel
 
 @Composable
 internal fun NodeListItem(
@@ -54,6 +56,9 @@ internal fun NodeListItem(
     } else {
         Color.Transparent
     }
+    val protocolDisplay = remember(node.type, node.rawLink) {
+        node.protocolDisplayLabel()
+    }
 
     Surface(
         modifier = Modifier
@@ -73,29 +78,30 @@ internal fun NodeListItem(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = node.getFlagEmoji(),
-                        fontSize = 24.sp,
-                        modifier = Modifier.padding(end = 12.dp)
-                    )
+                Text(
+                    text = node.getFlagEmoji(),
+                    fontSize = 24.sp,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
 
-                    Text(
-                        text = node.getDisplayName(),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (node.isAvailable) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = node.getDisplayName(),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (node.isAvailable) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                NodeProtocolDetailsBadge(
+                    label = protocolDisplay,
+                    modifier = Modifier.padding(start = 8.dp, end = 4.dp)
+                )
 
                 IconButton(
                     onClick = onToggleFavorite,
@@ -145,6 +151,24 @@ internal fun NodeListItem(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun NodeProtocolDetailsBadge(label: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+        )
     }
 }
 
