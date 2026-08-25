@@ -12,6 +12,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.ProxyCore
 
 /** Runs an isolated download test through a temporary node-specific SOCKS proxy. */
 internal class NodeDownloadBandwidthTester(private val context: Context) {
@@ -19,7 +20,8 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         node: Node,
         sizeMb: Int,
         hysteriaUpMbps: Int,
-        hysteriaDownMbps: Int
+        hysteriaDownMbps: Int,
+        core: ProxyCore
     ): Float = withContext(Dispatchers.IO) {
         val port = ServerSocket(0).use { it.localPort }
         val session = NodeTestProxyManager.createSession(
@@ -27,7 +29,8 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
             node,
             port,
             hysteriaUpMbps,
-            hysteriaDownMbps
+            hysteriaDownMbps,
+            core
         )
         if (!session.start()) return@withContext 0f
 

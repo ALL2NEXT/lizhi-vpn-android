@@ -766,6 +766,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val isVpnRunning = vpnState.value == VpnState.CONNECTED
         val clashApiPort: Int
         var startedHeadless = false
+        var testableNodes = nodes
 
         try {
             if (isVpnRunning) {
@@ -776,20 +777,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.d(tag, "URL Test via headless instance (port $clashApiPort)")
                 _testingLabel.value = "$labelPrefix：启动测试引擎..."
 
-                val started = withContext(Dispatchers.IO) {
+                val startResult = withContext(Dispatchers.IO) {
                     xyz.a202132.app.network.UrlTestManager.start(
                         getApplication(),
                         nodes,
                         hysteriaUpMbps.value,
                         hysteriaDownMbps.value,
-                        urlTestUrl.value
+                        urlTestUrl.value,
+                        protocolCoreSettings.value
                     )
                 }
-                if (!started) {
+                if (startResult == null) {
                     _error.value = "启动测试引擎失败"
                     return emptyList()
                 }
                 startedHeadless = true
+                testableNodes = startResult.nodes
 
                 delay(2000)
                 val clashReady = withContext(Dispatchers.IO) {
@@ -828,9 +831,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            Log.d(tag, "URL Testing ${nodes.size} nodes via ClashAPI (port=$clashApiPort)")
-            val results = latencyTester.urlTestAllNodes(
-                nodes = nodes,
+            Log.d(tag, "URL Testing ${testableNodes.size} nodes via ClashAPI (port=$clashApiPort)")
+            val testedResults = latencyTester.urlTestAllNodes(
+                nodes = testableNodes,
                 clashApiPort = clashApiPort,
                 targetUrl = urlTestUrl.value,
                 timeoutMs = urlTestTimeoutMs.value,
@@ -838,6 +841,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ) { completed, total ->
                 _testingLabel.value = "$labelPrefix 测试中 ($completed/$total)"
                 onProgress?.invoke(completed, total)
+            }
+            val testedById = testedResults.associateBy(LatencyTester.LatencyResult::nodeId)
+            val results = nodes.map { node ->
+                testedById[node.id] ?: LatencyTester.LatencyResult(
+                    nodeId = node.id,
+                    latency = -2,
+                    isAvailable = false
+                )
             }
             Log.d(tag, "Got ${results.size} URL test results")
             return results
@@ -1676,7 +1687,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             node,
             sizeMb,
             hysteriaUpMbps.value,
-            hysteriaDownMbps.value
+            hysteriaDownMbps.value,
+            protocolCoreSettings.value.coreFor(node.type)
         )
 
 }

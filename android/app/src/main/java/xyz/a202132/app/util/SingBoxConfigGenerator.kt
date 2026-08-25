@@ -188,7 +188,8 @@ class SingBoxConfigGenerator {
         logFile: String? = null,
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS,
-        urlTestUrl: String = AppConfig.URL_TEST_URL
+        urlTestUrl: String = AppConfig.URL_TEST_URL,
+        xrayBridgePorts: Map<String, Int> = emptyMap()
     ): String {
         val config = JsonObject().apply {
             add("log", JsonObject().apply {
@@ -241,7 +242,14 @@ class SingBoxConfigGenerator {
                 })
                 
                 nodes.forEach { node ->
-                    add(createNodeOutbound(node, node.id, hysteriaUpMbps, hysteriaDownMbps))
+                    val xrayPort = xrayBridgePorts[node.id]
+                    add(
+                        if (xrayPort != null) {
+                            createXrayBridgeOutbound(node.id, xrayPort)
+                        } else {
+                            createNodeOutbound(node, node.id, hysteriaUpMbps, hysteriaDownMbps)
+                        }
+                    )
                 }
                 
                 add(JsonObject().apply {

@@ -18,10 +18,15 @@ import java.util.concurrent.TimeUnit
 internal class XrayProcessManager(
     context: Context,
     private val scope: CoroutineScope,
+    runtimeDirectoryName: String = DEFAULT_RUNTIME_DIRECTORY,
     private val onUnexpectedExit: (String) -> Unit
 ) {
     private val appContext = context.applicationContext
-    private val workDir = File(appContext.filesDir, "xray")
+    private val workDir = File(
+        appContext.filesDir,
+        runtimeDirectoryName.takeIf(::isSafeRuntimeDirectoryName)
+            ?: error("Xray 运行目录名称无效")
+    )
     private val binary = File(appContext.applicationInfo.nativeLibraryDir, "libxray.so")
     private val configFile = File(workDir, "config.json")
     private val testConfigFile = File(workDir, "config-test.json")
@@ -154,6 +159,7 @@ internal class XrayProcessManager(
     }
 
     private companion object {
+        const val DEFAULT_RUNTIME_DIRECTORY = "xray"
         const val TAG = "XrayProcessManager"
         const val CONFIG_CHECK_TIMEOUT_SECONDS = 15L
         const val STOP_TIMEOUT_SECONDS = 3L
@@ -162,5 +168,10 @@ internal class XrayProcessManager(
         const val PORT_PROBE_INTERVAL_MS = 80L
         const val MAX_RECENT_LOG_LINES = 20
         const val MAX_ERROR_LENGTH = 1_500
+
+        fun isSafeRuntimeDirectoryName(value: String): Boolean =
+            value.isNotBlank() && value.length <= 80 && value.all { character ->
+                character.isLetterOrDigit() || character == '-' || character == '_'
+            }
     }
 }
