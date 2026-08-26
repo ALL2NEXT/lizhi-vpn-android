@@ -7,14 +7,13 @@ import org.junit.Test
 
 class ProtocolCoreSettingsTest {
     @Test
-    fun defaultsVlessVmessAndHysteria2ToXray() {
+    fun defaultsEveryProtocolToSingBox() {
         val settings = ProtocolCoreSettings()
 
-        assertEquals(ProxyCore.XRAY, settings.coreFor(NodeType.VLESS))
-        assertEquals(ProxyCore.XRAY, settings.coreFor(NodeType.VMESS))
-        assertEquals(ProxyCore.XRAY, settings.coreFor(NodeType.HYSTERIA2))
-        assertEquals(ProxyCore.SING_BOX, settings.coreFor(NodeType.TROJAN))
-        assertEquals(ProxyCore.SING_BOX, settings.coreFor(NodeType.SHADOWSOCKS))
+        assertTrue(ProtocolCoreSettings.DEFAULT_XRAY_PROTOCOLS.isEmpty())
+        ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
+            assertEquals(ProxyCore.SING_BOX, settings.coreFor(nodeType))
+        }
     }
 
     @Test

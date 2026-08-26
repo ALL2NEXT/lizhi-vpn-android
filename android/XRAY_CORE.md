@@ -38,9 +38,9 @@ sing-box（DNS、路由、分应用、流量统计、节点选择）
 - SOCKS5（SOCKS4/4a 仍由 sing-box 处理）
 - HTTP/HTTPS
 
-AnyTLS、TUIC、Naive 固定由 sing-box 处理。首次安装或尚未保存核心设置时，VLESS、VMess
-默认使用 Xray，其他协议默认使用 sing-box；用户后续选择会覆盖默认值。修改核心
-选择后，正在运行的 VPN 会自动重连。
+AnyTLS、TUIC、Naive 固定由 sing-box 处理。首次安装或尚未保存核心设置时，全部协议
+默认使用 sing-box；用户后续选择会覆盖默认值。修改核心选择后，正在运行的 VPN
+会自动重连。
 
 Xray `v26.3.27` 已移除 `allowInsecure`。带自签名证书的 Hysteria2/HTTPS 节点如需
 使用 Xray，应由服务端链接提供 `pcs` 或 `pinSHA256`（SHA-256 证书指纹）；否则

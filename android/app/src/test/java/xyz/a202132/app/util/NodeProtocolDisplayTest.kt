@@ -12,14 +12,14 @@ class NodeProtocolDisplayTest {
     @Test
     fun displaysProtocolSecurityAndTransportTogether() {
         assertEquals(
-            "vless+reality+tcp+xray",
+            "vless+reality+tcp+sing-box",
             node(
                 NodeType.VLESS,
                 "vless://id@example.com:443?security=reality&type=tcp"
             ).protocolDisplayLabel(FULL_DISPLAY)
         )
         assertEquals(
-            "hy2+tls+quic+xray",
+            "hy2+tls+quic+sing-box",
             node(
                 NodeType.HYSTERIA2,
                 "hy2://password@example.com:443?insecure=0"
@@ -30,21 +30,21 @@ class NodeProtocolDisplayTest {
     @Test
     fun explicitlyDisplaysMissingSecurityForVlessAndVmess() {
         assertEquals(
-            "vless+none+ws+xray",
+            "vless+none+ws+sing-box",
             node(
                 NodeType.VLESS,
                 "vless://id@example.com:80?security=none&type=websocket"
             ).protocolDisplayLabel(FULL_DISPLAY)
         )
         assertEquals(
-            "vless+none+grpc+xray",
+            "vless+none+grpc+sing-box",
             node(
                 NodeType.VLESS,
                 "vless://id@example.com:80?type=gun"
             ).protocolDisplayLabel(FULL_DISPLAY)
         )
         assertEquals(
-            "vmess+tls+ws+xray",
+            "vmess+tls+ws+sing-box",
             node(
                 NodeType.VMESS,
                 vmessLink("""{"add":"example.com","port":"443","id":"id","tls":"tls","net":"ws"}""")
@@ -82,15 +82,15 @@ class NodeProtocolDisplayTest {
             "vless://id@example.com:443?security=reality&type=tcp"
         )
         assertEquals(
-            "reality+tcp+xray",
+            "reality+tcp+sing-box",
             realityNode.protocolDisplayLabel(FULL_DISPLAY.copy(showProtocol = false))
         )
         assertEquals(
-            "vless+tcp+xray",
+            "vless+tcp+sing-box",
             realityNode.protocolDisplayLabel(FULL_DISPLAY.copy(showSecurity = false))
         )
         assertEquals(
-            "vless+reality+xray",
+            "vless+reality+sing-box",
             realityNode.protocolDisplayLabel(FULL_DISPLAY.copy(showTransport = false))
         )
         assertEquals(

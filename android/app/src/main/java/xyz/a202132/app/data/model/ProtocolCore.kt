@@ -30,11 +30,8 @@ data class ProtocolCoreSettings(
             it == NodeType.UNKNOWN
         }
 
-        val DEFAULT_XRAY_PROTOCOLS: Set<NodeType> = setOf(
-            NodeType.VLESS,
-            NodeType.VMESS,
-            NodeType.HYSTERIA2
-        )
+        /** 首次安装或尚未保存选择时，所有协议默认由 sing-box 处理。 */
+        val DEFAULT_XRAY_PROTOCOLS: Set<NodeType> = emptySet()
 
         val XRAY_CAPABLE_PROTOCOLS: List<NodeType> = listOf(
             NodeType.VLESS,
