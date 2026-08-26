@@ -2,11 +2,11 @@ package xyz.a202132.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// 主色调 - 青色/蓝绿色主题（与Firefly图像相匹配）
-val Primary = Color(0xFF00BFA5)          // 青绿主色
-val PrimaryVariant = Color(0xFF00897B)   // 深青绿
-val Secondary = Color(0xFF26C6DA)        // 亮青色
-val SecondaryVariant = Color(0xFF0097A7) // 深青色
+// 默认备用配色。系统不支持莫奈取色或方案关闭莫奈取色时使用。
+val Primary = Color(0xFF37474F)          // 蓝灰主色
+val PrimaryVariant = Color(0xFF263238)   // 深蓝灰
+val Secondary = Color(0xFF607D8B)        // 蓝灰辅助色
+val SecondaryVariant = Color(0xFF455A64) // 深蓝灰辅助色
 
 // 状态颜色
 val ErrorRed = Color(0xFFEF4444)

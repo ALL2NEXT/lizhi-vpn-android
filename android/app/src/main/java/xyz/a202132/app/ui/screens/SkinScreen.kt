@@ -1,5 +1,6 @@
 package xyz.a202132.app.ui.screens
 
+import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,7 +86,7 @@ fun SkinScreen(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "默认方案不可删除。新增方案后可单独设置图片和基础颜色。",
+                text = "默认方案不可删除。新增方案后可单独设置图片、莫奈取色和备用基础颜色。",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -198,6 +201,19 @@ private fun SkinSchemeCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val previewColor = if (scheme.monetEnabled && monetSupported) {
+        dynamicLightColorScheme(LocalContext.current).primary
+    } else {
+        Color(scheme.baseColorArgb)
+    }
+    val schemeDescription = when {
+        scheme.isDefault && monetSupported -> "内置默认方案 · 莫奈动态取色"
+        scheme.isDefault -> "内置默认方案 · 当前使用备用色 #37474F"
+        scheme.monetEnabled && monetSupported -> "自定义方案 · 莫奈动态取色"
+        scheme.monetEnabled -> "自定义方案 · 当前系统使用备用基础颜色"
+        else -> "自定义方案 · 使用基础颜色"
+    }
     val containerColor = if (selected) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
     } else {
@@ -236,7 +252,7 @@ private fun SkinSchemeCard(
                         .padding(6.dp)
                         .size(18.dp),
                     shape = CircleShape,
-                    color = Color(scheme.baseColorArgb),
+                    color = previewColor,
                     border = BorderStroke(1.dp, Color.White)
                 ) {}
             }
@@ -249,7 +265,7 @@ private fun SkinSchemeCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = if (scheme.isDefault) "内置默认方案，不可删除" else "自定义方案",
+                    text = schemeDescription,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

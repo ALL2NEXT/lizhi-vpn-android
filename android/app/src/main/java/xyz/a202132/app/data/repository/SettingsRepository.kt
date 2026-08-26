@@ -96,6 +96,7 @@ class SettingsRepository(private val context: Context) {
         // 兼容早期单皮肤版本的数据。
         private val SKIN_BASE_COLOR_ARGB = longPreferencesKey("skin_base_color_argb")
         private val SKIN_CUSTOM_IMAGE_PATH = stringPreferencesKey("skin_custom_image_path")
+        private const val LEGACY_DEFAULT_BASE_COLOR_ARGB: Long = 0xFF00BFA5L
 
     }
     
@@ -129,6 +130,7 @@ class SettingsRepository(private val context: Context) {
             ?: SkinScheme.default()
         SkinSettings(
             baseColorArgb = activeScheme.baseColorArgb,
+            monetEnabled = activeScheme.monetEnabled,
             customImagePath = activeScheme.customImagePath,
             homeDisconnectedImagePath = activeScheme.homeDisconnectedImagePath,
             homeConnectingImagePath = activeScheme.homeConnectingImagePath,
@@ -670,6 +672,7 @@ class SettingsRepository(private val context: Context) {
                                         SkinSettings.DEFAULT_BASE_COLOR_ARGB
                                     )
                                 ),
+                                monetEnabled = item.optBoolean("monetEnabled", false),
                                 customImagePath = item.optString("customImagePath")
                                     .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
                                 homeDisconnectedImagePath = item.optString("homeDisconnectedImagePath")
@@ -689,16 +692,19 @@ class SettingsRepository(private val context: Context) {
         val legacyColor = preferences[SKIN_BASE_COLOR_ARGB]
         val legacyImage = preferences[SKIN_CUSTOM_IMAGE_PATH]
             ?.takeIf { it.isNotBlank() }
+        val normalizedLegacyColor = legacyColor?.let(::normalizeSkinColor)
         val legacyScheme = if (
             legacyImage != null ||
-            legacyColor != null && normalizeSkinColor(legacyColor) != SkinSettings.DEFAULT_BASE_COLOR_ARGB
+            normalizedLegacyColor != null &&
+                normalizedLegacyColor != SkinSettings.DEFAULT_BASE_COLOR_ARGB &&
+                normalizedLegacyColor != LEGACY_DEFAULT_BASE_COLOR_ARGB
         ) {
             SkinScheme(
                 id = "legacy_custom",
                 name = "我的皮肤",
-                baseColorArgb = normalizeSkinColor(
-                    legacyColor ?: SkinSettings.DEFAULT_BASE_COLOR_ARGB
-                ),
+                baseColorArgb = normalizedLegacyColor
+                    ?.takeUnless { it == LEGACY_DEFAULT_BASE_COLOR_ARGB }
+                    ?: SkinSettings.DEFAULT_BASE_COLOR_ARGB,
                 customImagePath = legacyImage
             )
         } else {
@@ -718,6 +724,7 @@ class SettingsRepository(private val context: Context) {
                         put("id", scheme.id)
                         put("name", scheme.name)
                         put("baseColorArgb", normalizeSkinColor(scheme.baseColorArgb))
+                        put("monetEnabled", scheme.monetEnabled)
                         scheme.customImagePath?.let { put("customImagePath", it) }
                         scheme.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }
                         scheme.homeConnectingImagePath?.let { put("homeConnectingImagePath", it) }

@@ -1,6 +1,7 @@
 package xyz.a202132.app.ui.screens
 
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -148,6 +150,7 @@ fun SkinSchemeEditorScreen(
     }
     var colorError by remember { mutableStateOf(false) }
     val isActive = scheme.id == skinSettings.activeSchemeId
+    val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -386,15 +389,54 @@ fun SkinSchemeEditorScreen(
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "莫奈取色",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (monetSupported) {
+                                    "使用系统壁纸生成的动态配色。"
+                                } else {
+                                    "当前系统不支持，将使用备用基础颜色；Android 12 及以上可用。"
+                                },
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = scheme.monetEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.upsertSkinScheme(
+                                    scheme.copy(monetEnabled = enabled)
+                                )
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "基础颜色",
+                        text = if (scheme.monetEnabled) "备用基础颜色" else "基础颜色",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "用于按钮、选中状态、开关和其他强调元素。",
+                        text = if (scheme.monetEnabled) {
+                            "系统不支持莫奈取色时使用，也用于颜色预览。"
+                        } else {
+                            "用于按钮、选中状态、开关和其他强调元素。"
+                        },
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

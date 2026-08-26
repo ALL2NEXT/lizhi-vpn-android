@@ -712,13 +712,12 @@ ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
 
 **文件**: `android/app/src/main/java/xyz/a202132/app/ui/theme/Color.kt`
 
-项目使用青绿色系主题，修改 `Color.kt` 中的颜色变量即可全局更改主题色：
+默认皮肤在 Android 12 及以上启用莫奈动态取色；系统不支持或皮肤关闭莫奈取色时，使用 `Color.kt` 中的蓝灰色备用方案：
 
 ```kotlin
-// Primary Colors - Cyan/Teal Theme (matching firefly images)
-val Primary = Color(0xFF00BFA5)          // 青绿主色
-val PrimaryVariant = Color(0xFF00897B)   // 深青绿
-val Secondary = Color(0xFF26C6DA)        // 亮青色
+val Primary = Color(0xFF37474F)          // 蓝灰主色
+val PrimaryVariant = Color(0xFF263238)   // 深蓝灰
+val Secondary = Color(0xFF607D8B)        // 蓝灰辅助色
 // ...
 ```
 

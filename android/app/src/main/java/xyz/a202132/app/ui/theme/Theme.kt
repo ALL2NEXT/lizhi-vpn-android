@@ -1,6 +1,7 @@
 package xyz.a202132.app.ui.theme
 
 import android.app.Activity
+import android.os.Build
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -8,6 +9,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import xyz.a202132.app.data.model.SkinSettings
@@ -91,8 +93,15 @@ fun FireflyVPNTheme(
     skinSettings: SkinSettings = SkinSettings(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = remember(skinSettings.baseColorArgb) {
+    val context = LocalContext.current
+    val useMonetColors = skinSettings.monetEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val fallbackColorScheme = remember(skinSettings.baseColorArgb) {
         skinColorScheme(Color(skinSettings.baseColorArgb))
+    }
+    val colorScheme = if (useMonetColors) {
+        dynamicLightColorScheme(context)
+    } else {
+        fallbackColorScheme
     }
     val view = LocalView.current
     
