@@ -375,6 +375,11 @@ private fun NodeListContent(
     }
     val showPullRefreshStatus =
         canPullRefresh && (pullRefreshing || pullRefreshState.progress > 0f)
+    val pullRefreshProgress = if (pullRefreshing) {
+        1f
+    } else {
+        pullRefreshState.progress
+    }
     val pullRefreshModifier = Modifier.pullRefresh(
         state = pullRefreshState,
         enabled = canPullRefresh
@@ -546,6 +551,7 @@ private fun NodeListContent(
                     PullRefreshStatus(
                         visible = showPullRefreshStatus,
                         refreshing = pullRefreshing,
+                        progress = pullRefreshProgress,
                         contentOffsetPx = pullRefreshContentOffsetPx,
                         lastUpdatedAt = lastUpdatedAt,
                         nowMillis = nowMillis,
@@ -593,6 +599,7 @@ private fun NodeListContent(
                     PullRefreshStatus(
                         visible = showPullRefreshStatus,
                         refreshing = pullRefreshing,
+                        progress = pullRefreshProgress,
                         contentOffsetPx = pullRefreshContentOffsetPx,
                         lastUpdatedAt = lastUpdatedAt,
                         nowMillis = nowMillis,
@@ -779,6 +786,7 @@ private fun NodeListCategorySegment(
 private fun PullRefreshStatus(
     visible: Boolean,
     refreshing: Boolean,
+    progress: Float,
     contentOffsetPx: Float,
     lastUpdatedAt: Long?,
     nowMillis: Long,
@@ -787,6 +795,19 @@ private fun PullRefreshStatus(
     if (!visible) return
     val density = LocalDensity.current
     val statusHeightPx = with(density) { 50.dp.toPx() }
+    val boundedProgress = progress.coerceIn(0f, 1f)
+    val readyToRefresh = !refreshing && progress >= 1f
+    val statusText = when {
+        refreshing -> "\u6b63\u5728\u5237\u65b0"
+        readyToRefresh -> "\u677e\u5f00\u5237\u65b0"
+        else -> "\u7ee7\u7eed\u4e0b\u62c9"
+    }
+    val activeColor = MaterialTheme.colorScheme.primary
+    val indicatorColor = if (readyToRefresh || refreshing) {
+        activeColor
+    } else {
+        activeColor.copy(alpha = 0.6f)
+    }
     Column(
         modifier = modifier.graphicsLayer {
             translationY = (contentOffsetPx - statusHeightPx).coerceAtLeast(0f)
@@ -794,8 +815,13 @@ private fun PullRefreshStatus(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = formatSubscriptionUpdatedText(lastUpdatedAt, nowMillis),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "$statusText \u00b7 ${formatSubscriptionUpdatedText(lastUpdatedAt, nowMillis)}",
+            color = if (readyToRefresh || refreshing) {
+                activeColor
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            fontWeight = if (readyToRefresh) FontWeight.Bold else FontWeight.Medium,
             fontSize = 12.sp,
             maxLines = 1
         )
@@ -803,7 +829,7 @@ private fun PullRefreshStatus(
             modifier = Modifier
                 .width(1.dp)
                 .height(14.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+            color = indicatorColor,
             shape = RoundedCornerShape(1.dp)
         ) {}
         if (refreshing) {
@@ -815,8 +841,15 @@ private fun PullRefreshStatus(
             Icon(
                 imageVector = Icons.Default.Refresh,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary
+                modifier = Modifier
+                    .size(20.dp)
+                    .graphicsLayer {
+                        rotationZ = boundedProgress * 180f
+                        val readyScale = if (readyToRefresh) 1.12f else 1f
+                        scaleX = readyScale
+                        scaleY = readyScale
+                    },
+                tint = indicatorColor
             )
         }
     }
