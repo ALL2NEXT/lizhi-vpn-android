@@ -193,7 +193,7 @@ object AppConfig {
     // 速度测试 (Cloudflare)
     const val SPEED_TEST_DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
     const val SPEED_TEST_UPLOAD_URL = "https://speed.cloudflare.com/__up"
-    const val AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS = 25000L // 单次下载带宽测试超时
+    const val AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS = 5000L  // 单次下载带宽测试超时
     const val AUTO_TEST_BANDWIDTH_UPLOAD_TIMEOUT_MS = 30000L   // 单次上传带宽测试超时
 }
 ```
@@ -405,7 +405,7 @@ android/app/src/main/
 | Hysteria 最大带宽 (Up/Dw) | 1000/1000 Mbps | 仅对 Hysteria2 节点生效；输入 0 表示不设置，修改后下次连接生效 |
 | TCPing 超时 | 3000ms | 最低 500ms |
 | URL Test 超时 | 3000ms | 最低 500ms |
-| 单次下载测速超时 | 25000ms | 设为 0 则不限制 |
+| 单次下载测速超时 | 5000ms | 设为 0 则不限制 |
 | TCPing 并发数 | 16 | 范围 1~128 |
 | URL Test 并发数 | 10 | 范围 1~128 |
 | 带宽测试并发数 | 1 | 范围 1~3，默认保持串行；提高并发可加快粗筛但会增加测速竞争 |

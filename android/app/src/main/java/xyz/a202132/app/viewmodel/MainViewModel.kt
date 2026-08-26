@@ -1690,6 +1690,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         bandwidthTester.test(
             node,
             sizeMb,
+            speedTestDownloadTimeoutMs.value,
             hysteriaUpMbps.value,
             hysteriaDownMbps.value,
             protocolCoreSettings.value.coreFor(node.type)

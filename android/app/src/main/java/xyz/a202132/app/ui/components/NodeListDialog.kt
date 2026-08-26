@@ -786,38 +786,37 @@ private fun PullRefreshStatus(
 ) {
     if (!visible) return
     val density = LocalDensity.current
-    val statusHeightPx = with(density) { 28.dp.toPx() }
-    Surface(
+    val statusHeightPx = with(density) { 50.dp.toPx() }
+    Column(
         modifier = modifier.graphicsLayer {
             translationY = (contentOffsetPx - statusHeightPx).coerceAtLeast(0f)
         },
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        shape = RoundedCornerShape(14.dp),
-        tonalElevation = 2.dp
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (refreshing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = formatSubscriptionUpdatedText(lastUpdatedAt, nowMillis),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                maxLines = 1
+        Text(
+            text = formatSubscriptionUpdatedText(lastUpdatedAt, nowMillis),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+            maxLines = 1
+        )
+        Surface(
+            modifier = Modifier
+                .width(1.dp)
+                .height(14.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+            shape = RoundedCornerShape(1.dp)
+        ) {}
+        if (refreshing) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
         }
     }

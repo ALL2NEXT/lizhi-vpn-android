@@ -85,7 +85,6 @@ object AppConfig {
     const val SMART_CONNECT_URL_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_SIZE_MB = 5
-    const val SMART_CONNECT_SPEED_TEST_TIMEOUT_MS = 5000L
 
     // VPN 断线恢复，默认关闭，由特色功能页面控制
     const val DISCONNECT_RECOVERY_ENABLED = false
@@ -124,6 +123,6 @@ object AppConfig {
     const val NJU_SPEED_TEST_URL = "https://test.nju.edu.cn/"
     const val NETFLIX_SPEED_TEST_URL = "https://fast.com/"
     const val GOOGLE_SPEED_TEST_URL = "https://fiber.google.com/speedtest/"
-    const val AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS = 25000L // 单次下载带宽测试超时（毫秒），设为0则无限制
+    const val AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS = 5000L // 单次下载带宽测试超时（毫秒），设为0则无限制
     const val AUTO_TEST_BANDWIDTH_UPLOAD_TIMEOUT_MS = 30000L // 单次上传带宽测试超时（毫秒），设为0则无限制
 }

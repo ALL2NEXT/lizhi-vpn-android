@@ -19,6 +19,7 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
     suspend fun test(
         node: Node,
         sizeMb: Int,
+        timeoutMs: Long,
         hysteriaUpMbps: Int,
         hysteriaDownMbps: Int,
         core: ProxyCore
@@ -36,11 +37,12 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
 
         try {
             val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
+            val effectiveTimeoutMs = timeoutMs.coerceAtLeast(0L)
             val client = NetworkClient.withUserAgent(OkHttpClient.Builder())
                 .proxy(proxy)
-                .connectTimeout(AppConfig.SMART_CONNECT_SPEED_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                .readTimeout(AppConfig.SMART_CONNECT_SPEED_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                .callTimeout(AppConfig.SMART_CONNECT_SPEED_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .connectTimeout(effectiveTimeoutMs, TimeUnit.MILLISECONDS)
+                .readTimeout(effectiveTimeoutMs, TimeUnit.MILLISECONDS)
+                .callTimeout(effectiveTimeoutMs, TimeUnit.MILLISECONDS)
                 .build()
             val bytes = sizeMb.toLong() * 1_000_000L
             val request = Request.Builder()
