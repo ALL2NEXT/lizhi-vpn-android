@@ -242,7 +242,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     // 自动化测试设置
-    val rememberLastSelectedNodeEnabled = settingsRepository.rememberLastSelectedNodeEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
     val urlTestTimeoutMs = settingsRepository.urlTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_TIMEOUT)
     val urlTestUrl = settingsRepository.urlTestUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_URL)
@@ -308,11 +307,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // presentation must not serialize the resource-loading pipeline.
 
                 subscriptionDataLoader.loadCachedSubscriptionList()
-                if (subscriptionDataLoader.initialize()) {
-                    restoreRememberedLastSelectedNodeIfNeeded(
-                        subscriptionDataLoader.lastFetchedNodes
-                    )
-                } else {
+                if (!subscriptionDataLoader.initialize()) {
                     // A successful refresh schedules enrichment for the fresh
                     // nodes. Only fall back to cached nodes when refresh failed.
                     scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
@@ -560,12 +555,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    fun setRememberLastSelectedNodeEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setRememberLastSelectedNodeEnabled(enabled)
-        }
-    }
-
     fun setTcpingTestTimeoutMs(value: Long) {
         viewModelScope.launch {
             settingsRepository.setTcpingTestTimeoutMs(value)
@@ -1638,17 +1627,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .toInt()
             .coerceIn(1, nodes.size)
         return nodes.take(count)
-    }
-
-    private suspend fun restoreRememberedLastSelectedNodeIfNeeded(freshNodes: List<Node>? = null) {
-        if (!settingsRepository.rememberLastSelectedNodeEnabled.first()) return
-        val rememberedNodeId = settingsRepository.lastSelectedNodeId.first()?.takeIf { it.isNotBlank() } ?: return
-        val candidateNodes = freshNodes ?: nodeDao().getAllNodes().first()
-        val rememberedNode = candidateNodes.firstOrNull { it.id == rememberedNodeId }
-            ?: nodeDao().getNodeById(rememberedNodeId)
-        if (rememberedNode?.source != NodeSource.SUBSCRIPTION && rememberedNode != null) {
-            settingsRepository.setSelectedNodeId(rememberedNodeId)
-        }
     }
 
     /** Refresh all subscriptions when no source is specified, otherwise only the selected source. */

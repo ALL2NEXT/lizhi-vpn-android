@@ -126,7 +126,7 @@ fun FeatureScreen(
                 title = "协议核心"
             ) {
                 Text(
-                    text = "全部协议默认使用 sing-box；当前有 8 种可切换为 Xray。灰色 Xray 表示核心不支持；SOCKS 的 Xray 选项仅适用于 SOCKS5。修改后会自动重连。",
+                    text = "vless，vmess适用于xray生态，带有自定义证书，ech等特殊设置优先使用xray，其余使用singbox",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )

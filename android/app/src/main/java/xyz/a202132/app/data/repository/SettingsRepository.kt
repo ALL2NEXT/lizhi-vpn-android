@@ -64,8 +64,6 @@ class SettingsRepository(private val context: Context) {
         private val TUN_STACK = stringPreferencesKey("tun_stack")
         
         // 自动化测试设置
-        private val REMEMBER_LAST_SELECTED_NODE_ENABLED = booleanPreferencesKey("remember_last_selected_node_enabled")
-        private val LAST_SELECTED_NODE_ID = stringPreferencesKey("last_selected_node_id")
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
         private val NODE_LIST_CATEGORY = stringPreferencesKey("node_list_category")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
@@ -307,9 +305,6 @@ class SettingsRepository(private val context: Context) {
                 preferences.remove(SELECTED_NODE_ID)
             } else {
                 preferences[SELECTED_NODE_ID] = nodeId
-                if (preferences[REMEMBER_LAST_SELECTED_NODE_ENABLED] ?: true) {
-                    preferences[LAST_SELECTED_NODE_ID] = nodeId
-                }
             }
         }
     }
@@ -442,25 +437,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
     
-    val rememberLastSelectedNodeEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[REMEMBER_LAST_SELECTED_NODE_ENABLED] ?: true
-    }
-
-    suspend fun setRememberLastSelectedNodeEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[REMEMBER_LAST_SELECTED_NODE_ENABLED] = enabled
-            if (!enabled) {
-                preferences.remove(LAST_SELECTED_NODE_ID)
-            } else {
-                preferences[SELECTED_NODE_ID]?.let { preferences[LAST_SELECTED_NODE_ID] = it }
-            }
-        }
-    }
-
-    val lastSelectedNodeId: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[LAST_SELECTED_NODE_ID]
-    }
-
     val tcpingTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
         (preferences[TCPING_TEST_TIMEOUT_MS] ?: xyz.a202132.app.AppConfig.TCPING_TEST_TIMEOUT).coerceAtLeast(500L)
     }

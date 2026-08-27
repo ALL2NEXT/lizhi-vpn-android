@@ -63,7 +63,6 @@ fun OtherConfigScreen(
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val vpnMtu by viewModel.vpnMtu.collectAsStateWithLifecycle()
-    val rememberLastSelectedNodeEnabled by viewModel.rememberLastSelectedNodeEnabled.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
@@ -146,28 +145,6 @@ fun OtherConfigScreen(
                     selectedIndex = tunStacks.indexOf(tunStack),
                     onOptionSelected = { index -> viewModel.setTunStack(tunStacks[index]) }
                 )
-            }
-
-            OtherConfigSection {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "记住上次选择的节点",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Switch(
-                        checked = rememberLastSelectedNodeEnabled,
-                        onCheckedChange = { viewModel.setRememberLastSelectedNodeEnabled(it) },
-                        colors = visibleSwitchColors()
-                    )
-                }
-
             }
 
             OtherConfigSection(
