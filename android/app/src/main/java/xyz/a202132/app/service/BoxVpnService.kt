@@ -407,13 +407,14 @@ class BoxVpnService : VpnService() {
     private var baseTxBytes = 0L
     private var baseRxBytes = 0L
 
-    // Local daily storage baseline. The backend is contacted only by the 23:00 receiver.
+    // Local storage baseline. Uploads are attempted on disconnect and before the next connection.
     private val trafficPersistenceLock = Any()
     private var lastPersistedUploadTotal = 0L
     private var lastPersistedDownloadTotal = 0L
     private var lastTrafficPersistAt = 0L
     
     private fun startTrafficMonitor() {
+        TrafficReporter.reportPendingAsync(applicationContext, "vpn_connect")
         currentTrafficSource = TrafficSource.WAITING_FOR_CORE
         lastSingBoxTrafficStatusAt = 0L
         trafficStatsFallbackActive = false
@@ -894,7 +895,6 @@ class BoxVpnService : VpnService() {
             }
 
             // 1. 停止流量监控
-            persistTrafficProgress(System.currentTimeMillis(), force = true)
             stopTrafficMonitor()
             stopCommandClient()
 
@@ -919,6 +919,15 @@ class BoxVpnService : VpnService() {
             Log.d(TAG, "Resources cleaned up")
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up resources", e)
+        } finally {
+            // Persist before POST even when an earlier cleanup step failed. This scope
+            // outlives the service; an interrupted request keeps the local snapshot.
+            try {
+                persistTrafficProgress(System.currentTimeMillis(), force = true)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error persisting final traffic snapshot", e)
+            }
+            TrafficReporter.reportPendingAsync(applicationContext, "vpn_disconnect")
         }
     }
     
