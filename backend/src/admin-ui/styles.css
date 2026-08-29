@@ -83,13 +83,15 @@
     button.danger { background: #7f1d1d; color: #fee2e2; }
     .check { display: flex; align-items: center; margin: 8px 0; }
     .source-row { border: 1px solid #4b5563; border-radius: 10px; padding: 14px; margin: 10px 0; }
-    .source-row-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #374151; }
-    .source-row-heading { display: grid; flex: 0 1 390px; min-width: 0; grid-template-columns: 160px 220px; gap: 10px; }
+    .source-row-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #374151; }
+    .source-row-heading { display: grid; flex: 1 1 720px; min-width: 0; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.35fr) minmax(130px, .85fr) minmax(130px, .85fr); gap: 10px; }
     .source-row-heading .field { min-width: 0; }
     .source-row-heading label { display: flex; flex-direction: column; gap: 5px; color: #94a3b8; font-size: 12px; }
-    .source-row-heading input { min-height: 34px; padding: 7px 9px; }
+    .source-row-heading input, .source-row-heading select { min-height: 34px; padding: 7px 9px; }
     .source-row-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .source-row-controls button { margin: 0; padding: 7px 10px; }
+    .source-row-controls .source-edit-button { min-width: 32px; min-height: 32px; padding: 5px 8px; font-size: 18px; line-height: 1; }
+    .source-row-controls .source-edit-button[aria-expanded="true"] { font-size: 24px; font-weight: 400; }
     .source-enabled-check { box-sizing: border-box; min-height: 32px; margin: 0; padding: 5px 10px; color: #e5e7eb; background: #111827; border: 1px solid #4b5563; border-radius: 7px; white-space: nowrap; }
     .source-row-controls .source-move-button { min-width: 32px; min-height: 32px; padding: 5px 8px; font-size: 16px; line-height: 1; }
     .source-row-body[hidden] { display: none; }
@@ -97,7 +99,6 @@
     .source-section { padding: 12px; background: #172033; border: 1px solid #374151; border-radius: 8px; }
     .source-section + .source-section { margin-top: 12px; }
     .source-section-title { margin: 0 0 10px; color: #f8fafc; font-size: 14px; }
-    .source-permissions-grid { align-items: end; }
     .source-details-grid { margin-bottom: 12px; }
     .source-mode { margin-top: 12px; }
     .source-mode[hidden] { display: none; }

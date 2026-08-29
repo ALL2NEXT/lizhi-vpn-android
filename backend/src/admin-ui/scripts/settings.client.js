@@ -10,26 +10,21 @@ function addSource(source) {
     '<div class="source-row-heading">' +
       '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
       '<div class="field"><label>备注<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="仅后台保存"></label></div>' +
+      '<div class="field"><label>最低应用版本<input data-field="minAppVersion" type="text" value="' + esc(source.minAppVersion) + '" placeholder="留空不限制"></label></div>' +
+      '<div class="field"><label>最低账户等级<select data-field="minAccountType">' +
+        '<option value="banned" ' + (minAccountType === 'banned' ? 'selected' : '') + '>被封禁账户</option>' +
+        '<option value="guest" ' + (minAccountType === 'guest' ? 'selected' : '') + '>游客</option>' +
+        '<option value="formal" ' + (minAccountType === 'formal' ? 'selected' : '') + '>正式用户</option>' +
+      '</select></label></div>' +
     '</div>' +
     '<div class="source-row-controls" role="group" aria-label="线路启用、排序和折叠操作">' +
       '<label class="check source-enabled-check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用</label>' +
       '<button class="secondary source-move-button" type="button" data-action="move-up" aria-label="上移线路" title="上移线路">↑</button>' +
       '<button class="secondary source-move-button" type="button" data-action="move-down" aria-label="下移线路" title="下移线路">↓</button>' +
-      '<button class="secondary source-edit-button" type="button" data-action="collapse" aria-expanded="false" aria-label="编辑订阅线路" title="编辑订阅线路">🖊</button>' +
+      '<button class="secondary source-edit-button" type="button" data-action="collapse" aria-expanded="false" aria-label="编辑订阅线路" title="编辑订阅线路">&#9881;&#65038;</button>' +
     '</div>' +
   '</div>' +
   '<div class="source-row-body" data-source-body hidden>' +
-    '<section class="source-section source-permissions-section">' +
-      '<h3 class="source-section-title">线路权限控制</h3>' +
-      '<div class="grid source-permissions-grid">' +
-        '<div class="field"><label>最低应用版本<input data-field="minAppVersion" type="text" value="' + esc(source.minAppVersion) + '" placeholder="例如 2.40（留空不限制）"></label></div>' +
-        '<div class="field"><label>最低账户等级<select data-field="minAccountType">' +
-          '<option value="banned" ' + (minAccountType === 'banned' ? 'selected' : '') + '>被封禁账户</option>' +
-          '<option value="guest" ' + (minAccountType === 'guest' ? 'selected' : '') + '>游客</option>' +
-          '<option value="formal" ' + (minAccountType === 'formal' ? 'selected' : '') + '>正式用户</option>' +
-        '</select></label></div>' +
-      '</div>' +
-    '</section>' +
     '<section class="source-section source-details-section">' +
       '<h3 class="source-section-title">订阅详细设定</h3>' +
       '<div class="grid source-details-grid">' +
@@ -98,9 +93,9 @@ function toggleSourceRow(row) {
   body.hidden = collapsed;
   row.classList.toggle('collapsed', collapsed);
   button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-  button.textContent = '🖊';
-  button.setAttribute('aria-label', collapsed ? '编辑订阅线路' : '收起订阅线路');
-  button.title = collapsed ? '编辑订阅线路' : '收起订阅线路';
+  button.textContent = collapsed ? '\u2699\uFE0E' : '\u00D7';
+  button.setAttribute('aria-label', collapsed ? '编辑订阅线路' : '关闭订阅编辑');
+  button.title = collapsed ? '编辑订阅线路' : '关闭订阅编辑';
 }
 function updateSourceMode(row) {
   const type = row.querySelector('[data-field="sourceType"]').value;
