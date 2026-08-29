@@ -162,7 +162,7 @@ fun NodeListScreen(
 
     AppScreenScaffold(
         title = "节点列表",
-        subtitle = testingLabel,
+        subtitle = if (isRefreshing) "节点刷新中..." else testingLabel,
         onBack = handleBack,
         backEnabled = !isClosing,
         actions = {
@@ -491,7 +491,7 @@ private fun NodeListContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        if (isTesting) {
+        if (isTesting || isRefreshing) {
             LinearProgressIndicator(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primary
