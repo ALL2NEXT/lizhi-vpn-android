@@ -333,9 +333,9 @@ private fun NodeListContent(
     var pendingScrollToTop by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
-    val subscriptionSwipeThresholdPx = with(density) { 72.dp.toPx() }
-    var subscriptionSwipeOffsetPx by remember { mutableFloatStateOf(0f) }
-    var isSubscriptionSwiping by remember { mutableStateOf(false) }
+    val nodeGroupSwipeThresholdPx = with(density) { 72.dp.toPx() }
+    var nodeGroupSwipeOffsetPx by remember { mutableFloatStateOf(0f) }
+    var isNodeGroupSwiping by remember { mutableStateOf(false) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var pullRefreshRequested by remember { mutableStateOf(false) }
     LaunchedEffect(subscriptionSourceUpdatedAt[selectedSubscriptionSourceId]) {
@@ -347,9 +347,18 @@ private fun NodeListContent(
     LaunchedEffect(isRefreshing) {
         if (!isRefreshing) pullRefreshRequested = false
     }
-    val currentSubscriptionIndex = subscriptionGroups.indexOfFirst {
-        it.sourceId == selectedSubscriptionSourceId
-    }.takeIf { it >= 0 } ?: 0
+    // 收藏节点和所有订阅组共用同一套页序，保证任意相邻页面都能左右滑动切换。
+    val subscriptionPageCount = subscriptionGroups.size.coerceAtLeast(1)
+    val nodeGroupPageCount =
+        subscriptionPageCount + if (hideFavoriteNodeGroup) 0 else 1
+    val currentNodeGroupPageIndex = when {
+        category == NodeListCategory.FAVORITES && !hideFavoriteNodeGroup ->
+            subscriptionPageCount
+        subscriptionGroups.isEmpty() -> 0
+        else -> subscriptionGroups.indexOfFirst {
+            it.sourceId == selectedSubscriptionSourceId
+        }.coerceAtLeast(0)
+    }
     val lastUpdatedAt = selectedSubscriptionSourceId?.let(subscriptionSourceUpdatedAt::get)
     val canPullRefresh =
         interactionEnabled &&
@@ -385,75 +394,82 @@ private fun NodeListContent(
         state = pullRefreshState,
         enabled = canPullRefresh
     )
-    val canSwipeSubscriptions =
+    val canSwipeNodeGroups =
         interactionEnabled &&
             !isTesting &&
-            category == NodeListCategory.PRIMARY &&
-            subscriptionGroups.size > 1
-    val subscriptionSwipeVisualOffsetPx by animateFloatAsState(
-        targetValue = if (isSubscriptionSwiping) subscriptionSwipeOffsetPx else 0f,
-        animationSpec = if (isSubscriptionSwiping) {
+            nodeGroupPageCount > 1
+    val nodeGroupSwipeVisualOffsetPx by animateFloatAsState(
+        targetValue = if (isNodeGroupSwiping) nodeGroupSwipeOffsetPx else 0f,
+        animationSpec = if (isNodeGroupSwiping) {
             snap()
         } else {
             tween(durationMillis = 180, easing = FastOutSlowInEasing)
         },
-        label = "subscriptionSwipeOffset"
+        label = "nodeGroupSwipeOffset"
     )
-    val subscriptionSwipeProgress =
-        (abs(subscriptionSwipeVisualOffsetPx) / subscriptionSwipeThresholdPx)
+    val nodeGroupSwipeProgress =
+        (abs(nodeGroupSwipeVisualOffsetPx) / nodeGroupSwipeThresholdPx)
             .coerceIn(0f, 1f)
-    val subscriptionSwipeModifier = Modifier
+    val nodeGroupSwipeModifier = Modifier
         .graphicsLayer {
-            translationX = subscriptionSwipeVisualOffsetPx
-            alpha = 1f - subscriptionSwipeProgress * 0.12f
+            translationX = nodeGroupSwipeVisualOffsetPx
+            alpha = 1f - nodeGroupSwipeProgress * 0.12f
         }
         .pointerInput(
-            canSwipeSubscriptions,
-            currentSubscriptionIndex,
+            canSwipeNodeGroups,
+            currentNodeGroupPageIndex,
+            nodeGroupPageCount,
             subscriptionGroups,
-            subscriptionSwipeThresholdPx
+            nodeGroupSwipeThresholdPx
         ) {
-            if (!canSwipeSubscriptions) return@pointerInput
+            if (!canSwipeNodeGroups) return@pointerInput
             detectHorizontalDragGestures(
                 onDragStart = {
-                    subscriptionSwipeOffsetPx = 0f
-                    isSubscriptionSwiping = true
+                    nodeGroupSwipeOffsetPx = 0f
+                    isNodeGroupSwiping = true
                 },
                 onHorizontalDrag = { change, dragAmount ->
-                    val requestedOffset = subscriptionSwipeOffsetPx + dragAmount
+                    val requestedOffset = nodeGroupSwipeOffsetPx + dragAmount
                     val hasTarget = when {
                         requestedOffset < 0f ->
-                            currentSubscriptionIndex < subscriptionGroups.lastIndex
-                        requestedOffset > 0f -> currentSubscriptionIndex > 0
+                            currentNodeGroupPageIndex < nodeGroupPageCount - 1
+                        requestedOffset > 0f -> currentNodeGroupPageIndex > 0
                         else -> true
                     }
                     val adjustedDrag = if (hasTarget) dragAmount else dragAmount * 0.25f
-                    subscriptionSwipeOffsetPx =
-                        (subscriptionSwipeOffsetPx + adjustedDrag).coerceIn(
-                            -subscriptionSwipeThresholdPx * 1.2f,
-                            subscriptionSwipeThresholdPx * 1.2f
+                    nodeGroupSwipeOffsetPx =
+                        (nodeGroupSwipeOffsetPx + adjustedDrag).coerceIn(
+                            -nodeGroupSwipeThresholdPx * 1.2f,
+                            nodeGroupSwipeThresholdPx * 1.2f
                         )
                     change.consume()
                 },
                 onDragEnd = {
                     val targetIndex = when {
-                        subscriptionSwipeOffsetPx <= -subscriptionSwipeThresholdPx &&
-                            currentSubscriptionIndex < subscriptionGroups.lastIndex ->
-                            currentSubscriptionIndex + 1
-                        subscriptionSwipeOffsetPx >= subscriptionSwipeThresholdPx &&
-                            currentSubscriptionIndex > 0 -> currentSubscriptionIndex - 1
-                        else -> currentSubscriptionIndex
+                        nodeGroupSwipeOffsetPx <= -nodeGroupSwipeThresholdPx &&
+                            currentNodeGroupPageIndex < nodeGroupPageCount - 1 ->
+                            currentNodeGroupPageIndex + 1
+                        nodeGroupSwipeOffsetPx >= nodeGroupSwipeThresholdPx &&
+                            currentNodeGroupPageIndex > 0 -> currentNodeGroupPageIndex - 1
+                        else -> currentNodeGroupPageIndex
                     }
-                    isSubscriptionSwiping = false
-                    subscriptionSwipeOffsetPx = 0f
-                    if (targetIndex != currentSubscriptionIndex) {
+                    isNodeGroupSwiping = false
+                    nodeGroupSwipeOffsetPx = 0f
+                    if (targetIndex != currentNodeGroupPageIndex) {
                         pendingScrollToTop = true
-                        onSubscriptionSourceChange(subscriptionGroups[targetIndex].sourceId)
+                        val targetSubscription = subscriptionGroups.getOrNull(targetIndex)
+                        when {
+                            targetSubscription != null ->
+                                onSubscriptionSourceChange(targetSubscription.sourceId)
+                            targetIndex == subscriptionPageCount ->
+                                onCategoryChange(NodeListCategory.FAVORITES)
+                            else -> onCategoryChange(NodeListCategory.PRIMARY)
+                        }
                     }
                 },
                 onDragCancel = {
-                    isSubscriptionSwiping = false
-                    subscriptionSwipeOffsetPx = 0f
+                    isNodeGroupSwiping = false
+                    nodeGroupSwipeOffsetPx = 0f
                 }
             )
         }
@@ -546,7 +562,7 @@ private fun NodeListContent(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(pullRefreshModifier)
-                        .then(subscriptionSwipeModifier)
+                        .then(nodeGroupSwipeModifier)
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -572,7 +588,7 @@ private fun NodeListContent(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(pullRefreshModifier)
-                        .then(subscriptionSwipeModifier)
+                        .then(nodeGroupSwipeModifier)
                 ) {
                     LazyColumn(
                         state = listState,
