@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
@@ -46,7 +45,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,7 +66,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
@@ -104,7 +101,6 @@ fun NodeListScreen(
     onToggleFavorite: (Node) -> Unit,
     onSkipFavoriteRemovalConfirmationForSession: () -> Unit,
     onImportFromText: (String) -> Unit,
-    onImportSubscriptionUrl: (String) -> Unit,
     onScanQrCode: () -> Unit,
     onTcpingTest: () -> Unit,
     onUrlTest: () -> Unit,
@@ -116,8 +112,6 @@ fun NodeListScreen(
     var isClosing by remember { mutableStateOf(false) }
     var favoriteRemovalCandidate by remember { mutableStateOf<Node?>(null) }
     var skipConfirmationForSessionChecked by remember { mutableStateOf(false) }
-    var showSubscriptionImportDialog by remember { mutableStateOf(false) }
-    var subscriptionUrlInput by remember { mutableStateOf("") }
 
     val handleBack = {
         if (!isClosing) {
@@ -195,7 +189,6 @@ fun NodeListScreen(
             subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
             onRefresh = onRefresh,
             onImportFromClipboard = handleImportFromClipboard,
-            onImportSubscriptionUrl = { showSubscriptionImportDialog = true },
             onScanQrCode = handleScanQrCode,
             onNodeSelected = handleNodeSelected,
             onCategoryChange = onCategoryChange,
@@ -269,54 +262,6 @@ fun NodeListScreen(
         )
     }
 
-    if (showSubscriptionImportDialog) {
-        val normalizedInput = subscriptionUrlInput.trim()
-        val localHttpPrefix = "http://127.0.0.1"
-        val looksLikeLocalHttpUrl = normalizedInput.equals(localHttpPrefix, ignoreCase = true) ||
-            normalizedInput.startsWith("$localHttpPrefix/", ignoreCase = true) ||
-            normalizedInput.startsWith("$localHttpPrefix:", ignoreCase = true)
-        val looksLikeHttpUrl = normalizedInput.startsWith("https://", ignoreCase = true) ||
-            looksLikeLocalHttpUrl
-        AlertDialog(
-            onDismissRequest = { showSubscriptionImportDialog = false },
-            title = { Text("导入订阅链接") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "订阅中的有效节点会经过核心校验和去重后加入收藏节点。",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 13.sp
-                    )
-                    OutlinedTextField(
-                        value = subscriptionUrlInput,
-                        onValueChange = { subscriptionUrlInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("HTTPS 订阅地址") },
-                        singleLine = true,
-                        isError = normalizedInput.isNotEmpty() && !looksLikeHttpUrl,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSubscriptionImportDialog = false }) {
-                    Text("取消")
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = looksLikeHttpUrl,
-                    onClick = {
-                        showSubscriptionImportDialog = false
-                        onImportSubscriptionUrl(normalizedInput)
-                        subscriptionUrlInput = ""
-                    }
-                ) {
-                    Text("导入")
-                }
-            }
-        )
-    }
 }
 @Composable
 private fun NodeListTopActions(
@@ -376,7 +321,6 @@ private fun NodeListContent(
     subscriptionSourceUpdatedAt: Map<String, Long>,
     onRefresh: () -> Unit,
     onImportFromClipboard: () -> Unit,
-    onImportSubscriptionUrl: () -> Unit,
     onScanQrCode: () -> Unit,
     onNodeSelected: (Node) -> Unit,
     onCategoryChange: (NodeListCategory) -> Unit,
@@ -574,26 +518,25 @@ private fun NodeListContent(
             ) {
                 NodeListImportAction(
                     icon = Icons.Default.ContentPaste,
-                    text = "剪贴板",
+                    text = "剪贴板导入",
                     enabled = interactionEnabled && !isTesting,
                     onClick = onImportFromClipboard,
                     modifier = Modifier.weight(1f)
                 )
                 NodeListImportAction(
-                    icon = Icons.Default.Language,
-                    text = "订阅链接",
-                    enabled = interactionEnabled && !isTesting,
-                    onClick = onImportSubscriptionUrl,
-                    modifier = Modifier.weight(1f)
-                )
-                NodeListImportAction(
                     icon = Icons.Default.QrCodeScanner,
-                    text = "二维码",
+                    text = "二维码导入",
                     enabled = interactionEnabled && !isTesting,
                     onClick = onScanQrCode,
                     modifier = Modifier.weight(1f)
                 )
             }
+            Text(
+                text = "自动识别节点 URI、订阅内容和订阅链接",
+                modifier = Modifier.padding(top = 8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp
+            )
             Spacer(modifier = Modifier.height(12.dp))
         }
 

@@ -113,16 +113,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                        val importSubscriptionToFavorites: (String) -> Unit = { url ->
-                            viewModel.importSubscriptionToFavorites(url) { result, importedCount ->
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    favoriteImportMessage(result, importedCount),
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        }
-
                         NavHost(
                             navController = navController,
                             startDestination = AppRoute.MAIN,
@@ -290,7 +280,6 @@ class MainActivity : ComponentActivity() {
                                         viewModel.skipFavoriteRemovalConfirmationForSession()
                                     },
                                     onImportFromText = { importNodesToFavorites(it, false, null) },
-                                    onImportSubscriptionUrl = importSubscriptionToFavorites,
                                     onScanQrCode = { navigateTo(AppRoute.QR_SCANNER) },
                                     onTcpingTest = { viewModel.testAllNodes() },
                                     onUrlTest = { viewModel.urlTestAllNodes() },

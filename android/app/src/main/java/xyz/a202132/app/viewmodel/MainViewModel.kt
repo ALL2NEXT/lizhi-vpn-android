@@ -1090,38 +1090,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun importNodesToFavoritesFromText(text: String, onResult: (NodeImportResult, Int) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
-            val importResult = withContext(Dispatchers.IO) {
-                val parsedNodes = subscriptionParser.parseSubscription(text)
-                persistNodesToFavorites(parsedNodes)
-            }
-            finishFavoriteImport(importResult, onResult)
-        }
-    }
-
-    /** 拉取用户提供的订阅链接，将其中通过核心校验的新节点批量写入收藏组。 */
-    fun importSubscriptionToFavorites(
-        url: String,
-        onResult: (NodeImportResult, Int) -> Unit = { _, _ -> }
-    ) {
-        viewModelScope.launch {
-            val normalizedUrl = SubscriptionImportUrl.normalize(url)
-            if (normalizedUrl == null) {
-                onResult(NodeImportResult.INVALID, 0)
-                return@launch
-            }
-
-            val fetchedNodes = withContext(Dispatchers.IO) {
-                subscriptionParser.fetchAndParse(normalizedUrl)
-            }
-            val importResult = fetchedNodes.fold(
-                onSuccess = { nodes ->
-                    withContext(Dispatchers.IO) { persistNodesToFavorites(nodes) }
-                },
-                onFailure = { error ->
-                    Log.e(tag, "Unable to import favorite subscription", error)
-                    NodeImportResult.FETCH_FAILED to 0
+            val subscriptionUrl = SubscriptionImportUrl.detect(text)
+            val importResult = if (subscriptionUrl == null) {
+                withContext(Dispatchers.IO) {
+                    persistNodesToFavorites(subscriptionParser.parseSubscription(text))
                 }
-            )
+            } else {
+                val fetchedNodes = withContext(Dispatchers.IO) {
+                    subscriptionParser.fetchAndParse(subscriptionUrl)
+                }
+                fetchedNodes.fold(
+                    onSuccess = { nodes ->
+                        withContext(Dispatchers.IO) { persistNodesToFavorites(nodes) }
+                    },
+                    onFailure = { error ->
+                        Log.e(tag, "Unable to import favorite subscription", error)
+                        NodeImportResult.FETCH_FAILED to 0
+                    }
+                )
+            }
             finishFavoriteImport(importResult, onResult)
         }
     }
