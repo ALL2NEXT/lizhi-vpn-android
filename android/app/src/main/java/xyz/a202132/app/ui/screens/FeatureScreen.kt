@@ -44,6 +44,8 @@ fun FeatureScreen(
     val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsStateWithLifecycle()
     val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsStateWithLifecycle()
     val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsStateWithLifecycle()
+    val smartConnectFullTestEnabled by
+        viewModel.smartConnectFullTestEnabled.collectAsStateWithLifecycle()
     val publicNodePoolOptimizationEnabled by
         viewModel.publicNodePoolOptimizationEnabled.collectAsStateWithLifecycle()
     val publicNodePoolNodeThreshold by viewModel.publicNodePoolNodeThreshold.collectAsStateWithLifecycle()
@@ -155,6 +157,16 @@ fun FeatureScreen(
             FeatureSection(
                 title = "智能连接"
             ) {
+                FeatureSwitchRow(
+                    label = "全量测试",
+                    checked = smartConnectFullTestEnabled,
+                    onCheckedChange = viewModel::setSmartConnectFullTestEnabled
+                )
+                Text(
+                    text = "开启后从全部普通订阅组中测试并选择最优节点；仍遵守下方候选比例和节点列表的地区旗帜白名单。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
                 FeatureSwitchRow(
                     label = "公共节点池优化",
                     checked = publicNodePoolOptimizationEnabled,

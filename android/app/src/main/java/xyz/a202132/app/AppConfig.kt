@@ -85,6 +85,7 @@ object AppConfig {
     const val SMART_CONNECT_URL_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_SIZE_MB = 5
+    const val SMART_CONNECT_FULL_TEST_ENABLED = false
 
     // 公共节点池优化：当前订阅组节点数超过阈值时提高智能连接前两阶段的并发。
     const val PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED = true

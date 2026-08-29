@@ -274,6 +274,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_TCPING_PERCENT)
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
+    val smartConnectFullTestEnabled = settingsRepository.smartConnectFullTestEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        AppConfig.SMART_CONNECT_FULL_TEST_ENABLED
+    )
     val publicNodePoolOptimizationEnabled = settingsRepository.publicNodePoolOptimizationEnabled.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -425,9 +430,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * 智能连接：TCPing 全量筛选 → 204 URL Test → 5MB 下载测速，最后连接测速结果第一名。
-     */
+    /** 智能连接：按设置取得候选范围，再依次执行 TCPing、URL Test 和 5MB 下载测速。 */
     fun startSmartConnection() {
         viewModelScope.launch {
             if (GlobalTestExecution.isFetching()) {
@@ -441,11 +444,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             _isTesting.value = true
             try {
-                val allNodes = currentSmartConnectNodes()
+                val fullTestEnabled = settingsRepository.smartConnectFullTestEnabled.first()
+                val allNodes = currentSmartConnectNodes(fullTestEnabled)
                 if (allNodes.isEmpty()) {
 
                     _error.value = "没有可用节点"
                     return@launch
+                }
+                if (fullTestEnabled) {
+                    Log.i(tag, "Smart connection full test enabled: nodes=${allNodes.size}")
                 }
 
                 val smartTestConcurrency = PublicNodePoolOptimization.resolveConcurrency(
@@ -525,6 +532,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 settingsRepository.setSelectedNodeId(bestNode.id)
+                if (fullTestEnabled) {
+                    bestNode.subscriptionSourceId?.takeIf(String::isNotBlank)?.let { sourceId ->
+                        settingsRepository.setSelectedSubscriptionSourceId(sourceId)
+                        settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+                    }
+                }
                 Log.i(tag, "Smart connection selected node: ${bestNode.getDisplayName()}")
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
             } catch (e: Exception) {
@@ -682,6 +695,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSmartConnectSpeedTestPercent(value: Int) {
         viewModelScope.launch {
             settingsRepository.setSmartConnectSpeedTestPercent(value)
+        }
+    }
+
+    fun setSmartConnectFullTestEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSmartConnectFullTestEnabled(enabled)
         }
     }
 
@@ -1723,11 +1742,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sortNodesForList(filterNodesByRegionWhitelist(snapshot, selectedRegionCodes))
     }
 
-    private suspend fun effectiveNodeRegionFilterCodes(): Set<String> {
+    private suspend fun effectiveNodeRegionFilterCodes(
+        subscriptionNodes: List<Node>? = null
+    ): Set<String> {
         val selectedCodes = settingsRepository.nodeRegionFilterCodes.first()
         if (selectedCodes.isEmpty()) return emptySet()
         val availableCodes = collectAvailableNodeRegionCodes(
-            nodeDao().getSubscriptionNodes().first()
+            subscriptionNodes ?: nodeDao().getSubscriptionNodes().first()
         ).toSet()
         return selectedCodes.intersect(availableCodes)
     }
@@ -1747,7 +1768,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sortNodesForList(scoped)
     }
 
-    private suspend fun currentSmartConnectNodes(): List<Node> = currentNodeListSnapshot()
+    private suspend fun currentSmartConnectNodes(fullTestEnabled: Boolean): List<Node> {
+        if (!fullTestEnabled) return currentNodeListSnapshot()
+        return withContext(Dispatchers.Default) {
+            val allSubscriptionNodes = nodeDao().getSubscriptionNodes().first()
+            val selectedRegionCodes = effectiveNodeRegionFilterCodes(allSubscriptionNodes)
+            val candidates = SmartConnectNodeScope.selectCandidates(
+                currentNodes = emptyList(),
+                allSubscriptionNodes = allSubscriptionNodes,
+                fullTestEnabled = true,
+                selectedRegionCodes = selectedRegionCodes
+            )
+            sortNodesForList(candidates)
+        }
+    }
 
     private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {
         if (nodes.isEmpty()) return emptyList()

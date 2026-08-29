@@ -76,6 +76,8 @@ class SettingsRepository(private val context: Context) {
         private val SMART_CONNECT_TCPING_PERCENT = intPreferencesKey("smart_connect_tcping_percent")
         private val SMART_CONNECT_URL_TEST_PERCENT = intPreferencesKey("smart_connect_url_test_percent")
         private val SMART_CONNECT_SPEED_TEST_PERCENT = intPreferencesKey("smart_connect_speed_test_percent")
+        private val SMART_CONNECT_FULL_TEST_ENABLED =
+            booleanPreferencesKey("smart_connect_full_test_enabled")
         private val PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED =
             booleanPreferencesKey("public_node_pool_optimization_enabled")
         private val PUBLIC_NODE_POOL_NODE_THRESHOLD =
@@ -575,6 +577,17 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSmartConnectSpeedTestPercent(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[SMART_CONNECT_SPEED_TEST_PERCENT] = value.coerceIn(1, 100)
+        }
+    }
+
+    val smartConnectFullTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SMART_CONNECT_FULL_TEST_ENABLED]
+            ?: xyz.a202132.app.AppConfig.SMART_CONNECT_FULL_TEST_ENABLED
+    }
+
+    suspend fun setSmartConnectFullTestEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SMART_CONNECT_FULL_TEST_ENABLED] = enabled
         }
     }
 
