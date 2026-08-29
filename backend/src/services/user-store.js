@@ -15,7 +15,7 @@ import {
   normalizeUserReference,
   randomPublicUid,
 } from "../domain/account.js";
-import { beijingTimestamp } from "../domain/time.js";
+import { beijingTimestamp, usagePeriodKeys } from "../domain/time.js";
 import { cleanText } from "../lib/values.js";
 
 let userSchemaReady = false;
@@ -239,6 +239,71 @@ export async function readD1User(env, userId, settings) {
   return row ? rowToUser(row, settings) : null;
 }
 
+export async function readD1UserWithTraffic(env, userId, settings, now = new Date()) {
+  const db = await ensureUserSchema(env);
+  const normalizedUserId = Number(userId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
+  const { day, month } = usagePeriodKeys(now);
+  const row = await db.prepare(
+    `SELECT
+       u.*,
+       d.brand AS device_brand,
+       d.model AS device_model,
+       d.android_version AS device_android_version,
+       d.android_sdk AS device_android_sdk,
+       d.app_version AS device_app_version,
+       COALESCE(SUM(CASE WHEN r.usage_day = ? THEN r.upload_bytes ELSE 0 END), 0)
+         AS today_upload_bytes,
+       COALESCE(SUM(CASE WHEN r.usage_day = ? THEN r.download_bytes ELSE 0 END), 0)
+         AS today_download_bytes,
+       COALESCE(SUM(CASE WHEN substr(r.usage_day, 1, 7) = ? THEN r.upload_bytes ELSE 0 END), 0)
+         AS month_upload_bytes,
+       COALESCE(SUM(CASE WHEN substr(r.usage_day, 1, 7) = ? THEN r.download_bytes ELSE 0 END), 0)
+         AS month_download_bytes,
+       COALESCE(SUM(r.upload_bytes), 0) AS total_upload_bytes,
+       COALESCE(SUM(r.download_bytes), 0) AS total_download_bytes,
+       MAX(r.reported_at) AS last_report_at
+     FROM users_mb u
+     LEFT JOIN user_devices_mb d ON d.id = (
+       SELECT id FROM user_devices_mb
+       WHERE user_id = u.id
+       ORDER BY last_seen_at DESC, id DESC LIMIT 1
+     )
+     LEFT JOIN user_usage_mb r ON r.user_id = u.id
+     WHERE u.id = ?
+     GROUP BY u.id`,
+  ).bind(day, day, month, month, normalizedUserId).first();
+  if (!row) return null;
+  return {
+    ...rowToUser(row, settings),
+    traffic: accountTrafficFromRow(row),
+  };
+}
+
+function accountTrafficFromRow(row) {
+  const period = (uploadValue, downloadValue) => {
+    const uploadBytes = safeTrafficBytes(uploadValue);
+    const downloadBytes = safeTrafficBytes(downloadValue);
+    return {
+      uploadBytes,
+      downloadBytes,
+      totalBytes: safeTrafficBytes(uploadBytes + downloadBytes),
+    };
+  };
+  return {
+    today: period(row.today_upload_bytes, row.today_download_bytes),
+    month: period(row.month_upload_bytes, row.month_download_bytes),
+    total: period(row.total_upload_bytes, row.total_download_bytes),
+    lastReportAt: cleanText(row.last_report_at) || null,
+  };
+}
+
+function safeTrafficBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return 0;
+  return Math.min(Math.round(bytes), Number.MAX_SAFE_INTEGER);
+}
+
 export function rowToUser(row, settings) {
   const uid = normalizeStoredUid(row.uid);
   return {
@@ -261,7 +326,7 @@ export function publicAccount(user) {
     : ["banned", "guest", "formal"].includes(cleanText(user.accountType))
     ? cleanText(user.accountType)
     : accountTypeForUser(user);
-  return {
+  const account = {
     uid: user.uid,
     nickname: user.nickname,
     accountType,
@@ -273,6 +338,8 @@ export function publicAccount(user) {
     appVersion: user.appVersion,
     deviceBlocked: Boolean(user.deviceBlocked),
   };
+  if (user.traffic) account.traffic = user.traffic;
+  return account;
 }
 
 export function publicAdminUser(row, settings) {

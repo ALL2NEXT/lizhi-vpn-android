@@ -38,7 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.AccountInfo
+import xyz.a202132.app.data.model.AccountTrafficInfo
+import xyz.a202132.app.data.model.AccountTrafficPeriod
 import xyz.a202132.app.ui.components.AppScreenScaffold
+import xyz.a202132.app.util.TrafficUsageFormatter
 import xyz.a202132.app.viewmodel.MainViewModel
 
 @Composable
@@ -223,6 +226,30 @@ fun AccountSettingsScreen(
                     AccountInfoRow(
                         label = "账户类型",
                         value = accountIdentityText(account)
+                    )
+                }
+                AccountSettingsSection(title = "流量信息") {
+                    val traffic = account.traffic ?: AccountTrafficInfo()
+                    AccountInfoRow(
+                        label = "今日流量",
+                        value = trafficPeriodText(traffic.today)
+                    )
+                    AccountInfoRow(
+                        label = "本月流量",
+                        value = trafficPeriodText(traffic.month)
+                    )
+                    AccountInfoRow(
+                        label = "累计流量",
+                        value = trafficPeriodText(traffic.total)
+                    )
+                    AccountInfoRow(
+                        label = "最近上报",
+                        value = TrafficUsageFormatter.formatTimestamp(traffic.lastReportAt)
+                    )
+                    Text(
+                        text = "这里显示后台已接收的 VPN 流量，点击右上角刷新可获取最新统计。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 AccountSettingsSection(title = "客户端信息") {
@@ -678,6 +705,16 @@ private fun accountIdentityText(accountInfo: AccountInfo): String {
         accountInfo.accountType == "formal" -> "正式用户"
         else -> "游客"
     }
+}
+
+private fun trafficPeriodText(period: AccountTrafficPeriod): String {
+    val upload = period.uploadBytes.coerceAtLeast(0L)
+    val download = period.downloadBytes.coerceAtLeast(0L)
+    val calculatedTotal = if (upload > Long.MAX_VALUE - download) Long.MAX_VALUE else upload + download
+    val total = period.totalBytes.coerceAtLeast(calculatedTotal)
+    return "${TrafficUsageFormatter.formatBytes(total)}\n" +
+        "上行 ${TrafficUsageFormatter.formatBytes(upload)} · " +
+        "下行 ${TrafficUsageFormatter.formatBytes(download)}"
 }
 
 private fun String.displayOrUnknown(): String = trim().ifBlank { "未登记" }

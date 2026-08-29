@@ -12,6 +12,7 @@ export function createAccountRoutes(deps) {
     resolveDeviceIdentity,
     readDeviceContextFromDb,
     readD1User,
+    readD1UserWithTraffic,
     attachDeviceToUser,
     registerOrTouchUser,
     normalizeNickname,
@@ -40,7 +41,7 @@ export function createAccountRoutes(deps) {
       await ensureUserSchema(env);
       const identity = await registerOrTouchUser(env, deviceId, body || {}, now);
       const user = identity && identity.userId > 0
-        ? await readD1User(env, identity.userId)
+        ? await readD1UserWithTraffic(env, identity.userId, undefined, now)
         : null;
       if (!user) {
         if (identity && identity.deviceBanned) {
@@ -131,7 +132,7 @@ export function createAccountRoutes(deps) {
         return json({ ok: false, error: "invalid_registration_code" }, 409);
       }
 
-      const updated = await readD1User(env, identity.userId);
+      const updated = await readD1UserWithTraffic(env, identity.userId);
       return json({ ok: true, account: publicAccount(updated) });
     }
 
@@ -162,7 +163,10 @@ export function createAccountRoutes(deps) {
 
       const attached = await attachDeviceToUser(db, Number(row.id), deviceId, body || {}, true);
       if (!attached) return json({ ok: false, error: "device_banned" }, 403);
-      return json({ ok: true, account: publicAccount(await readD1User(env, Number(row.id))) });
+      return json({
+        ok: true,
+        account: publicAccount(await readD1UserWithTraffic(env, Number(row.id))),
+      });
     }
 
     if (path === "/api/account/delete" && request.method === "POST") {
@@ -212,7 +216,10 @@ export function createAccountRoutes(deps) {
       if (!result.meta || Number(result.meta.changes) < 1) {
         return json({ ok: false, error: "account_not_found" }, 404);
       }
-      return json({ ok: true, account: publicAccount(await readD1User(env, identity.userId)) });
+      return json({
+        ok: true,
+        account: publicAccount(await readD1UserWithTraffic(env, identity.userId)),
+      });
     }
 
     if (path === "/api/account/report" && request.method === "POST") {

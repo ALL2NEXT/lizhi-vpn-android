@@ -223,8 +223,8 @@ android {
         applicationId = "xyz.a202132.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 22
-        versionName = "3.0.1"
+        versionCode = 23
+        versionName = "3.0.2"
         buildConfigField("String", "XRAY_CORE_VERSION", "\"$xrayCoreVersion\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

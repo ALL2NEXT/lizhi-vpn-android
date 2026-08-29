@@ -61,6 +61,7 @@ import {
   ensureUserSchema,
   initializeUserSchema,
   readD1User,
+  readD1UserWithTraffic,
   readDeviceContextFromDb,
   registerOrTouchUser,
   publicAccount,
@@ -99,6 +100,7 @@ const routeDeps = {
   resolveDeviceIdentity,
   readDeviceContextFromDb,
   readD1User,
+  readD1UserWithTraffic,
   attachDeviceToUser,
   registerOrTouchUser,
   // 账户注册成功后需要用统一格式返回账户信息。

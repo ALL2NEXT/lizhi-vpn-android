@@ -12,6 +12,8 @@ import xyz.a202132.app.data.model.AccountActionResponse
 import xyz.a202132.app.data.model.AccountBindingRequest
 import xyz.a202132.app.data.model.AccountDeleteRequest
 import xyz.a202132.app.data.model.AccountInfo
+import xyz.a202132.app.data.model.AccountTrafficInfo
+import xyz.a202132.app.data.model.AccountTrafficPeriod
 import xyz.a202132.app.data.model.AccountLoginRequest
 import xyz.a202132.app.data.model.AccountProfileUpdateRequest
 import xyz.a202132.app.data.model.AccountRegisterRequest
@@ -229,6 +231,13 @@ class AccountManager(private val context: Context) {
         val storedType = preferences.getString(ACCOUNT_TYPE_KEY, "").orEmpty()
         val accountType = storedType.takeIf { it in setOf("banned", "guest", "formal") }
             ?: if (email.isBlank()) "guest" else "formal"
+        val traffic = AccountTrafficInfo(
+            today = loadTrafficPeriod(TRAFFIC_TODAY_PREFIX),
+            month = loadTrafficPeriod(TRAFFIC_MONTH_PREFIX),
+            total = loadTrafficPeriod(TRAFFIC_TOTAL_PREFIX),
+            lastReportAt = preferences.getString(TRAFFIC_LAST_REPORT_AT_KEY, null)
+                ?.takeIf { it.isNotBlank() }
+        )
         return AccountInfo(
             uid = uid,
             nickname = preferences.getString(ACCOUNT_NICKNAME_KEY, null)
@@ -240,14 +249,22 @@ class AccountManager(private val context: Context) {
             androidVersion = preferences.getString(ACCOUNT_ANDROID_VERSION_KEY, "").orEmpty(),
             androidSdk = preferences.getInt(ACCOUNT_ANDROID_SDK_KEY, 0),
             appVersion = preferences.getString(ACCOUNT_APP_VERSION_KEY, "").orEmpty(),
-            deviceBlocked = preferences.getBoolean(ACCOUNT_DEVICE_BLOCKED_KEY, false)
+            deviceBlocked = preferences.getBoolean(ACCOUNT_DEVICE_BLOCKED_KEY, false),
+            traffic = traffic
         )
     }
+
+    private fun loadTrafficPeriod(prefix: String) = AccountTrafficPeriod(
+        uploadBytes = preferences.getLong("${prefix}_upload_bytes", 0L).coerceAtLeast(0L),
+        downloadBytes = preferences.getLong("${prefix}_download_bytes", 0L).coerceAtLeast(0L),
+        totalBytes = preferences.getLong("${prefix}_total_bytes", 0L).coerceAtLeast(0L)
+    )
 
     private fun persistAccount(account: AccountInfo) {
         val normalized = account.copy(
             accountType = if (account.deviceBlocked) "banned" else account.accountType
         )
+        val traffic = normalized.traffic ?: AccountTrafficInfo()
         _accountInfo.value = normalized
         preferences.edit()
             .putString(ACCOUNT_ID_KEY, normalized.uid)
@@ -260,7 +277,20 @@ class AccountManager(private val context: Context) {
             .putInt(ACCOUNT_ANDROID_SDK_KEY, normalized.androidSdk)
             .putString(ACCOUNT_APP_VERSION_KEY, normalized.appVersion)
             .putBoolean(ACCOUNT_DEVICE_BLOCKED_KEY, normalized.deviceBlocked)
+            .putTrafficPeriod(TRAFFIC_TODAY_PREFIX, traffic.today)
+            .putTrafficPeriod(TRAFFIC_MONTH_PREFIX, traffic.month)
+            .putTrafficPeriod(TRAFFIC_TOTAL_PREFIX, traffic.total)
+            .putString(TRAFFIC_LAST_REPORT_AT_KEY, traffic.lastReportAt.orEmpty())
             .apply()
+    }
+
+    private fun android.content.SharedPreferences.Editor.putTrafficPeriod(
+        prefix: String,
+        traffic: AccountTrafficPeriod
+    ) = apply {
+        putLong("${prefix}_upload_bytes", traffic.uploadBytes.coerceAtLeast(0L))
+        putLong("${prefix}_download_bytes", traffic.downloadBytes.coerceAtLeast(0L))
+        putLong("${prefix}_total_bytes", traffic.totalBytes.coerceAtLeast(0L))
     }
 
     private fun clearLocalAccount() {
@@ -279,5 +309,9 @@ class AccountManager(private val context: Context) {
         const val ACCOUNT_ANDROID_SDK_KEY = "account_android_sdk"
         const val ACCOUNT_APP_VERSION_KEY = "account_app_version"
         const val ACCOUNT_DEVICE_BLOCKED_KEY = "account_device_blocked"
+        const val TRAFFIC_TODAY_PREFIX = "traffic_today"
+        const val TRAFFIC_MONTH_PREFIX = "traffic_month"
+        const val TRAFFIC_TOTAL_PREFIX = "traffic_total"
+        const val TRAFFIC_LAST_REPORT_AT_KEY = "traffic_last_report_at"
     }
 }

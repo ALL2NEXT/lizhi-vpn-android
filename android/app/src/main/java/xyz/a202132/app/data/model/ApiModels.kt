@@ -195,7 +195,35 @@ data class AccountInfo(
     val appVersion: String = "",
 
     @SerializedName("deviceBlocked")
-    val deviceBlocked: Boolean = false
+    val deviceBlocked: Boolean = false,
+
+    @SerializedName("traffic")
+    val traffic: AccountTrafficInfo? = null
+)
+
+data class AccountTrafficInfo(
+    @SerializedName("today")
+    val today: AccountTrafficPeriod = AccountTrafficPeriod(),
+
+    @SerializedName("month")
+    val month: AccountTrafficPeriod = AccountTrafficPeriod(),
+
+    @SerializedName("total")
+    val total: AccountTrafficPeriod = AccountTrafficPeriod(),
+
+    @SerializedName("lastReportAt")
+    val lastReportAt: String? = null
+)
+
+data class AccountTrafficPeriod(
+    @SerializedName("uploadBytes")
+    val uploadBytes: Long = 0L,
+
+    @SerializedName("downloadBytes")
+    val downloadBytes: Long = 0L,
+
+    @SerializedName("totalBytes")
+    val totalBytes: Long = 0L
 )
 
 data class AccountProfileUpdateRequest(
