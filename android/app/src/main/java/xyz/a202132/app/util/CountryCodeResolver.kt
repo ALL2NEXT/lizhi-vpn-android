@@ -5,6 +5,8 @@ import java.util.Locale
 /** Resolves country names and ISO 3166-1 alpha-2 codes found in node names. */
 object CountryCodeResolver {
     private val whitespacePattern = Regex("\\s+")
+    private const val FIRST_REGION_INDICATOR = 0x1F1E6
+    private const val LAST_REGION_INDICATOR = 0x1F1FF
 
     private val isoCountryCodes by lazy {
         Locale.getISOCountries().map { it.uppercase(Locale.ROOT) }.toSet()
@@ -117,6 +119,14 @@ object CountryCodeResolver {
 
     private val codePattern = Regex("(?<![A-Za-z])([A-Za-z]{2})(?![A-Za-z])")
 
+    /** 规范化地区代码；除国家代码外，也保留 EU 等可用旗帜表示的地区代码。 */
+    fun normalizeRegionCode(value: String?): String? {
+        val normalized = value?.trim()?.uppercase(Locale.ROOT) ?: return null
+        return normalized.takeIf {
+            it.length == 2 && it.all { character -> character in 'A'..'Z' }
+        }
+    }
+
     fun normalizeCountryCode(value: String?): String? {
         val normalized = normalizeText(value ?: return null)
         if (normalized.length == 2 && normalized.all { it in 'a'..'z' }) {
@@ -124,6 +134,40 @@ object CountryCodeResolver {
             if (code in isoCountryCodes) return code
         }
         return aliases[normalized]
+    }
+
+    /** 从文本中的第一面旗帜提取两位地区代码。 */
+    fun fromFlagEmoji(value: String?): String? {
+        val text = value ?: return null
+        var index = 0
+        while (index < text.length) {
+            val first = text.codePointAt(index)
+            val firstLength = Character.charCount(first)
+            if (first in FIRST_REGION_INDICATOR..LAST_REGION_INDICATOR) {
+                val secondIndex = index + firstLength
+                if (secondIndex < text.length) {
+                    val second = text.codePointAt(secondIndex)
+                    if (second in FIRST_REGION_INDICATOR..LAST_REGION_INDICATOR) {
+                        return buildString(2) {
+                            append(('A'.code + first - FIRST_REGION_INDICATOR).toChar())
+                            append(('A'.code + second - FIRST_REGION_INDICATOR).toChar())
+                        }
+                    }
+                }
+            }
+            index += firstLength
+        }
+        return null
+    }
+
+    /** 将两位地区代码转换为旗帜 Emoji。 */
+    fun flagEmoji(code: String?): String? {
+        val normalized = normalizeRegionCode(code) ?: return null
+        return buildString {
+            normalized.forEach { character ->
+                appendCodePoint(FIRST_REGION_INDICATOR + character.code - 'A'.code)
+            }
+        }
     }
 
     fun fromNodeName(name: String?): String? {

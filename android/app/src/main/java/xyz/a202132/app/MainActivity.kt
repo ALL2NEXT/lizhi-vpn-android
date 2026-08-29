@@ -238,6 +238,10 @@ class MainActivity : ComponentActivity() {
                                     viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
                                 val favoriteSourceNodeIds by
                                     viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
+                                val availableRegionCodes by
+                                    viewModel.availableNodeRegionCodes.collectAsStateWithLifecycle()
+                                val selectedRegionCodes by
+                                    viewModel.selectedNodeRegionCodes.collectAsStateWithLifecycle()
                                 val skipFavoriteRemovalConfirmation by
                                     viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
                                 val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
@@ -259,6 +263,8 @@ class MainActivity : ComponentActivity() {
                                     subscriptionGroups = subscriptionGroups,
                                     selectedSubscriptionSourceId = selectedSubscriptionSourceId,
                                     favoriteSourceNodeIds = favoriteSourceNodeIds,
+                                    availableRegionCodes = availableRegionCodes,
+                                    selectedRegionCodes = selectedRegionCodes,
                                     skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
                                     isTesting = isTesting,
                                     isRefreshing = isRefreshing,
@@ -275,6 +281,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onCategoryChange = { viewModel.setNodeListCategory(it) },
                                     onSubscriptionSourceChange = { viewModel.setSubscriptionSource(it) },
+                                    onRegionFilterChange = { viewModel.setNodeRegionFilterCodes(it) },
                                     onToggleFavorite = { viewModel.toggleFavoriteNode(it) },
                                     onSkipFavoriteRemovalConfirmationForSession = {
                                         viewModel.skipFavoriteRemovalConfirmationForSession()

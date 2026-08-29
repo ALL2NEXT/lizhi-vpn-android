@@ -44,42 +44,18 @@ data class Node(
     fun getRawLinkPlain(): String = rawLink
 
     /**
-     * 获取国旗emoji
+     * 获取节点地区代码，优先沿用节点名中的显式旗帜，并兼容后端识别结果和地区名称。
      */
-    fun getFlagEmoji(): String {
-        // 1. 尝试在名称中查找现有的旗帜表情符号
-        var i = 0
-        while (i < name.length) {
-            val codePoint = name.codePointAt(i)
-            // 检查当前代码点是否为区域指示符（U+1F1E6 至 U+1F1FF）
-            if (codePoint in 0x1F1E6..0x1F1FF) {
-                // 检查下一个代码点
-                val charCount = Character.charCount(codePoint)
-                if (i + charCount < name.length) {
-                    val nextCodePoint = name.codePointAt(i + charCount)
-                    if (nextCodePoint in 0x1F1E6..0x1F1FF) {
-                        return String(Character.toChars(codePoint)) + String(Character.toChars(nextCodePoint))
-                    }
-                }
-            }
-            i += Character.charCount(codePoint)
-        }
-
-        // 2. 优先使用显式国家代码，其次从节点名称识别国家名或代码
-        val resolvedCountry = CountryCodeResolver.normalizeCountryCode(country)
+    fun getCountryCode(): String? =
+        CountryCodeResolver.fromFlagEmoji(name)
+            ?: CountryCodeResolver.normalizeCountryCode(country)
             ?: CountryCodeResolver.fromNodeName(name)
+            ?: CountryCodeResolver.fromFlagEmoji(countryName)
             ?: CountryCodeResolver.fromNodeName(countryName)
-        if (resolvedCountry == null) {
-            return "🌐"
-        }
-        return try {
-            val firstChar = resolvedCountry[0].code - 'A'.code + 0x1F1E6
-            val secondChar = resolvedCountry[1].code - 'A'.code + 0x1F1E6
-            String(Character.toChars(firstChar)) + String(Character.toChars(secondChar))
-        } catch (e: Exception) {
-            "🌐"
-        }
-    }
+
+    /** 获取国旗 Emoji，无法识别地区时显示全球图标。 */
+    fun getFlagEmoji(): String =
+        CountryCodeResolver.flagEmoji(getCountryCode()) ?: "🌐"
     
     /**
      * 获取显示名称（去除国旗emoji）

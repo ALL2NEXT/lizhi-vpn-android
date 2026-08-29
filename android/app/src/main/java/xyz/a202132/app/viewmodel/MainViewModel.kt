@@ -32,6 +32,8 @@ import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.XrayConfigGenerator
 import xyz.a202132.app.util.DatabasePassphraseManager
+import xyz.a202132.app.util.availableNodeRegionCodes as collectAvailableNodeRegionCodes
+import xyz.a202132.app.util.filterNodesByRegionWhitelist
 import java.io.File
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -173,6 +175,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             emptySet()
         )
 
+    private val allSubscriptionNodes = nodeDaoFlow.flatMapLatest { dao ->
+        dao.getSubscriptionNodes()
+    }
+
+    /** 旗帜筛选项始终来自全部普通订阅组，不受当前页和收藏节点影响。 */
+    val availableNodeRegionCodes = allSubscriptionNodes
+        .map(::collectAvailableNodeRegionCodes)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val selectedNodeRegionCodes = combine(
+        settingsRepository.nodeRegionFilterCodes,
+        availableNodeRegionCodes
+    ) { selectedCodes, availableCodes ->
+        selectedCodes.intersect(availableCodes.toSet())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
     private val subscriptionNodes = nodeDaoFlow
         .flatMapLatest { dao ->
             activeSubscriptionSourceId.flatMapLatest { sourceId ->
@@ -190,10 +208,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val visibleNodes = combine(
         subscriptionNodes,
         favoriteNodes,
-        nodeListCategory
+        nodeListCategory,
+        selectedNodeRegionCodes
 
-    ) { subscription, favorites, category ->
-        if (category == NodeListCategory.FAVORITES) favorites else subscription
+    ) { subscription, favorites, category, selectedRegionCodes ->
+        val sourceNodes = if (category == NodeListCategory.FAVORITES) favorites else subscription
+        filterNodesByRegionWhitelist(sourceNodes, selectedRegionCodes)
     }
 
     val nodes = combine(
@@ -1021,6 +1041,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setNodeRegionFilterCodes(codes: Set<String>) {
+        viewModelScope.launch {
+            settingsRepository.setNodeRegionFilterCodes(codes)
+        }
+    }
+
     /** Select a node from the node list and connect to it immediately. */
     fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
@@ -1692,7 +1718,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             NodeListCategory.PRIMARY -> currentSubscriptionNodeSnapshot()
             NodeListCategory.FAVORITES -> nodeDao().getFavoriteNodes().first()
         }
-        sortNodesForList(snapshot)
+        // 测速与智能连接使用和列表相同的地区白名单，避免操作被隐藏的节点。
+        val selectedRegionCodes = effectiveNodeRegionFilterCodes()
+        sortNodesForList(filterNodesByRegionWhitelist(snapshot, selectedRegionCodes))
+    }
+
+    private suspend fun effectiveNodeRegionFilterCodes(): Set<String> {
+        val selectedCodes = settingsRepository.nodeRegionFilterCodes.first()
+        if (selectedCodes.isEmpty()) return emptySet()
+        val availableCodes = collectAvailableNodeRegionCodes(
+            nodeDao().getSubscriptionNodes().first()
+        ).toSet()
+        return selectedCodes.intersect(availableCodes)
     }
 
     private suspend fun currentSubscriptionNodeSnapshot(): List<Node> = withContext(Dispatchers.Default) {
