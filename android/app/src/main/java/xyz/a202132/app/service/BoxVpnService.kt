@@ -117,7 +117,10 @@ class BoxVpnService : VpnService() {
                 }
 
                 // 立即启动前台服务，避免 ForegroundServiceDidNotStartInTimeException
-                startForeground(AppConfig.NOTIFICATION_ID, createNotification(nodeName))
+                startForeground(
+                    AppConfig.NOTIFICATION_ID,
+                    createNotification(nodeName, proxyMode)
+                )
                 
                 if (rawLink != null) {
                     startVpn(rawLink, nodeName, proxyMode)
@@ -134,7 +137,10 @@ class BoxVpnService : VpnService() {
             }
             else -> {
                 // 未知 action，启动前台服务然后停止
-                startForeground(AppConfig.NOTIFICATION_ID, createNotification("正在停止..."))
+                startForeground(
+                    AppConfig.NOTIFICATION_ID,
+                    createNotification("正在停止...", ProxyMode.SMART)
+                )
                 stopSelf()
             }
         }
@@ -209,7 +215,8 @@ class BoxVpnService : VpnService() {
                     configContent,
                     nodeName,
                     internalSocksPort,
-                    runtimeSettings
+                    runtimeSettings,
+                    proxyMode
                 )
                 
             } catch (e: Exception) {
@@ -227,7 +234,8 @@ class BoxVpnService : VpnService() {
         configContent: String,
         nodeName: String,
         internalSocksPort: Int,
-        runtimeSettings: VpnRuntimeSettings
+        runtimeSettings: VpnRuntimeSettings,
+        proxyMode: ProxyMode
     ) {
         withContext(Dispatchers.IO) {
             try {
@@ -291,6 +299,7 @@ class BoxVpnService : VpnService() {
                     currentInternalSocksPort = internalSocksPort
                     isRunning = true
                     currentNodeName = nodeName
+                    notificationFactory.update(nodeName, proxyMode)
 
                     // 通知UI更新
                     ServiceManager.notifyStateChange()
@@ -783,7 +792,8 @@ class BoxVpnService : VpnService() {
                         configContent,
                         savedNodeName,
                         internalSocksPort,
-                        runtimeSettings
+                        runtimeSettings,
+                        proxyMode
                     )
                 }
             }
@@ -968,8 +978,8 @@ class BoxVpnService : VpnService() {
         super.onDestroy()
     }
     
-    private fun createNotification(nodeName: String): Notification {
-        return notificationFactory.build(nodeName)
+    private fun createNotification(nodeName: String, proxyMode: ProxyMode): Notification {
+        return notificationFactory.build(nodeName, proxyMode)
     }
     
     /**

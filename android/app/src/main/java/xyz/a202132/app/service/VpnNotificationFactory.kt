@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.MainActivity
 import xyz.a202132.app.R
+import xyz.a202132.app.data.model.ProxyMode
 
 internal class VpnNotificationFactory(private val service: BoxVpnService) {
     fun createChannel() {
@@ -28,6 +29,7 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
 
     fun build(
         nodeName: String,
+        proxyMode: ProxyMode,
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
             service,
@@ -41,7 +43,7 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
         val restartIntent = serviceAction(2, BoxVpnService.ACTION_RESTART)
         return NotificationCompat.Builder(service, AppConfig.NOTIFICATION_CHANNEL_ID)
             .setContentTitle(nodeName)
-            .setContentText("VPN 服务运行中")
+            .setContentText("分流规则：${proxyMode.notificationLabel()}")
             .setSmallIcon(R.drawable.ic_vpn_key)
             .setContentIntent(contentIntent)
             .addAction(R.drawable.ic_vpn_key, "断开连接", stopIntent)
@@ -52,6 +54,12 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
             .build()
     }
 
+    /** VPN 内部重载完成后刷新同一个常驻通知，避免继续显示旧分流规则。 */
+    fun update(nodeName: String, proxyMode: ProxyMode) {
+        service.getSystemService(NotificationManager::class.java)
+            .notify(AppConfig.NOTIFICATION_ID, build(nodeName, proxyMode))
+    }
+
     private fun serviceAction(requestCode: Int, action: String): PendingIntent =
         PendingIntent.getService(
             service,
@@ -59,4 +67,9 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
             Intent(service, BoxVpnService::class.java).apply { this.action = action },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+
+    private fun ProxyMode.notificationLabel(): String = when (this) {
+        ProxyMode.GLOBAL -> "全局"
+        ProxyMode.SMART -> "智能"
+    }
 }
