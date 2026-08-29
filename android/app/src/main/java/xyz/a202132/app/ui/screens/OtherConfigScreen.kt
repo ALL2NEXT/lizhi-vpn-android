@@ -67,7 +67,6 @@ fun OtherConfigScreen(
     val publicNodePoolUrlTestConcurrency by
         viewModel.publicNodePoolUrlTestConcurrency.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
-    val vpnMtu by viewModel.vpnMtu.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
@@ -90,7 +89,6 @@ fun OtherConfigScreen(
         mutableStateOf(publicNodePoolUrlTestConcurrency.toString())
     }
     var concurrencySettingsType by remember { mutableStateOf(0) }
-    var mtuInput by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
 
     LaunchedEffect(
         tcpingTestTimeoutMs,
@@ -101,8 +99,7 @@ fun OtherConfigScreen(
         bandwidthTestConcurrency,
         publicNodePoolNodeThreshold,
         publicNodePoolTcpingConcurrency,
-        publicNodePoolUrlTestConcurrency,
-        vpnMtu
+        publicNodePoolUrlTestConcurrency
     ) {
         tcpingTimeoutInput = tcpingTestTimeoutMs.toString()
         urlTestTimeoutInput = urlTestTimeoutMs.toString()
@@ -113,7 +110,6 @@ fun OtherConfigScreen(
         publicNodePoolThresholdInput = publicNodePoolNodeThreshold.toString()
         publicNodePoolTcpingConcurrencyInput = publicNodePoolTcpingConcurrency.toString()
         publicNodePoolUrlTestConcurrencyInput = publicNodePoolUrlTestConcurrency.toString()
-        mtuInput = vpnMtu.toString()
     }
 
     AppScreenScaffold(
@@ -304,7 +300,7 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
-                title = "并发与网络"
+                title = "并发设置"
             ) {
                 MultiPositionSwitch(
                     options = listOf("普通订阅设置", "公共池设置"),
@@ -386,22 +382,6 @@ fun OtherConfigScreen(
                     )
                 }
 
-                Text(
-                    text = "通用网络",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                OtherConfigNumberField(
-                    label = "VPN MTU",
-                    value = mtuInput,
-                    onValueChange = {
-                        mtuInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setVpnMtu(value.coerceIn(576, 9000))
-                        }
-                    }
-                )
             }
         }
     }

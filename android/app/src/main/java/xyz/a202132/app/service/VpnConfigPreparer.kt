@@ -2,6 +2,7 @@ package xyz.a202132.app.service
 
 import android.util.Log
 import io.nekohasekai.libbox.Libbox
+import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
@@ -22,7 +23,6 @@ internal class VpnConfigPreparer(
         selectedNodeId: String?,
         proxyMode: ProxyMode,
         ipv6Mode: IPv6RoutingMode,
-        vpnMtu: Int,
         internalSocksPort: Int,
         hysteriaUpMbps: Int,
         hysteriaDownMbps: Int,
@@ -41,7 +41,7 @@ internal class VpnConfigPreparer(
             selectedNodeId,
             proxyMode,
             ipv6Mode,
-            vpnMtu,
+            AppConfig.VPN_MTU,
             internalSocksPort,
             hysteriaUpMbps,
             hysteriaDownMbps,

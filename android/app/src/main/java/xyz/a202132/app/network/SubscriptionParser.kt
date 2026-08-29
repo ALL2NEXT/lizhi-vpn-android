@@ -52,7 +52,8 @@ class SubscriptionParser {
             }
             Result.success(nodes)
         } catch (e: Exception) {
-            Log.e(tag, "Failed to fetch subscription: $url", e)
+            // 订阅地址经常含有访问令牌，日志中不得输出完整 URL。
+            Log.e(tag, "Failed to fetch subscription", e)
             Result.failure(e)
         }
     }
@@ -81,7 +82,7 @@ class SubscriptionParser {
                 Result.success(parseSubscription(content))
             }
         } catch (e: Exception) {
-            Log.e(tag, "Failed to fetch subscription with custom client: $url", e)
+            Log.e(tag, "Failed to fetch subscription with custom client", e)
             Result.failure(e)
         }
     }

@@ -183,13 +183,12 @@ class BoxVpnService : VpnService() {
 
                 val runtimeSettings = settingsRepo.getVpnRuntimeSettings()
                 val ipv6Mode = runtimeSettings.ipv6RoutingMode
-                val vpnMtu = runtimeSettings.vpnMtu
                 val tunStack = runtimeSettings.tunStack
                 val hysteriaUpMbps = runtimeSettings.hysteriaUpMbps
                 val hysteriaDownMbps = runtimeSettings.hysteriaDownMbps
                 val internalSocksPort = pickFreeInternalSocksPort()
                 
-                Log.d(TAG, "Generating config with ${rawNodes.size} nodes, selected: $selectedNodeId, ipv6Mode: $ipv6Mode, tunStack=$tunStack, mtu: $vpnMtu, hysteria=${hysteriaUpMbps}/${hysteriaDownMbps}Mbps, internalSocks=$internalSocksPort")
+                Log.d(TAG, "Generating config with ${rawNodes.size} nodes, selected: $selectedNodeId, ipv6Mode: $ipv6Mode, tunStack=$tunStack, mtu: ${AppConfig.VPN_MTU}, hysteria=${hysteriaUpMbps}/${hysteriaDownMbps}Mbps, internalSocks=$internalSocksPort")
 
                 // 3. 确保规则集文件存在（从 assets 拷贝兜底）
                 RuleManager.ensureRuleSets(application)
@@ -843,7 +842,6 @@ class BoxVpnService : VpnService() {
             selectedNodeId = selectedNodeId,
             proxyMode = proxyMode,
             ipv6Mode = runtimeSettings.ipv6RoutingMode,
-            vpnMtu = runtimeSettings.vpnMtu,
             internalSocksPort = internalSocksPort,
             hysteriaUpMbps = runtimeSettings.hysteriaUpMbps,
             hysteriaDownMbps = runtimeSettings.hysteriaDownMbps,

@@ -23,6 +23,7 @@ import xyz.a202132.app.network.LatencyTester
 import xyz.a202132.app.network.NodeDownloadBandwidthTester
 import xyz.a202132.app.network.SpeedTestService
 import xyz.a202132.app.network.SubscriptionParser
+import xyz.a202132.app.network.SubscriptionImportUrl
 import xyz.a202132.app.network.DownloadManager
 import xyz.a202132.app.network.NodeLocationResolver
 import xyz.a202132.app.network.AccountManager
@@ -40,7 +41,8 @@ import java.util.UUID
 enum class NodeImportResult {
     IMPORTED,
     DUPLICATE,
-    INVALID
+    INVALID,
+    FETCH_FAILED
 }
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -288,7 +290,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         NodeDisplaySettings()
     )
-    val vpnMtu = settingsRepository.vpnMtu.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.VPN_MTU)
     val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Eagerly, TunStack.GVISOR)
     val skinSettings = settingsRepository.skinSettings.stateIn(
         viewModelScope,
@@ -768,12 +769,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return "%.1f".format(java.util.Locale.US, speedMbps)
     }
 
-    fun setVpnMtu(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setVpnMtu(value)
-        }
-    }
-
     fun setProtocolCore(nodeType: NodeType, core: ProxyCore) {
         if (protocolCoreSettings.value.coreFor(nodeType) == core) return
         viewModelScope.launch {
@@ -1096,52 +1091,94 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun importNodesToFavoritesFromText(text: String, onResult: (NodeImportResult, Int) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             val importResult = withContext(Dispatchers.IO) {
-                val now = System.currentTimeMillis()
                 val parsedNodes = subscriptionParser.parseSubscription(text)
-                if (parsedNodes.isEmpty()) return@withContext NodeImportResult.INVALID to 0
-
-                setupLibboxForConfigCheck()
-                val coreCompatibleNodes = parsedNodes.filter { node ->
-                    isNodeCoreConfigCompatible(node)
-                }
-                if (coreCompatibleNodes.isEmpty()) return@withContext NodeImportResult.INVALID to 0
-
-                val existingFavoriteRawLinks = nodeDao().getFavoriteNodes().first()
-                    .map { it.getRawLinkPlain() }
-                    .toMutableSet()
-                val uniqueNodes = coreCompatibleNodes.filter { node ->
-                    existingFavoriteRawLinks.add(node.getRawLinkPlain())
-                }
-                if (uniqueNodes.isEmpty()) return@withContext NodeImportResult.DUPLICATE to 0
-
-                val favorites = uniqueNodes.mapIndexed { index, node ->
-                    node.copy(
-                        id = "fav_${UUID.randomUUID()}",
-                        source = NodeSource.FAVORITE,
-                        favoriteSourceNodeId = null,
-                        favoriteCreatedAt = now + index,
-                        latency = -1,
-                        isAvailable = true,
-                        lastTestedAt = 0L,
-                        downloadMbps = 0f,
-                        uploadMbps = 0f,
-                    )
-                }
-                nodeDao().insertNodes(favorites)
-                NodeImportResult.IMPORTED to favorites.size
+                persistNodesToFavorites(parsedNodes)
             }
-            val result = importResult.first
-            val importedCount = importResult.second
-
-
-            if (result == NodeImportResult.IMPORTED) {
-                settingsRepository.setNodeListCategory(NodeListCategory.FAVORITES)
-                Log.i(tag, "Imported $importedCount nodes to favorites")
-            } else {
-                Log.w(tag, "Node import finished without new nodes: result=$result")
-            }
-            onResult(result, importedCount)
+            finishFavoriteImport(importResult, onResult)
         }
+    }
+
+    /** 拉取用户提供的订阅链接，将其中通过核心校验的新节点批量写入收藏组。 */
+    fun importSubscriptionToFavorites(
+        url: String,
+        onResult: (NodeImportResult, Int) -> Unit = { _, _ -> }
+    ) {
+        viewModelScope.launch {
+            val normalizedUrl = SubscriptionImportUrl.normalize(url)
+            if (normalizedUrl == null) {
+                onResult(NodeImportResult.INVALID, 0)
+                return@launch
+            }
+
+            val fetchedNodes = withContext(Dispatchers.IO) {
+                subscriptionParser.fetchAndParse(normalizedUrl)
+            }
+            val importResult = fetchedNodes.fold(
+                onSuccess = { nodes ->
+                    withContext(Dispatchers.IO) { persistNodesToFavorites(nodes) }
+                },
+                onFailure = { error ->
+                    Log.e(tag, "Unable to import favorite subscription", error)
+                    NodeImportResult.FETCH_FAILED to 0
+                }
+            )
+            finishFavoriteImport(importResult, onResult)
+        }
+    }
+
+    private suspend fun persistNodesToFavorites(
+        parsedNodes: List<Node>
+    ): Pair<NodeImportResult, Int> {
+        if (parsedNodes.isEmpty()) return NodeImportResult.INVALID to 0
+
+        setupLibboxForConfigCheck()
+        val coreCompatibleNodes = parsedNodes.filter { node ->
+            isNodeCoreConfigCompatible(node)
+        }
+        if (coreCompatibleNodes.isEmpty()) return NodeImportResult.INVALID to 0
+
+        val existingFavoriteRawLinks = nodeDao().getFavoriteNodes().first()
+            .map { it.getRawLinkPlain() }
+            .toMutableSet()
+        val uniqueNodes = coreCompatibleNodes.filter { node ->
+            existingFavoriteRawLinks.add(node.getRawLinkPlain())
+        }
+        if (uniqueNodes.isEmpty()) return NodeImportResult.DUPLICATE to 0
+
+        val now = System.currentTimeMillis()
+        val favorites = uniqueNodes.mapIndexed { index, node ->
+            node.copy(
+                id = "fav_${UUID.randomUUID()}",
+                source = NodeSource.FAVORITE,
+                favoriteSourceNodeId = null,
+                favoriteCreatedAt = now + index,
+                subscriptionSourceId = null,
+                subscriptionSourceName = null,
+                latency = -1,
+                tcpingLatency = -1,
+                urlTestLatency = -1,
+                isAvailable = true,
+                lastTestedAt = 0L,
+                downloadMbps = 0f,
+                uploadMbps = 0f,
+            )
+        }
+        nodeDao().insertNodes(favorites)
+        return NodeImportResult.IMPORTED to favorites.size
+    }
+
+    private suspend fun finishFavoriteImport(
+        importResult: Pair<NodeImportResult, Int>,
+        onResult: (NodeImportResult, Int) -> Unit
+    ) {
+        val (result, importedCount) = importResult
+        if (result == NodeImportResult.IMPORTED) {
+            settingsRepository.setNodeListCategory(NodeListCategory.FAVORITES)
+            Log.i(tag, "Imported $importedCount nodes to favorites")
+        } else {
+            Log.w(tag, "Node import finished without new nodes: result=$result")
+        }
+        onResult(result, importedCount)
     }
 
     private fun setupLibboxForConfigCheck() {

@@ -29,7 +29,6 @@ data class PerAppProxySettings(
 data class VpnRuntimeSettings(
     val proxyMode: ProxyMode,
     val ipv6RoutingMode: IPv6RoutingMode,
-    val vpnMtu: Int,
     val tunStack: TunStack,
     val hysteriaUpMbps: Int,
     val hysteriaDownMbps: Int,
@@ -73,7 +72,6 @@ class SettingsRepository(private val context: Context) {
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val URL_TEST_CONCURRENCY = intPreferencesKey("url_test_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
-        private val VPN_MTU = intPreferencesKey("vpn_mtu")
         private val SMART_CONNECT_TCPING_PERCENT = intPreferencesKey("smart_connect_tcping_percent")
         private val SMART_CONNECT_URL_TEST_PERCENT = intPreferencesKey("smart_connect_url_test_percent")
         private val SMART_CONNECT_SPEED_TEST_PERCENT = intPreferencesKey("smart_connect_speed_test_percent")
@@ -218,8 +216,6 @@ class SettingsRepository(private val context: Context) {
                 preferences[IPV6_ROUTING_MODE],
                 IPv6RoutingMode.DISABLED
             ),
-            vpnMtu = (preferences[VPN_MTU] ?: xyz.a202132.app.AppConfig.VPN_MTU)
-                .coerceIn(1280, 65_535),
             tunStack = enumValueOrDefault(preferences[TUN_STACK], TunStack.GVISOR),
             // 关闭 Hy2 带宽参数时必须向两个核心都传 0，避免运行时仍启用 Brutal。
             hysteriaUpMbps = if (hysteriaBandwidthEnabled) {
@@ -761,16 +757,6 @@ class SettingsRepository(private val context: Context) {
                 )
             }
         return array.toString()
-    }
-
-    val vpnMtu: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[VPN_MTU] ?: xyz.a202132.app.AppConfig.VPN_MTU).coerceIn(576, 9000)
-    }
-
-    suspend fun setVpnMtu(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[VPN_MTU] = value.coerceIn(576, 9000)
-        }
     }
 
 }
