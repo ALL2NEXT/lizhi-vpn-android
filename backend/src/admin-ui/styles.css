@@ -84,25 +84,20 @@
     .check { display: flex; align-items: center; margin: 8px 0; }
     .source-row { border: 1px solid #4b5563; border-radius: 10px; padding: 14px; margin: 10px 0; }
     .source-row-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #374151; }
-    .source-row-heading { min-width: 0; }
-    .source-row-title { display: block; overflow: hidden; color: #f8fafc; font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-    .source-row-remark { display: block; margin-top: 3px; overflow: hidden; color: #94a3b8; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-    .source-row-remark[hidden] { display: none; }
+    .source-row-heading { display: grid; flex: 0 1 390px; min-width: 0; grid-template-columns: 160px 220px; gap: 10px; }
+    .source-row-heading .field { min-width: 0; }
+    .source-row-heading label { display: flex; flex-direction: column; gap: 5px; color: #94a3b8; font-size: 12px; }
+    .source-row-heading input { min-height: 34px; padding: 7px 9px; }
     .source-row-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .source-row-controls button { margin: 0; padding: 7px 10px; }
-    .source-drag-handle { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; color: #cbd5e1; border: 1px dashed #64748b; border-radius: 7px; cursor: grab; user-select: none; }
-    .source-drag-handle:hover { color: #f8fafc; border-color: #22c55e; background: #1e293b; }
-    .source-drag-handle:active, .source-row.dragging .source-drag-handle { cursor: grabbing; }
-    .source-row.dragging { opacity: .5; }
-    .source-row.drag-over { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34, 197, 94, .25); }
+    .source-enabled-check { box-sizing: border-box; min-height: 32px; margin: 0; padding: 5px 10px; color: #e5e7eb; background: #111827; border: 1px solid #4b5563; border-radius: 7px; white-space: nowrap; }
+    .source-row-controls .source-move-button { min-width: 32px; min-height: 32px; padding: 5px 8px; font-size: 16px; line-height: 1; }
     .source-row-body[hidden] { display: none; }
     .source-row.collapsed .source-row-header { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
     .source-section { padding: 12px; background: #172033; border: 1px solid #374151; border-radius: 8px; }
     .source-section + .source-section { margin-top: 12px; }
     .source-section-title { margin: 0 0 10px; color: #f8fafc; font-size: 14px; }
-    .source-identity-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
     .source-permissions-grid { align-items: end; }
-    .source-permissions-grid .check { min-height: 42px; margin: 0; padding: 0 10px; background: #111827; border: 1px solid #4b5563; border-radius: 8px; }
     .source-details-grid { margin-bottom: 12px; }
     .source-mode { margin-top: 12px; }
     .source-mode[hidden] { display: none; }
@@ -112,6 +107,9 @@
     .settings-section-title { margin: 0 0 6px; color: #f8fafc; font-size: 16px; }
      .settings-section-description { margin: 0 0 12px; color: #94a3b8; font-size: 12px; }
      .settings-section .grid { margin-top: 0; }
+     .app-info-icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+     .app-info-label { display: inline-flex; align-items: center; gap: 7px; }
+     .app-info-label svg { width: 19px; height: 19px; flex: 0 0 19px; fill: currentColor; color: #86efac; }
      .admin-login-record-wrap { overflow: auto; border: 1px solid #374151; border-radius: 10px; background: #111827; }
      .admin-login-table { width: 100%; min-width: 980px; border-collapse: collapse; font-size: 12px; }
      .admin-login-table th, .admin-login-table td { padding: 10px 12px; text-align: left; vertical-align: top; border-right: 1px solid #374151; border-bottom: 1px solid #374151; }
@@ -289,6 +287,7 @@
        .user-admin-control-grid { grid-template-columns: 1fr; }
        .table-wrap { max-height: calc(100vh - 190px); }
        .source-row-header { align-items: flex-start; flex-direction: column; }
-       .source-row-controls { justify-content: flex-start; }
+       .source-row-heading { width: 100%; grid-template-columns: 1fr; }
+       .source-row-controls { width: 100%; justify-content: flex-start; }
        .device-relation-detail-grid { grid-template-columns: 1fr; }
      }

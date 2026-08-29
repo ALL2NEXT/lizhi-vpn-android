@@ -1,25 +1,24 @@
 function addSource(source) {
   source = source || {};
   const row = document.createElement('div');
-  row.className = 'source-row';
+  row.className = 'source-row collapsed';
   const sourceType = source.content ? 'content' : 'url';
   const minAccountType = ['banned', 'guest', 'formal'].includes(source.minAccountType)
     ? source.minAccountType
     : 'guest';
   row.innerHTML = '<div class="source-row-header">' +
-    '<div class="source-row-heading"><span class="source-row-title" data-source-title>线路</span><span class="source-row-remark" data-source-remark hidden></span></div>' +
-    '<div class="source-row-controls" role="group" aria-label="线路排序和折叠操作">' +
-      '<span class="source-drag-handle" data-drag-handle draggable="true" role="button" aria-label="拖动线路排序" title="拖动线路排序">☷</span>' +
+    '<div class="source-row-heading">' +
+      '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
+      '<div class="field"><label>备注<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="仅后台保存"></label></div>' +
+    '</div>' +
+    '<div class="source-row-controls" role="group" aria-label="线路启用、排序和折叠操作">' +
+      '<label class="check source-enabled-check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用</label>' +
+      '<button class="secondary source-move-button" type="button" data-action="move-up" aria-label="上移线路" title="上移线路">↑</button>' +
+      '<button class="secondary source-move-button" type="button" data-action="move-down" aria-label="下移线路" title="下移线路">↓</button>' +
       '<button class="secondary source-edit-button" type="button" data-action="collapse" aria-expanded="false" aria-label="编辑订阅线路" title="编辑订阅线路">🖊</button>' +
     '</div>' +
   '</div>' +
   '<div class="source-row-body" data-source-body hidden>' +
-  '<section class="source-section source-identity-section">' +
-    '<div class="grid source-identity-grid">' +
-      '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
-      '<div class="field"><label>后台备注（仅后台保存）<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="例如：备用线路、长期稳定"></label></div>' +
-    '</div>' +
-    '</section>' +
     '<section class="source-section source-permissions-section">' +
       '<h3 class="source-section-title">线路权限控制</h3>' +
       '<div class="grid source-permissions-grid">' +
@@ -29,7 +28,6 @@ function addSource(source) {
           '<option value="guest" ' + (minAccountType === 'guest' ? 'selected' : '') + '>游客</option>' +
           '<option value="formal" ' + (minAccountType === 'formal' ? 'selected' : '') + '>正式用户</option>' +
         '</select></label></div>' +
-        '<label class="check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用这条线路</label>' +
       '</div>' +
     '</section>' +
     '<section class="source-section source-details-section">' +
@@ -54,49 +52,14 @@ function addSource(source) {
     updateSourceRowsMeta();
   };
   row.querySelector('[data-field="sourceType"]').onchange = function() { updateSourceMode(row); };
-  row.querySelector('[data-field="name"]').oninput = function() { updateSourceRowsMeta(); };
-  row.querySelector('[data-field="remark"]').oninput = function() { updateSourceRowsMeta(); };
   row.querySelector('[data-action="collapse"]').onclick = function() {
     toggleSourceRow(row);
   };
-  const dragHandle = row.querySelector('[data-drag-handle]');
-  dragHandle.ondragstart = function(event) {
-    draggedSourceRow = row;
-    row.classList.add('dragging');
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', 'subscription-row');
-    }
+  row.querySelector('[data-action="move-up"]').onclick = function() {
+    moveSourceRow(row, -1);
   };
-  dragHandle.ondragend = function() {
-    clearSourceDragState();
-  };
-  row.ondragover = function(event) {
-    if (!draggedSourceRow || draggedSourceRow === row) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    row.classList.add('drag-over');
-  };
-  row.ondragleave = function(event) {
-    if (!row.contains(event.relatedTarget)) row.classList.remove('drag-over');
-  };
-  row.ondrop = function(event) {
-    if (!draggedSourceRow || draggedSourceRow === row) return;
-    event.preventDefault();
-    const draggedRow = draggedSourceRow;
-    const container = el('subscriptionRows');
-    const rect = row.getBoundingClientRect();
-    const insertAfter = event.clientY > rect.top + rect.height / 2;
-    if (insertAfter) {
-      const nextRow = row.nextElementSibling;
-      if (nextRow === draggedRow) {
-        // The dragged row is already immediately after the target row.
-      } else if (nextRow) container.insertBefore(draggedRow, nextRow);
-      else container.appendChild(draggedRow);
-    } else if (row.previousElementSibling !== draggedRow) {
-      container.insertBefore(draggedRow, row);
-    }
-    clearSourceDragState();
+  row.querySelector('[data-action="move-down"]').onclick = function() {
+    moveSourceRow(row, 1);
   };
   updateSourceMode(row);
   el('subscriptionRows').appendChild(row);
@@ -111,17 +74,22 @@ function updateSourceRowsMeta() {
   const rows = getSourceRows();
   rows.forEach(function(row, index) {
     const nameInput = row.querySelector('[data-field="name"]');
-    const remarkInput = row.querySelector('[data-field="remark"]');
-    const title = row.querySelector('[data-source-title]');
-    const remark = row.querySelector('[data-source-remark]');
-    const name = nameInput ? nameInput.value.trim() : '';
-    const remarkText = remarkInput ? remarkInput.value.trim() : '';
-    if (title) title.textContent = name || '线路' + (index + 1);
-    if (remark) {
-      remark.textContent = remarkText ? '备注：' + remarkText : '';
-      remark.hidden = !remarkText;
-    }
+    const moveUp = row.querySelector('[data-action="move-up"]');
+    const moveDown = row.querySelector('[data-action="move-down"]');
+    if (nameInput) nameInput.placeholder = '线路' + (index + 1);
+    if (moveUp) moveUp.disabled = index === 0;
+    if (moveDown) moveDown.disabled = index === rows.length - 1;
   });
+}
+function moveSourceRow(row, direction) {
+  const rows = getSourceRows();
+  const index = rows.indexOf(row);
+  const targetIndex = index + direction;
+  if (index < 0 || targetIndex < 0 || targetIndex >= rows.length) return;
+  const container = el('subscriptionRows');
+  if (direction < 0) container.insertBefore(row, rows[targetIndex]);
+  else container.insertBefore(rows[targetIndex], row);
+  updateSourceRowsMeta();
 }
 function toggleSourceRow(row) {
   const body = row.querySelector('[data-source-body]');
@@ -134,13 +102,6 @@ function toggleSourceRow(row) {
   button.textContent = '🖊';
   button.setAttribute('aria-label', collapsed ? '编辑订阅线路' : '收起订阅线路');
   button.title = collapsed ? '编辑订阅线路' : '收起订阅线路';
-}
-function clearSourceDragState() {
-  getSourceRows().forEach(function(row) {
-    row.classList.remove('dragging', 'drag-over');
-  });
-  draggedSourceRow = null;
-  updateSourceRowsMeta();
 }
 function updateSourceMode(row) {
   const type = row.querySelector('[data-field="sourceType"]').value;

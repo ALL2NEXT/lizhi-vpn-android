@@ -13,7 +13,6 @@
   let trafficDetailsSortKey = '';
   let trafficDetailsSortDirection = 'asc';
   const trafficZeroFilters = {today: false, month: false, total: false};
-  let draggedSourceRow = null;
  let growthPeriod = 'day';
  let growthRequestId = 0;
  let activityPeriod = 'day';

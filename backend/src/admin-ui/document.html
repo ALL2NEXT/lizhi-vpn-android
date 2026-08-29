@@ -264,12 +264,18 @@
       <section class="settings-section">
         <h3 class="settings-section-title">应用基础信息</h3>
         <p class="settings-section-description">配置应用官网、反馈入口、项目源码地址和 TG 群连接。</p>
+        <svg class="app-info-icon-sprite" aria-hidden="true">
+          <symbol id="app-icon-language" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2Zm6.92 6h-2.95a15.7 15.7 0 0 0-1.5-3.5A8.03 8.03 0 0 1 18.92 8ZM12 4c.83 1.2 1.48 2.53 1.87 4h-3.74C10.52 6.53 11.17 5.2 12 4ZM4.26 14A8.15 8.15 0 0 1 4 12c0-.69.1-1.36.26-2h3.38a16.78 16.78 0 0 0 0 4H4.26Zm.82 2h2.95c.32 1.25.82 2.45 1.5 3.5A8.03 8.03 0 0 1 5.08 16Zm2.95-8H5.08a8.03 8.03 0 0 1 4.45-3.5A15.7 15.7 0 0 0 8.03 8ZM12 20a13.7 13.7 0 0 1-1.87-4h3.74A13.7 13.7 0 0 1 12 20Zm2.34-6H9.66a14.46 14.46 0 0 1 0-4h4.68a14.46 14.46 0 0 1 0 4Zm.13 5.5c.68-1.05 1.18-2.25 1.5-3.5h2.95a8.03 8.03 0 0 1-4.45 3.5ZM16.36 14a16.78 16.78 0 0 0 0-4h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38Z"/></symbol>
+          <symbol id="app-icon-email" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2Zm0 4-8 5-8-5V6l8 5 8-5v2Z"/></symbol>
+          <symbol id="app-icon-github" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.084-.729.084-.729 1.205.084 1.84 1.237 1.84 1.237 1.07 1.835 2.809 1.305 3.495.998.108-.776.418-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-.908 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></symbol>
+          <symbol id="app-icon-telegram" viewBox="0 0 24 24"><path d="M21.9 2.6 2.4 10.1c-1.1.4-1.1 1.2-.2 1.5l5 1.6L9.1 19c.2.6.1.9.8.9.5 0 .7-.2 1-.5l2.4-2.3 5 3.7c.9.5 1.6.3 1.8-.9l3.2-15.2c.3-1.3-.5-2.5-1.4-2.1ZM8 12.8l10.9-6.9c.5-.3 1-.1.6.2l-9 8.1-.3 3.2L8 12.8Z"/></symbol>
+        </svg>
         <div class="grid">
-          <div class="field"><label>官方网站<input id="websiteUrl" type="url" placeholder="https://example.com"></label></div>
-          <div class="field"><label>反馈邮箱<input id="feedbackEmail" type="email" placeholder="support@example.com"></label></div>
-          <div class="field"><label>问题反馈链接<input id="feedbackUrl" type="url" placeholder="https://github.com/.../issues"></label></div>
-          <div class="field"><label>项目源码链接<input id="githubUrl" type="url" placeholder="https://github.com/.../..."></label></div>
-          <div class="field"><label>Telegram 群组链接<input id="telegramUrl" type="url" placeholder="https://t.me/..."></label></div>
+          <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-language"></use></svg>官方网站</span><input id="websiteUrl" type="url" placeholder="https://example.com"></label></div>
+          <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-email"></use></svg>反馈邮箱</span><input id="feedbackEmail" type="email" placeholder="support@example.com"></label></div>
+          <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-email"></use></svg>问题反馈链接</span><input id="feedbackUrl" type="url" placeholder="https://github.com/.../issues"></label></div>
+          <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-github"></use></svg>项目源码链接</span><input id="githubUrl" type="url" placeholder="https://github.com/.../..."></label></div>
+          <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-telegram"></use></svg>Telegram 群组链接</span><input id="telegramUrl" type="url" placeholder="https://t.me/..."></label></div>
         </div>
       </section>
 
