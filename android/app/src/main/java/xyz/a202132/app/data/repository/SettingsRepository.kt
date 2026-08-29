@@ -77,6 +77,14 @@ class SettingsRepository(private val context: Context) {
         private val SMART_CONNECT_TCPING_PERCENT = intPreferencesKey("smart_connect_tcping_percent")
         private val SMART_CONNECT_URL_TEST_PERCENT = intPreferencesKey("smart_connect_url_test_percent")
         private val SMART_CONNECT_SPEED_TEST_PERCENT = intPreferencesKey("smart_connect_speed_test_percent")
+        private val PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED =
+            booleanPreferencesKey("public_node_pool_optimization_enabled")
+        private val PUBLIC_NODE_POOL_NODE_THRESHOLD =
+            intPreferencesKey("public_node_pool_node_threshold")
+        private val PUBLIC_NODE_POOL_TCPING_CONCURRENCY =
+            intPreferencesKey("public_node_pool_tcping_concurrency")
+        private val PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY =
+            intPreferencesKey("public_node_pool_url_test_concurrency")
         private val DISCONNECT_RECOVERY_ENABLED = booleanPreferencesKey("disconnect_recovery_enabled")
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
@@ -549,6 +557,50 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSmartConnectSpeedTestPercent(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[SMART_CONNECT_SPEED_TEST_PERCENT] = value.coerceIn(1, 100)
+        }
+    }
+
+    val publicNodePoolOptimizationEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED]
+            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED
+    }
+
+    suspend fun setPublicNodePoolOptimizationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED] = enabled
+        }
+    }
+
+    val publicNodePoolNodeThreshold: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_NODE_THRESHOLD]
+            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_NODE_THRESHOLD).coerceIn(1, 10_000)
+    }
+
+    suspend fun setPublicNodePoolNodeThreshold(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_NODE_THRESHOLD] = value.coerceIn(1, 10_000)
+        }
+    }
+
+    val publicNodePoolTcpingConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_TCPING_CONCURRENCY]
+            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_TCPING_CONCURRENCY).coerceIn(1, 512)
+    }
+
+    suspend fun setPublicNodePoolTcpingConcurrency(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_TCPING_CONCURRENCY] = value.coerceIn(1, 512)
+        }
+    }
+
+    val publicNodePoolUrlTestConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY]
+            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY).coerceIn(1, 128)
+    }
+
+    suspend fun setPublicNodePoolUrlTestConcurrency(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY] = value.coerceIn(1, 128)
         }
     }
 

@@ -61,6 +61,11 @@ fun OtherConfigScreen(
     val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsStateWithLifecycle()
     val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsStateWithLifecycle()
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsStateWithLifecycle()
+    val publicNodePoolNodeThreshold by viewModel.publicNodePoolNodeThreshold.collectAsStateWithLifecycle()
+    val publicNodePoolTcpingConcurrency by
+        viewModel.publicNodePoolTcpingConcurrency.collectAsStateWithLifecycle()
+    val publicNodePoolUrlTestConcurrency by
+        viewModel.publicNodePoolUrlTestConcurrency.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val vpnMtu by viewModel.vpnMtu.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
@@ -75,6 +80,16 @@ fun OtherConfigScreen(
     var tcpingConcurrencyInput by remember(tcpingConcurrency) { mutableStateOf(tcpingConcurrency.toString()) }
     var urlTestConcurrencyInput by remember(urlTestConcurrency) { mutableStateOf(urlTestConcurrency.toString()) }
     var bandwidthTestConcurrencyInput by remember(bandwidthTestConcurrency) { mutableStateOf(bandwidthTestConcurrency.toString()) }
+    var publicNodePoolThresholdInput by remember(publicNodePoolNodeThreshold) {
+        mutableStateOf(publicNodePoolNodeThreshold.toString())
+    }
+    var publicNodePoolTcpingConcurrencyInput by remember(publicNodePoolTcpingConcurrency) {
+        mutableStateOf(publicNodePoolTcpingConcurrency.toString())
+    }
+    var publicNodePoolUrlTestConcurrencyInput by remember(publicNodePoolUrlTestConcurrency) {
+        mutableStateOf(publicNodePoolUrlTestConcurrency.toString())
+    }
+    var concurrencySettingsType by remember { mutableStateOf(0) }
     var mtuInput by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
 
     LaunchedEffect(
@@ -84,6 +99,9 @@ fun OtherConfigScreen(
         tcpingConcurrency,
         urlTestConcurrency,
         bandwidthTestConcurrency,
+        publicNodePoolNodeThreshold,
+        publicNodePoolTcpingConcurrency,
+        publicNodePoolUrlTestConcurrency,
         vpnMtu
     ) {
         tcpingTimeoutInput = tcpingTestTimeoutMs.toString()
@@ -92,6 +110,9 @@ fun OtherConfigScreen(
         tcpingConcurrencyInput = tcpingConcurrency.toString()
         urlTestConcurrencyInput = urlTestConcurrency.toString()
         bandwidthTestConcurrencyInput = bandwidthTestConcurrency.toString()
+        publicNodePoolThresholdInput = publicNodePoolNodeThreshold.toString()
+        publicNodePoolTcpingConcurrencyInput = publicNodePoolTcpingConcurrency.toString()
+        publicNodePoolUrlTestConcurrencyInput = publicNodePoolUrlTestConcurrency.toString()
         mtuInput = vpnMtu.toString()
     }
 
@@ -285,35 +306,91 @@ fun OtherConfigScreen(
             OtherConfigSection(
                 title = "并发与网络"
             ) {
-                OtherConfigNumberField(
-                    label = "TCPing 并发数",
-                    value = tcpingConcurrencyInput,
-                    onValueChange = {
-                        tcpingConcurrencyInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setTcpingConcurrency(value.coerceIn(1, 128))
-                        }
-                    }
+                MultiPositionSwitch(
+                    options = listOf("普通订阅设置", "公共池设置"),
+                    selectedIndex = concurrencySettingsType,
+                    onOptionSelected = { concurrencySettingsType = it }
                 )
-                OtherConfigNumberField(
-                    label = "URL Test 并发数",
-                    value = urlTestConcurrencyInput,
-                    onValueChange = {
-                        urlTestConcurrencyInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setUrlTestConcurrency(value.coerceIn(1, 128))
+
+                if (concurrencySettingsType == 0) {
+                    Text(
+                        text = "用于普通订阅组及手动节点测速。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OtherConfigNumberField(
+                        label = "TCPing 并发数",
+                        value = tcpingConcurrencyInput,
+                        onValueChange = {
+                            tcpingConcurrencyInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setTcpingConcurrency(value.coerceIn(1, 128))
+                            }
                         }
-                    }
-                )
-                OtherConfigNumberField(
-                    label = "带宽测试并发数",
-                    value = bandwidthTestConcurrencyInput,
-                    onValueChange = {
-                        bandwidthTestConcurrencyInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setBandwidthTestConcurrency(value.coerceIn(1, 3))
+                    )
+                    OtherConfigNumberField(
+                        label = "URL Test 并发数",
+                        value = urlTestConcurrencyInput,
+                        onValueChange = {
+                            urlTestConcurrencyInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setUrlTestConcurrency(value.coerceIn(1, 128))
+                            }
                         }
-                    }
+                    )
+                    OtherConfigNumberField(
+                        label = "带宽测试并发数",
+                        value = bandwidthTestConcurrencyInput,
+                        onValueChange = {
+                            bandwidthTestConcurrencyInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setBandwidthTestConcurrency(value.coerceIn(1, 3))
+                            }
+                        }
+                    )
+                } else {
+                    Text(
+                        text = "仅用于特色功能中的公共节点池智能连接测速；节点数必须大于判定阈值。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OtherConfigNumberField(
+                        label = "公共池判定阈值（节点数）",
+                        value = publicNodePoolThresholdInput,
+                        onValueChange = {
+                            publicNodePoolThresholdInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setPublicNodePoolNodeThreshold(value.coerceIn(1, 10_000))
+                            }
+                        }
+                    )
+                    OtherConfigNumberField(
+                        label = "公共池 TCPing 并发数",
+                        value = publicNodePoolTcpingConcurrencyInput,
+                        onValueChange = {
+                            publicNodePoolTcpingConcurrencyInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setPublicNodePoolTcpingConcurrency(value.coerceIn(1, 512))
+                            }
+                        }
+                    )
+                    OtherConfigNumberField(
+                        label = "公共池 URL Test 并发数",
+                        value = publicNodePoolUrlTestConcurrencyInput,
+                        onValueChange = {
+                            publicNodePoolUrlTestConcurrencyInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setPublicNodePoolUrlTestConcurrency(value.coerceIn(1, 128))
+                            }
+                        }
+                    )
+                }
+
+                Text(
+                    text = "通用网络",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 OtherConfigNumberField(
                     label = "VPN MTU",

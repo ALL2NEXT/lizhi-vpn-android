@@ -86,6 +86,12 @@ object AppConfig {
     const val SMART_CONNECT_SPEED_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_SIZE_MB = 5
 
+    // 公共节点池优化：当前订阅组节点数超过阈值时提高智能连接前两阶段的并发。
+    const val PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED = true
+    const val PUBLIC_NODE_POOL_NODE_THRESHOLD = 100
+    const val PUBLIC_NODE_POOL_TCPING_CONCURRENCY = 256
+    const val PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY = 32
+
     // VPN 断线恢复，默认关闭，由特色功能页面控制
     const val DISCONNECT_RECOVERY_ENABLED = false
     const val DISCONNECT_RECOVERY_CHECK_INTERVAL_MS = 5000L

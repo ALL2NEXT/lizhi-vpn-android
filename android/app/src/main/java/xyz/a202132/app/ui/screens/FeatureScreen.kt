@@ -44,6 +44,13 @@ fun FeatureScreen(
     val smartConnectTcpingPercent by viewModel.smartConnectTcpingPercent.collectAsStateWithLifecycle()
     val smartConnectUrlTestPercent by viewModel.smartConnectUrlTestPercent.collectAsStateWithLifecycle()
     val smartConnectSpeedTestPercent by viewModel.smartConnectSpeedTestPercent.collectAsStateWithLifecycle()
+    val publicNodePoolOptimizationEnabled by
+        viewModel.publicNodePoolOptimizationEnabled.collectAsStateWithLifecycle()
+    val publicNodePoolNodeThreshold by viewModel.publicNodePoolNodeThreshold.collectAsStateWithLifecycle()
+    val publicNodePoolTcpingConcurrency by
+        viewModel.publicNodePoolTcpingConcurrency.collectAsStateWithLifecycle()
+    val publicNodePoolUrlTestConcurrency by
+        viewModel.publicNodePoolUrlTestConcurrency.collectAsStateWithLifecycle()
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
@@ -148,6 +155,18 @@ fun FeatureScreen(
             FeatureSection(
                 title = "智能连接"
             ) {
+                FeatureSwitchRow(
+                    label = "公共节点池优化",
+                    checked = publicNodePoolOptimizationEnabled,
+                    onCheckedChange = viewModel::setPublicNodePoolOptimizationEnabled
+                )
+                Text(
+                    text = "订阅组节点数大于 $publicNodePoolNodeThreshold 时，智能连接使用 " +
+                        "TCPing $publicNodePoolTcpingConcurrency 并发、" +
+                        "URL Test $publicNodePoolUrlTestConcurrency 并发；可在基础设定中调整。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
                 FeatureNumberField(
                     label = "TCPing 节点比例 (%)",
                     value = tcpingPercentInput,
