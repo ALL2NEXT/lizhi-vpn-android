@@ -46,10 +46,6 @@ export function normalizeState(input) {
         url: content ? "" : externalUrl,
         name: cleanText(item.name || item.title),
         enabled: parseFlag(item.enabled, true),
-        refreshOnAppOpen: parseFlag(
-          item.refreshOnAppOpen ?? item.openAppImmediateUpdate ?? item.updateOnAppOpen,
-          true,
-        ),
         minAccountType: normalizeAccountType(
           item.minAccountType ?? item.requiredAccountType ?? item.minimumAccountType,
           "guest",
@@ -70,7 +66,6 @@ export function normalizeState(input) {
       name: item.name || `线路${index + 1}`,
       url: item.url,
       enabled: item.enabled,
-      refreshOnAppOpen: item.refreshOnAppOpen,
       minAccountType: item.minAccountType,
       minAppVersion: item.minAppVersion,
       cacheMinutes: item.cacheMinutes,

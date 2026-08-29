@@ -67,18 +67,13 @@ class SubscriptionListParser {
         val minAccountType = normalizeSubscriptionAccountType(
             readString(source, "minAccountType", "requiredAccountType", "minimumAccountType")
         )
-        val refreshOnAppOpen = source.get("refreshOnAppOpen")?.let { readBoolean(it) }
-            ?: source.get("openAppImmediateUpdate")?.let { readBoolean(it) }
-            ?: source.get("updateOnAppOpen")?.let { readBoolean(it) }
-            ?: true
         return SubscriptionSource(
             id = "",
             name = name,
             url = url,
             enabled = enabled,
             encrypted = encrypted,
-            minAccountType = minAccountType.ifBlank { DEFAULT_MIN_ACCOUNT_TYPE },
-            refreshOnAppOpen = refreshOnAppOpen
+            minAccountType = minAccountType.ifBlank { DEFAULT_MIN_ACCOUNT_TYPE }
         )
     }
 

@@ -307,7 +307,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // presentation must not serialize the resource-loading pipeline.
 
                 subscriptionDataLoader.loadCachedSubscriptionList()
-                if (!subscriptionDataLoader.initialize()) {
+                if (!subscriptionDataLoader.initialize(forceRefresh = true)) {
                     // A successful refresh schedules enrichment for the fresh
                     // nodes. Only fall back to cached nodes when refresh failed.
                     scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())

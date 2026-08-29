@@ -132,13 +132,6 @@ internal class SubscriptionDataLoader(
         } else {
             accessibleSources.filter { it.id == sourceId }
         }
-        val sourcesToRefresh = if (forceRefresh) {
-            targetSources
-        } else {
-            targetSources.filter { source ->
-                source.refreshOnAppOpen || cachedNodes.none { it.subscriptionSourceId == source.id }
-            }
-        }
         val cachedAccessibleNodes = cachedNodes.filter {
             it.subscriptionSourceId in accessibleSourceIds
         }
@@ -148,16 +141,9 @@ internal class SubscriptionDataLoader(
             onNodesPersisted(cachedAccessibleNodes)
             return@coroutineScope true
         }
-        if (sourcesToRefresh.isEmpty()) {
-            nodeDao().replaceSubscriptionNodes(cachedAccessibleNodes)
-            lastFetchedNodes = cachedAccessibleNodes
-            onNodesPersisted(cachedAccessibleNodes)
-            return@coroutineScope true
-        }
-
         val fetched = fetchAndPersistNodes(
             subscriptionList.copy(sources = accessibleSources),
-            sourcesToRefresh = sourcesToRefresh,
+            sourcesToRefresh = targetSources,
             cachedNodes = cachedAccessibleNodes,
         )
         fetched

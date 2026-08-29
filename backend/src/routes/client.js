@@ -36,7 +36,6 @@ async function handleClient(request, env) {
         name: source.name,
         enabled: source.enabled,
         encrypted: true,
-        refreshOnAppOpen: source.refreshOnAppOpen,
         minAccountType: source.minAccountType,
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
       })),

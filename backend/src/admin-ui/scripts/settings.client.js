@@ -37,7 +37,6 @@ function addSource(source) {
           '<option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>外部接口</option>' +
           '<option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>纯文本节点</option>' +
         '</select></label></div>' +
-        '<label class="check"><input data-field="refreshOnAppOpen" type="checkbox" ' + (source.refreshOnAppOpen === false ? '' : 'checked') + '>打开app立即更新</label>' +
       '</div>' +
       '<div class="source-mode" data-source-mode="url"><div class="grid">' +
         '<div class="field"><label>外部明文订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/plain-sub"></label></div>' +
@@ -165,7 +164,6 @@ function formState() {
         : 0,
       autoRename: sourceType === 'url' && row.querySelector('[data-field="autoRename"]').checked,
       content: sourceType === 'content' ? content : '',
-      refreshOnAppOpen: row.querySelector('[data-field="refreshOnAppOpen"]').checked,
       remark: row.querySelector('[data-field="remark"]').value.trim()
     };
   }).filter(function(item) { return item.url || item.content; });
