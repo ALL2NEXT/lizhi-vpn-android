@@ -82,6 +82,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     // UI状态
     val isLoading = subscriptionDataLoader.isLoading
+
+    // 全部订阅刷新（启动自动刷新或右上角手动刷新）显示顶部提示；单组下拉刷新使用列表内置动效。
+    private val _isRefreshingAllSubscriptions = MutableStateFlow(false)
+    val isRefreshingAllSubscriptions = _isRefreshingAllSubscriptions.asStateFlow()
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
@@ -353,7 +357,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // presentation must not serialize the resource-loading pipeline.
 
                 subscriptionDataLoader.loadCachedSubscriptionList()
-                if (!subscriptionDataLoader.initialize(forceRefresh = true)) {
+                if (!initializeSubscriptionsWithRefreshState(forceRefresh = true)) {
                     // A successful refresh schedules enrichment for the fresh
                     // nodes. Only fall back to cached nodes when refresh failed.
                     scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
@@ -1642,7 +1646,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (result.isSuccess) {
 
-                    val refreshed = subscriptionDataLoader.initialize(forceRefresh = true)
+                    val refreshed = initializeSubscriptionsWithRefreshState(forceRefresh = true)
                     _accountMessage.value = if (refreshed) {
                         "账户切换成功"
                     } else {
@@ -1804,11 +1808,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _error.value = GlobalTestExecution.busyHint()
                 return@launch
             }
-            val fetchOk = subscriptionDataLoader.initialize(
+            val fetchOk = initializeSubscriptionsWithRefreshState(
                 forceRefresh = true,
                 sourceId = sourceId
             )
             if (!fetchOk) return@launch
+        }
+    }
+
+    /** 统一维护全量刷新提示，确保启动自动刷新与手动全部刷新表现一致。 */
+    private suspend fun initializeSubscriptionsWithRefreshState(
+        forceRefresh: Boolean,
+        sourceId: String? = null
+    ): Boolean {
+        val isRefreshAll = sourceId.isNullOrBlank()
+        if (isRefreshAll) _isRefreshingAllSubscriptions.value = true
+        return try {
+            subscriptionDataLoader.initialize(
+                forceRefresh = forceRefresh,
+                sourceId = sourceId
+            )
+        } finally {
+            if (isRefreshAll) _isRefreshingAllSubscriptions.value = false
         }
     }
 

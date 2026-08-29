@@ -246,6 +246,8 @@ class MainActivity : ComponentActivity() {
                                     viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
                                 val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
                                 val isRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()
+                                val isRefreshingAllSubscriptions by
+                                    viewModel.isRefreshingAllSubscriptions.collectAsStateWithLifecycle()
                                 val hideFavoriteNodeGroup by
                                     viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
                                 val nodeDisplaySettings by
@@ -268,6 +270,7 @@ class MainActivity : ComponentActivity() {
                                     skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
                                     isTesting = isTesting,
                                     isRefreshing = isRefreshing,
+                                    isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
                                     hideFavoriteNodeGroup = hideFavoriteNodeGroup,
                                     nodeDisplaySettings = nodeDisplaySettings,
                                     protocolCoreSettings = protocolCoreSettings,

@@ -95,6 +95,7 @@ fun NodeListScreen(
     skipFavoriteRemovalConfirmation: Boolean,
     isTesting: Boolean,
     isRefreshing: Boolean,
+    isRefreshingAllSubscriptions: Boolean,
     hideFavoriteNodeGroup: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
@@ -169,7 +170,7 @@ fun NodeListScreen(
 
     AppScreenScaffold(
         title = "节点列表",
-        subtitle = if (isRefreshing) "节点刷新中..." else testingLabel,
+        subtitle = if (isRefreshingAllSubscriptions) "节点刷新中..." else testingLabel,
         onBack = handleBack,
         backEnabled = !isClosing,
         actions = {
@@ -193,6 +194,7 @@ fun NodeListScreen(
             favoriteSourceNodeIds = favoriteSourceNodeIds,
             isTesting = isTesting,
             isRefreshing = isRefreshing,
+            isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
             hideFavoriteNodeGroup = hideFavoriteNodeGroup,
             nodeDisplaySettings = nodeDisplaySettings,
             protocolCoreSettings = protocolCoreSettings,
@@ -450,6 +452,7 @@ private fun NodeListContent(
     favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
     isRefreshing: Boolean,
+    isRefreshingAllSubscriptions: Boolean,
     hideFavoriteNodeGroup: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
@@ -643,7 +646,7 @@ private fun NodeListContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        if (isTesting || isRefreshing) {
+        if (isTesting || isRefreshingAllSubscriptions) {
             LinearProgressIndicator(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primary
