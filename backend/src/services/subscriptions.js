@@ -1,6 +1,7 @@
 import {
   DEFAULT_SUBSCRIPTION_CACHE_MINUTES,
   MAX_MANAGED_SUBSCRIPTION_BYTES,
+  MAX_SUBSCRIPTION_DEBUG_ACCESS_COUNT,
   MAX_SUBSCRIPTION_CACHE_MINUTES,
   PLAINTEXT_NODE_PATTERN,
   PRIVATE_B64_ALPHABET,
@@ -26,6 +27,14 @@ export function normalizeSubscriptionCacheMinutes(value) {
   return Number.isFinite(minutes)
     ? Math.min(Math.max(Math.round(minutes), 0), MAX_SUBSCRIPTION_CACHE_MINUTES)
     : DEFAULT_SUBSCRIPTION_CACHE_MINUTES;
+}
+
+export function normalizeSubscriptionDebugAccessCount(value) {
+  if (value === undefined || value === null || value === "") return 0;
+  const count = Number(value);
+  return Number.isFinite(count)
+    ? Math.min(Math.max(Math.round(count), 0), MAX_SUBSCRIPTION_DEBUG_ACCESS_COUNT)
+    : 0;
 }
 
 export function normalizeMinimumAppVersion(value) {

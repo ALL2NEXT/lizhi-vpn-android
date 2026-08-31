@@ -7,6 +7,7 @@ import {
   normalizeManagedContent,
   normalizeMinimumAppVersion,
   normalizeSubscriptionCacheMinutes,
+  normalizeSubscriptionDebugAccessCount,
 } from "./subscriptions.js";
 
 export async function readState(env) {
@@ -54,6 +55,9 @@ export function normalizeState(input) {
           item.minAppVersion ?? item.minimumAppVersion,
         ),
         cacheMinutes: normalizeSubscriptionCacheMinutes(item.cacheMinutes),
+        debugAccessCount: normalizeSubscriptionDebugAccessCount(
+          item.debugAccessCount ?? item.debugAccessLimit ?? item.plaintextDebugAccessCount,
+        ),
         // 只有外部订阅允许在 Worker 转发前自动重命名节点。
         autoRename: !content && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
         content,
@@ -69,6 +73,7 @@ export function normalizeState(input) {
       minAccountType: item.minAccountType,
       minAppVersion: item.minAppVersion,
       cacheMinutes: item.cacheMinutes,
+      debugAccessCount: item.debugAccessCount,
       autoRename: item.autoRename,
       content: item.content,
       remark: item.remark,
@@ -82,6 +87,21 @@ export function normalizeState(input) {
     settings: normalizeSettings(value.settings),
     ...(value.updatedAt ? { updatedAt: String(value.updatedAt) } : {}),
   };
+}
+
+/** Consume one plaintext debug request from the latest stored state. */
+export async function consumeSubscriptionDebugAccess(env, id) {
+  const state = await readState(env);
+  const source = state.subscriptions.find((item) => item.id === String(id));
+  if (!source || source.debugAccessCount <= 0) return false;
+
+  await writeState(env, {
+    ...state,
+    subscriptions: state.subscriptions.map((item) => item.id === source.id
+      ? { ...item, debugAccessCount: item.debugAccessCount - 1 }
+      : item),
+  });
+  return true;
 }
 
 export function normalizeNotice(value) {

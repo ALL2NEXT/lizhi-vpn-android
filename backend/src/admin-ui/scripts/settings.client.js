@@ -3,6 +3,10 @@ function addSource(source) {
   const row = document.createElement('div');
   row.className = 'source-row collapsed';
   const sourceType = source.content ? 'content' : 'url';
+  const debugAccessCount = source.debugAccessCount == null ? 0 : source.debugAccessCount;
+  const debugUrl = source.id
+    ? new URL('/api/subscription/' + encodeURIComponent(source.id) + '/debug', window.location.origin).toString()
+    : '';
   const minAccountType = ['banned', 'guest', 'formal'].includes(source.minAccountType)
     ? source.minAccountType
     : 'guest';
@@ -32,7 +36,12 @@ function addSource(source) {
           '<option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>外部接口</option>' +
           '<option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>纯文本节点</option>' +
         '</select></label></div>' +
+        '<div class="field"><label>明文调试接口访问次数（剩余）<input data-field="debugAccessCount" type="number" min="0" max="1000" step="1" value="' + esc(debugAccessCount) + '"></label></div>' +
       '</div>' +
+      '<small>明文调试接口设置为 0 时关闭；每次成功访问会减少 1 次，并复用本线路的缓存和自动重命名结果。</small>' +
+      (debugUrl
+        ? '<small>明文调试地址：<a href="' + esc(debugUrl) + '" target="_blank" rel="noopener">' + esc(debugUrl) + '</a></small>'
+        : '<small>保存线路后生成明文调试地址。</small>') +
       '<div class="source-mode" data-source-mode="url"><div class="grid">' +
         '<div class="field"><label>外部明文订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/plain-sub"></label></div>' +
         '<div class="field"><label>接口缓存时间（分钟）<input data-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '"></label></div>' +
@@ -157,6 +166,7 @@ function formState() {
       cacheMinutes: sourceType === 'url'
         ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 0)
         : 0,
+      debugAccessCount: Number(row.querySelector('[data-field="debugAccessCount"]').value || 0),
       autoRename: sourceType === 'url' && row.querySelector('[data-field="autoRename"]').checked,
       content: sourceType === 'content' ? content : '',
       remark: row.querySelector('[data-field="remark"]').value.trim()

@@ -50,6 +50,7 @@ import {
   validateAndWarmSubscriptionSources,
 } from "./services/subscriptions.js";
 import {
+  consumeSubscriptionDebugAccess,
   normalizeState,
   publicClientSettings,
   readState,
@@ -90,6 +91,7 @@ const routeDeps = {
   autoRenameSubscriptionContent,
   protectSubscription,
   getClientIp,
+  consumeSubscriptionDebugAccess,
   readState,
   visibleNotice,
   publicClientSettings,

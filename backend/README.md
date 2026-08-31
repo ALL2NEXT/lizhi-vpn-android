@@ -47,6 +47,16 @@ Authorization: Bearer <ADMIN_TOKEN>
 
 本次优化保持现有 API 路径、请求字段、响应字段和 KV 状态格式不变。流量统计改为从 `user_usage_mb` 查询时按日汇总，并通过 schema v4 移除旧的 `user_usage_daily_mb` 汇总表。部署时仍指向 `backend/serverless.js`。
 
+## 明文调试接口
+
+后台每条订阅线路都可以设置“明文调试接口访问次数”。设置为 `0` 时关闭；每次成功访问会减少 1 次，最多可设置 `1000` 次。接口地址为：
+
+```http
+GET /api/subscription/<id>/debug
+```
+
+该接口不要求 `deviceId`，直接返回对应线路的明文订阅内容，仅用于调试。它与普通订阅接口共用上游缓存和自动重命名处理，但不会执行订阅内容加密；请勿将调试地址用于生产客户端。
+
 ## 本地验证
 
 ```powershell
