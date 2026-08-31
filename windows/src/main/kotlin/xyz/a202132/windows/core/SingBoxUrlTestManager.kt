@@ -140,7 +140,7 @@ class SingBoxUrlTestManager(
                 ?.takeIf(String::isNotBlank)
                 ?.let(Paths::get)
                 ?: Paths.get(System.getProperty("user.home"), "AppData", "Local")
-            return base.resolve("FireflyVPN").resolve("sing-box-url-test")
+            return base.resolve("Firefly").resolve("sing-box-url-test")
         }
     }
 }

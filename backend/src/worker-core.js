@@ -1,5 +1,5 @@
 /*
- * FireflyVPN Cloudflare Worker composition root.
+ * Firefly Cloudflare Worker composition root.
  *
  * Domain logic lives in focused modules. This file only wires route
  * dependencies and dispatches incoming requests.

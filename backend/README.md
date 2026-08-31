@@ -1,6 +1,6 @@
-# FireflyVPN Cloudflare Worker 后端
+# Firefly Cloudflare Worker 后端
 
-这是 FireflyVPN 的 Cloudflare Worker 后端。部署入口保持为 `serverless.js`，业务实现已按职责拆分，便于维护和测试。
+这是 Firefly 的 Cloudflare Worker 后端。部署入口保持为 `serverless.js`，业务实现已按职责拆分，便于维护和测试。
 
 ## 目录结构
 

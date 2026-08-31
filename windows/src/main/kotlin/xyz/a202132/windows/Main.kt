@@ -44,18 +44,18 @@ fun main() = application {
         Tray(
             icon = painterResource("firefly.png"),
             state = trayState,
-            tooltip = "FireflyVPN",
+            tooltip = "Firefly",
             onAction = ::showWindow
         ) {
             Item("显示主界面", onClick = ::showWindow)
             Separator()
-            Item("退出 FireflyVPN", onClick = ::exitApplication)
+            Item("退出 Firefly", onClick = ::exitApplication)
         }
     }
 
     Window(
         visible = windowVisible,
-        title = "FireflyVPN",
+        title = "Firefly",
         icon = painterResource("firefly.png"),
         state = windowState,
         // Windows 端保持 Android 风格的固定比例，避免拉伸后布局无法恢复。

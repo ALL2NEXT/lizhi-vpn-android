@@ -256,7 +256,7 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "FireflyVPN",
+                            "Firefly",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground
@@ -364,7 +364,7 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
             title = { Text("TUN 模式需要管理员权限") },
             text = {
                 Text(
-                    "TUN 模式会接管整机网络，需要以管理员身份运行 FireflyVPN。请关闭程序后右键选择“以管理员身份运行”，再重新连接。"
+                    "TUN 模式会接管整机网络，需要以管理员身份运行 Firefly。请关闭程序后右键选择“以管理员身份运行”，再重新连接。"
                 )
             },
             confirmButton = {
@@ -1373,7 +1373,7 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
         AppScreen.BASIC_SETTINGS -> "基础设定"
         AppScreen.FEATURES -> "特色功能"
         AppScreen.ABOUT -> "关于应用"
-        else -> "FireflyVPN"
+        else -> "Firefly"
     }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -1413,7 +1413,7 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                     appIcon?.let {
                         Image(
                             bitmap = it,
-                            contentDescription = "FireflyVPN 应用图标",
+                            contentDescription = "Firefly 应用图标",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .size(88.dp)
@@ -1421,7 +1421,7 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                                 .clickable(onClick = ::handleAppIconClick)
                         )
                     }
-                    Text("FireflyVPN", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Primary)
+                    Text("Firefly", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Primary)
                     Text("Windows 原生客户端 3.0.4", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val updateUrl = state.backendSettings.githubUrl.ifBlank {
                         state.backendSettings.websiteUrl

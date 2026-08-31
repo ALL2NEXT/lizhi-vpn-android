@@ -1,4 +1,4 @@
-# FireflyVPN Windows
+# Firefly Windows
 
 Windows 客户端的独立 Compose Desktop 工程。UI、后台协议、节点解析和 sing-box 配置均以当前 Android 3.0.1 为兼容基线。
 

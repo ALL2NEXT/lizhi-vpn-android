@@ -116,7 +116,7 @@ object AppConfig {
     const val VPN_DNS_PRIMARY = "8.8.8.8"
     const val VPN_DNS_CHINA = "223.5.5.5" // 国内 DNS（智能分流模式使用）
     val HTTP_USER_AGENT: String
-        get() = "FireflyVPN/${xyz.a202132.app.BuildConfig.VERSION_NAME}"
+        get() = "Firefly/${xyz.a202132.app.BuildConfig.VERSION_NAME}"
 
 
     // Notification

@@ -58,8 +58,8 @@ Cloudflare 会在你的 DNS 里自动生成一个 **R2 只读记录**（通常�
 
 完成后，你的文件就可以用这种形式访问：
 
-- `https://firefly.202132.xyz/latest/FireflyVPN.apk`
-- `https://firefly.202132.xyz/v1.10.0/FireflyVPN.apk`
+- `https://firefly.202132.xyz/latest/Firefly.apk`
+- `https://firefly.202132.xyz/v1.10.0/Firefly.apk`
 
 ------
 
@@ -123,11 +123,11 @@ GitHub → Settings → Secrets and variables → Actions → New repository sec
 .github/workflows/sync-apk-to-r2.yml
 ```
 
-> 作用：你每次发布 GitHub Release（并上传 `FireflyVPN.apk`）后
+> 作用：你每次发布 GitHub Release（并上传 `Firefly.apk`）后
 >  自动把 APK 同步到：
 >
-> - `/<tag>/FireflyVPN.apk`（版本固定链接）
-> - `/latest/FireflyVPN.apk`（永久最新链接）
+> - `/<tag>/Firefly.apk`（版本固定链接）
+> - `/latest/Firefly.apk`（永久最新链接）
 >    同时生成并上传 sha256 校验文件。
 
 ```yml
@@ -159,7 +159,7 @@ jobs:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-      APK_NAME: FireflyVPN.apk
+      APK_NAME: Firefly.apk
 
       # 你的公开下载域名（你这里应当设置为 https://firefly.202132.xyz）
       R2_PUBLIC_BASE: ${{ secrets.R2_PUBLIC_BASE }}
@@ -202,7 +202,7 @@ jobs:
             exit 1
           fi
 
-          # 找到名为 FireflyVPN.apk 的 asset 并下载
+          # 找到名为 Firefly.apk 的 asset 并下载
           ASSET_URL=$(gh api repos/${{ github.repository }}/releases/tags/$TAG \
             --jq '.assets[] | select(.name=="'"$APK_NAME"'") | .url')
 
@@ -255,14 +255,14 @@ jobs:
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
           echo "Upload tag: $TAG"
 
-          # 1) 版本目录：/<tag>/FireflyVPN.apk
+          # 1) 版本目录：/<tag>/Firefly.apk
           aws s3 cp "$APK_NAME" "s3://${R2_BUCKET}/${TAG}/${APK_NAME}" \
             --endpoint-url "${R2_ENDPOINT}"
 
           aws s3 cp "${APK_NAME}.sha256" "s3://${R2_BUCKET}/${TAG}/${APK_NAME}.sha256" \
             --endpoint-url "${R2_ENDPOINT}"
 
-          # 2) 最新目录：/latest/FireflyVPN.apk
+          # 2) 最新目录：/latest/Firefly.apk
           aws s3 cp "$APK_NAME" "s3://${R2_BUCKET}/latest/${APK_NAME}" \
             --endpoint-url "${R2_ENDPOINT}"
 
@@ -300,7 +300,7 @@ sync-apk-to-r2.yml解决了几个问题：
 
 ## 五、开始访问！
 
-访问https://firefly.202132.xyz/latest/FireflyVPN.apk即可在国内外稳定下载APP安装包！！！
+访问https://firefly.202132.xyz/latest/Firefly.apk即可在国内外稳定下载APP安装包！！！
 
 ## 六、其他文件处理
 

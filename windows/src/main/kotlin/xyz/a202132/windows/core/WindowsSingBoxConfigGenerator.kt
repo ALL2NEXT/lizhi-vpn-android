@@ -46,7 +46,7 @@ class WindowsSingBoxConfigGenerator {
                     add(JsonObject().apply {
                         addProperty("type", "tun")
                         addProperty("tag", "tun-in")
-                        addProperty("interface_name", "FireflyVPN")
+                        addProperty("interface_name", "Firefly")
                         add("address", JsonArray().apply {
                             if (settings.ipv6RoutingMode != Ipv6RoutingMode.ONLY) add("172.19.0.1/30")
                             if (settings.ipv6RoutingMode != Ipv6RoutingMode.DISABLED) add("fdfe:dcba:9876::1/126")

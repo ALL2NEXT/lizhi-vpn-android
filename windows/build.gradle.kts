@@ -91,7 +91,7 @@ tasks.matching { it.name == "prepareAppResources" }.configureEach {
 
 val verifyRuntimeModules by tasks.registering {
     group = "verification"
-    description = "Verify modules required by the packaged FireflyVPN runtime"
+    description = "Verify modules required by the packaged Firefly runtime"
     dependsOn("createRuntimeImage")
 
     val releaseFile = layout.buildDirectory.file("compose/tmp/main/runtime/release")
@@ -123,10 +123,10 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             modules("java.net.http")
-            packageName = "FireflyVPN"
+            packageName = "Firefly"
             packageVersion = project.version.toString()
-            description = "FireflyVPN Windows client"
-            vendor = "FireflyVPN"
+            description = "Firefly Windows client"
+            vendor = "Firefly"
             licenseFile.set(rootProject.file("../LICENSE"))
             appResourcesRootDir.set(project.layout.projectDirectory.dir("runtime"))
 
@@ -135,7 +135,7 @@ compose.desktop {
                 // including the generated executable, shortcuts and taskbar.
                 iconFile.set(project.file("src/main/resources/firefly.ico"))
                 dirChooser = true
-                menuGroup = "FireflyVPN"
+                menuGroup = "Firefly"
                 upgradeUuid = "f0f23d8d-0a4b-4f66-94f9-77b9308a0b9d"
             }
         }

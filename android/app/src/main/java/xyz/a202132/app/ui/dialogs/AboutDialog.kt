@@ -151,7 +151,7 @@ fun AboutDialog(
                     }
                     Image(
                         bitmap = iconBitmap,
-                        contentDescription = "FireflyVPN 应用图标",
+                        contentDescription = "Firefly 应用图标",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .size(iconSize)
@@ -162,7 +162,7 @@ fun AboutDialog(
 
                     // App名字
                     Text(
-                        text = "FireflyVPN",
+                        text = "Firefly",
                         fontSize = if (isLargeScreen) 24.sp else 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -172,7 +172,7 @@ fun AboutDialog(
 
                     // 标语
                     Text(
-                        text = "FireflyVPN",
+                        text = "Firefly",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

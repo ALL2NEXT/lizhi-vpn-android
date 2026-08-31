@@ -333,7 +333,7 @@ class BackendClient(
         HttpRequest.newBuilder(URI(url))
             .timeout(Duration.ofMillis(timeoutMs.coerceIn(5_000L, 60_000L)))
             .header("accept", "application/json, text/plain, */*;q=0.1")
-            .header("user-agent", "FireflyVPN/$APP_VERSION (Windows)")
+            .header("user-agent", "Firefly/$APP_VERSION (Windows)")
 
     private fun send(request: HttpRequest): HttpResponse<String> {
         val response = httpClient.send(

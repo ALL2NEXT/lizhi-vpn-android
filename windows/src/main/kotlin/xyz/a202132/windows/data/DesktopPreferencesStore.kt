@@ -95,7 +95,7 @@ class DesktopPreferencesStore(
                 ?.takeIf(String::isNotBlank)
                 ?.let(Paths::get)
                 ?: Paths.get(System.getProperty("user.home"), "AppData", "Local")
-            return base.resolve("FireflyVPN").resolve("preferences.json")
+            return base.resolve("Firefly").resolve("preferences.json")
         }
     }
 }

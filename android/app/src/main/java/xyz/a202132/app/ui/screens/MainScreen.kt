@@ -195,7 +195,7 @@ fun MainScreen(
                     },
                     title = {
                         Text(
-                            text = "FireflyVPN",
+                            text = "Firefly",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground

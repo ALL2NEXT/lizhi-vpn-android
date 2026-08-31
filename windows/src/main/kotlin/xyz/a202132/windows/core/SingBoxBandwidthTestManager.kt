@@ -100,7 +100,7 @@ class SingBoxBandwidthTestManager(
         val timeout = timeoutMs.coerceAtLeast(1_000)
         connection.connectTimeout = timeout
         connection.readTimeout = timeout
-        connection.setRequestProperty("user-agent", "FireflyVPN/3.0.4 (Windows)")
+        connection.setRequestProperty("user-agent", "Firefly/3.0.4 (Windows)")
         val started = System.nanoTime()
         return runCatching {
             connection.inputStream.use { input ->
@@ -138,7 +138,7 @@ class SingBoxBandwidthTestManager(
                 ?.takeIf(String::isNotBlank)
                 ?.let(Paths::get)
                 ?: Paths.get(System.getProperty("user.home"), "AppData", "Local")
-            return base.resolve("FireflyVPN").resolve("sing-box-bandwidth-test")
+            return base.resolve("Firefly").resolve("sing-box-bandwidth-test")
         }
     }
 }

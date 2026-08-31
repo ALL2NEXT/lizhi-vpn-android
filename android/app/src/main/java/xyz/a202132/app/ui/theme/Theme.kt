@@ -89,7 +89,7 @@ private fun contentColorFor(color: Color): Color {
 }
 
 @Composable
-fun FireflyVPNTheme(
+fun FireflyTheme(
     skinSettings: SkinSettings = SkinSettings(),
     content: @Composable () -> Unit
 ) {

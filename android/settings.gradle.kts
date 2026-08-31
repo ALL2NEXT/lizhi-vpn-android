@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FireflyVPN"
+rootProject.name = "Firefly"
 include(":app")

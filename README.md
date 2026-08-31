@@ -1,4 +1,4 @@
-# 流萤加速器 (FireflyVPN)
+# 流萤加速器 (Firefly)
 <p align="center">
   <img src="./images/firefly.jpg" width="100" alt="Logo">
 </p>
@@ -152,8 +152,8 @@ git submodule update --init --recursive
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/Iskongkongyo/FireflyVPN.git
-cd FireflyVPN
+git clone https://github.com/Iskongkongyo/Firefly.git
+cd Firefly
 ```
 
 ### 2. 配置 API 地址
@@ -184,7 +184,7 @@ object AppConfig {
     const val VPN_DNS_SECONDARY = "8.8.4.4"
     const val VPN_DNS_CHINA = "223.5.5.5"        // 国内 DNS（智能分流模式使用）
     val HTTP_USER_AGENT: String  // 运行时 getter，自动跟随版本号
-        get() = "FireflyVPN/${BuildConfig.VERSION_NAME}"
+        get() = "Firefly/${BuildConfig.VERSION_NAME}"
 
     // 通知
     const val NOTIFICATION_CHANNEL_ID = "vpn_service"
@@ -422,7 +422,7 @@ android/app/src/main/
 **功能特点**：
 
 - 顶部提供刷新、分享、清空三个图标按钮
-- 分享时生成 `FireflyVPN-runtime-日期-hash.log`，通过 `FileProvider` 分享
+- 分享时生成 `Firefly-runtime-日期-hash.log`，通过 `FileProvider` 分享
 - 日志来源为 APP 内部专用 `RuntimeLog`，不直接导出 Android logcat
 - 默认最多保留最新 1000 条日志；单条消息会截断，旧日志会自动滚动清理
 - 仅记录脱敏后的关键 Info / Warn / Error，例如 APP 启动、VPN 启停、核心兼容校验、自动测试摘要、导入结果、更新/公告请求失败、sing-box warn/error 等
@@ -824,7 +824,7 @@ versionName — 字符串，格式通常为 主版本.次版本.修订号（如 
 **文件**: `android/app/src/main/res/values/themes.xml`
 
 ```xml
-<style name="Theme.FireflyVPN" parent="android:Theme.Material.Light.NoActionBar">
+<style name="Theme.Firefly" parent="android:Theme.Material.Light.NoActionBar">
     <item name="android:colorPrimary">@color/your_primary</item>
     <item name="android:colorAccent">@color/your_accent</item>
 </style>

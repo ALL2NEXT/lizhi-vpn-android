@@ -14,4 +14,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FireflyVPN-Windows"
+rootProject.name = "Firefly-Windows"

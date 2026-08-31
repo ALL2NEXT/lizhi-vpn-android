@@ -327,7 +327,7 @@ export async function readExternalSubscription(env, source) {
       method: "GET",
       headers: {
         accept: "text/plain, */*;q=0.1",
-        "user-agent": "FireflyVPN-Worker/1.0",
+        "user-agent": "Firefly-Worker/1.0",
       },
       redirect: "follow",
     });
