@@ -169,9 +169,9 @@ object AppConfig {
     // 官网、反馈联系方式、GitHub、请求超时均在 Worker 管理后台配置
 
     // 延迟测试 (TCPing & URL Test)
-    const val TCPING_TEST_TIMEOUT = 3000L // 超时默认3秒
+    const val TCPING_TEST_TIMEOUT = 1000L // 超时默认1秒
     const val URL_TEST_URL = UrlTestTargets.DEFAULT_URL // 用户可在基础设定中修改
-    const val URL_TEST_TIMEOUT = 3000L // 超时默认3秒
+    const val URL_TEST_TIMEOUT = 1000L // 超时默认1秒
     const val URL_TEST_RETRY_COUNT = 1 // URL Test 自动重试次数，仅对503/504或异常生效
     
     // 延迟测试并发数
@@ -193,7 +193,7 @@ object AppConfig {
     // 带宽测速默认地址 (Cloudflare)
     const val SPEED_TEST_DOWNLOAD_URL = "https://speed.cloudflare.com/__down?bytes=5000000"
     const val SPEED_TEST_UPLOAD_URL = "https://speed.cloudflare.com/__up"
-    const val AUTO_TEST_BANDWIDTH_DURATION_MS = 5000L          // 单次带宽测试时长
+    const val AUTO_TEST_BANDWIDTH_DURATION_MS = 3000L          // 单次带宽测试时长
 }
 ```
 
@@ -403,9 +403,9 @@ android/app/src/main/
 | URL Test 候选比例 | 50% | 智能连接第二阶段从 TCPing 结果中选取的比例 |
 | 带宽测速候选比例 | 50% | 智能连接第三阶段从 URL Test 结果中选取的比例 |
 | Hysteria 最大带宽 (Up/Dw) | 1000/1000 Mbps | 仅对 Hysteria2 节点生效；输入 0 表示不设置，修改后下次连接生效 |
-| TCPing 超时 | 3000ms | 最低 500ms |
-| URL Test 超时 | 3000ms | 最低 500ms |
-| 带宽测试时长 | 5000ms | 在固定时长内持续统计下载或上传流量，最低 1000ms |
+| TCPing 超时 | 1000ms | 最低 500ms |
+| URL Test 超时 | 1000ms | 最低 500ms |
+| 带宽测试时长 | 3000ms | 在固定时长内持续统计下载或上传流量，最低 1000ms |
 | TCPing 并发数 | 16 | 范围 1~128 |
 | URL Test 并发数 | 10 | 范围 1~128 |
 | 带宽测试并发数 | 1 | 范围 1~3，默认保持串行；提高并发可加快粗筛但会增加测速竞争 |

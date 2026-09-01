@@ -75,10 +75,10 @@ object AppConfig {
     // Contact
 
     // Latency Test
-    const val TCPING_TEST_TIMEOUT = 3000L // TCPing 超时（毫秒）
+    const val TCPING_TEST_TIMEOUT = 1000L // TCPing 超时（毫秒）
     
     const val URL_TEST_URL = UrlTestTargets.DEFAULT_URL // URL Test 默认测试 URL
-    const val URL_TEST_TIMEOUT = 3000L // URL Test 超时（毫秒）
+    const val URL_TEST_TIMEOUT = 1000L // URL Test 超时（毫秒）
     const val URL_TEST_RETRY_COUNT = 1 // URL Test 自动重试次数，仅对503/504或异常生效
 
     // 智能连接候选比例
@@ -130,5 +130,5 @@ object AppConfig {
     const val NJU_SPEED_TEST_URL = "https://test.nju.edu.cn/"
     const val NETFLIX_SPEED_TEST_URL = "https://fast.com/"
     const val GOOGLE_SPEED_TEST_URL = "https://fiber.google.com/speedtest/"
-    const val AUTO_TEST_BANDWIDTH_DURATION_MS = 5000L // 单次带宽测试时长（毫秒）
+    const val AUTO_TEST_BANDWIDTH_DURATION_MS = 3000L // 单次带宽测试时长（毫秒）
 }

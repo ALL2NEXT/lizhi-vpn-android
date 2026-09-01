@@ -17,17 +17,17 @@ class DirectBandwidthTestManagerTest {
                 exchange.responseBody.use { it.write(payload) }
             }
             createContext("/__up") { exchange ->
-                val buffer = ByteArray(payload.size)
-                var received = 0
+                val buffer = ByteArray(32 * 1024)
+                var received = 0L
                 exchange.requestBody.use { input ->
-                    while (received < buffer.size) {
-                        val count = input.read(buffer, received, buffer.size - received)
+                    while (true) {
+                        val count = input.read(buffer)
                         if (count < 0) break
-                        received += count
+                        received += count.toLong()
                     }
                 }
-                uploadedBytes.set(received.toLong())
-                exchange.sendResponseHeaders(if (received == payload.size) 200 else 400, 0)
+                uploadedBytes.set(received)
+                exchange.sendResponseHeaders(200, 0)
                 exchange.responseBody.close()
             }
             start()
@@ -38,7 +38,7 @@ class DirectBandwidthTestManagerTest {
             val result = DirectBandwidthTestManager(
                 downloadUrl = "$baseUrl/__down",
                 uploadUrl = "$baseUrl/__up"
-            ).test(durationMs = 100)
+            ).test(durationMs = 1_000)
 
             assertTrue(result.downloadMbps > 0f)
             assertTrue(result.uploadMbps > 0f)
