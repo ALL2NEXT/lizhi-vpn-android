@@ -29,6 +29,7 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
 
     fun build(
         nodeName: String,
+        nodeGroupName: String?,
         proxyMode: ProxyMode,
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
@@ -45,9 +46,14 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
         }
         val stopIntent = serviceAction(1, BoxVpnService.ACTION_STOP)
         val restartIntent = serviceAction(2, BoxVpnService.ACTION_RESTART)
+        val detailLines = listOfNotNull(
+            nodeGroupName?.trim()?.takeIf(String::isNotEmpty)?.let { "订阅组：$it" },
+            "分流规则：${proxyMode.notificationLabel()}"
+        )
         return NotificationCompat.Builder(service, AppConfig.NOTIFICATION_CHANNEL_ID)
             .setContentTitle(nodeName)
-            .setContentText("分流规则：${proxyMode.notificationLabel()}")
+            .setContentText(detailLines.joinToString(" · "))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detailLines.joinToString("\n")))
             .setSmallIcon(R.drawable.ic_vpn_key)
             .setContentIntent(contentIntent)
             .addAction(
@@ -64,9 +70,9 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
     }
 
     /** VPN 内部重载完成后刷新同一个常驻通知，避免继续显示旧分流规则。 */
-    fun update(nodeName: String, proxyMode: ProxyMode) {
+    fun update(nodeName: String, nodeGroupName: String?, proxyMode: ProxyMode) {
         service.getSystemService(NotificationManager::class.java)
-            .notify(AppConfig.NOTIFICATION_ID, build(nodeName, proxyMode))
+            .notify(AppConfig.NOTIFICATION_ID, build(nodeName, nodeGroupName, proxyMode))
     }
 
     private fun serviceAction(

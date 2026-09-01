@@ -44,12 +44,16 @@ class BoxVpnService : VpnService() {
         const val ACTION_SET_PROXY_MODE = "xyz.a202132.app.SET_PROXY_MODE"
         const val EXTRA_NODE_RAW_LINK = "node_raw_link"
         const val EXTRA_NODE_NAME = "node_name"
+        const val EXTRA_NODE_GROUP_NAME = "node_group_name"
         const val EXTRA_PROXY_MODE = "proxy_mode"
         
         var isRunning = false
             private set
         
         var currentNodeName: String? = null
+            private set
+
+        var currentNodeGroupName: String? = null
             private set
             
         // 褰撳墠娴侀噺缁熻
@@ -110,17 +114,18 @@ class BoxVpnService : VpnService() {
             ACTION_START -> {
                 val rawLink = intent.getStringExtra(EXTRA_NODE_RAW_LINK)
                 val nodeName = intent.getStringExtra(EXTRA_NODE_NAME) ?: "Unknown"
+                val nodeGroupName = intent.getStringExtra(EXTRA_NODE_GROUP_NAME)
                 val proxyModeName = intent.getStringExtra(EXTRA_PROXY_MODE) ?: ProxyMode.SMART.name
                 val proxyMode = parseProxyMode(proxyModeName) ?: ProxyMode.SMART
 
                 // 立即启动前台服务，避免 ForegroundServiceDidNotStartInTimeException
                 startForeground(
                     AppConfig.NOTIFICATION_ID,
-                    createNotification(nodeName, proxyMode)
+                    createNotification(nodeName, nodeGroupName, proxyMode)
                 )
-                
+
                 if (rawLink != null) {
-                    startVpn(rawLink, nodeName, proxyMode)
+                    startVpn(rawLink, nodeName, nodeGroupName, proxyMode)
                 } else {
                     stopSelf()
                 }
@@ -145,7 +150,7 @@ class BoxVpnService : VpnService() {
                 // 未知 action，启动前台服务然后停止
                 startForeground(
                     AppConfig.NOTIFICATION_ID,
-                    createNotification("正在停止...", ProxyMode.SMART)
+                    createNotification("正在停止...", null, ProxyMode.SMART)
                 )
                 stopSelf()
             }
@@ -153,7 +158,12 @@ class BoxVpnService : VpnService() {
         return START_STICKY
     }
     
-    private fun startVpn(rawLink: String, nodeName: String, proxyMode: ProxyMode) {
+    private fun startVpn(
+        rawLink: String,
+        nodeName: String,
+        nodeGroupName: String?,
+        proxyMode: ProxyMode
+    ) {
         Log.d(TAG, "Starting VPN for node: $nodeName")
         Log.i(TAG, "VPN start requested")
         
@@ -188,10 +198,13 @@ class BoxVpnService : VpnService() {
                 // 如果传入的是 specific node (非 Auto)，找到它的 ID
                 // 这里的 rawLink 可能只是为了兼容旧逻辑，实际我们更关心 nodeName 或 ID
                 // 但为了保险，我们尝试匹配 rawLink 对应的节点
+                var selectedNode: Node? = null
                 var selectedNodeId: String? = null
                 if (nodeName != "自动选择") {
-                    selectedNodeId = rawNodes.find { it.getRawLinkPlain() == rawLink }?.id
+                    selectedNode = rawNodes.find { it.getRawLinkPlain() == rawLink }
+                    selectedNodeId = selectedNode?.id
                 }
+                val connectedGroupName = selectedNode?.getConnectionGroupName() ?: nodeGroupName
 
                 val runtimeSettings = settingsRepo.getVpnRuntimeSettings()
                 val ipv6Mode = runtimeSettings.ipv6RoutingMode
@@ -220,6 +233,7 @@ class BoxVpnService : VpnService() {
                 initializeLibbox(
                     configContent,
                     nodeName,
+                    connectedGroupName,
                     internalSocksPort,
                     runtimeSettings,
                     proxyMode
@@ -239,6 +253,7 @@ class BoxVpnService : VpnService() {
     private suspend fun initializeLibbox(
         configContent: String,
         nodeName: String,
+        nodeGroupName: String?,
         internalSocksPort: Int,
         runtimeSettings: VpnRuntimeSettings,
         proxyMode: ProxyMode
@@ -305,7 +320,8 @@ class BoxVpnService : VpnService() {
                     currentInternalSocksPort = internalSocksPort
                     isRunning = true
                     currentNodeName = nodeName
-                    notificationFactory.update(nodeName, proxyMode)
+                    currentNodeGroupName = nodeGroupName
+                    notificationFactory.update(nodeName, nodeGroupName, proxyMode)
 
                     // 通知UI更新
                     ServiceManager.notifyStateChange()
@@ -731,6 +747,7 @@ class BoxVpnService : VpnService() {
             // 保存当前配置
             val savedNode = ServiceManager.currentNode.value
             val savedNodeName = savedNode?.name ?: currentNodeName
+            val savedNodeGroupName = savedNode?.getConnectionGroupName() ?: currentNodeGroupName
             ServiceManager.notifyRestarting()
 
             // 立即关闭 TUN，确保状态栏 VPN 图标尽快消失
@@ -802,6 +819,7 @@ class BoxVpnService : VpnService() {
                     initializeLibbox(
                         configContent,
                         savedNodeName,
+                        savedNodeGroupName,
                         internalSocksPort,
                         runtimeSettings,
                         proxyMode
@@ -956,6 +974,7 @@ class BoxVpnService : VpnService() {
                 isRunning = false
                 isStopping = false
                 currentNodeName = null
+                currentNodeGroupName = null
                 uploadTotal = 0L
                 downloadTotal = 0L
 
@@ -1000,8 +1019,12 @@ class BoxVpnService : VpnService() {
         super.onDestroy()
     }
     
-    private fun createNotification(nodeName: String, proxyMode: ProxyMode): Notification {
-        return notificationFactory.build(nodeName, proxyMode)
+    private fun createNotification(
+        nodeName: String,
+        nodeGroupName: String?,
+        proxyMode: ProxyMode
+    ): Notification {
+        return notificationFactory.build(nodeName, nodeGroupName, proxyMode)
     }
     
     /**

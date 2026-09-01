@@ -287,8 +287,18 @@ fun MainScreen(
             ) {
                 Spacer(modifier = Modifier.height(32.dp))
                 
-                // 主页直接复用节点列表卡片，避免额外的当前节点、节点名和测速提示文字。
+                // 主页复用节点列表卡片，并在连接期间明确标出实际节点所属订阅组。
                 currentNode?.let { node ->
+                    if (vpnState != VpnState.DISCONNECTED) {
+                        Text(
+                            text = "当前连接订阅组：${node.getConnectionGroupName()}",
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     NodeListItem(
                         node = node,
                         isSelected = node.id == selectedNodeId,

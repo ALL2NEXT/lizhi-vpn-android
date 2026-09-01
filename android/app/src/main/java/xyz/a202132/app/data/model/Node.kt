@@ -86,6 +86,15 @@ data class Node(
         }
         return result.toString().trim()
     }
+
+    /**
+     * 获取连接信息中展示的订阅组名称。
+     * 收藏自订阅的节点保留原订阅组名称；手动导入的收藏节点显示为“收藏节点”。
+     */
+    fun getConnectionGroupName(): String =
+        subscriptionSourceName?.trim()?.takeIf(String::isNotEmpty)
+            ?: subscriptionSourceId?.trim()?.takeIf(String::isNotEmpty)
+            ?: if (source == NodeSource.FAVORITE) "收藏节点" else "未分组订阅"
     
     /**
      * 获取延迟显示文本

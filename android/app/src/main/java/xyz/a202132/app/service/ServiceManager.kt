@@ -40,6 +40,7 @@ object ServiceManager {
             action = BoxVpnService.ACTION_START
             putExtra(BoxVpnService.EXTRA_NODE_RAW_LINK, node.getRawLinkPlain())
             putExtra(BoxVpnService.EXTRA_NODE_NAME, node.name)
+            putExtra(BoxVpnService.EXTRA_NODE_GROUP_NAME, node.getConnectionGroupName())
             putExtra(BoxVpnService.EXTRA_PROXY_MODE, proxyMode.name)
         }
         
