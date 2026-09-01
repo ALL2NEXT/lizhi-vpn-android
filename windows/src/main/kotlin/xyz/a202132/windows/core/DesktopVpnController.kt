@@ -26,6 +26,7 @@ import xyz.a202132.windows.model.CoreStatus
 import xyz.a202132.windows.model.DesktopAppState
 import xyz.a202132.windows.model.DesktopNode
 import xyz.a202132.windows.model.DesktopSettings
+import xyz.a202132.windows.model.BandwidthTestTargets
 import xyz.a202132.windows.model.NodeCategory
 import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProxyMode
@@ -336,7 +337,9 @@ class DesktopVpnController(
     override fun updateSettings(settings: DesktopSettings) {
         val previous = mutableState.value.settings
         val sanitizedSettings = settings.copy(
-            urlTestUrl = UrlTestTargets.normalize(settings.urlTestUrl) ?: previous.urlTestUrl
+            urlTestUrl = UrlTestTargets.normalize(settings.urlTestUrl) ?: previous.urlTestUrl,
+            speedTestDownloadUrl = BandwidthTestTargets.normalize(settings.speedTestDownloadUrl)
+                ?: previous.speedTestDownloadUrl
         )
         mutableState.update { current ->
             current.copy(
@@ -388,7 +391,11 @@ class DesktopVpnController(
             it.copy(isHysteriaBandwidthAdapting = true, message = "正在测试直连网络上下行…")
         }
         scope.launch {
-            runCatching { directBandwidthTestManager.test() }
+            runCatching {
+                directBandwidthTestManager.test(
+                    downloadUrl = mutableState.value.settings.speedTestDownloadUrl
+                )
+            }
                 .onSuccess { result ->
                     val downMbps = roundUpHysteriaBandwidth(result.downloadMbps)
                     val upMbps = roundUpHysteriaBandwidth(result.uploadMbps)
@@ -585,7 +592,7 @@ class DesktopVpnController(
                 .filter { it.downloadMbps > 0f }
             val best = speedCandidates.maxByOrNull(DesktopNode::downloadMbps)
             if (best == null) {
-                mutableState.update { it.copy(message = "5MB 测速未找到可用节点") }
+                mutableState.update { it.copy(message = "带宽测速未找到可用节点") }
                 return@launch
             }
             mutableState.update {
@@ -608,7 +615,7 @@ class DesktopVpnController(
         mutableState.update {
             it.copy(
                 isTesting = true,
-                testingLabel = "智能连接：5MB 测速 (0/${nodes.size})",
+                testingLabel = "智能连接：带宽测速 (0/${nodes.size})",
                 message = null
             )
         }

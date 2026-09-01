@@ -145,6 +145,7 @@ import kotlin.math.sin
 import org.jetbrains.skia.Image as SkiaImage
 import xyz.a202132.windows.core.VpnController
 import xyz.a202132.windows.model.AppScreen
+import xyz.a202132.windows.model.BandwidthTestTargets
 import xyz.a202132.windows.model.CoreStatus
 import xyz.a202132.windows.model.DesktopAppState
 import xyz.a202132.windows.model.DesktopNode
@@ -1898,7 +1899,7 @@ private fun BasicSettingsContent(
         NumberSettingField("URL Test 超时", settings.urlTestTimeoutMs) {
             onSettingsChange(settings.copy(urlTestTimeoutMs = it.coerceAtLeast(500)))
         }
-        NumberSettingField("单次下载测速超时", settings.speedTestTimeoutMs) {
+        NumberSettingField("带宽测速超时", settings.speedTestTimeoutMs) {
             onSettingsChange(settings.copy(speedTestTimeoutMs = it.coerceAtLeast(0)))
         }
     }
@@ -1990,6 +1991,55 @@ private fun UrlTestUrlSetting(
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        val bandwidthUrlInputState = remember(settings.speedTestDownloadUrl) {
+            mutableStateOf(settings.speedTestDownloadUrl)
+        }
+        val bandwidthUrlInput = bandwidthUrlInputState.value
+        val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrlInput)
+        Text(
+            "带宽测速地址",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        OutlinedTextField(
+            value = bandwidthUrlInput,
+            onValueChange = { bandwidthUrlInputState.value = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("自定义 URL") },
+            singleLine = true,
+            isError = normalizedBandwidthUrl == null,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+        )
+        if (normalizedBandwidthUrl == null) {
+            Text(
+                "请输入有效的 HTTP 或 HTTPS 地址",
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = {
+                    normalizedBandwidthUrl?.let {
+                        onSettingsChange(settings.copy(speedTestDownloadUrl = it))
+                    }
+                },
+                enabled = normalizedBandwidthUrl != null && normalizedBandwidthUrl != settings.speedTestDownloadUrl
+            ) {
+                Text("保存")
+            }
+        }
+        Text(
+            "当前使用：${settings.speedTestDownloadUrl}",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -2030,7 +2080,7 @@ private fun FeatureSettingsContent(
         NumberSettingField("URL Test 候选比例 (%)", settings.smartConnectUrlTestPercent) {
             onSettingsChange(settings.copy(smartConnectUrlTestPercent = it.coerceIn(1, 100)))
         }
-        NumberSettingField("5MB 测速候选比例 (%)", settings.smartConnectSpeedTestPercent) {
+        NumberSettingField("带宽测速候选比例 (%)", settings.smartConnectSpeedTestPercent) {
             onSettingsChange(settings.copy(smartConnectSpeedTestPercent = it.coerceIn(1, 100)))
         }
     }

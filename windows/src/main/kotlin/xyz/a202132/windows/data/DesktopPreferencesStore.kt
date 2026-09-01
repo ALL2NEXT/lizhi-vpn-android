@@ -7,6 +7,7 @@ import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.net.URI
 import java.util.UUID
+import xyz.a202132.windows.model.BandwidthTestTargets
 import xyz.a202132.windows.model.DesktopSettings
 import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProxyMode
@@ -49,7 +50,9 @@ class DesktopPreferencesStore(
         loaded.copy(
             settings = loaded.settings.copy(
                 urlTestUrl = UrlTestTargets.normalize(loaded.settings.urlTestUrl)
-                    ?: UrlTestTargets.DEFAULT_URL
+                    ?: UrlTestTargets.DEFAULT_URL,
+                speedTestDownloadUrl = BandwidthTestTargets.normalize(loaded.settings.speedTestDownloadUrl)
+                    ?: BandwidthTestTargets.DEFAULT_URL
             )
         )
     }.getOrDefault(DesktopPreferences())

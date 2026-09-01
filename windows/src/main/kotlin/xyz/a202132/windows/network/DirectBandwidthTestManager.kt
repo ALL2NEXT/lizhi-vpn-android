@@ -5,6 +5,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import xyz.a202132.windows.model.BandwidthTestTargets
 
 data class DirectBandwidthResult(
     val downloadMbps: Float,
@@ -12,25 +13,29 @@ data class DirectBandwidthResult(
 )
 
 class DirectBandwidthTestManager(
-    private val downloadUrl: String = "https://speed.cloudflare.com/__down",
+    private val downloadUrl: String = BandwidthTestTargets.DEFAULT_URL,
     private val uploadUrl: String = "https://speed.cloudflare.com/__up",
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .followRedirects(HttpClient.Redirect.NORMAL)
         .connectTimeout(Duration.ofSeconds(15))
         .build()
 ) {
-    fun test(sizeBytes: Int = 10_000_000, timeoutMs: Int = 25_000): DirectBandwidthResult {
+    fun test(
+        sizeBytes: Int = 10_000_000,
+        timeoutMs: Int = 25_000,
+        downloadUrl: String? = null
+    ): DirectBandwidthResult {
         require(sizeBytes > 0) { "测速数据大小必须大于 0" }
         val timeout = Duration.ofMillis(timeoutMs.coerceAtLeast(1_000).toLong())
-        val download = testDownload(sizeBytes, timeout)
+        val download = testDownload(downloadUrl ?: this.downloadUrl, sizeBytes, timeout)
         val upload = testUpload(sizeBytes, timeout)
         require(download > 0f && upload > 0f) { "测速结果无效" }
         return DirectBandwidthResult(download, upload)
     }
 
-    private fun testDownload(sizeBytes: Int, timeout: Duration): Float {
+    private fun testDownload(downloadUrl: String, sizeBytes: Int, timeout: Duration): Float {
         val request = HttpRequest.newBuilder(
-            URI("$downloadUrl?bytes=$sizeBytes&r=${System.nanoTime()}")
+            URI(downloadUrl)
         )
             .timeout(timeout)
             .header("user-agent", USER_AGENT)
@@ -42,8 +47,8 @@ class DirectBandwidthTestManager(
         val received = response.body().use { input ->
             val buffer = ByteArray(32 * 1024)
             var total = 0L
-            while (total < sizeBytes) {
-                val count = input.read(buffer, 0, minOf(buffer.size.toLong(), sizeBytes - total).toInt())
+            while (true) {
+                val count = input.read(buffer)
                 if (count < 0) break
                 total += count
             }

@@ -41,6 +41,7 @@ class BoxVpnService : VpnService() {
         const val ACTION_START = "xyz.a202132.app.START_VPN"
         const val ACTION_STOP = "xyz.a202132.app.STOP_VPN"
         const val ACTION_RESTART = "xyz.a202132.app.RESTART_VPN"
+        const val ACTION_SET_PROXY_MODE = "xyz.a202132.app.SET_PROXY_MODE"
         const val EXTRA_NODE_RAW_LINK = "node_raw_link"
         const val EXTRA_NODE_NAME = "node_name"
         const val EXTRA_PROXY_MODE = "proxy_mode"
@@ -110,11 +111,7 @@ class BoxVpnService : VpnService() {
                 val rawLink = intent.getStringExtra(EXTRA_NODE_RAW_LINK)
                 val nodeName = intent.getStringExtra(EXTRA_NODE_NAME) ?: "Unknown"
                 val proxyModeName = intent.getStringExtra(EXTRA_PROXY_MODE) ?: ProxyMode.SMART.name
-                val proxyMode = try {
-                    ProxyMode.valueOf(proxyModeName)
-                } catch (e: Exception) {
-                    ProxyMode.SMART
-                }
+                val proxyMode = parseProxyMode(proxyModeName) ?: ProxyMode.SMART
 
                 // 立即启动前台服务，避免 ForegroundServiceDidNotStartInTimeException
                 startForeground(
@@ -134,6 +131,15 @@ class BoxVpnService : VpnService() {
             ACTION_RESTART -> {
                 // 重置连接：停止后重新启动
                 restartVpn()
+            }
+            ACTION_SET_PROXY_MODE -> {
+                val proxyMode = parseProxyMode(intent.getStringExtra(EXTRA_PROXY_MODE))
+                if (proxyMode == null) {
+                    Log.w(TAG, "Ignoring proxy mode switch without a valid mode")
+                } else {
+                    // 通知操作直接由前台服务处理，无需打开应用界面。
+                    restartVpn(proxyMode)
+                }
             }
             else -> {
                 // 未知 action，启动前台服务然后停止
@@ -712,11 +718,16 @@ class BoxVpnService : VpnService() {
         }
     }
     
-    private fun restartVpn() {
+    private fun restartVpn(proxyModeOverride: ProxyMode? = null) {
         Log.d(TAG, "Restarting VPN")
         Log.i(TAG, "VPN restart requested")
         
         serviceScope.launch {
+            val settingsRepo = xyz.a202132.app.data.repository.SettingsRepository(application)
+            if (proxyModeOverride != null) {
+                settingsRepo.setProxyMode(proxyModeOverride)
+            }
+
             // 保存当前配置
             val savedNode = ServiceManager.currentNode.value
             val savedNodeName = savedNode?.name ?: currentNodeName
@@ -743,7 +754,6 @@ class BoxVpnService : VpnService() {
 
                 // 获取节点信息并重新连接
                 val nodeDao = xyz.a202132.app.data.local.AppDatabase.getInstance(application).nodeDao()
-                val settingsRepo = xyz.a202132.app.data.repository.SettingsRepository(application)
                 val rawNodes = try {
                     if (savedNode == null) {
                         loadNodesForCurrentCategory(nodeDao, settingsRepo)
@@ -765,7 +775,7 @@ class BoxVpnService : VpnService() {
 
                 if (rawNodes.isNotEmpty()) {
                     val runtimeSettings = settingsRepo.getVpnRuntimeSettings()
-                    val proxyMode = runtimeSettings.proxyMode
+                    val proxyMode = proxyModeOverride ?: runtimeSettings.proxyMode
                     val internalSocksPort = pickFreeInternalSocksPort()
 
                     // 获取选中的节点
@@ -800,6 +810,9 @@ class BoxVpnService : VpnService() {
             }
         }
     }
+
+    private fun parseProxyMode(value: String?): ProxyMode? =
+        value?.let { mode -> runCatching { ProxyMode.valueOf(mode) }.getOrNull() }
 
     private fun pickFreeInternalSocksPort(): Int {
         return ServerSocket(0).use { it.localPort }

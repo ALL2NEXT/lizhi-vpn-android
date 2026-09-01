@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.ProxyCore
 
@@ -18,7 +17,7 @@ import xyz.a202132.app.data.model.ProxyCore
 internal class NodeDownloadBandwidthTester(private val context: Context) {
     suspend fun test(
         node: Node,
-        sizeMb: Int,
+        downloadUrl: String,
         timeoutMs: Long,
         hysteriaUpMbps: Int,
         hysteriaDownMbps: Int,
@@ -44,9 +43,8 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
                 .readTimeout(effectiveTimeoutMs, TimeUnit.MILLISECONDS)
                 .callTimeout(effectiveTimeoutMs, TimeUnit.MILLISECONDS)
                 .build()
-            val bytes = sizeMb.toLong() * 1_000_000L
             val request = Request.Builder()
-                .url("${AppConfig.SPEED_TEST_DOWNLOAD_URL}?bytes=$bytes&r=${System.currentTimeMillis()}")
+                .url(downloadUrl)
                 .build()
 
             val start = System.currentTimeMillis()

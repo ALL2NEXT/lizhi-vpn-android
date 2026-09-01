@@ -163,6 +163,7 @@ data class DesktopSettings(
     val tcpingTimeoutMs: Int = 3_000,
     val urlTestTimeoutMs: Int = 3_000,
     val urlTestUrl: String = UrlTestTargets.DEFAULT_URL,
+    val speedTestDownloadUrl: String = BandwidthTestTargets.DEFAULT_URL,
     val speedTestTimeoutMs: Int = 5_000,
     val tcpingConcurrency: Int = 16,
     val urlTestConcurrency: Int = 10,

@@ -22,7 +22,8 @@ data class SpeedTestResult(
 class SpeedTestService(
     downloadTimeoutMs: Long = AppConfig.AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS,
     uploadTimeoutMs: Long = AppConfig.AUTO_TEST_BANDWIDTH_UPLOAD_TIMEOUT_MS,
-    proxy: Proxy? = null
+    proxy: Proxy? = null,
+    private val downloadUrl: String = AppConfig.SPEED_TEST_DOWNLOAD_URL
 ) {
 
     private val downloadClient = NetworkClient.withUserAgent(OkHttpClient.Builder())
@@ -70,7 +71,7 @@ class SpeedTestService(
     ): SpeedTestResult {
         isCancelled = false
         // 使用随机查询参数以避免缓存
-        val url = "${AppConfig.SPEED_TEST_DOWNLOAD_URL}?bytes=$size&r=${System.currentTimeMillis()}"
+        val url = downloadUrl
         val request = Request.Builder().url(url).build()
 
         Log.d(TAG, "Starting download test: url=$url, size=$size")

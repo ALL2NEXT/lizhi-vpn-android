@@ -39,6 +39,10 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val targetProxyMode = proxyMode.opposite()
+        val switchModeIntent = serviceAction(3, BoxVpnService.ACTION_SET_PROXY_MODE) {
+            putExtra(BoxVpnService.EXTRA_PROXY_MODE, targetProxyMode.name)
+        }
         val stopIntent = serviceAction(1, BoxVpnService.ACTION_STOP)
         val restartIntent = serviceAction(2, BoxVpnService.ACTION_RESTART)
         return NotificationCompat.Builder(service, AppConfig.NOTIFICATION_CHANNEL_ID)
@@ -46,6 +50,11 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
             .setContentText("分流规则：${proxyMode.notificationLabel()}")
             .setSmallIcon(R.drawable.ic_vpn_key)
             .setContentIntent(contentIntent)
+            .addAction(
+                R.drawable.ic_vpn_key,
+                "切换到${targetProxyMode.notificationLabel()}",
+                switchModeIntent
+            )
             .addAction(R.drawable.ic_vpn_key, "断开连接", stopIntent)
             .addAction(R.drawable.ic_vpn_key, "重置连接", restartIntent)
             .setOngoing(true)
@@ -60,13 +69,25 @@ internal class VpnNotificationFactory(private val service: BoxVpnService) {
             .notify(AppConfig.NOTIFICATION_ID, build(nodeName, proxyMode))
     }
 
-    private fun serviceAction(requestCode: Int, action: String): PendingIntent =
+    private fun serviceAction(
+        requestCode: Int,
+        action: String,
+        configure: Intent.() -> Unit = {}
+    ): PendingIntent =
         PendingIntent.getService(
             service,
             requestCode,
-            Intent(service, BoxVpnService::class.java).apply { this.action = action },
+            Intent(service, BoxVpnService::class.java).apply {
+                this.action = action
+                configure()
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+
+    private fun ProxyMode.opposite(): ProxyMode = when (this) {
+        ProxyMode.GLOBAL -> ProxyMode.SMART
+        ProxyMode.SMART -> ProxyMode.GLOBAL
+    }
 
     private fun ProxyMode.notificationLabel(): String = when (this) {
         ProxyMode.GLOBAL -> "全局"

@@ -26,15 +26,14 @@ class SingBoxBandwidthTestManager(
     fun test(
         executable: Path,
         nodes: List<DesktopNode>,
-        settings: DesktopSettings,
-        sizeMb: Int = 5
+        settings: DesktopSettings
     ): Map<String, Float> {
         if (nodes.isEmpty()) return emptyMap()
         Files.createDirectories(stateRoot)
         val executor = Executors.newFixedThreadPool(settings.bandwidthTestConcurrency.coerceIn(1, 3))
         return try {
             executor.invokeAll(nodes.map { node ->
-                Callable { node.id to testNode(executable, node, settings, sizeMb) }
+                Callable { node.id to testNode(executable, node, settings) }
             }).map { it.get() }.toMap()
         } finally {
             executor.shutdownNow()
@@ -44,8 +43,7 @@ class SingBoxBandwidthTestManager(
     private fun testNode(
         executable: Path,
         node: DesktopNode,
-        settings: DesktopSettings,
-        sizeMb: Int
+        settings: DesktopSettings
     ): Float {
         val directory = stateRoot.resolve(node.id)
         Files.createDirectories(directory)
@@ -85,16 +83,23 @@ class SingBoxBandwidthTestManager(
         return try {
             Thread.sleep(650)
             if (!process.isAlive) return 0f
-            downloadThroughProxy(proxyPort, settings.speedTestTimeoutMs, sizeMb)
+            downloadThroughProxy(
+                proxyPort,
+                settings.speedTestTimeoutMs,
+                settings.speedTestDownloadUrl
+            )
         } finally {
             process.destroy()
             if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly()
         }
     }
 
-    private fun downloadThroughProxy(proxyPort: Int, timeoutMs: Int, sizeMb: Int): Float {
-        val byteLimit = sizeMb.coerceAtLeast(1).toLong() * 1_000_000L
-        val url = URL("https://speed.cloudflare.com/__down?bytes=$byteLimit&r=${System.nanoTime()}")
+    private fun downloadThroughProxy(
+        proxyPort: Int,
+        timeoutMs: Int,
+        downloadUrl: String
+    ): Float {
+        val url = URL(downloadUrl)
         val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", proxyPort))
         val connection = url.openConnection(proxy) as HttpURLConnection
         val timeout = timeoutMs.coerceAtLeast(1_000)
@@ -106,8 +111,8 @@ class SingBoxBandwidthTestManager(
             connection.inputStream.use { input ->
                 val buffer = ByteArray(32 * 1024)
                 var received = 0L
-                while (received < byteLimit) {
-                    val count = input.read(buffer, 0, minOf(buffer.size.toLong(), byteLimit - received).toInt())
+                while (true) {
+                    val count = input.read(buffer)
                     if (count < 0) break
                     received += count
                 }

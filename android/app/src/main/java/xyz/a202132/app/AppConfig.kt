@@ -2,6 +2,7 @@ package xyz.a202132.app
 
 import android.content.Context
 import java.net.URI
+import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.UrlTestTargets
 
 /**
@@ -84,7 +85,6 @@ object AppConfig {
     const val SMART_CONNECT_TCPING_PERCENT = 100
     const val SMART_CONNECT_URL_TEST_PERCENT = 50
     const val SMART_CONNECT_SPEED_TEST_PERCENT = 50
-    const val SMART_CONNECT_SPEED_TEST_SIZE_MB = 5
     const val SMART_CONNECT_FULL_TEST_ENABLED = false
 
     // 公共节点池优化：当前订阅组节点数超过阈值时提高智能连接前两阶段的并发。
@@ -123,8 +123,8 @@ object AppConfig {
     const val NOTIFICATION_CHANNEL_ID = "vpn_service"
     const val NOTIFICATION_ID = 1
 
-    // Speed Test - Cloudflare 网速测试
-    const val SPEED_TEST_DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
+    // Bandwidth test
+    const val SPEED_TEST_DOWNLOAD_URL = BandwidthTestTargets.DEFAULT_URL
     const val SPEED_TEST_UPLOAD_URL = "https://speed.cloudflare.com/__up"
     const val USTC_SPEED_TEST_URL = "https://test.ustc.edu.cn/"
     const val NJU_SPEED_TEST_URL = "https://test.nju.edu.cn/"

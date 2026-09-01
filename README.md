@@ -66,7 +66,7 @@ backend/    # Cloudflare Worker 后台
 - 🔧 **三点工具菜单**：主界面右上角“三点”菜单提供中科大、南大、奈飞、Google 四个网页测速入口
 - 🌐 **URL Test 测试**：通过启动临时无头 sing-box 实例进行 HTTP 握手延迟测试，无需连接 VPN 即可测试所有节点真实连通性
 - 🧩 **测试模式系统**：内置 `日常模式`（URL Test 延迟优先）与 `下载模式`（下行带宽优先，默认 10MB），支持自定义模式保存/删除
-- 🤖 **智能连接**：依次执行 TCPing、204 URL Test 和 5MB 下载测速，按测试结果自动连接最佳节点
+- 🤖 **智能连接**：依次执行 TCPing、204 URL Test 和带宽测速，按测试结果自动连接最佳节点
 - 🌐 **网页测速入口**：支持中科大测速、南大测速、奈飞测速和 Google 测速，分别标注墙内/墙外线路
 - 📡 **TCPing 测试**：直接 TCP 连接测试节点可达性和延迟
 - 🗑️ **清理不合格节点**：一键隐藏超时/不可用/不达标节点（UI 过滤，不删除数据库数据）
@@ -190,8 +190,8 @@ object AppConfig {
     const val NOTIFICATION_CHANNEL_ID = "vpn_service"
     const val NOTIFICATION_ID = 1
 
-    // 速度测试 (Cloudflare)
-    const val SPEED_TEST_DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
+    // 带宽测速默认地址 (Cloudflare)
+    const val SPEED_TEST_DOWNLOAD_URL = "https://speed.cloudflare.com/__down?bytes=5000000"
     const val SPEED_TEST_UPLOAD_URL = "https://speed.cloudflare.com/__up"
     const val AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS = 5000L  // 单次下载带宽测试超时
     const val AUTO_TEST_BANDWIDTH_UPLOAD_TIMEOUT_MS = 30000L   // 单次上传带宽测试超时
@@ -392,16 +392,17 @@ android/app/src/main/
 
 ### 其他配置
 
-“基础设定”页面集中管理网络开关、204 测速地址、测试超时、并发数和 VPN 参数；智能连接比例与 Hysteria2 带宽位于“特色功能”。IPv6 路由和预设地址点击后立即生效，自定义 204 地址校验并保存后生效。
+“基础设定”页面集中管理网络开关、204 测速地址、带宽测速地址、测试超时、并发数和 VPN 参数；智能连接比例与 Hysteria2 带宽位于“特色功能”。IPv6 路由和预设地址点击后立即生效，自定义地址校验并保存后生效。
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | IPv6 路由 | 禁用 | 可选仅 / 优先 / 启用 / 禁用，位于其他配置顶部 |
 | 记住上次选择的节点 | 开启 | 退出 APP 前选择的节点会在下次启动后恢复 |
 | 204 测速地址 | Google generate_204 | 可输入自定义 HTTP(S) 地址，或从 Cloudflare、Google、Gstatic、Google Play、Android 等 7 个预设中选择 |
+| 带宽测速地址 | Cloudflare __down?bytes=5000000 | 可输入完整的自定义 HTTP(S) 地址，供智能连接带宽测速使用 |
 | TCPing 节点比例 | 100% | 智能连接第一阶段候选比例，默认测试全部节点 |
 | URL Test 候选比例 | 50% | 智能连接第二阶段从 TCPing 结果中选取的比例 |
-| 5MB 测速候选比例 | 50% | 智能连接第三阶段从 URL Test 结果中选取的比例 |
+| 带宽测速候选比例 | 50% | 智能连接第三阶段从 URL Test 结果中选取的比例 |
 | Hysteria 最大带宽 (Up/Dw) | 1000/1000 Mbps | 仅对 Hysteria2 节点生效；输入 0 表示不设置，修改后下次连接生效 |
 | TCPing 超时 | 3000ms | 最低 500ms |
 | URL Test 超时 | 3000ms | 最低 500ms |

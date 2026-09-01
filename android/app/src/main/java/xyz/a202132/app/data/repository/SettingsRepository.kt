@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
+import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
@@ -69,6 +70,7 @@ class SettingsRepository(private val context: Context) {
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         private val URL_TEST_TIMEOUT_MS = longPreferencesKey("url_test_timeout_ms")
         private val URL_TEST_URL = stringPreferencesKey("url_test_url")
+        private val SPEED_TEST_DOWNLOAD_URL = stringPreferencesKey("speed_test_download_url")
         private val SPEED_TEST_DOWNLOAD_TIMEOUT_MS = longPreferencesKey("speed_test_download_timeout_ms")
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val URL_TEST_CONCURRENCY = intPreferencesKey("url_test_concurrency")
@@ -493,6 +495,18 @@ class SettingsRepository(private val context: Context) {
         val normalized = UrlTestTargets.normalize(value) ?: return
         context.dataStore.edit { preferences ->
             preferences[URL_TEST_URL] = normalized
+        }
+    }
+
+    val speedTestDownloadUrl: Flow<String> = context.dataStore.data.map { preferences ->
+        BandwidthTestTargets.normalize(preferences[SPEED_TEST_DOWNLOAD_URL])
+            ?: xyz.a202132.app.AppConfig.SPEED_TEST_DOWNLOAD_URL
+    }
+
+    suspend fun setSpeedTestDownloadUrl(value: String) {
+        val normalized = BandwidthTestTargets.normalize(value) ?: return
+        context.dataStore.edit { preferences ->
+            preferences[SPEED_TEST_DOWNLOAD_URL] = normalized
         }
     }
 

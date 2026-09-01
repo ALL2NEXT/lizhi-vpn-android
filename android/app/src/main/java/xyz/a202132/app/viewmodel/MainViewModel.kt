@@ -271,6 +271,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
     val urlTestTimeoutMs = settingsRepository.urlTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_TIMEOUT)
     val urlTestUrl = settingsRepository.urlTestUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_URL)
+    val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
     val speedTestDownloadTimeoutMs = settingsRepository.speedTestDownloadTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS)
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_CONCURRENCY)
     val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_CONCURRENCY)
@@ -434,7 +435,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 智能连接：按设置取得候选范围，再依次执行 TCPing、URL Test 和 5MB 下载测速。 */
+    /** 智能连接：按设置取得候选范围，再依次执行 TCPing、URL Test 和带宽测速。 */
     fun startSmartConnection() {
         viewModelScope.launch {
             if (GlobalTestExecution.isFetching()) {
@@ -514,11 +515,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val speedTestNodes = takeTopPercent(urlTestCandidates, smartConnectSpeedTestPercent.value)
                 val speedResults = mutableListOf<Pair<Node, Float>>()
                 speedTestNodes.forEachIndexed { index, node ->
-                    _testingLabel.value = "智能连接：5MB 测速 (${index + 1}/${speedTestNodes.size})"
-                    val speedMbps = testNodeDownloadBandwidthMbps(
-                        node,
-                        AppConfig.SMART_CONNECT_SPEED_TEST_SIZE_MB
-                    )
+                    _testingLabel.value = "智能连接：带宽测速 (${index + 1}/${speedTestNodes.size})"
+                    val speedMbps = testNodeDownloadBandwidthMbps(node)
                     nodeDao().updateDownloadMbps(node.id, speedMbps)
                     speedResults += node to speedMbps
                 }
@@ -653,6 +651,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setSpeedTestDownloadUrl(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setSpeedTestDownloadUrl(value)
+        }
+    }
+
     fun setSpeedTestDownloadTimeoutMs(value: Long) {
         viewModelScope.launch {
             settingsRepository.setSpeedTestDownloadTimeoutMs(value)
@@ -777,7 +781,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val service = SpeedTestService(
                     downloadTimeoutMs = 25_000L,
-                    uploadTimeoutMs = 25_000L
+                    uploadTimeoutMs = 25_000L,
+                    downloadUrl = speedTestDownloadUrl.value
                 )
                 val testSize = 10_000_000L
                 val downloadResult = service.startDownloadTest(testSize) { _, _ -> }
@@ -1848,10 +1853,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return Result.failure(second.exceptionOrNull() ?: first.exceptionOrNull() ?: IllegalStateException("${requestName}请求失败"))
     }
 
-    private suspend fun testNodeDownloadBandwidthMbps(node: Node, sizeMb: Int): Float =
+    private suspend fun testNodeDownloadBandwidthMbps(node: Node): Float =
         bandwidthTester.test(
             node,
-            sizeMb,
+            speedTestDownloadUrl.value,
             speedTestDownloadTimeoutMs.value,
             hysteriaUpMbps.value,
             hysteriaDownMbps.value,

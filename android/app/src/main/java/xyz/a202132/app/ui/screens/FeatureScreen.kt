@@ -168,7 +168,7 @@ fun FeatureScreen(
                     fontSize = 13.sp
                 )
                 FeatureSwitchRow(
-                    label = "公共节点池优化",
+                    label = "聚合订阅优化",
                     checked = publicNodePoolOptimizationEnabled,
                     onCheckedChange = viewModel::setPublicNodePoolOptimizationEnabled
                 )
@@ -200,7 +200,7 @@ fun FeatureScreen(
                     }
                 )
                 FeatureNumberField(
-                    label = "5MB 测速候选比例 (%)",
+                    label = "带宽测速候选比例 (%)",
                     value = speedTestPercentInput,
                     onValueChange = {
                         speedTestPercentInput = it.filter(Char::isDigit)
