@@ -13,14 +13,7 @@ object UrlTestTargets {
     val PRESETS = listOf(
         UrlTestPreset("Cloudflare", "https://cp.cloudflare.com/generate_204"),
         UrlTestPreset("Google", DEFAULT_URL),
-        UrlTestPreset(
-            "Google Connectivity Check",
-            "https://connectivitycheck.gstatic.com/generate_204"
-        ),
-        UrlTestPreset("Google Clients 3", "https://clients3.google.com/generate_204"),
-        UrlTestPreset("Google Static", "https://www.gstatic.com/generate_204"),
-        UrlTestPreset("Google Play", "https://play.googleapis.com/generate_204"),
-        UrlTestPreset("Android", "https://www.android.com/generate_204")
+        UrlTestPreset("Google Static", "https://www.gstatic.com/generate_204")
     )
 
     /** Accepts an HTTP(S) URL, adding HTTPS when the scheme is omitted. */

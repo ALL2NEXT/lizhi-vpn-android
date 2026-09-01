@@ -6,12 +6,13 @@ import org.junit.Test
 
 class BandwidthTestTargetsTest {
     @Test
-    fun `contains bandwidth presets from multiple providers`() {
-        assertEquals(BandwidthTestTargets.DEFAULT_URL, BandwidthTestTargets.PRESETS.first().url)
-        assertTrue(BandwidthTestTargets.PRESETS.size >= 4)
+    fun `contains only Cloudflare 5 and 25 MB presets`() {
         assertEquals(
-            BandwidthTestTargets.PRESETS.size,
-            BandwidthTestTargets.PRESETS.map(BandwidthTestPreset::url).toSet().size
+            listOf(
+                BandwidthTestTargets.DEFAULT_URL,
+                "https://speed.cloudflare.com/__down?bytes=25000000"
+            ),
+            BandwidthTestTargets.PRESETS.map(BandwidthTestPreset::url)
         )
         assertTrue(
             BandwidthTestTargets.PRESETS.all { preset ->

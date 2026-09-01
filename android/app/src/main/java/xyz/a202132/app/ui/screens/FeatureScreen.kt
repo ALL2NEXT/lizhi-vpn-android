@@ -214,63 +214,6 @@ fun FeatureScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             FeatureSection(
-                title = "节点标签显示",
-                collapsible = true,
-                initiallyExpanded = false
-            ) {
-                Text(
-                    text = "协议、安全层、传输方式和核心可独立显示，默认全部关闭；全部关闭后隐藏节点标签。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-                FeatureSwitchRow(
-                    label = "显示协议",
-                    checked = nodeDisplaySettings.showProtocol,
-                    onCheckedChange = viewModel::setNodeLabelShowProtocol
-                )
-                FeatureSwitchRow(
-                    label = "显示安全层",
-                    checked = nodeDisplaySettings.showSecurity,
-                    onCheckedChange = viewModel::setNodeLabelShowSecurity
-                )
-                FeatureSwitchRow(
-                    label = "显示传输方式",
-                    checked = nodeDisplaySettings.showTransport,
-                    onCheckedChange = viewModel::setNodeLabelShowTransport
-                )
-                FeatureSwitchRow(
-                    label = "显示核心",
-                    checked = nodeDisplaySettings.showCore,
-                    onCheckedChange = viewModel::setNodeLabelShowCore
-                )
-            }
-
-            FeatureSection(
-                title = "协议核心",
-                collapsible = true,
-                initiallyExpanded = false
-            ) {
-                Text(
-                    text = "vless，vmess适用于xray生态，带有自定义证书，ech等特殊设置优先使用xray，其余使用singbox",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-                ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
-                    ProtocolCoreRow(
-                        label = nodeType.displayName(),
-                        selectedCore = protocolCoreSettings.coreFor(nodeType),
-                        xrayAvailable = nodeType in ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS,
-                        onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
-                    )
-                }
-                Text(
-                    text = "内置 Xray ${BuildConfig.XRAY_CORE_VERSION}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
-
-            FeatureSection(
                 title = "智能连接"
             ) {
                 FeatureSwitchRow(
@@ -542,6 +485,63 @@ fun FeatureScreen(
                         Text(if (isHysteriaBandwidthAdapting) "测试中..." else "自适应")
                     }
                 }
+            }
+
+            FeatureSection(
+                title = "节点标签显示",
+                collapsible = true,
+                initiallyExpanded = false
+            ) {
+                Text(
+                    text = "协议、安全层、传输方式和核心可独立显示，默认全部关闭；全部关闭后隐藏节点标签。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                FeatureSwitchRow(
+                    label = "显示协议",
+                    checked = nodeDisplaySettings.showProtocol,
+                    onCheckedChange = viewModel::setNodeLabelShowProtocol
+                )
+                FeatureSwitchRow(
+                    label = "显示安全层",
+                    checked = nodeDisplaySettings.showSecurity,
+                    onCheckedChange = viewModel::setNodeLabelShowSecurity
+                )
+                FeatureSwitchRow(
+                    label = "显示传输方式",
+                    checked = nodeDisplaySettings.showTransport,
+                    onCheckedChange = viewModel::setNodeLabelShowTransport
+                )
+                FeatureSwitchRow(
+                    label = "显示核心",
+                    checked = nodeDisplaySettings.showCore,
+                    onCheckedChange = viewModel::setNodeLabelShowCore
+                )
+            }
+
+            FeatureSection(
+                title = "协议核心",
+                collapsible = true,
+                initiallyExpanded = false
+            ) {
+                Text(
+                    text = "vless，vmess适用于xray生态，带有自定义证书，ech等特殊设置优先使用xray，其余使用singbox",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
+                    ProtocolCoreRow(
+                        label = nodeType.displayName(),
+                        selectedCore = protocolCoreSettings.coreFor(nodeType),
+                        xrayAvailable = nodeType in ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS,
+                        onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
+                    )
+                }
+                Text(
+                    text = "内置 Xray ${BuildConfig.XRAY_CORE_VERSION}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
             }
         }
     }

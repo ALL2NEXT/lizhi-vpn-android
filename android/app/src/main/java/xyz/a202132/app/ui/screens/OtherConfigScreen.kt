@@ -292,7 +292,7 @@ fun OtherConfigScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "预设来自不同服务商，实际可用性和速度可能因地区而异，也可以手动填写完整 URL。",
+                    text = "内置 Cloudflare 5 MB 和 25 MB 两个预设，也可以手动填写完整 URL。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -397,8 +397,8 @@ android/app/src/main/
 |--------|--------|------|
 | IPv6 路由 | 禁用 | 可选仅 / 优先 / 启用 / 禁用，位于其他配置顶部 |
 | 记住上次选择的节点 | 开启 | 退出 APP 前选择的节点会在下次启动后恢复 |
-| 204 测速地址 | Google generate_204 | 可输入自定义 HTTP(S) 地址，或从 Cloudflare、Google、Gstatic、Google Play、Android 等 7 个预设中选择 |
-| 带宽测速地址 | Cloudflare __down?bytes=5000000 | 可输入完整的自定义 HTTP(S) 地址，或从 Cloudflare、OVH、ThinkBroadband、Hetzner 预设中选择，供智能连接带宽测速使用 |
+| 204 测速地址 | Google generate_204 | 可输入自定义 HTTP(S) 地址，或从 Cloudflare、Google、Google Static 三个预设中选择 |
+| 带宽测速地址 | Cloudflare __down?bytes=5000000 | 可输入完整的自定义 HTTP(S) 地址，或选择 Cloudflare 5 MB、25 MB 预设，供智能连接带宽测速使用 |
 | TCPing 节点比例 | 100% | 智能连接第一阶段候选比例，默认测试全部节点 |
 | URL Test 候选比例 | 50% | 智能连接第二阶段从 TCPing 结果中选取的比例 |
 | 带宽测速候选比例 | 50% | 智能连接第三阶段从 URL Test 结果中选取的比例 |
