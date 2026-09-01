@@ -55,67 +55,20 @@ fun OtherConfigScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val tcpingTestTimeoutMs by viewModel.tcpingTestTimeoutMs.collectAsStateWithLifecycle()
-    val urlTestTimeoutMs by viewModel.urlTestTimeoutMs.collectAsStateWithLifecycle()
     val urlTestUrl by viewModel.urlTestUrl.collectAsStateWithLifecycle()
     val speedTestDownloadUrl by viewModel.speedTestDownloadUrl.collectAsStateWithLifecycle()
-    val speedTestDurationMs by viewModel.speedTestDurationMs.collectAsStateWithLifecycle()
-    val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsStateWithLifecycle()
-    val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsStateWithLifecycle()
-    val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsStateWithLifecycle()
-    val publicNodePoolNodeThreshold by viewModel.publicNodePoolNodeThreshold.collectAsStateWithLifecycle()
-    val publicNodePoolTcpingConcurrency by
-        viewModel.publicNodePoolTcpingConcurrency.collectAsStateWithLifecycle()
-    val publicNodePoolUrlTestConcurrency by
-        viewModel.publicNodePoolUrlTestConcurrency.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
 
-    var tcpingTimeoutInput by remember(tcpingTestTimeoutMs) { mutableStateOf(tcpingTestTimeoutMs.toString()) }
-    var urlTestTimeoutInput by remember(urlTestTimeoutMs) { mutableStateOf(urlTestTimeoutMs.toString()) }
     var urlTestUrlInput by remember(urlTestUrl) { mutableStateOf(urlTestUrl) }
     var showUrlTestPresets by remember { mutableStateOf(false) }
     var speedTestDownloadUrlInput by remember(speedTestDownloadUrl) { mutableStateOf(speedTestDownloadUrl) }
     var showBandwidthPresets by remember { mutableStateOf(false) }
-    var speedTestDurationInput by remember(speedTestDurationMs) { mutableStateOf(speedTestDurationMs.toString()) }
-    var tcpingConcurrencyInput by remember(tcpingConcurrency) { mutableStateOf(tcpingConcurrency.toString()) }
-    var urlTestConcurrencyInput by remember(urlTestConcurrency) { mutableStateOf(urlTestConcurrency.toString()) }
-    var bandwidthTestConcurrencyInput by remember(bandwidthTestConcurrency) { mutableStateOf(bandwidthTestConcurrency.toString()) }
-    var publicNodePoolThresholdInput by remember(publicNodePoolNodeThreshold) {
-        mutableStateOf(publicNodePoolNodeThreshold.toString())
-    }
-    var publicNodePoolTcpingConcurrencyInput by remember(publicNodePoolTcpingConcurrency) {
-        mutableStateOf(publicNodePoolTcpingConcurrency.toString())
-    }
-    var publicNodePoolUrlTestConcurrencyInput by remember(publicNodePoolUrlTestConcurrency) {
-        mutableStateOf(publicNodePoolUrlTestConcurrency.toString())
-    }
-    var concurrencySettingsType by remember { mutableStateOf(0) }
 
-    LaunchedEffect(
-        tcpingTestTimeoutMs,
-        urlTestTimeoutMs,
-        speedTestDownloadUrl,
-        speedTestDurationMs,
-        tcpingConcurrency,
-        urlTestConcurrency,
-        bandwidthTestConcurrency,
-        publicNodePoolNodeThreshold,
-        publicNodePoolTcpingConcurrency,
-        publicNodePoolUrlTestConcurrency
-    ) {
-        tcpingTimeoutInput = tcpingTestTimeoutMs.toString()
-        urlTestTimeoutInput = urlTestTimeoutMs.toString()
+    LaunchedEffect(speedTestDownloadUrl) {
         speedTestDownloadUrlInput = speedTestDownloadUrl
-        speedTestDurationInput = speedTestDurationMs.toString()
-        tcpingConcurrencyInput = tcpingConcurrency.toString()
-        urlTestConcurrencyInput = urlTestConcurrency.toString()
-        bandwidthTestConcurrencyInput = bandwidthTestConcurrency.toString()
-        publicNodePoolThresholdInput = publicNodePoolNodeThreshold.toString()
-        publicNodePoolTcpingConcurrencyInput = publicNodePoolTcpingConcurrency.toString()
-        publicNodePoolUrlTestConcurrencyInput = publicNodePoolUrlTestConcurrency.toString()
     }
 
     AppScreenScaffold(
@@ -345,125 +298,6 @@ fun OtherConfigScreen(
                 )
             }
 
-            OtherConfigSection(
-                title = "测试超时"
-            ) {
-                OtherConfigNumberField(
-                    label = "TCPing 超时",
-                    value = tcpingTimeoutInput,
-                    onValueChange = {
-                        tcpingTimeoutInput = it.filter(Char::isDigit)
-                        it.toLongOrNull()?.let { value ->
-                            viewModel.setTcpingTestTimeoutMs(value.coerceAtLeast(500L))
-                        }
-                    }
-                )
-                OtherConfigNumberField(
-                    label = "URL Test 超时",
-                    value = urlTestTimeoutInput,
-                    onValueChange = {
-                        urlTestTimeoutInput = it.filter(Char::isDigit)
-                        it.toLongOrNull()?.let { value ->
-                            viewModel.setUrlTestTimeoutMs(value.coerceAtLeast(500L))
-                        }
-                    }
-                )
-                OtherConfigNumberField(
-                    label = "带宽测试时长（毫秒）",
-                    value = speedTestDurationInput,
-                    onValueChange = {
-                        speedTestDurationInput = it.filter(Char::isDigit)
-                        it.toLongOrNull()?.let { value ->
-                            viewModel.setSpeedTestDurationMs(value.coerceAtLeast(1_000L))
-                        }
-                    }
-                )
-            }
-
-            OtherConfigSection(
-                title = "并发设置"
-            ) {
-                MultiPositionSwitch(
-                    options = listOf("常规订阅", "聚合订阅"),
-                    selectedIndex = concurrencySettingsType,
-                    onOptionSelected = { concurrencySettingsType = it }
-                )
-
-                if (concurrencySettingsType == 0) {
-                    Text(
-                        text = "用于普通订阅组及手动节点测速。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    OtherConfigNumberField(
-                        label = "TCPing 并发数",
-                        value = tcpingConcurrencyInput,
-                        onValueChange = {
-                            tcpingConcurrencyInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setTcpingConcurrency(value.coerceIn(1, 128))
-                            }
-                        }
-                    )
-                    OtherConfigNumberField(
-                        label = "URL Test 并发数",
-                        value = urlTestConcurrencyInput,
-                        onValueChange = {
-                            urlTestConcurrencyInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setUrlTestConcurrency(value.coerceIn(1, 128))
-                            }
-                        }
-                    )
-                    OtherConfigNumberField(
-                        label = "带宽测试并发数",
-                        value = bandwidthTestConcurrencyInput,
-                        onValueChange = {
-                            bandwidthTestConcurrencyInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setBandwidthTestConcurrency(value.coerceIn(1, 3))
-                            }
-                        }
-                    )
-                } else {
-                    Text(
-                        text = "仅用于特色功能中的公共节点池智能连接测速；节点数必须大于判定阈值。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    OtherConfigNumberField(
-                        label = "公共池判定阈值（节点数）",
-                        value = publicNodePoolThresholdInput,
-                        onValueChange = {
-                            publicNodePoolThresholdInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setPublicNodePoolNodeThreshold(value.coerceIn(1, 10_000))
-                            }
-                        }
-                    )
-                    OtherConfigNumberField(
-                        label = "公共池 TCPing 并发数",
-                        value = publicNodePoolTcpingConcurrencyInput,
-                        onValueChange = {
-                            publicNodePoolTcpingConcurrencyInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setPublicNodePoolTcpingConcurrency(value.coerceIn(1, 512))
-                            }
-                        }
-                    )
-                    OtherConfigNumberField(
-                        label = "公共池 URL Test 并发数",
-                        value = publicNodePoolUrlTestConcurrencyInput,
-                        onValueChange = {
-                            publicNodePoolUrlTestConcurrencyInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setPublicNodePoolUrlTestConcurrency(value.coerceIn(1, 128))
-                            }
-                        }
-                    )
-                }
-
-            }
         }
     }
 }
@@ -490,7 +324,7 @@ private fun OtherConfigSection(
 }
 
 @Composable
-private fun MultiPositionSwitch(
+internal fun MultiPositionSwitch(
     options: List<String>,
     selectedIndex: Int,
     onOptionSelected: (Int) -> Unit
@@ -559,22 +393,3 @@ private fun visibleSwitchColors() = SwitchDefaults.colors(
     disabledUncheckedTrackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
     disabledUncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
 )
-
-@Composable
-private fun OtherConfigNumberField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
-        label = { Text(label) },
-        enabled = enabled,
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-    )
-}

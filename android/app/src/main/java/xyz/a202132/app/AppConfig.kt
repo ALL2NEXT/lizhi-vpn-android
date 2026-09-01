@@ -92,6 +92,7 @@ object AppConfig {
     const val PUBLIC_NODE_POOL_NODE_THRESHOLD = 100
     const val PUBLIC_NODE_POOL_TCPING_CONCURRENCY = 256
     const val PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY = 32
+    const val PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY = 1
 
     // VPN 断线恢复，默认关闭，由特色功能页面控制
     const val DISCONNECT_RECOVERY_ENABLED = false
@@ -110,6 +111,7 @@ object AppConfig {
     // Concurrency
     const val TCPING_CONCURRENCY = 16 // TCPing并发数
     const val URL_TEST_CONCURRENCY = 10 // URL Test并发数
+    const val BANDWIDTH_TEST_CONCURRENCY = 1 // 带宽测速并发数
     
     // VPN
     const val VPN_MTU = 9000 // 固定核心 MTU，不提供用户配置入口

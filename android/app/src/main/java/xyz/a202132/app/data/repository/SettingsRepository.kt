@@ -87,10 +87,24 @@ class SettingsRepository(private val context: Context) {
             booleanPreferencesKey("public_node_pool_optimization_enabled")
         private val PUBLIC_NODE_POOL_NODE_THRESHOLD =
             intPreferencesKey("public_node_pool_node_threshold")
+        private val PUBLIC_NODE_POOL_TCPING_PERCENT =
+            intPreferencesKey("public_node_pool_tcping_percent")
+        private val PUBLIC_NODE_POOL_URL_TEST_PERCENT =
+            intPreferencesKey("public_node_pool_url_test_percent")
+        private val PUBLIC_NODE_POOL_SPEED_TEST_PERCENT =
+            intPreferencesKey("public_node_pool_speed_test_percent")
+        private val PUBLIC_NODE_POOL_TCPING_TEST_TIMEOUT_MS =
+            longPreferencesKey("public_node_pool_tcping_test_timeout_ms")
+        private val PUBLIC_NODE_POOL_URL_TEST_TIMEOUT_MS =
+            longPreferencesKey("public_node_pool_url_test_timeout_ms")
+        private val PUBLIC_NODE_POOL_SPEED_TEST_DURATION_MS =
+            longPreferencesKey("public_node_pool_speed_test_duration_ms")
         private val PUBLIC_NODE_POOL_TCPING_CONCURRENCY =
             intPreferencesKey("public_node_pool_tcping_concurrency")
         private val PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY =
             intPreferencesKey("public_node_pool_url_test_concurrency")
+        private val PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY =
+            intPreferencesKey("public_node_pool_bandwidth_test_concurrency")
         private val DISCONNECT_RECOVERY_ENABLED = booleanPreferencesKey("disconnect_recovery_enabled")
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
@@ -548,7 +562,8 @@ class SettingsRepository(private val context: Context) {
     }
 
     val bandwidthTestConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[BANDWIDTH_TEST_CONCURRENCY] ?: 1).coerceIn(1, 3)
+        (preferences[BANDWIDTH_TEST_CONCURRENCY]
+            ?: xyz.a202132.app.AppConfig.BANDWIDTH_TEST_CONCURRENCY).coerceIn(1, 3)
     }
 
     suspend fun setBandwidthTestConcurrency(value: Int) {
@@ -633,6 +648,72 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    val publicNodePoolTcpingPercent: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_TCPING_PERCENT]
+            ?: xyz.a202132.app.AppConfig.SMART_CONNECT_TCPING_PERCENT).coerceIn(1, 100)
+    }
+
+    suspend fun setPublicNodePoolTcpingPercent(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_TCPING_PERCENT] = value.coerceIn(1, 100)
+        }
+    }
+
+    val publicNodePoolUrlTestPercent: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_URL_TEST_PERCENT]
+            ?: xyz.a202132.app.AppConfig.SMART_CONNECT_URL_TEST_PERCENT).coerceIn(1, 100)
+    }
+
+    suspend fun setPublicNodePoolUrlTestPercent(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_URL_TEST_PERCENT] = value.coerceIn(1, 100)
+        }
+    }
+
+    val publicNodePoolSpeedTestPercent: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_SPEED_TEST_PERCENT]
+            ?: xyz.a202132.app.AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT).coerceIn(1, 100)
+    }
+
+    suspend fun setPublicNodePoolSpeedTestPercent(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_SPEED_TEST_PERCENT] = value.coerceIn(1, 100)
+        }
+    }
+
+    val publicNodePoolTcpingTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_TCPING_TEST_TIMEOUT_MS]
+            ?: xyz.a202132.app.AppConfig.TCPING_TEST_TIMEOUT).coerceAtLeast(500L)
+    }
+
+    suspend fun setPublicNodePoolTcpingTestTimeoutMs(value: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_TCPING_TEST_TIMEOUT_MS] = value.coerceAtLeast(500L)
+        }
+    }
+
+    val publicNodePoolUrlTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_URL_TEST_TIMEOUT_MS]
+            ?: xyz.a202132.app.AppConfig.URL_TEST_TIMEOUT).coerceAtLeast(500L)
+    }
+
+    suspend fun setPublicNodePoolUrlTestTimeoutMs(value: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_URL_TEST_TIMEOUT_MS] = value.coerceAtLeast(500L)
+        }
+    }
+
+    val publicNodePoolSpeedTestDurationMs: Flow<Long> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_SPEED_TEST_DURATION_MS]
+            ?: xyz.a202132.app.AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS).coerceAtLeast(1_000L)
+    }
+
+    suspend fun setPublicNodePoolSpeedTestDurationMs(value: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_SPEED_TEST_DURATION_MS] = value.coerceAtLeast(1_000L)
+        }
+    }
+
     val publicNodePoolTcpingConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
         (preferences[PUBLIC_NODE_POOL_TCPING_CONCURRENCY]
             ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_TCPING_CONCURRENCY).coerceIn(1, 512)
@@ -652,6 +733,17 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPublicNodePoolUrlTestConcurrency(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY] = value.coerceIn(1, 128)
+        }
+    }
+
+    val publicNodePoolBandwidthTestConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY]
+            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY).coerceIn(1, 3)
+    }
+
+    suspend fun setPublicNodePoolBandwidthTestConcurrency(value: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY] = value.coerceIn(1, 3)
         }
     }
 

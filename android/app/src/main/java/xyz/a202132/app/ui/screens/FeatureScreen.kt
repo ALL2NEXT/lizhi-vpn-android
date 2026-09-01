@@ -3,7 +3,9 @@ package xyz.a202132.app.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,10 +52,30 @@ fun FeatureScreen(
     val publicNodePoolOptimizationEnabled by
         viewModel.publicNodePoolOptimizationEnabled.collectAsStateWithLifecycle()
     val publicNodePoolNodeThreshold by viewModel.publicNodePoolNodeThreshold.collectAsStateWithLifecycle()
+    val publicNodePoolTcpingPercent by
+        viewModel.publicNodePoolTcpingPercent.collectAsStateWithLifecycle()
+    val publicNodePoolUrlTestPercent by
+        viewModel.publicNodePoolUrlTestPercent.collectAsStateWithLifecycle()
+    val publicNodePoolSpeedTestPercent by
+        viewModel.publicNodePoolSpeedTestPercent.collectAsStateWithLifecycle()
+    val publicNodePoolTcpingTestTimeoutMs by
+        viewModel.publicNodePoolTcpingTestTimeoutMs.collectAsStateWithLifecycle()
+    val publicNodePoolUrlTestTimeoutMs by
+        viewModel.publicNodePoolUrlTestTimeoutMs.collectAsStateWithLifecycle()
+    val publicNodePoolSpeedTestDurationMs by
+        viewModel.publicNodePoolSpeedTestDurationMs.collectAsStateWithLifecycle()
     val publicNodePoolTcpingConcurrency by
         viewModel.publicNodePoolTcpingConcurrency.collectAsStateWithLifecycle()
     val publicNodePoolUrlTestConcurrency by
         viewModel.publicNodePoolUrlTestConcurrency.collectAsStateWithLifecycle()
+    val publicNodePoolBandwidthTestConcurrency by
+        viewModel.publicNodePoolBandwidthTestConcurrency.collectAsStateWithLifecycle()
+    val tcpingTestTimeoutMs by viewModel.tcpingTestTimeoutMs.collectAsStateWithLifecycle()
+    val urlTestTimeoutMs by viewModel.urlTestTimeoutMs.collectAsStateWithLifecycle()
+    val speedTestDurationMs by viewModel.speedTestDurationMs.collectAsStateWithLifecycle()
+    val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsStateWithLifecycle()
+    val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsStateWithLifecycle()
+    val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsStateWithLifecycle()
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
@@ -70,6 +93,56 @@ fun FeatureScreen(
     var speedTestPercentInput by remember(smartConnectSpeedTestPercent) {
         mutableStateOf(smartConnectSpeedTestPercent.toString())
     }
+    var tcpingTimeoutInput by remember(tcpingTestTimeoutMs) {
+        mutableStateOf(tcpingTestTimeoutMs.toString())
+    }
+    var urlTestTimeoutInput by remember(urlTestTimeoutMs) {
+        mutableStateOf(urlTestTimeoutMs.toString())
+    }
+    var speedTestDurationInput by remember(speedTestDurationMs) {
+        mutableStateOf(speedTestDurationMs.toString())
+    }
+    var tcpingConcurrencyInput by remember(tcpingConcurrency) {
+        mutableStateOf(tcpingConcurrency.toString())
+    }
+    var urlTestConcurrencyInput by remember(urlTestConcurrency) {
+        mutableStateOf(urlTestConcurrency.toString())
+    }
+    var bandwidthTestConcurrencyInput by remember(bandwidthTestConcurrency) {
+        mutableStateOf(bandwidthTestConcurrency.toString())
+    }
+    var publicNodePoolThresholdInput by remember(publicNodePoolNodeThreshold) {
+        mutableStateOf(publicNodePoolNodeThreshold.toString())
+    }
+    var publicNodePoolTcpingPercentInput by remember(publicNodePoolTcpingPercent) {
+        mutableStateOf(publicNodePoolTcpingPercent.toString())
+    }
+    var publicNodePoolUrlTestPercentInput by remember(publicNodePoolUrlTestPercent) {
+        mutableStateOf(publicNodePoolUrlTestPercent.toString())
+    }
+    var publicNodePoolSpeedTestPercentInput by remember(publicNodePoolSpeedTestPercent) {
+        mutableStateOf(publicNodePoolSpeedTestPercent.toString())
+    }
+    var publicNodePoolTcpingTimeoutInput by remember(publicNodePoolTcpingTestTimeoutMs) {
+        mutableStateOf(publicNodePoolTcpingTestTimeoutMs.toString())
+    }
+    var publicNodePoolUrlTestTimeoutInput by remember(publicNodePoolUrlTestTimeoutMs) {
+        mutableStateOf(publicNodePoolUrlTestTimeoutMs.toString())
+    }
+    var publicNodePoolSpeedTestDurationInput by remember(publicNodePoolSpeedTestDurationMs) {
+        mutableStateOf(publicNodePoolSpeedTestDurationMs.toString())
+    }
+    var publicNodePoolTcpingConcurrencyInput by remember(publicNodePoolTcpingConcurrency) {
+        mutableStateOf(publicNodePoolTcpingConcurrency.toString())
+    }
+    var publicNodePoolUrlTestConcurrencyInput by remember(publicNodePoolUrlTestConcurrency) {
+        mutableStateOf(publicNodePoolUrlTestConcurrency.toString())
+    }
+    var publicNodePoolBandwidthTestConcurrencyInput by
+        remember(publicNodePoolBandwidthTestConcurrency) {
+            mutableStateOf(publicNodePoolBandwidthTestConcurrency.toString())
+        }
+    var testSettingsType by remember { mutableStateOf(0) }
     var hysteriaUpMbpsInput by remember(hysteriaUpMbps) {
         mutableStateOf(hysteriaUpMbps.toString())
     }
@@ -81,12 +154,44 @@ fun FeatureScreen(
         smartConnectTcpingPercent,
         smartConnectUrlTestPercent,
         smartConnectSpeedTestPercent,
+        tcpingTestTimeoutMs,
+        urlTestTimeoutMs,
+        speedTestDurationMs,
+        tcpingConcurrency,
+        urlTestConcurrency,
+        bandwidthTestConcurrency,
+        publicNodePoolNodeThreshold,
+        publicNodePoolTcpingPercent,
+        publicNodePoolUrlTestPercent,
+        publicNodePoolSpeedTestPercent,
+        publicNodePoolTcpingTestTimeoutMs,
+        publicNodePoolUrlTestTimeoutMs,
+        publicNodePoolSpeedTestDurationMs,
+        publicNodePoolTcpingConcurrency,
+        publicNodePoolUrlTestConcurrency,
+        publicNodePoolBandwidthTestConcurrency,
         hysteriaUpMbps,
         hysteriaDownMbps
     ) {
         tcpingPercentInput = smartConnectTcpingPercent.toString()
         urlTestPercentInput = smartConnectUrlTestPercent.toString()
         speedTestPercentInput = smartConnectSpeedTestPercent.toString()
+        tcpingTimeoutInput = tcpingTestTimeoutMs.toString()
+        urlTestTimeoutInput = urlTestTimeoutMs.toString()
+        speedTestDurationInput = speedTestDurationMs.toString()
+        tcpingConcurrencyInput = tcpingConcurrency.toString()
+        urlTestConcurrencyInput = urlTestConcurrency.toString()
+        bandwidthTestConcurrencyInput = bandwidthTestConcurrency.toString()
+        publicNodePoolThresholdInput = publicNodePoolNodeThreshold.toString()
+        publicNodePoolTcpingPercentInput = publicNodePoolTcpingPercent.toString()
+        publicNodePoolUrlTestPercentInput = publicNodePoolUrlTestPercent.toString()
+        publicNodePoolSpeedTestPercentInput = publicNodePoolSpeedTestPercent.toString()
+        publicNodePoolTcpingTimeoutInput = publicNodePoolTcpingTestTimeoutMs.toString()
+        publicNodePoolUrlTestTimeoutInput = publicNodePoolUrlTestTimeoutMs.toString()
+        publicNodePoolSpeedTestDurationInput = publicNodePoolSpeedTestDurationMs.toString()
+        publicNodePoolTcpingConcurrencyInput = publicNodePoolTcpingConcurrency.toString()
+        publicNodePoolUrlTestConcurrencyInput = publicNodePoolUrlTestConcurrency.toString()
+        publicNodePoolBandwidthTestConcurrencyInput = publicNodePoolBandwidthTestConcurrency.toString()
         hysteriaUpMbpsInput = hysteriaUpMbps.toString()
         hysteriaDownMbpsInput = hysteriaDownMbps.toString()
     }
@@ -173,40 +278,193 @@ fun FeatureScreen(
                     onCheckedChange = viewModel::setPublicNodePoolOptimizationEnabled
                 )
                 Text(
-                    text = "订阅组节点数大于 $publicNodePoolNodeThreshold 时，智能连接使用 " +
-                        "TCPing $publicNodePoolTcpingConcurrency 并发、" +
-                        "URL Test $publicNodePoolUrlTestConcurrency 并发；可在基础设定中调整。",
+                    text = "订阅组节点数大于 $publicNodePoolNodeThreshold 时，智能连接改用独立的聚合订阅测试参数。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
-                FeatureNumberField(
-                    label = "TCPing 节点比例 (%)",
-                    value = tcpingPercentInput,
-                    onValueChange = {
-                        tcpingPercentInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setSmartConnectTcpingPercent(value.coerceIn(1, 100))
-                        }
-                    }
+                Text(
+                    text = "测试配置",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
                 )
-                FeatureNumberField(
-                    label = "URL Test 候选比例 (%)",
-                    value = urlTestPercentInput,
-                    onValueChange = {
-                        urlTestPercentInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setSmartConnectUrlTestPercent(value.coerceIn(1, 100))
-                        }
-                    }
+                MultiPositionSwitch(
+                    options = listOf("常规订阅", "聚合订阅"),
+                    selectedIndex = testSettingsType,
+                    onOptionSelected = { testSettingsType = it }
                 )
-                FeatureNumberField(
-                    label = "带宽测速候选比例 (%)",
-                    value = speedTestPercentInput,
-                    onValueChange = {
-                        speedTestPercentInput = it.filter(Char::isDigit)
-                        it.toIntOrNull()?.let { value ->
-                            viewModel.setSmartConnectSpeedTestPercent(value.coerceIn(1, 100))
+                Text(
+                    text = if (testSettingsType == 0) {
+                        "常规订阅参数也用于手动节点测速；与聚合订阅参数分别保存。"
+                    } else {
+                        "聚合订阅参数仅在优化开启且节点数超过判定阈值时使用。"
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+                if (testSettingsType == 1) {
+                    FeatureNumberField(
+                        label = "聚合订阅判定阈值（节点数）",
+                        value = publicNodePoolThresholdInput,
+                        onValueChange = {
+                            publicNodePoolThresholdInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setPublicNodePoolNodeThreshold(value.coerceIn(1, 10_000))
+                            }
                         }
+                    )
+                }
+                SmartTestSettingsTable(
+                    rows = if (testSettingsType == 0) {
+                        listOf(
+                            SmartTestSettingsRow(
+                                label = "TCPing",
+                                percentValue = tcpingPercentInput,
+                                onPercentChange = {
+                                    tcpingPercentInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setSmartConnectTcpingPercent(value.coerceIn(1, 100))
+                                    }
+                                },
+                                timeValue = tcpingTimeoutInput,
+                                onTimeChange = {
+                                    tcpingTimeoutInput = it.filter(Char::isDigit)
+                                    it.toLongOrNull()?.let { value ->
+                                        viewModel.setTcpingTestTimeoutMs(value.coerceAtLeast(500L))
+                                    }
+                                },
+                                concurrencyValue = tcpingConcurrencyInput,
+                                onConcurrencyChange = {
+                                    tcpingConcurrencyInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setTcpingConcurrency(value.coerceIn(1, 128))
+                                    }
+                                }
+                            ),
+                            SmartTestSettingsRow(
+                                label = "URL Test",
+                                percentValue = urlTestPercentInput,
+                                onPercentChange = {
+                                    urlTestPercentInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setSmartConnectUrlTestPercent(value.coerceIn(1, 100))
+                                    }
+                                },
+                                timeValue = urlTestTimeoutInput,
+                                onTimeChange = {
+                                    urlTestTimeoutInput = it.filter(Char::isDigit)
+                                    it.toLongOrNull()?.let { value ->
+                                        viewModel.setUrlTestTimeoutMs(value.coerceAtLeast(500L))
+                                    }
+                                },
+                                concurrencyValue = urlTestConcurrencyInput,
+                                onConcurrencyChange = {
+                                    urlTestConcurrencyInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setUrlTestConcurrency(value.coerceIn(1, 128))
+                                    }
+                                }
+                            ),
+                            SmartTestSettingsRow(
+                                label = "带宽测速",
+                                percentValue = speedTestPercentInput,
+                                onPercentChange = {
+                                    speedTestPercentInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setSmartConnectSpeedTestPercent(value.coerceIn(1, 100))
+                                    }
+                                },
+                                timeValue = speedTestDurationInput,
+                                onTimeChange = {
+                                    speedTestDurationInput = it.filter(Char::isDigit)
+                                    it.toLongOrNull()?.let { value ->
+                                        viewModel.setSpeedTestDurationMs(value.coerceAtLeast(1_000L))
+                                    }
+                                },
+                                concurrencyValue = bandwidthTestConcurrencyInput,
+                                onConcurrencyChange = {
+                                    bandwidthTestConcurrencyInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setBandwidthTestConcurrency(value.coerceIn(1, 3))
+                                    }
+                                }
+                            )
+                        )
+                    } else {
+                        listOf(
+                            SmartTestSettingsRow(
+                                label = "TCPing",
+                                percentValue = publicNodePoolTcpingPercentInput,
+                                onPercentChange = {
+                                    publicNodePoolTcpingPercentInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setPublicNodePoolTcpingPercent(value.coerceIn(1, 100))
+                                    }
+                                },
+                                timeValue = publicNodePoolTcpingTimeoutInput,
+                                onTimeChange = {
+                                    publicNodePoolTcpingTimeoutInput = it.filter(Char::isDigit)
+                                    it.toLongOrNull()?.let { value ->
+                                        viewModel.setPublicNodePoolTcpingTestTimeoutMs(value.coerceAtLeast(500L))
+                                    }
+                                },
+                                concurrencyValue = publicNodePoolTcpingConcurrencyInput,
+                                onConcurrencyChange = {
+                                    publicNodePoolTcpingConcurrencyInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setPublicNodePoolTcpingConcurrency(value.coerceIn(1, 512))
+                                    }
+                                }
+                            ),
+                            SmartTestSettingsRow(
+                                label = "URL Test",
+                                percentValue = publicNodePoolUrlTestPercentInput,
+                                onPercentChange = {
+                                    publicNodePoolUrlTestPercentInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setPublicNodePoolUrlTestPercent(value.coerceIn(1, 100))
+                                    }
+                                },
+                                timeValue = publicNodePoolUrlTestTimeoutInput,
+                                onTimeChange = {
+                                    publicNodePoolUrlTestTimeoutInput = it.filter(Char::isDigit)
+                                    it.toLongOrNull()?.let { value ->
+                                        viewModel.setPublicNodePoolUrlTestTimeoutMs(value.coerceAtLeast(500L))
+                                    }
+                                },
+                                concurrencyValue = publicNodePoolUrlTestConcurrencyInput,
+                                onConcurrencyChange = {
+                                    publicNodePoolUrlTestConcurrencyInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setPublicNodePoolUrlTestConcurrency(value.coerceIn(1, 128))
+                                    }
+                                }
+                            ),
+                            SmartTestSettingsRow(
+                                label = "带宽测速",
+                                percentValue = publicNodePoolSpeedTestPercentInput,
+                                onPercentChange = {
+                                    publicNodePoolSpeedTestPercentInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setPublicNodePoolSpeedTestPercent(value.coerceIn(1, 100))
+                                    }
+                                },
+                                timeValue = publicNodePoolSpeedTestDurationInput,
+                                onTimeChange = {
+                                    publicNodePoolSpeedTestDurationInput = it.filter(Char::isDigit)
+                                    it.toLongOrNull()?.let { value ->
+                                        viewModel.setPublicNodePoolSpeedTestDurationMs(value.coerceAtLeast(1_000L))
+                                    }
+                                },
+                                concurrencyValue = publicNodePoolBandwidthTestConcurrencyInput,
+                                onConcurrencyChange = {
+                                    publicNodePoolBandwidthTestConcurrencyInput = it.filter(Char::isDigit)
+                                    it.toIntOrNull()?.let { value ->
+                                        viewModel.setPublicNodePoolBandwidthTestConcurrency(value.coerceIn(1, 3))
+                                    }
+                                }
+                            )
+                        )
                     }
                 )
             }
@@ -399,3 +657,102 @@ private fun FeatureNumberField(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
     )
 }
+
+private data class SmartTestSettingsRow(
+    val label: String,
+    val percentValue: String,
+    val onPercentChange: (String) -> Unit,
+    val timeValue: String,
+    val onTimeChange: (String) -> Unit,
+    val concurrencyValue: String,
+    val onConcurrencyChange: (String) -> Unit
+)
+
+@Composable
+private fun SmartTestSettingsTable(rows: List<SmartTestSettingsRow>) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        SmartTestSettingsTableRow {
+            Text(
+                text = "类型",
+                modifier = Modifier.width(SmartTestTypeColumnWidth),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+            SmartTestTableHeader("比例 (%)", Modifier.weight(1f))
+            SmartTestTableHeader("时间 (ms)", Modifier.weight(1f))
+            SmartTestTableHeader("并发", Modifier.weight(1f))
+        }
+        rows.forEach { row ->
+            SmartTestSettingsTableRow {
+                Text(
+                    text = row.label,
+                    modifier = Modifier.width(SmartTestTypeColumnWidth),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+                CompactFeatureNumberField(
+                    value = row.percentValue,
+                    onValueChange = row.onPercentChange,
+                    modifier = Modifier.weight(1f)
+                )
+                CompactFeatureNumberField(
+                    value = row.timeValue,
+                    onValueChange = row.onTimeChange,
+                    modifier = Modifier.weight(1f)
+                )
+                CompactFeatureNumberField(
+                    value = row.concurrencyValue,
+                    onValueChange = row.onConcurrencyChange,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmartTestSettingsTableRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content
+    )
+}
+
+@Composable
+private fun SmartTestTableHeader(text: String, modifier: Modifier) {
+    Text(
+        text = text,
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        textAlign = TextAlign.Center,
+        maxLines = 1
+    )
+}
+
+@Composable
+private fun CompactFeatureNumberField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+    )
+}
+
+private val SmartTestTypeColumnWidth = 70.dp

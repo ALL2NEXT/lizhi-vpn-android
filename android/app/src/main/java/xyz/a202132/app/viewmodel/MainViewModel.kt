@@ -11,6 +11,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.local.AppDatabase
@@ -275,7 +277,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val speedTestDurationMs = settingsRepository.speedTestDurationMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_CONCURRENCY)
     val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_CONCURRENCY)
-    val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, 1)
+    val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        AppConfig.BANDWIDTH_TEST_CONCURRENCY
+    )
     val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_TCPING_PERCENT)
     val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
     val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
@@ -294,6 +300,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         AppConfig.PUBLIC_NODE_POOL_NODE_THRESHOLD
     )
+    val publicNodePoolTcpingPercent = settingsRepository.publicNodePoolTcpingPercent.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        AppConfig.SMART_CONNECT_TCPING_PERCENT
+    )
+    val publicNodePoolUrlTestPercent = settingsRepository.publicNodePoolUrlTestPercent.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        AppConfig.SMART_CONNECT_URL_TEST_PERCENT
+    )
+    val publicNodePoolSpeedTestPercent = settingsRepository.publicNodePoolSpeedTestPercent.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT
+    )
+    val publicNodePoolTcpingTestTimeoutMs = settingsRepository.publicNodePoolTcpingTestTimeoutMs.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        AppConfig.TCPING_TEST_TIMEOUT
+    )
+    val publicNodePoolUrlTestTimeoutMs = settingsRepository.publicNodePoolUrlTestTimeoutMs.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        AppConfig.URL_TEST_TIMEOUT
+    )
+    val publicNodePoolSpeedTestDurationMs = settingsRepository.publicNodePoolSpeedTestDurationMs.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS
+    )
     val publicNodePoolTcpingConcurrency = settingsRepository.publicNodePoolTcpingConcurrency.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -304,6 +340,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         AppConfig.PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY
     )
+    val publicNodePoolBandwidthTestConcurrency =
+        settingsRepository.publicNodePoolBandwidthTestConcurrency.stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            AppConfig.PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY
+        )
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
     val hideFavoriteNodeGroup = settingsRepository.hideFavoriteNodeGroup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -475,14 +517,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         "Public node pool optimization enabled: nodes=${allNodes.size}, " +
                             "tcpingConcurrency=${smartTestConcurrency.tcping}, " +
                             "urlTestConcurrency=${smartTestConcurrency.urlTest}"
-                    )
+                        )
                 }
 
-                val tcpingNodes = takeTopPercent(allNodes, smartConnectTcpingPercent.value)
+                val tcpingPercent = if (smartTestConcurrency.isPublicNodePool) {
+                    publicNodePoolTcpingPercent.value
+                } else {
+                    smartConnectTcpingPercent.value
+                }
+                val urlTestPercent = if (smartTestConcurrency.isPublicNodePool) {
+                    publicNodePoolUrlTestPercent.value
+                } else {
+                    smartConnectUrlTestPercent.value
+                }
+                val speedTestPercent = if (smartTestConcurrency.isPublicNodePool) {
+                    publicNodePoolSpeedTestPercent.value
+                } else {
+                    smartConnectSpeedTestPercent.value
+                }
+                val selectedTcpingTimeoutMs = if (smartTestConcurrency.isPublicNodePool) {
+                    publicNodePoolTcpingTestTimeoutMs.value
+                } else {
+                    tcpingTestTimeoutMs.value
+                }
+                val selectedUrlTestTimeoutMs = if (smartTestConcurrency.isPublicNodePool) {
+                    publicNodePoolUrlTestTimeoutMs.value
+                } else {
+                    urlTestTimeoutMs.value
+                }
+                val selectedSpeedTestDurationMs = if (smartTestConcurrency.isPublicNodePool) {
+                    publicNodePoolSpeedTestDurationMs.value
+                } else {
+                    speedTestDurationMs.value
+                }
+                val selectedSpeedTestConcurrency = if (smartTestConcurrency.isPublicNodePool) {
+                    publicNodePoolBandwidthTestConcurrency.value
+                } else {
+                    bandwidthTestConcurrency.value
+                }
+
+                val tcpingNodes = takeTopPercent(allNodes, tcpingPercent)
                 _testingLabel.value = "智能连接：TCPing 测试中..."
                 val tcpingResults = internalTestNodes(
                     currentNodes = tcpingNodes,
-                    concurrency = smartTestConcurrency.tcping
+                    concurrency = smartTestConcurrency.tcping,
+                    timeoutMs = selectedTcpingTimeoutMs
                 ) { completed, total ->
                     _testingLabel.value = "智能连接：TCPing ($completed/$total)"
                 }
@@ -496,11 +575,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                val urlTestNodes = takeTopPercent(tcpingCandidates, smartConnectUrlTestPercent.value)
+                val urlTestNodes = takeTopPercent(tcpingCandidates, urlTestPercent)
                 val urlTestResults = runUrlTestNodes(
                     nodes = urlTestNodes,
                     labelPrefix = "智能连接：URL Test 204",
-                    concurrency = smartTestConcurrency.urlTest
+                    concurrency = smartTestConcurrency.urlTest,
+                    timeoutMs = selectedUrlTestTimeoutMs
                 )
                 applyUrlTestResults(urlTestResults)
                 val urlTestCandidates = urlTestResults
@@ -512,14 +592,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                val speedTestNodes = takeTopPercent(urlTestCandidates, smartConnectSpeedTestPercent.value)
-                val speedResults = mutableListOf<Pair<Node, Float>>()
-                speedTestNodes.forEachIndexed { index, node ->
-                    _testingLabel.value = "智能连接：带宽测速 (${index + 1}/${speedTestNodes.size})"
-                    val speedMbps = testNodeDownloadBandwidthMbps(node)
-                    nodeDao().updateDownloadMbps(node.id, speedMbps)
-                    speedResults += node to speedMbps
-                }
+                val speedTestNodes = takeTopPercent(urlTestCandidates, speedTestPercent)
+                val speedResults = speedTestNodes
+                    .chunked(selectedSpeedTestConcurrency)
+                    .flatMapIndexed { batchIndex, batch ->
+                        coroutineScope {
+                            batch.map { node ->
+                                async {
+                                    val speedMbps = testNodeDownloadBandwidthMbps(
+                                        node = node,
+                                        durationMs = selectedSpeedTestDurationMs
+                                    )
+                                    nodeDao().updateDownloadMbps(node.id, speedMbps)
+                                    node to speedMbps
+                                }
+                            }.awaitAll()
+                        }.also {
+                            val completed = ((batchIndex + 1) * selectedSpeedTestConcurrency)
+                                .coerceAtMost(speedTestNodes.size)
+                            _testingLabel.value =
+                                "智能连接：带宽测速 ($completed/${speedTestNodes.size})"
+                        }
+                    }
 
                 val bestNode = speedResults
                     .sortedWith(
@@ -724,6 +818,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setPublicNodePoolTcpingPercent(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setPublicNodePoolTcpingPercent(value)
+        }
+    }
+
+    fun setPublicNodePoolUrlTestPercent(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setPublicNodePoolUrlTestPercent(value)
+        }
+    }
+
+    fun setPublicNodePoolSpeedTestPercent(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setPublicNodePoolSpeedTestPercent(value)
+        }
+    }
+
+    fun setPublicNodePoolTcpingTestTimeoutMs(value: Long) {
+        viewModelScope.launch {
+            settingsRepository.setPublicNodePoolTcpingTestTimeoutMs(value)
+        }
+    }
+
+    fun setPublicNodePoolUrlTestTimeoutMs(value: Long) {
+        viewModelScope.launch {
+            settingsRepository.setPublicNodePoolUrlTestTimeoutMs(value)
+        }
+    }
+
+    fun setPublicNodePoolSpeedTestDurationMs(value: Long) {
+        viewModelScope.launch {
+            settingsRepository.setPublicNodePoolSpeedTestDurationMs(value)
+        }
+    }
+
     fun setPublicNodePoolTcpingConcurrency(value: Int) {
         viewModelScope.launch {
             settingsRepository.setPublicNodePoolTcpingConcurrency(value)
@@ -733,6 +863,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setPublicNodePoolUrlTestConcurrency(value: Int) {
         viewModelScope.launch {
             settingsRepository.setPublicNodePoolUrlTestConcurrency(value)
+        }
+    }
+
+    fun setPublicNodePoolBandwidthTestConcurrency(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setPublicNodePoolBandwidthTestConcurrency(value)
         }
     }
 
@@ -862,6 +998,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         nodes: List<Node>,
         labelPrefix: String,
         concurrency: Int = urlTestConcurrency.value,
+        timeoutMs: Long = urlTestTimeoutMs.value,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
         val isVpnRunning = vpnState.value == VpnState.CONNECTED
@@ -937,7 +1074,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 nodes = testableNodes,
                 clashApiPort = clashApiPort,
                 targetUrl = urlTestUrl.value,
-                timeoutMs = urlTestTimeoutMs.value,
+                timeoutMs = timeoutMs,
                 concurrency = concurrency
             ) { completed, total ->
                 _testingLabel.value = "$labelPrefix 测试中 ($completed/$total)"
@@ -1019,6 +1156,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun internalTestNodes(
         currentNodes: List<Node>,
         concurrency: Int = tcpingConcurrency.value,
+        timeoutMs: Long = tcpingTestTimeoutMs.value,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
         if (currentNodes.isEmpty()) return emptyList()
@@ -1029,7 +1167,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // 即使 VPN 运行中也可以工作，因为测试的是节点服务器本身
         val results = latencyTester.testAllNodes(
             nodes = currentNodes,
-            timeoutMs = tcpingTestTimeoutMs.value,
+            timeoutMs = timeoutMs,
             concurrency = concurrency,
             onProgress = onProgress
         )
@@ -1851,11 +1989,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return Result.failure(second.exceptionOrNull() ?: first.exceptionOrNull() ?: IllegalStateException("${requestName}请求失败"))
     }
 
-    private suspend fun testNodeDownloadBandwidthMbps(node: Node): Float =
+    private suspend fun testNodeDownloadBandwidthMbps(
+        node: Node,
+        durationMs: Long = speedTestDurationMs.value
+    ): Float =
         bandwidthTester.test(
             node,
             speedTestDownloadUrl.value,
-            speedTestDurationMs.value,
+            durationMs,
             hysteriaUpMbps.value,
             hysteriaDownMbps.value,
             protocolCoreSettings.value.coreFor(node.type)
