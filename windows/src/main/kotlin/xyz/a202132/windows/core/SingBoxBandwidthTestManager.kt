@@ -3,6 +3,7 @@ package xyz.a202132.windows.core
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -85,7 +86,7 @@ class SingBoxBandwidthTestManager(
             if (!process.isAlive) return 0f
             downloadThroughProxy(
                 proxyPort,
-                settings.speedTestTimeoutMs,
+                settings.speedTestDurationMs,
                 settings.speedTestDownloadUrl
             )
         } finally {
@@ -96,31 +97,53 @@ class SingBoxBandwidthTestManager(
 
     private fun downloadThroughProxy(
         proxyPort: Int,
-        timeoutMs: Int,
+        durationMs: Int,
         downloadUrl: String
     ): Float {
-        val url = URL(downloadUrl)
-        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", proxyPort))
-        val connection = url.openConnection(proxy) as HttpURLConnection
-        val timeout = timeoutMs.coerceAtLeast(1_000)
-        connection.connectTimeout = timeout
-        connection.readTimeout = timeout
-        connection.setRequestProperty("user-agent", "Firefly/3.0.4 (Windows)")
+        val effectiveDurationMs = durationMs.coerceAtLeast(1)
+        val durationNanos = effectiveDurationMs * NANOS_PER_MILLISECOND
         val started = System.nanoTime()
-        return runCatching {
-            connection.inputStream.use { input ->
-                val buffer = ByteArray(32 * 1024)
-                var received = 0L
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    received += count
+        val deadline = started + durationNanos
+        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", proxyPort))
+        var received = 0L
+
+        return try {
+            // 小文件下载完后继续发起请求，保证测速窗口由“时长”而不是文件大小决定。
+            while (System.nanoTime() < deadline) {
+                val connection = URL(downloadUrl).openConnection(proxy) as HttpURLConnection
+                try {
+                    val remainingMs = ((deadline - System.nanoTime()) / NANOS_PER_MILLISECOND)
+                        .coerceAtLeast(1L)
+                        .coerceAtMost(Int.MAX_VALUE.toLong())
+                        .toInt()
+                    connection.connectTimeout = remainingMs
+                    connection.readTimeout = remainingMs
+                    connection.setRequestProperty("user-agent", "Firefly/3.0.4 (Windows)")
+                    require(connection.responseCode in 200..299) {
+                        "下载测速返回 HTTP ${connection.responseCode}"
+                    }
+                    connection.inputStream.use { input ->
+                        val buffer = ByteArray(32 * 1024)
+                        while (System.nanoTime() < deadline) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            received += count
+                        }
+                    }
+                } catch (error: IOException) {
+                    if (System.nanoTime() < deadline) throw error
+                } finally {
+                    connection.disconnect()
                 }
-                val seconds = (System.nanoTime() - started) / 1_000_000_000.0
-                if (received <= 0L || seconds <= 0.0) 0f
-                else (received * 8.0 / seconds / 1_000_000.0).toFloat()
             }
-        }.getOrDefault(0f).also { connection.disconnect() }
+            val elapsedNanos = (System.nanoTime() - started)
+                .coerceAtMost(durationNanos)
+                .coerceAtLeast(NANOS_PER_MILLISECOND)
+            if (received <= 0L) 0f
+            else (received * 8.0 / elapsedNanos * 1_000_000_000.0 / 1_000_000.0).toFloat()
+        } catch (error: Exception) {
+            0f
+        }
     }
 
     private fun processBuilder(
@@ -138,6 +161,8 @@ class SingBoxBandwidthTestManager(
     }
 
     companion object {
+        private const val NANOS_PER_MILLISECOND = 1_000_000L
+
         private fun defaultStateDirectory(): Path {
             val base = System.getenv("LOCALAPPDATA")
                 ?.takeIf(String::isNotBlank)

@@ -71,7 +71,10 @@ class SettingsRepository(private val context: Context) {
         private val URL_TEST_TIMEOUT_MS = longPreferencesKey("url_test_timeout_ms")
         private val URL_TEST_URL = stringPreferencesKey("url_test_url")
         private val SPEED_TEST_DOWNLOAD_URL = stringPreferencesKey("speed_test_download_url")
-        private val SPEED_TEST_DOWNLOAD_TIMEOUT_MS = longPreferencesKey("speed_test_download_timeout_ms")
+        private val SPEED_TEST_DURATION_MS = longPreferencesKey("speed_test_duration_ms")
+        // 兼容读取旧版本的“带宽测速超时”设置，避免升级后丢失用户配置。
+        private val LEGACY_SPEED_TEST_DOWNLOAD_TIMEOUT_MS =
+            longPreferencesKey("speed_test_download_timeout_ms")
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val URL_TEST_CONCURRENCY = intPreferencesKey("url_test_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
@@ -510,14 +513,17 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val speedTestDownloadTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
-        (preferences[SPEED_TEST_DOWNLOAD_TIMEOUT_MS] ?: xyz.a202132.app.AppConfig.AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS)
-            .coerceAtLeast(0L)
+    val speedTestDurationMs: Flow<Long> = context.dataStore.data.map { preferences ->
+        (preferences[SPEED_TEST_DURATION_MS]
+            ?: preferences[LEGACY_SPEED_TEST_DOWNLOAD_TIMEOUT_MS]
+            ?: xyz.a202132.app.AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
+            .coerceAtLeast(1_000L)
     }
 
-    suspend fun setSpeedTestDownloadTimeoutMs(value: Long) {
+    suspend fun setSpeedTestDurationMs(value: Long) {
         context.dataStore.edit { preferences ->
-            preferences[SPEED_TEST_DOWNLOAD_TIMEOUT_MS] = value.coerceAtLeast(0L)
+            preferences[SPEED_TEST_DURATION_MS] = value.coerceAtLeast(1_000L)
+            preferences.remove(LEGACY_SPEED_TEST_DOWNLOAD_TIMEOUT_MS)
         }
     }
 

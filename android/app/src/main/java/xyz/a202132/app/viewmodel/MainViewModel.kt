@@ -272,7 +272,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val urlTestTimeoutMs = settingsRepository.urlTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_TIMEOUT)
     val urlTestUrl = settingsRepository.urlTestUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_URL)
     val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
-    val speedTestDownloadTimeoutMs = settingsRepository.speedTestDownloadTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS)
+    val speedTestDurationMs = settingsRepository.speedTestDurationMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_CONCURRENCY)
     val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_CONCURRENCY)
     val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, 1)
@@ -657,9 +657,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setSpeedTestDownloadTimeoutMs(value: Long) {
+    fun setSpeedTestDurationMs(value: Long) {
         viewModelScope.launch {
-            settingsRepository.setSpeedTestDownloadTimeoutMs(value)
+            settingsRepository.setSpeedTestDurationMs(value)
         }
     }
 
@@ -780,13 +780,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             try {
                 val service = SpeedTestService(
-                    downloadTimeoutMs = 25_000L,
-                    uploadTimeoutMs = 25_000L,
+                    durationMs = speedTestDurationMs.value,
                     downloadUrl = speedTestDownloadUrl.value
                 )
-                val testSize = 10_000_000L
-                val downloadResult = service.startDownloadTest(testSize) { _, _ -> }
-                val uploadResult = service.startUploadTest(testSize) { _, _ -> }
+                val downloadResult = service.startDownloadTest { _, _ -> }
+                val uploadResult = service.startUploadTest { _, _ -> }
                 val downMbps = roundUpHysteriaBandwidth(downloadResult.avgSpeedMbps)
                 val upMbps = roundUpHysteriaBandwidth(uploadResult.avgSpeedMbps)
 
@@ -1857,7 +1855,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         bandwidthTester.test(
             node,
             speedTestDownloadUrl.value,
-            speedTestDownloadTimeoutMs.value,
+            speedTestDurationMs.value,
             hysteriaUpMbps.value,
             hysteriaDownMbps.value,
             protocolCoreSettings.value.coreFor(node.type)

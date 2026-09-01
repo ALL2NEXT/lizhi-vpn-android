@@ -130,6 +130,5 @@ object AppConfig {
     const val NJU_SPEED_TEST_URL = "https://test.nju.edu.cn/"
     const val NETFLIX_SPEED_TEST_URL = "https://fast.com/"
     const val GOOGLE_SPEED_TEST_URL = "https://fiber.google.com/speedtest/"
-    const val AUTO_TEST_BANDWIDTH_DOWNLOAD_TIMEOUT_MS = 5000L // 单次下载带宽测试超时（毫秒），设为0则无限制
-    const val AUTO_TEST_BANDWIDTH_UPLOAD_TIMEOUT_MS = 30000L // 单次上传带宽测试超时（毫秒），设为0则无限制
+    const val AUTO_TEST_BANDWIDTH_DURATION_MS = 5000L // 单次带宽测试时长（毫秒）
 }

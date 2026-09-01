@@ -64,7 +64,7 @@ Xray `v26.3.27` 已移除 `allowInsecure`。自签名证书节点选择 Xray 时
 - [x] 官方 sing-box 源码锁定、构建、探测与 TUN 启动
 - [x] 官方 Xray-core 源码锁定、独立进程桥接与按协议选择核心
 - [x] 后台账户、订阅发现、访问控制和加密订阅接入
-- [x] TCPing、可自定义/预设地址的 204 URL Test、可自定义地址的带宽测速和智能连接
+- [x] TCPing、可自定义/预设地址的 204 URL Test、可自定义/预设地址的带宽测速和智能连接
 - [x] Android 基础设定、Hy2 直连带宽自适应、特色功能和账户操作迁移
 - [x] Android 同款标题连续点击五次切换后台
 - [ ] Windows Service 与 Named Pipe

@@ -1899,8 +1899,8 @@ private fun BasicSettingsContent(
         NumberSettingField("URL Test 超时", settings.urlTestTimeoutMs) {
             onSettingsChange(settings.copy(urlTestTimeoutMs = it.coerceAtLeast(500)))
         }
-        NumberSettingField("带宽测速超时", settings.speedTestTimeoutMs) {
-            onSettingsChange(settings.copy(speedTestTimeoutMs = it.coerceAtLeast(0)))
+        NumberSettingField("带宽测试时长（毫秒）", settings.speedTestDurationMs) {
+            onSettingsChange(settings.copy(speedTestDurationMs = it.coerceAtLeast(1_000)))
         }
     }
     SettingSection("并发与网络") {
@@ -1926,6 +1926,7 @@ private fun UrlTestUrlSetting(
 ) {
     var input by remember(settings.urlTestUrl) { mutableStateOf(settings.urlTestUrl) }
     var showPresets by remember { mutableStateOf(false) }
+    var showBandwidthPresets by remember { mutableStateOf(false) }
     val normalizedUrl = UrlTestTargets.normalize(input)
 
     SettingSection("204 测速地址") {
@@ -2021,9 +2022,36 @@ private fun UrlTestUrlSetting(
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box {
+                TextButton(onClick = { showBandwidthPresets = true }) { Text("选择预设") }
+                DropdownMenu(
+                    expanded = showBandwidthPresets,
+                    onDismissRequest = { showBandwidthPresets = false }
+                ) {
+                    BandwidthTestTargets.PRESETS.forEach { preset ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(preset.name)
+                                    Text(
+                                        preset.url,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            onClick = {
+                                bandwidthUrlInputState.value = preset.url
+                                onSettingsChange(settings.copy(speedTestDownloadUrl = preset.url))
+                                showBandwidthPresets = false
+                            }
+                        )
+                    }
+                }
+            }
             Button(
                 onClick = {
                     normalizedBandwidthUrl?.let {
@@ -2037,6 +2065,11 @@ private fun UrlTestUrlSetting(
         }
         Text(
             "当前使用：${settings.speedTestDownloadUrl}",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "预设来自不同服务商，实际可用性和速度可能因地区而异，也可以手动填写完整 URL。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

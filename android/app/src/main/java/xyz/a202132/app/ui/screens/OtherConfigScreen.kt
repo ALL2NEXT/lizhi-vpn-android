@@ -59,7 +59,7 @@ fun OtherConfigScreen(
     val urlTestTimeoutMs by viewModel.urlTestTimeoutMs.collectAsStateWithLifecycle()
     val urlTestUrl by viewModel.urlTestUrl.collectAsStateWithLifecycle()
     val speedTestDownloadUrl by viewModel.speedTestDownloadUrl.collectAsStateWithLifecycle()
-    val speedTestDownloadTimeoutMs by viewModel.speedTestDownloadTimeoutMs.collectAsStateWithLifecycle()
+    val speedTestDurationMs by viewModel.speedTestDurationMs.collectAsStateWithLifecycle()
     val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsStateWithLifecycle()
     val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsStateWithLifecycle()
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsStateWithLifecycle()
@@ -78,7 +78,8 @@ fun OtherConfigScreen(
     var urlTestUrlInput by remember(urlTestUrl) { mutableStateOf(urlTestUrl) }
     var showUrlTestPresets by remember { mutableStateOf(false) }
     var speedTestDownloadUrlInput by remember(speedTestDownloadUrl) { mutableStateOf(speedTestDownloadUrl) }
-    var speedTestDownloadTimeoutInput by remember(speedTestDownloadTimeoutMs) { mutableStateOf(speedTestDownloadTimeoutMs.toString()) }
+    var showBandwidthPresets by remember { mutableStateOf(false) }
+    var speedTestDurationInput by remember(speedTestDurationMs) { mutableStateOf(speedTestDurationMs.toString()) }
     var tcpingConcurrencyInput by remember(tcpingConcurrency) { mutableStateOf(tcpingConcurrency.toString()) }
     var urlTestConcurrencyInput by remember(urlTestConcurrency) { mutableStateOf(urlTestConcurrency.toString()) }
     var bandwidthTestConcurrencyInput by remember(bandwidthTestConcurrency) { mutableStateOf(bandwidthTestConcurrency.toString()) }
@@ -97,7 +98,7 @@ fun OtherConfigScreen(
         tcpingTestTimeoutMs,
         urlTestTimeoutMs,
         speedTestDownloadUrl,
-        speedTestDownloadTimeoutMs,
+        speedTestDurationMs,
         tcpingConcurrency,
         urlTestConcurrency,
         bandwidthTestConcurrency,
@@ -108,7 +109,7 @@ fun OtherConfigScreen(
         tcpingTimeoutInput = tcpingTestTimeoutMs.toString()
         urlTestTimeoutInput = urlTestTimeoutMs.toString()
         speedTestDownloadUrlInput = speedTestDownloadUrl
-        speedTestDownloadTimeoutInput = speedTestDownloadTimeoutMs.toString()
+        speedTestDurationInput = speedTestDurationMs.toString()
         tcpingConcurrencyInput = tcpingConcurrency.toString()
         urlTestConcurrencyInput = urlTestConcurrency.toString()
         bandwidthTestConcurrencyInput = bandwidthTestConcurrency.toString()
@@ -293,9 +294,38 @@ fun OtherConfigScreen(
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Box {
+                        TextButton(onClick = { showBandwidthPresets = true }) {
+                            Text("选择预设")
+                        }
+                        DropdownMenu(
+                            expanded = showBandwidthPresets,
+                            onDismissRequest = { showBandwidthPresets = false }
+                        ) {
+                            BandwidthTestTargets.PRESETS.forEach { preset ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(preset.name)
+                                            Text(
+                                                text = preset.url,
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        speedTestDownloadUrlInput = preset.url
+                                        viewModel.setSpeedTestDownloadUrl(preset.url)
+                                        showBandwidthPresets = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                     Button(
                         onClick = { normalizedBandwidthUrl?.let(viewModel::setSpeedTestDownloadUrl) },
                         enabled = normalizedBandwidthUrl != null && normalizedBandwidthUrl != speedTestDownloadUrl
@@ -305,6 +335,11 @@ fun OtherConfigScreen(
                 }
                 Text(
                     text = "当前使用：$speedTestDownloadUrl",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "预设来自不同服务商，实际可用性和速度可能因地区而异，也可以手动填写完整 URL。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -334,12 +369,12 @@ fun OtherConfigScreen(
                     }
                 )
                 OtherConfigNumberField(
-                    label = "带宽测速超时",
-                    value = speedTestDownloadTimeoutInput,
+                    label = "带宽测试时长（毫秒）",
+                    value = speedTestDurationInput,
                     onValueChange = {
-                        speedTestDownloadTimeoutInput = it.filter(Char::isDigit)
+                        speedTestDurationInput = it.filter(Char::isDigit)
                         it.toLongOrNull()?.let { value ->
-                            viewModel.setSpeedTestDownloadTimeoutMs(value.coerceAtLeast(0L))
+                            viewModel.setSpeedTestDurationMs(value.coerceAtLeast(1_000L))
                         }
                     }
                 )

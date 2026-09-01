@@ -1,5 +1,7 @@
 package xyz.a202132.windows.model
 
+import com.google.gson.annotations.SerializedName
+
 import java.nio.file.Path
 
 enum class VpnState {
@@ -164,7 +166,8 @@ data class DesktopSettings(
     val urlTestTimeoutMs: Int = 3_000,
     val urlTestUrl: String = UrlTestTargets.DEFAULT_URL,
     val speedTestDownloadUrl: String = BandwidthTestTargets.DEFAULT_URL,
-    val speedTestTimeoutMs: Int = 5_000,
+    @SerializedName(value = "speedTestDurationMs", alternate = ["speedTestTimeoutMs"])
+    val speedTestDurationMs: Int = 5_000,
     val tcpingConcurrency: Int = 16,
     val urlTestConcurrency: Int = 10,
     val bandwidthTestConcurrency: Int = 1,

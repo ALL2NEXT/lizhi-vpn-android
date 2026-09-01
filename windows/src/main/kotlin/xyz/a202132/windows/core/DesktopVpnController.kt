@@ -393,6 +393,7 @@ class DesktopVpnController(
         scope.launch {
             runCatching {
                 directBandwidthTestManager.test(
+                    durationMs = mutableState.value.settings.speedTestDurationMs,
                     downloadUrl = mutableState.value.settings.speedTestDownloadUrl
                 )
             }

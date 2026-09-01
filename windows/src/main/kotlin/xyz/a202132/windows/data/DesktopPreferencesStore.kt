@@ -52,7 +52,10 @@ class DesktopPreferencesStore(
                 urlTestUrl = UrlTestTargets.normalize(loaded.settings.urlTestUrl)
                     ?: UrlTestTargets.DEFAULT_URL,
                 speedTestDownloadUrl = BandwidthTestTargets.normalize(loaded.settings.speedTestDownloadUrl)
-                    ?: BandwidthTestTargets.DEFAULT_URL
+                    ?: BandwidthTestTargets.DEFAULT_URL,
+                speedTestDurationMs = loaded.settings.speedTestDurationMs
+                    .takeIf { it > 0 }
+                    ?: DesktopSettings().speedTestDurationMs
             )
         )
     }.getOrDefault(DesktopPreferences())
