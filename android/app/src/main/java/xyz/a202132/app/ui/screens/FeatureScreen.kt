@@ -1,10 +1,12 @@
 package xyz.a202132.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -12,17 +14,22 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -207,7 +214,9 @@ fun FeatureScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             FeatureSection(
-                title = "节点标签显示"
+                title = "节点标签显示",
+                collapsible = true,
+                initiallyExpanded = false
             ) {
                 Text(
                     text = "协议、安全层、传输方式和核心可独立显示，默认全部关闭；全部关闭后隐藏节点标签。",
@@ -237,7 +246,9 @@ fun FeatureScreen(
             }
 
             FeatureSection(
-                title = "协议核心"
+                title = "协议核心",
+                collapsible = true,
+                initiallyExpanded = false
             ) {
                 Text(
                     text = "vless，vmess适用于xray生态，带有自定义证书，ech等特殊设置优先使用xray，其余使用singbox",
@@ -302,6 +313,12 @@ fun FeatureScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
+                Text(
+                    text = "时间说明：TCPing 和 204 URL Test 的时间表示单个节点的超时时间；" +
+                        "带宽测速的时间表示每个节点实际持续测试的时长，单位均为毫秒。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
                 if (testSettingsType == 1) {
                     FeatureNumberField(
                         label = "聚合订阅判定阈值（节点数）",
@@ -342,7 +359,7 @@ fun FeatureScreen(
                                 }
                             ),
                             SmartTestSettingsRow(
-                                label = "URL Test",
+                                label = "204 URL",
                                 percentValue = urlTestPercentInput,
                                 onPercentChange = {
                                     urlTestPercentInput = it.filter(Char::isDigit)
@@ -417,7 +434,7 @@ fun FeatureScreen(
                                 }
                             ),
                             SmartTestSettingsRow(
-                                label = "URL Test",
+                                label = "204 URL",
                                 percentValue = publicNodePoolUrlTestPercentInput,
                                 onPercentChange = {
                                     publicNodePoolUrlTestPercentInput = it.filter(Char::isDigit)
@@ -581,14 +598,27 @@ private fun NodeType.displayName(): String = when (this) {
 private fun FeatureSection(
     title: String,
     titleAction: (@Composable () -> Unit)? = null,
+    collapsible: Boolean = false,
+    initiallyExpanded: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (collapsible) {
+                        Modifier
+                            .heightIn(min = 48.dp)
+                            .clickable { expanded = !expanded }
+                    } else {
+                        Modifier
+                    }
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -599,8 +629,21 @@ private fun FeatureSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
             titleAction?.invoke()
+            if (collapsible) {
+                Icon(
+                    imageVector = if (expanded) {
+                        Icons.Default.KeyboardArrowUp
+                    } else {
+                        Icons.Default.KeyboardArrowDown
+                    },
+                    contentDescription = if (expanded) "折叠$title" else "展开$title",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-        content()
+        if (!collapsible || expanded) {
+            content()
+        }
     }
 }
 
