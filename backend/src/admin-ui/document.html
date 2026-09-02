@@ -61,6 +61,7 @@
               <span>后台设置</span><span class="nav-chevron" aria-hidden="true">⌄</span>
             </button>
             <div id="backend-settings-subnav" class="nav-submenu" role="group" aria-label="后台设置子菜单">
+              <button class="tab-button" role="tab" type="button" data-tab="debug-interface">调试接口</button>
               <button class="tab-button" role="tab" type="button" data-tab="admin-login-records">后台登录记录</button>
             </div>
           </div>
@@ -335,6 +336,36 @@
      <div class="field"><label>更新说明<textarea id="appChangelog"></textarea></label></div>
      <label class="check"><input id="appForce" type="checkbox">强制更新</label>
      <button type="button" onclick="pushSection('app-update')">推送</button>
+  </section>
+
+  <section class="card tab-panel" role="tabpanel" data-panel="debug-interface">
+    <div class="dashboard-heading">
+      <div>
+        <h2>调试接口</h2>
+        <p>一次选择一个或多个订阅线路，生成统一的明文订阅地址。该地址仅用于调试，请勿用于生产客户端。</p>
+      </div>
+    </div>
+    <div class="settings-sections">
+      <section class="settings-section">
+        <h3 class="settings-section-title">线路选择</h3>
+        <p class="settings-section-description">访问地址使用随机 UUID 保护；只有选中的线路会被合并输出，停用线路也可以用于调试。</p>
+        <div id="debugInterfaceSources" class="debug-interface-sources">
+          <div class="loading-state">正在读取订阅线路</div>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3 class="settings-section-title">明文接口地址</h3>
+        <div class="debug-interface-url-row">
+          <input id="debugInterfaceUrl" type="text" readonly placeholder="选择线路并保存后生成地址">
+          <button class="secondary" type="button" onclick="copyDebugInterfaceUrl()">复制地址</button>
+        </div>
+        <div class="debug-interface-token-actions">
+          <small>保存设置后，旧地址会失效。</small>
+          <button class="secondary" type="button" onclick="regenerateDebugInterfaceToken()">重新生成 UUID</button>
+        </div>
+      </section>
+    </div>
+    <button type="button" onclick="pushSection('debug-interface')">保存调试接口</button>
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="admin-login-records">

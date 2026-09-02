@@ -11,7 +11,6 @@ export const MAX_TRAFFIC_BYTES = 1e15;
 export const SUBSCRIPTION_CACHE_KEY_PREFIX = "fireflyvpn:subscription-cache:v1:";
 export const DEFAULT_SUBSCRIPTION_CACHE_MINUTES = 30;
 export const MAX_SUBSCRIPTION_CACHE_MINUTES = 7 * 24 * 60;
-export const MAX_SUBSCRIPTION_DEBUG_ACCESS_COUNT = 1000;
 export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive|naive\+https|wireguard|ss|socks|socks5|socks4|socks4a|https?):\/\/\S+/i;
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
@@ -299,5 +298,6 @@ export const DEFAULT_STATE = {
     // 后台可关闭游客注册正式用户；默认保持现有注册流程开放。
     registrationEnabled: true,
     requireAdminRegistrationCode: false,
+    debugInterface: null,
   },
 };

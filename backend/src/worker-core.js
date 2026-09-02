@@ -50,7 +50,6 @@ import {
   validateAndWarmSubscriptionSources,
 } from "./services/subscriptions.js";
 import {
-  consumeSubscriptionDebugAccess,
   normalizeState,
   publicClientSettings,
   readState,
@@ -91,7 +90,6 @@ const routeDeps = {
   autoRenameSubscriptionContent,
   protectSubscription,
   getClientIp,
-  consumeSubscriptionDebugAccess,
   readState,
   visibleNotice,
   publicClientSettings,
@@ -138,7 +136,7 @@ const routeDeps = {
   readAdminLoginRecords,
 };
 
-const { handleClient, handleManagedSubscription } = createClientRoutes(routeDeps);
+const { handleClient, handleManagedSubscription, handleDebugSubscription } = createClientRoutes(routeDeps);
 const { handleAccount } = createAccountRoutes(routeDeps);
 const { handleAdmin } = createAdminRoutes(routeDeps);
 
@@ -187,6 +185,10 @@ const worker = {
 
       if (path === "/api/client" && request.method === "GET") {
         return handleClient(request, env);
+      }
+
+      if (path.startsWith("/api/subscription/debug/") && request.method === "GET") {
+        return handleDebugSubscription(path, request, env);
       }
 
       if (path.startsWith("/api/subscription/") && request.method === "GET") {

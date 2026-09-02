@@ -3,10 +3,6 @@ function addSource(source) {
   const row = document.createElement('div');
   row.className = 'source-row collapsed';
   const sourceType = source.content ? 'content' : 'url';
-  const debugAccessCount = source.debugAccessCount == null ? 0 : source.debugAccessCount;
-  const debugUrl = source.id
-    ? new URL('/api/subscription/' + encodeURIComponent(source.id) + '/debug', window.location.origin).toString()
-    : '';
   const minAccountType = ['banned', 'guest', 'formal'].includes(source.minAccountType)
     ? source.minAccountType
     : 'guest';
@@ -36,12 +32,7 @@ function addSource(source) {
           '<option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>外部接口</option>' +
           '<option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>纯文本节点</option>' +
         '</select></label></div>' +
-        '<div class="field"><label>明文调试接口访问次数（剩余）<input data-field="debugAccessCount" type="number" min="0" max="1000" step="1" value="' + esc(debugAccessCount) + '"></label></div>' +
       '</div>' +
-      '<small>明文调试接口设置为 0 时关闭；每次成功访问会减少 1 次，并复用本线路的缓存和自动重命名结果。</small>' +
-      (debugUrl
-        ? '<small>明文调试地址：<a href="' + esc(debugUrl) + '" target="_blank" rel="noopener">' + esc(debugUrl) + '</a></small>'
-        : '<small>保存线路后生成明文调试地址。</small>') +
       '<div class="source-mode" data-source-mode="url"><div class="grid">' +
         '<div class="field"><label>外部明文订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/plain-sub"></label></div>' +
         '<div class="field"><label>接口缓存时间（分钟）<input data-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '"></label></div>' +
@@ -145,12 +136,85 @@ function fillState(state) {
   setValue('appDownloadUrl', update.downloadUrl);
   setValue('appChangelog', update.changelog);
   checked('appForce', update.is_force === 1 || update.isForce === 1);
+  renderDebugInterface();
   loadRegistrationCodes();
 }
 function noticeDateTimeValue(data) {
   const text = String(data == null ? '' : data).trim();
   const match = text.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
   return match ? match[1] : '';
+}
+function getDebugInterfaceConfig() {
+  const settings = currentState && currentState.settings ? currentState.settings : {};
+  const config = settings.debugInterface || {};
+  return {
+    token: String(config.token || ''),
+    subscriptionIds: Array.isArray(config.subscriptionIds)
+      ? config.subscriptionIds.map(function(id) { return String(id); })
+      : []
+  };
+}
+function debugInterfaceUrl(token) {
+  return token
+    ? new URL('/api/subscription/debug/' + encodeURIComponent(token), window.location.origin).toString()
+    : '';
+}
+function updateDebugInterfaceUrl() {
+  const input = el('debugInterfaceUrl');
+  if (!input) return;
+  const config = getDebugInterfaceConfig();
+  const selected = Array.from(document.querySelectorAll('[data-debug-source-id]:checked'));
+  input.value = selected.length ? debugInterfaceUrl(config.token) : '';
+}
+function renderDebugInterface() {
+  const host = el('debugInterfaceSources');
+  if (!host) return;
+  const sources = Array.isArray(currentState && currentState.subscriptions)
+    ? currentState.subscriptions
+    : [];
+  const config = getDebugInterfaceConfig();
+  const selected = new Set(config.subscriptionIds);
+  if (!sources.length) {
+    host.innerHTML = '<div class="loading-state">暂无可用订阅线路</div>';
+    updateDebugInterfaceUrl();
+    return;
+  }
+  host.innerHTML = sources.map(function(source) {
+    const id = String(source.id || '');
+    const disabled = source.enabled === false;
+    return '<label class="debug-interface-source' + (disabled ? ' disabled' : '') + '">' +
+      '<input type="checkbox" data-debug-source-id="' + esc(id) + '" ' +
+      (selected.has(id) ? 'checked ' : '') + '>' +
+      '<span>' + esc(source.name || ('线路' + id)) + '</span>' +
+      (disabled ? '<small>已停用</small>' : '') +
+      '</label>';
+  }).join('');
+  host.querySelectorAll('[data-debug-source-id]').forEach(function(control) {
+    control.addEventListener('change', updateDebugInterfaceUrl);
+  });
+  updateDebugInterfaceUrl();
+}
+function regenerateDebugInterfaceToken() {
+  if (!currentState) return;
+  if (!currentState.settings) currentState.settings = {};
+  const config = getDebugInterfaceConfig();
+  config.token = crypto.randomUUID();
+  currentState.settings.debugInterface = config;
+  renderDebugInterface();
+  show('UUID 已重新生成，请保存调试接口后生效');
+}
+async function copyDebugInterfaceUrl() {
+  const input = el('debugInterfaceUrl');
+  const url = input && input.value;
+  if (!url) return show('请先选择线路并保存调试接口', true);
+  try {
+    await navigator.clipboard.writeText(url);
+    show('调试接口地址已复制');
+  } catch (_) {
+    input.focus();
+    input.select();
+    show('无法自动复制，请手动复制地址', true);
+  }
 }
 function formState() {
   const subscriptions = Array.from(document.querySelectorAll('.source-row')).map(function(row, index) {
@@ -166,7 +230,6 @@ function formState() {
       cacheMinutes: sourceType === 'url'
         ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 0)
         : 0,
-      debugAccessCount: Number(row.querySelector('[data-field="debugAccessCount"]').value || 0),
       autoRename: sourceType === 'url' && row.querySelector('[data-field="autoRename"]').checked,
       content: sourceType === 'content' ? content : '',
       remark: row.querySelector('[data-field="remark"]').value.trim()
@@ -188,6 +251,9 @@ function formState() {
     changelog: value('appChangelog'),
     is_force: el('appForce').checked ? 1 : 0
   } : null;
+  const debugConfig = getDebugInterfaceConfig();
+  debugConfig.subscriptionIds = Array.from(document.querySelectorAll('[data-debug-source-id]:checked'))
+    .map(function(control) { return control.dataset.debugSourceId; });
   return {
     subscriptions: subscriptions,
     settings: {
@@ -200,6 +266,7 @@ function formState() {
        registrationEnabled: el('registrationEnabled').checked,
        requireAdminRegistrationCode: el('requireAdminRegistrationCode').checked,
        },
+      debugInterface: debugConfig,
     notice: notice,
     appUpdate: appUpdate
   };
@@ -271,6 +338,10 @@ async function pushSection(section) {
         registrationEnabled: form.settings.registrationEnabled,
         requireAdminRegistrationCode: form.settings.requireAdminRegistrationCode
       })
+      : section === 'debug-interface'
+        ? Object.assign({}, currentState.settings, {
+          debugInterface: form.debugInterface
+        })
       : currentState.settings;
   const state = {
     subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,

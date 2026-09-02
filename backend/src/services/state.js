@@ -7,8 +7,29 @@ import {
   normalizeManagedContent,
   normalizeMinimumAppVersion,
   normalizeSubscriptionCacheMinutes,
-  normalizeSubscriptionDebugAccessCount,
 } from "./subscriptions.js";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function randomDebugInterfaceToken() {
+  return globalThis.crypto.randomUUID();
+}
+
+function normalizeDebugInterface(value, subscriptions) {
+  const input = plainObject(value) ? value : {};
+  const availableIds = new Set(subscriptions.map((item) => item.id));
+  const rawIds = input.subscriptionIds ?? input.sourceIds ?? input.subscriptions;
+  const subscriptionIds = Array.from(new Set(
+    (Array.isArray(rawIds) ? rawIds : [])
+      .map((id) => String(id).trim())
+      .filter((id) => /^\d+$/.test(id) && availableIds.has(id)),
+  ));
+  const candidate = cleanText(input.token ?? input.uuid).toLowerCase();
+  return {
+    token: UUID_PATTERN.test(candidate) ? candidate : randomDebugInterfaceToken(),
+    subscriptionIds,
+  };
+}
 
 export async function readState(env) {
   if (!env.CONFIG) {
@@ -55,9 +76,6 @@ export function normalizeState(input) {
           item.minAppVersion ?? item.minimumAppVersion,
         ),
         cacheMinutes: normalizeSubscriptionCacheMinutes(item.cacheMinutes),
-        debugAccessCount: normalizeSubscriptionDebugAccessCount(
-          item.debugAccessCount ?? item.debugAccessLimit ?? item.plaintextDebugAccessCount,
-        ),
         // 只有外部订阅允许在 Worker 转发前自动重命名节点。
         autoRename: !content && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
         content,
@@ -73,7 +91,6 @@ export function normalizeState(input) {
       minAccountType: item.minAccountType,
       minAppVersion: item.minAppVersion,
       cacheMinutes: item.cacheMinutes,
-      debugAccessCount: item.debugAccessCount,
       autoRename: item.autoRename,
       content: item.content,
       remark: item.remark,
@@ -84,24 +101,9 @@ export function normalizeState(input) {
     subscriptions,
     notice: normalizeNotice(value.notice),
     appUpdate: plainObject(value.appUpdate) ? value.appUpdate : null,
-    settings: normalizeSettings(value.settings),
+    settings: normalizeSettings(value.settings, subscriptions),
     ...(value.updatedAt ? { updatedAt: String(value.updatedAt) } : {}),
   };
-}
-
-/** Consume one plaintext debug request from the latest stored state. */
-export async function consumeSubscriptionDebugAccess(env, id) {
-  const state = await readState(env);
-  const source = state.subscriptions.find((item) => item.id === String(id));
-  if (!source || source.debugAccessCount <= 0) return false;
-
-  await writeState(env, {
-    ...state,
-    subscriptions: state.subscriptions.map((item) => item.id === source.id
-      ? { ...item, debugAccessCount: item.debugAccessCount - 1 }
-      : item),
-  });
-  return true;
 }
 
 export function normalizeNotice(value) {
@@ -148,7 +150,7 @@ export function visibleNotice(notice, now = Date.now()) {
   return notice;
 }
 
-export function normalizeSettings(value) {
+export function normalizeSettings(value, subscriptions = []) {
   const settings = plainObject(value) ? value : {};
   // 旧版状态没有注册控制字段，升级时采用新的邮箱绑定经验默认值。
   const hasRegistrationControl =
@@ -172,9 +174,12 @@ export function normalizeSettings(value) {
       settings.requireAdminRegistrationCode,
       false,
     ),
+    debugInterface: normalizeDebugInterface(settings.debugInterface, subscriptions),
   };
 }
 
 export function publicClientSettings(settings) {
-  return normalizeSettings(settings);
+  const normalized = normalizeSettings(settings);
+  const { debugInterface: _debugInterface, ...publicSettings } = normalized;
+  return publicSettings;
 }
