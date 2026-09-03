@@ -79,9 +79,9 @@ fun FloatingHomeNavigationBar(
         ) {
             Row(
                 modifier = Modifier
-                    .height(62.dp)
-                    .padding(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    .height(64.dp)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 FloatingNavigationItem(
                     selected = selectedDestination == HomeDestination.HOME,
@@ -138,7 +138,7 @@ private fun FloatingNavigationItem(
         color = containerColor
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 8.dp),
+            modifier = Modifier.padding(vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -152,6 +152,8 @@ private fun FloatingNavigationItem(
                 text = label,
                 color = contentColor,
                 fontSize = 12.sp,
+                lineHeight = 14.sp,
+                maxLines = 1,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
             )
         }

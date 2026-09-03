@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -17,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -43,6 +45,7 @@ fun AppScreenScaffold(
     onBackBlocked: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+    contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
     content: @Composable () -> Unit
 ) {
     var isLeaving by remember { mutableStateOf(false) }
@@ -66,6 +69,7 @@ fun AppScreenScaffold(
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.surface,
+            contentWindowInsets = contentWindowInsets,
             topBar = {
                 TopAppBar(
                     title = {

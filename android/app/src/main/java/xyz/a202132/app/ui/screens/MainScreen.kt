@@ -145,15 +145,13 @@ fun MainScreen(
         },
         gesturesEnabled = true
     ) {
-        Scaffold(
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = {
-                FloatingHomeNavigationBar(
-                    selectedDestination = bottomNavigationDestination,
-                    onDestinationSelected = onBottomNavigationDestinationSelected
-                )
-            },
-            topBar = {
+        FloatingHomeNavigationLayout(
+            selectedDestination = bottomNavigationDestination,
+            onDestinationSelected = onBottomNavigationDestinationSelected
+        ) {
+            Scaffold(
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                topBar = {
                 TopAppBar(
                     modifier = Modifier.windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
                     windowInsets = WindowInsets(0, 0, 0, 0),
@@ -223,16 +221,18 @@ fun MainScreen(
                         containerColor = MaterialTheme.colorScheme.background
                     )
                 )
-            },
-            containerColor = MaterialTheme.colorScheme.background
-        ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+                },
+                containerColor = MaterialTheme.colorScheme.background
+            ) { paddingValues ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 86.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                 Spacer(modifier = Modifier.height(32.dp))
                 
                 // 主页复用节点列表卡片，并在连接期间明确标出实际节点所属订阅组。
@@ -301,7 +301,8 @@ fun MainScreen(
                 
                 Spacer(modifier = Modifier.weight(1f))
                 
-                Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
             }
         }
     }

@@ -25,6 +25,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -192,8 +193,9 @@ fun NodeListScreen(
             start = 20.dp,
             top = 16.dp,
             end = 20.dp,
-            bottom = bottomContentPadding
-        )
+            bottom = 0.dp
+        ),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) {
         NodeListContent(
             nodes = nodes,
@@ -217,6 +219,7 @@ fun NodeListScreen(
             onSubscriptionSourceChange = onSubscriptionSourceChange,
             onToggleFavorite = handleToggleFavorite,
             interactionEnabled = !isClosing,
+            bottomContentPadding = bottomContentPadding
         )
     }
 
@@ -475,6 +478,7 @@ private fun NodeListContent(
     onSubscriptionSourceChange: (String) -> Unit,
     onToggleFavorite: (Node, Boolean) -> Unit,
     interactionEnabled: Boolean,
+    bottomContentPadding: Dp,
 ) {
     var frozenNodeOrderIds by remember { mutableStateOf<List<String>?>(null) }
     var wasTesting by remember { mutableStateOf(isTesting) }
@@ -745,7 +749,10 @@ private fun NodeListContent(
                             .graphicsLayer {
                                 translationY = pullRefreshContentOffsetPx
                             },
-                        contentPadding = PaddingValues(vertical = 4.dp),
+                        contentPadding = PaddingValues(
+                            top = 4.dp,
+                            bottom = bottomContentPadding
+                        ),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(
