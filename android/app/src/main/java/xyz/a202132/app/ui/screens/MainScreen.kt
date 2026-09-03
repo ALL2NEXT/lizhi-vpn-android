@@ -7,29 +7,18 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -66,9 +55,8 @@ fun MainScreen(
     onOpenFeatures: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
-    nodeListSwipeEnabled: Boolean = true,
-    floatingBottomNavigationDestination: HomeDestination? = null,
-    onBottomNavigationDestinationSelected: (HomeDestination) -> Unit = {}
+    bottomNavigationDestination: HomeDestination,
+    onBottomNavigationDestinationSelected: (HomeDestination) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -78,24 +66,6 @@ fun MainScreen(
     val drawerAnimationSpec = remember {
         tween<Float>(durationMillis = 250, easing = FastOutSlowInEasing)
     }
-    val density = LocalDensity.current
-    val nodeSwipeThresholdPx = with(density) { 72.dp.toPx() }
-    val nodeSwipeContentOffsetPx = with(density) { 14.dp.toPx() }
-    val nodeSwipeHintOffsetPx = with(density) { 18.dp.toPx() }
-    var nodeSwipeDistancePx by remember { mutableFloatStateOf(0f) }
-    var isNodeSwipeDragging by remember { mutableStateOf(false) }
-    val nodeSwipeProgress =
-        (nodeSwipeDistancePx / nodeSwipeThresholdPx).coerceIn(0f, 1f)
-    val nodeSwipeVisualProgress by animateFloatAsState(
-        targetValue = if (isNodeSwipeDragging) nodeSwipeProgress else 0f,
-        animationSpec = if (isNodeSwipeDragging) {
-            snap()
-        } else {
-            tween(durationMillis = 180, easing = FastOutSlowInEasing)
-        },
-        label = "nodeSwipeProgress"
-    )
-
     fun closeDrawerThen(action: () -> Unit) {
         scope.launch {
             drawerState.animateTo(DrawerValue.Closed, drawerAnimationSpec)
@@ -178,12 +148,10 @@ fun MainScreen(
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                floatingBottomNavigationDestination?.let { destination ->
-                    FloatingHomeNavigationBar(
-                        selectedDestination = destination,
-                        onDestinationSelected = onBottomNavigationDestinationSelected
-                    )
-                }
+                FloatingHomeNavigationBar(
+                    selectedDestination = bottomNavigationDestination,
+                    onDestinationSelected = onBottomNavigationDestinationSelected
+                )
             },
             topBar = {
                 TopAppBar(
@@ -262,51 +230,6 @@ fun MainScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .then(
-                        if (floatingBottomNavigationDestination == null) {
-                            Modifier.windowInsetsPadding(
-                                WindowInsets.navigationBarsIgnoringVisibility
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .graphicsLayer {
-                        translationY = -nodeSwipeContentOffsetPx * nodeSwipeVisualProgress
-                    }
-                    .then(
-                        if (nodeListSwipeEnabled) {
-                            Modifier.pointerInput(onOpenNodeList, nodeSwipeThresholdPx) {
-                                detectVerticalDragGestures(
-                                    onDragStart = {
-                                        nodeSwipeDistancePx = 0f
-                                        isNodeSwipeDragging = true
-                                    },
-                                    onVerticalDrag = { change, dragAmount ->
-                                        nodeSwipeDistancePx =
-                                            (nodeSwipeDistancePx - dragAmount)
-                                                .coerceIn(0f, nodeSwipeThresholdPx * 1.2f)
-                                        change.consume()
-                                    },
-                                    onDragEnd = {
-                                        val shouldOpenNodeList =
-                                            nodeSwipeDistancePx >= nodeSwipeThresholdPx
-                                        isNodeSwipeDragging = false
-                                        nodeSwipeDistancePx = 0f
-                                        if (shouldOpenNodeList) {
-                                            onOpenNodeList()
-                                        }
-                                    },
-                                    onDragCancel = {
-                                        isNodeSwipeDragging = false
-                                        nodeSwipeDistancePx = 0f
-                                    }
-                                )
-                            }
-                        } else {
-                            Modifier
-                        }
-                    )
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -377,65 +300,6 @@ fun MainScreen(
                 )
                 
                 Spacer(modifier = Modifier.weight(1f))
-                
-                if (nodeListSwipeEnabled) {
-                    // 滑动式保留原有上划手势与实时反馈。
-                    val nodeSwipeHintColor = lerp(
-                        MaterialTheme.colorScheme.onSurfaceVariant,
-                        MaterialTheme.colorScheme.primary,
-                        nodeSwipeVisualProgress
-                    )
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.graphicsLayer {
-                            translationY = -nodeSwipeHintOffsetPx * nodeSwipeVisualProgress
-                            val scale = 1f + 0.05f * nodeSwipeVisualProgress
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = null,
-                            tint = nodeSwipeHintColor,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Text(
-                            text = if (nodeSwipeProgress >= 1f) {
-                                "松开打开节点列表"
-                            } else {
-                                "向上滑动选择节点"
-                            },
-                            fontSize = 14.sp,
-                            fontWeight = if (nodeSwipeProgress >= 1f) {
-                                FontWeight.SemiBold
-                            } else {
-                                FontWeight.Normal
-                            },
-                            color = nodeSwipeHintColor
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .width(96.dp)
-                                .height(3.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
-                                )
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .fillMaxWidth(nodeSwipeVisualProgress)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
                 
                 Spacer(modifier = Modifier.height(32.dp))
             }

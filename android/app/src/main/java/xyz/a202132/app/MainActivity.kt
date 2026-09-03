@@ -15,9 +15,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
@@ -39,10 +37,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.saveable.rememberSaveable
-import xyz.a202132.app.data.model.HomeNavigationMode
 import xyz.a202132.app.ui.components.FloatingHomeNavigationLayout
 import xyz.a202132.app.ui.components.HomeDestination
-import xyz.a202132.app.ui.dialogs.HomeNavigationModeDialog
 import xyz.a202132.app.ui.navigation.AppRoute
 import xyz.a202132.app.ui.screens.FeatureScreen
 import xyz.a202132.app.ui.screens.AccountSettingsScreen
@@ -84,13 +80,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = viewModel()
             val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
-            val homeNavigationPreference by
-                viewModel.homeNavigationPreference.collectAsStateWithLifecycle()
-            val isUserAgreementAccepted by
-                viewModel.isUserAgreementAccepted.collectAsStateWithLifecycle()
-            var navigationModeChosenForLaunch by rememberSaveable {
-                mutableStateOf(false)
-            }
             FireflyTheme(skinSettings = skinSettings) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -175,88 +164,66 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             ) {
-                                if (
-                                    homeNavigationPreference.mode ==
-                                    HomeNavigationMode.BOTTOM_NAVIGATION
-                                ) {
-                                    var selectedDestination by rememberSaveable {
-                                        mutableStateOf(HomeDestination.HOME)
-                                    }
-                                    when (selectedDestination) {
-                                        HomeDestination.HOME -> MainScreen(
-                                            viewModel = viewModel,
-                                            onStartVpn = { action ->
-                                                requestVpnPermission(action)
-                                            },
-                                            onOpenProxyScope = {
-                                                navigateTo(AppRoute.PROXY_SCOPE)
-                                            },
-                                            onOpenNodeList = {
-                                                selectedDestination =
-                                                    HomeDestination.SUBSCRIPTIONS
-                                            },
-                                            onOpenOtherConfig = {
-                                                navigateTo(AppRoute.OTHER_CONFIG)
-                                            },
-                                            onOpenFeatures = {
-                                                navigateTo(AppRoute.FEATURES)
-                                            },
-                                            onOpenAccountSettings = {
-                                                navigateTo(AppRoute.ACCOUNT_SETTINGS)
-                                            },
-                                            onOpenSkin = { navigateTo(AppRoute.SKIN) },
-                                            nodeListSwipeEnabled = false,
-                                            floatingBottomNavigationDestination =
-                                                selectedDestination,
-                                            onBottomNavigationDestinationSelected = {
-                                                selectedDestination = it
-                                            }
-                                        )
-
-                                        HomeDestination.SUBSCRIPTIONS ->
-                                            FloatingHomeNavigationLayout(
-                                                selectedDestination = selectedDestination,
-                                                onDestinationSelected = {
-                                                    selectedDestination = it
-                                                }
-                                            ) {
-                                                NodeListDestination(
-                                                    viewModel = viewModel,
-                                                    onNodeSelected = { node ->
-                                                        selectedDestination =
-                                                            HomeDestination.HOME
-                                                        requestVpnPermission {
-                                                            viewModel.selectAndConnectNode(node)
-                                                        }
-                                                    },
-                                                    onImportFromText = {
-                                                        importNodesToFavorites(it, false, null)
-                                                    },
-                                                    onScanQrCode = {
-                                                        navigateTo(AppRoute.QR_SCANNER)
-                                                    },
-                                                    onBack = {
-                                                        selectedDestination =
-                                                            HomeDestination.HOME
-                                                    },
-                                                    showBackNavigation = false,
-                                                    bottomContentPadding = 108.dp
-                                                )
-                                            }
-                                    }
-                                } else {
-                                    MainScreen(
+                                var selectedDestination by rememberSaveable {
+                                    mutableStateOf(HomeDestination.HOME)
+                                }
+                                when (selectedDestination) {
+                                    HomeDestination.HOME -> MainScreen(
                                         viewModel = viewModel,
-                                        onStartVpn = { action -> requestVpnPermission(action) },
-                                        onOpenProxyScope = { navigateTo(AppRoute.PROXY_SCOPE) },
-                                        onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
-                                        onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
-                                        onOpenFeatures = { navigateTo(AppRoute.FEATURES) },
+                                        onStartVpn = { action ->
+                                            requestVpnPermission(action)
+                                        },
+                                        onOpenProxyScope = {
+                                            navigateTo(AppRoute.PROXY_SCOPE)
+                                        },
+                                        onOpenNodeList = {
+                                            selectedDestination = HomeDestination.SUBSCRIPTIONS
+                                        },
+                                        onOpenOtherConfig = {
+                                            navigateTo(AppRoute.OTHER_CONFIG)
+                                        },
+                                        onOpenFeatures = {
+                                            navigateTo(AppRoute.FEATURES)
+                                        },
                                         onOpenAccountSettings = {
                                             navigateTo(AppRoute.ACCOUNT_SETTINGS)
                                         },
-                                        onOpenSkin = { navigateTo(AppRoute.SKIN) }
+                                        onOpenSkin = { navigateTo(AppRoute.SKIN) },
+                                        bottomNavigationDestination =
+                                            selectedDestination,
+                                        onBottomNavigationDestinationSelected = {
+                                            selectedDestination = it
+                                        }
                                     )
+
+                                    HomeDestination.SUBSCRIPTIONS ->
+                                        FloatingHomeNavigationLayout(
+                                            selectedDestination = selectedDestination,
+                                            onDestinationSelected = {
+                                                selectedDestination = it
+                                            }
+                                        ) {
+                                            NodeListDestination(
+                                                viewModel = viewModel,
+                                                onNodeSelected = { node ->
+                                                    selectedDestination = HomeDestination.HOME
+                                                    requestVpnPermission {
+                                                        viewModel.selectAndConnectNode(node)
+                                                    }
+                                                },
+                                                onImportFromText = {
+                                                    importNodesToFavorites(it, false, null)
+                                                },
+                                                onScanQrCode = {
+                                                    navigateTo(AppRoute.QR_SCANNER)
+                                                },
+                                                onBack = {
+                                                    selectedDestination = HomeDestination.HOME
+                                                },
+                                                showBackNavigation = false,
+                                                bottomContentPadding = 108.dp
+                                            )
+                                        }
                                 }
                             }
 
@@ -286,47 +253,6 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 }
-                            }
-
-                            composable(
-                                route = AppRoute.NODE_LIST,
-                                enterTransition = {
-                                    fadeIn(
-                                        animationSpec = tween(durationMillis = 180, delayMillis = 30)
-                                    ) + slideInVertically(
-                                        animationSpec = tween(
-                                            durationMillis = 300,
-                                            easing = FastOutSlowInEasing
-                                        ),
-                                        initialOffsetY = { height -> height }
-                                    )
-                                },
-                                popEnterTransition = {
-                                    fadeIn(animationSpec = tween(durationMillis = 180))
-                                },
-                                popExitTransition = {
-                                    fadeOut(animationSpec = tween(durationMillis = 160)) +
-                                        slideOutVertically(
-                                            animationSpec = tween(
-                                                durationMillis = 280,
-                                                easing = FastOutSlowInEasing
-                                            ),
-                                            targetOffsetY = { height -> height }
-                                        )
-                                }
-                            ) {
-                                NodeListDestination(
-                                    viewModel = viewModel,
-                                    onNodeSelected = { node ->
-                                        navController.popBackStack(AppRoute.MAIN, false)
-                                        requestVpnPermission {
-                                            viewModel.selectAndConnectNode(node)
-                                        }
-                                    },
-                                    onImportFromText = { importNodesToFavorites(it, false, null) },
-                                    onScanQrCode = { navigateTo(AppRoute.QR_SCANNER) },
-                                    onBack = { navController.popBackStack() }
-                                )
                             }
 
                             composable(AppRoute.QR_SCANNER) {
@@ -378,19 +304,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                        }
-
-                        if (
-                            homeNavigationPreference.isLoaded &&
-                            !navigationModeChosenForLaunch &&
-                            isUserAgreementAccepted == true
-                        ) {
-                            HomeNavigationModeDialog(
-                                onModeSelected = { mode ->
-                                    navigationModeChosenForLaunch = true
-                                    viewModel.setHomeNavigationMode(mode)
-                                }
-                            )
                         }
                 }
             }

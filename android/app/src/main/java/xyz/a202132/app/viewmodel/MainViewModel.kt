@@ -49,11 +49,6 @@ enum class NodeImportResult {
     FETCH_FAILED
 }
 
-data class HomeNavigationPreference(
-    val isLoaded: Boolean = false,
-    val mode: HomeNavigationMode? = null
-)
-
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
@@ -263,14 +258,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ProxyMode.SMART
     )
 
-    val homeNavigationPreference = settingsRepository.homeNavigationMode
-        .map { mode -> HomeNavigationPreference(isLoaded = true, mode = mode) }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.Eagerly,
-            HomeNavigationPreference()
-        )
-    
     val ipv6RoutingMode = settingsRepository.ipv6RoutingMode.stateIn(
         viewModelScope,
         SharingStarted.Lazily,
@@ -1216,12 +1203,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setNodeListCategory(category: NodeListCategory) {
         viewModelScope.launch {
             settingsRepository.setNodeListCategory(category)
-        }
-    }
-
-    fun setHomeNavigationMode(mode: HomeNavigationMode) {
-        viewModelScope.launch {
-            settingsRepository.setHomeNavigationMode(mode)
         }
     }
 
