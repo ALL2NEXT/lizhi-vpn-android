@@ -65,7 +65,10 @@ fun MainScreen(
     onOpenOtherConfig: () -> Unit = {},
     onOpenFeatures: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
-    onOpenSkin: () -> Unit = {}
+    onOpenSkin: () -> Unit = {},
+    nodeListSwipeEnabled: Boolean = true,
+    floatingBottomNavigationDestination: HomeDestination? = null,
+    onBottomNavigationDestinationSelected: (HomeDestination) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -174,6 +177,14 @@ fun MainScreen(
     ) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                floatingBottomNavigationDestination?.let { destination ->
+                    FloatingHomeNavigationBar(
+                        selectedDestination = destination,
+                        onDestinationSelected = onBottomNavigationDestinationSelected
+                    )
+                }
+            },
             topBar = {
                 TopAppBar(
                     modifier = Modifier.windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
@@ -251,37 +262,51 @@ fun MainScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
+                    .then(
+                        if (floatingBottomNavigationDestination == null) {
+                            Modifier.windowInsetsPadding(
+                                WindowInsets.navigationBarsIgnoringVisibility
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
                     .graphicsLayer {
                         translationY = -nodeSwipeContentOffsetPx * nodeSwipeVisualProgress
                     }
-                    .pointerInput(onOpenNodeList, nodeSwipeThresholdPx) {
-                        detectVerticalDragGestures(
-                            onDragStart = {
-                                nodeSwipeDistancePx = 0f
-                                isNodeSwipeDragging = true
-                            },
-                            onVerticalDrag = { change, dragAmount ->
-                                nodeSwipeDistancePx =
-                                    (nodeSwipeDistancePx - dragAmount)
-                                        .coerceIn(0f, nodeSwipeThresholdPx * 1.2f)
-                                change.consume()
-                            },
-                            onDragEnd = {
-                                val shouldOpenNodeList =
-                                    nodeSwipeDistancePx >= nodeSwipeThresholdPx
-                                isNodeSwipeDragging = false
-                                nodeSwipeDistancePx = 0f
-                                if (shouldOpenNodeList) {
-                                    onOpenNodeList()
-                                }
-                            },
-                            onDragCancel = {
-                                isNodeSwipeDragging = false
-                                nodeSwipeDistancePx = 0f
+                    .then(
+                        if (nodeListSwipeEnabled) {
+                            Modifier.pointerInput(onOpenNodeList, nodeSwipeThresholdPx) {
+                                detectVerticalDragGestures(
+                                    onDragStart = {
+                                        nodeSwipeDistancePx = 0f
+                                        isNodeSwipeDragging = true
+                                    },
+                                    onVerticalDrag = { change, dragAmount ->
+                                        nodeSwipeDistancePx =
+                                            (nodeSwipeDistancePx - dragAmount)
+                                                .coerceIn(0f, nodeSwipeThresholdPx * 1.2f)
+                                        change.consume()
+                                    },
+                                    onDragEnd = {
+                                        val shouldOpenNodeList =
+                                            nodeSwipeDistancePx >= nodeSwipeThresholdPx
+                                        isNodeSwipeDragging = false
+                                        nodeSwipeDistancePx = 0f
+                                        if (shouldOpenNodeList) {
+                                            onOpenNodeList()
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        isNodeSwipeDragging = false
+                                        nodeSwipeDistancePx = 0f
+                                    }
+                                )
                             }
-                        )
-                    }
+                        } else {
+                            Modifier
+                        }
+                    )
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -353,62 +378,64 @@ fun MainScreen(
                 
                 Spacer(modifier = Modifier.weight(1f))
                 
-                // 节点列表改由主页上划打开；提示跟随手势提供实时反馈。
-                val nodeSwipeHintColor = lerp(
-                    MaterialTheme.colorScheme.onSurfaceVariant,
-                    MaterialTheme.colorScheme.primary,
-                    nodeSwipeVisualProgress
-                )
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.graphicsLayer {
-                        translationY = -nodeSwipeHintOffsetPx * nodeSwipeVisualProgress
-                        val scale = 1f + 0.05f * nodeSwipeVisualProgress
-                        scaleX = scale
-                        scaleY = scale
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = null,
-                        tint = nodeSwipeHintColor,
-                        modifier = Modifier.size(24.dp)
+                if (nodeListSwipeEnabled) {
+                    // 滑动式保留原有上划手势与实时反馈。
+                    val nodeSwipeHintColor = lerp(
+                        MaterialTheme.colorScheme.onSurfaceVariant,
+                        MaterialTheme.colorScheme.primary,
+                        nodeSwipeVisualProgress
                     )
-                    Text(
-                        text = if (nodeSwipeProgress >= 1f) {
-                            "松开打开节点列表"
-                        } else {
-                            "向上滑动选择节点"
-                        },
-                        fontSize = 14.sp,
-                        fontWeight = if (nodeSwipeProgress >= 1f) {
-                            FontWeight.SemiBold
-                        } else {
-                            FontWeight.Normal
-                        },
-                        color = nodeSwipeHintColor
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .width(96.dp)
-                            .height(3.dp)
-                            .clip(CircleShape)
-                            .background(
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
-                            )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.graphicsLayer {
+                            translationY = -nodeSwipeHintOffsetPx * nodeSwipeVisualProgress
+                            val scale = 1f + 0.05f * nodeSwipeVisualProgress
+                            scaleX = scale
+                            scaleY = scale
+                        }
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = null,
+                            tint = nodeSwipeHintColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = if (nodeSwipeProgress >= 1f) {
+                                "松开打开节点列表"
+                            } else {
+                                "向上滑动选择节点"
+                            },
+                            fontSize = 14.sp,
+                            fontWeight = if (nodeSwipeProgress >= 1f) {
+                                FontWeight.SemiBold
+                            } else {
+                                FontWeight.Normal
+                            },
+                            color = nodeSwipeHintColor
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
                         Box(
                             modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(nodeSwipeVisualProgress)
+                                .width(96.dp)
+                                .height(3.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
+                                .background(
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
+                                )
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(nodeSwipeVisualProgress)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
                 
                 Spacer(modifier = Modifier.height(32.dp))
             }

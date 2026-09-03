@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.BandwidthTestTargets
+import xyz.a202132.app.data.model.HomeNavigationMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.UrlTestTargets
@@ -61,6 +62,8 @@ fun OtherConfigScreen(
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
+    val homeNavigationPreference by
+        viewModel.homeNavigationPreference.collectAsStateWithLifecycle()
 
     var urlTestUrlInput by remember(urlTestUrl) { mutableStateOf(urlTestUrl) }
     var showUrlTestPresets by remember { mutableStateOf(false) }
@@ -81,6 +84,39 @@ fun OtherConfigScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            OtherConfigSection(
+                title = "主页导航方式"
+            ) {
+                MultiPositionSwitch(
+                    options = listOf("滑动式", "底部导航式"),
+                    selectedIndex = if (
+                        homeNavigationPreference.mode ==
+                        HomeNavigationMode.BOTTOM_NAVIGATION
+                    ) 1 else 0,
+                    onOptionSelected = { index ->
+                        viewModel.setHomeNavigationMode(
+                            if (index == 0) {
+                                HomeNavigationMode.SWIPE
+                            } else {
+                                HomeNavigationMode.BOTTOM_NAVIGATION
+                            }
+                        )
+                    }
+                )
+                Text(
+                    text = if (
+                        homeNavigationPreference.mode ==
+                        HomeNavigationMode.BOTTOM_NAVIGATION
+                    ) {
+                        "主页与订阅使用底部悬浮胶囊导航切换。"
+                    } else {
+                        "在主页向上滑动打开节点列表。"
+                    },
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             OtherConfigSection(
                 title = "网络配置"
             ) {

@@ -39,6 +39,7 @@ fun AppScreenScaffold(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     backEnabled: Boolean = true,
+    showBackNavigation: Boolean = true,
     onBackBlocked: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
@@ -89,14 +90,16 @@ fun AppScreenScaffold(
                         }
                     },
                     navigationIcon = {
-                        IconButton(
-                            onClick = handleBack,
-                            enabled = backEnabled && !isLeaving
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.ArrowBack,
-                                contentDescription = "返回"
-                            )
+                        if (showBackNavigation) {
+                            IconButton(
+                                onClick = handleBack,
+                                enabled = backEnabled && !isLeaving
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowBack,
+                                    contentDescription = "返回"
+                                )
+                            }
                         }
                     },
                     actions = actions,

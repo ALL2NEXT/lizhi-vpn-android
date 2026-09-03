@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 import xyz.a202132.app.data.model.BandwidthTestTargets
+import xyz.a202132.app.data.model.HomeNavigationMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
@@ -50,6 +51,7 @@ class SettingsRepository(private val context: Context) {
         private val USER_AGREEMENT_ACCEPTED = booleanPreferencesKey("user_agreement_accepted")
         private val USER_AGREEMENT_VERSION = stringPreferencesKey("user_agreement_version")
         private val USER_AGREEMENT_ACCEPTED_AT = longPreferencesKey("user_agreement_accepted_at")
+        private val HOME_NAVIGATION_MODE = stringPreferencesKey("home_navigation_mode")
         private const val CURRENT_USER_AGREEMENT_VERSION = "2026-08-19-v2"
         
         // 分应用代理设置
@@ -143,6 +145,13 @@ class SettingsRepository(private val context: Context) {
             ProxyMode.valueOf(mode)
         } catch (e: Exception) {
             ProxyMode.SMART
+        }
+    }
+
+    /** 空值表示用户尚未选择主页导航方式。 */
+    val homeNavigationMode: Flow<HomeNavigationMode?> = context.dataStore.data.map { preferences ->
+        preferences[HOME_NAVIGATION_MODE]?.let { storedMode ->
+            runCatching { HomeNavigationMode.valueOf(storedMode) }.getOrNull()
         }
     }
 
@@ -365,6 +374,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setProxyMode(mode: ProxyMode) {
         context.dataStore.edit { preferences ->
             preferences[PROXY_MODE] = mode.name
+        }
+    }
+
+    suspend fun setHomeNavigationMode(mode: HomeNavigationMode) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_NAVIGATION_MODE] = mode.name
         }
     }
 

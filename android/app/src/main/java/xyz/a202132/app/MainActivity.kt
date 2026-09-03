@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -37,18 +38,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import xyz.a202132.app.ui.components.NodeListScreen
+import androidx.compose.runtime.saveable.rememberSaveable
+import xyz.a202132.app.data.model.HomeNavigationMode
+import xyz.a202132.app.ui.components.FloatingHomeNavigationLayout
+import xyz.a202132.app.ui.components.HomeDestination
+import xyz.a202132.app.ui.dialogs.HomeNavigationModeDialog
 import xyz.a202132.app.ui.navigation.AppRoute
 import xyz.a202132.app.ui.screens.FeatureScreen
 import xyz.a202132.app.ui.screens.AccountSettingsScreen
 import xyz.a202132.app.ui.screens.MainScreen
+import xyz.a202132.app.ui.screens.NodeListDestination
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.SkinScreen
 import xyz.a202132.app.ui.screens.SkinSchemeEditorScreen
 import xyz.a202132.app.ui.theme.FireflyTheme
-import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.viewmodel.MainViewModel
 import xyz.a202132.app.viewmodel.NodeImportResult
 
@@ -79,6 +84,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = viewModel()
             val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
+            val homeNavigationPreference by
+                viewModel.homeNavigationPreference.collectAsStateWithLifecycle()
+            val isUserAgreementAccepted by
+                viewModel.isUserAgreementAccepted.collectAsStateWithLifecycle()
+            var navigationModeChosenForLaunch by rememberSaveable {
+                mutableStateOf(false)
+            }
             FireflyTheme(skinSettings = skinSettings) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -109,7 +121,7 @@ class MainActivity : ComponentActivity() {
                                     ).show()
                                     onComplete?.invoke(success)
                                     if (success && returnToNodeList) {
-                                        navController.popBackStack(AppRoute.NODE_LIST, false)
+                                        navController.popBackStack()
                                     }
                                 }
                             }
@@ -163,16 +175,89 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             ) {
-                                MainScreen(
-                                    viewModel = viewModel,
-                                    onStartVpn = { action -> requestVpnPermission(action) },
-                                    onOpenProxyScope = { navigateTo(AppRoute.PROXY_SCOPE) },
-                                    onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
-                                    onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
-                                    onOpenFeatures = { navigateTo(AppRoute.FEATURES) },
-                                    onOpenAccountSettings = { navigateTo(AppRoute.ACCOUNT_SETTINGS) },
-                                    onOpenSkin = { navigateTo(AppRoute.SKIN) }
-                                )
+                                if (
+                                    homeNavigationPreference.mode ==
+                                    HomeNavigationMode.BOTTOM_NAVIGATION
+                                ) {
+                                    var selectedDestination by rememberSaveable {
+                                        mutableStateOf(HomeDestination.HOME)
+                                    }
+                                    when (selectedDestination) {
+                                        HomeDestination.HOME -> MainScreen(
+                                            viewModel = viewModel,
+                                            onStartVpn = { action ->
+                                                requestVpnPermission(action)
+                                            },
+                                            onOpenProxyScope = {
+                                                navigateTo(AppRoute.PROXY_SCOPE)
+                                            },
+                                            onOpenNodeList = {
+                                                selectedDestination =
+                                                    HomeDestination.SUBSCRIPTIONS
+                                            },
+                                            onOpenOtherConfig = {
+                                                navigateTo(AppRoute.OTHER_CONFIG)
+                                            },
+                                            onOpenFeatures = {
+                                                navigateTo(AppRoute.FEATURES)
+                                            },
+                                            onOpenAccountSettings = {
+                                                navigateTo(AppRoute.ACCOUNT_SETTINGS)
+                                            },
+                                            onOpenSkin = { navigateTo(AppRoute.SKIN) },
+                                            nodeListSwipeEnabled = false,
+                                            floatingBottomNavigationDestination =
+                                                selectedDestination,
+                                            onBottomNavigationDestinationSelected = {
+                                                selectedDestination = it
+                                            }
+                                        )
+
+                                        HomeDestination.SUBSCRIPTIONS ->
+                                            FloatingHomeNavigationLayout(
+                                                selectedDestination = selectedDestination,
+                                                onDestinationSelected = {
+                                                    selectedDestination = it
+                                                }
+                                            ) {
+                                                NodeListDestination(
+                                                    viewModel = viewModel,
+                                                    onNodeSelected = { node ->
+                                                        selectedDestination =
+                                                            HomeDestination.HOME
+                                                        requestVpnPermission {
+                                                            viewModel.selectAndConnectNode(node)
+                                                        }
+                                                    },
+                                                    onImportFromText = {
+                                                        importNodesToFavorites(it, false, null)
+                                                    },
+                                                    onScanQrCode = {
+                                                        navigateTo(AppRoute.QR_SCANNER)
+                                                    },
+                                                    onBack = {
+                                                        selectedDestination =
+                                                            HomeDestination.HOME
+                                                    },
+                                                    showBackNavigation = false,
+                                                    bottomContentPadding = 108.dp
+                                                )
+                                            }
+                                    }
+                                } else {
+                                    MainScreen(
+                                        viewModel = viewModel,
+                                        onStartVpn = { action -> requestVpnPermission(action) },
+                                        onOpenProxyScope = { navigateTo(AppRoute.PROXY_SCOPE) },
+                                        onOpenNodeList = { navigateTo(AppRoute.NODE_LIST) },
+                                        onOpenOtherConfig = { navigateTo(AppRoute.OTHER_CONFIG) },
+                                        onOpenFeatures = { navigateTo(AppRoute.FEATURES) },
+                                        onOpenAccountSettings = {
+                                            navigateTo(AppRoute.ACCOUNT_SETTINGS)
+                                        },
+                                        onOpenSkin = { navigateTo(AppRoute.SKIN) }
+                                    )
+                                }
                             }
 
                             composable(AppRoute.PROXY_SCOPE) {
@@ -230,75 +315,16 @@ class MainActivity : ComponentActivity() {
                                         )
                                 }
                             ) {
-                                val nodes by viewModel.nodes.collectAsStateWithLifecycle()
-                                val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
-                                val nodeListCategory by viewModel.nodeListCategory.collectAsStateWithLifecycle()
-                                val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
-                                val selectedSubscriptionSourceId by
-                                    viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
-                                val favoriteSourceNodeIds by
-                                    viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
-                                val availableRegionCodes by
-                                    viewModel.availableNodeRegionCodes.collectAsStateWithLifecycle()
-                                val selectedRegionCodes by
-                                    viewModel.selectedNodeRegionCodes.collectAsStateWithLifecycle()
-                                val skipFavoriteRemovalConfirmation by
-                                    viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
-                                val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
-                                val isRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()
-                                val isRefreshingAllSubscriptions by
-                                    viewModel.isRefreshingAllSubscriptions.collectAsStateWithLifecycle()
-                                val hideFavoriteNodeGroup by
-                                    viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
-                                val nodeDisplaySettings by
-                                    viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
-                                val protocolCoreSettings by
-                                    viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
-                                val subscriptionSourceUpdatedAt by
-                                    viewModel.subscriptionSourceUpdatedAt.collectAsStateWithLifecycle()
-                                val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
-
-                                NodeListScreen(
-                                    nodes = nodes,
-                                    selectedNodeId = selectedNodeId,
-                                    category = nodeListCategory,
-                                    subscriptionGroups = subscriptionGroups,
-                                    selectedSubscriptionSourceId = selectedSubscriptionSourceId,
-                                    favoriteSourceNodeIds = favoriteSourceNodeIds,
-                                    availableRegionCodes = availableRegionCodes,
-                                    selectedRegionCodes = selectedRegionCodes,
-                                    skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
-                                    isTesting = isTesting,
-                                    isRefreshing = isRefreshing,
-                                    isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
-                                    hideFavoriteNodeGroup = hideFavoriteNodeGroup,
-                                    nodeDisplaySettings = nodeDisplaySettings,
-                                    protocolCoreSettings = protocolCoreSettings,
-                                    subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
-                                    testingLabel = testingLabel,
+                                NodeListDestination(
+                                    viewModel = viewModel,
                                     onNodeSelected = { node ->
                                         navController.popBackStack(AppRoute.MAIN, false)
                                         requestVpnPermission {
                                             viewModel.selectAndConnectNode(node)
                                         }
                                     },
-                                    onCategoryChange = { viewModel.setNodeListCategory(it) },
-                                    onSubscriptionSourceChange = { viewModel.setSubscriptionSource(it) },
-                                    onRegionFilterChange = { viewModel.setNodeRegionFilterCodes(it) },
-                                    onToggleFavorite = { viewModel.toggleFavoriteNode(it) },
-                                    onSkipFavoriteRemovalConfirmationForSession = {
-                                        viewModel.skipFavoriteRemovalConfirmationForSession()
-                                    },
                                     onImportFromText = { importNodesToFavorites(it, false, null) },
                                     onScanQrCode = { navigateTo(AppRoute.QR_SCANNER) },
-                                    onTcpingTest = { viewModel.testAllNodes() },
-                                    onUrlTest = { viewModel.urlTestAllNodes() },
-                                    onRefresh = {
-                                        if (nodeListCategory == NodeListCategory.PRIMARY) {
-                                            selectedSubscriptionSourceId?.let(viewModel::refreshNodes)
-                                        }
-                                    },
-                                    onRefreshAll = { viewModel.refreshNodes() },
                                     onBack = { navController.popBackStack() }
                                 )
                             }
@@ -352,6 +378,19 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                        }
+
+                        if (
+                            homeNavigationPreference.isLoaded &&
+                            !navigationModeChosenForLaunch &&
+                            isUserAgreementAccepted == true
+                        ) {
+                            HomeNavigationModeDialog(
+                                onModeSelected = { mode ->
+                                    navigationModeChosenForLaunch = true
+                                    viewModel.setHomeNavigationMode(mode)
+                                }
+                            )
                         }
                 }
             }

@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
@@ -113,7 +114,9 @@ fun NodeListScreen(
     onUrlTest: () -> Unit,
     onRefresh: () -> Unit,
     onRefreshAll: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    showBackNavigation: Boolean = true,
+    bottomContentPadding: Dp = 16.dp
 ) {
     val context = LocalContext.current
     var isClosing by remember { mutableStateOf(false) }
@@ -173,6 +176,7 @@ fun NodeListScreen(
         subtitle = if (isRefreshingAllSubscriptions) "节点刷新中..." else testingLabel,
         onBack = handleBack,
         backEnabled = !isClosing,
+        showBackNavigation = showBackNavigation,
         actions = {
             NodeListTopActions(
                 enabled = !isClosing,
@@ -183,7 +187,13 @@ fun NodeListScreen(
                 onRegionFilter = { showRegionFilterDialog = true },
                 onRefresh = onRefreshAll
             )
-        }
+        },
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            top = 16.dp,
+            end = 20.dp,
+            bottom = bottomContentPadding
+        )
     ) {
         NodeListContent(
             nodes = nodes,
