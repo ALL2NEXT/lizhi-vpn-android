@@ -49,6 +49,7 @@ import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.SkinScreen
 import xyz.a202132.app.ui.screens.SkinSchemeEditorScreen
+import xyz.a202132.app.ui.screens.WebNavigationScreen
 import xyz.a202132.app.ui.theme.FireflyTheme
 import xyz.a202132.app.viewmodel.MainViewModel
 import xyz.a202132.app.viewmodel.NodeImportResult
@@ -221,6 +222,21 @@ class MainActivity : ComponentActivity() {
                                                     selectedDestination = HomeDestination.HOME
                                                 },
                                                 showBackNavigation = false,
+                                                bottomContentPadding = 108.dp
+                                            )
+                                        }
+
+                                    HomeDestination.NAVIGATION ->
+                                        FloatingHomeNavigationLayout(
+                                            selectedDestination = selectedDestination,
+                                            onDestinationSelected = {
+                                                selectedDestination = it
+                                            }
+                                        ) {
+                                            WebNavigationScreen(
+                                                onBack = {
+                                                    selectedDestination = HomeDestination.HOME
+                                                },
                                                 bottomContentPadding = 108.dp
                                             )
                                         }

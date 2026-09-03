@@ -1,9 +1,5 @@
 package xyz.a202132.app.ui.screens
 
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -13,7 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,13 +31,6 @@ import xyz.a202132.app.ui.components.*
 import xyz.a202132.app.ui.dialogs.*
 import xyz.a202132.app.ui.theme.*
 import xyz.a202132.app.viewmodel.MainViewModel
-
-private val WEB_SPEED_TESTS = listOf(
-    "中科大测速" to AppConfig.USTC_SPEED_TEST_URL,
-    "南大测速" to AppConfig.NJU_SPEED_TEST_URL,
-    "奈飞测速" to AppConfig.NETFLIX_SPEED_TEST_URL,
-    "Google测速" to AppConfig.GOOGLE_SPEED_TEST_URL
-)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -187,35 +175,6 @@ fun MainScreen(
                                 )
                             }
                         )
-
-                        // 工具菜单按钮
-                        var showToolsMenu by remember { mutableStateOf(false) }
-                        Box {
-                            IconButton(
-                                onClick = { showToolsMenu = true }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "工具",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showToolsMenu,
-                                onDismissRequest = { showToolsMenu = false }
-                            ) {
-                                WEB_SPEED_TESTS.forEach { (label, url) ->
-                                    DropdownMenuItem(
-                                        text = { Text(label) },
-                                        onClick = {
-                                            showToolsMenu = false
-                                            openWebSpeedTest(context, url)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                        
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background
@@ -528,12 +487,4 @@ fun MainScreen(
         )
     }
 
-}
-
-private fun openWebSpeedTest(context: Context, url: String) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "没有可用的浏览器", Toast.LENGTH_SHORT).show()
-    }
 }

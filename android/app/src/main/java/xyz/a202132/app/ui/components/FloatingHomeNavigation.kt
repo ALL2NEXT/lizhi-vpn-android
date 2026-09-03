@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Subscriptions
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.Icon
@@ -36,7 +38,8 @@ import androidx.compose.ui.unit.sp
 
 enum class HomeDestination {
     HOME,
-    SUBSCRIPTIONS
+    SUBSCRIPTIONS,
+    NAVIGATION
 }
 
 @Composable
@@ -97,6 +100,14 @@ fun FloatingHomeNavigationBar(
                     unselectedIcon = Icons.Outlined.Subscriptions,
                     label = "订阅",
                     onClick = { onDestinationSelected(HomeDestination.SUBSCRIPTIONS) },
+                    modifier = Modifier.weight(1f)
+                )
+                FloatingNavigationItem(
+                    selected = selectedDestination == HomeDestination.NAVIGATION,
+                    selectedIcon = Icons.Rounded.Explore,
+                    unselectedIcon = Icons.Outlined.Explore,
+                    label = "导航",
+                    onClick = { onDestinationSelected(HomeDestination.NAVIGATION) },
                     modifier = Modifier.weight(1f)
                 )
             }
