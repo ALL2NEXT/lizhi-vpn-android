@@ -77,7 +77,7 @@ fun DrawerContent(
         if (drawerImage != null) {
             Image(
                 bitmap = drawerImage,
-                contentDescription = "自定义皮肤图片",
+                contentDescription = "自定义样式图片",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -130,7 +130,7 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Palette,
-                title = "皮肤",
+                title = "样式",
                 onClick = onOpenSkin
             )
 

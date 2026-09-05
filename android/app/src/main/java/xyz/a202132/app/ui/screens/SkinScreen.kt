@@ -24,7 +24,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,8 +68,7 @@ fun SkinScreen(
     var schemeToDelete by remember { mutableStateOf<SkinScheme?>(null) }
 
     AppScreenScaffold(
-        title = "皮肤方案",
-        subtitle = "当前 ${skinSettings.activeScheme.name}",
+        title = "样式方案",
         onBack = onBack
     ) {
         Column(
@@ -85,12 +83,6 @@ fun SkinScreen(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = "默认方案不可删除。新增方案后可单独设置图片、莫奈取色和备用基础颜色。",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
             skinSettings.schemes.forEach { scheme ->
                 SkinSchemeCard(
                     scheme = scheme,
@@ -113,22 +105,13 @@ fun SkinScreen(
                 Text("新增方案")
             }
 
-            Divider(
-                modifier = Modifier.padding(vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
-            )
-            Text(
-                text = "切换方案后会立即应用到按钮、选中状态和侧栏图片。",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
-            title = { Text("新增皮肤方案") },
+            title = { Text("新增样式方案") },
             text = {
                 OutlinedTextField(
                     value = newSchemeName,
@@ -163,7 +146,7 @@ fun SkinScreen(
     schemeToDelete?.let { scheme ->
         AlertDialog(
             onDismissRequest = { schemeToDelete = null },
-            title = { Text("删除皮肤方案") },
+            title = { Text("删除样式方案") },
             text = { Text("确定删除“${scheme.name}”吗？图片和颜色设置也会一并删除。") },
             dismissButton = {
                 TextButton(onClick = { schemeToDelete = null }) {
@@ -206,13 +189,6 @@ private fun SkinSchemeCard(
         dynamicLightColorScheme(LocalContext.current).primary
     } else {
         Color(scheme.baseColorArgb)
-    }
-    val schemeDescription = when {
-        scheme.isDefault && monetSupported -> "内置默认方案 · 莫奈动态取色"
-        scheme.isDefault -> "内置默认方案 · 当前使用备用色 #37474F"
-        scheme.monetEnabled && monetSupported -> "自定义方案 · 莫奈动态取色"
-        scheme.monetEnabled -> "自定义方案 · 当前系统使用备用基础颜色"
-        else -> "自定义方案 · 使用基础颜色"
     }
     val containerColor = if (selected) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
@@ -264,13 +240,15 @@ private fun SkinSchemeCard(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Text(
-                    text = schemeDescription,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
             if (scheme.isDefault) {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "编辑方案",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 Icon(
                     imageVector = Icons.Outlined.Lock,
                     contentDescription = "默认方案不可删除",

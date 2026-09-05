@@ -26,7 +26,7 @@ internal fun SkinImagePreview(
     imagePath: String?,
     modifier: Modifier = Modifier,
     defaultImageRes: Int = R.drawable.drawer_wallpaper,
-    contentDescription: String = "皮肤图片"
+    contentDescription: String = "样式图片"
 ) {
     val customImage by produceState<ImageBitmap?>(
         initialValue = null,
@@ -47,7 +47,7 @@ internal fun SkinImagePreview(
         if (image != null) {
             Image(
                 bitmap = image,
-                contentDescription = "当前皮肤图片",
+                contentDescription = "当前样式图片",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )

@@ -395,16 +395,17 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {
         context.dataStore.edit { preferences ->
-            if (!scheme.isDefault) {
-                val schemes = decodeSkinSchemes(preferences)
-                    .filterNot { it.id == scheme.id } + scheme.copy(
-                    name = scheme.name.trim().ifBlank { "我的方案" },
-                    baseColorArgb = normalizeSkinColor(scheme.baseColorArgb)
-                )
-                preferences[SKIN_SCHEMES_JSON] = encodeSkinSchemes(schemes)
-                if (activate) {
-                    preferences[ACTIVE_SKIN_SCHEME_ID] = scheme.id
-                }
+            val normalizedScheme = scheme.copy(
+                name = scheme.name.trim().ifBlank {
+                    if (scheme.isDefault) "默认方案" else "我的方案"
+                },
+                baseColorArgb = normalizeSkinColor(scheme.baseColorArgb)
+            )
+            val schemes = decodeSkinSchemes(preferences)
+                .filterNot { it.id == scheme.id } + normalizedScheme
+            preferences[SKIN_SCHEMES_JSON] = encodeSkinSchemes(schemes)
+            if (activate) {
+                preferences[ACTIVE_SKIN_SCHEME_ID] = scheme.id
             }
         }
     }
@@ -855,7 +856,7 @@ class SettingsRepository(private val context: Context) {
                     for (index in 0 until array.length()) {
                         val item = array.optJSONObject(index) ?: continue
                         val id = item.optString("id").trim()
-                        if (id.isBlank() || id == SkinScheme.DEFAULT_SCHEME_ID) continue
+                        if (id.isBlank()) continue
                         add(
                             SkinScheme(
                                 id = id,
@@ -882,7 +883,10 @@ class SettingsRepository(private val context: Context) {
                     }
                 }
             }.getOrDefault(emptyList())
-            return listOf(SkinScheme.default()) + storedSchemes.distinctBy { it.id }
+            val defaultScheme = storedSchemes.firstOrNull { it.isDefault } ?: SkinScheme.default()
+            return listOf(defaultScheme) + storedSchemes
+                .filterNot { it.isDefault }
+                .distinctBy { it.id }
         }
 
         val legacyColor = preferences[SKIN_BASE_COLOR_ARGB]
@@ -912,7 +916,6 @@ class SettingsRepository(private val context: Context) {
     private fun encodeSkinSchemes(schemes: List<SkinScheme>): String {
         val array = JSONArray()
         schemes
-            .filterNot { it.isDefault }
             .distinctBy { it.id }
             .forEach { scheme ->
                 array.put(

@@ -1,7 +1,6 @@
 package xyz.a202132.app.ui.screens
 
 import android.net.Uri
-import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -90,11 +89,6 @@ private fun HomeStateImageRow(
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = if (imagePath == null) "使用默认图片" else "已使用自定义图片",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onChoose) {
                     Text("选择")
@@ -121,23 +115,9 @@ fun SkinSchemeEditorScreen(
     val scheme = skinSettings.schemes.firstOrNull { it.id == schemeId }
 
     if (scheme == null) {
-        AppScreenScaffold(title = "编辑皮肤方案", onBack = onBack) {
+        AppScreenScaffold(title = "编辑样式方案", onBack = onBack) {
             Text(
                 text = "正在加载方案…",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        return
-    }
-
-    if (scheme.isDefault) {
-        AppScreenScaffold(
-            title = scheme.name,
-            subtitle = "内置默认方案",
-            onBack = onBack
-        ) {
-            Text(
-                text = "默认方案不可编辑。请新增方案后进行自定义。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -150,7 +130,6 @@ fun SkinSchemeEditorScreen(
     }
     var colorError by remember { mutableStateOf(false) }
     val isActive = scheme.id == skinSettings.activeSchemeId
-    val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -296,12 +275,6 @@ fun SkinSchemeEditorScreen(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "图片会显示在左侧设置栏顶部，建议选择横向图片。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(onClick = { imagePicker.launch(arrayOf("image/*")) }) {
@@ -336,12 +309,6 @@ fun SkinSchemeEditorScreen(
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "分别设置主页未连接、连接中和已连接时显示的图片，未设置时使用默认图片。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     HomeStateImageRow(
@@ -401,16 +368,6 @@ fun SkinSchemeEditorScreen(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = if (monetSupported) {
-                                    "使用系统壁纸生成的动态配色。"
-                                } else {
-                                    "当前系统不支持，将使用备用基础颜色；Android 12 及以上可用。"
-                                },
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                         Switch(
                             checked = scheme.monetEnabled,
@@ -429,16 +386,6 @@ fun SkinSchemeEditorScreen(
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = if (scheme.monetEnabled) {
-                            "系统不支持莫奈取色时使用，也用于颜色预览。"
-                        } else {
-                            "用于按钮、选中状态、开关和其他强调元素。"
-                        },
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     Row(
@@ -481,12 +428,10 @@ fun SkinSchemeEditorScreen(
                         singleLine = true,
                         label = { Text("颜色代码") },
                         placeholder = { Text("例如 #2979FF") },
-                        supportingText = {
-                            if (colorError) {
-                                Text("请输入 6 位十六进制颜色代码")
-                            } else {
-                                Text("支持 #RRGGBB 格式")
-                            }
+                        supportingText = if (colorError) {
+                            { Text("请输入 6 位十六进制颜色代码") }
+                        } else {
+                            null
                         },
                         isError = colorError,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
