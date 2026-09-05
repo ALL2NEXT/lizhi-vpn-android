@@ -32,6 +32,7 @@ enum class TunStack(val configValue: String) {
 enum class AppScreen {
     MAIN,
     NODE_LIST,
+    WEB_NAVIGATION,
     ACCOUNT_SETTINGS,
     BASIC_SETTINGS,
     FEATURES,

@@ -2,6 +2,7 @@ package xyz.a202132.windows.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -40,8 +41,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -50,8 +55,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Language
@@ -64,10 +67,16 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
@@ -168,6 +177,148 @@ private val WEB_SPEED_TESTS = listOf(
     "Google 测速" to "https://fiber.google.com/speedtest/"
 )
 
+// Windows 端底部导航与 Android 保持相同的三项目的和选中态。
+private enum class DesktopHomeDestination {
+    HOME,
+    SUBSCRIPTIONS,
+    NAVIGATION
+}
+
+private fun DesktopHomeDestination.toAppScreen(): AppScreen = when (this) {
+    DesktopHomeDestination.HOME -> AppScreen.MAIN
+    DesktopHomeDestination.SUBSCRIPTIONS -> AppScreen.NODE_LIST
+    DesktopHomeDestination.NAVIGATION -> AppScreen.WEB_NAVIGATION
+}
+
+@Composable
+private fun DesktopHomeNavigationLayout(
+    selectedDestination: DesktopHomeDestination,
+    onDestinationSelected: (DesktopHomeDestination) -> Unit,
+    content: @Composable () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        content()
+        DesktopHomeNavigationBar(
+            selectedDestination = selectedDestination,
+            onDestinationSelected = onDestinationSelected,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+    }
+}
+
+@Composable
+private fun DesktopHomeNavigationBar(
+    selectedDestination: DesktopHomeDestination,
+    onDestinationSelected: (DesktopHomeDestination) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .padding(horizontal = 32.dp, vertical = 12.dp)
+            .fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier
+                .widthIn(max = 360.dp)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(34.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.98f),
+            tonalElevation = 10.dp,
+            shadowElevation = 12.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                DesktopHomeNavigationItem(
+                    selected = selectedDestination == DesktopHomeDestination.HOME,
+                    selectedIcon = Icons.Rounded.Home,
+                    unselectedIcon = Icons.Outlined.Home,
+                    label = "主页",
+                    onClick = { onDestinationSelected(DesktopHomeDestination.HOME) },
+                    modifier = Modifier.weight(1f)
+                )
+                DesktopHomeNavigationItem(
+                    selected = selectedDestination == DesktopHomeDestination.SUBSCRIPTIONS,
+                    selectedIcon = Icons.Rounded.Subscriptions,
+                    unselectedIcon = Icons.Outlined.Subscriptions,
+                    label = "订阅",
+                    onClick = { onDestinationSelected(DesktopHomeDestination.SUBSCRIPTIONS) },
+                    modifier = Modifier.weight(1f)
+                )
+                DesktopHomeNavigationItem(
+                    selected = selectedDestination == DesktopHomeDestination.NAVIGATION,
+                    selectedIcon = Icons.Rounded.Explore,
+                    unselectedIcon = Icons.Outlined.Explore,
+                    label = "导航",
+                    onClick = { onDestinationSelected(DesktopHomeDestination.NAVIGATION) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DesktopHomeNavigationItem(
+    selected: Boolean,
+    selectedIcon: ImageVector,
+    unselectedIcon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val containerColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            Color.Transparent
+        },
+        label = "desktop-home-navigation-container"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        label = "desktop-home-navigation-content"
+    )
+
+    Surface(
+        modifier = modifier
+            .fillMaxHeight()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(28.dp),
+        color = containerColor
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = if (selected) selectedIcon else unselectedIcon,
+                contentDescription = label,
+                tint = contentColor,
+                modifier = Modifier.size(22.dp)
+            )
+            Text(
+                text = label,
+                color = contentColor,
+                fontSize = 12.sp,
+                lineHeight = 14.sp,
+                maxLines = 1,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+            )
+        }
+    }
+}
+
 @Composable
 fun FireflyDesktopApp(controller: VpnController) {
     val state by controller.state.collectAsState()
@@ -191,8 +342,24 @@ fun FireflyDesktopApp(controller: VpnController) {
             label = "screen"
         ) { screen ->
             when (screen) {
-                AppScreen.MAIN -> MainScreen(state, controller)
-                AppScreen.NODE_LIST -> NodeListScreen(state, controller)
+                AppScreen.MAIN -> DesktopHomeNavigationLayout(
+                    selectedDestination = DesktopHomeDestination.HOME,
+                    onDestinationSelected = { controller.navigate(it.toAppScreen()) }
+                ) {
+                    MainScreen(state, controller)
+                }
+                AppScreen.NODE_LIST -> DesktopHomeNavigationLayout(
+                    selectedDestination = DesktopHomeDestination.SUBSCRIPTIONS,
+                    onDestinationSelected = { controller.navigate(it.toAppScreen()) }
+                ) {
+                    NodeListScreen(state, controller)
+                }
+                AppScreen.WEB_NAVIGATION -> DesktopHomeNavigationLayout(
+                    selectedDestination = DesktopHomeDestination.NAVIGATION,
+                    onDestinationSelected = { controller.navigate(it.toAppScreen()) }
+                ) {
+                    WebNavigationScreen()
+                }
                 else -> SecondaryScreen(screen, state, controller)
             }
         }
@@ -321,7 +488,8 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 86.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(32.dp))
@@ -353,8 +521,7 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
                 }
             )
             Spacer(Modifier.weight(1f))
-            NodeListEntry(onClick = { controller.navigate(AppScreen.NODE_LIST) })
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(32.dp))
         }
     }
 
@@ -381,6 +548,86 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
                 }
             }
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WebNavigationScreen() {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("导航", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "常用测速网站",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { padding ->
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 72.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 20.dp),
+            contentPadding = PaddingValues(bottom = 108.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            gridItems(
+                items = WEB_SPEED_TESTS,
+                key = { it.second }
+            ) { (label, url) ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { browse(url) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp, vertical = 9.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(44.dp),
+                            shape = RoundedCornerShape(13.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Language,
+                                    contentDescription = label,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = label,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -531,60 +778,6 @@ private fun connectionLabel(state: VpnState): String = when (state) {
     VpnState.DISCONNECTED -> "点击连接"
 }
 
-@Composable
-private fun NodeListEntry(onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f))
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                color = Primary.copy(alpha = 0.12f),
-                shape = CircleShape
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.List,
-                        contentDescription = null,
-                        tint = Primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "节点列表",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "点击选择节点",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "打开节点列表",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
@@ -594,11 +787,6 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = controller::navigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                    }
-                },
                 title = {
                     Column {
                         Text("节点列表", fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -623,7 +811,11 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
         }
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp, vertical = 12.dp)
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(bottom = 86.dp)
         ) {
             if (state.isTesting || state.isLoadingNodes) {
                 LinearProgressIndicator(Modifier.fillMaxWidth(), color = Primary)
