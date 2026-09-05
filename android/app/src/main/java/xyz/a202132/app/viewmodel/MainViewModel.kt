@@ -258,6 +258,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ProxyMode.SMART
     )
 
+    val homeClickAction = settingsRepository.homeClickAction.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        HomeConnectionAction.DIRECT
+    )
+
+    val homeLongPressAction = settingsRepository.homeLongPressAction.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        HomeConnectionAction.SMART
+    )
+
     val ipv6RoutingMode = settingsRepository.ipv6RoutingMode.stateIn(
         viewModelScope,
         SharingStarted.Lazily,
@@ -1385,6 +1397,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     ServiceManager.startVpn(getApplication(), node, mode)
                 }
             }
+        }
+    }
+
+    /** 设置主页图标单击动作。 */
+    fun setHomeClickAction(action: HomeConnectionAction) {
+        viewModelScope.launch {
+            settingsRepository.setHomeClickAction(action)
+        }
+    }
+
+    /** 设置主页图标长按动作。 */
+    fun setHomeLongPressAction(action: HomeConnectionAction) {
+        viewModelScope.launch {
+            settingsRepository.setHomeLongPressAction(action)
         }
     }
     

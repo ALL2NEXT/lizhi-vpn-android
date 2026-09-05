@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.BandwidthTestTargets
+import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.UrlTestTargets
@@ -61,6 +62,8 @@ fun OtherConfigScreen(
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
+    val homeClickAction by viewModel.homeClickAction.collectAsStateWithLifecycle()
+    val homeLongPressAction by viewModel.homeLongPressAction.collectAsStateWithLifecycle()
 
     var urlTestUrlInput by remember(urlTestUrl) { mutableStateOf(urlTestUrl) }
     var showUrlTestPresets by remember { mutableStateOf(false) }
@@ -81,6 +84,36 @@ fun OtherConfigScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            OtherConfigSection(
+                title = "主页图标操作"
+            ) {
+                Text(
+                    text = "点击执行",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                HomeConnectionActionSwitch(
+                    selectedAction = homeClickAction,
+                    onActionSelected = viewModel::setHomeClickAction
+                )
+                Text(
+                    text = "长按执行",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                HomeConnectionActionSwitch(
+                    selectedAction = homeLongPressAction,
+                    onActionSelected = viewModel::setHomeLongPressAction
+                )
+                Text(
+                    text = "仅在 VPN 未连接时生效，已连接时点击主页图标仍会断开 VPN。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             OtherConfigSection(
                 title = "网络配置"
             ) {
@@ -300,6 +333,19 @@ fun OtherConfigScreen(
 
         }
     }
+}
+
+@Composable
+private fun HomeConnectionActionSwitch(
+    selectedAction: HomeConnectionAction,
+    onActionSelected: (HomeConnectionAction) -> Unit
+) {
+    val actions = HomeConnectionAction.values()
+    MultiPositionSwitch(
+        options = actions.map(HomeConnectionAction::displayName),
+        selectedIndex = actions.indexOf(selectedAction),
+        onOptionSelected = { index -> onActionSelected(actions[index]) }
+    )
 }
 
 @Composable

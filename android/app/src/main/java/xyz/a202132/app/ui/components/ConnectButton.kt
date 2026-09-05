@@ -47,6 +47,11 @@ fun ConnectButton(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     customLabel: String? = null,
+    /** 是否显示按钮下方的状态文字。 */
+    showStatusLabel: Boolean = true,
+    /** 无障碍服务读取的单击和长按动作名称。 */
+    clickActionLabel: String = "普通连接",
+    longClickActionLabel: String = "智能连接",
     enabled: Boolean = true,
     isTesting: Boolean = false,
     /** 三种连接状态的图片均可按当前皮肤方案单独覆盖，未设置时使用内置图片。 */
@@ -158,8 +163,8 @@ fun ConnectButton(
                             enabled = enabled && !isConnecting,
                             indication = rememberRipple(bounded = true),
                             interactionSource = interactionSource,
-                            onClickLabel = if (vpnState == VpnState.DISCONNECTED) "普通连接" else null,
-                            onLongClickLabel = if (onLongClick != null) "智能连接" else null,
+                            onClickLabel = if (vpnState == VpnState.DISCONNECTED) clickActionLabel else null,
+                            onLongClickLabel = if (onLongClick != null) longClickActionLabel else null,
                             onLongClick = onLongClick,
                             onClick = onClick
                         )
@@ -205,21 +210,23 @@ fun ConnectButton(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        if (showStatusLabel) {
+            Spacer(modifier = Modifier.height(16.dp))
 
-        // 状态文本
-        Text(
-            text = customLabel ?: when (vpnState) {
-                VpnState.CONNECTED -> "已连接"
-                VpnState.CONNECTING -> "连接中..."
-                VpnState.DISCONNECTING -> "断开中..."
-                VpnState.DISCONNECTED -> "点击连接"
-            },
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = if (customLabel != null) 18.sp else 14.sp,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center,
-            lineHeight = if (customLabel != null) 26.sp else 20.sp
-        )
+            // 状态文本
+            Text(
+                text = customLabel ?: when (vpnState) {
+                    VpnState.CONNECTED -> "已连接"
+                    VpnState.CONNECTING -> "连接中..."
+                    VpnState.DISCONNECTING -> "断开中..."
+                    VpnState.DISCONNECTED -> "点击连接"
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = if (customLabel != null) 18.sp else 14.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                lineHeight = if (customLabel != null) 26.sp else 20.sp
+            )
+        }
     }
 }

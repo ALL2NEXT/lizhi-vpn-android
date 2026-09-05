@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.a202132.app.AppConfig
+import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.VpnState
@@ -66,6 +67,8 @@ fun MainScreen(
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
     val favoriteSourceNodeIds by viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
+    val homeClickAction by viewModel.homeClickAction.collectAsStateWithLifecycle()
+    val homeLongPressAction by viewModel.homeLongPressAction.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
@@ -233,7 +236,10 @@ fun MainScreen(
                         when (vpnState) {
                             VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
                             VpnState.DISCONNECTED -> onStartVpn {
-                                viewModel.startSelectedOrFirstConnection()
+                                when (homeClickAction) {
+                                    HomeConnectionAction.DIRECT -> viewModel.startSelectedOrFirstConnection()
+                                    HomeConnectionAction.SMART -> viewModel.startSmartConnection()
+                                }
                             }
                             else -> Unit
                         }
@@ -241,18 +247,21 @@ fun MainScreen(
                     onLongClick = if (vpnState == VpnState.DISCONNECTED) {
                         {
                             onStartVpn {
-                                viewModel.startSmartConnection()
+                                when (homeLongPressAction) {
+                                    HomeConnectionAction.DIRECT -> viewModel.startSelectedOrFirstConnection()
+                                    HomeConnectionAction.SMART -> viewModel.startSmartConnection()
+                                }
                             }
                         }
                     } else {
                         null
                     },
-                    customLabel = if (vpnState == VpnState.DISCONNECTED) {
-                        if (isTesting) {
-                            testingLabel ?: "智能连接中..."
-                        } else {
-                            "点击直接连接\n长按智能连接"
-                        }
+                    // 待连接时隐藏操作提示文字，点击和长按的交互逻辑保持不变。
+                    showStatusLabel = vpnState != VpnState.DISCONNECTED || isTesting,
+                    clickActionLabel = homeClickAction.displayName,
+                    longClickActionLabel = homeLongPressAction.displayName,
+                    customLabel = if (vpnState == VpnState.DISCONNECTED && isTesting) {
+                        testingLabel ?: "智能连接中..."
                     } else {
                         null
                     }

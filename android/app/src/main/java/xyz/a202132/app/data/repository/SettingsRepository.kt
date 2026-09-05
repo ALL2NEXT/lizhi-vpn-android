@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 import xyz.a202132.app.data.model.BandwidthTestTargets
+import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
@@ -45,6 +46,8 @@ class SettingsRepository(private val context: Context) {
     companion object {
         private val SELECTED_NODE_ID = stringPreferencesKey("selected_node_id")
         private val PROXY_MODE = stringPreferencesKey("proxy_mode")
+        private val HOME_CLICK_ACTION = stringPreferencesKey("home_click_action")
+        private val HOME_LONG_PRESS_ACTION = stringPreferencesKey("home_long_press_action")
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
         private val USER_AGREEMENT_ACCEPTED = booleanPreferencesKey("user_agreement_accepted")
@@ -143,6 +146,28 @@ class SettingsRepository(private val context: Context) {
             ProxyMode.valueOf(mode)
         } catch (e: Exception) {
             ProxyMode.SMART
+        }
+    }
+
+    /** 主页图标单击动作，默认保持原来的直接连接行为。 */
+    val homeClickAction: Flow<HomeConnectionAction> = context.dataStore.data.map { preferences ->
+        enumValueOrDefault(preferences[HOME_CLICK_ACTION], HomeConnectionAction.DIRECT)
+    }
+
+    /** 主页图标长按动作，默认保持原来的智能连接行为。 */
+    val homeLongPressAction: Flow<HomeConnectionAction> = context.dataStore.data.map { preferences ->
+        enumValueOrDefault(preferences[HOME_LONG_PRESS_ACTION], HomeConnectionAction.SMART)
+    }
+
+    suspend fun setHomeClickAction(action: HomeConnectionAction) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_CLICK_ACTION] = action.name
+        }
+    }
+
+    suspend fun setHomeLongPressAction(action: HomeConnectionAction) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_LONG_PRESS_ACTION] = action.name
         }
     }
 
