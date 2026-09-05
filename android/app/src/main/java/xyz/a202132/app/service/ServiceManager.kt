@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.VpnState
-import java.util.Locale
 
 /**
  * VPN服务管理器 - 单例
@@ -119,27 +118,4 @@ object ServiceManager {
         _cellularWarning.value = null
     }
     
-    /**
-     * 格式化速度显示
-     */
-    fun formatSpeed(bytesPerSecond: Long): String {
-        return when {
-            bytesPerSecond < 1024 -> "${bytesPerSecond} B/s"
-            bytesPerSecond < 1024 * 1024 -> String.format(Locale.US, "%.1f KB/s", bytesPerSecond / 1024.0)
-            bytesPerSecond < 1024 * 1024 * 1024 -> String.format(Locale.US, "%.1f MB/s", bytesPerSecond / (1024.0 * 1024))
-            else -> String.format(Locale.US, "%.2f GB/s", bytesPerSecond / (1024.0 * 1024 * 1024))
-        }
-    }
-    
-    /**
-     * 格式化流量显示
-     */
-    fun formatTraffic(bytes: Long): String {
-        return when {
-            bytes < 1024 -> "${bytes} B"
-            bytes < 1024 * 1024 -> String.format(Locale.US, "%.1f KB", bytes / 1024.0)
-            bytes < 1024 * 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024))
-            else -> String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024 * 1024))
-        }
-    }
 }

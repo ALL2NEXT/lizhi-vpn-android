@@ -1182,24 +1182,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return results
     }
 
-    /**
-     * 选择节点
-     */
-    fun selectNode(node: Node) {
-        viewModelScope.launch {
-            settingsRepository.setSelectedNodeId(node.id)
-            Log.i(tag, "Selected node changed: source=${node.source}, type=${node.type}")
-            
-            // If VPN is connected, restart to switch to new node
-            if (vpnState.value == VpnState.CONNECTED) {
-                // Notify user (Optional)
-                Log.i(tag, "Restarting VPN to apply new Node: ${node.name}")
-                Log.i(tag, "Restarting VPN after node selection")
-                ServiceManager.startVpn(getApplication(), node, proxyMode.value)
-            }
-        }
-    }
-
     fun setNodeListCategory(category: NodeListCategory) {
         viewModelScope.launch {
             settingsRepository.setNodeListCategory(category)

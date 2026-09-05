@@ -29,7 +29,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
-import xyz.a202132.app.data.model.LatencyLevel
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.ProtocolCoreSettings
@@ -222,23 +221,4 @@ private fun nodeMetricColor(latency: Int): Color = when {
     latency <= 200 -> LatencyGood
     latency <= 400 -> LatencyMedium
     else -> LatencyBad
-}
-
-@Composable
-fun LatencyBadge(node: Node, isTesting: Boolean = false) {
-    val latencyColor = when (node.getLatencyLevel()) {
-        LatencyLevel.GOOD -> LatencyGood
-        LatencyLevel.MEDIUM -> LatencyMedium
-        LatencyLevel.BAD -> LatencyBad
-    }
-
-    Surface(color = latencyColor.copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
-        Text(
-            text = if (isTesting && node.latency == -1) "测试中" else node.getLatencyText(),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = latencyColor,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
 }

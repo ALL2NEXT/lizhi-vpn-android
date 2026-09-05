@@ -16,32 +16,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun ProxyModeSelector(
-    isGlobalMode: Boolean,
-    onModeChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
-    ) {
-        ProxyModeButton(
-            title = "🌐 全局代理",
-            isSelected = isGlobalMode,
-            onClick = { onModeChange(true) },
-            modifier = Modifier.weight(1f)
-        )
-
-        ProxyModeButton(
-            title = "📱 智能分流",
-            isSelected = !isGlobalMode,
-            onClick = { onModeChange(false) },
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
 fun ProxyModeToggle(
     isGlobalMode: Boolean,
     onModeChange: (Boolean) -> Unit,
@@ -98,46 +72,5 @@ private fun ProxyModeToggleOption(
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium
         )
-    }
-}
-
-@Composable
-private fun ProxyModeButton(
-    title: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-    val textColor = if (isSelected) {
-        MaterialTheme.colorScheme.onPrimary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Surface(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
-        color = backgroundColor,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 14.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = textColor
-            )
-        }
     }
 }
