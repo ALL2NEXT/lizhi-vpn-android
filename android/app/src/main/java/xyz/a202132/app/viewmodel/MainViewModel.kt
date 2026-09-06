@@ -374,10 +374,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         NodeDisplaySettings()
     )
     val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Eagerly, TunStack.GVISOR)
+    val tunImplementations = settingsRepository.tunImplementations.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        ProxyCore.entries.associateWith { TunImplementation.defaultFor(it) }
+    )
+    /** Compatibility view for older screens; new UI uses [tunImplementations]. */
+    @Deprecated("Use tunImplementations for per-core preferences")
     val tunImplementation = settingsRepository.tunImplementation.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        TunImplementation.AUTO
+        TunImplementation.HEV_SOCKS5
     )
     val skinSettings = settingsRepository.skinSettings.stateIn(
         viewModelScope,
@@ -1389,6 +1396,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setTunImplementation(core: ProxyCore, implementation: TunImplementation) {
+        viewModelScope.launch {
+            settingsRepository.setTunImplementation(core, implementation)
+            restartVpnIfNeeded()
+        }
+    }
+
+    /** Compatibility setter for older callers of the global selector. */
+    @Deprecated("Use setTunImplementation(core, implementation)")
     fun setTunImplementation(implementation: TunImplementation) {
         viewModelScope.launch {
             settingsRepository.setTunImplementation(implementation)

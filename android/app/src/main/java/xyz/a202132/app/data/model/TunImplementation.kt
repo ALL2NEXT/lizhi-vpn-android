@@ -1,17 +1,62 @@
 package xyz.a202132.app.data.model
 
 /**
- * User preference for the Android TUN data plane.
+ * Per-core TUN implementation preference.
  *
- * AUTO keeps backend policy in control. NATIVE lets sing-box/Xray own the
- * Android TUN directly, while HEV uses HEV tun2socks and feeds the selected
- * core through its local SOCKS5 inbound.
+ * HEV is the compatibility data plane. The remaining public options select
+ * the core-owned native TUN stack. AUTO and NATIVE are retained only so
+ * installations using the first global selector can be migrated safely.
  */
 enum class TunImplementation(
     val displayName: String,
-    val description: String
+    val description: String,
+    val nativeStack: TunStack? = null
 ) {
-    AUTO("\u81ea\u52a8\uff08\u6838\u5fc3\u4f18\u5148\uff09", "\u7531\u5f53\u524d\u5185\u6838\u9009\u62e9\uff0c\u9ed8\u8ba4\u4f7f\u7528\u539f\u751f TUN"),
-    NATIVE("\u539f\u751f TUN", "\u7531 sing-box/Xray \u76f4\u63a5\u5904\u7406 Android TUN"),
-    HEV_SOCKS5("HEV tun2socks", "HEV \u63a5\u7ba1 TUN \u540e\u8f6c\u53d1\u5230\u6838\u5fc3 SOCKS5\uff0c\u517c\u5bb9\u6027\u66f4\u597d\u4f46\u591a\u4e00\u5c42\u8f6c\u53d1")
+    HEV_SOCKS5(
+        "HEV tun2socks",
+        "HEV \u63a5\u7ba1 Android TUN\uff0c\u518d\u8f6c\u53d1\u5230\u6838\u5fc3 SOCKS5"
+    ),
+    GVISOR(
+        "gVisor",
+        "\u7531\u5185\u6838\u76f4\u63a5\u5904\u7406 TUN\uff0c\u517c\u5bb9\u6027\u4f18\u5148",
+        TunStack.GVISOR
+    ),
+    SYSTEM(
+        "system",
+        "\u4f7f\u7528\u7cfb\u7edf\u7f51\u7edc\u6808\uff0c\u529f\u8017\u66f4\u4f4e",
+        TunStack.SYSTEM
+    ),
+    MIXED(
+        "mixed",
+        "\u6839\u636e\u6d41\u91cf\u7c7b\u578b\u6df7\u5408\u5904\u7406",
+        TunStack.MIXED
+    ),
+
+    /** Legacy global selector values; hidden from the new per-core UI. */
+    @Deprecated("legacy setting") AUTO(
+        "AUTO",
+        "legacy"
+    ),
+    @Deprecated("legacy setting") NATIVE(
+        "native",
+        "legacy",
+        TunStack.GVISOR
+    );
+
+    companion object {
+        fun optionsFor(core: ProxyCore): List<TunImplementation> = when (core) {
+            ProxyCore.XRAY -> listOf(HEV_SOCKS5, GVISOR)
+            ProxyCore.SING_BOX -> listOf(HEV_SOCKS5, GVISOR, SYSTEM, MIXED)
+            ProxyCore.MIHOMO -> listOf(HEV_SOCKS5, GVISOR, SYSTEM, MIXED)
+        }
+
+        fun defaultFor(@Suppress("UNUSED_PARAMETER") core: ProxyCore): TunImplementation =
+            HEV_SOCKS5
+
+        fun fromNativeStack(stack: TunStack): TunImplementation = when (stack) {
+            TunStack.GVISOR -> GVISOR
+            TunStack.SYSTEM -> SYSTEM
+            TunStack.MIXED -> MIXED
+        }
+    }
 }

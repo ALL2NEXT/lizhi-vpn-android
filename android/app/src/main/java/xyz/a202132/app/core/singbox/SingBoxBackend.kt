@@ -31,7 +31,7 @@ internal class SingBoxBackend : CoreBackend {
             generator.generateConfig(listOf(request.node), request.node.id, settings.proxyMode,
                 settings.ipv6RoutingMode, internalSocksPort = request.socksPort,
                 hysteriaUpMbps = request.hysteriaUpMbps, hysteriaDownMbps = request.hysteriaDownMbps,
-                tunStack = settings.tunStack,
+                tunStack = request.tunStack,
                 includeTun = request.tunMode == CoreTunMode.NATIVE)
                 .replace("\"geosite-cn.srs\"", "\"${File(context.filesDir, "sing-box/geosite-cn.srs").absolutePath}\"")
                 .replace("\"geoip-cn.srs\"", "\"${File(context.filesDir, "sing-box/geoip-cn.srs").absolutePath}\"")

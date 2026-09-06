@@ -45,8 +45,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
+import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.TunImplementation
-import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -61,8 +61,7 @@ fun OtherConfigScreen(
     val speedTestDownloadUrl by viewModel.speedTestDownloadUrl.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
-    val tunImplementation by viewModel.tunImplementation.collectAsStateWithLifecycle()
-    val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
+    val tunImplementations by viewModel.tunImplementations.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val homeClickAction by viewModel.homeClickAction.collectAsStateWithLifecycle()
     val homeLongPressAction by viewModel.homeLongPressAction.collectAsStateWithLifecycle()
@@ -147,34 +146,19 @@ fun OtherConfigScreen(
                 )
             }
 
-            OtherConfigSection(
-                title = "TUN \u63a5\u5165\u65b9\u5f0f"
-            ) {
-                val implementations = TunImplementation.values()
-                MultiPositionSwitch(
-                    options = implementations.map(TunImplementation::displayName),
-                    selectedIndex = implementations.indexOf(tunImplementation),
-                    onOptionSelected = { index ->
-                        viewModel.setTunImplementation(implementations[index])
-                    }
-                )
-                Text(
-                    text = tunImplementation.description,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            CoreTunImplementationSection(
+                core = ProxyCore.XRAY,
+                selected = tunImplementations[ProxyCore.XRAY]
+                    ?: TunImplementation.defaultFor(ProxyCore.XRAY),
+                onSelected = { viewModel.setTunImplementation(ProxyCore.XRAY, it) }
+            )
 
-            OtherConfigSection(
-                title = "sing-box \u539f\u751f TUN \u534f\u8bae\u6808\uff08HEV \u6a21\u5f0f\u4e0d\u4f7f\u7528\uff09"
-            ) {
-                val tunStacks = TunStack.values()
-                MultiPositionSwitch(
-                    options = tunStacks.map(TunStack::configValue),
-                    selectedIndex = tunStacks.indexOf(tunStack),
-                    onOptionSelected = { index -> viewModel.setTunStack(tunStacks[index]) }
-                )
-            }
+            CoreTunImplementationSection(
+                core = ProxyCore.SING_BOX,
+                selected = tunImplementations[ProxyCore.SING_BOX]
+                    ?: TunImplementation.defaultFor(ProxyCore.SING_BOX),
+                onSelected = { viewModel.setTunImplementation(ProxyCore.SING_BOX, it) }
+            )
 
             OtherConfigSection(
                 title = "自动删除超时节点"
@@ -352,6 +336,33 @@ fun OtherConfigScreen(
             }
 
         }
+    }
+}
+
+@Composable
+private fun CoreTunImplementationSection(
+    core: ProxyCore,
+    selected: TunImplementation,
+    onSelected: (TunImplementation) -> Unit
+) {
+    val options = TunImplementation.optionsFor(core)
+    OtherConfigSection(
+        title = when (core) {
+            ProxyCore.XRAY -> "Xray TUN \u5b9e\u73b0"
+            ProxyCore.SING_BOX -> "sing-box TUN \u5b9e\u73b0"
+            ProxyCore.MIHOMO -> "Mihomo TUN \u5b9e\u73b0"
+        }
+    ) {
+        MultiPositionSwitch(
+            options = options.map(TunImplementation::displayName),
+            selectedIndex = options.indexOf(selected),
+            onOptionSelected = { index -> onSelected(options[index]) }
+        )
+        Text(
+            text = selected.description,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

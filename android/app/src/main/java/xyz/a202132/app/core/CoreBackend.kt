@@ -14,8 +14,8 @@ import xyz.a202132.app.platform.AndroidVpnHost
 internal interface CoreBackend {
     val id: ProxyCore
     val capabilities: CoreCapabilities
-    /** Selects the packet data plane for VPN sessions; native TUN is safest by default. */
-    val preferredTunMode: CoreTunMode get() = CoreTunMode.NATIVE
+    /** Selects the packet data plane for VPN sessions; HEV is the default. */
+    val preferredTunMode: CoreTunMode get() = CoreTunMode.HEV_SOCKS5
     suspend fun prepare(context: Context, request: CoreRequest): PreparedCore
     suspend fun start(
         context: Context,
@@ -41,14 +41,23 @@ internal enum class CoreTunMode {
     HEV_SOCKS5
 }
 
-/** Resolves the persisted user preference against the selected core's capabilities. */
-internal fun CoreBackend.resolveTunMode(preference: TunImplementation): CoreTunMode {
-    val mode = when (preference) {
-        TunImplementation.AUTO -> preferredTunMode
-        TunImplementation.NATIVE -> CoreTunMode.NATIVE
-        TunImplementation.HEV_SOCKS5 -> CoreTunMode.HEV_SOCKS5
+internal data class CoreTunSelection(
+    val mode: CoreTunMode,
+    val stack: TunStack
+)
+
+/** Resolves one core's persisted TUN preference against its capabilities. */
+internal fun CoreBackend.resolveTunSelection(preference: TunImplementation): CoreTunSelection {
+    val selection = when (preference) {
+        TunImplementation.HEV_SOCKS5 -> CoreTunSelection(CoreTunMode.HEV_SOCKS5, TunStack.GVISOR)
+        TunImplementation.GVISOR -> CoreTunSelection(CoreTunMode.NATIVE, TunStack.GVISOR)
+        TunImplementation.SYSTEM -> CoreTunSelection(CoreTunMode.NATIVE, TunStack.SYSTEM)
+        TunImplementation.MIXED -> CoreTunSelection(CoreTunMode.NATIVE, TunStack.MIXED)
+        // Legacy values are only used while migrating old global settings.
+        TunImplementation.AUTO -> CoreTunSelection(CoreTunMode.HEV_SOCKS5, TunStack.GVISOR)
+        TunImplementation.NATIVE -> CoreTunSelection(CoreTunMode.NATIVE, TunStack.GVISOR)
     }
-    when (mode) {
+    when (selection.mode) {
         CoreTunMode.NATIVE -> require(capabilities.nativeTun) {
             "${id.displayName} does not support native TUN"
         }
@@ -56,7 +65,12 @@ internal fun CoreBackend.resolveTunMode(preference: TunImplementation): CoreTunM
             "${id.displayName} does not expose a SOCKS5 inbound required by HEV"
         }
     }
-    return mode
+    if (selection.mode == CoreTunMode.NATIVE) {
+        require(selection.stack in capabilities.tunStacks) {
+            "${id.displayName} does not support the ${selection.stack.configValue} TUN stack"
+        }
+    }
+    return selection
 }
 
 internal data class CoreRequest(
@@ -65,7 +79,8 @@ internal data class CoreRequest(
     val settings: VpnRuntimeSettings? = null,
     val hysteriaUpMbps: Int = settings?.hysteriaUpMbps ?: 0,
     val hysteriaDownMbps: Int = settings?.hysteriaDownMbps ?: 0,
-    val tunMode: CoreTunMode = CoreTunMode.NATIVE
+    val tunMode: CoreTunMode = CoreTunMode.NATIVE,
+    val tunStack: TunStack = settings?.tunStack ?: TunStack.GVISOR
 ) {
     val isVpn: Boolean get() = settings != null
 }
