@@ -13,7 +13,7 @@ cd windows
 .\gradlew.bat run
 ```
 
-首次构建会从根目录 `sing-box` 与 `xray-core` 中锁定的源码编译 Windows 双核心，耗时会比后续启动长。应用启动后自动注册本机设备身份、同步账户和订阅节点。
+首次构建会从根目录 `core/sing-box` 与 `core/xray-core` 中锁定的源码编译 Windows 双核心，耗时会比后续启动长。应用启动后自动注册本机设备身份、同步账户和订阅节点。
 
 TUN 连接需要管理员权限。开发运行时请先打开“管理员 PowerShell”，再执行上述命令；普通权限仍可浏览节点、修改设置及执行 TCPing、URL Test 和带宽测试，但无法建立整机 TUN。
 

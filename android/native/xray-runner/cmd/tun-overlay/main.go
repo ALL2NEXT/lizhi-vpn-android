@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	source := flag.String("source", "../../../xray-core", "pinned Xray source")
+	source := flag.String("source", "../../../core/xray-core", "pinned Xray source")
 	output := flag.String("output", "../../app/build/generated/xray/tun-overlay", "generated overlay directory")
 	flag.Parse()
 	original, err := filepath.Abs(filepath.Join(*source, "proxy/tun/udp_fullcone.go"))

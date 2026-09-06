@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectDirectory = Split-Path -Parent $PSScriptRoot
 $repositoryDirectory = Split-Path -Parent $projectDirectory
-$sourceDirectory = Join-Path $repositoryDirectory 'xray-core'
+$sourceDirectory = Join-Path $repositoryDirectory 'core\xray-core'
 $runtimeDirectory = Join-Path $projectDirectory 'runtime\windows-x64'
 $executable = Join-Path $runtimeDirectory 'xray.exe'
 $expectedRevision = 'd2758a023cd7f4174a5a5fa4ff66e487d4342ba0'

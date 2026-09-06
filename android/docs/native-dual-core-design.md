@@ -1,6 +1,6 @@
 # Android 多内核中间层
 
-实现日期：2026-09-05 至 2026-09-06。每次 VPN 连接运行一个内核，根据选中节点的协议及已保存的内核偏好选择。当前实现 sing-box、Xray，预留 Mihomo 注册身份；尚未集成 Mihomo 二进制或适配器。
+实现日期：2026-09-05 至 2026-09-06。每次 VPN 连接运行一个内核，根据选中节点的协议及已保存的内核偏好选择。当前实现 sing-box、Xray；Mihomo 源码已拉取并固定版本，尚未集成 Android 二进制或适配器。
 
 ## 架构与选择理由
 
@@ -84,7 +84,7 @@ Xray 输出管道关闭、读取失败或事件解析异常会转换为会话失
 - 返回写入错误，并释放消费完的 MultiBuffer。
 - 直接把完整 UDP 数据报交给 MultiBuffer，避免默认 8 KiB 流式读缓冲截断较大的数据报。
 
-[tun-overlay](../native/xray-runner/cmd/tun-overlay/main.go) 在构建目录生成 Go overlay，Gradle 的两个 Android ABI 均使用该 overlay。子模块和其他平台构建不变。替换片段数量不匹配时构建会失败，升级 Xray 必须审阅补丁是否仍需要。生成文件沿用原始 Xray 文件的 MPL-2.0 授权，原始许可证见 [Xray LICENSE](../../xray-core/LICENSE)。
+[tun-overlay](../native/xray-runner/cmd/tun-overlay/main.go) 在构建目录生成 Go overlay，Gradle 的两个 Android ABI 均使用该 overlay。子模块和其他平台构建不变。替换片段数量不匹配时构建会失败，升级 Xray 必须审阅补丁是否仍需要。生成文件沿用原始 Xray 文件的 MPL-2.0 授权，原始许可证见 [Xray LICENSE](../../core/xray-core/LICENSE)。
 
 ## 后续接入 Mihomo
 

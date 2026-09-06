@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectDirectory = Split-Path -Parent $PSScriptRoot
 $repositoryDirectory = Split-Path -Parent $projectDirectory
-$sourceDirectory = Join-Path $repositoryDirectory 'sing-box'
+$sourceDirectory = Join-Path $repositoryDirectory 'core\sing-box'
 $runtimeDirectory = Join-Path $projectDirectory 'runtime\windows-x64'
 $executable = Join-Path $runtimeDirectory 'sing-box.exe'
 $cronetLibrary = Join-Path $runtimeDirectory 'libcronet.dll'

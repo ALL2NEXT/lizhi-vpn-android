@@ -133,7 +133,7 @@ backend/    # Cloudflare Worker 后台
 
 ### 核心依赖
 
-Android 不再依赖 `android/app/libs/libbox.aar`。项目通过根目录下的 `sing-box` 子模块锁定 sing-box 源码版本，Gradle 构建时调用官方 `cmd/internal/build_libbox` 自动生成本次构建使用的 `libbox.aar`，生成文件位于 `android/app/build/generated/sing-box/`，不会提交到版本库。
+Android 不再依赖 `android/app/libs/libbox.aar`。项目通过根目录下的 `core/sing-box` 子模块锁定 sing-box 源码版本，Gradle 构建时调用官方 `cmd/internal/build_libbox` 自动生成本次构建使用的 `libbox.aar`，生成文件位于 `android/app/build/generated/sing-box/`，不会提交到版本库。
 
 首次获取源码后执行：
 
@@ -141,7 +141,7 @@ Android 不再依赖 `android/app/libs/libbox.aar`。项目通过根目录下的
 git submodule update --init --recursive
 ```
 
-源码构建需要 Go、JDK 17、Android SDK 和 NDK 28.0.13004108。协议扩展或核心修改直接在根目录 `sing-box` 中进行，重新构建 Android 或 Windows 项目即可生效。
+源码构建需要 Go、JDK 17、Android SDK 和 NDK 28.0.13004108。协议扩展或核心修改直接在根目录 `core/sing-box` 中进行，重新构建 Android 或 Windows 项目即可生效。
 
 项目还依赖 [SQLCipher for Android](https://github.com/niceyun/sqlcipher-android)（`net.zetetic:sqlcipher-android:4.13.0`）用于本地数据库加密，Gradle 会自动下载，无需手动配置。
 
@@ -298,7 +298,9 @@ android/app/src/main/java/xyz/a202132/app/
 ### 资源文件结构
 
 ```
-sing-box                           # sing-box 源码子模块（Android/Windows 构建输入）
+core/sing-box                       # sing-box 源码子模块（Android/Windows 构建输入）
+core/xray-core                      # Xray-core 源码子模块（Android/Windows 构建输入）
+core/mihomo                         # Mihomo 源码子模块（后续 Android 适配输入）
 android/app/build/generated/      # Gradle 生成的 libbox.aar（不提交）
 android/app/src/main/
 ├── assets/

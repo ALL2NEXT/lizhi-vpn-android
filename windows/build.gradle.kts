@@ -52,7 +52,7 @@ val buildSingBox by tasks.registering(Exec::class) {
         "-File",
         file("scripts/build-sing-box.ps1").absolutePath
     )
-    inputs.dir("../sing-box")
+    inputs.dir("../core/sing-box")
     inputs.file("scripts/build-sing-box.ps1")
     outputs.files(
         "runtime/windows-x64/sing-box.exe",
@@ -72,7 +72,7 @@ val buildXray by tasks.registering(Exec::class) {
         "-File",
         file("scripts/build-xray.ps1").absolutePath
     )
-    inputs.dir("../xray-core")
+    inputs.dir("../core/xray-core")
     inputs.file("scripts/build-xray.ps1")
     outputs.file("runtime/windows-x64/xray.exe")
 }

@@ -1,9 +1,12 @@
 [submodule "sing-box"]
-	path = sing-box
+	path = core/sing-box
 	url = https://github.com/SagerNet/sing-box.git
 [submodule "xray-core"]
-	path = xray-core
+	path = core/xray-core
 	url = https://github.com/XTLS/Xray-core.git
 [submodule "hev-socks5-tunnel"]
 	path = hev-socks5-tunnel
 	url = https://github.com/heiher/hev-socks5-tunnel.git
+[submodule "mihomo"]
+	path = core/mihomo
+	url = https://github.com/MetaCubeX/Clash.Meta.git

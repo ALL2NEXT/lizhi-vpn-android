@@ -13,9 +13,9 @@ val singBoxNdkVersion = "28.0.13004108"
 // The repository root pins the sing-box source revision in this submodule.
 // Android builds it directly instead of consuming a checked-in/prebuilt
 // libbox.aar.
-val singBoxSourceDir = rootProject.file("../sing-box")
+val singBoxSourceDir = rootProject.file("../core/sing-box")
 val generatedLibboxAar = layout.buildDirectory.file("generated/sing-box/libbox.aar")
-val xraySourceDir = rootProject.file("../xray-core")
+val xraySourceDir = rootProject.file("../core/xray-core")
 val xrayRunnerDir = rootProject.file("native/xray-runner")
 val generatedXrayJniDir = layout.buildDirectory.dir("generated/xray/jniLibs")
 val xrayCoreVersion = "26.3.27"
