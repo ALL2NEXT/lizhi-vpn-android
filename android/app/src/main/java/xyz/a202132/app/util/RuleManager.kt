@@ -162,16 +162,7 @@ object RuleManager {
                 }
 
                 // 原子替换
-                if (targetFile.exists() && !targetFile.delete()) {
-                    Log.e(TAG, "Failed to delete old file: ${targetFile.absolutePath}")
-                    tempFile.delete()
-                    return false
-                }
-                if (!tempFile.renameTo(targetFile)) {
-                    Log.e(TAG, "Failed to replace file: ${targetFile.absolutePath}")
-                    tempFile.delete()
-                    return false
-                }
+                android.system.Os.rename(tempFile.absolutePath, targetFile.absolutePath)
                 Log.i(TAG, "Downloaded ${targetFile.name} successfully (${targetFile.length()} bytes)")
                 return true
             } else {

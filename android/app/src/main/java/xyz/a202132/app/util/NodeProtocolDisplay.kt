@@ -69,6 +69,7 @@ internal fun Node.protocolDisplayLabel(
 private fun ProxyCore.displayLabel(): String = when (this) {
     ProxyCore.SING_BOX -> "sing-box"
     ProxyCore.XRAY -> "xray"
+    ProxyCore.MIHOMO -> "mihomo"
 }
 
 private data class DisplayLayers(

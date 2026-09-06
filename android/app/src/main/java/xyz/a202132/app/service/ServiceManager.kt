@@ -85,6 +85,16 @@ object ServiceManager {
             _vpnState.value = VpnState.CONNECTING
         }
     }
+
+    fun notifyConnected(node: Node) {
+        _currentNode.value = node
+        _vpnState.value = VpnState.CONNECTED
+    }
+
+    fun notifyStopped() {
+        _vpnState.value = VpnState.DISCONNECTED
+        _currentNode.value = null
+    }
     
     /**
      * 通知错误（由BoxVpnService调用）

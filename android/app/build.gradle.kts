@@ -16,6 +16,7 @@ val singBoxNdkVersion = "28.0.13004108"
 val singBoxSourceDir = rootProject.file("../sing-box")
 val generatedLibboxAar = layout.buildDirectory.file("generated/sing-box/libbox.aar")
 val xraySourceDir = rootProject.file("../xray-core")
+val xrayRunnerDir = rootProject.file("native/xray-runner")
 val generatedXrayJniDir = layout.buildDirectory.dir("generated/xray/jniLibs")
 val xrayCoreVersion = "26.3.27"
 
@@ -74,6 +75,7 @@ val buildLibbox = tasks.register("buildLibbox") {
         fun isExpectedGomobile(binary: File, commandPackage: String): Boolean {
             if (!binary.isFile) return false
             val info = commandOutput(goExecutable, "version", "-m", binary.absolutePath)
+                .replace(Regex("\\s+"), " ")
             return info.contains("path $commandPackage") &&
                 info.contains("mod github.com/sagernet/gomobile v0.1.11")
         }
@@ -130,7 +132,7 @@ val buildLibbox = tasks.register("buildLibbox") {
 
 // Xray 特意编译为独立 PIE 可执行文件并打包到 nativeLibraryDir。
 // 如果在进程内再加载一个 gomobile AAR，会在 libbox 旁引入第二套 Go/JNI 运行时。
-// 进程隔离可以避免符号与运行时冲突，并确保 Android TUN 始终只由 sing-box 管理。
+// 每次连接由选定内核直接读取 Android TUN；控制通道只传递 FD 和生命周期事件。
 val buildXrayCore = tasks.register("buildXrayCore") {
     group = "xray"
     description = "Build the pinned Xray-core source for the Android ABIs"
@@ -140,6 +142,9 @@ val buildXrayCore = tasks.register("buildXrayCore") {
         exclude("build/**")
         exclude("release/**")
     })
+    inputs.files(fileTree(xrayRunnerDir) { exclude("*.exe") })
+    inputs.property("ndkVersion", singBoxNdkVersion)
+    inputs.property("androidApi", 24)
     val arm32Output = generatedXrayJniDir.map { it.file("armeabi-v7a/libxray.so") }
     val arm64Output = generatedXrayJniDir.map { it.file("arm64-v8a/libxray.so") }
     outputs.files(arm32Output, arm64Output)
@@ -177,13 +182,19 @@ val buildXrayCore = tasks.register("buildXrayCore") {
             XrayAbi("armeabi-v7a", "arm", "armv7a-linux-androideabi", "7"),
             XrayAbi("arm64-v8a", "arm64", "aarch64-linux-android")
         )
+        val overlayDir = layout.buildDirectory.dir("generated/xray/tun-overlay").get().asFile
+        exec {
+            workingDir(xrayRunnerDir)
+            commandLine(goExecutable, "run", "./cmd/tun-overlay", "--source", xraySourceDir.absolutePath,
+                "--output", overlayDir.absolutePath)
+        }
         abis.forEach { abi ->
             val output = generatedXrayJniDir.get().file("${abi.androidAbi}/libxray.so").asFile
             output.parentFile.mkdirs()
             val clang = clangBin.resolve("${abi.clangTarget}24-clang$clangSuffix")
             check(clang.isFile) { "Android clang not found at ${clang.absolutePath}" }
             exec {
-                workingDir(xraySourceDir)
+                workingDir(xrayRunnerDir)
                 environment("GOOS", "android")
                 environment("GOARCH", abi.goArch)
                 environment("CGO_ENABLED", "1")
@@ -192,13 +203,14 @@ val buildXrayCore = tasks.register("buildXrayCore") {
                 commandLine(
                     goExecutable,
                     "build",
+                    "-overlay=${overlayDir.resolve("overlay.json").absolutePath}",
                     "-trimpath",
                     "-buildvcs=false",
                     "-buildmode=pie",
                     "-ldflags=-s -w -buildid=",
                     "-o",
                     output.absolutePath,
-                    "./main"
+                    "."
                 )
             }
         }

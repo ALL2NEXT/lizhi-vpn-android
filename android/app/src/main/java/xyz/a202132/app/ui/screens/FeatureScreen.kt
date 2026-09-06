@@ -3,6 +3,8 @@ package xyz.a202132.app.ui.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -533,7 +535,7 @@ fun FeatureScreen(
                     ProtocolCoreRow(
                         label = nodeType.displayName(),
                         selectedCore = protocolCoreSettings.coreFor(nodeType),
-                        xrayAvailable = nodeType in ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS,
+                        availableCores = xyz.a202132.app.core.CoreBackends.registry.availableFor(nodeType),
                         onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
                     )
                 }
@@ -548,11 +550,11 @@ fun FeatureScreen(
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 private fun ProtocolCoreRow(
     label: String,
     selectedCore: ProxyCore,
-    xrayAvailable: Boolean,
+    availableCores: List<ProxyCore>,
     onSelected: (ProxyCore) -> Unit
 ) {
     Row(
@@ -565,17 +567,15 @@ private fun ProtocolCoreRow(
             modifier = Modifier.weight(1f),
             color = MaterialTheme.colorScheme.onSurface
         )
-        FilterChip(
-            selected = selectedCore == ProxyCore.SING_BOX,
-            onClick = { onSelected(ProxyCore.SING_BOX) },
-            label = { Text("sing-box") }
-        )
-        FilterChip(
-            selected = selectedCore == ProxyCore.XRAY,
-            onClick = { onSelected(ProxyCore.XRAY) },
-            enabled = xrayAvailable,
-            label = { Text("Xray") }
-        )
+        FlowRow(modifier = Modifier.weight(2f), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            availableCores.forEach { core ->
+                FilterChip(
+                    selected = selectedCore == core,
+                    onClick = { onSelected(core) },
+                    label = { Text(core.displayName) }
+                )
+            }
+        }
     }
 }
 

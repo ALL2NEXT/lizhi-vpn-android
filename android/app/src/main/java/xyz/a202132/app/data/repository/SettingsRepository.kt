@@ -112,6 +112,7 @@ class SettingsRepository(private val context: Context) {
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
+        private val CORE_ASSIGNMENTS = stringSetPreferencesKey("protocol_core_assignments")
         private val XRAY_CORE_PROTOCOLS = stringSetPreferencesKey("xray_core_protocols")
         private val NODE_LABEL_SHOW_PROTOCOL = booleanPreferencesKey("node_label_show_protocol")
         private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
@@ -278,7 +279,7 @@ class SettingsRepository(private val context: Context) {
             } else {
                 0
             },
-            protocolCoreSettings = decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS]),
+            protocolCoreSettings = decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS], preferences[CORE_ASSIGNMENTS]),
             perAppProxy = PerAppProxySettings(
                 enabled = preferences[PER_APP_PROXY_ENABLED] ?: false,
                 selectedPackages = preferences[SELECTED_PACKAGES] ?: emptySet()
@@ -287,7 +288,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val protocolCoreSettings: Flow<ProtocolCoreSettings> = context.dataStore.data.map { preferences ->
-        decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS])
+        decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS], preferences[CORE_ASSIGNMENTS])
     }
 
     val nodeDisplaySettings: Flow<NodeDisplaySettings> = context.dataStore.data.map { preferences ->
@@ -344,17 +345,25 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setProtocolCore(nodeType: NodeType, core: ProxyCore) {
-        if (nodeType !in ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS) return
+        require(core in xyz.a202132.app.core.CoreBackends.registry.availableFor(nodeType))
         context.dataStore.edit { preferences ->
-            val current = decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS])
-                .xrayProtocols
-                .toMutableSet()
-            if (core == ProxyCore.XRAY) current += nodeType else current -= nodeType
-            preferences[XRAY_CORE_PROTOCOLS] = current.mapTo(mutableSetOf()) { it.protocol }
+            val current = decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS], preferences[CORE_ASSIGNMENTS])
+                .assignments.toMutableMap()
+            current[nodeType] = core
+            preferences[CORE_ASSIGNMENTS] = current.mapTo(mutableSetOf()) { (type, selected) ->
+                "${type.protocol}=${selected.name}"
+            }
         }
     }
 
-    private fun decodeProtocolCoreSettings(values: Set<String>?): ProtocolCoreSettings {
+    private fun decodeProtocolCoreSettings(values: Set<String>?, entries: Set<String>?): ProtocolCoreSettings {
+        val assignments = entries.orEmpty().mapNotNull { entry ->
+            val pair = entry.split('=', limit = 2)
+            if (pair.size != 2) return@mapNotNull null
+            val type = NodeType.entries.firstOrNull { it.protocol == pair[0] } ?: return@mapNotNull null
+            val selected = runCatching { ProxyCore.valueOf(pair[1]) }.getOrNull() ?: return@mapNotNull null
+            type to selected
+        }.toMap()
         val supported = ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS.toSet()
         val storedValues = values ?: ProtocolCoreSettings.DEFAULT_XRAY_PROTOCOLS
             .mapTo(mutableSetOf()) { it.protocol }
@@ -363,7 +372,7 @@ class SettingsRepository(private val context: Context) {
                 it.protocol.equals(value, ignoreCase = true) || it.name.equals(value, ignoreCase = true)
             }
         }.intersect(supported)
-        return ProtocolCoreSettings(selected)
+        return ProtocolCoreSettings(selected, assignments)
     }
 
     private inline fun <reified T : Enum<T>> enumValueOrDefault(

@@ -2,12 +2,12 @@ package xyz.a202132.app.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.util.Log
-import io.nekohasekai.libbox.Libbox
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -65,8 +65,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsRepository = SettingsRepository(application)
     private val subscriptionParser = SubscriptionParser()
     private val accountManager = AccountManager(application)
-    private val configGenerator = SingBoxConfigGenerator()
-    private val xrayConfigGenerator = XrayConfigGenerator()
     private val latencyTester = LatencyTester()
     private val bandwidthTester = NodeDownloadBandwidthTester(application)
     // 节流控制
@@ -730,6 +728,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     onProgress = onProgress
                 )
                 applyUrlTestResults(results)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e(tag, "URL Test batch failed", error)
+                _error.value = "延迟测速未完成，请重试（${error.javaClass.simpleName}）"
             } finally {
                 _isTesting.value = false
                 _testingLabel.value = null
@@ -1014,83 +1017,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         timeoutMs: Long = urlTestTimeoutMs.value,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
-        val isVpnRunning = vpnState.value == VpnState.CONNECTED
-        val clashApiPort: Int
-        var startedHeadless = false
-        var testableNodes = nodes
-
+        val batch = xyz.a202132.app.network.UrlTestManager.start(
+            getApplication(), nodes, hysteriaUpMbps.value, hysteriaDownMbps.value,
+            protocolCoreSettings.value
+        ) ?: return emptyList()
         try {
-            if (isVpnRunning) {
-                clashApiPort = 9090
-                Log.d(tag, "URL Test via existing VPN ClashAPI (port $clashApiPort)")
-            } else {
-                clashApiPort = xyz.a202132.app.network.UrlTestManager.CLASH_API_PORT
-                Log.d(tag, "URL Test via headless instance (port $clashApiPort)")
-                _testingLabel.value = "$labelPrefix：启动测试引擎..."
-
-                val startResult = withContext(Dispatchers.IO) {
-                    xyz.a202132.app.network.UrlTestManager.start(
-                        getApplication(),
-                        nodes,
-                        hysteriaUpMbps.value,
-                        hysteriaDownMbps.value,
-                        urlTestUrl.value,
-                        protocolCoreSettings.value
-                    )
-                }
-                if (startResult == null) {
-                    _error.value = "启动测试引擎失败"
-                    return emptyList()
-                }
-                startedHeadless = true
-                testableNodes = startResult.nodes
-
-                delay(2000)
-                val clashReady = withContext(Dispatchers.IO) {
-                    var ready = false
-                    for (retry in 1..6) {
-                        try {
-                            val checkUrl = java.net.URL("http://127.0.0.1:$clashApiPort/proxies")
-                            val conn = checkUrl.openConnection() as java.net.HttpURLConnection
-                            conn.connectTimeout = 2000
-                            conn.readTimeout = 2000
-                            if (conn.responseCode == 200) {
-                                ready = true
-                                conn.disconnect()
-                                break
-                            }
-                            conn.disconnect()
-                        } catch (e: Exception) {
-                            Log.d(tag, "ClashAPI not ready yet (attempt $retry/6): ${e.message}")
-                        }
-                        delay(1000)
-                    }
-                    ready
-                }
-
-                if (!clashReady) {
-                    _error.value = "测试引擎启动超时"
-                    return emptyList()
-                }
-                _testingLabel.value = "$labelPrefix 测试中..."
-            }
-
-            if (startedHeadless) {
-                withContext(Dispatchers.IO) {
-                    val proxiesResponse = xyz.a202132.app.network.UrlTestManager.diagnoseProxies()
-                    Log.d(tag, "ClashAPI proxies: ${proxiesResponse?.take(500)}")
-                }
-            }
-
-            Log.d(tag, "URL Testing ${testableNodes.size} nodes via ClashAPI (port=$clashApiPort)")
             val testedResults = latencyTester.urlTestAllNodes(
-                nodes = testableNodes,
-                clashApiPort = clashApiPort,
+                nodes = batch.nodes,
                 targetUrl = urlTestUrl.value,
                 timeoutMs = timeoutMs,
                 concurrency = concurrency
             ) { completed, total ->
-                _testingLabel.value = "$labelPrefix 测试中 ($completed/$total)"
+                _testingLabel.value = "$labelPrefix ($completed/$total)"
                 onProgress?.invoke(completed, total)
             }
             val testedById = testedResults.associateBy(LatencyTester.LatencyResult::nodeId)
@@ -1104,19 +1042,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             Log.d(tag, "Got ${results.size} URL test results")
             return results
         } finally {
-            if (startedHeadless) {
-                withContext(Dispatchers.IO) {
-                    val coreLog = xyz.a202132.app.network.UrlTestManager.readLogFile(getApplication())
-                    if (coreLog != null) {
-                        coreLog.lines().forEach { line ->
-                            Log.d("SingBoxCoreLog", line)
-                        }
-                    } else {
-                        Log.w(tag, "No sing-box core log available")
-                    }
-                }
-                xyz.a202132.app.network.UrlTestManager.stop()
-            }
+            withContext(NonCancellable) { xyz.a202132.app.network.UrlTestManager.stop() }
         }
     }
 
@@ -1303,7 +1229,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ): Pair<NodeImportResult, Int> {
         if (parsedNodes.isEmpty()) return NodeImportResult.INVALID to 0
 
-        setupLibboxForConfigCheck()
         val coreCompatibleNodes = parsedNodes.filter { node ->
             isNodeCoreConfigCompatible(node)
         }
@@ -1353,38 +1278,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         onResult(result, importedCount)
     }
 
-    private fun setupLibboxForConfigCheck() {
-        val app = getApplication<Application>()
-        val workDir = File(app.filesDir, "sing-box")
-        if (!workDir.exists()) workDir.mkdirs()
-        val options = io.nekohasekai.libbox.SetupOptions().apply {
-            basePath = workDir.absolutePath
-            workingPath = workDir.absolutePath
-            tempPath = app.cacheDir.absolutePath
+    private suspend fun isNodeCoreConfigCompatible(node: Node): Boolean {
+        return try {
+            val backend = xyz.a202132.app.core.CoreBackends.registry.resolve(protocolCoreSettings.value.coreFor(node.type), node)
+            backend.prepare(getApplication<Application>(), xyz.a202132.app.core.CoreRequest(node, 10808))
+            true
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w(tag, "Imported node is incompatible: " + node.type + "/" + error.javaClass.simpleName)
+            false
         }
-        Libbox.setup(options)
     }
 
-    private fun isNodeCoreConfigCompatible(node: Node): Boolean {
-        if (protocolCoreSettings.value.usesXray(node.type)) {
-            return runCatching {
-                xrayConfigGenerator.generateTestConfig(node)
-            }.onFailure { error ->
-                Log.w(tag, "Skip malformed Xray node: type=${node.type}, server=${node.server}", error)
-            }.isSuccess
-        }
-        return runCatching {
-            val config = configGenerator.generateTestConfig(node)
-            Libbox.checkConfig(config)
-        }.onFailure { error ->
-            Log.w(tag, "Skip incompatible imported node: type=${node.type}, server=${node.server}, error=${error.message}")
-            Log.w(tag, "Skip incompatible imported node: type=${node.type}", error)
-        }.isSuccess
-    }
-    
-    /**
-     * 切换代理模式
-     */
     fun setProxyMode(mode: ProxyMode) {
         viewModelScope.launch {
             settingsRepository.setProxyMode(mode)

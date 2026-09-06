@@ -146,7 +146,7 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
-                title = "TUN实现"
+                title = "sing-box TUN实现（Xray 使用 gvisor）"
             ) {
                 val tunStacks = TunStack.values()
                 MultiPositionSwitch(

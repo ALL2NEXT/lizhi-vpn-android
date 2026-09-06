@@ -9,36 +9,23 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 
-/** 为每个节点生成独立 SOCKS 桥接入站，并统一交由一个 Xray 进程运行。 */
+/** Builds a single-node native Xray configuration with a local probe/API entry. */
 class XrayConfigGenerator {
     private val gson = Gson()
 
-    fun generateConfig(
-        nodes: List<Node>,
-        bridgePorts: Map<String, Int>,
+    fun generateTestConfig(
+        node: Node,
+        socksPort: Int = 20_800,
         hysteriaUpMbps: Int = 0,
         hysteriaDownMbps: Int = 0
     ): String {
-        require(nodes.isNotEmpty()) { "Xray 节点列表为空" }
-        require(nodes.all { it.type in XRAY_SUPPORTED_TYPES }) { "包含 Xray 不支持的协议" }
-        require(nodes.all { bridgePorts[it.id] in 1..65_535 }) { "Xray 桥接端口无效" }
-
-        val config = JsonObject().apply {
+        require(node.type in XRAY_SUPPORTED_TYPES) { "Unsupported Xray protocol" }
+        require(socksPort in 1..65_535) { "Invalid local SOCKS port" }
+        return gson.toJson(JsonObject().apply {
             add("log", JsonObject().apply { addProperty("loglevel", "warning") })
-            add("inbounds", JsonArray().apply {
-                nodes.forEach { node -> add(createBridgeInbound(node, bridgePorts.getValue(node.id))) }
-            })
+            add("inbounds", JsonArray().apply { add(createSocksInbound(socksPort)) })
             add("outbounds", JsonArray().apply {
-                nodes.forEach { node ->
-                    add(
-                        createNodeOutbound(
-                            node,
-                            outboundTag(node.id),
-                            hysteriaUpMbps,
-                            hysteriaDownMbps
-                        )
-                    )
-                }
+                add(createNodeOutbound(node, "proxy", hysteriaUpMbps, hysteriaDownMbps))
                 add(JsonObject().apply {
                     addProperty("protocol", "freedom")
                     addProperty("tag", DIRECT_TAG)
@@ -48,39 +35,14 @@ class XrayConfigGenerator {
                     addProperty("tag", BLOCK_TAG)
                 })
             })
-            add("routing", JsonObject().apply {
-                addProperty("domainStrategy", "AsIs")
-                add("rules", JsonArray().apply {
-                    nodes.forEach { node ->
-                        add(JsonObject().apply {
-                            addProperty("type", "field")
-                            add("inboundTag", JsonArray().apply { add(inboundTag(node.id)) })
-                            addProperty("outboundTag", outboundTag(node.id))
-                        })
-                    }
-                })
-            })
-        }
-        return gson.toJson(config)
+        })
     }
 
-    fun generateTestConfig(
-        node: Node,
-        bridgePort: Int = 20_800,
-        hysteriaUpMbps: Int = 0,
-        hysteriaDownMbps: Int = 0
-    ): String = generateConfig(
-        listOf(node),
-        mapOf(node.id to bridgePort),
-        hysteriaUpMbps,
-        hysteriaDownMbps
-    )
-
-    private fun createBridgeInbound(node: Node, port: Int): JsonObject = JsonObject().apply {
+    private fun createSocksInbound(port: Int): JsonObject = JsonObject().apply {
         addProperty("listen", "127.0.0.1")
         addProperty("port", port)
         addProperty("protocol", "socks")
-        addProperty("tag", inboundTag(node.id))
+        addProperty("tag", "internal-socks-in")
         add("settings", JsonObject().apply {
             addProperty("auth", "noauth")
             addProperty("udp", true)
@@ -730,8 +692,6 @@ class XrayConfigGenerator {
         else -> "none"
     }
 
-    private fun inboundTag(nodeId: String) = "bridge-in-$nodeId"
-    private fun outboundTag(nodeId: String) = "proxy-$nodeId"
 
     companion object {
         val XRAY_SUPPORTED_TYPES: Set<NodeType> = ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS.toSet()

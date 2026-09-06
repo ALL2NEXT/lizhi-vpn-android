@@ -1,0 +1,5 @@
+syntax = "proto3";
+package firefly.android.runner;
+option go_package = "xyz.a202132/mobile/xrayrunner/statsconfig";
+// Marks the runner's plaintext traffic-counting dispatcher decorator.
+message Config {}

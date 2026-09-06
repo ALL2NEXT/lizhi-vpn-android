@@ -1,11 +1,8 @@
 package xyz.a202132.app.service
 
 import android.net.ConnectivityManager
-import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.os.Build
-import android.os.ParcelFileDescriptor
 import android.system.OsConstants
 import android.util.Log
 import io.nekohasekai.libbox.InterfaceUpdateListener
@@ -14,7 +11,6 @@ import io.nekohasekai.libbox.NetworkInterfaceIterator
 import io.nekohasekai.libbox.PlatformInterface
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.TunOptions
-import xyz.a202132.app.data.repository.PerAppProxySettings
 import java.net.Inet6Address
 import java.net.InetSocketAddress
 import java.net.InterfaceAddress
@@ -25,290 +21,34 @@ import io.nekohasekai.libbox.NetworkInterface as LibboxNetworkInterface
  * 参考官方 sing-box-for-android 实现
  * 适配 libbox 1.13.0-rc.3 API
  */
-class BoxPlatformInterface(
-    private val service: BoxVpnService,
-    private val perAppProxySettings: PerAppProxySettings
+internal class BoxPlatformInterface(
+    private val service: android.net.VpnService,
+    private val host: xyz.a202132.app.platform.AndroidVpnHost
 ) : PlatformInterface {
-    
-    companion object {
-        private const val TAG = "BoxPlatformInterface"
-    }
-    
-    private var tunFd: ParcelFileDescriptor? = null
-    private var defaultNetwork: Network? = null
-    private var interfaceUpdateListener: InterfaceUpdateListener? = null
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
-    private var lastNotifiedNetworkId: Long = -1
-    
+    private companion object { const val TAG = "BoxPlatformInterface" }
     private val connectivityManager by lazy {
         service.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     }
-    
-    private val availableNetworks = java.util.concurrent.ConcurrentHashMap<Network, NetworkCapabilities>()
-    
-    /**
-     * 启动网络监控 - 必须在 CommandServer 创建之前调用
-     */
-    fun startNetworkMonitor() {
-        Log.d(TAG, "Starting network monitor")
-        
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                // 获取 capabilities，如果获取不到则忽略
-                val caps = connectivityManager.getNetworkCapabilities(network) ?: return
-                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) return
-                
-                availableNetworks[network] = caps
-                evaluateBestNetwork()
-            }
-            
-            override fun onLost(network: Network) {
-                availableNetworks.remove(network)
-                evaluateBestNetwork()
-            }
-            
-            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) return
-                
-                availableNetworks[network] = capabilities
-                evaluateBestNetwork()
-            }
-        }
-        
-        networkCallback = callback
-        
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
-            .build()
-        
-        try {
-            connectivityManager.registerNetworkCallback(request, callback)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to register network callback", e)
-        }
-    }
-    
-    private fun evaluateBestNetwork() {
-        var bestNetwork: Network? = null
-        var bestCaps: NetworkCapabilities? = null
-        var bestScore = -1
-        
-        // 优先级: Ethernet (3) > WiFi (2) > Cellular (1)
-        for ((network, caps) in availableNetworks) {
-            val score = when {
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> 3
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> 2
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 1
-                else -> 0
-            }
-            
-            if (score > bestScore) {
-                bestScore = score
-                bestNetwork = network
-                bestCaps = caps
-            }
-        }
-        
-        // 如果最佳网络发生变化
-        if (bestNetwork != defaultNetwork) {
-            Log.d(TAG, "Network switched to: $bestNetwork (Score: $bestScore)")
-            defaultNetwork = bestNetwork
-            
-            updateUnderlyingNetwork(bestNetwork)
-            notifyInterfaceUpdate(bestNetwork)
-            
-            if (bestNetwork != null && bestCaps != null) {
-                checkAndNotifyCellularNetwork(bestNetwork, bestCaps)
-            }
-        }
-    }
-    
-    private fun notifyInterfaceUpdate(network: Network?) {
-        val listener = interfaceUpdateListener ?: return
-        if (network != null) {
-            val linkProperties = connectivityManager.getLinkProperties(network) ?: return
-            val interfaceName = linkProperties.interfaceName ?: return
-            
-            // 重试获取接口索引
-            for (times in 0 until 10) {
-                try {
-                    val networkInterface = java.net.NetworkInterface.getByName(interfaceName)
-                    if (networkInterface != null) {
-                        val interfaceIndex = networkInterface.index
-                        Log.d(TAG, "Default interface: $interfaceName (index: $interfaceIndex)")
-                        listener.updateDefaultInterface(interfaceName, interfaceIndex, false, false)
-                        return
-                    }
-                } catch (e: Exception) {
-                    Thread.sleep(100)
-                }
-            }
-        } else {
-            listener.updateDefaultInterface("", -1, false, false)
-        }
-    }
-    
-    /**
-     * 更新 VPN 底层网络
-     * 当网络切换（WiFi <-> 蜂窝网络）时调用，确保 VPN 流量走新的物理网络
-     */
-    private fun updateUnderlyingNetwork(network: Network?) {
-        try {
-            val networks = if (network != null) arrayOf(network) else null
-            service.setUnderlyingNetworks(networks)
-            Log.d(TAG, "Updated underlying network: ${network ?: "null"}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to update underlying network", e)
-        }
-    }
-    
-    /**
-     * 检测是否为蜂窝网络并通知用户
-     */
-    private fun checkAndNotifyCellularNetwork(network: Network, capabilities: NetworkCapabilities) {
-        try {
-            if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
-                // 防止重复提醒同一网络
-                if (network.networkHandle == lastNotifiedNetworkId) {
-                    return
-                }
-                
-                Log.d(TAG, "Switched to cellular network, notifying user")
-                
-                lastNotifiedNetworkId = network.networkHandle
-                
-                ServiceManager.notifyCellularNetwork()
-            } else {
-                // 如果切换到了非蜂窝网络，重置提醒 ID
-                // 这样下次切换回蜂窝网络时可以再次提醒
-                lastNotifiedNetworkId = -1
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to check network type", e)
-        }
-    }
-    
-    /**
-     * 停止网络监控
-     */
-    fun stopNetworkMonitor() {
-        Log.d(TAG, "Stopping network monitor")
-        networkCallback?.let {
-            try {
-                connectivityManager.unregisterNetworkCallback(it)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to unregister network callback", e)
-            }
-        }
-        networkCallback = null
-        defaultNetwork = null
-    }
-
-    /**
-     * VPN 关闭前尽快解除底层网络绑定，帮助系统更早完成 VPN teardown。
-     */
-    fun prepareForVpnShutdown() {
-        try {
-            service.setUnderlyingNetworks(null)
-            Log.d(TAG, "Underlying networks cleared")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to clear underlying networks", e)
-        }
-
-        stopNetworkMonitor()
-    }
-    
-    /**
-     * 打开 TUN 接口 - 使用 libbox 传来的选项
-     */
     override fun openTun(options: TunOptions): Int {
-        Log.d(TAG, "Opening TUN interface with MTU: ${options.mtu}")
-        
-        val builder = service.createVpnBuilder()
-            .setSession("空空加速器")
-            .setMtu(options.mtu)
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder.setMetered(false)
+        val addresses = mutableListOf<xyz.a202132.app.platform.IpPrefix>()
+        val v4 = options.inet4Address
+        while (v4.hasNext()) v4.next().let { addresses += xyz.a202132.app.platform.IpPrefix(it.address(), it.prefix()) }
+        val v6 = options.inet6Address
+        while (v6.hasNext()) v6.next().let { addresses += xyz.a202132.app.platform.IpPrefix(it.address(), it.prefix()) }
+        val routes = mutableListOf<xyz.a202132.app.platform.IpPrefix>()
+        val route4 = options.inet4RouteAddress
+        while (route4.hasNext()) route4.next().let { routes += xyz.a202132.app.platform.IpPrefix(it.address(), it.prefix()) }
+        val route6 = options.inet6RouteAddress
+        while (route6.hasNext()) route6.next().let { routes += xyz.a202132.app.platform.IpPrefix(it.address(), it.prefix()) }
+        if (routes.isEmpty()) {
+            if (addresses.any { ':' !in it.address }) routes += xyz.a202132.app.platform.IpPrefix("0.0.0.0", 0)
+            if (addresses.any { ':' in it.address }) routes += xyz.a202132.app.platform.IpPrefix("::", 0)
         }
-        
-        // IPv4 地址
-        val inet4Address = options.inet4Address
-        while (inet4Address.hasNext()) {
-            val address = inet4Address.next()
-            Log.d(TAG, "Adding IPv4 address: ${address.address()}/${address.prefix()}")
-            builder.addAddress(address.address(), address.prefix())
-        }
-        
-        // IPv6 地址
-        val inet6Address = options.inet6Address
-        while (inet6Address.hasNext()) {
-            val address = inet6Address.next()
-            Log.d(TAG, "Adding IPv6 address: ${address.address()}/${address.prefix()}")
-            builder.addAddress(address.address(), address.prefix())
-        }
-        
-        // 自动路由
-        if (options.autoRoute) {
-            // DNS 服务器
-            builder.addDnsServer(options.dnsServerAddress.value)
-            
-            // 路由
-            builder.addRoute("0.0.0.0", 0)
-            builder.addRoute("::", 0)
-        }
-        
-        // 分应用代理固定为仅代理选中应用，并返回是否使用了白名单模式
-        val usedWhitelistMode = applyPerAppProxy(builder)
-        
-        // 排除自身应用（仅在非白名单模式时）
-        // Android 限制：addAllowedApplication 和 addDisallowedApplication 不能混用
-        if (!usedWhitelistMode) {
-            try {
-                builder.addDisallowedApplication(service.packageName)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to disallow self package", e)
-            }
-        }
-        
-        tunFd = builder.establish()
-        
-        val fd = tunFd?.fd ?: -1
-        Log.d(TAG, "TUN interface opened with fd: $fd")
-        return fd
+        return host.openTun(xyz.a202132.app.platform.TunnelSpec(
+            options.mtu, addresses, routes, listOf(options.dnsServerAddress.value)
+        ))
     }
-    
-    /**
-     * 应用分应用代理规则
-     * @return 是否使用了白名单模式（addAllowedApplication）
-     */
-    private fun applyPerAppProxy(builder: android.net.VpnService.Builder): Boolean {
-        val isPerAppEnabled = perAppProxySettings.enabled
-        // VPN 宿主进程同时负责运行 Xray；如果代理自身 UID，Xray 的上游连接会被
-        // 再次送回 TUN，最终形成流量环路。
-        val selectedPackages = perAppProxySettings.selectedPackages - service.packageName
-        
-        if (!isPerAppEnabled) {
-            Log.d(TAG, "Per-app proxy disabled, all apps will use VPN")
-            return false
-        }
-        
-        Log.d(TAG, "Per-app proxy enabled, selected: ${selectedPackages.size} apps")
-        if (selectedPackages.isEmpty()) {
-            Log.w(TAG, "Per-app proxy enabled but no apps selected - no apps will use VPN")
-        }
-        selectedPackages.forEach { pkg ->
-            try {
-                builder.addAllowedApplication(pkg)
-                Log.d(TAG, "Allowed app: $pkg")
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to allow app: $pkg", e)
-            }
-        }
-        return true // 固定使用仅代理选中的白名单模式
-    }
-    
+
     override fun useProcFS(): Boolean {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
     }
@@ -349,7 +89,7 @@ class BoxPlatformInterface(
     
     override fun autoDetectInterfaceControl(fd: Int) {
         Log.d(TAG, "Protecting socket fd: $fd")
-        service.protect(fd)
+        check(host.protect(fd)) { "Unable to protect core socket" }
     }
     
     override fun clearDNSCache() {
@@ -358,16 +98,13 @@ class BoxPlatformInterface(
     
     override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener?) {
         Log.d(TAG, "Start default interface monitor")
-        interfaceUpdateListener = listener
-        // 立即通知当前网络
-        defaultNetwork?.let { notifyInterfaceUpdate(it) }
+        host.onInterfaceChanged = { name, index -> listener?.updateDefaultInterface(name, index, false, false) }
     }
-    
+
     override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener?) {
-        Log.d(TAG, "Close default interface monitor")
-        interfaceUpdateListener = null
+        host.onInterfaceChanged = null
     }
-    
+
     override fun getInterfaces(): NetworkInterfaceIterator {
         val networks = connectivityManager.allNetworks
         val networkInterfaces = java.net.NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList()
@@ -458,20 +195,6 @@ class BoxPlatformInterface(
         return false
     }
     
-    fun closeTun() {
-        val startTime = System.currentTimeMillis()
-        val hadFd = tunFd != null
-        try {
-            tunFd?.close()
-            tunFd = null
-            val elapsed = System.currentTimeMillis() - startTime
-            Log.d(TAG, "TUN interface closed (hadFd=$hadFd, took ${elapsed}ms)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to close TUN", e)
-        }
-    }
-    
-    // 辅助类
     private class InterfaceArray(private val iterator: Iterator<LibboxNetworkInterface>) : NetworkInterfaceIterator {
         override fun hasNext(): Boolean = iterator.hasNext()
         override fun next(): LibboxNetworkInterface = iterator.next()
