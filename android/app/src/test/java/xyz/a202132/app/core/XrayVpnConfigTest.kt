@@ -39,6 +39,23 @@ class XrayVpnConfigTest {
         assertFalse(result.toString().contains("bridge"))
     }
 
+    @Test fun vpnSocksInboundRequiresSessionCredentials() {
+        val authenticated = request(ProxyMode.GLOBAL, IPv6RoutingMode.DISABLED).copy(
+            endpoint = LocalSocksEndpoint("127.0.0.1", 20800, SocksCredentials("vpn", "secret"))
+        )
+        val source = base()
+        source.getAsJsonArray("inbounds")[0].asJsonObject.getAsJsonObject("settings").apply {
+            addProperty("auth", "password")
+            add("accounts", com.google.gson.JsonArray().apply {
+                add(JsonObject().apply { addProperty("user", "vpn"); addProperty("pass", "secret") })
+            })
+        }
+        val result = JsonParser.parseString(XrayVpnConfig.compose(source, authenticated)).asJsonObject
+        val settings = result.getAsJsonArray("inbounds")[0].asJsonObject.getAsJsonObject("settings")
+        assertEquals("password", settings.get("auth").asString)
+        assertEquals("vpn", settings.getAsJsonArray("accounts")[0].asJsonObject.get("user").asString)
+    }
+
     @Test fun vpnDnsTrafficUsesTheHevOwnedSocksInbound() {
         val result = JsonParser.parseString(
             XrayVpnConfig.compose(base(), request(ProxyMode.GLOBAL, IPv6RoutingMode.DISABLED))

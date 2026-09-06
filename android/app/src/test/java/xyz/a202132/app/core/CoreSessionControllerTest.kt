@@ -8,7 +8,7 @@ import xyz.a202132.app.data.model.ProxyCore
 class CoreSessionControllerTest {
     private class Session(private val events: MutableList<String>, private val name: String) : CoreSession {
         override val core = ProxyCore.SING_BOX
-        override val socksPort = 1
+        override val endpoint = LocalSocksEndpoint.unauthenticated(1)
         var closes = 0
         override fun traffic(): CoreTraffic? = null
         override fun close() { closes++; events += "close:$name" }
@@ -62,7 +62,7 @@ class CoreSessionControllerTest {
         val controller = CoreSessionController()
         val broken = object : CoreSession {
             override val core = ProxyCore.XRAY
-            override val socksPort = 1
+            override val endpoint = LocalSocksEndpoint.unauthenticated(1)
             override fun traffic(): CoreTraffic? = null
             override fun close(): Unit = error("native reader still alive")
         }

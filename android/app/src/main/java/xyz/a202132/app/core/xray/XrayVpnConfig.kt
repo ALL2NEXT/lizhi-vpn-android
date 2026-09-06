@@ -11,8 +11,8 @@ import xyz.a202132.app.util.XrayConfigGenerator
 
 internal object XrayVpnConfig {
     fun generate(request: CoreRequest, cnRules: JsonObject? = null): String {
-        val base = JsonParser.parseString(XrayConfigGenerator().generateTestConfig(
-            request.node, request.socksPort, request.hysteriaUpMbps, request.hysteriaDownMbps
+        val base = JsonParser.parseString(XrayConfigGenerator().generateCoreConfig(
+            request.node, request.endpoint, request.hysteriaUpMbps, request.hysteriaDownMbps
         )).asJsonObject
         return compose(base, request, cnRules)
     }

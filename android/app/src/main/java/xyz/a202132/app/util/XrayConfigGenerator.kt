@@ -5,6 +5,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProtocolCoreSettings
@@ -18,12 +19,23 @@ class XrayConfigGenerator {
         socksPort: Int = 20_800,
         hysteriaUpMbps: Int = 0,
         hysteriaDownMbps: Int = 0
+    ): String = generateCoreConfig(
+        node,
+        LocalSocksEndpoint.unauthenticated(socksPort),
+        hysteriaUpMbps,
+        hysteriaDownMbps
+    )
+
+    internal fun generateCoreConfig(
+        node: Node,
+        endpoint: LocalSocksEndpoint,
+        hysteriaUpMbps: Int = 0,
+        hysteriaDownMbps: Int = 0
     ): String {
         require(node.type in XRAY_SUPPORTED_TYPES) { "Unsupported Xray protocol" }
-        require(socksPort in 1..65_535) { "Invalid local SOCKS port" }
         return gson.toJson(JsonObject().apply {
             add("log", JsonObject().apply { addProperty("loglevel", "warning") })
-            add("inbounds", JsonArray().apply { add(createSocksInbound(socksPort)) })
+            add("inbounds", JsonArray().apply { add(createSocksInbound(endpoint)) })
             add("outbounds", JsonArray().apply {
                 add(createNodeOutbound(node, "proxy", hysteriaUpMbps, hysteriaDownMbps))
                 add(JsonObject().apply {
@@ -38,13 +50,22 @@ class XrayConfigGenerator {
         })
     }
 
-    private fun createSocksInbound(port: Int): JsonObject = JsonObject().apply {
-        addProperty("listen", "127.0.0.1")
-        addProperty("port", port)
+    private fun createSocksInbound(endpoint: LocalSocksEndpoint): JsonObject = JsonObject().apply {
+        addProperty("listen", endpoint.address)
+        addProperty("port", endpoint.port)
         addProperty("protocol", "socks")
         addProperty("tag", "internal-socks-in")
         add("settings", JsonObject().apply {
-            addProperty("auth", "noauth")
+            val credentials = endpoint.credentials
+            addProperty("auth", if (credentials == null) "noauth" else "password")
+            credentials?.let {
+                add("accounts", JsonArray().apply {
+                    add(JsonObject().apply {
+                        addProperty("user", it.username)
+                        addProperty("pass", it.password)
+                    })
+                })
+            }
             addProperty("udp", true)
             addProperty("ip", "127.0.0.1")
         })

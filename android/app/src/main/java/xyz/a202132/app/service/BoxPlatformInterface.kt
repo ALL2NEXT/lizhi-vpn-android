@@ -22,10 +22,10 @@ import io.nekohasekai.libbox.NetworkInterface as LibboxNetworkInterface
  * 适配 libbox 1.13.0-rc.3 API
  */
 internal class BoxPlatformInterface(
-    private val service: android.net.VpnService,
-    private val host: xyz.a202132.app.platform.AndroidVpnHost
+    private val underlay: xyz.a202132.app.platform.UnderlayController
 ) : PlatformInterface {
     private companion object { const val TAG = "BoxPlatformInterface" }
+    private val service get() = underlay.vpnService
     private val connectivityManager by lazy {
         service.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     }
@@ -72,8 +72,8 @@ internal class BoxPlatformInterface(
     }
     
     override fun autoDetectInterfaceControl(fd: Int) {
-        Log.d(TAG, "Protecting socket fd: $fd")
-        check(host.protect(fd)) { "Unable to protect core socket" }
+        // The VPN service UID is excluded from the TUN. Its sockets therefore
+        // already follow Android's physical default network.
     }
     
     override fun clearDNSCache() {
@@ -82,15 +82,15 @@ internal class BoxPlatformInterface(
     
     override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener?) {
         Log.d(TAG, "Start default interface monitor")
-        host.onInterfaceChanged = { name, index -> listener?.updateDefaultInterface(name, index, false, false) }
+        underlay.onInterfaceChanged = { name, index -> listener?.updateDefaultInterface(name, index, false, false) }
     }
 
     override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener?) {
-        host.onInterfaceChanged = null
+        underlay.onInterfaceChanged = null
     }
 
     override fun getInterfaces(): NetworkInterfaceIterator {
-        val networks = connectivityManager.allNetworks
+        val networks = listOfNotNull(underlay.currentNetwork)
         val networkInterfaces = java.net.NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList()
         val interfaces = mutableListOf<LibboxNetworkInterface>()
         
@@ -98,6 +98,7 @@ internal class BoxPlatformInterface(
             try {
                 val linkProperties = connectivityManager.getLinkProperties(network) ?: continue
                 val networkCapabilities = connectivityManager.getNetworkCapabilities(network) ?: continue
+                if (!networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) continue
                 
                 val boxInterface = LibboxNetworkInterface()
                 boxInterface.name = linkProperties.interfaceName ?: continue
@@ -128,7 +129,7 @@ internal class BoxPlatformInterface(
                 )
                 
                 var flags = 0
-                if (networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                if (networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
                     flags = OsConstants.IFF_UP or OsConstants.IFF_RUNNING
                 }
                 if (networkInterface.isLoopback) {

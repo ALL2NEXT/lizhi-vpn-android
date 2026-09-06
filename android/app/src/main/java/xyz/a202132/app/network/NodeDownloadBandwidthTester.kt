@@ -5,7 +5,6 @@ import android.util.Log
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Proxy
-import java.net.ServerSocket
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -24,11 +23,9 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         hysteriaDownMbps: Int,
         core: ProxyCore
     ): Float = withContext(Dispatchers.IO) {
-        val port = ServerSocket(0).use { it.localPort }
         val session = NodeTestProxyManager.createSession(
             context,
             node,
-            port,
             hysteriaUpMbps,
             hysteriaDownMbps,
             core
@@ -36,7 +33,7 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         if (!session.start()) return@withContext 0f
 
         try {
-            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
+            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", session.socksPort))
             val client = NetworkClient.withUserAgent(OkHttpClient.Builder())
                 .proxy(proxy)
                 .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)

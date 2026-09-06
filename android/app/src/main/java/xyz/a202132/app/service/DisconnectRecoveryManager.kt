@@ -1,8 +1,7 @@
 package xyz.a202132.app.service
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
+import android.net.Network
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,11 +11,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import okhttp3.CacheControl
 import okhttp3.Dns
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import xyz.a202132.app.AppConfig
+import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.data.local.AppDatabase
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeSource
@@ -27,18 +25,18 @@ import xyz.a202132.app.data.model.canBeRequestedBy
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.network.NetworkClient
+import xyz.a202132.app.network.Socks5HttpProbe
 import xyz.a202132.app.network.SubscriptionListParser
 import xyz.a202132.app.network.SubscriptionParser
 import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.Proxy
 import java.util.concurrent.TimeUnit
 
 /** 监测当前 VPN 出口，并在确认断线后刷新原订阅、重连同一节点。 */
 internal class DisconnectRecoveryManager(
     context: Context,
     private val scope: CoroutineScope,
-    private val socksPortProvider: () -> Int?,
+    private val socksEndpointProvider: () -> LocalSocksEndpoint?,
+    private val physicalNetworkProvider: () -> Network?,
     private val isVpnRunning: () -> Boolean,
     private val reconnect: suspend (Node, ProxyMode) -> Unit
 ) {
@@ -50,9 +48,6 @@ internal class DisconnectRecoveryManager(
     private val subscriptionListParser = SubscriptionListParser()
 
     private var monitorJob: Job? = null
-    private var probeClientPort: Int? = null
-    private var probeClient: OkHttpClient? = null
-
     fun start() {
         stop()
         monitorJob = scope.launch(Dispatchers.IO) {
@@ -87,40 +82,20 @@ internal class DisconnectRecoveryManager(
     fun stop() {
         monitorJob?.cancel()
         monitorJob = null
-        probeClient = null
-        probeClientPort = null
     }
 
     private fun probe204(): Boolean {
-        val port = socksPortProvider() ?: return false
-        val client = probeClientFor(port)
-        val request = Request.Builder()
-            .url(AppConfig.URL_TEST_URL)
-            .cacheControl(CacheControl.FORCE_NETWORK)
-            .header("Connection", "close")
-            .get()
-            .build()
+        val endpoint = socksEndpointProvider() ?: return false
         return runCatching {
-            client.newCall(request).execute().use { response -> response.code == 204 }
+            Socks5HttpProbe.hasStatus(
+                endpoint,
+                AppConfig.URL_TEST_URL,
+                expectedStatus = 204,
+                timeoutMs = AppConfig.URL_TEST_TIMEOUT
+            )
         }.onFailure { error ->
             Log.w(TAG, "204 probe failed: ${error.message}")
         }.getOrDefault(false)
-    }
-
-    private fun probeClientFor(port: Int): OkHttpClient {
-        probeClient?.takeIf { probeClientPort == port }?.let { return it }
-        return NetworkClient.withUserAgent(OkHttpClient.Builder())
-            .proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port)))
-            .connectTimeout(AppConfig.URL_TEST_TIMEOUT, TimeUnit.MILLISECONDS)
-            .readTimeout(AppConfig.URL_TEST_TIMEOUT, TimeUnit.MILLISECONDS)
-            .writeTimeout(AppConfig.URL_TEST_TIMEOUT, TimeUnit.MILLISECONDS)
-            .callTimeout(AppConfig.URL_TEST_TIMEOUT, TimeUnit.MILLISECONDS)
-            .followRedirects(false)
-            .build()
-            .also {
-                probeClientPort = port
-                probeClient = it
-            }
     }
 
     private suspend fun recoverCurrentNode(): Boolean {
@@ -209,7 +184,6 @@ internal class DisconnectRecoveryManager(
             url.startsWith(managedPrefix, ignoreCase = true)
     }
 
-    @Suppress("DEPRECATION")
     private fun createPhysicalNetworkClient(): OkHttpClient {
         val timeoutMs = AppConfig.URL_TEST_TIMEOUT.coerceAtLeast(5000L)
         val builder = NetworkClient.withUserAgent(OkHttpClient.Builder())
@@ -218,12 +192,7 @@ internal class DisconnectRecoveryManager(
             .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
             .callTimeout(timeoutMs, TimeUnit.MILLISECONDS)
 
-        val connectivityManager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val physicalNetwork = connectivityManager.allNetworks.firstOrNull { network ->
-            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return@firstOrNull false
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
-        }
+        val physicalNetwork = physicalNetworkProvider()
         if (physicalNetwork == null) {
             Log.w(TAG, "No physical network found for recovery subscription fetch; using default network")
         } else {

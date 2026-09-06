@@ -5,7 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import org.junit.Assert.*
 import org.junit.Test
 import xyz.a202132.app.data.model.*
-import xyz.a202132.app.platform.AndroidVpnHost
+import xyz.a202132.app.platform.UnderlayController
 
 class CoreRegistryTest {
     private class Backend(
@@ -15,7 +15,7 @@ class CoreRegistryTest {
         override val capabilities = CoreCapabilities(protocols)
         override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = error("unused")
         override suspend fun start(context: Context, scope: CoroutineScope, prepared: PreparedCore,
-            host: AndroidVpnHost?, onFailure: (String) -> Unit): CoreSession = error("unused")
+            underlay: UnderlayController?, onFailure: (String) -> Unit): CoreSession = error("unused")
     }
     @Test fun thirdBackendParticipatesWithoutAddingDispatchBranches() {
         val mihomo = Backend(ProxyCore.MIHOMO, setOf(NodeType.TROJAN))

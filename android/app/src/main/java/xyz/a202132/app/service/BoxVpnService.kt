@@ -14,8 +14,6 @@ import xyz.a202132.app.data.local.LocalTrafficUsageStore
 import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.platform.AndroidVpnHost
-import java.net.InetAddress
-import java.net.ServerSocket
 
 /** Android foreground host; native details live behind CoreBackend. */
 class BoxVpnService : VpnService() {
@@ -43,12 +41,12 @@ class BoxVpnService : VpnService() {
             private set
         @Volatile var downloadTotal = 0L
             private set
-        @Volatile private var internalSocksPort: Int? = null
-        fun getInternalSocksPort(): Int? = internalSocksPort?.takeIf { isRunning }
+        @Volatile private var internalSocksEndpoint: LocalSocksEndpoint? = null
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val controller = CoreSessionController()
+    private val sessionFactory = VpnSessionFactory()
     private val notificationFactory = VpnNotificationFactory(this)
     private var operation: Job? = null
     private var trafficJob: Job? = null
@@ -64,7 +62,8 @@ class BoxVpnService : VpnService() {
         super.onCreate()
         notificationFactory.createChannel()
         recovery = DisconnectRecoveryManager(applicationContext, serviceScope,
-            socksPortProvider = { getInternalSocksPort() }, isVpnRunning = { isRunning },
+            socksEndpointProvider = { internalSocksEndpoint?.takeIf { isRunning } },
+            physicalNetworkProvider = { host?.currentNetwork }, isVpnRunning = { isRunning },
             reconnect = { node, mode -> withContext(Dispatchers.Main) {
                 ServiceManager.startVpn(applicationContext, node, mode)
             } })
@@ -124,53 +123,56 @@ class BoxVpnService : VpnService() {
                     if (mode != null) settingsRepo.setProxyMode(mode)
                     val settings = settingsRepo.getVpnRuntimeSettings()
                     val node = knownNode ?: findNode(raw, name, settingsRepo)
-                    val backend = CoreBackends.registry.resolve(settings.protocolCoreSettings.coreFor(node.type), node)
                     require(settings.ipv6RoutingMode != IPv6RoutingMode.ONLY) {
                         "HEV tun2socks does not support IPv6-only routing"
                     }
-                    val port = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
-                    val prepared = backend.prepare(applicationContext,
-                        CoreRequest(node, port, settings))
-                    ensureActive()
-                    val vpnHost = AndroidVpnHost(this@BoxVpnService, settings.perAppProxy,
-                        onCellular = ServiceManager::notifyCellularNetwork)
-                    host = vpnHost
-                    vpnHost.start()
-                    controller.replace(ticket) {
-                        backend.start(applicationContext, serviceScope, prepared, vpnHost) { message ->
-                            if (controller.isCurrent(ticket) && !destroyed) {
-                                ServiceManager.notifyError(message)
-                                serviceScope.launch(Dispatchers.Main) { if (controller.isCurrent(ticket)) stopVpn() }
+                    val prepared = sessionFactory.prepare(applicationContext, node, settings)
+                    try {
+                        ensureActive()
+                        val vpnHost = AndroidVpnHost(this@BoxVpnService, settings.perAppProxy,
+                            onCellular = ServiceManager::notifyCellularNetwork)
+                        host = vpnHost
+                        vpnHost.start()
+                        val session = controller.replace(ticket) {
+                            sessionFactory.start(applicationContext, serviceScope, prepared, vpnHost) { message ->
+                                if (controller.isCurrent(ticket) && !destroyed) {
+                                    ServiceManager.notifyError(message)
+                                    serviceScope.launch(Dispatchers.Main) {
+                                        if (controller.isCurrent(ticket)) stopVpn()
+                                    }
+                                }
                             }
                         }
-                    }
-                    ensureActive()
-                    if (!controller.isCurrent(ticket)) throw CancellationException()
-                    activeNode = node
-                    uploadTotal = 0
-                    downloadTotal = 0
-                    persistedUpload = 0
-                    persistedDownload = 0
-                    lastPersistAt = 0
-                    currentNodeName = node.name
-                    currentNodeGroupName = node.getConnectionGroupName()
-                    currentCore = backend.id
-                    internalSocksPort = port
-                    isRunning = true
-                    withContext(Dispatchers.Main) {
-                        foreground(node.name, currentNodeGroupName, settings.proxyMode)
-                        ServiceManager.notifyConnected(node)
-                    }
-                    TrafficReporter.reportPendingAsync(applicationContext, "vpn_connect")
-                    trafficJob = serviceScope.launch {
-                        while (isActive && controller.isCurrent(ticket)) {
-                            delay(1000)
-                            updateTraffic(controller.current?.traffic())
-                            persistTraffic(false)
+                        ensureActive()
+                        if (!controller.isCurrent(ticket)) throw CancellationException()
+                        activeNode = node
+                        uploadTotal = 0
+                        downloadTotal = 0
+                        persistedUpload = 0
+                        persistedDownload = 0
+                        lastPersistAt = 0
+                        currentNodeName = node.name
+                        currentNodeGroupName = node.getConnectionGroupName()
+                        currentCore = prepared.selectedCore
+                        internalSocksEndpoint = session.endpoint
+                        isRunning = true
+                        withContext(Dispatchers.Main) {
+                            foreground(node.name, currentNodeGroupName, settings.proxyMode)
+                            ServiceManager.notifyConnected(node)
                         }
+                        TrafficReporter.reportPendingAsync(applicationContext, "vpn_connect")
+                        trafficJob = serviceScope.launch {
+                            while (isActive && controller.isCurrent(ticket)) {
+                                delay(1000)
+                                updateTraffic(controller.current?.traffic())
+                                persistTraffic(false)
+                            }
+                        }
+                        recovery.start()
+                        Log.i(TAG, "Native VPN started: core=" + prepared.selectedCore)
+                    } finally {
+                        prepared.close()
                     }
-                    recovery.start()
-                    Log.i(TAG, "Native VPN started: core=" + backend.id)
                 } catch (cancelled: CancellationException) {
                     withContext(NonCancellable) { cleanup() }
                     throw cancelled
@@ -236,7 +238,7 @@ class BoxVpnService : VpnService() {
             persistTraffic(true)
             host?.close()
             host = null
-            internalSocksPort = null
+            internalSocksEndpoint = null
             isRunning = false
             currentCore = null
             currentNodeName = null

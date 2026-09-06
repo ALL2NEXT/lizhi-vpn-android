@@ -12,10 +12,8 @@ import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import java.net.HttpURLConnection
-import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Proxy
-import java.net.ServerSocket
 import java.net.URL
 import java.util.Collections
 
@@ -52,8 +50,9 @@ object UrlTestManager {
             if (node.id !in active.nodes) return@withContext ProbeResult(-2, false)
             var session: NodeTestProxyManager.Session? = null
             try {
-                val port = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
-                val created = NodeTestProxyManager.createSession(active.context, node, port, active.up, active.down, active.settings.coreFor(node.type))
+                val created = NodeTestProxyManager.createSession(
+                    active.context, node, active.up, active.down, active.settings.coreFor(node.type)
+                )
                 session = created
                 mutex.withLock {
                     if (batch !== active) return@withContext ProbeResult(-2, false)
@@ -61,7 +60,8 @@ object UrlTestManager {
                 }
                 if (withTimeoutOrNull(20_000) { created.start() } != true) return@withContext ProbeResult(-2, false)
                 if (batch !== active) return@withContext ProbeResult(-2, false)
-                val connection = URL(url).openConnection(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))) as HttpURLConnection
+                val connection = URL(url).openConnection(Proxy(Proxy.Type.SOCKS,
+                    InetSocketAddress("127.0.0.1", created.socksPort))) as HttpURLConnection
                 connection.connectTimeout = timeoutMs.coerceIn(500, 60_000).toInt()
                 connection.readTimeout = connection.connectTimeout
                 connection.setRequestProperty("Connection", "close")

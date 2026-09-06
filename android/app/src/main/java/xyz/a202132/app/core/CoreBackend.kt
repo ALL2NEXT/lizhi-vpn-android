@@ -6,7 +6,7 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.repository.VpnRuntimeSettings
-import xyz.a202132.app.platform.AndroidVpnHost
+import xyz.a202132.app.platform.UnderlayController
 
 /** Control-plane contract. Packet buffers never cross this boundary. */
 internal interface CoreBackend {
@@ -17,25 +17,64 @@ internal interface CoreBackend {
         context: Context,
         scope: CoroutineScope,
         prepared: PreparedCore,
-        host: AndroidVpnHost?,
+        underlay: UnderlayController?,
         onFailure: (String) -> Unit
     ): CoreSession
+}
+
+internal enum class DnsHandling {
+    /** The data plane forwards DNS packets unchanged and the proxy core answers them. */
+    CORE
 }
 
 internal data class CoreCapabilities(
     val protocols: Set<NodeType>,
     /** The core must expose a local SOCKS5 inbound for the HEV data plane. */
-    val socks5Inbound: Boolean = true
+    val socks5Inbound: Boolean = true,
+    val dnsHandling: DnsHandling = DnsHandling.CORE
 )
+
+data class SocksCredentials(val username: String, val password: String) {
+    init {
+        require(username.isNotEmpty() && password.isNotEmpty())
+        require(username.toByteArray(Charsets.UTF_8).size <= 255)
+        require(password.toByteArray(Charsets.UTF_8).size <= 255)
+    }
+}
+
+data class LocalSocksEndpoint(
+    val address: String,
+    val port: Int,
+    val credentials: SocksCredentials? = null
+) {
+    init {
+        require(address == LOOPBACK) { "Only a loopback SOCKS endpoint is supported" }
+        require(port in 1..65_535) { "Invalid local SOCKS port" }
+    }
+
+    companion object {
+        const val LOOPBACK = "127.0.0.1"
+        fun unauthenticated(port: Int) = LocalSocksEndpoint(LOOPBACK, port)
+    }
+}
 
 internal data class CoreRequest(
     val node: Node,
-    val socksPort: Int,
+    val endpoint: LocalSocksEndpoint,
     val settings: VpnRuntimeSettings? = null,
     val hysteriaUpMbps: Int = settings?.hysteriaUpMbps ?: 0,
     val hysteriaDownMbps: Int = settings?.hysteriaDownMbps ?: 0
 ) {
+    constructor(
+        node: Node,
+        socksPort: Int,
+        settings: VpnRuntimeSettings? = null,
+        hysteriaUpMbps: Int = settings?.hysteriaUpMbps ?: 0,
+        hysteriaDownMbps: Int = settings?.hysteriaDownMbps ?: 0
+    ) : this(node, LocalSocksEndpoint.unauthenticated(socksPort), settings, hysteriaUpMbps, hysteriaDownMbps)
+
     val isVpn: Boolean get() = settings != null
+    val socksPort: Int get() = endpoint.port
 }
 
 internal data class PreparedCore(val core: ProxyCore, val request: CoreRequest, val config: String)
@@ -44,8 +83,9 @@ internal data class CoreTraffic(val upload: Long, val download: Long)
 
 internal interface CoreSession : AutoCloseable {
     val core: ProxyCore
-    val socksPort: Int
-    fun traffic(): CoreTraffic?
+    val endpoint: LocalSocksEndpoint
+    val socksPort: Int get() = endpoint.port
+    fun traffic(): CoreTraffic? = null
     /** Idempotent; must release native resources before returning. */
     override fun close()
 }
@@ -58,6 +98,9 @@ internal class CoreRegistry(backends: List<CoreBackend>) {
         backends.forEach { backend ->
             require(backend.capabilities.socks5Inbound) {
                 "${backend.id.displayName} requires a SOCKS5 inbound for HEV"
+            }
+            require(backend.capabilities.dnsHandling == DnsHandling.CORE) {
+                "${backend.id.displayName} must handle DNS forwarded by the data plane"
             }
         }
         require(entries.size == backends.size) { "重复注册内核" }

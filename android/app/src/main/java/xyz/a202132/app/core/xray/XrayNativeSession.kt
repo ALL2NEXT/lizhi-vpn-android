@@ -7,15 +7,13 @@ import xyz.a202132.app.platform.terminateCompat
 import android.content.Context
 import android.net.LocalServerSocket
 import android.net.LocalSocket
-import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.google.gson.JsonParser
 import kotlinx.coroutines.*
 import xyz.a202132.app.core.CoreSession
-import xyz.a202132.app.core.CoreTraffic
+import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.core.NativeProcessOutput
 import xyz.a202132.app.data.model.ProxyCore
-import xyz.a202132.app.platform.AndroidVpnHost
 import java.io.File
 import java.util.Collections
 import java.util.UUID
@@ -25,8 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** A separate Go runtime for Xray; HEV owns the Android TUN data plane. */
 internal class XrayNativeSession(
     private val context: Context,
-    override val socksPort: Int,
-    private val host: AndroidVpnHost?,
+    override val endpoint: LocalSocksEndpoint,
     private val onFailure: (String) -> Unit
 ) : CoreSession {
     override val core = ProxyCore.XRAY
@@ -40,7 +37,6 @@ internal class XrayNativeSession(
     private var server: LocalServerSocket? = null
     private var process: Process? = null
     private var configFile: File? = null
-    @Volatile private var total: CoreTraffic? = null
 
     suspend fun start(config: String): XrayNativeSession = withContext(Dispatchers.IO) {
         try {
@@ -69,10 +65,6 @@ internal class XrayNativeSession(
                     val event = runCatching { JsonParser.parseString(line).asJsonObject }.getOrNull()
                     when (event?.get("event")?.asString) {
                         "ready" -> ready.complete(Unit)
-                        "traffic" -> total = CoreTraffic(
-                            event.get("upload").asLong.coerceAtLeast(0),
-                            event.get("download").asLong.coerceAtLeast(0)
-                        )
                         "error" -> ready.completeExceptionally(IllegalStateException("Xray 原生运行失败"))
                     }
                 }
@@ -99,7 +91,7 @@ internal class XrayNativeSession(
                 socket.soTimeout = 5_000
                 if (socket.peerCredentials.uid != android.os.Process.myUid()) return
                 val input = socket.inputStream
-                // Read the header without read-ahead so ancillary FDs stay with the next byte.
+                // Bound the command header before blocking on the WATCH channel.
                 val header = StringBuilder()
                 while (header.length <= 96) {
                     val value = input.read()
@@ -112,22 +104,6 @@ internal class XrayNativeSession(
                         socket.soTimeout = 0
                         input.read() // EOF closes the parent-liveness channel.
                     }
-                    "PROTECT $token" -> {
-                        val marker = input.read()
-                        val descriptors = socket.ancillaryFileDescriptors.orEmpty()
-                        var protected = false
-                        try {
-                            if (marker == 1 && descriptors.size == 1) {
-                                ParcelFileDescriptor.dup(descriptors[0]).use { copy ->
-                                    protected = host?.protect(copy.fd) ?: true
-                                }
-                            }
-                        } finally {
-                            descriptors.forEach { descriptor -> runCatching { android.system.Os.close(descriptor) } }
-                        }
-                        socket.outputStream.write(if (protected) 1 else 0)
-                        socket.outputStream.flush()
-                    }
                     else -> Unit
                 }
             }
@@ -137,8 +113,6 @@ internal class XrayNativeSession(
             connections.remove(socket)
         }
     }
-
-    override fun traffic(): CoreTraffic? = total
 
     private fun notifyFailure(message: String) {
         try { onFailure(message) } catch (error: Exception) {
@@ -163,7 +137,6 @@ internal class XrayNativeSession(
                     check(running.awaitExit(3, TimeUnit.SECONDS)) { "Xray 未能停止" }
                 }
             }.onFailure { notifyFailure("Xray 停止失败: ${it.javaClass.simpleName}") }
-            // The worker emits final counters before exit. Drain them before accounting ends.
             output.awaitDrain(1, TimeUnit.SECONDS)
         }
         scope.cancel()

@@ -7,12 +7,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/xtls/xray-core/app/dispatcher"
-	"github.com/xtls/xray-core/common/serial"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/infra/conf"
 	_ "github.com/xtls/xray-core/main/distro/all"
-	"xyz.a202132/mobile/xrayrunner/statsconfig"
 )
 
 var eventLock sync.Mutex
@@ -36,11 +33,6 @@ func loadConfig(path string) (*core.Config, error) {
 	result, err := config.Build()
 	if err != nil {
 		return nil, err
-	}
-	for i, app := range result.App {
-		if app.Type == serial.ToTypedMessage(&dispatcher.Config{}).Type {
-			result.App[i] = serial.ToTypedMessage(&statsconfig.Config{})
-		}
 	}
 	return result, nil
 }

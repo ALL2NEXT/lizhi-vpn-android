@@ -2,7 +2,7 @@ package xyz.a202132.app.core
 
 import android.content.Context
 import xyz.a202132.app.data.model.IPv6RoutingMode
-import xyz.a202132.app.platform.AndroidVpnHost
+import xyz.a202132.app.platform.TunProvider
 
 /**
  * The single Android VPN data-plane adapter. Cores expose a local SOCKS5
@@ -11,8 +11,8 @@ import xyz.a202132.app.platform.AndroidVpnHost
 internal interface TunAdapter {
     suspend fun start(
         context: Context,
-        host: AndroidVpnHost,
-        socksPort: Int,
+        tunProvider: TunProvider,
+        endpoint: LocalSocksEndpoint,
         ipv6RoutingMode: IPv6RoutingMode,
         onFailure: (String) -> Unit
     ): TunAdapterSession
@@ -28,16 +28,18 @@ internal interface TunAdapterSession : AutoCloseable {
  * first so no new SOCKS requests arrive while the core is being torn down.
  */
 internal fun combineCoreSession(core: CoreSession, adapter: TunAdapterSession): CoreSession =
-    CombinedCoreSession(core, adapter)
+    VpnSession(core, adapter)
 
-private class CombinedCoreSession(
+private class VpnSession(
     private val delegate: CoreSession,
     private val adapter: TunAdapterSession
 ) : CoreSession {
     override val core = delegate.core
-    override val socksPort = delegate.socksPort
+    override val endpoint = delegate.endpoint
 
-    override fun traffic(): CoreTraffic? = adapter.traffic() ?: delegate.traffic()
+    // HEV is the sole VPN traffic authority. Mixing counters from different
+    // layers makes final accounting depend on sampling timing.
+    override fun traffic(): CoreTraffic? = adapter.traffic()
 
     override fun close() {
         var failure: Throwable? = null

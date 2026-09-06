@@ -1,10 +1,9 @@
 /*
  * Android process wrapper for hev-socks5-tunnel.
  *
- * The wrapper deliberately keeps packet data inside HEV. The control socket
- * only transfers the Android TUN descriptor, parent liveness and statistics.
- * Running this as a PIE child process prevents a native HEV abort from taking
- * down the Kotlin VPN controller.
+ * Packet data stays inside HEV. The private control socket transfers only the
+ * Android TUN descriptor and parent liveness. stdout carries lifecycle events
+ * and aggregate counters.
  */
 
 #include <errno.h>
@@ -19,18 +18,27 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "hev-main.h"
+#include <lwip/init.h>
+#include <hev-task-system.h>
+#include <hev-socks5-logger.h>
+#include <hev-socks5-misc.h>
+
+#include "hev-config.h"
+#include "hev-logger.h"
+#include "hev-socks5-tunnel.h"
+#include "hev-utils.h"
 
 #define CONTROL_BUFFER 256
-#define STOP_GRACE_MS 3000
 
 static pthread_mutex_t output_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t stats_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t tunnel_thread;
 static pthread_t watcher_thread;
 static pthread_t stats_thread;
 static int watch_fd = -1;
 static int tun_fd = -1;
 static const char *config_path;
+static atomic_int tunnel_ready;
 static atomic_int tunnel_done;
 static int tunnel_result;
 
@@ -50,6 +58,19 @@ emit_error (const char *message)
     char line[CONTROL_BUFFER];
     snprintf (line, sizeof (line),
               "{\"event\":\"error\",\"message\":\"%s\"}", message);
+    emit_line (line);
+}
+
+static void
+emit_traffic (void)
+{
+    char line[CONTROL_BUFFER];
+    size_t tx_packets, tx_bytes, rx_packets, rx_bytes;
+
+    hev_socks5_tunnel_stats (&tx_packets, &tx_bytes, &rx_packets, &rx_bytes);
+    snprintf (line, sizeof (line),
+              "{\"event\":\"traffic\",\"upload\":%zu,\"download\":%zu}",
+              tx_bytes, rx_bytes);
     emit_line (line);
 }
 
@@ -84,9 +105,6 @@ connect_control (const char *path, const char *token, const char *command)
         return -1;
 
     if (path[0] == '@') {
-        /* LocalServerSocket uses the Linux abstract namespace. */
-        if (path_length >= sizeof (address.sun_path))
-            return -1;
         address.sun_path[0] = '\0';
         memcpy (address.sun_path + 1, path + 1, path_length - 1);
     } else {
@@ -144,12 +162,78 @@ receive_tun (const char *path, const char *token)
     return fd;
 }
 
+/* This mirrors the pinned upstream main sequence so ready is emitted only
+ * after configuration, task-system and tunnel initialization all succeed. */
 static void *
 tunnel_entry (void *unused)
 {
+    const char *log_file;
+    int log_level;
+    int config_initialized = 0;
+    int logger_initialized = 0;
+    int socks_logger_initialized = 0;
+    int task_system_initialized = 0;
+    int tunnel_initialized = 0;
+    int res;
     (void)unused;
-    tunnel_result = hev_socks5_tunnel_main (config_path, tun_fd);
+
+    tunnel_result = -1;
+    res = hev_config_init_from_file (config_path);
+    if (res < 0)
+        goto done;
+    config_initialized = 1;
+
+    log_file = hev_config_get_misc_log_file ();
+    log_level = hev_config_get_misc_log_level ();
+    hev_socks5_set_connect_timeout (hev_config_get_misc_connect_timeout ());
+    hev_socks5_set_tcp_timeout (hev_config_get_misc_tcp_read_write_timeout ());
+    hev_socks5_set_udp_timeout (hev_config_get_misc_udp_read_write_timeout ());
+    hev_socks5_set_udp_recv_buffer_size (hev_config_get_misc_udp_recv_buffer_size ());
+
+    if (hev_logger_init (log_level, log_file) < 0)
+        goto done;
+    logger_initialized = 1;
+    if (hev_socks5_logger_init (log_level, log_file) < 0)
+        goto done;
+    socks_logger_initialized = 1;
+    (void)set_limit_nofile (hev_config_get_misc_limit_nofile ());
+
+    if (hev_task_system_init () < 0)
+        goto done;
+    task_system_initialized = 1;
+    lwip_init ();
+    if (hev_socks5_tunnel_init (tun_fd) < 0)
+        goto done;
+    tunnel_initialized = 1;
+
+    atomic_store (&tunnel_ready, 1);
+    emit_line ("{\"event\":\"ready\"}");
+    res = hev_socks5_tunnel_run ();
+
+    /* Serialize the final snapshot with the polling thread and take it before
+       upstream fini resets the counters. */
+    pthread_mutex_lock (&stats_mutex);
+    emit_traffic ();
     atomic_store (&tunnel_done, 1);
+    hev_socks5_tunnel_fini ();
+    tunnel_initialized = 0;
+    pthread_mutex_unlock (&stats_mutex);
+    tunnel_result = res < 0 ? -1 : 0;
+
+done:
+    atomic_store (&tunnel_done, 1);
+    if (tunnel_initialized)
+        hev_socks5_tunnel_fini ();
+    if (task_system_initialized)
+        hev_task_system_fini ();
+    if (socks_logger_initialized)
+        hev_socks5_logger_fini ();
+    if (logger_initialized)
+        hev_logger_fini ();
+    if (config_initialized)
+        hev_config_fini ();
+    if (tunnel_result < 0)
+        emit_error ("HEV initialization or runtime failed");
     return NULL;
 }
 
@@ -157,35 +241,28 @@ static void *
 watcher_entry (void *unused)
 {
     char byte;
-    int elapsed = 0;
     (void)unused;
 
     (void)read (watch_fd, &byte, sizeof (byte));
-    /* hev_socks5_tunnel_quit waits for initialization. Bound the wait and
-       let the parent process kill this worker if configuration never starts. */
-    while (!atomic_load (&tunnel_done) && elapsed < STOP_GRACE_MS) {
-        usleep (100 * 1000);
-        elapsed += 100;
-    }
-    if (!atomic_load (&tunnel_done))
-        hev_socks5_tunnel_quit ();
+    while (!atomic_load (&tunnel_ready) && !atomic_load (&tunnel_done))
+        usleep (10 * 1000);
+    if (atomic_load (&tunnel_ready) && !atomic_load (&tunnel_done))
+        hev_socks5_tunnel_stop ();
     return NULL;
 }
 
 static void *
 stats_entry (void *unused)
 {
-    char line[CONTROL_BUFFER];
-    size_t tx_packets, tx_bytes, rx_packets, rx_bytes;
     (void)unused;
-
     while (!atomic_load (&tunnel_done)) {
-        sleep (1);
-        hev_socks5_tunnel_stats (&tx_packets, &tx_bytes, &rx_packets, &rx_bytes);
-        snprintf (line, sizeof (line),
-                  "{\"event\":\"traffic\",\"upload\":%zu,\"download\":%zu}",
-                  tx_bytes, rx_bytes);
-        emit_line (line);
+        usleep (1000 * 1000);
+        if (!atomic_load (&tunnel_ready) || atomic_load (&tunnel_done))
+            continue;
+        pthread_mutex_lock (&stats_mutex);
+        if (!atomic_load (&tunnel_done))
+            emit_traffic ();
+        pthread_mutex_unlock (&stats_mutex);
     }
     return NULL;
 }
@@ -206,49 +283,56 @@ main (int argc, char **argv)
 {
     const char *control_path;
     const char *token;
+    int watcher_created = 0;
+    int stats_created = 0;
 
     config_path = argument (argc, argv, "--config");
     control_path = argument (argc, argv, "--control");
     token = argument (argc, argv, "--token");
     if (!config_path || !control_path || !token || strlen (token) < 16) {
-        emit_error ("HEV runner 参数无效");
+        emit_error ("Invalid HEV runner arguments");
         return 2;
     }
 
     tun_fd = receive_tun (control_path, token);
     if (tun_fd < 0) {
-        emit_error ("无法接收 Android TUN 描述符");
+        emit_error ("Unable to receive Android TUN descriptor");
         return 3;
     }
     watch_fd = connect_control (control_path, token, "WATCH");
     if (watch_fd < 0) {
         close (tun_fd);
-        emit_error ("无法建立 HEV 生命周期通道");
+        emit_error ("Unable to establish HEV lifecycle channel");
         return 4;
     }
 
+    atomic_init (&tunnel_ready, 0);
     atomic_init (&tunnel_done, 0);
-    if (pthread_create (&tunnel_thread, NULL, tunnel_entry, NULL) != 0 ||
-        pthread_create (&watcher_thread, NULL, watcher_entry, NULL) != 0 ||
-        pthread_create (&stats_thread, NULL, stats_entry, NULL) != 0) {
-        emit_error ("无法创建 HEV 工作线程");
+    if (pthread_create (&watcher_thread, NULL, watcher_entry, NULL) == 0)
+        watcher_created = 1;
+    if (watcher_created && pthread_create (&stats_thread, NULL, stats_entry, NULL) == 0)
+        stats_created = 1;
+    if (!watcher_created || !stats_created ||
+        pthread_create (&tunnel_thread, NULL, tunnel_entry, NULL) != 0) {
+        atomic_store (&tunnel_done, 1);
+        shutdown (watch_fd, SHUT_RDWR);
         close (watch_fd);
+        if (watcher_created)
+            pthread_join (watcher_thread, NULL);
+        if (stats_created)
+            pthread_join (stats_thread, NULL);
+        close (tun_fd);
+        emit_error ("Unable to create HEV worker threads");
         return 5;
     }
 
-    /* The API is blocking and exposes no ready callback. The host checks that
-       the child remains alive after this event; an immediate startup error is
-       therefore still reported as a closed process/output stream. */
-    emit_line ("{\"event\":\"ready\"}");
     pthread_join (tunnel_thread, NULL);
+    shutdown (watch_fd, SHUT_RDWR);
     close (watch_fd);
     watch_fd = -1;
     pthread_join (watcher_thread, NULL);
     pthread_join (stats_thread, NULL);
     close (tun_fd);
     tun_fd = -1;
-
-    if (tunnel_result < 0)
-        emit_error ("HEV 原生运行失败");
     return tunnel_result < 0 ? 6 : 0;
 }

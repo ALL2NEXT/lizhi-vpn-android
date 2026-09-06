@@ -14,11 +14,12 @@ object NodeTestProxyManager {
     class Session(
         private val context: Context,
         private val node: Node,
-        private val socksPort: Int,
         private val hysteriaUpMbps: Int,
         private val hysteriaDownMbps: Int,
         private val core: ProxyCore
     ) {
+        private val reservation = PortReservation()
+        val socksPort = reservation.port
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val stopped = AtomicBoolean()
         private val starting = AtomicBoolean()
@@ -32,6 +33,7 @@ object NodeTestProxyManager {
                 val prepared = backend.prepare(context, request)
                 currentCoroutineContext().ensureActive()
                 if (stopped.get()) return false
+                reservation.close()
                 val session = withContext(NonCancellable) { backend.start(context, scope, prepared, null) { stop() } }
                 try { currentCoroutineContext().ensureActive() } catch (cancelled: CancellationException) {
                     session.close()
@@ -54,6 +56,7 @@ object NodeTestProxyManager {
         @Synchronized fun stop() {
             if (!stopped.compareAndSet(false, true)) return
             try {
+                reservation.close()
                 running?.close()
             } finally {
                 running = null
@@ -65,9 +68,8 @@ object NodeTestProxyManager {
     fun createSession(
         context: Context,
         node: Node,
-        socksPort: Int,
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS,
         core: ProxyCore = ProxyCore.SING_BOX
-    ) = Session(context.applicationContext, node, socksPort, hysteriaUpMbps, hysteriaDownMbps, core)
+    ) = Session(context.applicationContext, node, hysteriaUpMbps, hysteriaDownMbps, core)
 }

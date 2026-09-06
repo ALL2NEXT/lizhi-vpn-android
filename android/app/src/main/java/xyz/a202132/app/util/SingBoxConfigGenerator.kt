@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import xyz.a202132.app.AppConfig
+import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProxyMode
@@ -37,7 +38,7 @@ class SingBoxConfigGenerator {
         selectedNodeId: String?,
         proxyMode: ProxyMode,
         ipv6Mode: IPv6RoutingMode = IPv6RoutingMode.DISABLED,
-        internalSocksPort: Int? = null,
+        internalSocksEndpoint: LocalSocksEndpoint? = null,
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
     ): String {
@@ -56,7 +57,7 @@ class SingBoxConfigGenerator {
                 
             add("log", createLogConfig())
             add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode))
-            add("inbounds", createInbounds(internalSocksPort))
+            add("inbounds", createInbounds(internalSocksEndpoint))
             add(
                 "outbounds",
                 createOutbounds(
@@ -314,15 +315,23 @@ class SingBoxConfigGenerator {
         }
     }
     
-    private fun createInbounds(internalSocksPort: Int?): JsonArray {
+    private fun createInbounds(endpoint: LocalSocksEndpoint?): JsonArray {
         return JsonArray().apply {
             // HEV owns the Android VPN TUN and forwards packets to this loopback SOCKS5 inbound.
-            internalSocksPort?.let { port ->
+            endpoint?.let { socks ->
                 add(JsonObject().apply {
                     addProperty("type", "socks")
                     addProperty("tag", "internal-socks-in")
-                    addProperty("listen", "127.0.0.1")
-                    addProperty("listen_port", port)
+                    addProperty("listen", socks.address)
+                    addProperty("listen_port", socks.port)
+                    socks.credentials?.let { credentials ->
+                        add("users", JsonArray().apply {
+                            add(JsonObject().apply {
+                                addProperty("username", credentials.username)
+                                addProperty("password", credentials.password)
+                            })
+                        })
+                    }
                 })
             }
         }
@@ -855,8 +864,15 @@ class SingBoxConfigGenerator {
         
         // 1. 劫持 DNS 流量
         rules.add(JsonObject().apply {
-            addProperty("protocol", "dns")
-            addProperty("outbound", "dns-out")
+            // HEV forwards every DNS record type unchanged. Match the port so
+            // DNS handling does not depend on protocol sniffing.
+            addProperty("port", 53)
+            addProperty("action", "hijack-dns")
+        })
+        // With HEV acting as a pure packet data plane, applications connect to
+        // resolved IPs. Recover HTTP/TLS/QUIC domains before SMART rules run.
+        rules.add(JsonObject().apply {
+            addProperty("action", "sniff")
         })
         
         // 2. 环回/私有 IP 地址 -> 始终直接连接，绕过局域网

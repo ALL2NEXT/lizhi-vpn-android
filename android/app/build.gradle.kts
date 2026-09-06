@@ -1,6 +1,8 @@
 import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
 import java.util.Properties
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaToolchainService
 
 plugins {
     id("com.android.application")
@@ -36,6 +38,7 @@ val buildLibbox = tasks.register("buildLibbox") {
         exclude("libbox*.aar")
     })
     outputs.file(generatedLibboxAar)
+    inputs.property("javaLanguageVersion", 17)
 
     doLast {
         val goExecutable = if (System.getProperty("os.name").startsWith("Windows")) "go.exe" else "go"
@@ -97,16 +100,15 @@ val buildLibbox = tasks.register("buildLibbox") {
             }
         }
 
-        val javaHome = System.getenv("JAVA_HOME") ?: System.getProperty("java.home")
+        // The binding generator requires Java 17 even when Gradle runs on a newer JDK.
+        val javaHome = java17Launcher.get().metadata.installationPath.asFile
         exec {
             workingDir(singBoxSourceDir)
             environment("ANDROID_HOME", sdkDir.absolutePath)
             environment("ANDROID_SDK_HOME", sdkDir.absolutePath)
             environment("ANDROID_NDK_HOME", ndkDir.absolutePath)
             environment("NDK", ndkDir.absolutePath)
-            if (!javaHome.isNullOrBlank()) {
-                environment("JAVA_HOME", javaHome)
-            }
+            environment("JAVA_HOME", javaHome.absolutePath)
             commandLine(
                 goExecutable,
                 "run",
@@ -135,7 +137,7 @@ val buildLibbox = tasks.register("buildLibbox") {
 }
 
 // Xray is compiled as a standalone PIE process and packaged into nativeLibraryDir.
-// HEV owns the Android TUN; this runner only handles control and socket protection.
+// HEV owns the Android TUN; this runner only handles core lifecycle control.
 val buildXrayCore = tasks.register("buildXrayCore") {
     group = "xray"
     description = "Build the pinned Xray-core source for the Android ABIs"
@@ -213,7 +215,7 @@ val buildXrayCore = tasks.register("buildXrayCore") {
     }
 }
 
-// HEV is an optional TUN-to-SOCKS compatibility adapter. It is compiled as
+// HEV is the TUN-to-SOCKS data plane. It is compiled as
 // an Android PIE executable instead of loaded into the app process, so a
 // native teardown failure cannot take down the UI or VPN controller process.
 val buildHevTunnel = tasks.register("buildHevTunnel") {
@@ -267,7 +269,7 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
         // Windows checkout may materialize those as one-line placeholders;
         // resolve them in the generated build copy without modifying the
         // checked-out submodule.
-        stagedSource.walkTopDown().filter { it.isFile }.forEach { file ->
+        stagedSource.walkTopDown().filter { it.isFile && it.length() <= 1_024 }.forEach { file ->
             val target = file.readText(Charsets.UTF_8).trim()
             if (target.startsWith("../") && !target.contains('\n') && !target.contains('\r')) {
                 val resolved = file.parentFile.resolve(target).canonicalFile
@@ -275,6 +277,20 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
                 resolved.copyTo(file, overwrite = true)
             }
         }
+        // HEV exposes counters to this runner from a separate pthread. The
+        // pinned upstream declarations are plain size_t, so make only the
+        // generated build copy atomic and avoid a C data race while polling.
+        val tunnelSource = stagedSource.resolve("src/hev-socks5-tunnel.c")
+        val tunnelText = tunnelSource.readText(Charsets.UTF_8)
+        check(tunnelText.contains("static size_t stat_tx_packets;")) {
+            "Pinned HEV counter declarations changed; refresh the Android atomic patch."
+        }
+        tunnelSource.writeText(
+            tunnelText
+                .replace("#include <signal.h>", "#include <signal.h>\n#include <stdatomic.h>")
+                .replace("static size_t stat_", "static _Atomic size_t stat_"),
+            Charsets.UTF_8
+        )
         exec {
             commandLine(ndkBuild.absolutePath,
                 "NDK_PROJECT_PATH=null",
@@ -300,15 +316,21 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
     }
 }
 
-// All Android variants resolve the generated AAR before compiling Kotlin or
-// packaging the APK. This also covers unit-test variants such as
-// preDebugUnitTestBuild.
+// JVM tests/lint need libbox types but do not execute the Xray or HEV Android
+// binaries. Avoid rebuilding both native data paths for those tasks.
 tasks.configureEach {
     if (name.startsWith("pre") && name.endsWith("Build")) {
         dependsOn(buildLibbox)
+    }
+    if (name.startsWith("merge") && name.endsWith("JniLibFolders")) {
         dependsOn(buildXrayCore)
         dependsOn(buildHevTunnel)
     }
+}
+
+val javaToolchains = extensions.getByType<JavaToolchainService>()
+val java17Launcher = javaToolchains.launcherFor {
+    languageVersion.set(JavaLanguageVersion.of(17))
 }
 
 android {

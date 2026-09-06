@@ -8,7 +8,7 @@ import com.google.gson.JsonParser
 import kotlinx.coroutines.*
 import xyz.a202132.app.core.*
 import xyz.a202132.app.data.model.IPv6RoutingMode
-import xyz.a202132.app.platform.AndroidVpnHost
+import xyz.a202132.app.platform.TunProvider
 import xyz.a202132.app.platform.awaitExit
 import xyz.a202132.app.platform.isRunningCompat
 import xyz.a202132.app.platform.terminateCompat
@@ -22,22 +22,20 @@ import java.util.concurrent.atomic.AtomicBoolean
  * HEV is the Android VPN data plane, not a proxy core. It turns the Android
  * TUN into SOCKS5 requests to the selected core's loopback inbound.
  */
-internal class HevSocksTunAdapter(
-    private val mappedDns: Boolean = true
-) : TunAdapter {
+internal class HevSocksTunAdapter : TunAdapter {
     override suspend fun start(
         context: Context,
-        host: AndroidVpnHost,
-        socksPort: Int,
+        tunProvider: TunProvider,
+        endpoint: LocalSocksEndpoint,
         ipv6RoutingMode: IPv6RoutingMode,
         onFailure: (String) -> Unit
     ): TunAdapterSession {
-        host.openTun(HevSocksTunConfig.tunnel(ipv6RoutingMode, mappedDns))
+        tunProvider.openTun(HevSocksTunConfig.tunnel(ipv6RoutingMode))
         return try {
-            HevNativeSession(context, host, onFailure)
-                .start(HevSocksTunConfig.render(socksPort, mappedDns))
+            HevNativeSession(context, tunProvider, onFailure)
+                .start(HevSocksTunConfig.render(endpoint))
         } catch (error: Throwable) {
-            host.closeTun()
+            tunProvider.closeTun()
             throw error
         }
     }
@@ -45,7 +43,7 @@ internal class HevSocksTunAdapter(
 
 private class HevNativeSession(
     private val context: Context,
-    private val host: AndroidVpnHost,
+    private val tunProvider: TunProvider,
     private val onFailure: (String) -> Unit
 ) : TunAdapterSession {
     private val token = UUID.randomUUID().toString()
@@ -136,7 +134,7 @@ private class HevNativeSession(
                         input.read()
                     }
                     "TUN $token" -> {
-                        socket.setFileDescriptorsForSend(arrayOf(host.tunDescriptor()))
+                        socket.setFileDescriptorsForSend(arrayOf(tunProvider.tunDescriptor()))
                         socket.outputStream.write(1)
                         socket.outputStream.flush()
                         socket.setFileDescriptorsForSend(null)
@@ -170,15 +168,17 @@ private class HevNativeSession(
         val running = process
         if (running != null) {
             runCatching {
-                if (!running.awaitExit(500, TimeUnit.MILLISECONDS)) running.terminateCompat()
-                if (!running.awaitExit(3, TimeUnit.SECONDS)) {
+                // Closing WATCH requests an immediate graceful HEV stop. TERM
+                // is only a watchdog after the native cleanup window expires.
+                if (!running.awaitExit(3, TimeUnit.SECONDS)) running.terminateCompat()
+                if (!running.awaitExit(2, TimeUnit.SECONDS)) {
                     running.terminateCompat(force = true)
                     check(running.awaitExit(3, TimeUnit.SECONDS)) { "HEV 未能停止" }
                 }
             }.onFailure { notifyFailure("HEV 停止失败: ${it.javaClass.simpleName}") }
             output.awaitDrain(1, TimeUnit.SECONDS)
         }
-        runCatching { host.closeTun() }
+        runCatching { tunProvider.closeTun() }
         scope.cancel()
         configFile?.delete()
         configFile = null
