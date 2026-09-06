@@ -10,10 +10,9 @@ import xyz.a202132.app.platform.AndroidVpnHost
 class CoreRegistryTest {
     private class Backend(
         override val id: ProxyCore,
-        protocols: Set<NodeType>,
-        stacks: Set<TunStack> = setOf(TunStack.GVISOR)
+        protocols: Set<NodeType>
     ) : CoreBackend {
-        override val capabilities = CoreCapabilities(protocols, stacks)
+        override val capabilities = CoreCapabilities(protocols)
         override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = error("unused")
         override suspend fun start(context: Context, scope: CoroutineScope, prepared: PreparedCore,
             host: AndroidVpnHost?, onFailure: (String) -> Unit): CoreSession = error("unused")
@@ -37,13 +36,10 @@ class CoreRegistryTest {
         assertEquals(ProxyCore.SING_BOX, settings.coreFor(NodeType.TUIC))
     }
 
-    @Test fun tunImplementationPreferenceResolvesAgainstBackendCapabilities() {
-        val backend = Backend(ProxyCore.SING_BOX, setOf(NodeType.VLESS), TunStack.entries.toSet())
-        assertEquals(CoreTunMode.HEV_SOCKS5,
-            backend.resolveTunSelection(TunImplementation.HEV_SOCKS5).mode)
-        assertEquals(TunStack.GVISOR,
-            backend.resolveTunSelection(TunImplementation.GVISOR).stack)
-        assertEquals(TunStack.SYSTEM,
-            backend.resolveTunSelection(TunImplementation.SYSTEM).stack)
+    @Test fun everyBackendMustExposeTheHevSocksInbound() {
+        val backend = Backend(ProxyCore.SING_BOX, setOf(NodeType.VLESS))
+        val registry = CoreRegistry(listOf(backend))
+        assertSame(backend, registry.backend(ProxyCore.SING_BOX))
+        assertTrue(backend.capabilities.socks5Inbound)
     }
 }

@@ -1,16 +1,18 @@
 # Android 双核心架构
 
-Android 端采用 sing-box 主核心 + Xray 协议核心的串联架构：
+Android 端采用 HEV 统一 TUN 数据面 + sing-box/Xray 协议核心的架构：
 
 ```text
 Android VpnService / TUN
         |
         v
-sing-box（DNS、路由、分应用、流量统计、节点选择）
+HEV tun2socks
         |
-        +-- sing-box 节点：直接连接服务器
+        v
+核心 loopback SOCKS5
         |
-        `-- Xray 节点：127.0.0.1 SOCKS bridge -> Xray -> 服务器
+        +-- sing-box -> 服务器
+        `-- Xray -> 服务器
 ```
 
 ## 为什么不加载第二个 GoMobile AAR
@@ -19,7 +21,7 @@ sing-box（DNS、路由、分应用、流量统计、节点选择）
 `libv2ray.aar` 会在同一 Android 进程中引入第二套同名运行时，容易出现类、JNI
 符号及生命周期冲突。因此 Xray-core 被编译为 Android PIE，并以独立进程运行：
 
-- sing-box 是唯一的 TUN 所有者，不会发生双核心抢占 VPN fd；
+- HEV 是唯一的 TUN 所有者，不会发生双核心抢占 VPN fd；
 - Xray 崩溃与 libbox 隔离，服务会检测退出并安全断开；
 - 两个核心可在同一节点列表中同时使用；
 - Xray 配置和 sing-box 配置在启动前分别由各自核心校验；

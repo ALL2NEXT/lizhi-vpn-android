@@ -19,7 +19,7 @@ class HevSocksTunConfigTest {
         assertTrue(yaml.contains("network: 198.18.0.0"))
     }
 
-    @Test fun ipv6OnlyFallsBackToCoreNativeTun() {
+    @Test fun ipv6OnlyIsRejectedByPureHevMode() {
         try {
             HevSocksTunConfig.tunnel(IPv6RoutingMode.ONLY)
             fail("HEV fallback must reject IPv6-only mode")

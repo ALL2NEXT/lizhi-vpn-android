@@ -9,16 +9,15 @@ import (
 	"xyz.a202132/mobile/xrayrunner/statsconfig"
 )
 
-func TestValidationDoesNotOpenTun(t *testing.T) {
-	t.Setenv("XRAY_TUN_FD", "not-a-descriptor")
+func TestValidationBuildsWithoutStartingRuntime(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
-	config := `{"inbounds":[{"protocol":"tun","tag":"tun-in","settings":{"name":"firefly","MTU":9000}}],"outbounds":[{"protocol":"freedom","tag":"direct"}]}`
+	config := `{"inbounds":[{"protocol":"socks","tag":"internal-socks-in","listen":"127.0.0.1","port":20800,"settings":{"udp":true}}],"outbounds":[{"protocol":"freedom","tag":"direct"}]}`
 	if err := os.WriteFile(path, []byte(config), 0600); err != nil {
 		t.Fatal(err)
 	}
 	built, err := loadConfig(path)
 	if err != nil {
-		t.Fatalf("static validation must not initialize TUN: %v", err)
+		t.Fatalf("static validation must build without starting Xray: %v", err)
 	}
 	found := false
 	for _, app := range built.App {

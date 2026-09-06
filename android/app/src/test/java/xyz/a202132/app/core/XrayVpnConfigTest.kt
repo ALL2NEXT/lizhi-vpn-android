@@ -20,13 +20,13 @@ class XrayVpnConfigTest {
     """).asJsonObject
 
     private fun request(mode: ProxyMode, ipv6: IPv6RoutingMode) = CoreRequest(node, 20800,
-        VpnRuntimeSettings(mode, ipv6, TunStack.GVISOR, 0, 0, ProtocolCoreSettings(), PerAppProxySettings(false, emptySet())))
+        VpnRuntimeSettings(mode, ipv6, 0, 0, ProtocolCoreSettings(), PerAppProxySettings(false, emptySet())))
 
-    @Test fun vpnUsesNativeTunAndRoutesDnsBeforePrivateNetworks() {
+    @Test fun vpnUsesHevSocksInboundAndRoutesDnsBeforePrivateNetworks() {
         val result = JsonParser.parseString(XrayVpnConfig.compose(base(), request(ProxyMode.GLOBAL, IPv6RoutingMode.DISABLED))).asJsonObject
         val inputs = result.getAsJsonArray("inbounds").map { it.asJsonObject }
-        assertEquals(1, inputs.count { it.get("protocol").asString == "tun" })
-        assertEquals(setOf("tun-in", "internal-socks-in"), inputs.map { it.get("tag").asString }.toSet())
+        assertEquals(1, inputs.count { it.get("protocol").asString == "socks" })
+        assertEquals(setOf("internal-socks-in"), inputs.map { it.get("tag").asString }.toSet())
         val rules = result.getAsJsonObject("routing").getAsJsonArray("rules")
         assertEquals("dns-out", rules[0].asJsonObject.get("outboundTag").asString)
         assertEquals("53", rules[0].asJsonObject.get("port").asString)
@@ -39,26 +39,13 @@ class XrayVpnConfigTest {
         assertFalse(result.toString().contains("bridge"))
     }
 
-    @Test fun hevModeLeavesTunOwnershipToTheAdapter() {
+    @Test fun vpnDnsTrafficUsesTheHevOwnedSocksInbound() {
         val result = JsonParser.parseString(
-            XrayVpnConfig.compose(base(), request(ProxyMode.GLOBAL, IPv6RoutingMode.DISABLED)
-                .copy(tunMode = CoreTunMode.HEV_SOCKS5))
+            XrayVpnConfig.compose(base(), request(ProxyMode.GLOBAL, IPv6RoutingMode.DISABLED))
         ).asJsonObject
-        val inputs = result.getAsJsonArray("inbounds").map { it.asJsonObject }
-        assertEquals(listOf("internal-socks-in"), inputs.map { it.get("tag").asString })
         val dnsRule = result.getAsJsonObject("routing").getAsJsonArray("rules")[0].asJsonObject
         assertEquals(listOf("internal-socks-in"), dnsRule.getAsJsonArray("inboundTag").map { it.asString })
-    }
-
-    @Test fun ipv6ModesProduceMatchingAddressesRoutesAndDnsFamily() {
-        val v4 = XrayVpnConfig.tunnel(IPv6RoutingMode.DISABLED)
-        assertTrue(v4.addresses.none { ':' in it.address })
-        assertTrue(v4.routes.none { ':' in it.address })
-        val v6 = XrayVpnConfig.tunnel(IPv6RoutingMode.ONLY)
-        assertTrue(v6.addresses.all { ':' in it.address })
-        assertTrue(v6.routes.all { ':' in it.address })
-        assertTrue(v6.dnsServers.all { ':' in it })
-        assertEquals(2, XrayVpnConfig.tunnel(IPv6RoutingMode.ENABLED).routes.size)
+        assertFalse(result.toString().contains("tun-in"))
     }
 
     @Test fun headlessProbeNeverAcquiresTun() {

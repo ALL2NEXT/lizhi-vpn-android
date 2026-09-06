@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * HEV is a fallback adapter, not a proxy core. It turns the Android TUN into
- * SOCKS5 requests to the selected core's loopback inbound.
+ * HEV is the Android VPN data plane, not a proxy core. It turns the Android
+ * TUN into SOCKS5 requests to the selected core's loopback inbound.
  */
 internal class HevSocksTunAdapter(
     private val mappedDns: Boolean = true

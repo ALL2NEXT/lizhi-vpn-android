@@ -32,7 +32,7 @@ func loadConfig(path string) (*core.Config, error) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
-	// Build protobuf configuration only. core.New initializes TUN even without Start.
+	// Build protobuf configuration only. The Android TUN is owned by HEV, not Xray.
 	result, err := config.Build()
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func main() {
 	path := flag.String("config", "", "private configuration file")
 	control := flag.String("control", "", "private Android control socket")
 	token := flag.String("token", "", "session token")
-	check := flag.Bool("check", false, "parse/build without opening a TUN")
+	check := flag.Bool("check", false, "parse/build without starting Xray")
 	export := flag.String("export-rules", "", "export shared domain/IP rule snapshot to this file")
 	geosite := flag.String("geosite", "", "source geosite SRS")
 	geoip := flag.String("geoip", "", "source geoip SRS")

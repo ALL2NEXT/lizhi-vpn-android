@@ -134,9 +134,8 @@ val buildLibbox = tasks.register("buildLibbox") {
     }
 }
 
-// Xray 特意编译为独立 PIE 可执行文件并打包到 nativeLibraryDir。
-// 如果在进程内再加载一个 gomobile AAR，会在 libbox 旁引入第二套 Go/JNI 运行时。
-// 每次连接由选定内核直接读取 Android TUN；控制通道只传递 FD 和生命周期事件。
+// Xray is compiled as a standalone PIE process and packaged into nativeLibraryDir.
+// HEV owns the Android TUN; this runner only handles control and socket protection.
 val buildXrayCore = tasks.register("buildXrayCore") {
     group = "xray"
     description = "Build the pinned Xray-core source for the Android ABIs"
@@ -186,12 +185,6 @@ val buildXrayCore = tasks.register("buildXrayCore") {
             XrayAbi("armeabi-v7a", "arm", "armv7a-linux-androideabi", "7"),
             XrayAbi("arm64-v8a", "arm64", "aarch64-linux-android")
         )
-        val overlayDir = layout.buildDirectory.dir("generated/xray/tun-overlay").get().asFile
-        exec {
-            workingDir(xrayRunnerDir)
-            commandLine(goExecutable, "run", "./cmd/tun-overlay", "--source", xraySourceDir.absolutePath,
-                "--output", overlayDir.absolutePath)
-        }
         abis.forEach { abi ->
             val output = generatedXrayJniDir.get().file("${abi.androidAbi}/libxray.so").asFile
             output.parentFile.mkdirs()
@@ -207,7 +200,6 @@ val buildXrayCore = tasks.register("buildXrayCore") {
                 commandLine(
                     goExecutable,
                     "build",
-                    "-overlay=${overlayDir.resolve("overlay.json").absolutePath}",
                     "-trimpath",
                     "-buildvcs=false",
                     "-buildmode=pie",

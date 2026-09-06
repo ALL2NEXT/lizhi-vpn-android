@@ -373,19 +373,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         NodeDisplaySettings()
     )
-    val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Eagerly, TunStack.GVISOR)
-    val tunImplementations = settingsRepository.tunImplementations.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        ProxyCore.entries.associateWith { TunImplementation.defaultFor(it) }
-    )
-    /** Compatibility view for older screens; new UI uses [tunImplementations]. */
-    @Deprecated("Use tunImplementations for per-core preferences")
-    val tunImplementation = settingsRepository.tunImplementation.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        TunImplementation.HEV_SOCKS5
-    )
     val skinSettings = settingsRepository.skinSettings.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -1385,29 +1372,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             settingsRepository.setIPv6RoutingMode(mode)
             // 如果 VPN 正在运行，重启以应用新设置
-            restartVpnIfNeeded()
-        }
-    }
-
-    fun setTunStack(stack: TunStack) {
-        viewModelScope.launch {
-            settingsRepository.setTunStack(stack)
-            restartVpnIfNeeded()
-        }
-    }
-
-    fun setTunImplementation(core: ProxyCore, implementation: TunImplementation) {
-        viewModelScope.launch {
-            settingsRepository.setTunImplementation(core, implementation)
-            restartVpnIfNeeded()
-        }
-    }
-
-    /** Compatibility setter for older callers of the global selector. */
-    @Deprecated("Use setTunImplementation(core, implementation)")
-    fun setTunImplementation(implementation: TunImplementation) {
-        viewModelScope.launch {
-            settingsRepository.setTunImplementation(implementation)
             restartVpnIfNeeded()
         }
     }

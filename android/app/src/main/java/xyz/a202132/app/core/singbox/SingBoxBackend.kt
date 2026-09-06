@@ -9,7 +9,6 @@ import xyz.a202132.app.core.*
 import xyz.a202132.app.core.hev.HevSocksTunAdapter
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProxyCore
-import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.platform.AndroidVpnHost
 import xyz.a202132.app.service.BoxPlatformInterface
 import xyz.a202132.app.service.HeadlessPlatformInterface
@@ -21,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 internal class SingBoxBackend : CoreBackend {
     override val id = ProxyCore.SING_BOX
-    override val capabilities = CoreCapabilities(NodeType.entries.filterNot { it == NodeType.UNKNOWN }.toSet(), TunStack.entries.toSet())
+    override val capabilities = CoreCapabilities(NodeType.entries.filterNot { it == NodeType.UNKNOWN }.toSet())
 
     override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = withContext(Dispatchers.IO) {
         val generator = SingBoxConfigGenerator()
@@ -31,8 +30,7 @@ internal class SingBoxBackend : CoreBackend {
             generator.generateConfig(listOf(request.node), request.node.id, settings.proxyMode,
                 settings.ipv6RoutingMode, internalSocksPort = request.socksPort,
                 hysteriaUpMbps = request.hysteriaUpMbps, hysteriaDownMbps = request.hysteriaDownMbps,
-                tunStack = request.tunStack,
-                includeTun = request.tunMode == CoreTunMode.NATIVE)
+            )
                 .replace("\"geosite-cn.srs\"", "\"${File(context.filesDir, "sing-box/geosite-cn.srs").absolutePath}\"")
                 .replace("\"geoip-cn.srs\"", "\"${File(context.filesDir, "sing-box/geoip-cn.srs").absolutePath}\"")
         } else generator.generateTestConfig(request.node, request.socksPort, request.hysteriaUpMbps, request.hysteriaDownMbps)
@@ -65,7 +63,7 @@ internal class SingBoxBackend : CoreBackend {
                 session.server!!.startOrReloadService(prepared.config, OverrideOptions())
                 if (prepared.request.isVpn) session.connectStats()
             }
-            if (prepared.request.isVpn && prepared.request.tunMode == CoreTunMode.HEV_SOCKS5) {
+            if (prepared.request.isVpn) {
                 try {
                     val adapter = HevSocksTunAdapter().start(context, requireNotNull(host),
                         prepared.request.socksPort, prepared.request.settings!!.ipv6RoutingMode, onFailure)

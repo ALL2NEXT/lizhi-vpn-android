@@ -22,7 +22,7 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** A separate Go runtime with a direct TUN FD; the control socket never carries packets. */
+/** A separate Go runtime for Xray; HEV owns the Android TUN data plane. */
 internal class XrayNativeSession(
     private val context: Context,
     override val socksPort: Int,
@@ -111,13 +111,6 @@ internal class XrayNativeSession(
                     "WATCH $token" -> {
                         socket.soTimeout = 0
                         input.read() // EOF closes the parent-liveness channel.
-                    }
-                    "TUN $token" -> {
-                        val descriptor = host?.tunDescriptor() ?: return
-                        socket.setFileDescriptorsForSend(arrayOf(descriptor))
-                        socket.outputStream.write(1)
-                        socket.outputStream.flush()
-                        socket.setFileDescriptorsForSend(null)
                     }
                     "PROTECT $token" -> {
                         val marker = input.read()

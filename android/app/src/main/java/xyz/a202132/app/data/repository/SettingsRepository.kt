@@ -20,8 +20,6 @@ import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.SkinSettings
-import xyz.a202132.app.data.model.TunStack
-import xyz.a202132.app.data.model.TunImplementation
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.util.CountryCodeResolver
 
@@ -33,19 +31,11 @@ data class PerAppProxySettings(
 data class VpnRuntimeSettings(
     val proxyMode: ProxyMode,
     val ipv6RoutingMode: IPv6RoutingMode,
-    val tunStack: TunStack,
     val hysteriaUpMbps: Int,
     val hysteriaDownMbps: Int,
     val protocolCoreSettings: ProtocolCoreSettings,
-    val perAppProxy: PerAppProxySettings,
-    /** Legacy global value retained for source/data compatibility. */
-    val tunImplementation: TunImplementation = TunImplementation.HEV_SOCKS5,
-    /** Actual per-core TUN preferences used for new VPN sessions. */
-    val tunImplementations: Map<ProxyCore, TunImplementation> = emptyMap()
-) {
-    fun tunImplementationFor(core: ProxyCore): TunImplementation =
-        tunImplementations[core] ?: tunImplementation
-}
+    val perAppProxy: PerAppProxySettings
+)
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -73,9 +63,6 @@ class SettingsRepository(private val context: Context) {
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
-        private val TUN_STACK = stringPreferencesKey("tun_stack")
-        private val TUN_IMPLEMENTATION = stringPreferencesKey("tun_implementation")
-        private val TUN_IMPLEMENTATIONS = stringSetPreferencesKey("tun_implementations")
         
         // 自动化测试设置
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
@@ -271,15 +258,10 @@ class SettingsRepository(private val context: Context) {
             ?: xyz.a202132.app.AppConfig.HYSTERIA_BANDWIDTH_ENABLED
         return VpnRuntimeSettings(
             proxyMode = enumValueOrDefault(preferences[PROXY_MODE], ProxyMode.SMART),
-            ipv6RoutingMode = enumValueOrDefault(
+            ipv6RoutingMode = normalizeIpv6RoutingMode(enumValueOrDefault(
                 preferences[IPV6_ROUTING_MODE],
                 IPv6RoutingMode.DISABLED
-            ),
-            tunStack = enumValueOrDefault(preferences[TUN_STACK], TunStack.GVISOR),
-            tunImplementation = enumValueOrDefault(
-                preferences[TUN_IMPLEMENTATION],
-                TunImplementation.HEV_SOCKS5
-            ),
+            )),
             // 关闭 Hy2 带宽参数时必须向两个核心都传 0，避免运行时仍启用 Brutal。
             hysteriaUpMbps = if (hysteriaBandwidthEnabled) {
                 (preferences[HYSTERIA_UP_MBPS]
@@ -298,7 +280,6 @@ class SettingsRepository(private val context: Context) {
                 enabled = preferences[PER_APP_PROXY_ENABLED] ?: false,
                 selectedPackages = preferences[SELECTED_PACKAGES] ?: emptySet()
             ),
-            tunImplementations = decodeTunImplementations(preferences)
         )
     }
 
@@ -389,43 +370,6 @@ class SettingsRepository(private val context: Context) {
         }.intersect(supported)
         return ProtocolCoreSettings(selected, assignments)
     }
-
-    private fun defaultTunImplementations(): Map<ProxyCore, TunImplementation> =
-        ProxyCore.entries.associateWith { TunImplementation.defaultFor(it) }
-
-    private fun decodeTunImplementations(preferences: Preferences): Map<ProxyCore, TunImplementation> {
-        val stored = preferences[TUN_IMPLEMENTATIONS].orEmpty().mapNotNull { entry ->
-            val pair = entry.split('=', limit = 2)
-            if (pair.size != 2) return@mapNotNull null
-            val core = runCatching { ProxyCore.valueOf(pair[0]) }.getOrNull() ?: return@mapNotNull null
-            val implementation = runCatching { TunImplementation.valueOf(pair[1]) }.getOrNull()
-                ?: return@mapNotNull null
-            core to implementation
-        }.toMap()
-        if (stored.isNotEmpty()) return defaultTunImplementations() + stored
-
-        // Migrate the first global selector. AUTO/NATIVE represented the
-        // native path, while a missing value means the new HEV default.
-        val legacy = preferences[TUN_IMPLEMENTATION]
-            ?.let { runCatching { TunImplementation.valueOf(it) }.getOrNull() }
-        return when (legacy) {
-            TunImplementation.AUTO, TunImplementation.NATIVE -> {
-                val stack = enumValueOrDefault(preferences[TUN_STACK], TunStack.GVISOR)
-                defaultTunImplementations() + mapOf(
-                    ProxyCore.XRAY to TunImplementation.GVISOR,
-                    ProxyCore.SING_BOX to TunImplementation.fromNativeStack(stack)
-                )
-            }
-            TunImplementation.GVISOR, TunImplementation.SYSTEM, TunImplementation.MIXED ->
-                defaultTunImplementations() + mapOf(ProxyCore.SING_BOX to legacy)
-            TunImplementation.HEV_SOCKS5, null -> defaultTunImplementations()
-        }
-    }
-
-    private fun encodeTunImplementations(values: Map<ProxyCore, TunImplementation>): Set<String> =
-        values.mapTo(mutableSetOf()) { (core, implementation) ->
-            "${core.name}=${implementation.name}"
-        }
 
     private inline fun <reified T : Enum<T>> enumValueOrDefault(
         value: String?,
@@ -546,61 +490,23 @@ class SettingsRepository(private val context: Context) {
     // IPv6 路由模式
     val ipv6RoutingMode: Flow<IPv6RoutingMode> = context.dataStore.data.map { preferences ->
         val mode = preferences[IPV6_ROUTING_MODE] ?: IPv6RoutingMode.DISABLED.name
-        try {
+        normalizeIpv6RoutingMode(try {
             IPv6RoutingMode.valueOf(mode)
         } catch (e: Exception) {
             IPv6RoutingMode.DISABLED
-        }
+        })
     }
     
     suspend fun setIPv6RoutingMode(mode: IPv6RoutingMode) {
         context.dataStore.edit { preferences ->
-            preferences[IPV6_ROUTING_MODE] = mode.name
+            preferences[IPV6_ROUTING_MODE] = normalizeIpv6RoutingMode(mode).name
         }
     }
 
-    val tunStack: Flow<TunStack> = context.dataStore.data.map { preferences ->
-        runCatching {
-            TunStack.valueOf(preferences[TUN_STACK] ?: TunStack.GVISOR.name)
-        }.getOrDefault(TunStack.GVISOR)
-    }
+    /** HEV does not provide an IPv6-only DNS/data path, so migrate old native-only values. */
+    private fun normalizeIpv6RoutingMode(mode: IPv6RoutingMode): IPv6RoutingMode =
+        if (mode == IPv6RoutingMode.ONLY) IPv6RoutingMode.ENABLED else mode
 
-    suspend fun setTunStack(stack: TunStack) {
-        context.dataStore.edit { preferences ->
-            preferences[TUN_STACK] = stack.name
-        }
-    }
-
-    val tunImplementations: Flow<Map<ProxyCore, TunImplementation>> = context.dataStore.data.map { preferences ->
-        decodeTunImplementations(preferences)
-    }
-
-    /**
-     * Compatibility view for callers compiled against the original global
-     * selector. New code must use [tunImplementations].
-     */
-    @Deprecated("Use tunImplementations for per-core preferences")
-    val tunImplementation: Flow<TunImplementation> = context.dataStore.data.map { preferences ->
-        enumValueOrDefault(preferences[TUN_IMPLEMENTATION], TunImplementation.HEV_SOCKS5)
-    }
-
-    suspend fun setTunImplementation(core: ProxyCore, implementation: TunImplementation) {
-        context.dataStore.edit { preferences ->
-            val current = decodeTunImplementations(preferences).toMutableMap()
-            current[core] = implementation
-            preferences[TUN_IMPLEMENTATIONS] = encodeTunImplementations(current)
-        }
-    }
-
-    /** Compatibility setter for the removed global selector. */
-    @Deprecated("Use setTunImplementation(core, implementation)")
-    suspend fun setTunImplementation(implementation: TunImplementation) {
-        context.dataStore.edit { preferences ->
-            preferences.remove(TUN_IMPLEMENTATIONS)
-            preferences[TUN_IMPLEMENTATION] = implementation.name
-        }
-    }
-    
     val tcpingTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
         (preferences[TCPING_TEST_TIMEOUT_MS] ?: xyz.a202132.app.AppConfig.TCPING_TEST_TIMEOUT).coerceAtLeast(500L)
     }

@@ -22,7 +22,7 @@ type countingDispatcher struct{ routing.Dispatcher }
 
 func counted(ctx context.Context) bool {
 	inbound := session.InboundFromContext(ctx)
-	return inbound != nil && (inbound.Tag == "tun-in" || inbound.Tag == "internal-socks-in")
+	return inbound != nil && inbound.Tag == "internal-socks-in"
 }
 
 func (d *countingDispatcher) Dispatch(ctx context.Context, dest net.Destination) (*transport.Link, error) {

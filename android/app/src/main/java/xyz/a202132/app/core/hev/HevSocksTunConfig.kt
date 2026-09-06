@@ -13,7 +13,7 @@ internal object HevSocksTunConfig {
 
     fun tunnel(mode: IPv6RoutingMode, mappedDns: Boolean = true): TunnelSpec {
         require(mode != IPv6RoutingMode.ONLY) {
-            "HEV fallback does not support IPv6-only routing; use the core native TUN"
+            "HEV tun2socks does not support IPv6-only routing"
         }
         val addresses = mutableListOf<IpPrefix>()
         val routes = mutableListOf<IpPrefix>()

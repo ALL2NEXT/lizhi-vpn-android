@@ -5,29 +5,11 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.core.CoreRequest
-import xyz.a202132.app.core.CoreTunMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.ProxyMode
-import xyz.a202132.app.platform.IpPrefix
-import xyz.a202132.app.platform.TunnelSpec
 import xyz.a202132.app.util.XrayConfigGenerator
 
 internal object XrayVpnConfig {
-    fun tunnel(mode: IPv6RoutingMode): TunnelSpec {
-        val addresses = mutableListOf<IpPrefix>()
-        val routes = mutableListOf<IpPrefix>()
-        if (mode != IPv6RoutingMode.ONLY) {
-            addresses += IpPrefix("172.19.0.1", 30)
-            routes += IpPrefix("0.0.0.0", 0)
-        }
-        if (mode != IPv6RoutingMode.DISABLED) {
-            addresses += IpPrefix("fdfe:dcba:9876::1", 126)
-            routes += IpPrefix("::", 0)
-        }
-        return TunnelSpec(AppConfig.VPN_MTU, addresses, routes,
-            listOf(if (mode == IPv6RoutingMode.ONLY) "fdfe:dcba:9876::2" else "172.19.0.2"))
-    }
-
     fun generate(request: CoreRequest, cnRules: JsonObject? = null): String {
         val base = JsonParser.parseString(XrayConfigGenerator().generateTestConfig(
             request.node, request.socksPort, request.hysteriaUpMbps, request.hysteriaDownMbps
@@ -60,17 +42,6 @@ internal object XrayVpnConfig {
                     sockopt.addProperty("domainStrategy", strategy)
                 }
             }
-            if (request.tunMode == CoreTunMode.NATIVE) {
-                base.getAsJsonArray("inbounds").add(JsonObject().apply {
-                    addProperty("tag", "tun-in")
-                    addProperty("protocol", "tun")
-                    add("settings", JsonObject().apply {
-                        addProperty("name", "firefly")
-                        addProperty("MTU", AppConfig.VPN_MTU)
-                    })
-                    add("sniffing", inbound.get("sniffing").deepCopy())
-                })
-            }
             base.getAsJsonArray("outbounds").add(JsonObject().apply {
                 addProperty("protocol", "dns")
                 addProperty("tag", "dns-out")
@@ -88,11 +59,7 @@ internal object XrayVpnConfig {
             })
             rules.add(rule("dns-out").apply {
                 addProperty("port", "53")
-                add("inboundTag", if (request.tunMode == CoreTunMode.NATIVE) {
-                    strings("tun-in", "internal-socks-in")
-                } else {
-                    strings("internal-socks-in")
-                })
+                add("inboundTag", strings("internal-socks-in"))
             })
             rules.add(rule("direct").apply { add("inboundTag", strings("dns-bootstrap")) })
             rules.add(rule("proxy").apply { add("inboundTag", strings("dns-remote")) })

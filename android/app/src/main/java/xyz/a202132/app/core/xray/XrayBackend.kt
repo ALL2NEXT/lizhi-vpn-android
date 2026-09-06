@@ -14,7 +14,6 @@ import xyz.a202132.app.core.hev.HevSocksTunAdapter
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.ProxyMode
-import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.platform.AndroidVpnHost
 import java.io.File
 import java.util.UUID
@@ -22,7 +21,7 @@ import java.util.concurrent.TimeUnit
 
 internal class XrayBackend : CoreBackend {
     override val id = ProxyCore.XRAY
-    override val capabilities = CoreCapabilities(ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS.toSet(), setOf(TunStack.GVISOR))
+    override val capabilities = CoreCapabilities(ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS.toSet())
 
     override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = withContext(Dispatchers.IO) {
         val rules = if (request.settings?.proxyMode == ProxyMode.SMART) {
@@ -49,12 +48,9 @@ internal class XrayBackend : CoreBackend {
     override suspend fun start(context: Context, scope: CoroutineScope, prepared: PreparedCore,
         host: AndroidVpnHost?, onFailure: (String) -> Unit): CoreSession {
         require(prepared.core == id)
-        if (prepared.request.isVpn && prepared.request.tunMode == CoreTunMode.NATIVE) {
-            requireNotNull(host).openTun(XrayVpnConfig.tunnel(prepared.request.settings!!.ipv6RoutingMode))
-        }
         val core = XrayNativeSession(context, prepared.request.socksPort, host, onFailure)
             .start(prepared.config)
-        if (prepared.request.isVpn && prepared.request.tunMode == CoreTunMode.HEV_SOCKS5) {
+        if (prepared.request.isVpn) {
             return try {
                 val adapter = HevSocksTunAdapter().start(context, requireNotNull(host),
                     prepared.request.socksPort, prepared.request.settings!!.ipv6RoutingMode, onFailure)

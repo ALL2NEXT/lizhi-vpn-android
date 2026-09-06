@@ -30,23 +30,7 @@ internal class BoxPlatformInterface(
         service.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     }
     override fun openTun(options: TunOptions): Int {
-        val addresses = mutableListOf<xyz.a202132.app.platform.IpPrefix>()
-        val v4 = options.inet4Address
-        while (v4.hasNext()) v4.next().let { addresses += xyz.a202132.app.platform.IpPrefix(it.address(), it.prefix()) }
-        val v6 = options.inet6Address
-        while (v6.hasNext()) v6.next().let { addresses += xyz.a202132.app.platform.IpPrefix(it.address(), it.prefix()) }
-        val routes = mutableListOf<xyz.a202132.app.platform.IpPrefix>()
-        val route4 = options.inet4RouteAddress
-        while (route4.hasNext()) route4.next().let { routes += xyz.a202132.app.platform.IpPrefix(it.address(), it.prefix()) }
-        val route6 = options.inet6RouteAddress
-        while (route6.hasNext()) route6.next().let { routes += xyz.a202132.app.platform.IpPrefix(it.address(), it.prefix()) }
-        if (routes.isEmpty()) {
-            if (addresses.any { ':' !in it.address }) routes += xyz.a202132.app.platform.IpPrefix("0.0.0.0", 0)
-            if (addresses.any { ':' in it.address }) routes += xyz.a202132.app.platform.IpPrefix("::", 0)
-        }
-        return host.openTun(xyz.a202132.app.platform.TunnelSpec(
-            options.mtu, addresses, routes, listOf(options.dnsServerAddress.value)
-        ))
+        throw UnsupportedOperationException("Android TUN is owned by HEV")
     }
 
     override fun useProcFS(): Boolean {

@@ -22,7 +22,7 @@ internal data class TunnelSpec(
     val dnsServers: List<String>
 )
 
-/** Owns the Android TUN reference. Native backends must release their copies first. */
+/** Owns the Android TUN reference used by the HEV data-plane adapter. */
 internal class AndroidVpnHost(
     private val service: VpnService,
     private val perApp: PerAppProxySettings,

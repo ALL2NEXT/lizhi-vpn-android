@@ -8,7 +8,6 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
-import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.UrlTestTargets
 import android.net.Uri
 
@@ -38,12 +37,9 @@ class SingBoxConfigGenerator {
         selectedNodeId: String?,
         proxyMode: ProxyMode,
         ipv6Mode: IPv6RoutingMode = IPv6RoutingMode.DISABLED,
-        mtu: Int = AppConfig.VPN_MTU,
         internalSocksPort: Int? = null,
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
-        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS,
-        tunStack: TunStack = TunStack.GVISOR,
-        includeTun: Boolean = true
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
         if (nodes.isEmpty()) {
@@ -60,7 +56,7 @@ class SingBoxConfigGenerator {
                 
             add("log", createLogConfig())
             add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode))
-            add("inbounds", createInbounds(ipv6Mode, mtu, internalSocksPort, tunStack, includeTun))
+            add("inbounds", createInbounds(internalSocksPort))
             add(
                 "outbounds",
                 createOutbounds(
@@ -81,11 +77,7 @@ class SingBoxConfigGenerator {
             add("log", createLogConfig())
             add(
                 "inbounds",
-                createInbounds(
-                    IPv6RoutingMode.DISABLED,
-                    AppConfig.VPN_MTU,
-                    null
-                )
+                createInbounds(null)
             )
             add("outbounds", JsonArray().apply {
                 add(JsonObject().apply {
@@ -322,51 +314,9 @@ class SingBoxConfigGenerator {
         }
     }
     
-    private fun createInbounds(
-        ipv6Mode: IPv6RoutingMode,
-        mtu: Int,
-        internalSocksPort: Int?,
-        tunStack: TunStack = TunStack.GVISOR,
-        includeTun: Boolean = true
-    ): JsonArray {
+    private fun createInbounds(internalSocksPort: Int?): JsonArray {
         return JsonArray().apply {
-            if (includeTun) add(JsonObject().apply {
-                addProperty("type", "tun")
-                addProperty("tag", "tun-in")
-                addProperty("interface_name", "tun0")
-                // IPv4 地址 (总是添加，否则 DNS 劫持会报错 "need one more IPv4 address")
-                addProperty("inet4_address", "172.19.0.1/30")
-                
-                // IPv6 地址 (启用/优先/仅模式下添加)
-                if (ipv6Mode != IPv6RoutingMode.DISABLED) {
-                    // 使用 GUA 地址而非 ULA，防止 Android 认为无 IPv6 互联网连接
-                    // 必须使用 /126 或更小掩码，因为 system stack 需要至少一个额外的 IPv6 地址用于网关/路由
-                    addProperty("inet6_address", "2001:db8::1/126")
-                }
-                addProperty("mtu", mtu)
-                addProperty("auto_route", true)
-                addProperty("strict_route", true)
-                
-                // 显式配置路由地址 (sing-box 1.12.x 使用 route_address)
-                add("route_address", JsonArray().apply {
-                    // IPv4 全局路由 (仅IPv6模式下不添加)
-                    if (ipv6Mode != IPv6RoutingMode.ONLY) {
-                        add("0.0.0.0/0")
-                    }
-                    // IPv6 全局路由 (启用/优先/仅模式下添加)
-                    if (ipv6Mode != IPv6RoutingMode.DISABLED) {
-                        add("::/0")
-                    }
-                })
-                
-                addProperty("stack", tunStack.configValue)
-                addProperty("sniff", true)
-                addProperty("sniff_override_destination", true)
-            })
-
-            // 本应用被排除在 Android VPN TUN 之外。提供一个仅监听回环地址的
-            // SOCKS 入站，让“当前已连接节点”的测速流量进入同一个 sing-box
-            // 实例，从而由核心 TrafficManager 准确统计，且不会暴露到局域网。
+            // HEV owns the Android VPN TUN and forwards packets to this loopback SOCKS5 inbound.
             internalSocksPort?.let { port ->
                 add(JsonObject().apply {
                     addProperty("type", "socks")

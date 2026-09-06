@@ -5,8 +5,8 @@ import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.platform.AndroidVpnHost
 
 /**
- * Optional data-plane adapter for cores that expose a local SOCKS5 inbound
- * but do not provide a stable Android TUN FD integration.
+ * The single Android VPN data-plane adapter. Cores expose a local SOCKS5
+ * inbound while HEV owns the Android TUN.
  */
 internal interface TunAdapter {
     suspend fun start(

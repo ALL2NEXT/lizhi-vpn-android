@@ -10,7 +10,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -30,42 +29,6 @@ func controlConnection(path, token, command string) (*net.UnixConn, error) {
 		return nil, err
 	}
 	return conn, nil
-}
-
-func receiveTun(path, token string) (int, error) {
-	conn, err := controlConnection(path, token, "TUN")
-	if err != nil {
-		return -1, err
-	}
-	defer conn.Close()
-	data, ancillary := make([]byte, 1), make([]byte, unix.CmsgSpace(4))
-	n, oobn, flags, _, err := conn.ReadMsgUnix(data, ancillary)
-	if err != nil {
-		return -1, err
-	}
-	messages, err := unix.ParseSocketControlMessage(ancillary[:oobn])
-	if err != nil {
-		return -1, err
-	}
-	var fds []int
-	for _, message := range messages {
-		received, parseErr := unix.ParseUnixRights(&message)
-		if parseErr != nil {
-			for _, fd := range fds {
-				unix.Close(fd)
-			}
-			return -1, parseErr
-		}
-		fds = append(fds, received...)
-	}
-	if n != 1 || data[0] != 1 || flags&unix.MSG_CTRUNC != 0 || len(fds) != 1 {
-		for _, fd := range fds {
-			unix.Close(fd)
-		}
-		return -1, errors.New("invalid TUN descriptor response")
-	}
-	unix.CloseOnExec(fds[0])
-	return fds[0], nil
 }
 
 func protectSocket(path, token string, fd int) error {
@@ -99,28 +62,11 @@ func run(config *core.Config, path, token string) error {
 	_ = watcher.SetDeadline(time.Time{})
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	// The pinned TUN has no complete shutdown contract. Bound teardown even on
-	// Android 7, where Process.destroyForcibly is unavailable to the host.
+	// Bound teardown even on Android 7, where Process.destroyForcibly is
+	// unavailable to the host.
 	go func() { <-ctx.Done(); time.Sleep(2 * time.Second); os.Exit(0) }()
 	go func() { var b [1]byte; _, _ = watcher.Read(b[:]); cancel() }()
 
-	hasTun := false
-	for _, inbound := range config.Inbound {
-		if inbound.ProxySettings != nil && inbound.ProxySettings.Type == "xray.proxy.tun.Config" {
-			hasTun = true
-		}
-	}
-	if hasTun {
-		fd, err := receiveTun(path, token)
-		if err != nil {
-			return err
-		}
-		defer unix.Close(fd)
-		// Only the received, process-local FD is passed to Xray.
-		if err := os.Setenv("XRAY_TUN_FD", strconv.Itoa(fd)); err != nil {
-			return err
-		}
-	}
 	controller := func(_, _ string, raw syscall.RawConn) error {
 		var protectErr error
 		err := raw.Control(func(fd uintptr) { protectErr = protectSocket(path, token, int(fd)) })
