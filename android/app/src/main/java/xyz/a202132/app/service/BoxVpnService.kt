@@ -125,8 +125,14 @@ class BoxVpnService : VpnService() {
                     val settings = settingsRepo.getVpnRuntimeSettings()
                     val node = knownNode ?: findNode(raw, name, settingsRepo)
                     val backend = CoreBackends.registry.resolve(settings.protocolCoreSettings.coreFor(node.type), node)
+                    val tunMode = backend.resolveTunMode(settings.tunImplementation)
+                    require(tunMode != CoreTunMode.HEV_SOCKS5 ||
+                        settings.ipv6RoutingMode != IPv6RoutingMode.ONLY) {
+                        "HEV tun2socks does not support IPv6-only routing; switch to native TUN"
+                    }
                     val port = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
-                    val prepared = backend.prepare(applicationContext, CoreRequest(node, port, settings))
+                    val prepared = backend.prepare(applicationContext,
+                        CoreRequest(node, port, settings, tunMode = tunMode))
                     ensureActive()
                     val vpnHost = AndroidVpnHost(this@BoxVpnService, settings.perAppProxy,
                         onCellular = ServiceManager::notifyCellularNetwork)

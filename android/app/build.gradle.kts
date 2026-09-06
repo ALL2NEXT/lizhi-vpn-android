@@ -19,6 +19,10 @@ val xraySourceDir = rootProject.file("../xray-core")
 val xrayRunnerDir = rootProject.file("native/xray-runner")
 val generatedXrayJniDir = layout.buildDirectory.dir("generated/xray/jniLibs")
 val xrayCoreVersion = "26.3.27"
+val hevSourceDir = rootProject.file("../hev-socks5-tunnel")
+val hevRunnerDir = rootProject.file("native/hev-runner")
+val generatedHevJniDir = layout.buildDirectory.dir("generated/hev/jniLibs")
+val hevTunnelVersion = "2.16.0"
 
 val buildLibbox = tasks.register("buildLibbox") {
     group = "sing-box"
@@ -217,6 +221,93 @@ val buildXrayCore = tasks.register("buildXrayCore") {
     }
 }
 
+// HEV is an optional TUN-to-SOCKS compatibility adapter. It is compiled as
+// an Android PIE executable instead of loaded into the app process, so a
+// native teardown failure cannot take down the UI or VPN controller process.
+val buildHevTunnel = tasks.register("buildHevTunnel") {
+    group = "hev"
+    description = "Build the pinned HEV tun2socks compatibility runner"
+
+    inputs.files(fileTree(hevSourceDir) {
+        exclude(".git/**")
+        exclude("bin/**")
+        exclude("build/**")
+    })
+    inputs.files(fileTree(hevRunnerDir) { exclude("*.exe") })
+    inputs.property("version", hevTunnelVersion)
+    inputs.property("ndkVersion", singBoxNdkVersion)
+    inputs.property("androidApi", 24)
+    val arm32Output = generatedHevJniDir.map { it.file("armeabi-v7a/libhev.so") }
+    val arm64Output = generatedHevJniDir.map { it.file("arm64-v8a/libhev.so") }
+    outputs.files(arm32Output, arm64Output)
+
+    doLast {
+        check(hevSourceDir.resolve("Android.mk").isFile &&
+            hevSourceDir.resolve("src/core/.git").exists()) {
+            "HEV source is missing at ${hevSourceDir.absolutePath}. " +
+                "Run `git submodule update --init --recursive`."
+        }
+        val localProperties = Properties()
+        rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use {
+            localProperties.load(it)
+        }
+        val sdkPath = localProperties.getProperty("sdk.dir") ?: System.getenv("ANDROID_HOME")
+            ?: error("Android SDK not found. Set sdk.dir in android/local.properties or ANDROID_HOME.")
+        val ndkDir = File(sdkPath).resolve("ndk").resolve(singBoxNdkVersion)
+        val ndkBuild = ndkDir.resolve(if (System.getProperty("os.name").startsWith("Windows")) "ndk-build.cmd" else "ndk-build")
+        check(ndkBuild.isFile) { "Android ndk-build not found at ${ndkBuild.absolutePath}" }
+
+        val outputRoot = layout.buildDirectory.dir("generated/hev/ndk").get().asFile
+        val libsRoot = generatedHevJniDir.get().asFile
+        val stagedSource = layout.buildDirectory.dir("generated/hev/source").get().asFile
+        outputRoot.deleteRecursively()
+        libsRoot.deleteRecursively()
+        stagedSource.deleteRecursively()
+        libsRoot.mkdirs()
+        copy {
+            from(hevSourceDir)
+            exclude("**/.git/**")
+            exclude("**/bin/**")
+            exclude("**/build/**")
+            into(stagedSource)
+        }
+        // The upstream repository uses Git symlinks for public headers. A
+        // Windows checkout may materialize those as one-line placeholders;
+        // resolve them in the generated build copy without modifying the
+        // checked-out submodule.
+        stagedSource.walkTopDown().filter { it.isFile }.forEach { file ->
+            val target = file.readText(Charsets.UTF_8).trim()
+            if (target.startsWith("../") && !target.contains('\n') && !target.contains('\r')) {
+                val resolved = file.parentFile.resolve(target).canonicalFile
+                check(resolved.isFile) { "HEV source link target is missing: $target" }
+                resolved.copyTo(file, overwrite = true)
+            }
+        }
+        exec {
+            commandLine(ndkBuild.absolutePath,
+                "NDK_PROJECT_PATH=null",
+                "APP_BUILD_SCRIPT=${hevRunnerDir.resolve("Android.mk").absolutePath}",
+                "APP_ABI=armeabi-v7a arm64-v8a",
+                "APP_PLATFORM=android-24",
+                "NDK_OUT=${outputRoot.absolutePath}",
+                "NDK_LIBS_OUT=${libsRoot.absolutePath}",
+                "HEV_ROOT=${stagedSource.absolutePath}",
+                "REV_ID=$hevTunnelVersion",
+                "V=1")
+        }
+        listOf("armeabi-v7a", "arm64-v8a").forEach { abi ->
+            val binary = outputRoot.resolve("local/$abi/hev-runner")
+            check(binary.isFile) { "HEV runner was not built for $abi" }
+            val packaged = libsRoot.resolve("$abi/libhev.so")
+            binary.copyTo(packaged, overwrite = true)
+            // ndk-build also installs the executable under its module name;
+            // keep only the stable libhev.so name consumed by ProcessBuilder.
+            libsRoot.resolve("$abi/hev-runner").delete()
+            packaged.setExecutable(true, false)
+        }
+    }
+}
+
 // All Android variants resolve the generated AAR before compiling Kotlin or
 // packaging the APK. This also covers unit-test variants such as
 // preDebugUnitTestBuild.
@@ -224,6 +315,7 @@ tasks.configureEach {
     if (name.startsWith("pre") && name.endsWith("Build")) {
         dependsOn(buildLibbox)
         dependsOn(buildXrayCore)
+        dependsOn(buildHevTunnel)
     }
 }
 
@@ -329,6 +421,7 @@ android {
     }
 
     sourceSets.getByName("main").jniLibs.srcDir(generatedXrayJniDir)
+    sourceSets.getByName("main").jniLibs.srcDir(generatedHevJniDir)
 
     externalNativeBuild {
         cmake {

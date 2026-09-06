@@ -32,4 +32,11 @@ class CoreRegistryTest {
         assertEquals(ProxyCore.MIHOMO, settings.coreFor(NodeType.TROJAN))
         assertEquals(ProxyCore.SING_BOX, settings.coreFor(NodeType.TUIC))
     }
+
+    @Test fun tunImplementationPreferenceResolvesAgainstBackendCapabilities() {
+        val backend = Backend(ProxyCore.SING_BOX, setOf(NodeType.VLESS))
+        assertEquals(CoreTunMode.NATIVE, backend.resolveTunMode(TunImplementation.AUTO))
+        assertEquals(CoreTunMode.NATIVE, backend.resolveTunMode(TunImplementation.NATIVE))
+        assertEquals(CoreTunMode.HEV_SOCKS5, backend.resolveTunMode(TunImplementation.HEV_SOCKS5))
+    }
 }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import xyz.a202132.app.core.*
+import xyz.a202132.app.core.hev.HevSocksTunAdapter
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.TunStack
@@ -30,7 +31,8 @@ internal class SingBoxBackend : CoreBackend {
             generator.generateConfig(listOf(request.node), request.node.id, settings.proxyMode,
                 settings.ipv6RoutingMode, internalSocksPort = request.socksPort,
                 hysteriaUpMbps = request.hysteriaUpMbps, hysteriaDownMbps = request.hysteriaDownMbps,
-                tunStack = settings.tunStack)
+                tunStack = settings.tunStack,
+                includeTun = request.tunMode == CoreTunMode.NATIVE)
                 .replace("\"geosite-cn.srs\"", "\"${File(context.filesDir, "sing-box/geosite-cn.srs").absolutePath}\"")
                 .replace("\"geoip-cn.srs\"", "\"${File(context.filesDir, "sing-box/geoip-cn.srs").absolutePath}\"")
         } else generator.generateTestConfig(request.node, request.socksPort, request.hysteriaUpMbps, request.hysteriaDownMbps)
@@ -63,7 +65,16 @@ internal class SingBoxBackend : CoreBackend {
                 session.server!!.startOrReloadService(prepared.config, OverrideOptions())
                 if (prepared.request.isVpn) session.connectStats()
             }
-            session
+            if (prepared.request.isVpn && prepared.request.tunMode == CoreTunMode.HEV_SOCKS5) {
+                try {
+                    val adapter = HevSocksTunAdapter().start(context, requireNotNull(host),
+                        prepared.request.socksPort, prepared.request.settings!!.ipv6RoutingMode, onFailure)
+                    combineCoreSession(session, adapter)
+                } catch (error: Throwable) {
+                    session.close()
+                    throw error
+                }
+            } else session
         } catch (error: Throwable) {
             session.close()
             throw error

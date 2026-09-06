@@ -5,6 +5,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.core.CoreRequest
+import xyz.a202132.app.core.CoreTunMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.platform.IpPrefix
@@ -59,15 +60,17 @@ internal object XrayVpnConfig {
                     sockopt.addProperty("domainStrategy", strategy)
                 }
             }
-            base.getAsJsonArray("inbounds").add(JsonObject().apply {
-                addProperty("tag", "tun-in")
-                addProperty("protocol", "tun")
-                add("settings", JsonObject().apply {
-                    addProperty("name", "firefly")
-                    addProperty("MTU", AppConfig.VPN_MTU)
+            if (request.tunMode == CoreTunMode.NATIVE) {
+                base.getAsJsonArray("inbounds").add(JsonObject().apply {
+                    addProperty("tag", "tun-in")
+                    addProperty("protocol", "tun")
+                    add("settings", JsonObject().apply {
+                        addProperty("name", "firefly")
+                        addProperty("MTU", AppConfig.VPN_MTU)
+                    })
+                    add("sniffing", inbound.get("sniffing").deepCopy())
                 })
-                add("sniffing", inbound.get("sniffing").deepCopy())
-            })
+            }
             base.getAsJsonArray("outbounds").add(JsonObject().apply {
                 addProperty("protocol", "dns")
                 addProperty("tag", "dns-out")
@@ -85,7 +88,11 @@ internal object XrayVpnConfig {
             })
             rules.add(rule("dns-out").apply {
                 addProperty("port", "53")
-                add("inboundTag", strings("tun-in", "internal-socks-in"))
+                add("inboundTag", if (request.tunMode == CoreTunMode.NATIVE) {
+                    strings("tun-in", "internal-socks-in")
+                } else {
+                    strings("internal-socks-in")
+                })
             })
             rules.add(rule("direct").apply { add("inboundTag", strings("dns-bootstrap")) })
             rules.add(rule("proxy").apply { add("inboundTag", strings("dns-remote")) })

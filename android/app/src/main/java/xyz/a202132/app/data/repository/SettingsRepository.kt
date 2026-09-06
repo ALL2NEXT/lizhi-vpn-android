@@ -21,6 +21,7 @@ import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.SkinSettings
 import xyz.a202132.app.data.model.TunStack
+import xyz.a202132.app.data.model.TunImplementation
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.util.CountryCodeResolver
 
@@ -36,7 +37,8 @@ data class VpnRuntimeSettings(
     val hysteriaUpMbps: Int,
     val hysteriaDownMbps: Int,
     val protocolCoreSettings: ProtocolCoreSettings,
-    val perAppProxy: PerAppProxySettings
+    val perAppProxy: PerAppProxySettings,
+    val tunImplementation: TunImplementation = TunImplementation.AUTO
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -66,6 +68,7 @@ class SettingsRepository(private val context: Context) {
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
         private val TUN_STACK = stringPreferencesKey("tun_stack")
+        private val TUN_IMPLEMENTATION = stringPreferencesKey("tun_implementation")
         
         // 自动化测试设置
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
@@ -266,6 +269,10 @@ class SettingsRepository(private val context: Context) {
                 IPv6RoutingMode.DISABLED
             ),
             tunStack = enumValueOrDefault(preferences[TUN_STACK], TunStack.GVISOR),
+            tunImplementation = enumValueOrDefault(
+                preferences[TUN_IMPLEMENTATION],
+                TunImplementation.AUTO
+            ),
             // 关闭 Hy2 带宽参数时必须向两个核心都传 0，避免运行时仍启用 Brutal。
             hysteriaUpMbps = if (hysteriaBandwidthEnabled) {
                 (preferences[HYSTERIA_UP_MBPS]
@@ -516,6 +523,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTunStack(stack: TunStack) {
         context.dataStore.edit { preferences ->
             preferences[TUN_STACK] = stack.name
+        }
+    }
+
+    val tunImplementation: Flow<TunImplementation> = context.dataStore.data.map { preferences ->
+        enumValueOrDefault(preferences[TUN_IMPLEMENTATION], TunImplementation.AUTO)
+    }
+
+    suspend fun setTunImplementation(implementation: TunImplementation) {
+        context.dataStore.edit { preferences ->
+            preferences[TUN_IMPLEMENTATION] = implementation.name
         }
     }
     

@@ -8,6 +8,10 @@
 -keep class xyz.a202132.app.util.SignatureVerifier { *; }
 -keep class xyz.a202132.app.util.RuntimeTuner { *; }
 
+# HEV is an optional runtime-selected TUN adapter used by future backends.
+-keep class xyz.a202132.app.core.hev.** { *; }
+-keep enum xyz.a202132.app.core.CoreTunMode { *; }
+
 # Keep data models for Gson
 -keep class xyz.a202132.app.data.model.** { *; }
 -keep interface xyz.a202132.app.data.model.** { *; }

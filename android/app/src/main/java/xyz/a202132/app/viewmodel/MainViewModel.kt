@@ -374,6 +374,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         NodeDisplaySettings()
     )
     val tunStack = settingsRepository.tunStack.stateIn(viewModelScope, SharingStarted.Eagerly, TunStack.GVISOR)
+    val tunImplementation = settingsRepository.tunImplementation.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        TunImplementation.AUTO
+    )
     val skinSettings = settingsRepository.skinSettings.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -1380,6 +1385,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setTunStack(stack: TunStack) {
         viewModelScope.launch {
             settingsRepository.setTunStack(stack)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setTunImplementation(implementation: TunImplementation) {
+        viewModelScope.launch {
+            settingsRepository.setTunImplementation(implementation)
             restartVpnIfNeeded()
         }
     }

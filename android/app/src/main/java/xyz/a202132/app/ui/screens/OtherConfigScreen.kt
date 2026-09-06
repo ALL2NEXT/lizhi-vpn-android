@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
+import xyz.a202132.app.data.model.TunImplementation
 import xyz.a202132.app.data.model.TunStack
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.ui.components.AppScreenScaffold
@@ -60,6 +61,7 @@ fun OtherConfigScreen(
     val speedTestDownloadUrl by viewModel.speedTestDownloadUrl.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
+    val tunImplementation by viewModel.tunImplementation.collectAsStateWithLifecycle()
     val tunStack by viewModel.tunStack.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val homeClickAction by viewModel.homeClickAction.collectAsStateWithLifecycle()
@@ -146,7 +148,25 @@ fun OtherConfigScreen(
             }
 
             OtherConfigSection(
-                title = "sing-box TUN实现（Xray 使用 gvisor）"
+                title = "TUN \u63a5\u5165\u65b9\u5f0f"
+            ) {
+                val implementations = TunImplementation.values()
+                MultiPositionSwitch(
+                    options = implementations.map(TunImplementation::displayName),
+                    selectedIndex = implementations.indexOf(tunImplementation),
+                    onOptionSelected = { index ->
+                        viewModel.setTunImplementation(implementations[index])
+                    }
+                )
+                Text(
+                    text = tunImplementation.description,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            OtherConfigSection(
+                title = "sing-box \u539f\u751f TUN \u534f\u8bae\u6808\uff08HEV \u6a21\u5f0f\u4e0d\u4f7f\u7528\uff09"
             ) {
                 val tunStacks = TunStack.values()
                 MultiPositionSwitch(

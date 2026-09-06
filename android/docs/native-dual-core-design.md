@@ -118,3 +118,19 @@ JVM 测试覆盖注册第三后端、旧设置兼容、会话取消/替换/停�
 测速异常修复已通过 `:app:testDebugUnitTest :app:lintDebug :app:assembleRelease`。签名修复包位于 `app/build/outputs/apk/release/app-arm64-v8a-release.apk` 和 `app-armeabi-v7a-release.apk`，均通过 APK v2 签名校验；两种 ABI 中的 `libbox.so`、`libxray.so` 均与本次构建的 stripped native 输出一致。
 
 消除串联转发和无用内核实例是可由代码确认的结构改善，不能据此宣称实测“性能最强”。性能比较应固定节点、服务器与网络，分别记录两种内核的连接耗时、TCP/UDP 吞吐、P95 延迟、CPU/RSS 及耗电，并与旧版本对照。
+
+## HEV tun2socks compatibility adapter
+
+HEV is suitable as a compatibility data plane when a core exposes a local SOCKS5 inbound but does not provide a reliable Android TUN integration. The implemented path is:
+
+```text
+AndroidVpnHost TUN -> hev-runner (HEV 2.16.0) -> core loopback SOCKS5 -> selected core outbound
+```
+
+`TunAdapter` and `TunAdapterSession` keep this path independent from the core control contract. `CombinedCoreSession` owns both objects, reports the HEV TUN counters once, and closes HEV before the proxy core. A future Mihomo backend only needs to generate a SOCKS5 inbound and request `CoreTunMode.HEV_SOCKS5`; sing-box and Xray already support this mode while retaining `NATIVE` as the default.
+
+The HEV runner is a standalone Android PIE executable. It exchanges the TUN descriptor, liveness, and statistics through a private abstract Unix socket; packet data does not cross Kotlin or JNI. The build pins HEV 2.16.0, stages the source to resolve Git symlink headers on Windows, and packages only `libhev.so` for `armeabi-v7a` and `arm64-v8a`. URL Test never starts HEV.
+
+Mapped DNS is enabled for domain preservation (`198.18.0.2` with the `198.18.0.0/16` fake-IP map). IPv6-only routing is rejected by the adapter and remains on the selected core's native TUN path. The adapter is an optional fallback because it adds one TUN-to-SOCKS hop; native sing-box/Xray TUN remains the performance path. Device-level TUN, socket protection, IPv6, UDP/QUIC, and teardown validation still require an Android device.
+
+Basic settings now expose `TUN 接入方式`: `自动（核心优先）`, `原生 TUN`, and `HEV tun2socks`. The existing sing-box `gvisor/system/mixed` selector remains a separate native-stack setting and is ignored when HEV is selected. `自动` preserves the backend's preferred mode, so existing installations continue to use native TUN.

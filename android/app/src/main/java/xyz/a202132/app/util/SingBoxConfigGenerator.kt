@@ -42,7 +42,8 @@ class SingBoxConfigGenerator {
         internalSocksPort: Int? = null,
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS,
-        tunStack: TunStack = TunStack.GVISOR
+        tunStack: TunStack = TunStack.GVISOR,
+        includeTun: Boolean = true
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
         if (nodes.isEmpty()) {
@@ -59,7 +60,7 @@ class SingBoxConfigGenerator {
                 
             add("log", createLogConfig())
             add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode))
-            add("inbounds", createInbounds(ipv6Mode, mtu, internalSocksPort, tunStack))
+            add("inbounds", createInbounds(ipv6Mode, mtu, internalSocksPort, tunStack, includeTun))
             add(
                 "outbounds",
                 createOutbounds(
@@ -325,10 +326,11 @@ class SingBoxConfigGenerator {
         ipv6Mode: IPv6RoutingMode,
         mtu: Int,
         internalSocksPort: Int?,
-        tunStack: TunStack = TunStack.GVISOR
+        tunStack: TunStack = TunStack.GVISOR,
+        includeTun: Boolean = true
     ): JsonArray {
         return JsonArray().apply {
-            add(JsonObject().apply {
+            if (includeTun) add(JsonObject().apply {
                 addProperty("type", "tun")
                 addProperty("tag", "tun-in")
                 addProperty("interface_name", "tun0")

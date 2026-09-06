@@ -39,6 +39,17 @@ class XrayVpnConfigTest {
         assertFalse(result.toString().contains("bridge"))
     }
 
+    @Test fun hevModeLeavesTunOwnershipToTheAdapter() {
+        val result = JsonParser.parseString(
+            XrayVpnConfig.compose(base(), request(ProxyMode.GLOBAL, IPv6RoutingMode.DISABLED)
+                .copy(tunMode = CoreTunMode.HEV_SOCKS5))
+        ).asJsonObject
+        val inputs = result.getAsJsonArray("inbounds").map { it.asJsonObject }
+        assertEquals(listOf("internal-socks-in"), inputs.map { it.get("tag").asString })
+        val dnsRule = result.getAsJsonObject("routing").getAsJsonArray("rules")[0].asJsonObject
+        assertEquals(listOf("internal-socks-in"), dnsRule.getAsJsonArray("inboundTag").map { it.asString })
+    }
+
     @Test fun ipv6ModesProduceMatchingAddressesRoutesAndDnsFamily() {
         val v4 = XrayVpnConfig.tunnel(IPv6RoutingMode.DISABLED)
         assertTrue(v4.addresses.none { ':' in it.address })

@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import xyz.a202132.app.core.*
 import xyz.a202132.app.core.route.CoreRuleRepository
+import xyz.a202132.app.core.hev.HevSocksTunAdapter
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.ProxyMode
@@ -48,9 +49,21 @@ internal class XrayBackend : CoreBackend {
     override suspend fun start(context: Context, scope: CoroutineScope, prepared: PreparedCore,
         host: AndroidVpnHost?, onFailure: (String) -> Unit): CoreSession {
         require(prepared.core == id)
-        if (prepared.request.isVpn) {
+        if (prepared.request.isVpn && prepared.request.tunMode == CoreTunMode.NATIVE) {
             requireNotNull(host).openTun(XrayVpnConfig.tunnel(prepared.request.settings!!.ipv6RoutingMode))
         }
-        return XrayNativeSession(context, prepared.request.socksPort, host, onFailure).start(prepared.config)
+        val core = XrayNativeSession(context, prepared.request.socksPort, host, onFailure)
+            .start(prepared.config)
+        if (prepared.request.isVpn && prepared.request.tunMode == CoreTunMode.HEV_SOCKS5) {
+            return try {
+                val adapter = HevSocksTunAdapter().start(context, requireNotNull(host),
+                    prepared.request.socksPort, prepared.request.settings!!.ipv6RoutingMode, onFailure)
+                combineCoreSession(core, adapter)
+            } catch (error: Throwable) {
+                core.close()
+                throw error
+            }
+        }
+        return core
     }
 }
