@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
+import xyz.a202132.app.data.model.UrlTestMode
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -56,6 +57,7 @@ fun OtherConfigScreen(
     onBack: () -> Unit
 ) {
     val urlTestUrl by viewModel.urlTestUrl.collectAsStateWithLifecycle()
+    val urlTestMode by viewModel.urlTestMode.collectAsStateWithLifecycle()
     val speedTestDownloadUrl by viewModel.speedTestDownloadUrl.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
@@ -177,6 +179,27 @@ fun OtherConfigScreen(
             OtherConfigSection(
                 title = "204 测速地址"
             ) {
+                Text(
+                    text = "延迟测速模式",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                MultiPositionSwitch(
+                    options = UrlTestMode.entries.map(UrlTestMode::displayName),
+                    selectedIndex = urlTestMode.ordinal,
+                    onOptionSelected = { index ->
+                        UrlTestMode.entries.getOrNull(index)?.let(viewModel::setUrlTestMode)
+                    }
+                )
+                Text(
+                    text = when (urlTestMode) {
+                        UrlTestMode.COLD -> "冷连接：统计代理握手、目标 TCP/TLS 和 HTTP 首包的完整耗时。"
+                        UrlTestMode.WARM -> "暖连接：首次请求用于预热，仅统计同一连接第二次请求的首包耗时，更接近 NekoBox/v2rayNG。"
+                    },
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 val normalizedUrl = UrlTestTargets.normalize(urlTestUrlInput)
                 OutlinedTextField(
                     value = urlTestUrlInput,

@@ -21,6 +21,7 @@ import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.SkinSettings
 import xyz.a202132.app.data.model.UrlTestTargets
+import xyz.a202132.app.data.model.UrlTestMode
 import xyz.a202132.app.util.CountryCodeResolver
 
 data class PerAppProxySettings(
@@ -70,6 +71,7 @@ class SettingsRepository(private val context: Context) {
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         private val URL_TEST_TIMEOUT_MS = longPreferencesKey("url_test_timeout_ms")
         private val URL_TEST_URL = stringPreferencesKey("url_test_url")
+        private val URL_TEST_MODE = stringPreferencesKey("url_test_mode")
         private val SPEED_TEST_DOWNLOAD_URL = stringPreferencesKey("speed_test_download_url")
         private val SPEED_TEST_DURATION_MS = longPreferencesKey("speed_test_duration_ms")
         // 兼容读取旧版本的“带宽测速超时”设置，避免升级后丢失用户配置。
@@ -535,6 +537,16 @@ class SettingsRepository(private val context: Context) {
         val normalized = UrlTestTargets.normalize(value) ?: return
         context.dataStore.edit { preferences ->
             preferences[URL_TEST_URL] = normalized
+        }
+    }
+
+    val urlTestMode: Flow<UrlTestMode> = context.dataStore.data.map { preferences ->
+        UrlTestMode.fromStored(preferences[URL_TEST_MODE])
+    }
+
+    suspend fun setUrlTestMode(mode: UrlTestMode) {
+        context.dataStore.edit { preferences ->
+            preferences[URL_TEST_MODE] = mode.name
         }
     }
 

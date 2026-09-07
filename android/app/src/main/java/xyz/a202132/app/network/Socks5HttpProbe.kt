@@ -1,14 +1,19 @@
 package xyz.a202132.app.network
 
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import xyz.a202132.app.core.LocalSocksEndpoint
+import xyz.a202132.app.data.model.UrlTestMode
 import java.io.BufferedInputStream
 import java.io.EOFException
 import java.io.InputStream
 import java.net.IDN
 import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.net.URI
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
@@ -27,8 +32,65 @@ internal object Socks5HttpProbe {
     fun measureLatency(
         endpoint: LocalSocksEndpoint,
         targetUrl: String,
+        timeoutMs: Long,
+        mode: UrlTestMode = UrlTestMode.COLD
+    ): Result = when (mode) {
+        UrlTestMode.COLD -> execute(endpoint, targetUrl, timeoutMs, "HEAD")
+        UrlTestMode.WARM -> measureWarmLatency(endpoint, targetUrl, timeoutMs)
+    }
+
+    /**
+     * 通过同一 HTTP 客户端连续请求两次：第一次建立并预热隧道，第二次只统计暖连接首包。
+     * 这与 NekoBox/v2rayNG 的常规显示口径接近，同时仍使用统一的总截止时间。
+     */
+    private fun measureWarmLatency(
+        endpoint: LocalSocksEndpoint,
+        targetUrl: String,
         timeoutMs: Long
-    ): Result = execute(endpoint, targetUrl, timeoutMs, "HEAD")
+    ): Result {
+        require(endpoint.credentials == null) { "暖连接测速仅支持应用内部免认证 SOCKS 入站" }
+        val effectiveTimeoutMs = timeoutMs.coerceIn(1L, 60_000L)
+        val deadline = System.nanoTime() + effectiveTimeoutMs * NANOS_PER_MILLISECOND
+        val client = OkHttpClient.Builder()
+            .proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress(endpoint.address, endpoint.port)))
+            .connectTimeout(effectiveTimeoutMs, TimeUnit.MILLISECONDS)
+            .readTimeout(effectiveTimeoutMs, TimeUnit.MILLISECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+        val request = Request.Builder()
+            .url(targetUrl)
+            .header("User-Agent", "liuying-vpn-probe")
+            .get()
+            .build()
+        try {
+            var measured: Result? = null
+            repeat(WARM_REQUEST_COUNT) { index ->
+                val call = client.newCall(request)
+                call.timeout().timeout(remainingMillis(deadline).toLong(), TimeUnit.MILLISECONDS)
+                val startedAt = System.nanoTime()
+                call.execute().use { response ->
+                    val headersAt = System.nanoTime()
+                    if (index == 0) {
+                        // 完整消费首个响应，OkHttp 才能把底层 TCP/TLS 连接交给第二次请求复用。
+                        val input = response.body?.byteStream()
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (input != null && input.read(buffer) != -1) Unit
+                    } else {
+                        measured = Result(
+                            response.code,
+                            ((headersAt - startedAt) / NANOS_PER_MILLISECOND)
+                                .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+                        )
+                    }
+                }
+            }
+            return requireNotNull(measured)
+        } finally {
+            client.connectionPool.evictAll()
+            client.dispatcher.executorService.shutdown()
+        }
+    }
 
     private fun execute(
         endpoint: LocalSocksEndpoint,
@@ -181,6 +243,7 @@ internal object Socks5HttpProbe {
     }
 
     private const val MAX_STATUS_LINE = 8_192
+    private const val WARM_REQUEST_COUNT = 2
     private const val NANOS_PER_MILLISECOND = 1_000_000L
     private const val VERSION: Byte = 5
     private const val AUTH_VERSION: Byte = 1

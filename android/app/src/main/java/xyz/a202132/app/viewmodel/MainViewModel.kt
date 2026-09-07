@@ -284,6 +284,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
     val urlTestTimeoutMs = settingsRepository.urlTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_TIMEOUT)
     val urlTestUrl = settingsRepository.urlTestUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_URL)
+    val urlTestMode = settingsRepository.urlTestMode.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_MODE)
     val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
     val speedTestDurationMs = settingsRepository.speedTestDurationMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_CONCURRENCY)
@@ -758,6 +759,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setUrlTestMode(mode: UrlTestMode) {
+        viewModelScope.launch {
+            settingsRepository.setUrlTestMode(mode)
+        }
+    }
+
     fun setSpeedTestDownloadUrl(value: String) {
         viewModelScope.launch {
             settingsRepository.setSpeedTestDownloadUrl(value)
@@ -1023,7 +1030,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 nodes = batch.nodes,
                 targetUrl = urlTestUrl.value,
                 timeoutMs = timeoutMs,
-                concurrency = concurrency
+                concurrency = concurrency,
+                mode = urlTestMode.value
             ) { completed, total ->
                 _testingLabel.value = "$labelPrefix ($completed/$total)"
                 onProgress?.invoke(completed, total)

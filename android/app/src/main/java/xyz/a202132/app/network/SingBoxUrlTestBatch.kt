@@ -20,6 +20,7 @@ import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.core.PortReservation
 import xyz.a202132.app.core.singbox.SingBoxBackend
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.UrlTestMode
 import xyz.a202132.app.service.HeadlessPlatformInterface
 import xyz.a202132.app.util.SingBoxConfigGenerator
 
@@ -76,13 +77,18 @@ internal class SingBoxUrlTestBatch(
         }
     }
 
-    suspend fun testNode(node: Node, targetUrl: String, timeoutMs: Long): UrlTestManager.ProbeResult =
+    suspend fun testNode(
+        node: Node,
+        targetUrl: String,
+        timeoutMs: Long,
+        mode: UrlTestMode
+    ): UrlTestManager.ProbeResult =
         withContext(Dispatchers.IO) {
             val endpoint = endpoints[node.id]
             if (closed.get() || endpoint == null) {
                 return@withContext UrlTestManager.ProbeResult(-2, false)
             }
-            UrlTestManager.probeEndpoint(endpoint, targetUrl, timeoutMs)
+            UrlTestManager.probeEndpoint(endpoint, targetUrl, timeoutMs, mode)
         }
 
     private suspend fun waitUntilReady(endpoint: LocalSocksEndpoint) {

@@ -31,4 +31,11 @@ class UrlTestTargetsTest {
         assertNull(UrlTestTargets.normalize("https://user@example.com/generate_204"))
         assertNull(UrlTestTargets.normalize("https://example.com/generate_204#fragment"))
     }
+
+    @Test
+    fun `url test mode falls back to cold for missing or invalid settings`() {
+        assertEquals(UrlTestMode.WARM, UrlTestMode.fromStored("warm"))
+        assertEquals(UrlTestMode.COLD, UrlTestMode.fromStored(null))
+        assertEquals(UrlTestMode.COLD, UrlTestMode.fromStored("invalid"))
+    }
 }
