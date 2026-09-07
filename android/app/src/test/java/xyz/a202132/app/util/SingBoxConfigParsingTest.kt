@@ -2,8 +2,12 @@ package xyz.a202132.app.util
 
 import com.google.gson.JsonParser
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
+import xyz.a202132.app.core.LocalSocksEndpoint
+import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.NodeType
 
 class SingBoxConfigParsingTest {
     @Test
@@ -47,5 +51,36 @@ class SingBoxConfigParsingTest {
             customUrl,
             config.getAsJsonArray("outbounds")[0].asJsonObject.get("url").asString
         )
+    }
+
+    @Test
+    fun batchUrlTestMapsEachSocksInboundToItsOwnOutbound() {
+        val nodes = listOf(
+            Node("node-a", "A", NodeType.SOCKS, "127.0.0.1", 10001, ""),
+            Node("node-b", "B", NodeType.SOCKS, "127.0.0.1", 10002, "")
+        )
+        val base = JsonParser.parseString(
+            """{"inbounds":[],"outbounds":[{"type":"urltest","tag":"auto"},
+                {"type":"socks","tag":"node-a"},{"type":"socks","tag":"node-b"},
+                {"type":"direct","tag":"direct"}],"route":{"final":"auto"},"experimental":{}}"""
+        ).asJsonObject
+        val result = JsonParser.parseString(
+            SingBoxConfigGenerator().composeUrlTestBatchConfig(
+                base,
+                nodes,
+                listOf(
+                    LocalSocksEndpoint.unauthenticated(21000),
+                    LocalSocksEndpoint.unauthenticated(21001)
+                )
+            )
+        ).asJsonObject
+
+        val inbounds = result.getAsJsonArray("inbounds").map { it.asJsonObject }
+        val rules = result.getAsJsonObject("route").getAsJsonArray("rules").map { it.asJsonObject }
+        assertEquals(listOf(21000, 21001), inbounds.map { it.get("listen_port").asInt })
+        assertEquals("urltest-in-1", rules[1].getAsJsonArray("inbound")[0].asString)
+        assertEquals("node-b", rules[1].get("outbound").asString)
+        assertEquals("node-a", result.getAsJsonArray("outbounds")[0].asJsonObject.get("tag").asString)
+        assertFalse(result.has("experimental"))
     }
 }

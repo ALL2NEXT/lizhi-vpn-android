@@ -260,33 +260,62 @@ class SingBoxConfigGenerator {
     }
 
     /**
-     * 生成不带自动测速组的批量 URL Test 配置。
-     * 单节点探测由 Clash API 主动触发；若保留自动测速组，核心启动后会立即重复测试全部节点。
+     * 生成一个进程承载多个独立 SOCKS 入站的批量测速配置。
+     *
+     * 每个入站固定路由到同下标节点。应用层因此可以让 sing-box 与 Xray 共用同一套
+     * SOCKS/HTTP 探测逻辑，避免 Clash API 修改 HTTP 测试地址而造成双核心口径不一致。
      */
     fun generateUrlTestBatchConfig(
         nodes: List<Node>,
-        clashApiPort: Int,
+        endpoints: List<LocalSocksEndpoint>,
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
     ): String {
         require(nodes.isNotEmpty()) { "URL Test 批次至少需要一个节点" }
+        require(nodes.size == endpoints.size) { "节点与 SOCKS 入站数量不一致" }
+        require(nodes.map(Node::id).toSet().size == nodes.size) { "URL Test 节点 ID 必须唯一" }
         val config = JsonParser.parseString(
             generateUrlTestConfig(
                 nodes = nodes,
-                clashApiPort = clashApiPort,
                 hysteriaUpMbps = hysteriaUpMbps,
                 hysteriaDownMbps = hysteriaDownMbps
             )
         ).asJsonObject
+        return composeUrlTestBatchConfig(config, nodes, endpoints)
+    }
 
-        // Clash API 可以直接按出站标签测速，因此无需额外监听入口。
-        config.add("inbounds", JsonArray())
+    internal fun composeUrlTestBatchConfig(
+        config: JsonObject,
+        nodes: List<Node>,
+        endpoints: List<LocalSocksEndpoint>
+    ): String {
+        require(nodes.isNotEmpty()) { "URL Test 批次至少需要一个节点" }
+        require(nodes.size == endpoints.size) { "节点与 SOCKS 入站数量不一致" }
+        // SOCKS 入站由应用逐个建立冷连接并执行同一 HTTP 探测，不再依赖 Clash API。
+        config.remove("experimental")
+        config.add("inbounds", JsonArray().apply {
+            endpoints.forEachIndexed { index, endpoint ->
+                add(JsonObject().apply {
+                    addProperty("type", "socks")
+                    addProperty("tag", "urltest-in-$index")
+                    addProperty("listen", endpoint.address)
+                    addProperty("listen_port", endpoint.port)
+                })
+            }
+        })
         val outbounds = config.getAsJsonArray("outbounds")
-        outbounds.set(0, JsonObject().apply {
-            addProperty("type", "selector")
-            addProperty("tag", "auto")
-            add("outbounds", JsonArray().apply { nodes.forEach { add(it.id) } })
-            addProperty("default", nodes.first().id)
+        outbounds.remove(0) // 移除自动测速组，只保留真实节点出站与 direct。
+        config.add("route", JsonObject().apply {
+            add("rules", JsonArray().apply {
+                nodes.forEachIndexed { index, node ->
+                    add(JsonObject().apply {
+                        add("inbound", JsonArray().apply { add("urltest-in-$index") })
+                        addProperty("action", "route")
+                        addProperty("outbound", node.id)
+                    })
+                }
+            })
+            addProperty("final", "direct")
         })
         return gson.toJson(config)
     }

@@ -683,10 +683,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * URL Test 所有节点延迟 (通过 ClashAPI)
-     * VPN 运行中 → 用现有 ClashAPI (port 9090)
-
-     * VPN 未运行 → 启动临时无头 sing-box 实例 (port 19090)
+     * 使用临时无头原生核心测试全部节点；sing-box 与 Xray 各自共享一个批量实例，
+     * 每个节点通过独立 SOCKS 入站执行相同的 HTTP HEAD 探测。
      */
     fun urlTestAllNodes(targetNodes: List<Node>? = null) {
         urlTestAllNodesInternal(

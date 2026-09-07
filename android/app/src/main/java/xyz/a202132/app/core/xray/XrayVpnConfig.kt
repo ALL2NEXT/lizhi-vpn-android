@@ -17,6 +17,50 @@ internal object XrayVpnConfig {
         return compose(base, request, cnRules)
     }
 
+    /** 将多个单节点配置合并为一个 Xray 进程，每个 SOCKS 入站只允许命中对应节点。 */
+    fun generateUrlTestBatch(requests: List<CoreRequest>): String {
+        require(requests.isNotEmpty()) { "URL Test 批次至少需要一个节点" }
+        require(requests.none(CoreRequest::isVpn)) { "批量测速配置不能包含 VPN 请求" }
+        val bases = requests.map { request ->
+            JsonParser.parseString(
+                XrayConfigGenerator().generateCoreConfig(
+                    request.node,
+                    request.endpoint,
+                    request.hysteriaUpMbps,
+                    request.hysteriaDownMbps
+                )
+            ).asJsonObject
+        }
+        return composeUrlTestBatch(bases)
+    }
+
+    internal fun composeUrlTestBatch(bases: List<JsonObject>): String {
+        require(bases.isNotEmpty()) { "URL Test 批次至少需要一个基础配置" }
+        val inbounds = JsonArray()
+        val outbounds = JsonArray()
+        val rules = JsonArray()
+        bases.forEachIndexed { index, base ->
+            val inbound = base.getAsJsonArray("inbounds")?.firstOrNull()?.asJsonObject?.deepCopy()
+                ?: error("Xray 基础配置缺少入站")
+            val outbound = base.getAsJsonArray("outbounds")?.firstOrNull()?.asJsonObject?.deepCopy()
+                ?: error("Xray 基础配置缺少节点出站")
+            val inboundTag = "urltest-in-$index"
+            val outboundTag = "urltest-out-$index"
+            inbounds.add(inbound.apply { addProperty("tag", inboundTag) })
+            outbounds.add(outbound.apply { addProperty("tag", outboundTag) })
+            rules.add(rule(outboundTag).apply { add("inboundTag", strings(inboundTag)) })
+        }
+        return JsonObject().apply {
+            bases.first().getAsJsonObject("log")?.let { add("log", it.deepCopy()) }
+            add("inbounds", inbounds)
+            add("outbounds", outbounds)
+            add("routing", JsonObject().apply {
+                addProperty("domainStrategy", "AsIs")
+                add("rules", rules)
+            })
+        }.toString()
+    }
+
     internal fun compose(base: JsonObject, request: CoreRequest, cnRules: JsonObject? = null): String {
         val inbound = base.getAsJsonArray("inbounds")[0].asJsonObject
         inbound.addProperty("tag", "internal-socks-in")

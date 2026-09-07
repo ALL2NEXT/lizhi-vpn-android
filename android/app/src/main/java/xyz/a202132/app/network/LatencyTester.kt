@@ -172,12 +172,32 @@ class LatencyTester {
         val lastProgressAt = java.util.concurrent.atomic.AtomicLong(0L)
         val totalCount = nodes.size
 
-        val results = parallelMapOrdered(nodes, concurrency) { node ->
+        val firstPass = parallelMapOrdered(nodes, concurrency) { node ->
             val result = urlTestNode(node, targetUrl, timeoutMs, retryCount)
             val current = completedCount.incrementAndGet()
             reportProgress(current, totalCount, lastProgressAt, onProgress)
             result
         }
+        val nodesById = nodes.associateBy(Node::id)
+        val finalists = UrlTestSamplePolicy.selectFinalistIds(
+            firstPass,
+            xyz.a202132.app.AppConfig.URL_TEST_RECHECK_TOP_COUNT
+        ).mapNotNull(nodesById::get)
+        val rechecks = if (
+            finalists.isEmpty() || xyz.a202132.app.AppConfig.URL_TEST_RECHECK_ATTEMPTS <= 0
+        ) {
+            emptyMap()
+        } else {
+            Log.d(tag, "URL Test rechecking ${finalists.size} finalists with cold connections")
+            parallelMapOrdered(finalists, concurrency.coerceAtMost(finalists.size)) { node ->
+                node.id to buildList {
+                    repeat(xyz.a202132.app.AppConfig.URL_TEST_RECHECK_ATTEMPTS) {
+                        add(urlTestNode(node, targetUrl, timeoutMs, retryCount))
+                    }
+                }
+            }.toMap()
+        }
+        val results = UrlTestSamplePolicy.stabilize(firstPass, rechecks)
         Log.d(tag, "========== URL Test END: ${results.size} results ==========")
         results
     }

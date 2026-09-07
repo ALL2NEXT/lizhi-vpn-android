@@ -2,7 +2,6 @@ package xyz.a202132.app.network
 
 import android.content.Context
 import android.util.Log
-import com.google.gson.JsonParser
 import io.nekohasekai.libbox.CommandServer
 import io.nekohasekai.libbox.CommandServerHandler
 import io.nekohasekai.libbox.Libbox
@@ -10,14 +9,14 @@ import io.nekohasekai.libbox.OverrideOptions
 import io.nekohasekai.libbox.PlatformInterface
 import io.nekohasekai.libbox.SystemProxyStatus
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.core.PortReservation
 import xyz.a202132.app.core.singbox.SingBoxBackend
 import xyz.a202132.app.data.model.Node
@@ -31,27 +30,30 @@ internal class SingBoxUrlTestBatch(
     private val hysteriaUpMbps: Int,
     private val hysteriaDownMbps: Int
 ) : AutoCloseable {
-    // 先占住 Clash API 端口，完成配置校验后再释放给 sing-box 绑定。
-    private val reservation = PortReservation()
-    private val apiPort = reservation.port
-    private val nodeIds = nodes.mapTo(hashSetOf(), Node::id)
     private val directory = File(context.cacheDir, "sb-urltest-${UUID.randomUUID().toString().take(8)}")
     private val closed = AtomicBoolean()
+    private val reservations = mutableListOf<PortReservation>()
+    private var endpoints = emptyMap<String, LocalSocksEndpoint>()
     private var server: CommandServer? = null
 
     suspend fun start(): SingBoxUrlTestBatch = withContext(Dispatchers.IO) {
-        val config = SingBoxConfigGenerator().generateUrlTestBatchConfig(
-            nodes = nodes,
-            clashApiPort = apiPort,
-            hysteriaUpMbps = hysteriaUpMbps,
-            hysteriaDownMbps = hysteriaDownMbps
-        )
         try {
+            repeat(nodes.size) { reservations.add(PortReservation()) }
+            val orderedEndpoints = reservations.map { LocalSocksEndpoint.unauthenticated(it.port) }
+            endpoints = nodes.map(Node::id).zip(orderedEndpoints).toMap()
+            val config = SingBoxConfigGenerator().generateUrlTestBatchConfig(
+                nodes = nodes,
+                endpoints = orderedEndpoints,
+                hysteriaUpMbps = hysteriaUpMbps,
+                hysteriaDownMbps = hysteriaDownMbps
+            )
+
             // Libbox.setup 会修改进程级状态，必须与 VPN 和其他测速会话串行初始化。
             synchronized(SingBoxBackend.setupLock) {
                 SingBoxBackend.setup(context, directory)
                 Libbox.checkConfig(config)
-                reservation.close()
+                reservations.forEach(PortReservation::close)
+                reservations.clear()
                 val platform: PlatformInterface = HeadlessPlatformInterface(context)
                 server = Libbox.newCommandServer(object : CommandServerHandler {
                     override fun serviceStop() {
@@ -66,7 +68,7 @@ internal class SingBoxUrlTestBatch(
                     it.startOrReloadService(config, OverrideOptions())
                 }
             }
-            waitUntilReady()
+            waitUntilReady(orderedEndpoints.first())
             this@SingBoxUrlTestBatch
         } catch (error: Throwable) {
             close()
@@ -76,57 +78,21 @@ internal class SingBoxUrlTestBatch(
 
     suspend fun testNode(node: Node, targetUrl: String, timeoutMs: Long): UrlTestManager.ProbeResult =
         withContext(Dispatchers.IO) {
-            if (closed.get() || node.id !in nodeIds) {
+            val endpoint = endpoints[node.id]
+            if (closed.get() || endpoint == null) {
                 return@withContext UrlTestManager.ProbeResult(-2, false)
             }
-            val timeout = timeoutMs.coerceIn(500L, 60_000L).toInt()
-            val encodedId = URLEncoder.encode(node.id, Charsets.UTF_8.name())
-            val encodedUrl = URLEncoder.encode(targetUrl, Charsets.UTF_8.name())
-            val connection = URL(
-                "http://127.0.0.1:$apiPort/proxies/$encodedId/delay?timeout=$timeout&url=$encodedUrl"
-            ).openConnection() as HttpURLConnection
-            // 真正的测速截止时间由核心控制；这里额外预留本地 API 调度时间。
-            connection.connectTimeout = timeout + API_TIMEOUT_GRACE_MS
-            connection.readTimeout = timeout + API_TIMEOUT_GRACE_MS
-            connection.instanceFollowRedirects = false
-            try {
-                val code = connection.responseCode
-                if (code == HttpURLConnection.HTTP_OK) {
-                    val delayMs = connection.inputStream.bufferedReader().use { reader ->
-                        JsonParser.parseReader(reader).asJsonObject.get("delay")?.asInt
-                    }
-                    if (delayMs != null && delayMs > 0) {
-                        UrlTestManager.ProbeResult(delayMs, false)
-                    } else {
-                        UrlTestManager.ProbeResult(-2, false)
-                    }
-                } else {
-                    UrlTestManager.ProbeResult(
-                        -2,
-                        code == HttpURLConnection.HTTP_UNAVAILABLE ||
-                            code == HttpURLConnection.HTTP_GATEWAY_TIMEOUT
-                    )
-                }
-            } catch (error: Exception) {
-                UrlTestManager.ProbeResult(-2, true)
-            } finally {
-                connection.disconnect()
-            }
+            UrlTestManager.probeEndpoint(endpoint, targetUrl, timeoutMs)
         }
 
-    private suspend fun waitUntilReady() {
+    private suspend fun waitUntilReady(endpoint: LocalSocksEndpoint) {
         repeat(READY_ATTEMPTS) {
             check(!closed.get()) { "批量 URL Test 在启动期间被停止" }
             val ready = runCatching {
-                val connection = URL("http://127.0.0.1:$apiPort/version")
-                    .openConnection() as HttpURLConnection
-                connection.connectTimeout = READY_TIMEOUT_MS
-                connection.readTimeout = READY_TIMEOUT_MS
-                try {
-                    connection.responseCode in 200..299
-                } finally {
-                    connection.disconnect()
+                Socket().use { socket ->
+                    socket.connect(InetSocketAddress(endpoint.address, endpoint.port), READY_TIMEOUT_MS)
                 }
+                true
             }.getOrDefault(false)
             if (ready) return
             delay(READY_RETRY_DELAY_MS)
@@ -137,7 +103,9 @@ internal class SingBoxUrlTestBatch(
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         // 关闭顺序保证核心先停止，再清理仅属于本批次的临时目录。
-        reservation.close()
+        reservations.forEach(PortReservation::close)
+        reservations.clear()
+        endpoints = emptyMap()
         runCatching { server?.closeService() }
         runCatching { server?.close() }
         server = null
@@ -147,8 +115,7 @@ internal class SingBoxUrlTestBatch(
 
     private companion object {
         const val TAG = "SingBoxUrlTestBatch"
-        const val API_TIMEOUT_GRACE_MS = 1_500
-        const val READY_ATTEMPTS = 20
+        const val READY_ATTEMPTS = 30
         const val READY_TIMEOUT_MS = 500
         const val READY_RETRY_DELAY_MS = 100L
     }

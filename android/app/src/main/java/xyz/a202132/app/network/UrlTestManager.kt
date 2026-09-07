@@ -8,22 +8,22 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import xyz.a202132.app.AppConfig
+import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyCore
 import java.util.Collections
 
-/** 按需启动有界并发测速；不同内核之间不再通过额外 SOCKS 桥接。 */
+/** 按需启动有界并发测速；同一内核的节点共享进程，每个节点使用独立 SOCKS 入站。 */
 object UrlTestManager {
     data class StartResult(val nodes: List<Node>)
     data class ProbeResult(val delayMs: Int, val retryable: Boolean)
     private data class Batch(
         val context: Context, val nodes: Map<String, Node>, val settings: ProtocolCoreSettings,
-        val up: Int, val down: Int, val singBox: SingBoxUrlTestBatch?
+        val up: Int, val down: Int, val singBox: SingBoxUrlTestBatch?, val xray: XrayUrlTestBatch?
     )
     private val mutex = Mutex()
-    // Xray 目前仍需每个节点独立启动进程，因此单独限制进程数；
-    // sing-box 节点共享一个批量实例，直接采用调用方配置的并发数。
+    // 仅在某个批量实例启动失败时，限制逐节点回退会话的并发进程数。
     private val perNodeRuntimePermits = Semaphore(4)
     @Volatile private var batch: Batch? = null
     private val sessions = Collections.synchronizedSet(mutableSetOf<NodeTestProxyManager.Session>())
@@ -49,9 +49,20 @@ object UrlTestManager {
         if (singBox != null) {
             Log.i(TAG, "共享 sing-box URL Test 已启动：nodes=${singBoxNodes.size}")
         }
+        val xrayNodes = nodes.filter {
+            protocolCoreSettings.coreFor(it.type) == ProxyCore.XRAY
+        }
+        val xray = if (xrayNodes.isEmpty()) null else runCatching {
+            XrayUrlTestBatch(appContext, xrayNodes, hysteriaUpMbps, hysteriaDownMbps).start()
+        }.onFailure {
+            Log.w(TAG, "无法启动共享 Xray URL Test，将回退到逐节点测速", it)
+        }.getOrNull()
+        if (xray != null) {
+            Log.i(TAG, "共享 Xray URL Test 已启动：nodes=${xrayNodes.size}")
+        }
         batch = Batch(
             appContext, nodes.associateBy { it.id }, protocolCoreSettings,
-            hysteriaUpMbps, hysteriaDownMbps, singBox
+            hysteriaUpMbps, hysteriaDownMbps, singBox, xray
         )
         StartResult(nodes)
     }
@@ -59,8 +70,13 @@ object UrlTestManager {
     suspend fun testNode(node: Node, url: String, timeoutMs: Long): ProbeResult? = withContext(Dispatchers.IO) {
         val active = batch ?: return@withContext null
         if (node.id !in active.nodes) return@withContext ProbeResult(-2, false)
-        if (active.settings.coreFor(node.type) == ProxyCore.SING_BOX) {
-            active.singBox?.let { return@withContext it.testNode(node, url, timeoutMs) }
+        when (active.settings.coreFor(node.type)) {
+            ProxyCore.SING_BOX -> active.singBox?.let {
+                return@withContext it.testNode(node, url, timeoutMs)
+            }
+            ProxyCore.XRAY -> active.xray?.let {
+                return@withContext it.testNode(node, url, timeoutMs)
+            }
         }
 
         perNodeRuntimePermits.withPermit {
@@ -76,13 +92,7 @@ object UrlTestManager {
                 }
                 if (withTimeoutOrNull(20_000) { created.start() } != true) return@withContext ProbeResult(-2, false)
                 if (batch !== active) return@withContext ProbeResult(-2, false)
-                val result = Socks5HttpProbe.measureLatency(
-                    created.endpoint,
-                    url,
-                    timeoutMs.coerceIn(500L, 60_000L)
-                )
-                if (result.statusCode in 200..399) ProbeResult(result.delayMs, false)
-                else ProbeResult(-2, result.statusCode == 503 || result.statusCode == 504)
+                probeEndpoint(created.endpoint, url, timeoutMs)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -111,6 +121,24 @@ object UrlTestManager {
         synchronized(sessions) { sessions.toList() }.forEach(::stopSafely)
         sessions.clear()
         active?.singBox?.close()
+        active?.xray?.close()
+    }
+
+    /** 双核心统一使用 HEAD、相同截止时间和相同 HTTP 状态判定。 */
+    internal fun probeEndpoint(
+        endpoint: LocalSocksEndpoint,
+        url: String,
+        timeoutMs: Long
+    ): ProbeResult = try {
+        val result = Socks5HttpProbe.measureLatency(
+            endpoint,
+            url,
+            timeoutMs.coerceIn(500L, 60_000L)
+        )
+        if (result.statusCode in 200..399) ProbeResult(result.delayMs, false)
+        else ProbeResult(-2, result.statusCode == 503 || result.statusCode == 504)
+    } catch (_: Exception) {
+        ProbeResult(-2, true)
     }
 
     private const val TAG = "UrlTestManager"

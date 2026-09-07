@@ -71,6 +71,27 @@ class XrayVpnConfigTest {
         assertFalse(result.has("dns"))
     }
 
+    @Test fun batchUrlTestMapsEachSocksInboundToItsOwnOutbound() {
+        val second = base().apply {
+            getAsJsonArray("inbounds")[0].asJsonObject.addProperty("port", 20801)
+            getAsJsonArray("outbounds")[0].asJsonObject
+                .getAsJsonObject("settings").getAsJsonArray("servers")[0].asJsonObject
+                .addProperty("address", "127.0.0.2")
+        }
+        val result = JsonParser.parseString(
+            XrayVpnConfig.composeUrlTestBatch(listOf(base(), second))
+        ).asJsonObject
+
+        val inbounds = result.getAsJsonArray("inbounds").map { it.asJsonObject }
+        val outbounds = result.getAsJsonArray("outbounds").map { it.asJsonObject }
+        val rules = result.getAsJsonObject("routing").getAsJsonArray("rules").map { it.asJsonObject }
+        assertEquals(listOf(20800, 20801), inbounds.map { it.get("port").asInt })
+        assertEquals(listOf("urltest-in-0", "urltest-in-1"), inbounds.map { it.get("tag").asString })
+        assertEquals(listOf("urltest-out-0", "urltest-out-1"), outbounds.map { it.get("tag").asString })
+        assertEquals("urltest-in-1", rules[1].getAsJsonArray("inboundTag")[0].asString)
+        assertEquals("urltest-out-1", rules[1].get("outboundTag").asString)
+    }
+
     @Test fun smartModeRequiresExplicitRuleResources() {
         try {
             XrayVpnConfig.compose(base(), request(ProxyMode.SMART, IPv6RoutingMode.DISABLED))
