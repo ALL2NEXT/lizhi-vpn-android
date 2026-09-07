@@ -16,7 +16,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.ProxyCore
-import xyz.a202132.app.data.model.UrlTestMode
 
 /** 通过临时节点代理，以多条独立连接在固定计时窗口内统计下载流量。 */
 internal class NodeDownloadBandwidthTester(private val context: Context) {
@@ -26,8 +25,7 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         durationMs: Long,
         hysteriaUpMbps: Int,
         hysteriaDownMbps: Int,
-        core: ProxyCore,
-        mode: UrlTestMode
+        core: ProxyCore
     ): Float = withContext(Dispatchers.IO) {
         val session = NodeTestProxyManager.createSession(
             context,
@@ -50,9 +48,8 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         try {
             val request = Request.Builder().url(downloadUrl).build()
             val effectiveDurationMs = durationMs.coerceAtLeast(MIN_DURATION_MS)
-            val warmUpMs = if (mode == UrlTestMode.WARM) WARM_UP_DURATION_MS else 0L
             val startedAt = System.nanoTime()
-            val measuredAt = startedAt + warmUpMs * NANOS_PER_MILLISECOND
+            val measuredAt = startedAt + WARM_UP_DURATION_MS * NANOS_PER_MILLISECOND
             val deadline = measuredAt + effectiveDurationMs * NANOS_PER_MILLISECOND
 
             val samples = coroutineScope {
@@ -73,7 +70,7 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
             Log.d(
                 TAG,
                 "Download bandwidth finished: node=${node.id}, streams=$DOWNLOAD_STREAM_COUNT, " +
-                    "warmUpMs=$warmUpMs, bytes=$totalBytes, speedMbps=$speedMbps"
+                    "warmUpMs=$WARM_UP_DURATION_MS, bytes=$totalBytes, speedMbps=$speedMbps"
             )
             speedMbps
         } catch (cancelled: CancellationException) {
@@ -97,7 +94,7 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         deadline: Long
     ): DownloadSample {
         var totalBytes = 0L
-        // 文件提前下载完后继续请求；暖模式在同一连接上先传输，但预热流量不计入结果。
+        // 文件提前下载完后继续请求；同一连接先预热传输，但预热流量不计入结果。
         while (System.nanoTime() < deadline) {
             val call = client.newCall(request)
             call.timeout().timeout(remainingMs(deadline), TimeUnit.MILLISECONDS)

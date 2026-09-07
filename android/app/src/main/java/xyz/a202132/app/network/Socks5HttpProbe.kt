@@ -3,7 +3,6 @@ package xyz.a202132.app.network
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import xyz.a202132.app.core.LocalSocksEndpoint
-import xyz.a202132.app.data.model.UrlTestMode
 import java.io.BufferedInputStream
 import java.io.EOFException
 import java.io.InputStream
@@ -32,22 +31,9 @@ internal object Socks5HttpProbe {
     fun measureLatency(
         endpoint: LocalSocksEndpoint,
         targetUrl: String,
-        timeoutMs: Long,
-        mode: UrlTestMode = UrlTestMode.COLD
-    ): Result = when (mode) {
-        UrlTestMode.COLD -> execute(endpoint, targetUrl, timeoutMs, "HEAD")
-        UrlTestMode.WARM -> measureWarmLatency(endpoint, targetUrl, timeoutMs)
-    }
-
-    /**
-     * 通过同一 HTTP 客户端连续请求两次：第一次建立并预热隧道，第二次只统计暖连接首包。
-     * 这与 NekoBox/v2rayNG 的常规显示口径接近，同时仍使用统一的总截止时间。
-     */
-    private fun measureWarmLatency(
-        endpoint: LocalSocksEndpoint,
-        targetUrl: String,
         timeoutMs: Long
     ): Result {
+        // 同一客户端连续请求两次：第一次建立并预热隧道，第二次只统计暖连接首包。
         require(endpoint.credentials == null) { "暖连接测速仅支持应用内部免认证 SOCKS 入站" }
         val effectiveTimeoutMs = timeoutMs.coerceIn(1L, 60_000L)
         val deadline = System.nanoTime() + effectiveTimeoutMs * NANOS_PER_MILLISECOND

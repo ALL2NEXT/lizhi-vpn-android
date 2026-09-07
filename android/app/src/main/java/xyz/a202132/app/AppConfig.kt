@@ -3,7 +3,6 @@ package xyz.a202132.app
 import android.content.Context
 import java.net.URI
 import xyz.a202132.app.data.model.BandwidthTestTargets
-import xyz.a202132.app.data.model.UrlTestMode
 import xyz.a202132.app.data.model.UrlTestTargets
 
 /**
@@ -79,11 +78,10 @@ object AppConfig {
     const val TCPING_TEST_TIMEOUT = 1000L // TCPing 超时（毫秒）
     
     const val URL_TEST_URL = UrlTestTargets.DEFAULT_URL // URL Test 默认测试 URL
-    val URL_TEST_MODE = UrlTestMode.COLD // 默认保留完整冷连接延迟口径
     const val URL_TEST_TIMEOUT = 3000L // URL Test 超时（毫秒），兼顾移动网络抖动与批量等待时间
     const val URL_TEST_RETRY_COUNT = 1 // URL Test 自动重试次数，仅对503/504或异常生效
     const val URL_TEST_RECHECK_TOP_COUNT = 5 // 首轮最快节点进入稳态复测的数量
-    const val URL_TEST_RECHECK_ATTEMPTS = 2 // 每个优胜节点额外建立冷连接复测的次数
+    const val URL_TEST_RECHECK_ATTEMPTS = 2 // 每个优胜节点额外执行暖连接复测的次数
 
     // 智能连接候选比例
     const val SMART_CONNECT_TCPING_PERCENT = 100

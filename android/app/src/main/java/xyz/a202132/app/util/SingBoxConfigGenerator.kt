@@ -291,7 +291,7 @@ class SingBoxConfigGenerator {
     ): String {
         require(nodes.isNotEmpty()) { "URL Test 批次至少需要一个节点" }
         require(nodes.size == endpoints.size) { "节点与 SOCKS 入站数量不一致" }
-        // SOCKS 入站由应用逐个建立冷连接并执行同一 HTTP 探测，不再依赖 Clash API。
+        // 应用通过每个节点独立的 SOCKS 入站执行同一 HTTP 探测，不再依赖 Clash API。
         config.remove("experimental")
         config.add("inbounds", JsonArray().apply {
             endpoints.forEachIndexed { index, endpoint ->

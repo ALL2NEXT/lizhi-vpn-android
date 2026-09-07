@@ -11,7 +11,6 @@ import xyz.a202132.app.core.PortReservation
 import xyz.a202132.app.core.xray.XrayNativeSession
 import xyz.a202132.app.core.xray.XrayVpnConfig
 import xyz.a202132.app.data.model.Node
-import xyz.a202132.app.data.model.UrlTestMode
 
 /** 一个 URL Test 批次内的全部 Xray 节点共享一个原生进程。 */
 internal class XrayUrlTestBatch(
@@ -55,15 +54,14 @@ internal class XrayUrlTestBatch(
     suspend fun testNode(
         node: Node,
         targetUrl: String,
-        timeoutMs: Long,
-        mode: UrlTestMode
+        timeoutMs: Long
     ): UrlTestManager.ProbeResult =
         withContext(Dispatchers.IO) {
             val endpoint = endpoints[node.id]
             if (closed.get() || endpoint == null) {
                 return@withContext UrlTestManager.ProbeResult(-2, false)
             }
-            UrlTestManager.probeEndpoint(endpoint, targetUrl, timeoutMs, mode)
+            UrlTestManager.probeEndpoint(endpoint, targetUrl, timeoutMs)
         }
 
     override fun close() {

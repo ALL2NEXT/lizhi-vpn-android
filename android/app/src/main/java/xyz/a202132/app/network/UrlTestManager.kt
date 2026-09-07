@@ -12,7 +12,6 @@ import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyCore
-import xyz.a202132.app.data.model.UrlTestMode
 import java.util.Collections
 
 /** 按需启动有界并发测速；同一内核的节点共享进程，每个节点使用独立 SOCKS 入站。 */
@@ -71,17 +70,16 @@ object UrlTestManager {
     suspend fun testNode(
         node: Node,
         url: String,
-        timeoutMs: Long,
-        mode: UrlTestMode
+        timeoutMs: Long
     ): ProbeResult? = withContext(Dispatchers.IO) {
         val active = batch ?: return@withContext null
         if (node.id !in active.nodes) return@withContext ProbeResult(-2, false)
         when (active.settings.coreFor(node.type)) {
             ProxyCore.SING_BOX -> active.singBox?.let {
-                return@withContext it.testNode(node, url, timeoutMs, mode)
+                return@withContext it.testNode(node, url, timeoutMs)
             }
             ProxyCore.XRAY -> active.xray?.let {
-                return@withContext it.testNode(node, url, timeoutMs, mode)
+                return@withContext it.testNode(node, url, timeoutMs)
             }
         }
 
@@ -98,7 +96,7 @@ object UrlTestManager {
                 }
                 if (withTimeoutOrNull(20_000) { created.start() } != true) return@withContext ProbeResult(-2, false)
                 if (batch !== active) return@withContext ProbeResult(-2, false)
-                probeEndpoint(created.endpoint, url, timeoutMs, mode)
+                probeEndpoint(created.endpoint, url, timeoutMs)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -130,18 +128,16 @@ object UrlTestManager {
         active?.xray?.close()
     }
 
-    /** 双核心统一使用所选冷热模式、相同截止时间和相同 HTTP 状态判定。 */
+    /** 双核心统一使用暖连接测速、相同截止时间和相同 HTTP 状态判定。 */
     internal fun probeEndpoint(
         endpoint: LocalSocksEndpoint,
         url: String,
-        timeoutMs: Long,
-        mode: UrlTestMode
+        timeoutMs: Long
     ): ProbeResult = try {
         val result = Socks5HttpProbe.measureLatency(
             endpoint,
             url,
-            timeoutMs.coerceIn(500L, 60_000L),
-            mode
+            timeoutMs.coerceIn(500L, 60_000L)
         )
         if (result.statusCode in 200..399) ProbeResult(result.delayMs, false)
         else ProbeResult(-2, result.statusCode == 503 || result.statusCode == 504)

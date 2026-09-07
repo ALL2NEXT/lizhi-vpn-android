@@ -5,7 +5,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.core.SocksCredentials
-import xyz.a202132.app.data.model.UrlTestMode
 import java.io.BufferedInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -33,33 +32,7 @@ class Socks5HttpProbeTest {
     }
 
     @Test
-    fun `latency probe uses head and returns elapsed time`() {
-        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
-            val failure = AtomicReference<Throwable?>()
-            val worker = thread(name = "fake-socks5-latency") {
-                runCatching { serveOnce(server, "HEAD") }.onFailure(failure::set)
-            }
-            val endpoint = LocalSocksEndpoint(
-                "127.0.0.1",
-                server.localPort,
-                SocksCredentials("vpn", "secret")
-            )
-
-            val result = Socks5HttpProbe.measureLatency(
-                endpoint,
-                "http://example.com/generate_204",
-                2_000
-            )
-
-            assertEquals(204, result.statusCode)
-            assertTrue(result.delayMs > 0)
-            worker.join(2_000)
-            failure.get()?.let { throw AssertionError("Fake SOCKS5 server failed", it) }
-        }
-    }
-
-    @Test
-    fun `warm latency probe reuses one socks tunnel for two get requests`() {
+    fun `latency probe reuses one socks tunnel for two get requests`() {
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
             val failure = AtomicReference<Throwable?>()
             val worker = thread(name = "fake-socks5-warm-latency") {
@@ -70,8 +43,7 @@ class Socks5HttpProbeTest {
             val result = Socks5HttpProbe.measureLatency(
                 endpoint,
                 "http://warm.test/generate_204",
-                2_000,
-                UrlTestMode.WARM
+                2_000
             )
 
             assertEquals(204, result.statusCode)

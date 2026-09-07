@@ -4,7 +4,6 @@ import android.util.Log
 import kotlinx.coroutines.*
 import xyz.a202132.app.BuildConfig
 import xyz.a202132.app.data.model.Node
-import xyz.a202132.app.data.model.UrlTestMode
 import xyz.a202132.app.util.parallelMapOrdered
 
 /**
@@ -132,10 +131,9 @@ class LatencyTester {
     private suspend fun urlTestNodeOnce(
         node: Node,
         targetUrl: String,
-        timeoutMs: Long,
-        mode: UrlTestMode
+        timeoutMs: Long
     ): UrlTestAttemptResult {
-        val probe = checkNotNull(UrlTestManager.testNode(node, targetUrl, timeoutMs, mode)) {
+        val probe = checkNotNull(UrlTestManager.testNode(node, targetUrl, timeoutMs)) {
             "Native probe batch has not started"
         }
         return UrlTestAttemptResult(LatencyResult(node.id, probe.delayMs, probe.delayMs > 0), probe.retryable)
@@ -145,12 +143,11 @@ class LatencyTester {
         node: Node,
         targetUrl: String,
         timeoutMs: Long,
-        retryCount: Int,
-        mode: UrlTestMode
+        retryCount: Int
     ): LatencyResult = withContext(Dispatchers.IO) {
         var lastResult = LatencyResult(node.id, -2, false)
         repeat(retryCount.coerceAtLeast(0) + 1) { attempt ->
-            val attemptResult = urlTestNodeOnce(node, targetUrl, timeoutMs, mode)
+            val attemptResult = urlTestNodeOnce(node, targetUrl, timeoutMs)
             lastResult = attemptResult.result
             if (lastResult.isAvailable || !attemptResult.shouldRetry || attempt >= retryCount) {
                 return@withContext lastResult
@@ -167,7 +164,6 @@ class LatencyTester {
         timeoutMs: Long = xyz.a202132.app.AppConfig.URL_TEST_TIMEOUT,
         retryCount: Int = xyz.a202132.app.AppConfig.URL_TEST_RETRY_COUNT,
         concurrency: Int = xyz.a202132.app.AppConfig.URL_TEST_CONCURRENCY,
-        mode: UrlTestMode = xyz.a202132.app.AppConfig.URL_TEST_MODE,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyResult> = withContext(Dispatchers.IO) {
         Log.d(tag, "========== URL Test START: ${nodes.size} nodes ==========")
@@ -177,7 +173,7 @@ class LatencyTester {
         val totalCount = nodes.size
 
         val firstPass = parallelMapOrdered(nodes, concurrency) { node ->
-            val result = urlTestNode(node, targetUrl, timeoutMs, retryCount, mode)
+            val result = urlTestNode(node, targetUrl, timeoutMs, retryCount)
             val current = completedCount.incrementAndGet()
             reportProgress(current, totalCount, lastProgressAt, onProgress)
             result
@@ -192,11 +188,11 @@ class LatencyTester {
         ) {
             emptyMap()
         } else {
-            Log.d(tag, "URL Test rechecking ${finalists.size} finalists with cold connections")
+            Log.d(tag, "URL Test rechecking ${finalists.size} finalists with warm connections")
             parallelMapOrdered(finalists, concurrency.coerceAtMost(finalists.size)) { node ->
                 node.id to buildList {
                     repeat(xyz.a202132.app.AppConfig.URL_TEST_RECHECK_ATTEMPTS) {
-                        add(urlTestNode(node, targetUrl, timeoutMs, retryCount, mode))
+                        add(urlTestNode(node, targetUrl, timeoutMs, retryCount))
                     }
                 }
             }.toMap()

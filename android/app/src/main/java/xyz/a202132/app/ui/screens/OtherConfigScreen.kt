@@ -45,7 +45,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
-import xyz.a202132.app.data.model.UrlTestMode
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -57,7 +56,6 @@ fun OtherConfigScreen(
     onBack: () -> Unit
 ) {
     val urlTestUrl by viewModel.urlTestUrl.collectAsStateWithLifecycle()
-    val urlTestMode by viewModel.urlTestMode.collectAsStateWithLifecycle()
     val speedTestDownloadUrl by viewModel.speedTestDownloadUrl.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
@@ -179,23 +177,7 @@ fun OtherConfigScreen(
                 title = "204 测速地址"
             ) {
                 Text(
-                    text = "延迟测速模式",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                MultiPositionSwitch(
-                    options = UrlTestMode.entries.map(UrlTestMode::displayName),
-                    selectedIndex = urlTestMode.ordinal,
-                    onOptionSelected = { index ->
-                        UrlTestMode.entries.getOrNull(index)?.let(viewModel::setUrlTestMode)
-                    }
-                )
-                Text(
-                    text = when (urlTestMode) {
-                        UrlTestMode.COLD -> "冷连接：统计代理握手、目标 TCP/TLS 和 HTTP 首包的完整耗时。"
-                        UrlTestMode.WARM -> "暖连接：首次请求用于预热，仅统计同一连接第二次请求的首包耗时，更接近 NekoBox/v2rayNG。"
-                    },
+                    text = "延迟测速固定使用暖连接：首次请求用于预热，仅统计同一连接第二次请求的首包耗时。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -303,7 +285,7 @@ fun OtherConfigScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "默认使用 Cloudflare 25 MB；带宽测速使用 4 条并发流。暖连接模式会额外预热 1 秒，预热流量不计入结果。",
+                    text = "默认使用 Cloudflare 25 MB；带宽测速使用 4 条并发流，并预热 1 秒，预热流量不计入结果。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
