@@ -24,7 +24,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.HomeConnectionAction
-import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.network.NetworkClient
@@ -64,8 +63,6 @@ fun MainScreen(
     
     // Collect状态
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
-    val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
-    val favoriteSourceNodeIds by viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val homeClickAction by viewModel.homeClickAction.collectAsStateWithLifecycle()
     val homeLongPressAction by viewModel.homeLongPressAction.collectAsStateWithLifecycle()
@@ -195,34 +192,20 @@ fun MainScreen(
                         .padding(bottom = 86.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(64.dp))
                 
-                // 主页复用节点列表卡片，并在连接期间明确标出实际节点所属订阅组。
-                currentNode?.let { node ->
-                    if (vpnState != VpnState.DISCONNECTED) {
-                        Text(
-                            text = "当前连接订阅组：${node.getConnectionGroupName()}",
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                    NodeListItem(
-                        node = node,
-                        isSelected = node.id == selectedNodeId,
-                        isFavorite = node.source == NodeSource.FAVORITE ||
-                            favoriteSourceNodeIds.contains(node.id),
-                        enabled = !isTesting,
-                        displaySettings = nodeDisplaySettings,
-                        coreSettings = protocolCoreSettings,
-                        onClick = onOpenNodeList,
-                        onToggleFavorite = { viewModel.toggleFavoriteNode(node) }
-                    )
-                }
+                // 主页直接展示设备、加密隧道、节点服务器与互联网之间的链路。
+                ConnectionRouteOverview(
+                    node = currentNode,
+                    vpnState = vpnState,
+                    isTesting = isTesting,
+                    enabled = !isTesting,
+                    displaySettings = nodeDisplaySettings,
+                    coreSettings = protocolCoreSettings,
+                    onNodeClick = onOpenNodeList
+                )
                 
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(0.7f))
                 
                 // 连接按钮
                 ConnectButton(
