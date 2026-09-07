@@ -68,7 +68,6 @@ fun OtherConfigScreen(
     var urlTestUrlInput by remember(urlTestUrl) { mutableStateOf(urlTestUrl) }
     var showUrlTestPresets by remember { mutableStateOf(false) }
     var speedTestDownloadUrlInput by remember(speedTestDownloadUrl) { mutableStateOf(speedTestDownloadUrl) }
-    var showBandwidthPresets by remember { mutableStateOf(false) }
 
     LaunchedEffect(speedTestDownloadUrl) {
         speedTestDownloadUrlInput = speedTestDownloadUrl
@@ -289,38 +288,8 @@ fun OtherConfigScreen(
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    Box {
-                        TextButton(onClick = { showBandwidthPresets = true }) {
-                            Text("选择预设")
-                        }
-                        DropdownMenu(
-                            expanded = showBandwidthPresets,
-                            onDismissRequest = { showBandwidthPresets = false }
-                        ) {
-                            BandwidthTestTargets.PRESETS.forEach { preset ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(preset.name)
-                                            Text(
-                                                text = preset.url,
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        speedTestDownloadUrlInput = preset.url
-                                        viewModel.setSpeedTestDownloadUrl(preset.url)
-                                        showBandwidthPresets = false
-                                    }
-                                )
-                            }
-                        }
-                    }
                     Button(
                         onClick = { normalizedBandwidthUrl?.let(viewModel::setSpeedTestDownloadUrl) },
                         enabled = normalizedBandwidthUrl != null && normalizedBandwidthUrl != speedTestDownloadUrl
@@ -334,7 +303,7 @@ fun OtherConfigScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "内置 Cloudflare 5 MB 和 25 MB 两个预设，也可以手动填写完整 URL。",
+                    text = "默认使用 Cloudflare 25 MB；带宽测速使用 4 条并发流。暖连接模式会额外预热 1 秒，预热流量不计入结果。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

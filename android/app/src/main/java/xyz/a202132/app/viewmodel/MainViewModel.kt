@@ -1912,7 +1912,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             durationMs,
             hysteriaUpMbps.value,
             hysteriaDownMbps.value,
-            protocolCoreSettings.value.coreFor(node.type)
+            protocolCoreSettings.value.coreFor(node.type),
+            urlTestMode.value
         )
 
 }

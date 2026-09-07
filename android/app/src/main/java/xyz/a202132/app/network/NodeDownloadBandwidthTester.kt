@@ -6,14 +6,19 @@ import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.ProxyCore
+import xyz.a202132.app.data.model.UrlTestMode
 
-/** 通过临时节点代理，在固定时长内统计下载流量。 */
+/** 通过临时节点代理，以多条独立连接在固定计时窗口内统计下载流量。 */
 internal class NodeDownloadBandwidthTester(private val context: Context) {
     suspend fun test(
         node: Node,
@@ -21,7 +26,8 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         durationMs: Long,
         hysteriaUpMbps: Int,
         hysteriaDownMbps: Int,
-        core: ProxyCore
+        core: ProxyCore,
+        mode: UrlTestMode
     ): Float = withContext(Dispatchers.IO) {
         val session = NodeTestProxyManager.createSession(
             context,
@@ -32,60 +38,105 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         )
         if (!session.start()) return@withContext 0f
 
-        try {
-            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", session.socksPort))
-            val client = NetworkClient.withUserAgent(OkHttpClient.Builder())
+        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", session.socksPort))
+        // 每条测速流使用独立连接池，确保 HTTP/2 也不会把四条流合并到同一条 TCP 连接。
+        val clients = List(DOWNLOAD_STREAM_COUNT) {
+            NetworkClient.withUserAgent(OkHttpClient.Builder())
                 .proxy(proxy)
                 .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .readTimeout(READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .build()
+        }
+        try {
             val request = Request.Builder().url(downloadUrl).build()
             val effectiveDurationMs = durationMs.coerceAtLeast(MIN_DURATION_MS)
-            val started = System.nanoTime()
-            val deadline = started + effectiveDurationMs * NANOS_PER_MILLISECOND
-            var total = 0L
+            val warmUpMs = if (mode == UrlTestMode.WARM) WARM_UP_DURATION_MS else 0L
+            val startedAt = System.nanoTime()
+            val measuredAt = startedAt + warmUpMs * NANOS_PER_MILLISECOND
+            val deadline = measuredAt + effectiveDurationMs * NANOS_PER_MILLISECOND
 
-            // 小文件下载完后继续发起请求，保证测速窗口由“时长”而不是文件大小决定。
-            while (System.nanoTime() < deadline) {
-                val call = client.newCall(request)
-                call.timeout().timeout(remainingMs(deadline), TimeUnit.MILLISECONDS)
-                try {
-                    call.execute().use { response ->
-                        if (!response.isSuccessful) return@withContext 0f
-                        val source = response.body?.source()
-                            ?: throw IOException("ResponseBody is null")
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        while (System.nanoTime() < deadline) {
-                            val read = source.read(buffer)
-                            if (read == -1) break
-                            total += read
-                        }
+            val samples = coroutineScope {
+                clients.map { client ->
+                    async(Dispatchers.IO) {
+                        downloadStream(client, request, measuredAt, deadline)
                     }
-                } catch (error: IOException) {
-                    if (System.nanoTime() < deadline) throw error
-                }
+                }.awaitAll()
             }
-
-            val elapsedNanos = ((System.nanoTime() - started)
-                .coerceAtMost(effectiveDurationMs * NANOS_PER_MILLISECOND))
-                .coerceAtLeast(NANOS_PER_MILLISECOND)
-            (total * 8.0 / elapsedNanos * 1_000_000_000.0 / 1_000_000.0).toFloat()
+            // 如果所有连接都在正式窗口结束前失败，不用残缺样本推算带宽。
+            if (samples.none(DownloadSample::completedWindow)) return@withContext 0f
+            val totalBytes = samples.sumOf(DownloadSample::bytes)
+            val elapsedNanos = ((System.nanoTime().coerceAtMost(deadline) - measuredAt)
+                .coerceAtLeast(NANOS_PER_MILLISECOND))
+            val speedMbps = (
+                totalBytes * 8.0 / elapsedNanos * NANOS_PER_SECOND / BITS_PER_MEGABIT
+            ).toFloat()
+            Log.d(
+                TAG,
+                "Download bandwidth finished: node=${node.id}, streams=$DOWNLOAD_STREAM_COUNT, " +
+                    "warmUpMs=$warmUpMs, bytes=$totalBytes, speedMbps=$speedMbps"
+            )
+            speedMbps
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             Log.e(TAG, "Download bandwidth test failed for ${node.getDisplayName()}", error)
             0f
         } finally {
+            clients.forEach { client ->
+                client.connectionPool.evictAll()
+                client.dispatcher.executorService.shutdown()
+            }
             session.stop()
         }
+    }
+
+    private fun downloadStream(
+        client: OkHttpClient,
+        request: Request,
+        measuredAt: Long,
+        deadline: Long
+    ): DownloadSample {
+        var totalBytes = 0L
+        // 文件提前下载完后继续请求；暖模式在同一连接上先传输，但预热流量不计入结果。
+        while (System.nanoTime() < deadline) {
+            val call = client.newCall(request)
+            call.timeout().timeout(remainingMs(deadline), TimeUnit.MILLISECONDS)
+            try {
+                call.execute().use { response ->
+                    if (!response.isSuccessful) return DownloadSample(totalBytes, false)
+                    val source = response.body?.source()
+                        ?: throw IOException("ResponseBody is null")
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (System.nanoTime() < deadline) {
+                        val read = source.read(buffer)
+                        if (read == -1) break
+                        if (System.nanoTime() >= measuredAt) totalBytes += read
+                    }
+                }
+            } catch (error: IOException) {
+                if (System.nanoTime() < deadline) {
+                    Log.d(TAG, "Download stream ended early: ${error.javaClass.simpleName}")
+                    return DownloadSample(totalBytes, false)
+                }
+            }
+        }
+        return DownloadSample(totalBytes, true)
     }
 
     private fun remainingMs(deadline: Long): Long =
         ((deadline - System.nanoTime()) / NANOS_PER_MILLISECOND).coerceAtLeast(1L)
 
+    private data class DownloadSample(val bytes: Long, val completedWindow: Boolean)
+
     private companion object {
         const val TAG = "NodeBandwidthTester"
+        const val DOWNLOAD_STREAM_COUNT = 4
+        const val WARM_UP_DURATION_MS = 1_000L
         const val MIN_DURATION_MS = 1_000L
         const val CONNECT_TIMEOUT_MS = 15_000L
         const val READ_TIMEOUT_MS = 60_000L
         const val NANOS_PER_MILLISECOND = 1_000_000L
+        const val NANOS_PER_SECOND = 1_000_000_000.0
+        const val BITS_PER_MEGABIT = 1_000_000.0
     }
 }

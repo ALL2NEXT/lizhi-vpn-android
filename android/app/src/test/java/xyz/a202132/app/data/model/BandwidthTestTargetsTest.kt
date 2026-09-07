@@ -1,23 +1,15 @@
 package xyz.a202132.app.data.model
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BandwidthTestTargetsTest {
     @Test
-    fun `contains only Cloudflare 5 and 25 MB presets`() {
+    fun `uses Cloudflare 25 MB as the only built in default`() {
         assertEquals(
-            listOf(
-                BandwidthTestTargets.DEFAULT_URL,
-                "https://speed.cloudflare.com/__down?bytes=25000000"
-            ),
-            BandwidthTestTargets.PRESETS.map(BandwidthTestPreset::url)
+            "https://speed.cloudflare.com/__down?bytes=25000000",
+            BandwidthTestTargets.DEFAULT_URL
         )
-        assertTrue(
-            BandwidthTestTargets.PRESETS.all { preset ->
-                BandwidthTestTargets.normalize(preset.url) == preset.url
-            }
-        )
+        assertEquals(BandwidthTestTargets.DEFAULT_URL, BandwidthTestTargets.normalize(BandwidthTestTargets.DEFAULT_URL))
     }
 }
