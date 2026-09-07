@@ -9,7 +9,7 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.ProxyCore
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** VPN and probes use exactly the same registered backend and protocol compiler. */
+/** VPN 与测速复用同一套内核注册表和协议配置生成逻辑。 */
 object NodeTestProxyManager {
     class Session(
         private val context: Context,
@@ -19,7 +19,9 @@ object NodeTestProxyManager {
         private val core: ProxyCore
     ) {
         private val reservation = PortReservation()
-        val socksPort = reservation.port
+        // 显式保留完整端点，确保测速请求和内核实际监听地址始终一致。
+        val endpoint = LocalSocksEndpoint.unauthenticated(reservation.port)
+        val socksPort = endpoint.port
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val stopped = AtomicBoolean()
         private val starting = AtomicBoolean()
@@ -29,7 +31,7 @@ object NodeTestProxyManager {
             if (stopped.get() || !starting.compareAndSet(false, true)) return false
             return try {
                 val backend = CoreBackends.registry.resolve(core, node)
-                val request = CoreRequest(node, socksPort, hysteriaUpMbps = hysteriaUpMbps, hysteriaDownMbps = hysteriaDownMbps)
+                val request = CoreRequest(node, endpoint, hysteriaUpMbps = hysteriaUpMbps, hysteriaDownMbps = hysteriaDownMbps)
                 val prepared = backend.prepare(context, request)
                 currentCoroutineContext().ensureActive()
                 if (stopped.get()) return false

@@ -77,13 +77,14 @@ internal class SingBoxBackend : CoreBackend {
             runCatching { server?.closeService() }
             runCatching { server?.close() }
             server = null
-            // The directory is generated locally for this session; no user files are stored here.
+            // 该目录仅供当前会话临时使用，不包含用户文件。
             directory.listFiles()?.forEach { if (it.isFile) it.delete() }
             directory.delete()
         }
     }
 
-    private companion object {
+    // VPN 会话与批量测速必须共用同一把初始化锁，避免并发改写 libbox 全局工作目录。
+    internal companion object {
         val setupLock = Any()
         fun setup(context: Context, directory: File) {
             check(directory.isDirectory || directory.mkdirs())

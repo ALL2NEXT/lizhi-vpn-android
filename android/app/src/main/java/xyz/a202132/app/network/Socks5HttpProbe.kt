@@ -7,18 +7,35 @@ import java.io.InputStream
 import java.net.IDN
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.net.URI
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
-/** Small authenticated SOCKS5 client used only for VPN-path health probes. */
+/** 用于健康检查和延迟测试的轻量 SOCKS5 客户端，支持用户名密码认证。 */
 internal object Socks5HttpProbe {
+    data class Result(val statusCode: Int, val delayMs: Int)
+
     fun hasStatus(
         endpoint: LocalSocksEndpoint,
         targetUrl: String,
         expectedStatus: Int,
         timeoutMs: Long
-    ): Boolean {
+    ): Boolean = execute(endpoint, targetUrl, timeoutMs, "GET").statusCode == expectedStatus
+
+    /** 使用单一递减截止时间且不跟随重定向，避免分阶段超时叠加导致延迟虚高。 */
+    fun measureLatency(
+        endpoint: LocalSocksEndpoint,
+        targetUrl: String,
+        timeoutMs: Long
+    ): Result = execute(endpoint, targetUrl, timeoutMs, "HEAD")
+
+    private fun execute(
+        endpoint: LocalSocksEndpoint,
+        targetUrl: String,
+        timeoutMs: Long,
+        method: String
+    ): Result {
         val target = URI(targetUrl)
         val host = requireNotNull(target.host) { "Probe URL has no host" }
         val secure = when (target.scheme?.lowercase()) {
@@ -27,18 +44,20 @@ internal object Socks5HttpProbe {
             else -> error("Unsupported probe URL scheme: ${target.scheme}")
         }
         val port = if (target.port >= 0) target.port else if (secure) 443 else 80
-        val timeout = timeoutMs.coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
+        val timeoutNanos = timeoutMs.coerceIn(1, Int.MAX_VALUE.toLong()) * NANOS_PER_MILLISECOND
+        val startedAt = System.nanoTime()
+        val deadline = startedAt + timeoutNanos
 
         val socket = Socket()
         try {
-            socket.soTimeout = timeout
-            socket.connect(InetSocketAddress(endpoint.address, endpoint.port), timeout)
+            socket.soTimeout = remainingMillis(deadline)
+            socket.connect(InetSocketAddress(endpoint.address, endpoint.port), remainingMillis(deadline))
             negotiate(socket, endpoint, host, port)
 
             val transport = if (secure) {
                 ((SSLSocketFactory.getDefault() as SSLSocketFactory)
                     .createSocket(socket, host, port, true) as SSLSocket).apply {
-                    soTimeout = timeout
+                    soTimeout = remainingMillis(deadline)
                     sslParameters = sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
                     startHandshake()
                 }
@@ -46,8 +65,14 @@ internal object Socks5HttpProbe {
                 socket
             }
             transport.use {
-                writeRequest(it, target, host, port, secure)
-                return readStatus(it) == expectedStatus
+                it.soTimeout = remainingMillis(deadline)
+                writeRequest(it, target, host, port, secure, method)
+                val statusCode = readStatus(it)
+                val completedAt = System.nanoTime()
+                if (completedAt > deadline) throw SocketTimeoutException("HTTP 探测超时")
+                val delayMs = ((completedAt - startedAt) / NANOS_PER_MILLISECOND)
+                    .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+                return Result(statusCode, delayMs)
             }
         } finally {
             runCatching { socket.close() }
@@ -55,8 +80,7 @@ internal object Socks5HttpProbe {
     }
 
     private fun negotiate(socket: Socket, endpoint: LocalSocksEndpoint, host: String, port: Int) {
-        // Do not buffer here: bytes read ahead of the SOCKS response would be lost
-        // when the socket is handed to TLS/HTTP below.
+        // 此处不能使用缓冲流，否则预读的 SOCKS 响应字节在套接字交给 TLS/HTTP 后会丢失。
         val input = socket.getInputStream()
         val output = socket.getOutputStream()
         val credentials = endpoint.credentials
@@ -103,7 +127,14 @@ internal object Socks5HttpProbe {
         input.readExactly(2)
     }
 
-    private fun writeRequest(socket: Socket, target: URI, host: String, port: Int, secure: Boolean) {
+    private fun writeRequest(
+        socket: Socket,
+        target: URI,
+        host: String,
+        port: Int,
+        secure: Boolean,
+        method: String
+    ) {
         val path = buildString {
             append(target.rawPath?.takeIf { it.isNotEmpty() } ?: "/")
             target.rawQuery?.let { append('?').append(it) }
@@ -111,7 +142,7 @@ internal object Socks5HttpProbe {
         val defaultPort = if (secure) 443 else 80
         val hostHeader = if (port == defaultPort) host else "$host:$port"
         socket.getOutputStream().write(
-            "GET $path HTTP/1.1\r\nHost: $hostHeader\r\nConnection: close\r\nUser-Agent: liuying-vpn-probe\r\n\r\n"
+            "$method $path HTTP/1.1\r\nHost: $hostHeader\r\nConnection: close\r\nUser-Agent: liuying-vpn-probe\r\n\r\n"
                 .toByteArray(Charsets.US_ASCII)
         )
         socket.getOutputStream().flush()
@@ -142,7 +173,15 @@ internal object Socks5HttpProbe {
         return result
     }
 
+    private fun remainingMillis(deadline: Long): Int {
+        val remainingNanos = deadline - System.nanoTime()
+        check(remainingNanos > 0) { "HTTP 探测超时" }
+        return ((remainingNanos + NANOS_PER_MILLISECOND - 1) / NANOS_PER_MILLISECOND)
+            .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+    }
+
     private const val MAX_STATUS_LINE = 8_192
+    private const val NANOS_PER_MILLISECOND = 1_000_000L
     private const val VERSION: Byte = 5
     private const val AUTH_VERSION: Byte = 1
     private const val NO_AUTH: Byte = 0

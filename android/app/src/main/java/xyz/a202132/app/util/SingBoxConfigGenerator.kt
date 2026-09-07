@@ -3,6 +3,7 @@ package xyz.a202132.app.util
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.data.model.Node
@@ -23,8 +24,7 @@ class SingBoxConfigGenerator {
         )
     }
 
-    // Compact JSON reduces allocations and libbox parsing work. The config is
-    // already truncated before debug logging, so pretty printing has no value.
+    // 紧凑 JSON 可以减少内存分配和 libbox 解析开销；调试日志本身会截断配置，无需美化输出。
     private val gson: Gson = Gson()
     
     /**
@@ -258,6 +258,38 @@ class SingBoxConfigGenerator {
         }
         return gson.toJson(config)
     }
+
+    /**
+     * 生成不带自动测速组的批量 URL Test 配置。
+     * 单节点探测由 Clash API 主动触发；若保留自动测速组，核心启动后会立即重复测试全部节点。
+     */
+    fun generateUrlTestBatchConfig(
+        nodes: List<Node>,
+        clashApiPort: Int,
+        hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
+        hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
+    ): String {
+        require(nodes.isNotEmpty()) { "URL Test 批次至少需要一个节点" }
+        val config = JsonParser.parseString(
+            generateUrlTestConfig(
+                nodes = nodes,
+                clashApiPort = clashApiPort,
+                hysteriaUpMbps = hysteriaUpMbps,
+                hysteriaDownMbps = hysteriaDownMbps
+            )
+        ).asJsonObject
+
+        // Clash API 可以直接按出站标签测速，因此无需额外监听入口。
+        config.add("inbounds", JsonArray())
+        val outbounds = config.getAsJsonArray("outbounds")
+        outbounds.set(0, JsonObject().apply {
+            addProperty("type", "selector")
+            addProperty("tag", "auto")
+            add("outbounds", JsonArray().apply { nodes.forEach { add(it.id) } })
+            addProperty("default", nodes.first().id)
+        })
+        return gson.toJson(config)
+    }
     
     private fun createLogConfig(): JsonObject {
         return JsonObject().apply {
@@ -317,7 +349,7 @@ class SingBoxConfigGenerator {
     
     private fun createInbounds(endpoint: LocalSocksEndpoint?): JsonArray {
         return JsonArray().apply {
-            // HEV owns the Android VPN TUN and forwards packets to this loopback SOCKS5 inbound.
+            // HEV 独占 Android VPN TUN，并将数据包转发到这个环回 SOCKS5 入口。
             endpoint?.let { socks ->
                 add(JsonObject().apply {
                     addProperty("type", "socks")
@@ -345,7 +377,7 @@ class SingBoxConfigGenerator {
     ): JsonArray {
         val outbounds = JsonArray()
         
-        // 1. Selector Group (手动选择组)
+        // 1. 手动选择组
         val selectorGroup = JsonObject().apply {
             addProperty("type", "selector")
             addProperty("tag", "proxy")
@@ -359,12 +391,12 @@ class SingBoxConfigGenerator {
         }
         outbounds.add(selectorGroup)
         
-        // 2. Individual Node Outbounds (具体节点)
+        // 2. 各节点独立出站
         nodes.forEach { node ->
             outbounds.add(createNodeOutbound(node, node.id, hysteriaUpMbps, hysteriaDownMbps))
         }
         
-        // 3. Other Outbounds (Direct, Block, DNS)
+        // 3. 其他出站（直连、阻断和 DNS）
         outbounds.add(JsonObject().apply {
             addProperty("type", "direct")
             addProperty("tag", "direct")
@@ -864,13 +896,11 @@ class SingBoxConfigGenerator {
         
         // 1. 劫持 DNS 流量
         rules.add(JsonObject().apply {
-            // HEV forwards every DNS record type unchanged. Match the port so
-            // DNS handling does not depend on protocol sniffing.
+            // HEV 会原样转发所有 DNS 记录类型，因此按端口匹配，避免依赖协议嗅探。
             addProperty("port", 53)
             addProperty("action", "hijack-dns")
         })
-        // With HEV acting as a pure packet data plane, applications connect to
-        // resolved IPs. Recover HTTP/TLS/QUIC domains before SMART rules run.
+        // HEV 仅负责数据面，应用通常连接已解析的 IP；执行智能分流规则前需恢复 HTTP/TLS/QUIC 域名。
         rules.add(JsonObject().apply {
             addProperty("action", "sniff")
         })

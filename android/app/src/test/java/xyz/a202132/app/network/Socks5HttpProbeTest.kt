@@ -17,7 +17,7 @@ class Socks5HttpProbeTest {
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
             val failure = AtomicReference<Throwable?>()
             val worker = thread(name = "fake-socks5") {
-                runCatching { serveOnce(server) }.onFailure(failure::set)
+                runCatching { serveOnce(server, "GET") }.onFailure(failure::set)
             }
             val endpoint = LocalSocksEndpoint(
                 "127.0.0.1",
@@ -31,7 +31,33 @@ class Socks5HttpProbeTest {
         }
     }
 
-    private fun serveOnce(server: ServerSocket) {
+    @Test
+    fun `latency probe uses head and returns elapsed time`() {
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
+            val failure = AtomicReference<Throwable?>()
+            val worker = thread(name = "fake-socks5-latency") {
+                runCatching { serveOnce(server, "HEAD") }.onFailure(failure::set)
+            }
+            val endpoint = LocalSocksEndpoint(
+                "127.0.0.1",
+                server.localPort,
+                SocksCredentials("vpn", "secret")
+            )
+
+            val result = Socks5HttpProbe.measureLatency(
+                endpoint,
+                "http://example.com/generate_204",
+                2_000
+            )
+
+            assertEquals(204, result.statusCode)
+            assertTrue(result.delayMs > 0)
+            worker.join(2_000)
+            failure.get()?.let { throw AssertionError("Fake SOCKS5 server failed", it) }
+        }
+    }
+
+    private fun serveOnce(server: ServerSocket, method: String) {
         server.accept().use { socket ->
             socket.soTimeout = 2_000
             val input = BufferedInputStream(socket.getInputStream())
@@ -65,7 +91,7 @@ class Socks5HttpProbeTest {
                     if (endsWith("\r\n\r\n")) break
                 }
             }
-            assertTrue(request.startsWith("GET /generate_204 HTTP/1.1\r\n"))
+            assertTrue(request.startsWith("$method /generate_204 HTTP/1.1\r\n"))
             output.write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".toByteArray())
             output.flush()
         }
