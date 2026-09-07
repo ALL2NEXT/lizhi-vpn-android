@@ -3,15 +3,13 @@ package xyz.a202132.app.data.model
 /** Android 上用于处理代理协议的运行核心。 */
 enum class ProxyCore(val displayName: String) {
     SING_BOX("sing-box"),
-    XRAY("Xray"),
-    /** Reserved identity; availability is determined by the backend registry. */
-    MIHOMO("Mihomo")
+    XRAY("Xray")
 }
 
 /**
  * 按协议保存核心选择。
  *
- * assignments 支持任意已注册内核；xrayProtocols 保留旧版本偏好迁移。
+ * assignments 保存 sing-box/Xray 的明确选择；xrayProtocols 保留旧版本偏好迁移。
  * 未设置的协议沿用 sing-box 默认值，升级不会静默改变已有选择。
  */
 data class ProtocolCoreSettings(

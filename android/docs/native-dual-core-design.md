@@ -1,6 +1,6 @@
 # Android 多内核中间层
 
-实现日期：2026-09-05 至 2026-09-06。每次 VPN 连接运行一个内核，根据选中节点的协议及已保存的内核偏好选择。当前实现 sing-box、Xray；Mihomo 源码已拉取并固定版本，尚未集成 Android 二进制或适配器。
+实现日期：2026-09-05 至 2026-09-06。每次 VPN 连接运行一个内核，根据选中节点的协议及已保存的内核偏好选择。项目只使用 sing-box 和 Xray 两个代理核心。
 
 ## 架构与选择理由
 
@@ -56,7 +56,7 @@
 
 智能分流使用当前下载的 `geoip-cn.srs` 和 `geosite-cn.srs`，与 sing-box 共用数据源。规则转换仅在源内容 SHA-256 改变时运行，快照写入应用私有目录。下载替换使用同目录原子 rename，避免旧文件删除与新文件落地之间的空窗。
 
-转换器接受 SRS 1–4 中的正向平面域名/IP 集合，拒绝逻辑、反选及其他不能无损转换的条件。快照 schema 1 的 `domains` 使用 `full:`、`domain:`、`keyword:`、`regexp:` 表达匹配类型，`ips` 使用 CIDR；以后 Mihomo 适配器可按匹配类型映射自身配置。以点开头的后缀保留“只匹配子域名”语义，不扩大到根域名。当前内置资源包含 8,528 条域名匹配、7,638 个 IP 前缀。
+转换器接受 SRS 1–4 中的正向平面域名/IP 集合，拒绝逻辑、反选及其他不能无损转换的条件。快照 schema 1 的 `domains` 使用 `full:`、`domain:`、`keyword:`、`regexp:` 表达匹配类型，`ips` 使用 CIDR。以点开头的后缀保留“只匹配子域名”语义，不扩大到根域名。当前内置资源包含 8,528 条域名匹配、7,638 个 IP 前缀。
 
 sing-box 和 Xray 都通过同一个 HEV tun2socks 数据平面运行，不再保留 core-owned TUN stack 选择。
 
@@ -82,14 +82,6 @@ Xray 输出管道关闭、读取失败或事件解析异常会转换为会话失
 - 核心只需要提供 `internal-socks-in`，不再初始化或接收 Android TUN。
 - HEV 和核心以组合会话关闭，先停止 HEV，再停止核心。
 
-## 后续接入 Mihomo
-
-1. 在 `core/mihomo/` 实现 `CoreBackend`、配置编译及 `CoreSession`，提供本地 SOCKS5 inbound。
-2. 复用 `HevSocksTunAdapter`，不再由新核心申请或持有 Android TUN。
-3. 实现原生统计、就绪/异常事件及幂等停止；测速 `settings == null` 时不启动 HEV。
-4. 增加固定版本源码与 ARM32/ARM64 构建，然后只在 `CoreBackends` 注册后端。UI 根据注册表展示可选内核，偏好使用可扩展的 `协议=内核ID` 存储；旧 Xray 协议偏好继续可读。
-5. 补充实际配置校验、生命周期与设备连通验证。未提供可运行适配器前，不向用户展示可选 Mihomo。
-
 ## 验证与构建
 
 Android 构建需要 JDK 17、Go 1.26、Android SDK 35 和 NDK `28.0.13004108`。sing-box 官方构建器检查 JDK 主版本，JDK 21 不能代替此处的 JDK 17。构建前初始化固定子模块。
@@ -104,7 +96,7 @@ Android 构建需要 JDK 17、Go 1.26、Android SDK 35 和 NDK `28.0.13004108`�
 go test ./...
 ```
 
-JVM 测试覆盖注册第三后端、旧设置兼容、会话取消/替换/停止失败、DNS 顺序及 HEV 配置；Go 测试验证 Xray runner 不提前启动、统计缓冲所有权、socket protect 和规则内容。规则测试的 JSON 基准由 sing-box CLI decompile 生成，仅存在于测试资源，不随 APK 打包。
+JVM 测试覆盖双核心注册、旧设置兼容、会话取消/替换/停止失败、DNS 顺序及 HEV 配置；Go 测试验证 Xray runner 不提前启动、统计缓冲所有权、socket protect 和规则内容。规则测试的 JSON 基准由 sing-box CLI decompile 生成，仅存在于测试资源，不随 APK 打包。
 
 最终本地验证：63 项 JVM 测试通过，Go 运行器和 Android UDP overlay 测试通过，Lint 为 0 errors / 29 warnings。另用真实 Xray Router 验证了“域名未命中 geosite、解析结果命中国内 IP”仍选择直连；配置依靠首个代理出站兜底，避免显式全匹配规则阻断 `IPIfNonMatch` 的二次匹配。
 
@@ -122,7 +114,7 @@ HEV is suitable as a compatibility data plane when a core exposes a local SOCKS5
 AndroidVpnHost TUN -> hev-runner (HEV 2.16.0) -> core loopback SOCKS5 -> selected core outbound
 ```
 
-`TunAdapter` and `TunAdapterSession` keep this path independent from the core control contract. `CombinedCoreSession` owns both objects, reports the HEV TUN counters once, and closes HEV before the proxy core. Any future backend only needs to generate a local SOCKS5 inbound; all VPN backends use the same HEV data plane.
+`TunAdapter` and `TunAdapterSession` keep this path independent from the core control contract. `CombinedCoreSession` owns both objects, reports the HEV TUN counters once, and closes HEV before the proxy core. Both sing-box and Xray provide a local SOCKS5 inbound and use the same HEV data plane.
 
 The HEV runner is a standalone Android PIE executable. It exchanges the TUN descriptor, liveness, and statistics through a private abstract Unix socket; packet data does not cross Kotlin or JNI. The build pins HEV 2.16.0, stages the source to resolve Git symlink headers on Windows, and packages only `libhev.so` for `armeabi-v7a` and `arm64-v8a`. URL Test never starts HEV.
 

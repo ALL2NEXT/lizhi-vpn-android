@@ -4,7 +4,6 @@
 
 - `sing-box/`：SagerNet sing-box 源码，供 Android 和 Windows 构建使用。
 - `xray-core/`：XTLS Xray-core 源码，供原生 Xray 运行器使用。
-- `mihomo/`：MetaCubeX Clash.Meta（Mihomo）源码，当前固定为 `v1.19.30`，用于后续 Android 适配。
 
 `hev-socks5-tunnel/` 仍保留在仓库顶层，因为它是数据面 TUN 适配器，不属于代理内核。
 

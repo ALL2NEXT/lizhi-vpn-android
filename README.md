@@ -300,7 +300,6 @@ android/app/src/main/java/xyz/a202132/app/
 ```
 core/sing-box                       # sing-box 源码子模块（Android/Windows 构建输入）
 core/xray-core                      # Xray-core 源码子模块（Android/Windows 构建输入）
-core/mihomo                         # Mihomo 源码子模块（后续 Android 适配输入）
 android/app/build/generated/      # Gradle 生成的 libbox.aar（不提交）
 android/app/src/main/
 ├── assets/

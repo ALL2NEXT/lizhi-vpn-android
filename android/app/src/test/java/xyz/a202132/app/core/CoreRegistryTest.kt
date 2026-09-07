@@ -17,22 +17,22 @@ class CoreRegistryTest {
         override suspend fun start(context: Context, scope: CoroutineScope, prepared: PreparedCore,
             underlay: UnderlayController?, onFailure: (String) -> Unit): CoreSession = error("unused")
     }
-    @Test fun thirdBackendParticipatesWithoutAddingDispatchBranches() {
-        val mihomo = Backend(ProxyCore.MIHOMO, setOf(NodeType.TROJAN))
-        val registry = CoreRegistry(listOf(Backend(ProxyCore.SING_BOX, setOf(NodeType.VLESS)), mihomo))
+    @Test fun registeredXrayBackendParticipatesWithoutDispatchBranches() {
+        val xray = Backend(ProxyCore.XRAY, setOf(NodeType.TROJAN))
+        val registry = CoreRegistry(listOf(Backend(ProxyCore.SING_BOX, setOf(NodeType.VLESS)), xray))
         val node = Node("id", "node", NodeType.TROJAN, "example.com", 443, "")
-        assertSame(mihomo, registry.resolve(ProxyCore.MIHOMO, node))
-        assertEquals(listOf(ProxyCore.MIHOMO), registry.availableFor(NodeType.TROJAN))
+        assertSame(xray, registry.resolve(ProxyCore.XRAY, node))
+        assertEquals(listOf(ProxyCore.XRAY), registry.availableFor(NodeType.TROJAN))
     }
     @Test fun missingBackendFailsInsteadOfSilentlyUsingSingBox() {
         val registry = CoreRegistry(emptyList())
-        try { registry.backend(ProxyCore.MIHOMO); fail("Missing core must fail") }
-        catch (error: IllegalStateException) { assertTrue(error.message!!.contains("Mihomo")) }
+        try { registry.backend(ProxyCore.XRAY); fail("Missing core must fail") }
+        catch (error: IllegalStateException) { assertTrue(error.message!!.contains("Xray")) }
     }
-    @Test fun assignmentsPreserveLegacySettingsAndAllowThirdCore() {
-        val settings = ProtocolCoreSettings(setOf(NodeType.VLESS), mapOf(NodeType.TROJAN to ProxyCore.MIHOMO))
+    @Test fun assignmentsPreserveLegacySettingsAndAllowExplicitCoreSelection() {
+        val settings = ProtocolCoreSettings(setOf(NodeType.VLESS), mapOf(NodeType.TROJAN to ProxyCore.XRAY))
         assertEquals(ProxyCore.XRAY, settings.coreFor(NodeType.VLESS))
-        assertEquals(ProxyCore.MIHOMO, settings.coreFor(NodeType.TROJAN))
+        assertEquals(ProxyCore.XRAY, settings.coreFor(NodeType.TROJAN))
         assertEquals(ProxyCore.SING_BOX, settings.coreFor(NodeType.TUIC))
     }
 
