@@ -101,7 +101,7 @@ fun FloatingHomeNavigationBar(
                     selected = selectedDestination == HomeDestination.COUNTRIES,
                     selectedIcon = Icons.Rounded.Public,
                     unselectedIcon = Icons.Outlined.Public,
-                    label = "国家",
+                    label = "地区",
                     onClick = { onDestinationSelected(HomeDestination.COUNTRIES) },
                     modifier = Modifier.weight(1f)
                 )

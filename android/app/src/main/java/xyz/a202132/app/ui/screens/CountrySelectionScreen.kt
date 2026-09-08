@@ -64,8 +64,8 @@ private fun CountrySelectionScreen(
     bottomContentPadding: Dp
 ) {
     AppScreenScaffold(
-        title = "选择国家",
-        subtitle = "主页智能测试将使用所选国家",
+        title = "选择地区",
+        subtitle = "主页智能测试将使用所选地区",
         onBack = onBack,
         showBackNavigation = false,
         contentPadding = PaddingValues(
@@ -108,7 +108,7 @@ private fun CountrySelectionScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "暂无可选择的国家",
+                    text = "暂无可选择的地区",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
@@ -150,6 +150,7 @@ private fun CountryCard(
             )
             Text(
                 text = country.name,
+                modifier = Modifier.weight(1f),
                 color = if (selected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
@@ -159,6 +160,16 @@ private fun CountryCard(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${country.nodeCount} 台服务器",
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontSize = 13.sp,
+                maxLines = 1
             )
         }
     }

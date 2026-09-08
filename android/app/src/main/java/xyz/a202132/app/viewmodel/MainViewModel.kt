@@ -187,7 +187,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         dao.getSubscriptionNodes()
     }
 
-    /** 面向小白的国家选项跨全部普通订阅组聚合，不受订阅页筛选状态影响。 */
+    /** 面向小白的地区选项跨全部普通订阅组聚合，不受订阅页筛选状态影响。 */
     val countryOptions = allSubscriptionNodes
         .map(::collectCountryOptions)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -1133,7 +1133,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 从全部订阅组中自动选择指定国家的最佳节点并连接。 */
+    /** 从全部订阅组中自动选择指定地区的最佳节点并连接。 */
     fun selectAndConnectCountry(countryCode: String) {
         viewModelScope.launch {
             val node = preferredNodeForCountry(
@@ -1141,7 +1141,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 countryCode = countryCode
             )
             if (node == null) {
-                _error.value = "该国家暂无可用节点"
+                _error.value = "该地区暂无可用节点"
                 return@launch
             }
 

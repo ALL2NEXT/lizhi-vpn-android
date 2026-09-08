@@ -212,7 +212,7 @@ class SettingsRepository(private val context: Context) {
         preferences[SELECTED_SUBSCRIPTION_SOURCE_ID]
     }
 
-    /** 国家页选中的国家；存在时主页智能测试跨订阅组限定到该国家。 */
+    /** 地区页选中的国家代码；存在时主页智能测试跨订阅组限定到该地区。 */
     val selectedCountryCode: Flow<String?> = context.dataStore.data.map { preferences ->
         CountryCodeResolver.normalizeCountryCode(preferences[SELECTED_COUNTRY_CODE])
     }

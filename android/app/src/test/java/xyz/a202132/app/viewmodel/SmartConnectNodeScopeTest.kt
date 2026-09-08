@@ -42,7 +42,7 @@ class SmartConnectNodeScopeTest {
     }
 
     @Test
-    fun `选择国家后跨订阅组且只测试该国家`() {
+    fun `选择地区后跨订阅组且只测试该地区`() {
         val allNodes = listOf(
             node("jp-a", "group-a", "JP"),
             node("us-a", "group-a", "US"),

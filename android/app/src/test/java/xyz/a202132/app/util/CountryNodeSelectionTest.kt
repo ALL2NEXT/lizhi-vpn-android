@@ -8,7 +8,7 @@ import xyz.a202132.app.data.model.NodeType
 
 class CountryNodeSelectionTest {
     @Test
-    fun `国家选项会跨订阅组合并并忽略未知地区`() {
+    fun `地区选项会跨订阅组合并统计节点数且忽略未知地区`() {
         val nodes = listOf(
             node("jp-a", "日本 01", sourceId = "a"),
             node("us", "美国 01", sourceId = "a"),
@@ -16,14 +16,15 @@ class CountryNodeSelectionTest {
             node("unknown", "高速节点", sourceId = "b")
         )
 
-        assertEquals(
-            setOf("JP", "US"),
-            countryOptions(nodes).map(CountryOption::code).toSet()
-        )
+        val optionsByCode = countryOptions(nodes).associateBy(CountryOption::code)
+
+        assertEquals(setOf("JP", "US"), optionsByCode.keys)
+        assertEquals(2, optionsByCode.getValue("JP").nodeCount)
+        assertEquals(1, optionsByCode.getValue("US").nodeCount)
     }
 
     @Test
-    fun `国家节点优先选择可用且延迟最低的节点`() {
+    fun `地区节点优先选择可用且延迟最低的节点`() {
         val nodes = listOf(
             node("unavailable", "日本 01", latency = 20, isAvailable = false),
             node("slow", "日本 02", latency = 180),
@@ -35,7 +36,7 @@ class CountryNodeSelectionTest {
     }
 
     @Test
-    fun `国家节点不存在时不返回其他国家节点`() {
+    fun `地区节点不存在时不返回其他地区节点`() {
         assertNull(preferredNodeForCountry(listOf(node("jp", "日本")), "US"))
     }
 
