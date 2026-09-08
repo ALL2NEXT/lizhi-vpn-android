@@ -35,7 +35,9 @@ import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.XrayConfigGenerator
 import xyz.a202132.app.util.DatabasePassphraseManager
 import xyz.a202132.app.util.availableNodeRegionCodes as collectAvailableNodeRegionCodes
+import xyz.a202132.app.util.countryOptions as collectCountryOptions
 import xyz.a202132.app.util.filterNodesByRegionWhitelist
+import xyz.a202132.app.util.preferredNodeForCountry
 import java.io.File
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -172,6 +174,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val selectedSubscriptionSourceId = activeSubscriptionSourceId
 
+    val selectedCountryCode = settingsRepository.selectedCountryCode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     val favoriteSourceNodeIds = nodeDaoFlow.flatMapLatest { it.getFavoriteSourceNodeIds() }
         .map { it.filterNotNull().toSet() }
         .stateIn(
@@ -183,6 +188,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val allSubscriptionNodes = nodeDaoFlow.flatMapLatest { dao ->
         dao.getSubscriptionNodes()
     }
+
+    /** 面向小白的国家选项跨全部普通订阅组聚合，不受订阅页筛选状态影响。 */
+    val countryOptions = allSubscriptionNodes
+        .map(::collectCountryOptions)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** 旗帜筛选项始终来自全部普通订阅组，不受当前页和收藏节点影响。 */
     val availableNodeRegionCodes = allSubscriptionNodes
@@ -502,7 +512,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isTesting.value = true
             try {
                 val fullTestEnabled = settingsRepository.smartConnectFullTestEnabled.first()
-                val allNodes = currentSmartConnectNodes(fullTestEnabled)
+                val countryCode = settingsRepository.selectedCountryCode.first()
+                val allNodes = currentSmartConnectNodes(fullTestEnabled, countryCode)
                 if (allNodes.isEmpty()) {
 
                     _error.value = "没有可用节点"
@@ -510,6 +521,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (fullTestEnabled) {
                     Log.i(tag, "Smart connection full test enabled: nodes=${allNodes.size}")
+                }
+                if (countryCode != null) {
+                    Log.i(
+                        tag,
+                        "Smart connection country scope enabled: country=$countryCode, " +
+                            "nodes=${allNodes.size}"
+                    )
                 }
 
                 val smartTestConcurrency = PublicNodePoolOptimization.resolveConcurrency(
@@ -638,7 +656,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 settingsRepository.setSelectedNodeId(bestNode.id)
-                if (fullTestEnabled) {
+                if (fullTestEnabled || countryCode != null) {
                     bestNode.subscriptionSourceId?.takeIf(String::isNotBlank)?.let { sourceId ->
                         settingsRepository.setSelectedSubscriptionSourceId(sourceId)
                         settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
@@ -1119,6 +1137,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNodeListCategory(category: NodeListCategory) {
         viewModelScope.launch {
+            settingsRepository.setSelectedCountryCode(null)
             settingsRepository.setNodeListCategory(category)
         }
     }
@@ -1132,29 +1151,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Select a node from the node list and connect to it immediately. */
     fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
-            settingsRepository.setSelectedNodeId(node.id)
-            Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
-            when (vpnState.value) {
+            settingsRepository.setSelectedCountryCode(null)
+            connectNode(node)
+        }
+    }
 
-                VpnState.DISCONNECTED -> {
-                    if (!NetworkUtils.isNetworkAvailable(getApplication())) {
-                        Log.w(tag, "Direct VPN start requested while network is unavailable")
-                        _error.value = "当前无网络连接节点！"
-                    }
-                    ServiceManager.startVpn(getApplication(), node, proxyMode.value)
-                }
-                VpnState.CONNECTED -> {
-                    ServiceManager.startVpn(getApplication(), node, proxyMode.value)
-                }
-                else -> {
-                    Log.i(tag, "Direct node connection ignored while VPN is transitioning")
-                }
+    /** 从全部订阅组中自动选择指定国家的最佳节点并连接。 */
+    fun selectAndConnectCountry(countryCode: String) {
+        viewModelScope.launch {
+            val node = preferredNodeForCountry(
+                nodes = nodeDao().getSubscriptionNodes().first(),
+                countryCode = countryCode
+            )
+            if (node == null) {
+                _error.value = "该国家暂无可用节点"
+                return@launch
             }
+
+            node.subscriptionSourceId?.takeIf(String::isNotBlank)?.let { sourceId ->
+                settingsRepository.setSelectedSubscriptionSourceId(sourceId)
+            }
+            settingsRepository.setSelectedCountryCode(countryCode)
+            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+            connectNode(node)
+        }
+    }
+
+    private suspend fun connectNode(node: Node) {
+        settingsRepository.setSelectedNodeId(node.id)
+        Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
+        when (vpnState.value) {
+            VpnState.DISCONNECTED -> {
+                if (!NetworkUtils.isNetworkAvailable(getApplication())) {
+                    Log.w(tag, "Direct VPN start requested while network is unavailable")
+                    _error.value = "当前无网络连接节点！"
+                }
+                ServiceManager.startVpn(getApplication(), node, proxyMode.value)
+            }
+            VpnState.CONNECTED -> ServiceManager.startVpn(
+                getApplication(),
+                node,
+                proxyMode.value
+            )
+            else -> Log.i(tag, "Direct node connection ignored while VPN is transitioning")
         }
     }
 
     fun setSubscriptionSource(sourceId: String) {
         viewModelScope.launch {
+            settingsRepository.setSelectedCountryCode(null)
             settingsRepository.setSelectedSubscriptionSourceId(sourceId)
             settingsRepository.setSelectedNodeId(null)
             settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
@@ -1818,15 +1863,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sortNodesForList(scoped)
     }
 
-    private suspend fun currentSmartConnectNodes(fullTestEnabled: Boolean): List<Node> {
-        if (!fullTestEnabled) return currentNodeListSnapshot()
+    private suspend fun currentSmartConnectNodes(
+        fullTestEnabled: Boolean,
+        selectedCountryCode: String?
+    ): List<Node> {
+        if (!fullTestEnabled && selectedCountryCode == null) return currentNodeListSnapshot()
         return withContext(Dispatchers.Default) {
             val allSubscriptionNodes = nodeDao().getSubscriptionNodes().first()
             val selectedRegionCodes = effectiveNodeRegionFilterCodes(allSubscriptionNodes)
             val candidates = SmartConnectNodeScope.selectCandidates(
                 currentNodes = emptyList(),
                 allSubscriptionNodes = allSubscriptionNodes,
-                fullTestEnabled = true,
+                fullTestEnabled = fullTestEnabled,
+                selectedCountryCode = selectedCountryCode,
                 selectedRegionCodes = selectedRegionCodes
             )
             sortNodesForList(candidates)

@@ -18,9 +18,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.sp
 
 enum class HomeDestination {
     HOME,
+    COUNTRIES,
     SUBSCRIPTIONS,
     NAVIGATION
 }
@@ -73,7 +76,7 @@ fun FloatingHomeNavigationBar(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(max = 360.dp)
+                .widthIn(max = 400.dp)
                 .fillMaxWidth(),
             shape = RoundedCornerShape(34.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.98f),
@@ -92,6 +95,14 @@ fun FloatingHomeNavigationBar(
                     unselectedIcon = Icons.Outlined.Home,
                     label = "主页",
                     onClick = { onDestinationSelected(HomeDestination.HOME) },
+                    modifier = Modifier.weight(1f)
+                )
+                FloatingNavigationItem(
+                    selected = selectedDestination == HomeDestination.COUNTRIES,
+                    selectedIcon = Icons.Rounded.Public,
+                    unselectedIcon = Icons.Outlined.Public,
+                    label = "国家",
+                    onClick = { onDestinationSelected(HomeDestination.COUNTRIES) },
                     modifier = Modifier.weight(1f)
                 )
                 FloatingNavigationItem(

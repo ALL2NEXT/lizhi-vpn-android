@@ -42,6 +42,7 @@ import xyz.a202132.app.ui.components.HomeDestination
 import xyz.a202132.app.ui.navigation.AppRoute
 import xyz.a202132.app.ui.screens.FeatureScreen
 import xyz.a202132.app.ui.screens.AccountSettingsScreen
+import xyz.a202132.app.ui.screens.CountrySelectionDestination
 import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.NodeListDestination
 import xyz.a202132.app.ui.screens.OtherConfigScreen
@@ -196,6 +197,28 @@ class MainActivity : ComponentActivity() {
                                             selectedDestination = it
                                         }
                                     )
+
+                                    HomeDestination.COUNTRIES ->
+                                        FloatingHomeNavigationLayout(
+                                            selectedDestination = selectedDestination,
+                                            onDestinationSelected = {
+                                                selectedDestination = it
+                                            }
+                                        ) {
+                                            CountrySelectionDestination(
+                                                viewModel = viewModel,
+                                                onCountrySelected = { countryCode ->
+                                                    selectedDestination = HomeDestination.HOME
+                                                    requestVpnPermission {
+                                                        viewModel.selectAndConnectCountry(countryCode)
+                                                    }
+                                                },
+                                                onBack = {
+                                                    selectedDestination = HomeDestination.HOME
+                                                },
+                                                bottomContentPadding = 108.dp
+                                            )
+                                        }
 
                                     HomeDestination.SUBSCRIPTIONS ->
                                         FloatingHomeNavigationLayout(

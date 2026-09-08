@@ -16,6 +16,7 @@ class SmartConnectNodeScopeTest {
             currentNodes = currentNodes,
             allSubscriptionNodes = allNodes,
             fullTestEnabled = false,
+            selectedCountryCode = null,
             selectedRegionCodes = emptySet()
         )
 
@@ -35,7 +36,28 @@ class SmartConnectNodeScopeTest {
             currentNodes = listOf(allNodes.first()),
             allSubscriptionNodes = allNodes,
             fullTestEnabled = true,
+            selectedCountryCode = null,
             selectedRegionCodes = setOf("JP")
+        )
+
+        assertEquals(listOf("jp-a", "jp-b"), candidates.map(Node::id))
+    }
+
+    @Test
+    fun `选择国家后跨订阅组且只测试该国家`() {
+        val allNodes = listOf(
+            node("jp-a", "group-a", "JP"),
+            node("us-a", "group-a", "US"),
+            node("jp-b", "group-b", "JP"),
+            node("favorite", null, "JP", NodeSource.FAVORITE)
+        )
+
+        val candidates = SmartConnectNodeScope.selectCandidates(
+            currentNodes = listOf(allNodes[1]),
+            allSubscriptionNodes = allNodes,
+            fullTestEnabled = false,
+            selectedCountryCode = "jp",
+            selectedRegionCodes = setOf("US")
         )
 
         assertEquals(listOf("jp-a", "jp-b"), candidates.map(Node::id))
