@@ -54,6 +54,7 @@ internal fun ConnectionRouteOverview(
     node: Node?,
     vpnState: VpnState,
     isTesting: Boolean,
+    testingLabel: String?,
     enabled: Boolean,
     displaySettings: NodeDisplaySettings,
     coreSettings: ProtocolCoreSettings,
@@ -70,11 +71,15 @@ internal fun ConnectionRouteOverview(
         VpnState.CONNECTING, VpnState.DISCONNECTING -> MaterialTheme.colorScheme.primary
         VpnState.DISCONNECTED -> MaterialTheme.colorScheme.outline
     }
-    val statusTitle = when (displayState) {
-        VpnState.CONNECTED -> "连接稳定 · 流量已受保护"
-        VpnState.CONNECTING -> "正在建立安全链路"
-        VpnState.DISCONNECTING -> "正在断开安全链路"
-        VpnState.DISCONNECTED -> "尚未连接 · 点击下方按钮"
+    val statusTitle = if (isTesting && vpnState == VpnState.DISCONNECTED) {
+        testingLabel ?: "智能连接中..."
+    } else {
+        when (displayState) {
+            VpnState.CONNECTED -> "连接稳定 · 流量已受保护"
+            VpnState.CONNECTING -> "正在建立安全链路"
+            VpnState.DISCONNECTING -> "正在断开安全链路"
+            VpnState.DISCONNECTED -> "尚未连接 · 点击下方按钮"
+        }
     }
     val protocolLabel = node?.let {
         it.protocolDisplayLabel(displaySettings, coreSettings)
@@ -295,7 +300,7 @@ private fun TunnelSegment(
             }
         }
         Spacer(modifier = Modifier.height(6.dp))
-        InlineRouteMetric(label = "TCPing", value = tcping)
+        InlineRouteMetric(label = "握手延迟", value = tcping)
     }
 }
 
@@ -346,17 +351,17 @@ private fun ProxyRouteMetrics(
             maxLines = 1
         )
         Spacer(modifier = Modifier.width(8.dp))
-        InlineRouteMetric(label = "204", value = urlLatency)
+        InlineRouteMetric(label = "上网延迟", value = urlLatency)
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
             imageVector = Icons.Outlined.ArrowDownward,
-            contentDescription = "下载带宽",
+            contentDescription = "下行速率",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(12.dp)
         )
         Spacer(modifier = Modifier.width(2.dp))
         Text(
-            text = "下载 · $downloadBandwidth",
+            text = "下行速率 · $downloadBandwidth",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 9.sp,
             lineHeight = 11.sp,

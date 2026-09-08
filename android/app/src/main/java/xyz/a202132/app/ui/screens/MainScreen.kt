@@ -199,6 +199,7 @@ fun MainScreen(
                     node = currentNode,
                     vpnState = vpnState,
                     isTesting = isTesting,
+                    testingLabel = testingLabel,
                     enabled = !isTesting,
                     displaySettings = nodeDisplaySettings,
                     coreSettings = protocolCoreSettings,
@@ -239,15 +240,10 @@ fun MainScreen(
                     } else {
                         null
                     },
-                    // 待连接时隐藏操作提示文字，点击和长按的交互逻辑保持不变。
-                    showStatusLabel = vpnState != VpnState.DISCONNECTED || isTesting,
+                    // 状态提示统一由上方链路图展示，连接按钮区域只保留图标。
+                    showStatusLabel = false,
                     clickActionLabel = homeClickAction.displayName,
-                    longClickActionLabel = homeLongPressAction.displayName,
-                    customLabel = if (vpnState == VpnState.DISCONNECTED && isTesting) {
-                        testingLabel ?: "智能连接中..."
-                    } else {
-                        null
-                    }
+                    longClickActionLabel = homeLongPressAction.displayName
                 )
                 
                 Spacer(modifier = Modifier.weight(1f))
