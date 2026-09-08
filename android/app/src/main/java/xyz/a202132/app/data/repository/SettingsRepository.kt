@@ -116,7 +116,6 @@ class SettingsRepository(private val context: Context) {
         private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
         private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
         private val NODE_LABEL_SHOW_CORE = booleanPreferencesKey("node_label_show_core")
-        private val NODE_REGION_FILTER_CODES = stringSetPreferencesKey("node_region_filter_codes")
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val HIDE_FAVORITE_NODE_GROUP =
             booleanPreferencesKey("hide_favorite_node_group")
@@ -300,26 +299,6 @@ class SettingsRepository(private val context: Context) {
             showTransport = preferences[NODE_LABEL_SHOW_TRANSPORT] ?: false,
             showCore = preferences[NODE_LABEL_SHOW_CORE] ?: false
         )
-    }
-
-    /** 节点列表地区白名单；空集合代表不过滤。 */
-    val nodeRegionFilterCodes: Flow<Set<String>> = context.dataStore.data.map { preferences ->
-        preferences[NODE_REGION_FILTER_CODES]
-            .orEmpty()
-            .mapNotNullTo(mutableSetOf()) { CountryCodeResolver.normalizeRegionCode(it) }
-    }
-
-    suspend fun setNodeRegionFilterCodes(codes: Set<String>) {
-        val normalizedCodes = codes.mapNotNullTo(mutableSetOf()) {
-            CountryCodeResolver.normalizeRegionCode(it)
-        }
-        context.dataStore.edit { preferences ->
-            if (normalizedCodes.isEmpty()) {
-                preferences.remove(NODE_REGION_FILTER_CODES)
-            } else {
-                preferences[NODE_REGION_FILTER_CODES] = normalizedCodes
-            }
-        }
     }
 
     suspend fun setNodeLabelShowProtocol(show: Boolean) {

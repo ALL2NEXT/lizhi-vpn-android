@@ -34,9 +34,7 @@ import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.XrayConfigGenerator
 import xyz.a202132.app.util.DatabasePassphraseManager
-import xyz.a202132.app.util.availableNodeRegionCodes as collectAvailableNodeRegionCodes
 import xyz.a202132.app.util.countryOptions as collectCountryOptions
-import xyz.a202132.app.util.filterNodesByRegionWhitelist
 import xyz.a202132.app.util.preferredNodeForCountry
 import java.io.File
 import java.time.Instant
@@ -194,18 +192,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map(::collectCountryOptions)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 旗帜筛选项始终来自全部普通订阅组，不受当前页和收藏节点影响。 */
-    val availableNodeRegionCodes = allSubscriptionNodes
-        .map(::collectAvailableNodeRegionCodes)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    val selectedNodeRegionCodes = combine(
-        settingsRepository.nodeRegionFilterCodes,
-        availableNodeRegionCodes
-    ) { selectedCodes, availableCodes ->
-        selectedCodes.intersect(availableCodes.toSet())
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
-
     private val subscriptionNodes = nodeDaoFlow
         .flatMapLatest { dao ->
             activeSubscriptionSourceId.flatMapLatest { sourceId ->
@@ -223,12 +209,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val visibleNodes = combine(
         subscriptionNodes,
         favoriteNodes,
-        nodeListCategory,
-        selectedNodeRegionCodes
-
-    ) { subscription, favorites, category, selectedRegionCodes ->
-        val sourceNodes = if (category == NodeListCategory.FAVORITES) favorites else subscription
-        filterNodesByRegionWhitelist(sourceNodes, selectedRegionCodes)
+        nodeListCategory
+    ) { subscription, favorites, category ->
+        if (category == NodeListCategory.FAVORITES) favorites else subscription
     }
 
     val nodes = combine(
@@ -1142,12 +1125,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setNodeRegionFilterCodes(codes: Set<String>) {
-        viewModelScope.launch {
-            settingsRepository.setNodeRegionFilterCodes(codes)
-        }
-    }
-
     /** Select a node from the node list and connect to it immediately. */
     fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
@@ -1832,20 +1809,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             NodeListCategory.PRIMARY -> currentSubscriptionNodeSnapshot()
             NodeListCategory.FAVORITES -> nodeDao().getFavoriteNodes().first()
         }
-        // 测速与智能连接使用和列表相同的地区白名单，避免操作被隐藏的节点。
-        val selectedRegionCodes = effectiveNodeRegionFilterCodes()
-        sortNodesForList(filterNodesByRegionWhitelist(snapshot, selectedRegionCodes))
-    }
-
-    private suspend fun effectiveNodeRegionFilterCodes(
-        subscriptionNodes: List<Node>? = null
-    ): Set<String> {
-        val selectedCodes = settingsRepository.nodeRegionFilterCodes.first()
-        if (selectedCodes.isEmpty()) return emptySet()
-        val availableCodes = collectAvailableNodeRegionCodes(
-            subscriptionNodes ?: nodeDao().getSubscriptionNodes().first()
-        ).toSet()
-        return selectedCodes.intersect(availableCodes)
+        sortNodesForList(snapshot)
     }
 
     private suspend fun currentSubscriptionNodeSnapshot(): List<Node> = withContext(Dispatchers.Default) {
@@ -1870,13 +1834,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!fullTestEnabled && selectedCountryCode == null) return currentNodeListSnapshot()
         return withContext(Dispatchers.Default) {
             val allSubscriptionNodes = nodeDao().getSubscriptionNodes().first()
-            val selectedRegionCodes = effectiveNodeRegionFilterCodes(allSubscriptionNodes)
             val candidates = SmartConnectNodeScope.selectCandidates(
                 currentNodes = emptyList(),
                 allSubscriptionNodes = allSubscriptionNodes,
                 fullTestEnabled = fullTestEnabled,
-                selectedCountryCode = selectedCountryCode,
-                selectedRegionCodes = selectedRegionCodes
+                selectedCountryCode = selectedCountryCode
             )
             sortNodesForList(candidates)
         }

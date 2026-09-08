@@ -224,7 +224,7 @@ fun FeatureScreen(
                     onCheckedChange = viewModel::setSmartConnectFullTestEnabled
                 )
                 Text(
-                    text = "开启后从全部普通订阅组中测试并选择最优节点；仍遵守下方候选比例和节点列表的地区旗帜白名单。",
+                    text = "开启后从全部普通订阅组中测试并选择最优节点；仍遵守下方候选比例。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )

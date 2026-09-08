@@ -29,10 +29,6 @@ fun NodeListDestination(
         viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
     val favoriteSourceNodeIds by
         viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
-    val availableRegionCodes by
-        viewModel.availableNodeRegionCodes.collectAsStateWithLifecycle()
-    val selectedRegionCodes by
-        viewModel.selectedNodeRegionCodes.collectAsStateWithLifecycle()
     val skipFavoriteRemovalConfirmation by
         viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
@@ -56,8 +52,6 @@ fun NodeListDestination(
         subscriptionGroups = subscriptionGroups,
         selectedSubscriptionSourceId = selectedSubscriptionSourceId,
         favoriteSourceNodeIds = favoriteSourceNodeIds,
-        availableRegionCodes = availableRegionCodes,
-        selectedRegionCodes = selectedRegionCodes,
         skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
         isTesting = isTesting,
         isRefreshing = isRefreshing,
@@ -70,7 +64,6 @@ fun NodeListDestination(
         onNodeSelected = onNodeSelected,
         onCategoryChange = viewModel::setNodeListCategory,
         onSubscriptionSourceChange = viewModel::setSubscriptionSource,
-        onRegionFilterChange = viewModel::setNodeRegionFilterCodes,
         onToggleFavorite = viewModel::toggleFavoriteNode,
         onSkipFavoriteRemovalConfirmationForSession =
             viewModel::skipFavoriteRemovalConfirmationForSession,

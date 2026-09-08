@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,7 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -81,7 +79,6 @@ import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.SubscriptionGroup
-import xyz.a202132.app.util.CountryCodeResolver
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
@@ -92,8 +89,6 @@ fun NodeListScreen(
     subscriptionGroups: List<SubscriptionGroup>,
     selectedSubscriptionSourceId: String?,
     favoriteSourceNodeIds: Set<String>,
-    availableRegionCodes: List<String>,
-    selectedRegionCodes: Set<String>,
     skipFavoriteRemovalConfirmation: Boolean,
     isTesting: Boolean,
     isRefreshing: Boolean,
@@ -106,7 +101,6 @@ fun NodeListScreen(
     onNodeSelected: (Node) -> Unit,
     onCategoryChange: (NodeListCategory) -> Unit,
     onSubscriptionSourceChange: (String) -> Unit,
-    onRegionFilterChange: (Set<String>) -> Unit,
     onToggleFavorite: (Node) -> Unit,
     onSkipFavoriteRemovalConfirmationForSession: () -> Unit,
     onImportFromText: (String) -> Unit,
@@ -123,7 +117,6 @@ fun NodeListScreen(
     var isClosing by remember { mutableStateOf(false) }
     var favoriteRemovalCandidate by remember { mutableStateOf<Node?>(null) }
     var skipConfirmationForSessionChecked by remember { mutableStateOf(false) }
-    var showRegionFilterDialog by remember { mutableStateOf(false) }
 
     val handleBack = {
         if (!isClosing) {
@@ -181,11 +174,8 @@ fun NodeListScreen(
         actions = {
             NodeListTopActions(
                 enabled = !isClosing,
-                regionFilterEnabled = !isClosing && !isTesting,
-                regionFilterActive = selectedRegionCodes.isNotEmpty(),
                 onTcpingTest = onTcpingTest,
                 onUrlTest = onUrlTest,
-                onRegionFilter = { showRegionFilterDialog = true },
                 onRefresh = onRefreshAll
             )
         },
@@ -287,27 +277,12 @@ fun NodeListScreen(
         )
     }
 
-    if (showRegionFilterDialog) {
-        NodeRegionFilterDialog(
-            availableRegionCodes = availableRegionCodes,
-            selectedRegionCodes = selectedRegionCodes,
-            onDismiss = { showRegionFilterDialog = false },
-            onConfirm = { selectedCodes ->
-                showRegionFilterDialog = false
-                onRegionFilterChange(selectedCodes)
-            }
-        )
-    }
-
 }
 @Composable
 private fun NodeListTopActions(
     enabled: Boolean,
-    regionFilterEnabled: Boolean,
-    regionFilterActive: Boolean,
     onTcpingTest: () -> Unit,
     onUrlTest: () -> Unit,
-    onRegionFilter: () -> Unit,
     onRefresh: () -> Unit
 ) {
     IconButton(
@@ -333,21 +308,6 @@ private fun NodeListTopActions(
     }
 
     IconButton(
-        onClick = onRegionFilter,
-        enabled = regionFilterEnabled
-    ) {
-        Icon(
-            imageVector = Icons.Default.Flag,
-            contentDescription = if (regionFilterActive) "地区过滤已启用" else "地区过滤",
-            tint = if (regionFilterActive) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
-        )
-    }
-
-    IconButton(
         onClick = onRefresh,
         enabled = enabled
     ) {
@@ -357,101 +317,6 @@ private fun NodeListTopActions(
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
-}
-
-@Composable
-private fun NodeRegionFilterDialog(
-    availableRegionCodes: List<String>,
-    selectedRegionCodes: Set<String>,
-    onDismiss: () -> Unit,
-    onConfirm: (Set<String>) -> Unit
-) {
-    val availableCodeSet = remember(availableRegionCodes) { availableRegionCodes.toSet() }
-    var pendingCodes by remember(availableRegionCodes, selectedRegionCodes) {
-        mutableStateOf(selectedRegionCodes.intersect(availableCodeSet))
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("地区过滤") },
-        text = {
-            Column {
-                Text(
-                    text = "白名单过滤：仅显示勾选地区的节点；全部不勾选时显示所有节点。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                if (availableRegionCodes.isEmpty()) {
-                    Text(
-                        text = "当前所有订阅组中暂无可识别的地区",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                        items(
-                            items = availableRegionCodes,
-                            key = { it }
-                        ) { code ->
-                            val checked = code in pendingCodes
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        pendingCodes = if (checked) {
-                                            pendingCodes - code
-                                        } else {
-                                            pendingCodes + code
-                                        }
-                                    }
-                                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = checked,
-                                    onCheckedChange = null
-                                )
-                                Text(
-                                    text = CountryCodeResolver.flagEmoji(code) ?: "🌐",
-                                    fontSize = 22.sp
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = CountryCodeResolver.displayName(code) ?: code,
-                                    modifier = Modifier.weight(1f),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = code,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        dismissButton = {
-            Row {
-                TextButton(
-                    onClick = { pendingCodes = emptySet() },
-                    enabled = pendingCodes.isNotEmpty()
-                ) {
-                    Text("清空")
-                }
-                TextButton(onClick = onDismiss) {
-                    Text("取消")
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(pendingCodes) }) {
-                Text("确定")
-            }
-        }
-    )
 }
 
 @OptIn(ExperimentalMaterialApi::class)

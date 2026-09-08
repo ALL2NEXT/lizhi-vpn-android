@@ -16,15 +16,14 @@ class SmartConnectNodeScopeTest {
             currentNodes = currentNodes,
             allSubscriptionNodes = allNodes,
             fullTestEnabled = false,
-            selectedCountryCode = null,
-            selectedRegionCodes = emptySet()
+            selectedCountryCode = null
         )
 
         assertEquals(listOf("current"), candidates.map(Node::id))
     }
 
     @Test
-    fun `全量测试使用所有订阅组并遵守地区白名单`() {
+    fun `全量测试使用所有订阅组`() {
         val allNodes = listOf(
             node("jp-a", "group-a", "JP"),
             node("us-a", "group-a", "US"),
@@ -36,11 +35,10 @@ class SmartConnectNodeScopeTest {
             currentNodes = listOf(allNodes.first()),
             allSubscriptionNodes = allNodes,
             fullTestEnabled = true,
-            selectedCountryCode = null,
-            selectedRegionCodes = setOf("JP")
+            selectedCountryCode = null
         )
 
-        assertEquals(listOf("jp-a", "jp-b"), candidates.map(Node::id))
+        assertEquals(listOf("jp-a", "us-a", "jp-b"), candidates.map(Node::id))
     }
 
     @Test
@@ -56,8 +54,7 @@ class SmartConnectNodeScopeTest {
             currentNodes = listOf(allNodes[1]),
             allSubscriptionNodes = allNodes,
             fullTestEnabled = false,
-            selectedCountryCode = "jp",
-            selectedRegionCodes = setOf("US")
+            selectedCountryCode = "jp"
         )
 
         assertEquals(listOf("jp-a", "jp-b"), candidates.map(Node::id))
