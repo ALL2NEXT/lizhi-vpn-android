@@ -333,6 +333,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         AppConfig.URL_TEST_TIMEOUT
     )
+    val publicNodePoolUrlTestUrl = settingsRepository.publicNodePoolUrlTestUrl.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        AppConfig.URL_TEST_URL
+    )
+    val publicNodePoolSpeedTestDownloadUrl =
+        settingsRepository.publicNodePoolSpeedTestDownloadUrl.stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            AppConfig.SPEED_TEST_DOWNLOAD_URL
+        )
     val publicNodePoolSpeedTestDurationMs = settingsRepository.publicNodePoolSpeedTestDurationMs.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -565,6 +576,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     urlTestTimeoutMs.value
                 }
+                val selectedUrlTestUrl = if (smartTestConcurrency.isPublicNodePool) {
+                    publicNodePoolUrlTestUrl.value
+                } else {
+                    urlTestUrl.value
+                }
+                val selectedSpeedTestDownloadUrl = if (smartTestConcurrency.isPublicNodePool) {
+                    publicNodePoolSpeedTestDownloadUrl.value
+                } else {
+                    speedTestDownloadUrl.value
+                }
                 val selectedSpeedTestDurationMs = if (smartTestConcurrency.isPublicNodePool) {
                     publicNodePoolSpeedTestDurationMs.value
                 } else {
@@ -600,7 +621,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     nodes = urlTestNodes,
                     labelPrefix = "智能连接：URL Test 204",
                     concurrency = smartTestConcurrency.urlTest,
-                    timeoutMs = selectedUrlTestTimeoutMs
+                    timeoutMs = selectedUrlTestTimeoutMs,
+                    targetUrl = selectedUrlTestUrl
                 )
                 applyUrlTestResults(urlTestResults)
                 val urlTestCandidates = urlTestResults
@@ -621,7 +643,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 async {
                                     val speedMbps = testNodeDownloadBandwidthMbps(
                                         node = node,
-                                        durationMs = selectedSpeedTestDurationMs
+                                        durationMs = selectedSpeedTestDurationMs,
+                                        downloadUrl = selectedSpeedTestDownloadUrl
                                     )
                                     nodeDao().updateDownloadMbps(node.id, speedMbps)
                                     node to speedMbps
@@ -871,6 +894,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setPublicNodePoolUrlTestUrl(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setPublicNodePoolUrlTestUrl(value)
+        }
+    }
+
+    fun setPublicNodePoolSpeedTestDownloadUrl(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setPublicNodePoolSpeedTestDownloadUrl(value)
+        }
+    }
+
     fun setPublicNodePoolSpeedTestDurationMs(value: Long) {
         viewModelScope.launch {
             settingsRepository.setPublicNodePoolSpeedTestDurationMs(value)
@@ -1022,6 +1057,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         labelPrefix: String,
         concurrency: Int = urlTestConcurrency.value,
         timeoutMs: Long = urlTestTimeoutMs.value,
+        targetUrl: String = urlTestUrl.value,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
         val batch = xyz.a202132.app.network.UrlTestManager.start(
@@ -1031,7 +1067,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val testedResults = latencyTester.urlTestAllNodes(
                 nodes = batch.nodes,
-                targetUrl = urlTestUrl.value,
+                targetUrl = targetUrl,
                 timeoutMs = timeoutMs,
                 concurrency = concurrency
             ) { completed, total ->
@@ -1926,11 +1962,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun testNodeDownloadBandwidthMbps(
         node: Node,
-        durationMs: Long = speedTestDurationMs.value
+        durationMs: Long = speedTestDurationMs.value,
+        downloadUrl: String = speedTestDownloadUrl.value
     ): Float =
         bandwidthTester.test(
             node,
-            speedTestDownloadUrl.value,
+            downloadUrl,
             durationMs,
             hysteriaUpMbps.value,
             hysteriaDownMbps.value,

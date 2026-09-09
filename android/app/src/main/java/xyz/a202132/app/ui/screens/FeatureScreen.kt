@@ -1,7 +1,9 @@
 package xyz.a202132.app.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,14 +40,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.BuildConfig
+import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyCore
+import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
@@ -81,10 +87,16 @@ fun FeatureScreen(
         viewModel.publicNodePoolBandwidthTestConcurrency.collectAsStateWithLifecycle()
     val tcpingTestTimeoutMs by viewModel.tcpingTestTimeoutMs.collectAsStateWithLifecycle()
     val urlTestTimeoutMs by viewModel.urlTestTimeoutMs.collectAsStateWithLifecycle()
+    val urlTestUrl by viewModel.urlTestUrl.collectAsStateWithLifecycle()
+    val speedTestDownloadUrl by viewModel.speedTestDownloadUrl.collectAsStateWithLifecycle()
     val speedTestDurationMs by viewModel.speedTestDurationMs.collectAsStateWithLifecycle()
     val tcpingConcurrency by viewModel.tcpingConcurrency.collectAsStateWithLifecycle()
     val urlTestConcurrency by viewModel.urlTestConcurrency.collectAsStateWithLifecycle()
     val bandwidthTestConcurrency by viewModel.bandwidthTestConcurrency.collectAsStateWithLifecycle()
+    val publicNodePoolUrlTestUrl by
+        viewModel.publicNodePoolUrlTestUrl.collectAsStateWithLifecycle()
+    val publicNodePoolSpeedTestDownloadUrl by
+        viewModel.publicNodePoolSpeedTestDownloadUrl.collectAsStateWithLifecycle()
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
@@ -152,6 +164,7 @@ fun FeatureScreen(
             mutableStateOf(publicNodePoolBandwidthTestConcurrency.toString())
         }
     var testSettingsType by remember { mutableStateOf(0) }
+    var urlEditorTarget by remember { mutableStateOf<TestUrlEditorTarget?>(null) }
     var hysteriaUpMbpsInput by remember(hysteriaUpMbps) {
         mutableStateOf(hysteriaUpMbps.toString())
     }
@@ -325,6 +338,10 @@ fun FeatureScreen(
                                     it.toIntOrNull()?.let { value ->
                                         viewModel.setUrlTestConcurrency(value.coerceIn(1, 128))
                                     }
+                                },
+                                targetUrl = urlTestUrl,
+                                onTargetUrlClick = {
+                                    urlEditorTarget = TestUrlEditorTarget.REGULAR_URL_TEST
                                 }
                             ),
                             SmartTestSettingsRow(
@@ -349,6 +366,10 @@ fun FeatureScreen(
                                     it.toIntOrNull()?.let { value ->
                                         viewModel.setBandwidthTestConcurrency(value.coerceIn(1, 3))
                                     }
+                                },
+                                targetUrl = speedTestDownloadUrl,
+                                onTargetUrlClick = {
+                                    urlEditorTarget = TestUrlEditorTarget.REGULAR_BANDWIDTH_TEST
                                 }
                             )
                         )
@@ -400,6 +421,10 @@ fun FeatureScreen(
                                     it.toIntOrNull()?.let { value ->
                                         viewModel.setPublicNodePoolUrlTestConcurrency(value.coerceIn(1, 128))
                                     }
+                                },
+                                targetUrl = publicNodePoolUrlTestUrl,
+                                onTargetUrlClick = {
+                                    urlEditorTarget = TestUrlEditorTarget.AGGREGATED_URL_TEST
                                 }
                             ),
                             SmartTestSettingsRow(
@@ -424,6 +449,10 @@ fun FeatureScreen(
                                     it.toIntOrNull()?.let { value ->
                                         viewModel.setPublicNodePoolBandwidthTestConcurrency(value.coerceIn(1, 3))
                                     }
+                                },
+                                targetUrl = publicNodePoolSpeedTestDownloadUrl,
+                                onTargetUrlClick = {
+                                    urlEditorTarget = TestUrlEditorTarget.AGGREGATED_BANDWIDTH_TEST
                                 }
                             )
                         )
@@ -546,6 +575,32 @@ fun FeatureScreen(
                 )
             }
         }
+    }
+
+    urlEditorTarget?.let { target ->
+        val currentUrl = when (target) {
+            TestUrlEditorTarget.REGULAR_URL_TEST -> urlTestUrl
+            TestUrlEditorTarget.REGULAR_BANDWIDTH_TEST -> speedTestDownloadUrl
+            TestUrlEditorTarget.AGGREGATED_URL_TEST -> publicNodePoolUrlTestUrl
+            TestUrlEditorTarget.AGGREGATED_BANDWIDTH_TEST -> publicNodePoolSpeedTestDownloadUrl
+        }
+        TestUrlEditorDialog(
+            target = target,
+            currentUrl = currentUrl,
+            onDismiss = { urlEditorTarget = null },
+            onSave = { value ->
+                when (target) {
+                    TestUrlEditorTarget.REGULAR_URL_TEST -> viewModel.setUrlTestUrl(value)
+                    TestUrlEditorTarget.REGULAR_BANDWIDTH_TEST ->
+                        viewModel.setSpeedTestDownloadUrl(value)
+                    TestUrlEditorTarget.AGGREGATED_URL_TEST ->
+                        viewModel.setPublicNodePoolUrlTestUrl(value)
+                    TestUrlEditorTarget.AGGREGATED_BANDWIDTH_TEST ->
+                        viewModel.setPublicNodePoolSpeedTestDownloadUrl(value)
+                }
+                urlEditorTarget = null
+            }
+        )
     }
 }
 
@@ -708,55 +763,207 @@ private data class SmartTestSettingsRow(
     val timeValue: String,
     val onTimeChange: (String) -> Unit,
     val concurrencyValue: String,
-    val onConcurrencyChange: (String) -> Unit
+    val onConcurrencyChange: (String) -> Unit,
+    val targetUrl: String? = null,
+    val onTargetUrlClick: (() -> Unit)? = null
 )
 
 @Composable
 private fun SmartTestSettingsTable(rows: List<SmartTestSettingsRow>) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        SmartTestSettingsTableRow {
-            Text(
-                text = "类型",
-                modifier = Modifier.width(SmartTestTypeColumnWidth),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
-            SmartTestTableHeader("比例 (%)", Modifier.weight(1f))
-            SmartTestTableHeader("时间 (ms)", Modifier.weight(1f))
-            SmartTestTableHeader("并发", Modifier.weight(1f))
-        }
-        rows.forEach { row ->
-            SmartTestSettingsTableRow {
-                Text(
-                    text = row.label,
-                    modifier = Modifier.width(SmartTestTypeColumnWidth),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1
-                )
-                CompactFeatureNumberField(
-                    value = row.percentValue,
-                    onValueChange = row.onPercentChange,
-                    modifier = Modifier.weight(1f)
-                )
-                CompactFeatureNumberField(
-                    value = row.timeValue,
-                    onValueChange = row.onTimeChange,
-                    modifier = Modifier.weight(1f)
-                )
-                CompactFeatureNumberField(
-                    value = row.concurrencyValue,
-                    onValueChange = row.onConcurrencyChange,
-                    modifier = Modifier.weight(1f)
-                )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val tableWidth = maxWidth.coerceAtLeast(SmartTestTableMinWidth)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+        ) {
+            Column(
+                modifier = Modifier.width(tableWidth),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                SmartTestSettingsTableRow {
+                    Text(
+                        text = "类型",
+                        modifier = Modifier.width(SmartTestTypeColumnWidth),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    SmartTestTableHeader(
+                        "比例 (%)",
+                        Modifier.weight(SmartTestPercentColumnWeight)
+                    )
+                    SmartTestTableHeader(
+                        "时间 (ms)",
+                        Modifier.weight(SmartTestTimeColumnWeight)
+                    )
+                    SmartTestTableHeader(
+                        "并发",
+                        Modifier.weight(SmartTestConcurrencyColumnWeight)
+                    )
+                    SmartTestTableHeader(
+                        "地址",
+                        Modifier.weight(SmartTestAddressColumnWeight)
+                    )
+                }
+                rows.forEach { row ->
+                    SmartTestSettingsTableRow {
+                        Text(
+                            text = row.label,
+                            modifier = Modifier.width(SmartTestTypeColumnWidth),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
+                        )
+                        CompactFeatureNumberField(
+                            value = row.percentValue,
+                            onValueChange = row.onPercentChange,
+                            modifier = Modifier.weight(SmartTestPercentColumnWeight)
+                        )
+                        CompactFeatureNumberField(
+                            value = row.timeValue,
+                            onValueChange = row.onTimeChange,
+                            modifier = Modifier.weight(SmartTestTimeColumnWeight)
+                        )
+                        CompactFeatureNumberField(
+                            value = row.concurrencyValue,
+                            onValueChange = row.onConcurrencyChange,
+                            modifier = Modifier.weight(SmartTestConcurrencyColumnWeight)
+                        )
+                        SmartTestTargetUrlCell(
+                            value = row.targetUrl,
+                            onClick = row.onTargetUrlClick,
+                            modifier = Modifier.weight(SmartTestAddressColumnWeight)
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun SmartTestTargetUrlCell(
+    value: String?,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    if (value != null && onClick != null) {
+        TextButton(
+            onClick = onClick,
+            modifier = modifier.heightIn(min = 56.dp)
+        ) {
+            Text(
+                text = value,
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    } else {
+        Text(
+            text = "—",
+            modifier = modifier,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+private enum class TestUrlEditorTarget(
+    val title: String,
+    val isBandwidthTest: Boolean
+) {
+    REGULAR_URL_TEST("编辑常规订阅 204 测速地址", false),
+    REGULAR_BANDWIDTH_TEST("编辑常规订阅带宽测速地址", true),
+    AGGREGATED_URL_TEST("编辑聚合订阅 204 测速地址", false),
+    AGGREGATED_BANDWIDTH_TEST("编辑聚合订阅带宽测速地址", true)
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+private fun TestUrlEditorDialog(
+    target: TestUrlEditorTarget,
+    currentUrl: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var input by remember(target, currentUrl) { mutableStateOf(currentUrl) }
+    val normalizedUrl = if (target.isBandwidthTest) {
+        BandwidthTestTargets.normalize(input)
+    } else {
+        UrlTestTargets.normalize(input)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(target.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("测速 URL") },
+                    singleLine = true,
+                    isError = normalizedUrl == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                )
+                if (normalizedUrl == null) {
+                    Text(
+                        text = "请输入有效的 HTTP 或 HTTPS 地址",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp
+                    )
+                }
+                if (!target.isBandwidthTest) {
+                    Text(
+                        text = "预设",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        UrlTestTargets.PRESETS.forEach { preset ->
+                            FilterChip(
+                                selected = normalizedUrl == preset.url,
+                                onClick = { input = preset.url },
+                                label = { Text(preset.name) }
+                            )
+                        }
+                    }
+                    Text(
+                        text = "延迟测速使用暖连接，仅统计预热后请求的首包耗时。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                } else {
+                    Text(
+                        text = "默认使用 Cloudflare 25 MB；每条测速连接会先预热 1 秒。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { normalizedUrl?.let(onSave) },
+                enabled = normalizedUrl != null
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
 
 @Composable
@@ -799,3 +1006,8 @@ private fun CompactFeatureNumberField(
 }
 
 private val SmartTestTypeColumnWidth = 70.dp
+private val SmartTestTableMinWidth = 520.dp
+private const val SmartTestPercentColumnWeight = 1f
+private const val SmartTestTimeColumnWeight = 1f
+private const val SmartTestConcurrencyColumnWeight = 0.85f
+private const val SmartTestAddressColumnWeight = 1.8f

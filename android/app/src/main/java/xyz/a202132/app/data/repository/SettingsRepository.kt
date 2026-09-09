@@ -100,6 +100,10 @@ class SettingsRepository(private val context: Context) {
             longPreferencesKey("public_node_pool_tcping_test_timeout_ms")
         private val PUBLIC_NODE_POOL_URL_TEST_TIMEOUT_MS =
             longPreferencesKey("public_node_pool_url_test_timeout_ms")
+        private val PUBLIC_NODE_POOL_URL_TEST_URL =
+            stringPreferencesKey("public_node_pool_url_test_url")
+        private val PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL =
+            stringPreferencesKey("public_node_pool_speed_test_download_url")
         private val PUBLIC_NODE_POOL_SPEED_TEST_DURATION_MS =
             longPreferencesKey("public_node_pool_speed_test_duration_ms")
         private val PUBLIC_NODE_POOL_TCPING_CONCURRENCY =
@@ -525,6 +529,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setUrlTestUrl(value: String) {
         val normalized = UrlTestTargets.normalize(value) ?: return
         context.dataStore.edit { preferences ->
+            if (UrlTestTargets.normalize(preferences[PUBLIC_NODE_POOL_URL_TEST_URL]) == null) {
+                preferences[PUBLIC_NODE_POOL_URL_TEST_URL] =
+                    UrlTestTargets.normalize(preferences[URL_TEST_URL]) ?: UrlTestTargets.DEFAULT_URL
+            }
             preferences[URL_TEST_URL] = normalized
         }
     }
@@ -537,6 +545,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSpeedTestDownloadUrl(value: String) {
         val normalized = BandwidthTestTargets.normalize(value) ?: return
         context.dataStore.edit { preferences ->
+            if (BandwidthTestTargets.normalize(preferences[PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL]) == null) {
+                preferences[PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL] =
+                    BandwidthTestTargets.normalize(preferences[SPEED_TEST_DOWNLOAD_URL])
+                        ?: xyz.a202132.app.AppConfig.SPEED_TEST_DOWNLOAD_URL
+            }
             preferences[SPEED_TEST_DOWNLOAD_URL] = normalized
         }
     }
@@ -731,6 +744,33 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPublicNodePoolUrlTestTimeoutMs(value: Long) {
         context.dataStore.edit { preferences ->
             preferences[PUBLIC_NODE_POOL_URL_TEST_TIMEOUT_MS] = value.coerceAtLeast(500L)
+        }
+    }
+
+    val publicNodePoolUrlTestUrl: Flow<String> = context.dataStore.data.map { preferences ->
+        UrlTestTargets.normalize(preferences[PUBLIC_NODE_POOL_URL_TEST_URL])
+            ?: UrlTestTargets.normalize(preferences[URL_TEST_URL])
+            ?: UrlTestTargets.DEFAULT_URL
+    }
+
+    suspend fun setPublicNodePoolUrlTestUrl(value: String) {
+        val normalized = UrlTestTargets.normalize(value) ?: return
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_URL_TEST_URL] = normalized
+        }
+    }
+
+    val publicNodePoolSpeedTestDownloadUrl: Flow<String> =
+        context.dataStore.data.map { preferences ->
+            BandwidthTestTargets.normalize(preferences[PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL])
+                ?: BandwidthTestTargets.normalize(preferences[SPEED_TEST_DOWNLOAD_URL])
+                ?: xyz.a202132.app.AppConfig.SPEED_TEST_DOWNLOAD_URL
+        }
+
+    suspend fun setPublicNodePoolSpeedTestDownloadUrl(value: String) {
+        val normalized = BandwidthTestTargets.normalize(value) ?: return
+        context.dataStore.edit { preferences ->
+            preferences[PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL] = normalized
         }
     }
 

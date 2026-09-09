@@ -15,61 +15,36 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
-import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OtherConfigScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val urlTestUrl by viewModel.urlTestUrl.collectAsStateWithLifecycle()
-    val speedTestDownloadUrl by viewModel.speedTestDownloadUrl.collectAsStateWithLifecycle()
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val homeClickAction by viewModel.homeClickAction.collectAsStateWithLifecycle()
     val homeLongPressAction by viewModel.homeLongPressAction.collectAsStateWithLifecycle()
-
-    var urlTestUrlInput by remember(urlTestUrl) { mutableStateOf(urlTestUrl) }
-    var showUrlTestPresets by remember { mutableStateOf(false) }
-    var speedTestDownloadUrlInput by remember(speedTestDownloadUrl) { mutableStateOf(speedTestDownloadUrl) }
-
-    LaunchedEffect(speedTestDownloadUrl) {
-        speedTestDownloadUrlInput = speedTestDownloadUrl
-    }
 
     AppScreenScaffold(
         title = "基础设定",
@@ -171,124 +146,6 @@ fun OtherConfigScreen(
                         colors = visibleSwitchColors()
                     )
                 }
-            }
-
-            OtherConfigSection(
-                title = "204 测速地址"
-            ) {
-                Text(
-                    text = "延迟测速固定使用暖连接：首次请求用于预热，仅统计同一连接第二次请求的首包耗时。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                val normalizedUrl = UrlTestTargets.normalize(urlTestUrlInput)
-                OutlinedTextField(
-                    value = urlTestUrlInput,
-                    onValueChange = { urlTestUrlInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("自定义 URL") },
-                    singleLine = true,
-                    isError = normalizedUrl == null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                )
-                if (normalizedUrl == null) {
-                    Text(
-                        text = "请输入有效的 HTTP 或 HTTPS 地址",
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 12.sp
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box {
-                        TextButton(onClick = { showUrlTestPresets = true }) {
-                            Text("选择预设")
-                        }
-                        DropdownMenu(
-                            expanded = showUrlTestPresets,
-                            onDismissRequest = { showUrlTestPresets = false }
-                        ) {
-                            UrlTestTargets.PRESETS.forEach { preset ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(preset.name)
-                                            Text(
-                                                text = preset.url,
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        urlTestUrlInput = preset.url
-                                        viewModel.setUrlTestUrl(preset.url)
-                                        showUrlTestPresets = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    Button(
-                        onClick = { normalizedUrl?.let(viewModel::setUrlTestUrl) },
-                        enabled = normalizedUrl != null && normalizedUrl != urlTestUrl
-                    ) {
-                        Text("保存")
-                    }
-                }
-                Text(
-                    text = "当前使用：$urlTestUrl",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                val normalizedBandwidthUrl = BandwidthTestTargets.normalize(speedTestDownloadUrlInput)
-                Text(
-                    text = "带宽测速地址",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                OutlinedTextField(
-                    value = speedTestDownloadUrlInput,
-                    onValueChange = { speedTestDownloadUrlInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("自定义 URL") },
-                    singleLine = true,
-                    isError = normalizedBandwidthUrl == null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                )
-                if (normalizedBandwidthUrl == null) {
-                    Text(
-                        text = "请输入有效的 HTTP 或 HTTPS 地址",
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 12.sp
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Button(
-                        onClick = { normalizedBandwidthUrl?.let(viewModel::setSpeedTestDownloadUrl) },
-                        enabled = normalizedBandwidthUrl != null && normalizedBandwidthUrl != speedTestDownloadUrl
-                    ) {
-                        Text("保存")
-                    }
-                }
-                Text(
-                    text = "当前使用：$speedTestDownloadUrl",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "默认使用 Cloudflare 25 MB；带宽测速使用 4 条并发流，并预热 1 秒，预热流量不计入结果。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
 
         }
