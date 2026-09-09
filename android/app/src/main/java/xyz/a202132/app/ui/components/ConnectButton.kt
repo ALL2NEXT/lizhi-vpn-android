@@ -192,14 +192,7 @@ fun ConnectButton(
                             )
                     )
                 }
-                if (isTesting) {
-                    // 智能连接启动后继续显示旋转进度，避免长按进度圈停在满格。
-                    CircularProgressIndicator(
-                        modifier = Modifier.fillMaxSize().padding(3.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 5.dp
-                    )
-                } else if (longPressEnabled && longPressProgress > 0f) {
+                if (longPressEnabled && longPressProgress > 0f) {
                     CircularProgressIndicator(
                         progress = longPressProgress,
                         modifier = Modifier.fillMaxSize().padding(3.dp),

@@ -220,9 +220,7 @@ class MainActivity : ComponentActivity() {
                                                 viewModel = viewModel,
                                                 onCountrySelected = { countryCode ->
                                                     selectedDestination = HomeDestination.HOME
-                                                    requestVpnPermission {
-                                                        viewModel.selectAndConnectCountry(countryCode)
-                                                    }
+                                                    viewModel.selectCountry(countryCode)
                                                 },
                                                 onSwitchToSubscriptions = {
                                                     viewModel.selectSubscriptionGrouping()

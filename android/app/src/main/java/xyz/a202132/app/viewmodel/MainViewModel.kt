@@ -35,7 +35,6 @@ import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.XrayConfigGenerator
 import xyz.a202132.app.util.DatabasePassphraseManager
 import xyz.a202132.app.util.countryOptions as collectCountryOptions
-import xyz.a202132.app.util.preferredNodeForCountry
 import java.io.File
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -1138,25 +1137,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 从全部订阅组中自动选择指定地区的最佳节点并连接。 */
-    fun selectAndConnectCountry(countryCode: String) {
+    /** 选择主页智能测速使用的地区，不立即选取节点或发起 VPN 连接。 */
+    fun selectCountry(countryCode: String) {
         viewModelScope.launch {
-            val node = preferredNodeForCountry(
-                nodes = nodeDao().getSubscriptionNodes().first(),
-                countryCode = countryCode
-            )
-            if (node == null) {
-                _error.value = "该地区暂无可用节点"
-                return@launch
-            }
-
-            node.subscriptionSourceId?.takeIf(String::isNotBlank)?.let { sourceId ->
-                settingsRepository.setSelectedSubscriptionSourceId(sourceId)
-            }
             settingsRepository.setSelectedCountryCode(countryCode)
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.COUNTRY)
             settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
-            connectNode(node)
         }
     }
 
