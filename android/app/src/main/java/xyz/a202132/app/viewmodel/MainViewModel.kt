@@ -175,6 +175,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val selectedCountryCode = settingsRepository.selectedCountryCode
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    val nodeGroupingMode = settingsRepository.nodeGroupingMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, NodeGroupingMode.COUNTRY)
+
     val favoriteSourceNodeIds = nodeDaoFlow.flatMapLatest { it.getFavoriteSourceNodeIds() }
         .map { it.filterNotNull().toSet() }
         .stateIn(
@@ -1121,6 +1124,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setNodeListCategory(category: NodeListCategory) {
         viewModelScope.launch {
             settingsRepository.setSelectedCountryCode(null)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
             settingsRepository.setNodeListCategory(category)
         }
     }
@@ -1129,6 +1133,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
             settingsRepository.setSelectedCountryCode(null)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
             connectNode(node)
         }
     }
@@ -1149,6 +1154,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 settingsRepository.setSelectedSubscriptionSourceId(sourceId)
             }
             settingsRepository.setSelectedCountryCode(countryCode)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.COUNTRY)
             settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
             connectNode(node)
         }
@@ -1177,9 +1183,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSubscriptionSource(sourceId: String) {
         viewModelScope.launch {
             settingsRepository.setSelectedCountryCode(null)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
             settingsRepository.setSelectedSubscriptionSourceId(sourceId)
             settingsRepository.setSelectedNodeId(null)
             settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+        }
+    }
+
+    /** 切换到订阅分组时立即取消地区限定，保证主页智能测速使用当前订阅组。 */
+    fun selectSubscriptionGrouping() {
+        viewModelScope.launch {
+            settingsRepository.setSelectedCountryCode(null)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+        }
+    }
+
+    fun selectCountryGrouping() {
+        viewModelScope.launch {
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.COUNTRY)
         }
     }
 

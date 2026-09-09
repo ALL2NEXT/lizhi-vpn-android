@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
@@ -109,6 +110,7 @@ fun NodeListScreen(
     onUrlTest: () -> Unit,
     onRefresh: () -> Unit,
     onRefreshAll: () -> Unit,
+    onSwitchToCountries: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp
@@ -172,6 +174,17 @@ fun NodeListScreen(
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
         actions = {
+            onSwitchToCountries?.let { switchToCountries ->
+                IconButton(
+                    onClick = switchToCountries,
+                    enabled = !isClosing
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Public,
+                        contentDescription = "切换为按地区分组"
+                    )
+                }
+            }
             NodeListTopActions(
                 enabled = !isClosing,
                 onTcpingTest = onTcpingTest,

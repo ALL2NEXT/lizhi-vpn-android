@@ -17,6 +17,7 @@ fun NodeListDestination(
     onNodeSelected: (Node) -> Unit,
     onImportFromText: (String) -> Unit,
     onScanQrCode: () -> Unit,
+    onSwitchToCountries: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp
@@ -77,6 +78,7 @@ fun NodeListDestination(
             }
         },
         onRefreshAll = viewModel::refreshNodes,
+        onSwitchToCountries = onSwitchToCountries,
         onBack = onBack,
         showBackNavigation = showBackNavigation,
         bottomContentPadding = bottomContentPadding

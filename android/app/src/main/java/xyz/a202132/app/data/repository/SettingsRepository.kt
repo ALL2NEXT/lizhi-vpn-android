@@ -12,6 +12,7 @@ import org.json.JSONObject
 import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
+import xyz.a202132.app.data.model.NodeGroupingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeType
@@ -67,6 +68,7 @@ class SettingsRepository(private val context: Context) {
         // 自动化测试设置
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
         private val SELECTED_COUNTRY_CODE = stringPreferencesKey("selected_country_code")
+        private val NODE_GROUPING_MODE = stringPreferencesKey("node_grouping_mode")
         private val NODE_LIST_CATEGORY = stringPreferencesKey("node_list_category")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         private val URL_TEST_TIMEOUT_MS = longPreferencesKey("url_test_timeout_ms")
@@ -215,6 +217,10 @@ class SettingsRepository(private val context: Context) {
     /** 地区页选中的国家代码；存在时主页智能测试跨订阅组限定到该地区。 */
     val selectedCountryCode: Flow<String?> = context.dataStore.data.map { preferences ->
         CountryCodeResolver.normalizeCountryCode(preferences[SELECTED_COUNTRY_CODE])
+    }
+
+    val nodeGroupingMode: Flow<NodeGroupingMode> = context.dataStore.data.map { preferences ->
+        enumValueOrDefault(preferences[NODE_GROUPING_MODE], NodeGroupingMode.COUNTRY)
     }
 
     val subscriptionListJson: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -598,6 +604,12 @@ class SettingsRepository(private val context: Context) {
             } else {
                 preferences[SELECTED_COUNTRY_CODE] = normalizedCode
             }
+        }
+    }
+
+    suspend fun setNodeGroupingMode(mode: NodeGroupingMode) {
+        context.dataStore.edit { preferences ->
+            preferences[NODE_GROUPING_MODE] = mode.name
         }
     }
 

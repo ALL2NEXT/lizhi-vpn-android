@@ -37,6 +37,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.saveable.rememberSaveable
+import xyz.a202132.app.data.model.NodeGroupingMode
 import xyz.a202132.app.ui.components.FloatingHomeNavigationLayout
 import xyz.a202132.app.ui.components.HomeDestination
 import xyz.a202132.app.ui.navigation.AppRoute
@@ -82,6 +83,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = viewModel()
             val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
+            val nodeGroupingMode by viewModel.nodeGroupingMode.collectAsStateWithLifecycle()
             FireflyTheme(skinSettings = skinSettings) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -169,6 +171,11 @@ class MainActivity : ComponentActivity() {
                                 var selectedDestination by rememberSaveable {
                                     mutableStateOf(HomeDestination.HOME)
                                 }
+                                val groupingDestination = when (nodeGroupingMode) {
+                                    NodeGroupingMode.COUNTRY -> HomeDestination.COUNTRIES
+                                    NodeGroupingMode.SUBSCRIPTION ->
+                                        HomeDestination.SUBSCRIPTIONS
+                                }
                                 when (selectedDestination) {
                                     HomeDestination.HOME -> MainScreen(
                                         viewModel = viewModel,
@@ -179,6 +186,7 @@ class MainActivity : ComponentActivity() {
                                             navigateTo(AppRoute.PROXY_SCOPE)
                                         },
                                         onOpenNodeList = {
+                                            viewModel.selectSubscriptionGrouping()
                                             selectedDestination = HomeDestination.SUBSCRIPTIONS
                                         },
                                         onOpenOtherConfig = {
@@ -193,6 +201,8 @@ class MainActivity : ComponentActivity() {
                                         onOpenSkin = { navigateTo(AppRoute.SKIN) },
                                         bottomNavigationDestination =
                                             selectedDestination,
+                                        groupingNavigationDestination =
+                                            groupingDestination,
                                         onBottomNavigationDestinationSelected = {
                                             selectedDestination = it
                                         }
@@ -201,6 +211,7 @@ class MainActivity : ComponentActivity() {
                                     HomeDestination.COUNTRIES ->
                                         FloatingHomeNavigationLayout(
                                             selectedDestination = selectedDestination,
+                                            groupingDestination = groupingDestination,
                                             onDestinationSelected = {
                                                 selectedDestination = it
                                             }
@@ -213,6 +224,11 @@ class MainActivity : ComponentActivity() {
                                                         viewModel.selectAndConnectCountry(countryCode)
                                                     }
                                                 },
+                                                onSwitchToSubscriptions = {
+                                                    viewModel.selectSubscriptionGrouping()
+                                                    selectedDestination =
+                                                        HomeDestination.SUBSCRIPTIONS
+                                                },
                                                 onBack = {
                                                     selectedDestination = HomeDestination.HOME
                                                 },
@@ -223,6 +239,7 @@ class MainActivity : ComponentActivity() {
                                     HomeDestination.SUBSCRIPTIONS ->
                                         FloatingHomeNavigationLayout(
                                             selectedDestination = selectedDestination,
+                                            groupingDestination = groupingDestination,
                                             onDestinationSelected = {
                                                 selectedDestination = it
                                             }
@@ -241,6 +258,10 @@ class MainActivity : ComponentActivity() {
                                                 onScanQrCode = {
                                                     navigateTo(AppRoute.QR_SCANNER)
                                                 },
+                                                onSwitchToCountries = {
+                                                    viewModel.selectCountryGrouping()
+                                                    selectedDestination = HomeDestination.COUNTRIES
+                                                },
                                                 onBack = {
                                                     selectedDestination = HomeDestination.HOME
                                                 },
@@ -252,6 +273,7 @@ class MainActivity : ComponentActivity() {
                                     HomeDestination.NAVIGATION ->
                                         FloatingHomeNavigationLayout(
                                             selectedDestination = selectedDestination,
+                                            groupingDestination = groupingDestination,
                                             onDestinationSelected = {
                                                 selectedDestination = it
                                             }

@@ -48,6 +48,7 @@ enum class HomeDestination {
 @Composable
 fun FloatingHomeNavigationLayout(
     selectedDestination: HomeDestination,
+    groupingDestination: HomeDestination,
     onDestinationSelected: (HomeDestination) -> Unit,
     content: @Composable () -> Unit
 ) {
@@ -55,6 +56,7 @@ fun FloatingHomeNavigationLayout(
         content()
         FloatingHomeNavigationBar(
             selectedDestination = selectedDestination,
+            groupingDestination = groupingDestination,
             onDestinationSelected = onDestinationSelected,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
@@ -64,9 +66,12 @@ fun FloatingHomeNavigationLayout(
 @Composable
 fun FloatingHomeNavigationBar(
     selectedDestination: HomeDestination,
+    groupingDestination: HomeDestination,
     onDestinationSelected: (HomeDestination) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val useCountryGrouping = groupingDestination == HomeDestination.COUNTRIES
+
     Box(
         modifier = modifier
             .navigationBarsPadding()
@@ -98,19 +103,19 @@ fun FloatingHomeNavigationBar(
                     modifier = Modifier.weight(1f)
                 )
                 FloatingNavigationItem(
-                    selected = selectedDestination == HomeDestination.COUNTRIES,
-                    selectedIcon = Icons.Rounded.Public,
-                    unselectedIcon = Icons.Outlined.Public,
-                    label = "地区",
-                    onClick = { onDestinationSelected(HomeDestination.COUNTRIES) },
-                    modifier = Modifier.weight(1f)
-                )
-                FloatingNavigationItem(
-                    selected = selectedDestination == HomeDestination.SUBSCRIPTIONS,
-                    selectedIcon = Icons.Rounded.Subscriptions,
-                    unselectedIcon = Icons.Outlined.Subscriptions,
-                    label = "订阅",
-                    onClick = { onDestinationSelected(HomeDestination.SUBSCRIPTIONS) },
+                    selected = selectedDestination == groupingDestination,
+                    selectedIcon = if (useCountryGrouping) {
+                        Icons.Rounded.Public
+                    } else {
+                        Icons.Rounded.Subscriptions
+                    },
+                    unselectedIcon = if (useCountryGrouping) {
+                        Icons.Outlined.Public
+                    } else {
+                        Icons.Outlined.Subscriptions
+                    },
+                    label = if (useCountryGrouping) "地区" else "订阅",
+                    onClick = { onDestinationSelected(groupingDestination) },
                     modifier = Modifier.weight(1f)
                 )
                 FloatingNavigationItem(

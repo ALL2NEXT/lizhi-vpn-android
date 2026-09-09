@@ -14,7 +14,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +41,7 @@ import xyz.a202132.app.viewmodel.MainViewModel
 fun CountrySelectionDestination(
     viewModel: MainViewModel,
     onCountrySelected: (String) -> Unit,
+    onSwitchToSubscriptions: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp = 108.dp
 ) {
@@ -49,6 +54,7 @@ fun CountrySelectionDestination(
         selectedCountryCode = selectedCountryCode,
         isLoading = isLoading,
         onCountrySelected = onCountrySelected,
+        onSwitchToSubscriptions = onSwitchToSubscriptions,
         onBack = onBack,
         bottomContentPadding = bottomContentPadding
     )
@@ -60,6 +66,7 @@ private fun CountrySelectionScreen(
     selectedCountryCode: String?,
     isLoading: Boolean,
     onCountrySelected: (String) -> Unit,
+    onSwitchToSubscriptions: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp
 ) {
@@ -68,6 +75,14 @@ private fun CountrySelectionScreen(
         subtitle = "主页智能测试将使用所选地区",
         onBack = onBack,
         showBackNavigation = false,
+        actions = {
+            IconButton(onClick = onSwitchToSubscriptions) {
+                Icon(
+                    imageVector = Icons.Rounded.Subscriptions,
+                    contentDescription = "切换为按订阅分组"
+                )
+            }
+        },
         contentPadding = PaddingValues(
             start = 20.dp,
             top = 16.dp,

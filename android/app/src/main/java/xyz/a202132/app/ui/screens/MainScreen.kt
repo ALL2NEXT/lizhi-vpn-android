@@ -44,6 +44,7 @@ fun MainScreen(
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     bottomNavigationDestination: HomeDestination,
+    groupingNavigationDestination: HomeDestination,
     onBottomNavigationDestinationSelected: (HomeDestination) -> Unit
 ) {
     val context = LocalContext.current
@@ -135,6 +136,7 @@ fun MainScreen(
     ) {
         FloatingHomeNavigationLayout(
             selectedDestination = bottomNavigationDestination,
+            groupingDestination = groupingNavigationDestination,
             onDestinationSelected = onBottomNavigationDestinationSelected
         ) {
             Scaffold(
