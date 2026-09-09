@@ -37,15 +37,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.saveable.rememberSaveable
-import xyz.a202132.app.data.model.NodeGroupingMode
+import xyz.a202132.app.feature.nodegrouping.ui.NodeGroupingDestination
 import xyz.a202132.app.ui.components.FloatingHomeNavigationLayout
 import xyz.a202132.app.ui.components.HomeDestination
 import xyz.a202132.app.ui.navigation.AppRoute
 import xyz.a202132.app.ui.screens.FeatureScreen
 import xyz.a202132.app.ui.screens.AccountSettingsScreen
-import xyz.a202132.app.ui.screens.CountrySelectionDestination
 import xyz.a202132.app.ui.screens.MainScreen
-import xyz.a202132.app.ui.screens.NodeListDestination
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
@@ -171,11 +169,6 @@ class MainActivity : ComponentActivity() {
                                 var selectedDestination by rememberSaveable {
                                     mutableStateOf(HomeDestination.HOME)
                                 }
-                                val groupingDestination = when (nodeGroupingMode) {
-                                    NodeGroupingMode.COUNTRY -> HomeDestination.COUNTRIES
-                                    NodeGroupingMode.SUBSCRIPTION ->
-                                        HomeDestination.SUBSCRIPTIONS
-                                }
                                 when (selectedDestination) {
                                     HomeDestination.HOME -> MainScreen(
                                         viewModel = viewModel,
@@ -187,7 +180,7 @@ class MainActivity : ComponentActivity() {
                                         },
                                         onOpenNodeList = {
                                             viewModel.selectSubscriptionGrouping()
-                                            selectedDestination = HomeDestination.SUBSCRIPTIONS
+                                            selectedDestination = HomeDestination.NODE_GROUPING
                                         },
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
@@ -201,49 +194,27 @@ class MainActivity : ComponentActivity() {
                                         onOpenSkin = { navigateTo(AppRoute.SKIN) },
                                         bottomNavigationDestination =
                                             selectedDestination,
-                                        groupingNavigationDestination =
-                                            groupingDestination,
+                                        nodeGroupingMode = nodeGroupingMode,
                                         onBottomNavigationDestinationSelected = {
                                             selectedDestination = it
                                         }
                                     )
 
-                                    HomeDestination.COUNTRIES ->
+                                    HomeDestination.NODE_GROUPING ->
                                         FloatingHomeNavigationLayout(
                                             selectedDestination = selectedDestination,
-                                            groupingDestination = groupingDestination,
+                                            groupingMode = nodeGroupingMode,
                                             onDestinationSelected = {
                                                 selectedDestination = it
                                             }
                                         ) {
-                                            CountrySelectionDestination(
+                                            NodeGroupingDestination(
+                                                groupingMode = nodeGroupingMode,
                                                 viewModel = viewModel,
                                                 onCountrySelected = { countryCode ->
                                                     selectedDestination = HomeDestination.HOME
                                                     viewModel.selectCountry(countryCode)
                                                 },
-                                                onSwitchToSubscriptions = {
-                                                    viewModel.selectSubscriptionGrouping()
-                                                    selectedDestination =
-                                                        HomeDestination.SUBSCRIPTIONS
-                                                },
-                                                onBack = {
-                                                    selectedDestination = HomeDestination.HOME
-                                                },
-                                                bottomContentPadding = 108.dp
-                                            )
-                                        }
-
-                                    HomeDestination.SUBSCRIPTIONS ->
-                                        FloatingHomeNavigationLayout(
-                                            selectedDestination = selectedDestination,
-                                            groupingDestination = groupingDestination,
-                                            onDestinationSelected = {
-                                                selectedDestination = it
-                                            }
-                                        ) {
-                                            NodeListDestination(
-                                                viewModel = viewModel,
                                                 onNodeSelected = { node ->
                                                     selectedDestination = HomeDestination.HOME
                                                     requestVpnPermission {
@@ -256,14 +227,9 @@ class MainActivity : ComponentActivity() {
                                                 onScanQrCode = {
                                                     navigateTo(AppRoute.QR_SCANNER)
                                                 },
-                                                onSwitchToCountries = {
-                                                    viewModel.selectCountryGrouping()
-                                                    selectedDestination = HomeDestination.COUNTRIES
-                                                },
                                                 onBack = {
                                                     selectedDestination = HomeDestination.HOME
                                                 },
-                                                showBackNavigation = false,
                                                 bottomContentPadding = 108.dp
                                             )
                                         }
@@ -271,7 +237,7 @@ class MainActivity : ComponentActivity() {
                                     HomeDestination.NAVIGATION ->
                                         FloatingHomeNavigationLayout(
                                             selectedDestination = selectedDestination,
-                                            groupingDestination = groupingDestination,
+                                            groupingMode = nodeGroupingMode,
                                             onDestinationSelected = {
                                                 selectedDestination = it
                                             }

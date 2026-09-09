@@ -1,20 +1,22 @@
-package xyz.a202132.app.viewmodel
+package xyz.a202132.app.feature.nodegrouping.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 
-class SmartConnectNodeScopeTest {
+class SmartConnectScopeResolverTest {
     @Test
     fun `默认模式只使用当前节点范围`() {
         val currentNodes = listOf(node("current", "group-a", "JP"))
         val allNodes = currentNodes + node("other", "group-b", "US")
 
-        val candidates = SmartConnectNodeScope.selectCandidates(
+        val candidates = SmartConnectScopeResolver.selectCandidates(
             currentNodes = currentNodes,
             allSubscriptionNodes = allNodes,
+            groupingMode = NodeGroupingMode.SUBSCRIPTION,
             fullTestEnabled = false,
             selectedCountryCode = null
         )
@@ -31,9 +33,10 @@ class SmartConnectNodeScopeTest {
             node("favorite", null, "JP", NodeSource.FAVORITE)
         )
 
-        val candidates = SmartConnectNodeScope.selectCandidates(
+        val candidates = SmartConnectScopeResolver.selectCandidates(
             currentNodes = listOf(allNodes.first()),
             allSubscriptionNodes = allNodes,
+            groupingMode = NodeGroupingMode.SUBSCRIPTION,
             fullTestEnabled = true,
             selectedCountryCode = null
         )
@@ -50,14 +53,31 @@ class SmartConnectNodeScopeTest {
             node("favorite", null, "JP", NodeSource.FAVORITE)
         )
 
-        val candidates = SmartConnectNodeScope.selectCandidates(
+        val candidates = SmartConnectScopeResolver.selectCandidates(
             currentNodes = listOf(allNodes[1]),
             allSubscriptionNodes = allNodes,
+            groupingMode = NodeGroupingMode.COUNTRY,
             fullTestEnabled = false,
             selectedCountryCode = "jp"
         )
 
         assertEquals(listOf("jp-a", "jp-b"), candidates.map(Node::id))
+    }
+
+    @Test
+    fun `订阅模式忽略残留地区并使用当前订阅组`() {
+        val currentNodes = listOf(node("us-current", "group-a", "US"))
+        val allNodes = currentNodes + node("jp-other", "group-b", "JP")
+
+        val candidates = SmartConnectScopeResolver.selectCandidates(
+            currentNodes = currentNodes,
+            allSubscriptionNodes = allNodes,
+            groupingMode = NodeGroupingMode.SUBSCRIPTION,
+            fullTestEnabled = false,
+            selectedCountryCode = "JP"
+        )
+
+        assertEquals(listOf("us-current"), candidates.map(Node::id))
     }
 
     private fun node(

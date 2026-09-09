@@ -26,6 +26,7 @@ import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.VpnState
+import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.network.NetworkClient
 import xyz.a202132.app.ui.components.*
 import xyz.a202132.app.ui.dialogs.*
@@ -44,7 +45,7 @@ fun MainScreen(
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     bottomNavigationDestination: HomeDestination,
-    groupingNavigationDestination: HomeDestination,
+    nodeGroupingMode: NodeGroupingMode,
     onBottomNavigationDestinationSelected: (HomeDestination) -> Unit
 ) {
     val context = LocalContext.current
@@ -136,7 +137,7 @@ fun MainScreen(
     ) {
         FloatingHomeNavigationLayout(
             selectedDestination = bottomNavigationDestination,
-            groupingDestination = groupingNavigationDestination,
+            groupingMode = nodeGroupingMode,
             onDestinationSelected = onBottomNavigationDestinationSelected
         ) {
             Scaffold(

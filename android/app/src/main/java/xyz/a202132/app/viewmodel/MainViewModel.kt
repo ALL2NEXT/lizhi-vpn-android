@@ -21,6 +21,10 @@ import xyz.a202132.app.data.local.NodeLocationUpdate
 import xyz.a202132.app.data.local.NodeDao
 import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
+import xyz.a202132.app.feature.nodegrouping.domain.CountryGroupingStrategy
+import xyz.a202132.app.feature.nodegrouping.domain.SmartConnectScopeResolver
+import xyz.a202132.app.feature.nodegrouping.domain.SubscriptionGroupingStrategy
+import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.network.LatencyTester
 import xyz.a202132.app.network.NodeDownloadBandwidthTester
 import xyz.a202132.app.network.SpeedTestService
@@ -34,7 +38,6 @@ import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.XrayConfigGenerator
 import xyz.a202132.app.util.DatabasePassphraseManager
-import xyz.a202132.app.util.countryOptions as collectCountryOptions
 import java.io.File
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -165,8 +168,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         subscriptionGroups,
         storedSubscriptionSourceId
     ) { groups, storedId ->
-        storedId?.takeIf { id -> groups.any { it.sourceId == id } }
-            ?: groups.firstOrNull()?.sourceId
+        SubscriptionGroupingStrategy.resolveActiveSourceId(groups, storedId)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val selectedSubscriptionSourceId = activeSubscriptionSourceId
@@ -191,7 +193,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 面向小白的地区选项跨全部普通订阅组聚合，不受订阅页筛选状态影响。 */
     val countryOptions = allSubscriptionNodes
-        .map(::collectCountryOptions)
+        .map(CountryGroupingStrategy::groups)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val subscriptionNodes = nodeDaoFlow
@@ -497,8 +499,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isTesting.value = true
             try {
                 val fullTestEnabled = settingsRepository.smartConnectFullTestEnabled.first()
+                val groupingMode = settingsRepository.nodeGroupingMode.first()
                 val countryCode = settingsRepository.selectedCountryCode.first()
-                val allNodes = currentSmartConnectNodes(fullTestEnabled, countryCode)
+                val allNodes = currentSmartConnectNodes(
+                    fullTestEnabled = fullTestEnabled,
+                    groupingMode = groupingMode,
+                    selectedCountryCode = countryCode
+                )
                 if (allNodes.isEmpty()) {
 
                     _error.value = "没有可用节点"
@@ -507,7 +514,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (fullTestEnabled) {
                     Log.i(tag, "Smart connection full test enabled: nodes=${allNodes.size}")
                 }
-                if (countryCode != null) {
+                if (groupingMode == NodeGroupingMode.COUNTRY && countryCode != null) {
                     Log.i(
                         tag,
                         "Smart connection country scope enabled: country=$countryCode, " +
@@ -1837,14 +1844,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun currentSmartConnectNodes(
         fullTestEnabled: Boolean,
+        groupingMode: NodeGroupingMode,
         selectedCountryCode: String?
     ): List<Node> {
-        if (!fullTestEnabled && selectedCountryCode == null) return currentNodeListSnapshot()
+        val hasCountryScope =
+            groupingMode == NodeGroupingMode.COUNTRY && selectedCountryCode != null
+        if (!fullTestEnabled && !hasCountryScope) return currentNodeListSnapshot()
         return withContext(Dispatchers.Default) {
             val allSubscriptionNodes = nodeDao().getSubscriptionNodes().first()
-            val candidates = SmartConnectNodeScope.selectCandidates(
+            val candidates = SmartConnectScopeResolver.selectCandidates(
                 currentNodes = emptyList(),
                 allSubscriptionNodes = allSubscriptionNodes,
+                groupingMode = groupingMode,
                 fullTestEnabled = fullTestEnabled,
                 selectedCountryCode = selectedCountryCode
             )

@@ -1,4 +1,4 @@
-package xyz.a202132.app.ui.components
+package xyz.a202132.app.feature.nodegrouping.ui
 
 import android.content.ClipboardManager
 import android.content.Context
@@ -80,10 +80,11 @@ import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.SubscriptionGroup
+import xyz.a202132.app.ui.components.AppScreenScaffold
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
-fun NodeListScreen(
+internal fun SubscriptionGroupingScreen(
     nodes: List<Node>,
     selectedNodeId: String?,
     category: NodeListCategory,

@@ -1,4 +1,4 @@
-package xyz.a202132.app.ui.components
+package xyz.a202132.app.feature.nodegrouping.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable

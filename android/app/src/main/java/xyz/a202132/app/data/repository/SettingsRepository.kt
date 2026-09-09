@@ -12,7 +12,6 @@ import org.json.JSONObject
 import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
-import xyz.a202132.app.data.model.NodeGroupingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeType
@@ -22,6 +21,7 @@ import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.SkinSettings
 import xyz.a202132.app.data.model.UrlTestTargets
+import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.util.CountryCodeResolver
 
 data class PerAppProxySettings(

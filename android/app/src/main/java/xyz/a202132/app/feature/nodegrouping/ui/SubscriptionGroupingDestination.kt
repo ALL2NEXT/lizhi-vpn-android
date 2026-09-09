@@ -1,4 +1,4 @@
-package xyz.a202132.app.ui.screens
+package xyz.a202132.app.feature.nodegrouping.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -7,12 +7,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
-import xyz.a202132.app.ui.components.NodeListScreen
 import xyz.a202132.app.viewmodel.MainViewModel
 
-/** 滑动路由和底部导航“订阅”页共用的节点列表入口，避免重复维护状态绑定。 */
+/** 订阅分组页面的状态绑定入口。 */
 @Composable
-fun NodeListDestination(
+internal fun SubscriptionGroupingDestination(
     viewModel: MainViewModel,
     onNodeSelected: (Node) -> Unit,
     onImportFromText: (String) -> Unit,
@@ -46,7 +45,7 @@ fun NodeListDestination(
         viewModel.subscriptionSourceUpdatedAt.collectAsStateWithLifecycle()
     val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
 
-    NodeListScreen(
+    SubscriptionGroupingScreen(
         nodes = nodes,
         selectedNodeId = selectedNodeId,
         category = nodeListCategory,

@@ -1,4 +1,4 @@
-package xyz.a202132.app.ui.screens
+package xyz.a202132.app.feature.nodegrouping.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,12 +33,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import xyz.a202132.app.feature.nodegrouping.model.CountryOption
 import xyz.a202132.app.ui.components.AppScreenScaffold
-import xyz.a202132.app.util.CountryOption
 import xyz.a202132.app.viewmodel.MainViewModel
 
 @Composable
-fun CountrySelectionDestination(
+internal fun CountryGroupingDestination(
     viewModel: MainViewModel,
     onCountrySelected: (String) -> Unit,
     onSwitchToSubscriptions: () -> Unit,
@@ -49,7 +49,7 @@ fun CountrySelectionDestination(
     val selectedCountryCode by viewModel.selectedCountryCode.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
-    CountrySelectionScreen(
+    CountryGroupingScreen(
         countries = countries,
         selectedCountryCode = selectedCountryCode,
         isLoading = isLoading,
@@ -61,7 +61,7 @@ fun CountrySelectionDestination(
 }
 
 @Composable
-private fun CountrySelectionScreen(
+private fun CountryGroupingScreen(
     countries: List<CountryOption>,
     selectedCountryCode: String?,
     isLoading: Boolean,

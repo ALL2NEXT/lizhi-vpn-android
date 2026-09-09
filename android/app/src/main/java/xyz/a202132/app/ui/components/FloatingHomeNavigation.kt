@@ -37,18 +37,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 
 enum class HomeDestination {
     HOME,
-    COUNTRIES,
-    SUBSCRIPTIONS,
+    NODE_GROUPING,
     NAVIGATION
 }
 
 @Composable
 fun FloatingHomeNavigationLayout(
     selectedDestination: HomeDestination,
-    groupingDestination: HomeDestination,
+    groupingMode: NodeGroupingMode,
     onDestinationSelected: (HomeDestination) -> Unit,
     content: @Composable () -> Unit
 ) {
@@ -56,7 +56,7 @@ fun FloatingHomeNavigationLayout(
         content()
         FloatingHomeNavigationBar(
             selectedDestination = selectedDestination,
-            groupingDestination = groupingDestination,
+            groupingMode = groupingMode,
             onDestinationSelected = onDestinationSelected,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
@@ -66,11 +66,11 @@ fun FloatingHomeNavigationLayout(
 @Composable
 fun FloatingHomeNavigationBar(
     selectedDestination: HomeDestination,
-    groupingDestination: HomeDestination,
+    groupingMode: NodeGroupingMode,
     onDestinationSelected: (HomeDestination) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val useCountryGrouping = groupingDestination == HomeDestination.COUNTRIES
+    val useCountryGrouping = groupingMode == NodeGroupingMode.COUNTRY
 
     Box(
         modifier = modifier
@@ -103,7 +103,7 @@ fun FloatingHomeNavigationBar(
                     modifier = Modifier.weight(1f)
                 )
                 FloatingNavigationItem(
-                    selected = selectedDestination == groupingDestination,
+                    selected = selectedDestination == HomeDestination.NODE_GROUPING,
                     selectedIcon = if (useCountryGrouping) {
                         Icons.Rounded.Public
                     } else {
@@ -115,7 +115,7 @@ fun FloatingHomeNavigationBar(
                         Icons.Outlined.Subscriptions
                     },
                     label = if (useCountryGrouping) "地区" else "订阅",
-                    onClick = { onDestinationSelected(groupingDestination) },
+                    onClick = { onDestinationSelected(HomeDestination.NODE_GROUPING) },
                     modifier = Modifier.weight(1f)
                 )
                 FloatingNavigationItem(
