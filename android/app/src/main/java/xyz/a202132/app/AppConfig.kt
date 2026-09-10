@@ -96,7 +96,7 @@ object AppConfig {
     const val PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY = 32
     const val PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY = 1
 
-    // VPN 断线恢复，默认关闭，由特色功能页面控制
+    // VPN 断线恢复，默认关闭，由高级设定页面控制
     const val DISCONNECT_RECOVERY_ENABLED = false
     const val DISCONNECT_RECOVERY_CHECK_INTERVAL_MS = 5000L
     const val DISCONNECT_RECOVERY_CONFIRM_INTERVAL_MS = 1000L

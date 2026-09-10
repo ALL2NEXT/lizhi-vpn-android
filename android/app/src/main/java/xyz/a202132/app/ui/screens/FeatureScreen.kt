@@ -219,7 +219,7 @@ fun FeatureScreen(
     }
 
     AppScreenScaffold(
-        title = "特色功能",
+        title = "高级设定",
         onBack = onBack
     ) {
         Column(
@@ -229,7 +229,9 @@ fun FeatureScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             FeatureSection(
-                title = "智能连接"
+                title = "智能连接",
+                collapsible = true,
+                initiallyExpanded = true
             ) {
                 FeatureSwitchRow(
                     label = "全量测试",
@@ -855,7 +857,7 @@ private fun SmartTestTargetUrlCell(
             modifier = modifier.heightIn(min = 56.dp)
         ) {
             Text(
-                text = value,
+                text = "编辑",
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primary,
                 fontSize = 12.sp,

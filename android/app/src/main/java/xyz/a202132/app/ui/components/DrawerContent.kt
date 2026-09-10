@@ -114,7 +114,7 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Star,
-                title = "特色功能",
+                title = "高级设定",
                 onClick = {
                     onOpenFeatures()
                 }
