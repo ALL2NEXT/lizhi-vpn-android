@@ -15,18 +15,25 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,6 +52,18 @@ fun OtherConfigScreen(
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val homeClickAction by viewModel.homeClickAction.collectAsStateWithLifecycle()
     val homeLongPressAction by viewModel.homeLongPressAction.collectAsStateWithLifecycle()
+    val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
+    val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
+    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
+    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
+    val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
+
+    var hysteriaUpMbpsInput by remember(hysteriaUpMbps) {
+        mutableStateOf(hysteriaUpMbps.toString())
+    }
+    var hysteriaDownMbpsInput by remember(hysteriaDownMbps) {
+        mutableStateOf(hysteriaDownMbps.toString())
+    }
 
     AppScreenScaffold(
         title = "基础设定",
@@ -148,6 +167,65 @@ fun OtherConfigScreen(
                 }
             }
 
+            OtherConfigSection(
+                title = "断线恢复",
+                titleAction = {
+                    Switch(
+                        checked = disconnectRecoveryEnabled,
+                        onCheckedChange = { viewModel.setDisconnectRecoveryEnabled(it) },
+                        colors = visibleSwitchColors()
+                    )
+                }
+            ) {}
+
+            OtherConfigSection(
+                title = "Hy2 加速",
+                titleAction = {
+                    Switch(
+                        checked = hysteriaBandwidthEnabled,
+                        onCheckedChange = { viewModel.setHysteriaBandwidthEnabled(it) },
+                        colors = visibleSwitchColors()
+                    )
+                }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicNumberField(
+                        label = "Up",
+                        value = hysteriaUpMbpsInput,
+                        onValueChange = {
+                            hysteriaUpMbpsInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setHysteriaUpMbps(value.coerceIn(0, 100_000))
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = hysteriaBandwidthEnabled
+                    )
+                    BasicNumberField(
+                        label = "Dw",
+                        value = hysteriaDownMbpsInput,
+                        onValueChange = {
+                            hysteriaDownMbpsInput = it.filter(Char::isDigit)
+                            it.toIntOrNull()?.let { value ->
+                                viewModel.setHysteriaDownMbps(value.coerceIn(0, 100_000))
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = hysteriaBandwidthEnabled
+                    )
+                    TextButton(
+                        onClick = { viewModel.adaptHysteriaBandwidth() },
+                        enabled = hysteriaBandwidthEnabled && !isHysteriaBandwidthAdapting
+                    ) {
+                        Text(if (isHysteriaBandwidthAdapting) "测试中..." else "自适应")
+                    }
+                }
+            }
+
         }
     }
 }
@@ -166,8 +244,28 @@ private fun HomeConnectionActionSwitch(
 }
 
 @Composable
+private fun BasicNumberField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        label = { Text(label) },
+        enabled = enabled,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+    )
+}
+
+@Composable
 private fun OtherConfigSection(
     title: String? = null,
+    titleAction: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     Column(
@@ -175,12 +273,19 @@ private fun OtherConfigSection(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (!title.isNullOrBlank()) {
-            Text(
-                text = title,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                titleAction?.invoke()
+            }
         }
         content()
     }

@@ -1,15 +1,14 @@
 package xyz.a202132.app.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -40,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,11 +95,6 @@ fun FeatureScreen(
         viewModel.publicNodePoolUrlTestUrl.collectAsStateWithLifecycle()
     val publicNodePoolSpeedTestDownloadUrl by
         viewModel.publicNodePoolSpeedTestDownloadUrl.collectAsStateWithLifecycle()
-    val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
-    val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
-    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
-    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
-    val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
 
@@ -165,13 +158,6 @@ fun FeatureScreen(
         }
     var testSettingsType by remember { mutableStateOf(0) }
     var urlEditorTarget by remember { mutableStateOf<TestUrlEditorTarget?>(null) }
-    var hysteriaUpMbpsInput by remember(hysteriaUpMbps) {
-        mutableStateOf(hysteriaUpMbps.toString())
-    }
-    var hysteriaDownMbpsInput by remember(hysteriaDownMbps) {
-        mutableStateOf(hysteriaDownMbps.toString())
-    }
-
     LaunchedEffect(
         smartConnectTcpingPercent,
         smartConnectUrlTestPercent,
@@ -191,9 +177,7 @@ fun FeatureScreen(
         publicNodePoolSpeedTestDurationMs,
         publicNodePoolTcpingConcurrency,
         publicNodePoolUrlTestConcurrency,
-        publicNodePoolBandwidthTestConcurrency,
-        hysteriaUpMbps,
-        hysteriaDownMbps
+        publicNodePoolBandwidthTestConcurrency
     ) {
         tcpingPercentInput = smartConnectTcpingPercent.toString()
         urlTestPercentInput = smartConnectUrlTestPercent.toString()
@@ -214,8 +198,6 @@ fun FeatureScreen(
         publicNodePoolTcpingConcurrencyInput = publicNodePoolTcpingConcurrency.toString()
         publicNodePoolUrlTestConcurrencyInput = publicNodePoolUrlTestConcurrency.toString()
         publicNodePoolBandwidthTestConcurrencyInput = publicNodePoolBandwidthTestConcurrency.toString()
-        hysteriaUpMbpsInput = hysteriaUpMbps.toString()
-        hysteriaDownMbpsInput = hysteriaDownMbps.toString()
     }
 
     AppScreenScaffold(
@@ -231,7 +213,7 @@ fun FeatureScreen(
             FeatureSection(
                 title = "智能连接",
                 collapsible = true,
-                initiallyExpanded = true
+                initiallyExpanded = false
             ) {
                 FeatureSwitchRow(
                     label = "全量测试",
@@ -460,64 +442,6 @@ fun FeatureScreen(
                         )
                     }
                 )
-            }
-
-            FeatureSection(
-                title = "断线恢复",
-                titleAction = {
-                    Switch(
-                        checked = disconnectRecoveryEnabled,
-                        onCheckedChange = { viewModel.setDisconnectRecoveryEnabled(it) },
-                        colors = featureSwitchColors()
-                    )
-                }
-            ) {}
-
-            FeatureSection(
-                title = "Hy2 加速",
-                titleAction = {
-                    Switch(
-                        checked = hysteriaBandwidthEnabled,
-                        onCheckedChange = { viewModel.setHysteriaBandwidthEnabled(it) },
-                        colors = featureSwitchColors()
-                    )
-                }
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FeatureNumberField(
-                        label = "Up",
-                        value = hysteriaUpMbpsInput,
-                        onValueChange = {
-                            hysteriaUpMbpsInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setHysteriaUpMbps(value.coerceIn(0, 100_000))
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = hysteriaBandwidthEnabled
-                    )
-                    FeatureNumberField(
-                        label = "Dw",
-                        value = hysteriaDownMbpsInput,
-                        onValueChange = {
-                            hysteriaDownMbpsInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setHysteriaDownMbps(value.coerceIn(0, 100_000))
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = hysteriaBandwidthEnabled
-                    )
-                    TextButton(
-                        onClick = { viewModel.adaptHysteriaBandwidth() },
-                        enabled = hysteriaBandwidthEnabled && !isHysteriaBandwidthAdapting
-                    ) {
-                        Text(if (isHysteriaBandwidthAdapting) "测试中..." else "自适应")
-                    }
-                }
             }
 
             FeatureSection(
@@ -772,74 +696,53 @@ private data class SmartTestSettingsRow(
 
 @Composable
 private fun SmartTestSettingsTable(rows: List<SmartTestSettingsRow>) {
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val tableWidth = maxWidth.coerceAtLeast(SmartTestTableMinWidth)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-        ) {
-            Column(
-                modifier = Modifier.width(tableWidth),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                SmartTestSettingsTableRow {
-                    Text(
-                        text = "类型",
-                        modifier = Modifier.width(SmartTestTypeColumnWidth),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    SmartTestTableHeader(
-                        "比例 (%)",
-                        Modifier.weight(SmartTestPercentColumnWeight)
-                    )
-                    SmartTestTableHeader(
-                        "时间 (ms)",
-                        Modifier.weight(SmartTestTimeColumnWeight)
-                    )
-                    SmartTestTableHeader(
-                        "并发",
-                        Modifier.weight(SmartTestConcurrencyColumnWeight)
-                    )
-                    SmartTestTableHeader(
-                        "地址",
-                        Modifier.weight(SmartTestAddressColumnWeight)
-                    )
-                }
-                rows.forEach { row ->
-                    SmartTestSettingsTableRow {
-                        Text(
-                            text = row.label,
-                            modifier = Modifier.width(SmartTestTypeColumnWidth),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1
-                        )
-                        CompactFeatureNumberField(
-                            value = row.percentValue,
-                            onValueChange = row.onPercentChange,
-                            modifier = Modifier.weight(SmartTestPercentColumnWeight)
-                        )
-                        CompactFeatureNumberField(
-                            value = row.timeValue,
-                            onValueChange = row.onTimeChange,
-                            modifier = Modifier.weight(SmartTestTimeColumnWeight)
-                        )
-                        CompactFeatureNumberField(
-                            value = row.concurrencyValue,
-                            onValueChange = row.onConcurrencyChange,
-                            modifier = Modifier.weight(SmartTestConcurrencyColumnWeight)
-                        )
-                        SmartTestTargetUrlCell(
-                            value = row.targetUrl,
-                            onClick = row.onTargetUrlClick,
-                            modifier = Modifier.weight(SmartTestAddressColumnWeight)
-                        )
-                    }
-                }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        SmartTestSettingsTableRow {
+            Text(
+                text = "类型",
+                modifier = Modifier.width(SmartTestTypeColumnWidth),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+            SmartTestTableHeader("比例 (%)", Modifier.weight(SmartTestPercentColumnWeight))
+            SmartTestTableHeader("时间 (ms)", Modifier.weight(SmartTestTimeColumnWeight))
+            SmartTestTableHeader("并发", Modifier.weight(SmartTestConcurrencyColumnWeight))
+            SmartTestTableHeader("地址", Modifier.weight(SmartTestAddressColumnWeight))
+        }
+        rows.forEach { row ->
+            SmartTestSettingsTableRow {
+                Text(
+                    text = row.label,
+                    modifier = Modifier.width(SmartTestTypeColumnWidth),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+                CompactFeatureNumberField(
+                    value = row.percentValue,
+                    onValueChange = row.onPercentChange,
+                    modifier = Modifier.weight(SmartTestPercentColumnWeight)
+                )
+                CompactFeatureNumberField(
+                    value = row.timeValue,
+                    onValueChange = row.onTimeChange,
+                    modifier = Modifier.weight(SmartTestTimeColumnWeight)
+                )
+                CompactFeatureNumberField(
+                    value = row.concurrencyValue,
+                    onValueChange = row.onConcurrencyChange,
+                    modifier = Modifier.weight(SmartTestConcurrencyColumnWeight)
+                )
+                SmartTestTargetUrlCell(
+                    value = row.targetUrl,
+                    onClick = row.onTargetUrlClick,
+                    modifier = Modifier.weight(SmartTestAddressColumnWeight)
+                )
             }
         }
     }
@@ -854,16 +757,15 @@ private fun SmartTestTargetUrlCell(
     if (value != null && onClick != null) {
         TextButton(
             onClick = onClick,
-            modifier = modifier.heightIn(min = 56.dp)
+            modifier = modifier.height(48.dp)
         ) {
             Text(
                 text = "编辑",
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primary,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 1
             )
         }
     } else {
@@ -1000,16 +902,15 @@ private fun CompactFeatureNumberField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = modifier,
+        modifier = modifier.height(48.dp),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center),
+        textStyle = MaterialTheme.typography.bodySmall.copy(textAlign = TextAlign.Center),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
     )
 }
 
-private val SmartTestTypeColumnWidth = 70.dp
-private val SmartTestTableMinWidth = 520.dp
-private const val SmartTestPercentColumnWeight = 1f
+private val SmartTestTypeColumnWidth = 58.dp
+private const val SmartTestPercentColumnWeight = 0.9f
 private const val SmartTestTimeColumnWeight = 1f
-private const val SmartTestConcurrencyColumnWeight = 0.85f
-private const val SmartTestAddressColumnWeight = 1.8f
+private const val SmartTestConcurrencyColumnWeight = 0.8f
+private const val SmartTestAddressColumnWeight = 1f
