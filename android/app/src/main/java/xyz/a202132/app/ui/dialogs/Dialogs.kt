@@ -46,7 +46,6 @@ private val htmlImageExecutor = Executors.newFixedThreadPool(2)
 private val htmlImageClient: OkHttpClient by lazy {
     NetworkClient.withUserAgent(OkHttpClient.Builder()).build()
 }
-
 @Composable
 fun NoticeDialog(
     notice: NoticeInfo,
@@ -306,7 +305,6 @@ private class HtmlImageGetter(
 
         return drawable
     }
-
     private fun loadDrawable(source: String): Drawable? {
         val resolvedSource = when {
             source.startsWith("//") -> "https:$source"
@@ -486,70 +484,6 @@ fun DownloadDialog(
                         ) {
                             Text(if (isPaused) "继续" else "暂停")
                         }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PermissionDialog(
-    onDismiss: () -> Unit,
-    onOpenSettings: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "需要安装权限",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Text(
-                    text = "为了更新应用，请授予\"安装未知应用\"权限。\n\n请点击下方按钮前往设置页面开启权限。",
-                    fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 22.sp
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
-                    ) {
-                        Text("取消")
-                    }
-                    
-                    Button(
-                        onClick = onOpenSettings,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Text("去设置")
                     }
                 }
             }

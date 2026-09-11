@@ -1,7 +1,6 @@
 package xyz.a202132.app.ui.screens
 
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -338,47 +337,12 @@ fun MainScreen(
     
     // 下载状态监听
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
-    var showPermissionDialog by remember { mutableStateOf(false) }
-    
-    val installLauncher = rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
-    ) {
-        // 从设置页返回后再次尝试安装
-        if (
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
-            context.packageManager.canRequestPackageInstalls()
-        ) {
-            viewModel.installApk()
-        }
-    }
     
     // 下载完成后自动安装
     LaunchedEffect(downloadState.status) {
         if (downloadState.status == xyz.a202132.app.network.DownloadStatus.COMPLETED) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                if (!context.packageManager.canRequestPackageInstalls()) {
-                    showPermissionDialog = true
-                } else {
-                    viewModel.installApk()
-                }
-            } else {
-                viewModel.installApk()
-            }
+            viewModel.installApk()
         }
-    }
-    
-    if (showPermissionDialog) {
-        PermissionDialog(
-            onDismiss = { showPermissionDialog = false },
-            onOpenSettings = {
-                showPermissionDialog = false
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                    intent.data = android.net.Uri.parse("package:${context.packageName}")
-                    installLauncher.launch(intent)
-                }
-            }
-        )
     }
     
     // 下载弹窗

@@ -1,5 +1,6 @@
 package xyz.a202132.app.viewmodel
 import android.app.Application
+import android.content.ClipData
 import android.content.Intent
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -31,6 +32,7 @@ import xyz.a202132.app.network.SpeedTestService
 import xyz.a202132.app.network.SubscriptionParser
 import xyz.a202132.app.network.SubscriptionImportUrl
 import xyz.a202132.app.network.DownloadManager
+import xyz.a202132.app.network.DownloadArtifact
 import xyz.a202132.app.network.NodeLocationResolver
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.service.ServiceManager
@@ -367,6 +369,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
     val hideFavoriteNodeGroup = settingsRepository.hideFavoriteNodeGroup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val updateDownloadDirectoryUri = settingsRepository.updateDownloadDirectoryUri.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        null
+    )
     val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
     val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_UP_MBPS)
     val hysteriaDownMbps = settingsRepository.hysteriaDownMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_DOWN_MBPS)
@@ -1545,15 +1552,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun openDownloadUrl() {
         updateInfo.value?.let { info ->
             // 使用 DownloadManager 检查文件是否已下载且有效
-            val existingFile = DownloadManager.isApkReady(getApplication(), info.version)
-            if (existingFile != null) {
+            val existingArtifact = DownloadManager.isApkReady(
+                getApplication(),
+                info.version,
+                updateDownloadDirectoryUri.value
+            )
+            if (existingArtifact != null) {
                 // 此处强制执行 installApk 逻辑
                 installApk()
                 return
             }
             
             viewModelScope.launch {
-                DownloadManager.startDownload(info.downloadUrl, getApplication(), info.version)
+                DownloadManager.startDownload(
+                    info.downloadUrl,
+                    getApplication(),
+                    info.version,
+                    updateDownloadDirectoryUri.value
+                )
             }
         }
     }
@@ -1565,7 +1581,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun resumeDownload() {
         updateInfo.value?.let { info ->
             viewModelScope.launch {
-                DownloadManager.startDownload(info.downloadUrl, getApplication(), info.version)
+                DownloadManager.startDownload(
+                    info.downloadUrl,
+                    getApplication(),
+                    info.version,
+                    updateDownloadDirectoryUri.value
+                )
             }
         }
     }
@@ -1573,7 +1594,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun retryDownload() {
          updateInfo.value?.let { info ->
             viewModelScope.launch {
-                DownloadManager.startDownload(info.downloadUrl, getApplication(), info.version)
+                DownloadManager.startDownload(
+                    info.downloadUrl,
+                    getApplication(),
+                    info.version,
+                    updateDownloadDirectoryUri.value
+                )
             }
         }
     }
@@ -1583,34 +1609,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     fun installApk() {
-        val targetFile = downloadState.value.file ?: run {
-             updateInfo.value?.let { info ->
-                 DownloadManager.isApkReady(getApplication(), info.version)
-             }
+        val context = getApplication<Application>()
+        val targetArtifact = updateInfo.value?.let { info ->
+            DownloadManager.isApkReady(
+                context,
+                info.version,
+                updateDownloadDirectoryUri.value
+            )
         }
+            ?: downloadState.value.file?.let { DownloadArtifact(file = it) }
+            ?: downloadState.value.fileUri?.let { DownloadArtifact(uri = it) }
 
-        targetFile?.let { file ->
-            val context = getApplication<Application>()
+        targetArtifact?.let { artifact ->
             try {
-                if (file.exists()) { 
-                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                val uri = artifact.uri ?: artifact.file?.takeIf { it.exists() }?.let { file ->
+                    androidx.core.content.FileProvider.getUriForFile(
                         context,
                         "${context.packageName}.fileprovider",
                         file
                     )
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, "application/vnd.android.package-archive")
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    }
-                    context.startActivity(intent)
-                } else {
-                     _error.value = "安装文件丢失，请重新下载"
-                     // 重置状态以允许重新下载
-                     DownloadManager.resetState()
+                } ?: run {
+                    _error.value = "安装文件丢失，请重新下载"
+                    DownloadManager.resetState()
+                    return
                 }
+
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    clipData = ClipData.newRawUri("APK", uri)
+                }
+                // 交给系统安装器打开 APK，不在应用内请求“安装未知来源”设置。
+                context.startActivity(intent)
             } catch (e: Exception) {
                 Log.e(tag, "Install failed", e)
-                _error.value = "无法启动安装程序: ${e.message}"
+                _error.value = "无法打开系统安装程序: ${e.message}"
             }
         } ?: run {
              _error.value = "找不到安装包，请重试下载"
@@ -1634,6 +1667,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 settingsRepository.setIgnoredUpdateVersionCode(info.versionCode)
                 Log.i(tag, "Ignored optional update: versionCode=${info.versionCode}")
             }
+        }
+    }
+
+    fun setUpdateDownloadDirectoryUri(uri: String?) {
+        viewModelScope.launch {
+            settingsRepository.setUpdateDownloadDirectoryUri(uri)
         }
     }
     

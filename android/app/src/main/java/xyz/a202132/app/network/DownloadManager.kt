@@ -1,7 +1,9 @@
 package xyz.a202132.app.network
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +38,13 @@ data class DownloadState(
     val totalBytes: Long = 0,
     val error: String? = null,
     val file: File? = null,
+    val fileUri: Uri? = null,
     val consecutiveFailures: Int = 0      // 连续失败次数（不含无网络）
+)
+
+data class DownloadArtifact(
+    val file: File? = null,
+    val uri: Uri? = null
 )
 
 object DownloadManager {
@@ -49,6 +57,7 @@ object DownloadManager {
     
     private var downloadUrl: String = ""
     private var targetFile: File? = null
+    private var targetDirectoryUri: String? = null
     
     // 控制标志
     @Volatile
@@ -62,40 +71,57 @@ object DownloadManager {
     /**
      * 开始或继续下载
      */
-    suspend fun startDownload(url: String, context: Context, versionName: String) {
+    suspend fun startDownload(
+        url: String,
+        context: Context,
+        versionName: String,
+        downloadDirectoryUri: String? = null
+    ) {
         withContext(Dispatchers.IO) {
             try {
                 val finalFileName = "update_$versionName.apk"
                 val tempFileName = "update_$versionName.temp"
-                val finalFile = File(context.externalCacheDir, finalFileName)
-                val tempFile = File(context.externalCacheDir, tempFileName)
-                
+                val cacheDirectory = context.externalCacheDir ?: context.cacheDir
+                val finalFile = File(cacheDirectory, finalFileName)
+                val tempFile = File(cacheDirectory, tempFileName)
+                val normalizedDirectoryUri = downloadDirectoryUri?.takeIf { it.isNotBlank() }
+                val downloadDirectory = normalizedDirectoryUri?.let { uriString ->
+                    DocumentFile.fromTreeUri(context, Uri.parse(uriString))
+                        ?.takeIf { it.exists() && it.isDirectory && it.canWrite() }
+                        ?: throw IllegalStateException("自定义下载目录不可用，请重新选择")
+                }
+
                 // 1. 检查最终文件是否存在且有效
-                if (finalFile.exists() && finalFile.length() > 0) {
+                val existingDocumentFile = downloadDirectory?.findFile(finalFileName)
+                    ?.takeIf { it.exists() && it.isFile && it.length() > 0 }
+                if (
+                    (downloadDirectory == null && finalFile.exists() && finalFile.length() > 0) ||
+                    existingDocumentFile != null
+                ) {
                     Log.d(TAG, "Final file exists, skipping download")
-                    if (_downloadState.value.status != DownloadStatus.COMPLETED) {
-                         _downloadState.value = DownloadState(
-                            status = DownloadStatus.COMPLETED,
-                            progress = 100,
-                            file = finalFile,
-                            totalBytes = finalFile.length(),
-                            downloadedBytes = finalFile.length()
-                        )
-                    }
+                    _downloadState.value = DownloadState(
+                        status = DownloadStatus.COMPLETED,
+                        progress = 100,
+                        file = if (downloadDirectory == null) finalFile else null,
+                        fileUri = existingDocumentFile?.uri,
+                        totalBytes = existingDocumentFile?.length() ?: finalFile.length(),
+                        downloadedBytes = existingDocumentFile?.length() ?: finalFile.length()
+                    )
                     return@withContext
                 }
 
                 // 初始化检查
-                if (downloadUrl != url) {
+                if (downloadUrl != url || targetDirectoryUri != normalizedDirectoryUri) {
                     // 新下载请求
                     downloadUrl = url
+                    targetDirectoryUri = normalizedDirectoryUri
                     targetFile = tempFile // 处理临时文件
 
                     // 清理旧缓存文件
                     if (tempFile.exists()) { }
 
                     // 清除其他版本中的旧文件
-                    context.externalCacheDir?.listFiles()?.forEach { file ->
+                    cacheDirectory.listFiles()?.forEach { file ->
                         if (file.name.startsWith("update_") && file.name != finalFileName && file.name != tempFileName) {
                             file.delete()
                         }
@@ -235,20 +261,61 @@ object DownloadManager {
                         }
                     }
 
-                    // 下载完成 - 重命名为最终名称
-                    if (targetFile!!.renameTo(finalFile)) {
-                         consecutiveFailures = 0 // 下载成功，重置失败计数
-                         _downloadState.value = DownloadState(
-                            status = DownloadStatus.COMPLETED,
-                            progress = 100,
-                            speed = "0 KB/s",
-                            downloadedBytes = totalBytesRead,
-                            totalBytes = totalLength,
-                            file = finalFile // 定位到最终文件
-                        )
+                    // 关闭临时文件后，再将其移动到默认目录或复制到 SAF 目录。
+                    outputStream.flush()
+                    outputStream.close()
+                    outputStream = null
+                    inputStream.close()
+                    inputStream = null
+                    body.close()
+
+                    val downloadedArtifact = if (downloadDirectory == null) {
+                        if (!targetFile!!.renameTo(finalFile)) {
+                            throw Exception("Failed to rename temp file to apk")
+                        }
+                        DownloadArtifact(file = finalFile)
                     } else {
-                        throw Exception("Failed to rename temp file to apk")
+                        val existingFile = downloadDirectory.findFile(finalFileName)
+                        if (existingFile != null && !existingFile.delete()) {
+                            throw Exception("无法替换自定义目录中的旧安装包")
+                        }
+                        val destinationFile = downloadDirectory.createFile(
+                            "application/vnd.android.package-archive",
+                            finalFileName
+                        ) ?: throw Exception("无法在自定义目录创建安装包")
+
+                        try {
+                            val destinationOutput = context.contentResolver
+                                .openOutputStream(destinationFile.uri, "rwt")
+                                ?: throw Exception("无法写入自定义下载目录")
+                            destinationOutput.use { output ->
+                                targetFile!!.inputStream().use { input ->
+                                    input.copyTo(output)
+                                }
+                            }
+                            if (!destinationFile.exists() || destinationFile.length() <= 0) {
+                                throw Exception("写入自定义下载目录后的安装包无效")
+                            }
+                            if (!targetFile!!.delete()) {
+                                Log.w(TAG, "Failed to delete temporary APK: ${targetFile!!.absolutePath}")
+                            }
+                            DownloadArtifact(uri = destinationFile.uri)
+                        } catch (error: Exception) {
+                            destinationFile.delete()
+                            throw error
+                        }
                     }
+
+                    consecutiveFailures = 0 // 下载成功，重置失败计数
+                    _downloadState.value = DownloadState(
+                        status = DownloadStatus.COMPLETED,
+                        progress = 100,
+                        speed = "0 KB/s",
+                        downloadedBytes = totalBytesRead,
+                        totalBytes = totalLength,
+                        file = downloadedArtifact.file,
+                        fileUri = downloadedArtifact.uri
+                    )
                     
                 } finally {
                     inputStream?.close()
@@ -296,21 +363,43 @@ object DownloadManager {
         consecutiveFailures = 0 // 取消时重置失败计数
         _downloadState.value = DownloadState(status = DownloadStatus.CANCELED)
         downloadUrl = "" // Reset url to force fresh start next time
+        targetDirectoryUri = null
     }
     
     fun resetState() {
         _downloadState.value = DownloadState()
         downloadUrl = ""
         targetFile = null
+        targetDirectoryUri = null
         isPaused = false
         isCancelled = false
         consecutiveFailures = 0
     }
     
     // Check if valid APK exists
-    fun isApkReady(context: Context, versionName: String): File? {
-        val file = File(context.externalCacheDir, "update_$versionName.apk")
-        return if (file.exists() && file.length() > 0) file else null
+    fun isApkReady(
+        context: Context,
+        versionName: String,
+        downloadDirectoryUri: String? = null
+    ): DownloadArtifact? {
+        val fileName = "update_$versionName.apk"
+        val normalizedDirectoryUri = downloadDirectoryUri?.takeIf { it.isNotBlank() }
+        if (normalizedDirectoryUri != null) {
+            val documentFile = runCatching {
+                DocumentFile.fromTreeUri(context, Uri.parse(normalizedDirectoryUri))
+                    ?.findFile(fileName)
+            }.getOrNull()
+            return documentFile?.takeIf {
+                it.exists() && it.isFile && it.length() > 0
+            }?.let { DownloadArtifact(uri = it.uri) }
+        }
+
+        val file = File(context.externalCacheDir ?: context.cacheDir, fileName)
+        return if (file.exists() && file.length() > 0) {
+            DownloadArtifact(file = file)
+        } else {
+            null
+        }
     }
 
     private fun calculateSpeed(bytesDiff: Long, timeMs: Long): String {

@@ -492,6 +492,7 @@ dependencies {
     
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.documentfile:documentfile:1.0.1")
     
     // sing-box core is compiled from the pinned source submodule for every
     // clean build; no prebuilt AAR is consumed from app/libs.

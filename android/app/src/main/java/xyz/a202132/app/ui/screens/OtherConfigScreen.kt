@@ -1,5 +1,10 @@
 package xyz.a202132.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -32,11 +38,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.documentfile.provider.DocumentFile
 import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.ui.components.AppScreenScaffold
@@ -47,6 +55,7 @@ fun OtherConfigScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
@@ -57,6 +66,30 @@ fun OtherConfigScreen(
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
     val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
+    val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
+
+    val updateDownloadDirectoryName = updateDownloadDirectoryUri?.let { uriString ->
+        runCatching {
+            DocumentFile.fromTreeUri(context, Uri.parse(uriString))?.name
+        }.getOrNull()
+    }?.takeIf { it.isNotBlank() }
+
+    val updateDownloadDirectoryPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        val persisted = runCatching {
+            context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+        }.isSuccess
+        if (persisted) {
+            viewModel.setUpdateDownloadDirectoryUri(uri.toString())
+        } else {
+            Toast.makeText(context, "无法保存该目录的访问权限，请重新选择", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     var hysteriaUpMbpsInput by remember(hysteriaUpMbps) {
         mutableStateOf(hysteriaUpMbps.toString())
@@ -132,6 +165,46 @@ fun OtherConfigScreen(
                             }
                         )
                     }
+                )
+            }
+
+            OtherConfigSection(
+                title = "更新安装包下载目录"
+            ) {
+                Text(
+                    text = if (updateDownloadDirectoryUri == null) {
+                        "当前：应用缓存目录"
+                    } else if (updateDownloadDirectoryName != null) {
+                        "当前：$updateDownloadDirectoryName"
+                    } else {
+                        "当前自定义目录不可访问，请重新选择"
+                    },
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { updateDownloadDirectoryPicker.launch(null) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("选择目录")
+                    }
+                    if (updateDownloadDirectoryUri != null) {
+                        TextButton(
+                            onClick = { viewModel.setUpdateDownloadDirectoryUri(null) }
+                        ) {
+                            Text("恢复默认")
+                        }
+                    }
+                }
+                Text(
+                    text = "更新包将保存到所选文件夹，下载完成后由系统安装程序打开。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 

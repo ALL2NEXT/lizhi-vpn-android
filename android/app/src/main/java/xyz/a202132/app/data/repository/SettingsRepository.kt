@@ -49,6 +49,8 @@ class SettingsRepository(private val context: Context) {
         private val HOME_LONG_PRESS_ACTION = stringPreferencesKey("home_long_press_action")
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
+        private val UPDATE_DOWNLOAD_DIRECTORY_URI =
+            stringPreferencesKey("update_download_directory_uri")
         private val USER_AGREEMENT_ACCEPTED = booleanPreferencesKey("user_agreement_accepted")
         private val USER_AGREEMENT_VERSION = stringPreferencesKey("user_agreement_version")
         private val USER_AGREEMENT_ACCEPTED_AT = longPreferencesKey("user_agreement_accepted_at")
@@ -201,6 +203,11 @@ class SettingsRepository(private val context: Context) {
 
     val ignoredUpdateVersionCode: Flow<Int?> = context.dataStore.data.map { preferences ->
         preferences[IGNORED_UPDATE_VERSION_CODE]
+    }
+
+    /** 用户选择的更新安装包目录；为空时使用应用缓存目录。 */
+    val updateDownloadDirectoryUri: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[UPDATE_DOWNLOAD_DIRECTORY_URI]
     }
     
     // 分应用代理 - 是否启用
@@ -411,6 +418,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setIgnoredUpdateVersionCode(versionCode: Int) {
         context.dataStore.edit { preferences ->
             preferences[IGNORED_UPDATE_VERSION_CODE] = versionCode
+        }
+    }
+
+    suspend fun setUpdateDownloadDirectoryUri(uri: String?) {
+        context.dataStore.edit { preferences ->
+            if (uri.isNullOrBlank()) {
+                preferences.remove(UPDATE_DOWNLOAD_DIRECTORY_URI)
+            } else {
+                preferences[UPDATE_DOWNLOAD_DIRECTORY_URI] = uri
+            }
         }
     }
     
