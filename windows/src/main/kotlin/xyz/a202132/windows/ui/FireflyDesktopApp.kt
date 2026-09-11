@@ -246,7 +246,7 @@ private fun DesktopHomeNavigationBar(
                     selected = selectedDestination == DesktopHomeDestination.SUBSCRIPTIONS,
                     selectedIcon = Icons.Rounded.Subscriptions,
                     unselectedIcon = Icons.Outlined.Subscriptions,
-                    label = "订阅",
+                    label = "分组",
                     onClick = { onDestinationSelected(DesktopHomeDestination.SUBSCRIPTIONS) },
                     modifier = Modifier.weight(1f)
                 )
@@ -789,7 +789,7 @@ private fun NodeListScreen(state: DesktopAppState, controller: VpnController) {
             TopAppBar(
                 title = {
                     Column {
-                        Text("节点列表", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text("订阅分组", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         state.testingLabel?.let {
                             Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }

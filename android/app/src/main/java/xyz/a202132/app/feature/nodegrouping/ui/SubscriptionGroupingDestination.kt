@@ -19,11 +19,19 @@ internal fun SubscriptionGroupingDestination(
     onSwitchToCountries: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
-    bottomContentPadding: Dp = 16.dp
+    bottomContentPadding: Dp = 16.dp,
+    nodesOverride: List<Node>? = null,
+    categoryOverride: NodeListCategory? = null,
+    screenTitle: String = "订阅分组",
+    screenSubtitle: String? = null,
+    showCategorySwitch: Boolean = true,
+    testNodes: List<Node>? = null
 ) {
-    val nodes by viewModel.nodes.collectAsStateWithLifecycle()
+    val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
+    val nodes = nodesOverride ?: viewModelNodes
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
     val nodeListCategory by viewModel.nodeListCategory.collectAsStateWithLifecycle()
+    val category = categoryOverride ?: nodeListCategory
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
     val selectedSubscriptionSourceId by
         viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
@@ -48,7 +56,7 @@ internal fun SubscriptionGroupingDestination(
     SubscriptionGroupingScreen(
         nodes = nodes,
         selectedNodeId = selectedNodeId,
-        category = nodeListCategory,
+        category = category,
         subscriptionGroups = subscriptionGroups,
         selectedSubscriptionSourceId = selectedSubscriptionSourceId,
         favoriteSourceNodeIds = favoriteSourceNodeIds,
@@ -69,10 +77,10 @@ internal fun SubscriptionGroupingDestination(
             viewModel::skipFavoriteRemovalConfirmationForSession,
         onImportFromText = onImportFromText,
         onScanQrCode = onScanQrCode,
-        onTcpingTest = viewModel::testAllNodes,
-        onUrlTest = viewModel::urlTestAllNodes,
+        onTcpingTest = { viewModel.testAllNodes(testNodes ?: nodes) },
+        onUrlTest = { viewModel.urlTestAllNodes(testNodes ?: nodes) },
         onRefresh = {
-            if (nodeListCategory == NodeListCategory.PRIMARY) {
+            if (category == NodeListCategory.PRIMARY) {
                 selectedSubscriptionSourceId?.let(viewModel::refreshNodes)
             }
         },
@@ -80,6 +88,9 @@ internal fun SubscriptionGroupingDestination(
         onSwitchToCountries = onSwitchToCountries,
         onBack = onBack,
         showBackNavigation = showBackNavigation,
-        bottomContentPadding = bottomContentPadding
+        bottomContentPadding = bottomContentPadding,
+        screenTitle = screenTitle,
+        screenSubtitle = screenSubtitle,
+        showCategorySwitch = showCategorySwitch
     )
 }

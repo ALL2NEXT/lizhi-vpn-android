@@ -187,9 +187,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             emptySet()
         )
 
-    private val allSubscriptionNodes = nodeDaoFlow.flatMapLatest { dao ->
+    val allSubscriptionNodes = nodeDaoFlow.flatMapLatest { dao ->
         dao.getSubscriptionNodes()
-    }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** 面向小白的地区选项跨全部普通订阅组聚合，不受订阅页筛选状态影响。 */
     val countryOptions = allSubscriptionNodes

@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -41,6 +42,7 @@ import xyz.a202132.app.viewmodel.MainViewModel
 internal fun CountryGroupingDestination(
     viewModel: MainViewModel,
     onCountrySelected: (String) -> Unit,
+    onViewCountryDetails: (CountryOption) -> Unit,
     onSwitchToSubscriptions: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp = 108.dp
@@ -54,6 +56,7 @@ internal fun CountryGroupingDestination(
         selectedCountryCode = selectedCountryCode,
         isLoading = isLoading,
         onCountrySelected = onCountrySelected,
+        onViewCountryDetails = onViewCountryDetails,
         onSwitchToSubscriptions = onSwitchToSubscriptions,
         onBack = onBack,
         bottomContentPadding = bottomContentPadding
@@ -66,12 +69,13 @@ private fun CountryGroupingScreen(
     selectedCountryCode: String?,
     isLoading: Boolean,
     onCountrySelected: (String) -> Unit,
+    onViewCountryDetails: (CountryOption) -> Unit,
     onSwitchToSubscriptions: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp
 ) {
     AppScreenScaffold(
-        title = "选择地区",
+        title = "地区分组",
         subtitle = "主页智能测试将使用所选地区",
         onBack = onBack,
         showBackNavigation = false,
@@ -104,7 +108,8 @@ private fun CountryGroupingScreen(
                     CountryCard(
                         country = country,
                         selected = country.code == selectedCountryCode,
-                        onClick = { onCountrySelected(country.code) }
+                        onClick = { onCountrySelected(country.code) },
+                        onViewDetails = { onViewCountryDetails(country) }
                     )
                 }
             }
@@ -137,7 +142,8 @@ private fun CountryGroupingScreen(
 private fun CountryCard(
     country: CountryOption,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onViewDetails: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -186,6 +192,17 @@ private fun CountryCard(
                 fontSize = 13.sp,
                 maxLines = 1
             )
+            IconButton(onClick = onViewDetails) {
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = "查看当前地区的线路详细信息",
+                    tint = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
         }
     }
 }

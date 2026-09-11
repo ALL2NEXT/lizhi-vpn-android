@@ -114,7 +114,10 @@ internal fun SubscriptionGroupingScreen(
     onSwitchToCountries: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
-    bottomContentPadding: Dp = 16.dp
+    bottomContentPadding: Dp = 16.dp,
+    screenTitle: String = "订阅分组",
+    screenSubtitle: String? = null,
+    showCategorySwitch: Boolean = true
 ) {
     val context = LocalContext.current
     var isClosing by remember { mutableStateOf(false) }
@@ -169,8 +172,12 @@ internal fun SubscriptionGroupingScreen(
     }
 
     AppScreenScaffold(
-        title = "节点列表",
-        subtitle = if (isRefreshingAllSubscriptions) "节点刷新中..." else testingLabel,
+        title = screenTitle,
+        subtitle = if (isRefreshingAllSubscriptions) {
+            "节点刷新中..."
+        } else {
+            testingLabel ?: screenSubtitle
+        },
         onBack = handleBack,
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
@@ -223,7 +230,8 @@ internal fun SubscriptionGroupingScreen(
             onSubscriptionSourceChange = onSubscriptionSourceChange,
             onToggleFavorite = handleToggleFavorite,
             interactionEnabled = !isClosing,
-            bottomContentPadding = bottomContentPadding
+            bottomContentPadding = bottomContentPadding,
+            showCategorySwitch = showCategorySwitch
         )
     }
 
@@ -358,6 +366,7 @@ private fun NodeListContent(
     onToggleFavorite: (Node, Boolean) -> Unit,
     interactionEnabled: Boolean,
     bottomContentPadding: Dp,
+    showCategorySwitch: Boolean,
 ) {
     var frozenNodeOrderIds by remember { mutableStateOf<List<String>?>(null) }
     var wasTesting by remember { mutableStateOf(isTesting) }
@@ -394,6 +403,7 @@ private fun NodeListContent(
     val canPullRefresh =
         interactionEnabled &&
             !isTesting &&
+            showCategorySwitch &&
             category == NodeListCategory.PRIMARY &&
             !selectedSubscriptionSourceId.isNullOrBlank()
     val pullRefreshing = isRefreshing && pullRefreshRequested
@@ -428,6 +438,7 @@ private fun NodeListContent(
     val canSwipeNodeGroups =
         interactionEnabled &&
             !isTesting &&
+            showCategorySwitch &&
             nodeGroupPageCount > 1
     val nodeGroupSwipeVisualOffsetPx by animateFloatAsState(
         targetValue = if (isNodeGroupSwiping) nodeGroupSwipeOffsetPx else 0f,
@@ -547,16 +558,18 @@ private fun NodeListContent(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
-        NodeListCategorySwitch(
-            category = category,
-            subscriptionGroups = subscriptionGroups,
-            selectedSubscriptionSourceId = selectedSubscriptionSourceId,
-            hideFavoriteNodeGroup = hideFavoriteNodeGroup,
-            enabled = interactionEnabled && !isTesting,
-            onCategoryChange = onCategoryChange,
-            onSubscriptionSourceChange = onSubscriptionSourceChange
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+        if (showCategorySwitch) {
+            NodeListCategorySwitch(
+                category = category,
+                subscriptionGroups = subscriptionGroups,
+                selectedSubscriptionSourceId = selectedSubscriptionSourceId,
+                hideFavoriteNodeGroup = hideFavoriteNodeGroup,
+                enabled = interactionEnabled && !isTesting,
+                onCategoryChange = onCategoryChange,
+                onSubscriptionSourceChange = onSubscriptionSourceChange
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         if (category == NodeListCategory.FAVORITES) {
             Row(

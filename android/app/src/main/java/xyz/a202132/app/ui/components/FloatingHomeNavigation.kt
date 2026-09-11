@@ -114,7 +114,7 @@ fun FloatingHomeNavigationBar(
                     } else {
                         Icons.Outlined.Subscriptions
                     },
-                    label = if (useCountryGrouping) "地区" else "订阅",
+                    label = "分组",
                     onClick = { onDestinationSelected(HomeDestination.NODE_GROUPING) },
                     modifier = Modifier.weight(1f)
                 )
