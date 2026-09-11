@@ -158,9 +158,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val subscriptionGroups = nodeDaoFlow.flatMapLatest { it.getSubscriptionGroups() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val subscriptionSourceUpdatedAt = settingsRepository.subscriptionSourceUpdatedAt
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
-
     private val storedSubscriptionSourceId = settingsRepository.selectedSubscriptionSourceId
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -207,7 +204,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-    private val favoriteNodes = nodeDaoFlow.flatMapLatest { it.getFavoriteNodes() }
+    val favoriteNodes = nodeDaoFlow
+        .flatMapLatest { it.getFavoriteNodes() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Data
     private val visibleNodes = combine(

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.SubscriptionGroup
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -44,14 +46,18 @@ import xyz.a202132.app.viewmodel.MainViewModel
 internal fun SubscriptionGroupSelectionDestination(
     viewModel: MainViewModel,
     onSubscriptionSelected: (SubscriptionGroup) -> Unit,
+    onFavoritesSelected: () -> Unit,
     onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp = 108.dp
 ) {
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
+    val favoriteNodes by viewModel.favoriteNodes.collectAsStateWithLifecycle()
     val selectedSubscriptionSourceId by
         viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
+    val nodeListCategory by viewModel.nodeListCategory.collectAsStateWithLifecycle()
+    val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val nodeCounts = allSubscriptionNodes
         .asSequence()
@@ -63,8 +69,12 @@ internal fun SubscriptionGroupSelectionDestination(
         subscriptionGroups = subscriptionGroups,
         selectedSubscriptionSourceId = selectedSubscriptionSourceId,
         nodeCounts = nodeCounts,
+        favoriteNodeCount = favoriteNodes.size,
+        favoriteSelected = nodeListCategory == NodeListCategory.FAVORITES,
+        hideFavoriteNodeGroup = hideFavoriteNodeGroup,
         isLoading = isLoading,
         onSubscriptionSelected = onSubscriptionSelected,
+        onFavoritesSelected = onFavoritesSelected,
         onSwitchToCountries = onSwitchToCountries,
         onBack = onBack,
         bottomContentPadding = bottomContentPadding
@@ -76,8 +86,12 @@ private fun SubscriptionGroupSelectionScreen(
     subscriptionGroups: List<SubscriptionGroup>,
     selectedSubscriptionSourceId: String?,
     nodeCounts: Map<String, Int>,
+    favoriteNodeCount: Int,
+    favoriteSelected: Boolean,
+    hideFavoriteNodeGroup: Boolean,
     isLoading: Boolean,
     onSubscriptionSelected: (SubscriptionGroup) -> Unit,
+    onFavoritesSelected: () -> Unit,
     onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp
@@ -104,7 +118,7 @@ private fun SubscriptionGroupSelectionScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) {
         when {
-            subscriptionGroups.isNotEmpty() -> LazyColumn(
+            subscriptionGroups.isNotEmpty() || !hideFavoriteNodeGroup -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = bottomContentPadding),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -119,6 +133,15 @@ private fun SubscriptionGroupSelectionScreen(
                         selected = group.sourceId == selectedSubscriptionSourceId,
                         onClick = { onSubscriptionSelected(group) }
                     )
+                }
+                if (!hideFavoriteNodeGroup) {
+                    item(key = "favorites") {
+                        FavoriteGroupCard(
+                            nodeCount = favoriteNodeCount,
+                            selected = favoriteSelected,
+                            onClick = onFavoritesSelected
+                        )
+                    }
                 }
             }
 
@@ -142,6 +165,77 @@ private fun SubscriptionGroupSelectionScreen(
                     textAlign = TextAlign.Center
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteGroupCard(
+    nodeCount: Int,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp)
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Favorite,
+                contentDescription = null,
+                tint = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                modifier = Modifier.size(34.dp)
+            )
+            Text(
+                text = "收藏节点",
+                modifier = Modifier.weight(1f),
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+            Text(
+                text = "$nodeCount 个节点",
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontSize = 13.sp,
+                maxLines = 1
+            )
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = "查看收藏节点",
+                tint = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }

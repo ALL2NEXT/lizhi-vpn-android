@@ -24,7 +24,6 @@ internal fun SubscriptionGroupingDestination(
     categoryOverride: NodeListCategory? = null,
     screenTitle: String = "订阅分组",
     screenSubtitle: String? = null,
-    showCategorySwitch: Boolean = true,
     testNodes: List<Node>? = null
 ) {
     val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
@@ -32,46 +31,31 @@ internal fun SubscriptionGroupingDestination(
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
     val nodeListCategory by viewModel.nodeListCategory.collectAsStateWithLifecycle()
     val category = categoryOverride ?: nodeListCategory
-    val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
-    val selectedSubscriptionSourceId by
-        viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
     val favoriteSourceNodeIds by
         viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
     val skipFavoriteRemovalConfirmation by
         viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
-    val isRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()
     val isRefreshingAllSubscriptions by
         viewModel.isRefreshingAllSubscriptions.collectAsStateWithLifecycle()
-    val hideFavoriteNodeGroup by
-        viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val nodeDisplaySettings by
         viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     val protocolCoreSettings by
         viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
-    val subscriptionSourceUpdatedAt by
-        viewModel.subscriptionSourceUpdatedAt.collectAsStateWithLifecycle()
     val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
 
     SubscriptionGroupingScreen(
         nodes = nodes,
         selectedNodeId = selectedNodeId,
         category = category,
-        subscriptionGroups = subscriptionGroups,
-        selectedSubscriptionSourceId = selectedSubscriptionSourceId,
         favoriteSourceNodeIds = favoriteSourceNodeIds,
         skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
         isTesting = isTesting,
-        isRefreshing = isRefreshing,
         isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
-        hideFavoriteNodeGroup = hideFavoriteNodeGroup,
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
-        subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
         testingLabel = testingLabel,
         onNodeSelected = onNodeSelected,
-        onCategoryChange = viewModel::setNodeListCategory,
-        onSubscriptionSourceChange = viewModel::setSubscriptionSource,
         onToggleFavorite = viewModel::toggleFavoriteNode,
         onSkipFavoriteRemovalConfirmationForSession =
             viewModel::skipFavoriteRemovalConfirmationForSession,
@@ -79,18 +63,12 @@ internal fun SubscriptionGroupingDestination(
         onScanQrCode = onScanQrCode,
         onTcpingTest = { viewModel.testAllNodes(testNodes ?: nodes) },
         onUrlTest = { viewModel.urlTestAllNodes(testNodes ?: nodes) },
-        onRefresh = {
-            if (category == NodeListCategory.PRIMARY) {
-                selectedSubscriptionSourceId?.let(viewModel::refreshNodes)
-            }
-        },
         onRefreshAll = viewModel::refreshNodes,
         onSwitchToCountries = onSwitchToCountries,
         onBack = onBack,
         showBackNavigation = showBackNavigation,
         bottomContentPadding = bottomContentPadding,
         screenTitle = screenTitle,
-        screenSubtitle = screenSubtitle,
-        showCategorySwitch = showCategorySwitch
+        screenSubtitle = screenSubtitle
     )
 }

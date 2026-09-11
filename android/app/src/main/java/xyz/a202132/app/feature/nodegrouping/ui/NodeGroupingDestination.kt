@@ -23,6 +23,8 @@ private sealed interface NodeGroupingDetail {
         val sourceId: String,
         val sourceName: String
     ) : NodeGroupingDetail
+
+    data object Favorites : NodeGroupingDetail
 }
 
 /**
@@ -42,6 +44,7 @@ fun NodeGroupingDestination(
     bottomContentPadding: Dp = 108.dp
 ) {
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
+    val favoriteNodes by viewModel.favoriteNodes.collectAsStateWithLifecycle()
     var detail by remember { mutableStateOf<NodeGroupingDetail?>(null) }
 
     val switchToCountries = {
@@ -64,7 +67,6 @@ fun NodeGroupingDestination(
                 categoryOverride = NodeListCategory.PRIMARY,
                 screenTitle = "线路信息",
                 screenSubtitle = currentDetail.countryName,
-                showCategorySwitch = false,
                 testNodes = countryNodes,
                 onNodeSelected = onNodeSelected,
                 onImportFromText = onImportFromText,
@@ -86,8 +88,25 @@ fun NodeGroupingDestination(
                 categoryOverride = NodeListCategory.PRIMARY,
                 screenTitle = "线路信息",
                 screenSubtitle = currentDetail.sourceName,
-                showCategorySwitch = false,
                 testNodes = subscriptionNodes,
+                onNodeSelected = onNodeSelected,
+                onImportFromText = onImportFromText,
+                onScanQrCode = onScanQrCode,
+                onSwitchToCountries = switchToCountries,
+                onBack = { detail = null },
+                showBackNavigation = true,
+                bottomContentPadding = bottomContentPadding
+            )
+        }
+
+        NodeGroupingDetail.Favorites -> {
+            SubscriptionGroupingDestination(
+                viewModel = viewModel,
+                nodesOverride = favoriteNodes,
+                categoryOverride = NodeListCategory.FAVORITES,
+                screenTitle = "收藏节点",
+                screenSubtitle = "管理收藏的节点",
+                testNodes = favoriteNodes,
                 onNodeSelected = onNodeSelected,
                 onImportFromText = onImportFromText,
                 onScanQrCode = onScanQrCode,
@@ -115,6 +134,10 @@ fun NodeGroupingDestination(
                 onSubscriptionSelected = { group ->
                     detail = NodeGroupingDetail.Subscription(group.sourceId, group.name)
                     viewModel.setSubscriptionSource(group.sourceId)
+                },
+                onFavoritesSelected = {
+                    detail = NodeGroupingDetail.Favorites
+                    viewModel.setNodeListCategory(NodeListCategory.FAVORITES)
                 },
                 onSwitchToCountries = switchToCountries,
                 onBack = onBack,

@@ -347,10 +347,6 @@ internal class SubscriptionDataLoader(
             }
             nodeDao().replaceSubscriptionNodes(nodesToPersist)
             lastFetchedNodes = nodesToPersist
-            settingsRepository.setSubscriptionSourcesUpdatedAt(
-                sourceIds = fetchedResult.successfulSourceIds,
-                updatedAt = System.currentTimeMillis()
-            )
             onNodesPersisted(nodesToPersist)
             Log.d(TAG, "Fetched ${fetchedNodes.size} nodes, persisted ${nodesToPersist.size}")
             return true

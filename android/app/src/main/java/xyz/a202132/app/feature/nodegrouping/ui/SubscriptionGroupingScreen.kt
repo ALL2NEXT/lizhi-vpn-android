@@ -3,16 +3,10 @@ package xyz.a202132.app.feature.nodegrouping.ui
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,9 +21,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Language
@@ -38,11 +29,8 @@ import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.rounded.Public
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -53,71 +41,51 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
-import kotlinx.coroutines.delay
-import kotlin.math.abs
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProtocolCoreSettings
-import xyz.a202132.app.data.model.SubscriptionGroup
 import xyz.a202132.app.ui.components.AppScreenScaffold
 
-@OptIn(ExperimentalMaterialApi::class)
 @Composable
 internal fun SubscriptionGroupingScreen(
     nodes: List<Node>,
     selectedNodeId: String?,
     category: NodeListCategory,
-    subscriptionGroups: List<SubscriptionGroup>,
-    selectedSubscriptionSourceId: String?,
     favoriteSourceNodeIds: Set<String>,
     skipFavoriteRemovalConfirmation: Boolean,
     isTesting: Boolean,
-    isRefreshing: Boolean,
     isRefreshingAllSubscriptions: Boolean,
-    hideFavoriteNodeGroup: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
-    subscriptionSourceUpdatedAt: Map<String, Long>,
     testingLabel: String? = null,
     onNodeSelected: (Node) -> Unit,
-    onCategoryChange: (NodeListCategory) -> Unit,
-    onSubscriptionSourceChange: (String) -> Unit,
     onToggleFavorite: (Node) -> Unit,
     onSkipFavoriteRemovalConfirmationForSession: () -> Unit,
     onImportFromText: (String) -> Unit,
     onScanQrCode: () -> Unit,
     onTcpingTest: () -> Unit,
     onUrlTest: () -> Unit,
-    onRefresh: () -> Unit,
     onRefreshAll: () -> Unit,
     onSwitchToCountries: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp,
     screenTitle: String = "订阅分组",
-    screenSubtitle: String? = null,
-    showCategorySwitch: Boolean = true
+    screenSubtitle: String? = null
 ) {
     val context = LocalContext.current
     var isClosing by remember { mutableStateOf(false) }
@@ -212,26 +180,17 @@ internal fun SubscriptionGroupingScreen(
             nodes = nodes,
             selectedNodeId = selectedNodeId,
             category = category,
-            subscriptionGroups = subscriptionGroups,
-            selectedSubscriptionSourceId = selectedSubscriptionSourceId,
             favoriteSourceNodeIds = favoriteSourceNodeIds,
             isTesting = isTesting,
-            isRefreshing = isRefreshing,
             isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
-            hideFavoriteNodeGroup = hideFavoriteNodeGroup,
             nodeDisplaySettings = nodeDisplaySettings,
             protocolCoreSettings = protocolCoreSettings,
-            subscriptionSourceUpdatedAt = subscriptionSourceUpdatedAt,
-            onRefresh = onRefresh,
             onImportFromClipboard = handleImportFromClipboard,
             onScanQrCode = handleScanQrCode,
             onNodeSelected = handleNodeSelected,
-            onCategoryChange = onCategoryChange,
-            onSubscriptionSourceChange = onSubscriptionSourceChange,
             onToggleFavorite = handleToggleFavorite,
             interactionEnabled = !isClosing,
-            bottomContentPadding = bottomContentPadding,
-            showCategorySwitch = showCategorySwitch
+            bottomContentPadding = bottomContentPadding
         )
     }
 
@@ -340,181 +299,25 @@ private fun NodeListTopActions(
         )
     }
 }
-
-@OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun NodeListContent(
     nodes: List<Node>,
     selectedNodeId: String?,
     category: NodeListCategory,
-    subscriptionGroups: List<SubscriptionGroup>,
-    selectedSubscriptionSourceId: String?,
     favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
-    isRefreshing: Boolean,
     isRefreshingAllSubscriptions: Boolean,
-    hideFavoriteNodeGroup: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
-    subscriptionSourceUpdatedAt: Map<String, Long>,
-    onRefresh: () -> Unit,
     onImportFromClipboard: () -> Unit,
     onScanQrCode: () -> Unit,
     onNodeSelected: (Node) -> Unit,
-    onCategoryChange: (NodeListCategory) -> Unit,
-    onSubscriptionSourceChange: (String) -> Unit,
     onToggleFavorite: (Node, Boolean) -> Unit,
     interactionEnabled: Boolean,
-    bottomContentPadding: Dp,
-    showCategorySwitch: Boolean,
+    bottomContentPadding: Dp
 ) {
     var frozenNodeOrderIds by remember { mutableStateOf<List<String>?>(null) }
-    var wasTesting by remember { mutableStateOf(isTesting) }
-    var pendingScrollToTop by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
-    val density = LocalDensity.current
-    val nodeGroupSwipeThresholdPx = with(density) { 72.dp.toPx() }
-    var nodeGroupSwipeOffsetPx by remember { mutableFloatStateOf(0f) }
-    var isNodeGroupSwiping by remember { mutableStateOf(false) }
-    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var pullRefreshRequested by remember { mutableStateOf(false) }
-    LaunchedEffect(subscriptionSourceUpdatedAt[selectedSubscriptionSourceId]) {
-        while (true) {
-            delay(60_000L)
-            nowMillis = System.currentTimeMillis()
-        }
-    }
-    LaunchedEffect(isRefreshing) {
-        if (!isRefreshing) pullRefreshRequested = false
-    }
-    // 收藏节点和所有订阅组共用同一套页序，保证任意相邻页面都能左右滑动切换。
-    val subscriptionPageCount = subscriptionGroups.size.coerceAtLeast(1)
-    val nodeGroupPageCount =
-        subscriptionPageCount + if (hideFavoriteNodeGroup) 0 else 1
-    val currentNodeGroupPageIndex = when {
-        category == NodeListCategory.FAVORITES && !hideFavoriteNodeGroup ->
-            subscriptionPageCount
-        subscriptionGroups.isEmpty() -> 0
-        else -> subscriptionGroups.indexOfFirst {
-            it.sourceId == selectedSubscriptionSourceId
-        }.coerceAtLeast(0)
-    }
-    val lastUpdatedAt = selectedSubscriptionSourceId?.let(subscriptionSourceUpdatedAt::get)
-    val canPullRefresh =
-        interactionEnabled &&
-            !isTesting &&
-            showCategorySwitch &&
-            category == NodeListCategory.PRIMARY &&
-            !selectedSubscriptionSourceId.isNullOrBlank()
-    val pullRefreshing = isRefreshing && pullRefreshRequested
-    val pullRefreshState = rememberPullRefreshState(
-        refreshing = pullRefreshing,
-        onRefresh = {
-            if (!isRefreshing) {
-                pullRefreshRequested = true
-                onRefresh()
-            }
-        }
-    )
-    val pullRefreshContentOffsetPx = with(density) {
-        val offset = if (pullRefreshing) {
-            56.dp.toPx()
-        } else {
-            80.dp.toPx() * pullRefreshState.progress.coerceIn(0f, 1f)
-        }
-        offset
-    }
-    val showPullRefreshStatus =
-        canPullRefresh && (pullRefreshing || pullRefreshState.progress > 0f)
-    val pullRefreshProgress = if (pullRefreshing) {
-        1f
-    } else {
-        pullRefreshState.progress
-    }
-    val pullRefreshModifier = Modifier.pullRefresh(
-        state = pullRefreshState,
-        enabled = canPullRefresh
-    )
-    val canSwipeNodeGroups =
-        interactionEnabled &&
-            !isTesting &&
-            showCategorySwitch &&
-            nodeGroupPageCount > 1
-    val nodeGroupSwipeVisualOffsetPx by animateFloatAsState(
-        targetValue = if (isNodeGroupSwiping) nodeGroupSwipeOffsetPx else 0f,
-        animationSpec = if (isNodeGroupSwiping) {
-            snap()
-        } else {
-            tween(durationMillis = 180, easing = FastOutSlowInEasing)
-        },
-        label = "nodeGroupSwipeOffset"
-    )
-    val nodeGroupSwipeProgress =
-        (abs(nodeGroupSwipeVisualOffsetPx) / nodeGroupSwipeThresholdPx)
-            .coerceIn(0f, 1f)
-    val nodeGroupSwipeModifier = Modifier
-        .graphicsLayer {
-            translationX = nodeGroupSwipeVisualOffsetPx
-            alpha = 1f - nodeGroupSwipeProgress * 0.12f
-        }
-        .pointerInput(
-            canSwipeNodeGroups,
-            currentNodeGroupPageIndex,
-            nodeGroupPageCount,
-            subscriptionGroups,
-            nodeGroupSwipeThresholdPx
-        ) {
-            if (!canSwipeNodeGroups) return@pointerInput
-            detectHorizontalDragGestures(
-                onDragStart = {
-                    nodeGroupSwipeOffsetPx = 0f
-                    isNodeGroupSwiping = true
-                },
-                onHorizontalDrag = { change, dragAmount ->
-                    val requestedOffset = nodeGroupSwipeOffsetPx + dragAmount
-                    val hasTarget = when {
-                        requestedOffset < 0f ->
-                            currentNodeGroupPageIndex < nodeGroupPageCount - 1
-                        requestedOffset > 0f -> currentNodeGroupPageIndex > 0
-                        else -> true
-                    }
-                    val adjustedDrag = if (hasTarget) dragAmount else dragAmount * 0.25f
-                    nodeGroupSwipeOffsetPx =
-                        (nodeGroupSwipeOffsetPx + adjustedDrag).coerceIn(
-                            -nodeGroupSwipeThresholdPx * 1.2f,
-                            nodeGroupSwipeThresholdPx * 1.2f
-                        )
-                    change.consume()
-                },
-                onDragEnd = {
-                    val targetIndex = when {
-                        nodeGroupSwipeOffsetPx <= -nodeGroupSwipeThresholdPx &&
-                            currentNodeGroupPageIndex < nodeGroupPageCount - 1 ->
-                            currentNodeGroupPageIndex + 1
-                        nodeGroupSwipeOffsetPx >= nodeGroupSwipeThresholdPx &&
-                            currentNodeGroupPageIndex > 0 -> currentNodeGroupPageIndex - 1
-                        else -> currentNodeGroupPageIndex
-                    }
-                    isNodeGroupSwiping = false
-                    nodeGroupSwipeOffsetPx = 0f
-                    if (targetIndex != currentNodeGroupPageIndex) {
-                        pendingScrollToTop = true
-                        val targetSubscription = subscriptionGroups.getOrNull(targetIndex)
-                        when {
-                            targetSubscription != null ->
-                                onSubscriptionSourceChange(targetSubscription.sourceId)
-                            targetIndex == subscriptionPageCount ->
-                                onCategoryChange(NodeListCategory.FAVORITES)
-                            else -> onCategoryChange(NodeListCategory.PRIMARY)
-                        }
-                    }
-                },
-                onDragCancel = {
-                    isNodeGroupSwiping = false
-                    nodeGroupSwipeOffsetPx = 0f
-                }
-            )
-        }
 
     LaunchedEffect(isTesting) {
         if (isTesting) {
@@ -522,12 +325,8 @@ private fun NodeListContent(
                 frozenNodeOrderIds = nodes.map { it.id }
             }
         } else {
-            if (wasTesting) {
-                pendingScrollToTop = true
-            }
             frozenNodeOrderIds = null
         }
-        wasTesting = isTesting
     }
 
     val displayNodes = remember(nodes, isTesting, frozenNodeOrderIds) {
@@ -541,14 +340,6 @@ private fun NodeListContent(
         }
     }
 
-    LaunchedEffect(pendingScrollToTop, isTesting, frozenNodeOrderIds, displayNodes.size) {
-        if (pendingScrollToTop && !isTesting && frozenNodeOrderIds == null && displayNodes.isNotEmpty()) {
-            withFrameNanos { }
-            listState.scrollToItem(0)
-            pendingScrollToTop = false
-        }
-    }
-
     Column(modifier = Modifier.fillMaxSize()) {
         if (isTesting || isRefreshingAllSubscriptions) {
             LinearProgressIndicator(
@@ -556,19 +347,6 @@ private fun NodeListContent(
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        if (showCategorySwitch) {
-            NodeListCategorySwitch(
-                category = category,
-                subscriptionGroups = subscriptionGroups,
-                selectedSubscriptionSourceId = selectedSubscriptionSourceId,
-                hideFavoriteNodeGroup = hideFavoriteNodeGroup,
-                enabled = interactionEnabled && !isTesting,
-                onCategoryChange = onCategoryChange,
-                onSubscriptionSourceChange = onSubscriptionSourceChange
-            )
-            Spacer(modifier = Modifier.height(12.dp))
         }
 
         if (category == NodeListCategory.FAVORITES) {
@@ -605,8 +383,6 @@ private fun NodeListContent(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(pullRefreshModifier)
-                        .then(nodeGroupSwipeModifier)
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -615,32 +391,16 @@ private fun NodeListContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 16.sp
                     )
-                    PullRefreshStatus(
-                        visible = showPullRefreshStatus,
-                        refreshing = pullRefreshing,
-                        progress = pullRefreshProgress,
-                        contentOffsetPx = pullRefreshContentOffsetPx,
-                        lastUpdatedAt = lastUpdatedAt,
-                        nowMillis = nowMillis,
-                        modifier = Modifier.align(Alignment.TopCenter)
-                    )
                 }
             }
 
             else -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(pullRefreshModifier)
-                        .then(nodeGroupSwipeModifier)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                translationY = pullRefreshContentOffsetPx
-                            },
+                        modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             top = 4.dp,
                             bottom = bottomContentPadding
@@ -666,15 +426,6 @@ private fun NodeListContent(
                             )
                         }
                     }
-                    PullRefreshStatus(
-                        visible = showPullRefreshStatus,
-                        refreshing = pullRefreshing,
-                        progress = pullRefreshProgress,
-                        contentOffsetPx = pullRefreshContentOffsetPx,
-                        lastUpdatedAt = lastUpdatedAt,
-                        nowMillis = nowMillis,
-                        modifier = Modifier.align(Alignment.TopCenter)
-                    )
                 }
             }
         }
@@ -691,7 +442,6 @@ private fun NodeListContent(
         }
     }
 }
-
 @Composable
 private fun NodeListImportAction(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -737,198 +487,4 @@ private fun NodeListImportAction(
             )
         }
     }
-}
-
-@Composable
-private fun NodeListCategorySwitch(
-    category: NodeListCategory,
-    subscriptionGroups: List<SubscriptionGroup>,
-    selectedSubscriptionSourceId: String?,
-    hideFavoriteNodeGroup: Boolean,
-    enabled: Boolean,
-    onCategoryChange: (NodeListCategory) -> Unit,
-    onSubscriptionSourceChange: (String) -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(10.dp)
-    ) {
-        val subscriptionSegmentCount = if (subscriptionGroups.isEmpty()) 1 else subscriptionGroups.size
-        val segmentCount = subscriptionSegmentCount + if (hideFavoriteNodeGroup) 0 else 1
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val segmentGap = 4.dp
-            val availableWidth = maxWidth - 8.dp - segmentGap * (segmentCount - 1)
-            val segmentWidth = if (segmentCount <= 4) {
-                (availableWidth / segmentCount).coerceAtLeast(88.dp)
-            } else {
-                112.dp
-            }
-            val categoryScrollState = rememberScrollState()
-            val density = LocalDensity.current
-            val selectedSegmentIndex = when {
-                category == NodeListCategory.FAVORITES && !hideFavoriteNodeGroup -> segmentCount - 1
-                subscriptionGroups.isEmpty() -> 0
-                else -> subscriptionGroups.indexOfFirst {
-                    it.sourceId == selectedSubscriptionSourceId
-                }.coerceAtLeast(0)
-            }
-
-            LaunchedEffect(selectedSegmentIndex, segmentWidth, maxWidth) {
-                withFrameNanos { }
-                val segmentStepPx = with(density) { (segmentWidth + segmentGap).roundToPx() }
-                val centerOffsetPx = with(density) {
-                    ((maxWidth - segmentWidth) / 2).roundToPx()
-                }
-                val targetOffset =
-                    (selectedSegmentIndex * segmentStepPx - centerOffsetPx)
-                        .coerceIn(0, categoryScrollState.maxValue)
-                categoryScrollState.animateScrollTo(targetOffset)
-            }
-
-            Row(
-                modifier = Modifier
-                    .horizontalScroll(categoryScrollState)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(segmentGap)
-            ) {
-                if (subscriptionGroups.isEmpty()) {
-                    NodeListCategorySegment(
-                        text = "订阅节点",
-                        selected = category == NodeListCategory.PRIMARY,
-                        enabled = enabled,
-                        modifier = Modifier.width(segmentWidth),
-                        onClick = { onCategoryChange(NodeListCategory.PRIMARY) }
-                    )
-                } else {
-                    subscriptionGroups.forEach { group ->
-                        NodeListCategorySegment(
-                            text = group.name,
-                            selected = category == NodeListCategory.PRIMARY &&
-                                selectedSubscriptionSourceId == group.sourceId,
-                            enabled = enabled,
-                            modifier = Modifier.width(segmentWidth),
-                            onClick = { onSubscriptionSourceChange(group.sourceId) }
-                        )
-                    }
-                }
-                if (!hideFavoriteNodeGroup) {
-                    NodeListCategorySegment(
-                        text = "\u6536\u85cf\u8282\u70b9",
-                        selected = category == NodeListCategory.FAVORITES,
-                        enabled = enabled,
-                        modifier = Modifier.width(segmentWidth),
-                        onClick = { onCategoryChange(NodeListCategory.FAVORITES) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NodeListCategorySegment(
-    text: String,
-    selected: Boolean,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled) { onClick() },
-        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(vertical = 9.dp),
-            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            fontSize = 14.sp,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun PullRefreshStatus(
-    visible: Boolean,
-    refreshing: Boolean,
-    progress: Float,
-    contentOffsetPx: Float,
-    lastUpdatedAt: Long?,
-    nowMillis: Long,
-    modifier: Modifier = Modifier
-) {
-    if (!visible) return
-    val density = LocalDensity.current
-    val statusHeightPx = with(density) { 50.dp.toPx() }
-    val boundedProgress = progress.coerceIn(0f, 1f)
-    val readyToRefresh = !refreshing && progress >= 1f
-    val statusText = when {
-        refreshing -> "\u6b63\u5728\u5237\u65b0"
-        readyToRefresh -> "\u677e\u5f00\u5237\u65b0"
-        else -> "\u7ee7\u7eed\u4e0b\u62c9"
-    }
-    val activeColor = MaterialTheme.colorScheme.primary
-    val indicatorColor = if (readyToRefresh || refreshing) {
-        activeColor
-    } else {
-        activeColor.copy(alpha = 0.6f)
-    }
-    Column(
-        modifier = modifier.graphicsLayer {
-            translationY = (contentOffsetPx - statusHeightPx).coerceAtLeast(0f)
-        },
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "$statusText \u00b7 ${formatSubscriptionUpdatedText(lastUpdatedAt, nowMillis)}",
-            color = if (readyToRefresh || refreshing) {
-                activeColor
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            fontWeight = if (readyToRefresh) FontWeight.Bold else FontWeight.Medium,
-            fontSize = 12.sp,
-            maxLines = 1
-        )
-        Surface(
-            modifier = Modifier
-                .width(1.dp)
-                .height(14.dp),
-            color = indicatorColor,
-            shape = RoundedCornerShape(1.dp)
-        ) {}
-        if (refreshing) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(20.dp)
-                    .graphicsLayer {
-                        rotationZ = boundedProgress * 180f
-                        val readyScale = if (readyToRefresh) 1.12f else 1f
-                        scaleX = readyScale
-                        scaleY = readyScale
-                    },
-                tint = indicatorColor
-            )
-        }
-    }
-}
-
-private fun formatSubscriptionUpdatedText(updatedAt: Long?, nowMillis: Long): String {
-    if (updatedAt == null || updatedAt <= 0L) {
-        return "\u6682\u65e0\u8bb0\u5f55"
-    }
-    val minutes = (nowMillis - updatedAt).coerceAtLeast(0L) / 60_000L
-    return "${minutes}\u5206\u949f\u524d"
 }
