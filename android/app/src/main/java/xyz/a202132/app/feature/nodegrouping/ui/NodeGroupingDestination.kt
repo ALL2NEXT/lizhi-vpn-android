@@ -64,13 +64,10 @@ fun NodeGroupingDestination(
             SubscriptionGroupingDestination(
                 viewModel = viewModel,
                 nodesOverride = countryNodes,
-                categoryOverride = NodeListCategory.PRIMARY,
                 screenTitle = "线路信息",
                 screenSubtitle = currentDetail.countryName,
                 testNodes = countryNodes,
                 onNodeSelected = onNodeSelected,
-                onImportFromText = onImportFromText,
-                onScanQrCode = onScanQrCode,
                 onBack = { detail = null },
                 showBackNavigation = true,
                 bottomContentPadding = bottomContentPadding
@@ -84,13 +81,10 @@ fun NodeGroupingDestination(
             SubscriptionGroupingDestination(
                 viewModel = viewModel,
                 nodesOverride = subscriptionNodes,
-                categoryOverride = NodeListCategory.PRIMARY,
                 screenTitle = "线路信息",
                 screenSubtitle = currentDetail.sourceName,
                 testNodes = subscriptionNodes,
                 onNodeSelected = onNodeSelected,
-                onImportFromText = onImportFromText,
-                onScanQrCode = onScanQrCode,
                 onBack = { detail = null },
                 showBackNavigation = true,
                 bottomContentPadding = bottomContentPadding
@@ -101,13 +95,10 @@ fun NodeGroupingDestination(
             SubscriptionGroupingDestination(
                 viewModel = viewModel,
                 nodesOverride = favoriteNodes,
-                categoryOverride = NodeListCategory.FAVORITES,
                 screenTitle = "收藏节点",
                 screenSubtitle = "管理收藏的节点",
                 testNodes = favoriteNodes,
                 onNodeSelected = onNodeSelected,
-                onImportFromText = onImportFromText,
-                onScanQrCode = onScanQrCode,
                 onBack = { detail = null },
                 showBackNavigation = true,
                 bottomContentPadding = bottomContentPadding
@@ -142,6 +133,8 @@ fun NodeGroupingDestination(
                 onViewFavoritesDetails = {
                     detail = NodeGroupingDetail.Favorites
                 },
+                onImportFromText = onImportFromText,
+                onScanQrCode = onScanQrCode,
                 onSwitchToCountries = switchToCountries,
                 onBack = onBack,
                 bottomContentPadding = bottomContentPadding

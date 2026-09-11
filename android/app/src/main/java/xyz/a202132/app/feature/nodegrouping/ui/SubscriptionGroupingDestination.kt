@@ -6,7 +6,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.Node
-import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.viewmodel.MainViewModel
 
 /** 按订阅仓库分组页面的状态绑定入口。 */
@@ -14,13 +13,10 @@ import xyz.a202132.app.viewmodel.MainViewModel
 internal fun SubscriptionGroupingDestination(
     viewModel: MainViewModel,
     onNodeSelected: (Node) -> Unit,
-    onImportFromText: (String) -> Unit,
-    onScanQrCode: () -> Unit,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp,
     nodesOverride: List<Node>? = null,
-    categoryOverride: NodeListCategory? = null,
     screenTitle: String = "按订阅仓库分组",
     screenSubtitle: String? = null,
     testNodes: List<Node>? = null
@@ -28,8 +24,6 @@ internal fun SubscriptionGroupingDestination(
     val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
     val nodes = nodesOverride ?: viewModelNodes
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
-    val nodeListCategory by viewModel.nodeListCategory.collectAsStateWithLifecycle()
-    val category = categoryOverride ?: nodeListCategory
     val favoriteSourceNodeIds by
         viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
     val skipFavoriteRemovalConfirmation by
@@ -46,7 +40,6 @@ internal fun SubscriptionGroupingDestination(
     SubscriptionGroupingScreen(
         nodes = nodes,
         selectedNodeId = selectedNodeId,
-        category = category,
         favoriteSourceNodeIds = favoriteSourceNodeIds,
         skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
         isTesting = isTesting,
@@ -58,8 +51,6 @@ internal fun SubscriptionGroupingDestination(
         onToggleFavorite = viewModel::toggleFavoriteNode,
         onSkipFavoriteRemovalConfirmationForSession =
             viewModel::skipFavoriteRemovalConfirmationForSession,
-        onImportFromText = onImportFromText,
-        onScanQrCode = onScanQrCode,
         onTcpingTest = { viewModel.testAllNodes(testNodes ?: nodes) },
         onUrlTest = { viewModel.urlTestAllNodes(testNodes ?: nodes) },
         onRefreshAll = viewModel::refreshNodes,

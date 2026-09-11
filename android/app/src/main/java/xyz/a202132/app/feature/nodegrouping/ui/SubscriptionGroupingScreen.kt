@@ -1,8 +1,5 @@
 package xyz.a202132.app.feature.nodegrouping.ui
 
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -16,17 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -46,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
@@ -54,7 +47,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeDisplaySettings
-import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.ui.components.AppScreenScaffold
@@ -63,7 +55,6 @@ import xyz.a202132.app.ui.components.AppScreenScaffold
 internal fun SubscriptionGroupingScreen(
     nodes: List<Node>,
     selectedNodeId: String?,
-    category: NodeListCategory,
     favoriteSourceNodeIds: Set<String>,
     skipFavoriteRemovalConfirmation: Boolean,
     isTesting: Boolean,
@@ -74,8 +65,6 @@ internal fun SubscriptionGroupingScreen(
     onNodeSelected: (Node) -> Unit,
     onToggleFavorite: (Node) -> Unit,
     onSkipFavoriteRemovalConfirmationForSession: () -> Unit,
-    onImportFromText: (String) -> Unit,
-    onScanQrCode: () -> Unit,
     onTcpingTest: () -> Unit,
     onUrlTest: () -> Unit,
     onRefreshAll: () -> Unit,
@@ -85,7 +74,6 @@ internal fun SubscriptionGroupingScreen(
     screenTitle: String = "按订阅仓库分组",
     screenSubtitle: String? = null
 ) {
-    val context = LocalContext.current
     var isClosing by remember { mutableStateOf(false) }
     var favoriteRemovalCandidate by remember { mutableStateOf<Node?>(null) }
     var skipConfirmationForSessionChecked by remember { mutableStateOf(false) }
@@ -111,29 +99,6 @@ internal fun SubscriptionGroupingScreen(
                 skipConfirmationForSessionChecked = false
                 favoriteRemovalCandidate = node
             }
-        }
-    }
-
-    val handleImportFromClipboard = {
-        if (!isClosing) {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clipText = clipboard.primaryClip
-                ?.takeIf { it.itemCount > 0 }
-                ?.getItemAt(0)
-                ?.coerceToText(context)
-                ?.toString()
-                ?.trim()
-            if (clipText.isNullOrBlank()) {
-                Toast.makeText(context, "\u526a\u5207\u677f\u4e3a\u7a7a", Toast.LENGTH_SHORT).show()
-            } else {
-                onImportFromText(clipText)
-            }
-        }
-    }
-
-    val handleScanQrCode = {
-        if (!isClosing) {
-            onScanQrCode()
         }
     }
 
@@ -166,14 +131,11 @@ internal fun SubscriptionGroupingScreen(
         NodeListContent(
             nodes = nodes,
             selectedNodeId = selectedNodeId,
-            category = category,
             favoriteSourceNodeIds = favoriteSourceNodeIds,
             isTesting = isTesting,
             isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
             nodeDisplaySettings = nodeDisplaySettings,
             protocolCoreSettings = protocolCoreSettings,
-            onImportFromClipboard = handleImportFromClipboard,
-            onScanQrCode = handleScanQrCode,
             onNodeSelected = handleNodeSelected,
             onToggleFavorite = handleToggleFavorite,
             interactionEnabled = !isClosing,
@@ -290,14 +252,11 @@ private fun NodeListTopActions(
 private fun NodeListContent(
     nodes: List<Node>,
     selectedNodeId: String?,
-    category: NodeListCategory,
     favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
     isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
-    onImportFromClipboard: () -> Unit,
-    onScanQrCode: () -> Unit,
     onNodeSelected: (Node) -> Unit,
     onToggleFavorite: (Node, Boolean) -> Unit,
     interactionEnabled: Boolean,
@@ -334,35 +293,6 @@ private fun NodeListContent(
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        if (category == NodeListCategory.FAVORITES) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                NodeListImportAction(
-                    icon = Icons.Default.ContentPaste,
-                    text = "剪贴板导入",
-                    enabled = interactionEnabled && !isTesting,
-                    onClick = onImportFromClipboard,
-                    modifier = Modifier.weight(1f)
-                )
-                NodeListImportAction(
-                    icon = Icons.Default.QrCodeScanner,
-                    text = "二维码导入",
-                    enabled = interactionEnabled && !isTesting,
-                    onClick = onScanQrCode,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Text(
-                text = "自动识别节点 URI、订阅内容和订阅链接",
-                modifier = Modifier.padding(top = 8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp
-            )
-            Spacer(modifier = Modifier.height(12.dp))
         }
 
         when {
@@ -425,52 +355,6 @@ private fun NodeListContent(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) { }
-            )
-        }
-    }
-}
-@Composable
-private fun NodeListImportAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(enabled = enabled, onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(10.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (enabled) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = text,
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
             )
         }
     }

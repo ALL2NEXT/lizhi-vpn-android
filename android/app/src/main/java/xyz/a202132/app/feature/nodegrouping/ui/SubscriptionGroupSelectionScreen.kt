@@ -1,5 +1,8 @@
 package xyz.a202132.app.feature.nodegrouping.ui
 
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,11 +18,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,8 +35,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,6 +61,8 @@ internal fun SubscriptionGroupSelectionDestination(
     onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
     onFavoritesSelected: () -> Unit,
     onViewFavoritesDetails: () -> Unit,
+    onImportFromText: (String) -> Unit,
+    onScanQrCode: () -> Unit,
     onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp = 108.dp
@@ -79,6 +93,8 @@ internal fun SubscriptionGroupSelectionDestination(
         onViewSubscriptionDetails = onViewSubscriptionDetails,
         onFavoritesSelected = onFavoritesSelected,
         onViewFavoritesDetails = onViewFavoritesDetails,
+        onImportFromText = onImportFromText,
+        onScanQrCode = onScanQrCode,
         onSwitchToCountries = onSwitchToCountries,
         onBack = onBack,
         bottomContentPadding = bottomContentPadding
@@ -98,10 +114,30 @@ private fun SubscriptionGroupSelectionScreen(
     onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
     onFavoritesSelected: () -> Unit,
     onViewFavoritesDetails: () -> Unit,
+    onImportFromText: (String) -> Unit,
+    onScanQrCode: () -> Unit,
     onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp
 ) {
+    val context = LocalContext.current
+    var importMenuExpanded by remember { mutableStateOf(false) }
+
+    val handleImportFromClipboard = {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clipText = clipboard.primaryClip
+            ?.takeIf { it.itemCount > 0 }
+            ?.getItemAt(0)
+            ?.coerceToText(context)
+            ?.toString()
+            ?.trim()
+        if (clipText.isNullOrBlank()) {
+            Toast.makeText(context, "\u526a\u5207\u677f\u4e3a\u7a7a", Toast.LENGTH_SHORT).show()
+        } else {
+            onImportFromText(clipText)
+        }
+    }
+
     AppScreenScaffold(
         title = "按订阅仓库分组",
         subtitle = "选择订阅仓库用于主页筛选，点击右侧查看线路信息",
@@ -113,6 +149,45 @@ private fun SubscriptionGroupSelectionScreen(
                     imageVector = Icons.Rounded.Public,
                     contentDescription = "切换为按地区分组"
                 )
+            }
+            Box {
+                IconButton(onClick = { importMenuExpanded = true }) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "添加订阅"
+                    )
+                }
+                DropdownMenu(
+                    expanded = importMenuExpanded,
+                    onDismissRequest = { importMenuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("剪贴板导入") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.ContentPaste,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            importMenuExpanded = false
+                            handleImportFromClipboard()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("二维码导入") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.QrCodeScanner,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            importMenuExpanded = false
+                            onScanQrCode()
+                        }
+                    )
+                }
             }
         },
         contentPadding = PaddingValues(
