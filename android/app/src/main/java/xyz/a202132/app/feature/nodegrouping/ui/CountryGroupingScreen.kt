@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import xyz.a202132.app.data.model.NodeGroupKey
 import xyz.a202132.app.feature.nodegrouping.model.CountryOption
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -48,12 +49,12 @@ internal fun CountryGroupingDestination(
     bottomContentPadding: Dp = 108.dp
 ) {
     val countries by viewModel.countryOptions.collectAsStateWithLifecycle()
-    val selectedCountryCode by viewModel.selectedCountryCode.collectAsStateWithLifecycle()
+    val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
     CountryGroupingScreen(
         countries = countries,
-        selectedCountryCode = selectedCountryCode,
+        selectedNodeGroupId = selectedNodeGroupId,
         isLoading = isLoading,
         onCountrySelected = onCountrySelected,
         onViewCountryDetails = onViewCountryDetails,
@@ -66,7 +67,7 @@ internal fun CountryGroupingDestination(
 @Composable
 private fun CountryGroupingScreen(
     countries: List<CountryOption>,
-    selectedCountryCode: String?,
+    selectedNodeGroupId: String?,
     isLoading: Boolean,
     onCountrySelected: (String) -> Unit,
     onViewCountryDetails: (CountryOption) -> Unit,
@@ -107,7 +108,7 @@ private fun CountryGroupingScreen(
                 ) { country ->
                     CountryCard(
                         country = country,
-                        selected = country.code == selectedCountryCode,
+                        selected = selectedNodeGroupId == NodeGroupKey.Country(country.code).value,
                         onClick = { onCountrySelected(country.code) },
                         onViewDetails = { onViewCountryDetails(country) }
                     )

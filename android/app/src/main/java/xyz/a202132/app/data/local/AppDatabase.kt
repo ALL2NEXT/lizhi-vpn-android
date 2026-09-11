@@ -10,14 +10,16 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.NodeGroupEntity
+import xyz.a202132.app.data.model.NodeGroupMemberEntity
 import xyz.a202132.app.data.model.NodeTypeConverter
 import xyz.a202132.app.util.DatabasePassphraseManager
 import java.io.File
 import java.io.RandomAccessFile
 
 @Database(
-    entities = [Node::class],
-    version = 6,
+    entities = [Node::class, NodeGroupEntity::class, NodeGroupMemberEntity::class],
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -86,6 +88,44 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `nodes` ADD COLUMN `subscriptionSourceName` TEXT")
             }
         }
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `node_groups` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_node_groups_type` " +
+                        "ON `node_groups` (`type`)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `node_group_members` (
+                        `groupId` TEXT NOT NULL,
+                        `nodeId` TEXT NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        PRIMARY KEY(`groupId`, `nodeId`),
+                        FOREIGN KEY(`groupId`) REFERENCES `node_groups`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`nodeId`) REFERENCES `nodes`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_node_group_members_nodeId` " +
+                        "ON `node_group_members` (`nodeId`)"
+                )
+            }
+        }
         @Volatile
         private var sqlCipherLibLoaded = false
 
@@ -132,7 +172,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build()
         }
 

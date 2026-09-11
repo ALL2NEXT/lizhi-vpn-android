@@ -178,6 +178,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val nodeGroupingMode = settingsRepository.nodeGroupingMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, NodeGroupingMode.COUNTRY)
 
+    /** 所有节点组共用的当前选中标识，旧版分散设置会在这里自动转换。 */
+    val selectedNodeGroupId = combine(
+        settingsRepository.selectedNodeGroupId,
+        nodeListCategory,
+        nodeGroupingMode,
+        selectedCountryCode,
+        activeSubscriptionSourceId
+    ) { storedGroupId, category, groupingMode, countryCode, sourceId ->
+        val storedGroup = NodeGroupKey.parse(storedGroupId)
+        when {
+            category == NodeListCategory.FAVORITES -> NodeGroupKey.Favorites.value
+            storedGroup != null && storedGroup !is NodeGroupKey.Favorites -> storedGroup.value
+            groupingMode == NodeGroupingMode.COUNTRY -> countryCode
+                ?.let { NodeGroupKey.Country(it).value }
+            else -> sourceId?.let { NodeGroupKey.Subscription(it).value }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     val favoriteSourceNodeIds = nodeDaoFlow.flatMapLatest { it.getFavoriteSourceNodeIds() }
         .map { it.filterNotNull().toSet() }
         .stateIn(
@@ -210,13 +228,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .flatMapLatest { it.getFavoriteNodes() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** 用户导入组的展示摘要，供后续统一分组列表直接复用。 */
+    val importedNodeGroups = nodeDaoFlow
+        .flatMapLatest { it.getImportedGroupsWithCount() }
+        .map { groups ->
+            groups.map { item ->
+                NodeGroupSummary(
+                    id = NodeGroupKey.Imported(item.group.id).value,
+                    name = item.group.name,
+                    type = runCatching { NodeGroupType.valueOf(item.group.type) }
+                        .getOrDefault(NodeGroupType.IMPORTED),
+                    nodeCount = item.nodeCount
+                )
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** 当前选中用户导入组的节点；没有选中导入组时不参与主页列表。 */
+    private val importedNodes = selectedNodeGroupId.flatMapLatest { groupId ->
+        val group = NodeGroupKey.parse(groupId) as? NodeGroupKey.Imported
+        if (group == null) {
+            flowOf(emptyList())
+        } else {
+            nodeDaoFlow.flatMapLatest { it.getNodesByGroup(group.groupId) }
+        }
+    }
+
     // Data
     private val visibleNodes = combine(
         subscriptionNodes,
         favoriteNodes,
-        nodeListCategory
-    ) { subscription, favorites, category ->
-        if (category == NodeListCategory.FAVORITES) favorites else subscription
+        importedNodes,
+        selectedNodeGroupId
+    ) { subscription, favorites, imported, groupId ->
+        when (NodeGroupKey.parse(groupId)) {
+            NodeGroupKey.Favorites -> favorites
+            is NodeGroupKey.Imported -> imported
+            else -> subscription
+        }
     }
 
     val nodes = combine(
@@ -680,6 +729,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (fullTestEnabled || countryCode != null) {
                     bestNode.subscriptionSourceId?.takeIf(String::isNotBlank)?.let { sourceId ->
                         settingsRepository.setSelectedSubscriptionSourceId(sourceId)
+                        settingsRepository.setSelectedNodeGroupId(
+                            NodeGroupKey.Subscription(sourceId).value
+                        )
                         settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
                     }
                 }
@@ -1171,10 +1223,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNodeListCategory(category: NodeListCategory) {
         viewModelScope.launch {
+            val wasFavorites = nodeListCategory.value == NodeListCategory.FAVORITES
             settingsRepository.setSelectedCountryCode(null)
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
             settingsRepository.setNodeListCategory(category)
+            if (category == NodeListCategory.FAVORITES) {
+                settingsRepository.setSelectedNodeGroupId(NodeGroupKey.Favorites.value)
+            } else if (wasFavorites) {
+                val sourceId = settingsRepository.selectedSubscriptionSourceId.first()
+                settingsRepository.setSelectedNodeGroupId(
+                    sourceId?.takeIf(String::isNotBlank)
+                        ?.let { NodeGroupKey.Subscription(it).value }
+                )
+            }
         }
+    }
+
+    /** 统一选择节点组，并同步维护旧版设置字段，保证已有连接逻辑继续兼容。 */
+    fun selectNodeGroup(group: NodeGroupKey) {
+        viewModelScope.launch {
+            settingsRepository.setSelectedNodeGroupId(group.value)
+            when (group) {
+                is NodeGroupKey.Subscription -> {
+                    settingsRepository.setSelectedCountryCode(null)
+                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+                    settingsRepository.setSelectedSubscriptionSourceId(group.sourceId)
+                    settingsRepository.setSelectedNodeId(null)
+                    settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+                }
+                is NodeGroupKey.Country -> {
+                    settingsRepository.setSelectedCountryCode(group.countryCode)
+                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.COUNTRY)
+                    settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+                }
+                NodeGroupKey.Favorites -> {
+                    settingsRepository.setSelectedCountryCode(null)
+                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+                    settingsRepository.setNodeListCategory(NodeListCategory.FAVORITES)
+                }
+                is NodeGroupKey.Imported -> {
+                    settingsRepository.setSelectedCountryCode(null)
+                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+                    settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+                }
+            }
+        }
+    }
+
+    fun selectFavoritesGroup() {
+        selectNodeGroup(NodeGroupKey.Favorites)
     }
 
     /** Select a node from the node list and connect to it immediately. */
@@ -1188,11 +1285,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 选择主页智能测速使用的地区，不立即选取节点或发起 VPN 连接。 */
     fun selectCountry(countryCode: String) {
-        viewModelScope.launch {
-            settingsRepository.setSelectedCountryCode(countryCode)
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.COUNTRY)
-            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
-        }
+        selectNodeGroup(NodeGroupKey.Country(countryCode))
     }
 
     private suspend fun connectNode(node: Node) {
@@ -1216,13 +1309,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setSubscriptionSource(sourceId: String) {
-        viewModelScope.launch {
-            settingsRepository.setSelectedCountryCode(null)
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
-            settingsRepository.setSelectedSubscriptionSourceId(sourceId)
-            settingsRepository.setSelectedNodeId(null)
-            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
-        }
+        selectNodeGroup(NodeGroupKey.Subscription(sourceId))
     }
 
     /** 切换到按订阅仓库分组时立即取消地区限定，保证主页智能测速使用当前订阅组。 */
@@ -1231,6 +1318,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setSelectedCountryCode(null)
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
             settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+            activeSubscriptionSourceId.value?.let { sourceId ->
+                settingsRepository.setSelectedNodeGroupId(
+                    NodeGroupKey.Subscription(sourceId).value
+                )
+            }
         }
     }
 
@@ -1893,10 +1985,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun currentNodeListSnapshot(): List<Node> = withContext(Dispatchers.Default) {
-        val category = settingsRepository.nodeListCategory.first()
-        val snapshot = when (category) {
-            NodeListCategory.PRIMARY -> currentSubscriptionNodeSnapshot()
-            NodeListCategory.FAVORITES -> nodeDao().getFavoriteNodes().first()
+        val selectedGroup = NodeGroupKey.parse(settingsRepository.selectedNodeGroupId.first())
+        val snapshot = when (selectedGroup) {
+            NodeGroupKey.Favorites -> nodeDao().getFavoriteNodes().first()
+            is NodeGroupKey.Country -> nodeDao().getSubscriptionNodes().first().filter {
+                it.getCountryCode() == selectedGroup.countryCode
+            }
+            is NodeGroupKey.Subscription -> nodeDao()
+                .getSubscriptionNodesBySource(selectedGroup.sourceId)
+                .first()
+            is NodeGroupKey.Imported -> nodeDao().getNodesByGroup(selectedGroup.groupId).first()
+            null -> when (settingsRepository.nodeListCategory.first()) {
+                NodeListCategory.PRIMARY -> currentSubscriptionNodeSnapshot()
+                NodeListCategory.FAVORITES -> nodeDao().getFavoriteNodes().first()
+            }
         }
         sortNodesForList(snapshot)
     }

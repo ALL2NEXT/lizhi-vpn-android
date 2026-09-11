@@ -196,12 +196,25 @@ class BoxVpnService : VpnService() {
         }
         val selectedId = settings.selectedNodeId.first()
         all.firstOrNull { it.id == selectedId && it.type != NodeType.UNKNOWN }?.let { return it }
-        val candidates = when (settings.nodeListCategory.first()) {
-            NodeListCategory.FAVORITES -> dao.getFavoriteNodes().first()
-            NodeListCategory.PRIMARY -> {
-                val source = settings.selectedSubscriptionSourceId.first()
+        val selectedGroup = NodeGroupKey.parse(settings.selectedNodeGroupId.first())
+        val candidates = when (selectedGroup) {
+            NodeGroupKey.Favorites -> dao.getFavoriteNodes().first()
+            is NodeGroupKey.Country -> dao.getSubscriptionNodes().first().filter {
+                it.getCountryCode() == selectedGroup.countryCode
+            }
+            is NodeGroupKey.Subscription -> {
                 val nodes = dao.getSubscriptionNodes().first()
-                nodes.filter { source.isNullOrBlank() || it.subscriptionSourceId == source }.ifEmpty { nodes }
+                nodes.filter { it.subscriptionSourceId == selectedGroup.sourceId }.ifEmpty { nodes }
+            }
+            is NodeGroupKey.Imported -> dao.getNodesByGroup(selectedGroup.groupId).first()
+            null -> when (settings.nodeListCategory.first()) {
+                NodeListCategory.FAVORITES -> dao.getFavoriteNodes().first()
+                NodeListCategory.PRIMARY -> {
+                    val source = settings.selectedSubscriptionSourceId.first()
+                    val nodes = dao.getSubscriptionNodes().first()
+                    nodes.filter { source.isNullOrBlank() || it.subscriptionSourceId == source }
+                        .ifEmpty { nodes }
+                }
             }
         }
         return candidates.firstOrNull { it.type != NodeType.UNKNOWN && it.server.isNotBlank() && it.port in 1..65535 }

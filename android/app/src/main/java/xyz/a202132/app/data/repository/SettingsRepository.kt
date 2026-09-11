@@ -21,6 +21,7 @@ import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.SkinSettings
 import xyz.a202132.app.data.model.UrlTestTargets
+import xyz.a202132.app.data.model.NodeGroupKey
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.util.CountryCodeResolver
 
@@ -71,6 +72,7 @@ class SettingsRepository(private val context: Context) {
         private val SELECTED_COUNTRY_CODE = stringPreferencesKey("selected_country_code")
         private val NODE_GROUPING_MODE = stringPreferencesKey("node_grouping_mode")
         private val NODE_LIST_CATEGORY = stringPreferencesKey("node_list_category")
+        private val SELECTED_NODE_GROUP_ID = stringPreferencesKey("selected_node_group_id")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         private val URL_TEST_TIMEOUT_MS = longPreferencesKey("url_test_timeout_ms")
         private val URL_TEST_URL = stringPreferencesKey("url_test_url")
@@ -143,6 +145,37 @@ class SettingsRepository(private val context: Context) {
         runCatching {
             NodeListCategory.valueOf(preferences[NODE_LIST_CATEGORY] ?: NodeListCategory.PRIMARY.name)
         }.getOrDefault(NodeListCategory.PRIMARY)
+    }
+
+    /** 统一的当前节点组标识，兼容旧版的订阅、地区和收藏分开存储方式。 */
+    val selectedNodeGroupId: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[SELECTED_NODE_GROUP_ID]?.takeIf(String::isNotBlank)
+            ?: legacySelectedNodeGroupId(preferences)
+    }
+
+    private fun legacySelectedNodeGroupId(preferences: Preferences): String? {
+        val category = runCatching {
+            NodeListCategory.valueOf(
+                preferences[NODE_LIST_CATEGORY] ?: NodeListCategory.PRIMARY.name
+            )
+        }.getOrDefault(NodeListCategory.PRIMARY)
+        if (category == NodeListCategory.FAVORITES) {
+            return NodeGroupKey.Favorites.value
+        }
+
+        val groupingMode = runCatching {
+            NodeGroupingMode.valueOf(
+                preferences[NODE_GROUPING_MODE] ?: NodeGroupingMode.COUNTRY.name
+            )
+        }.getOrDefault(NodeGroupingMode.COUNTRY)
+        return when (groupingMode) {
+            NodeGroupingMode.COUNTRY -> CountryCodeResolver
+                .normalizeCountryCode(preferences[SELECTED_COUNTRY_CODE])
+                ?.let { NodeGroupKey.Country(it).value }
+            NodeGroupingMode.SUBSCRIPTION -> preferences[SELECTED_SUBSCRIPTION_SOURCE_ID]
+                ?.takeIf(String::isNotBlank)
+                ?.let { NodeGroupKey.Subscription(it).value }
+        }
     }
     
     val proxyMode: Flow<ProxyMode> = context.dataStore.data.map { preferences ->
@@ -361,6 +394,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNodeListCategory(category: NodeListCategory) {
         context.dataStore.edit { preferences ->
             preferences[NODE_LIST_CATEGORY] = category.name
+        }
+    }
+
+    suspend fun setSelectedNodeGroupId(groupId: String?) {
+        context.dataStore.edit { preferences ->
+            if (groupId.isNullOrBlank()) {
+                preferences.remove(SELECTED_NODE_GROUP_ID)
+            } else {
+                preferences[SELECTED_NODE_GROUP_ID] = groupId
+            }
         }
     }
     

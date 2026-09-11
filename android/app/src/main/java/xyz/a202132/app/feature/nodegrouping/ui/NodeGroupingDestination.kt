@@ -8,7 +8,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import xyz.a202132.app.data.model.Node
-import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -128,7 +127,7 @@ fun NodeGroupingDestination(
                 },
                 // 收藏卡片同样区分“选中”和“查看详情”两种操作。
                 onFavoritesSelected = {
-                    viewModel.setNodeListCategory(NodeListCategory.FAVORITES)
+                    viewModel.selectFavoritesGroup()
                 },
                 onViewFavoritesDetails = {
                     detail = NodeGroupingDetail.Favorites

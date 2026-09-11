@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.Node
-import xyz.a202132.app.data.model.NodeListCategory
+import xyz.a202132.app.data.model.NodeGroupKey
 import xyz.a202132.app.data.model.SubscriptionGroup
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -70,9 +70,7 @@ internal fun SubscriptionGroupSelectionDestination(
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
     val favoriteNodes by viewModel.favoriteNodes.collectAsStateWithLifecycle()
-    val selectedSubscriptionSourceId by
-        viewModel.selectedSubscriptionSourceId.collectAsStateWithLifecycle()
-    val nodeListCategory by viewModel.nodeListCategory.collectAsStateWithLifecycle()
+    val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val nodeCounts = allSubscriptionNodes
@@ -83,10 +81,9 @@ internal fun SubscriptionGroupSelectionDestination(
 
     SubscriptionGroupSelectionScreen(
         subscriptionGroups = subscriptionGroups,
-        selectedSubscriptionSourceId = selectedSubscriptionSourceId,
+        selectedNodeGroupId = selectedNodeGroupId,
         nodeCounts = nodeCounts,
         favoriteNodeCount = favoriteNodes.size,
-        favoriteSelected = nodeListCategory == NodeListCategory.FAVORITES,
         hideFavoriteNodeGroup = hideFavoriteNodeGroup,
         isLoading = isLoading,
         onSubscriptionSelected = onSubscriptionSelected,
@@ -104,10 +101,9 @@ internal fun SubscriptionGroupSelectionDestination(
 @Composable
 private fun SubscriptionGroupSelectionScreen(
     subscriptionGroups: List<SubscriptionGroup>,
-    selectedSubscriptionSourceId: String?,
+    selectedNodeGroupId: String?,
     nodeCounts: Map<String, Int>,
     favoriteNodeCount: Int,
-    favoriteSelected: Boolean,
     hideFavoriteNodeGroup: Boolean,
     isLoading: Boolean,
     onSubscriptionSelected: (SubscriptionGroup) -> Unit,
@@ -120,6 +116,7 @@ private fun SubscriptionGroupSelectionScreen(
     onBack: () -> Unit,
     bottomContentPadding: Dp
 ) {
+    val favoriteSelected = selectedNodeGroupId == NodeGroupKey.Favorites.value
     val context = LocalContext.current
     var importMenuExpanded by remember { mutableStateOf(false) }
 
@@ -211,7 +208,9 @@ private fun SubscriptionGroupSelectionScreen(
                     SubscriptionGroupCard(
                         group = group,
                         nodeCount = nodeCounts[group.sourceId] ?: 0,
-                        selected = group.sourceId == selectedSubscriptionSourceId,
+                        // 收藏节点组和普通订阅组保持互斥选中状态。
+                        selected = selectedNodeGroupId ==
+                            NodeGroupKey.Subscription(group.sourceId).value,
                         onClick = { onSubscriptionSelected(group) },
                         onViewDetails = { onViewSubscriptionDetails(group) }
                     )
