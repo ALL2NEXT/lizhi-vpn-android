@@ -1641,9 +1641,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 // 交给系统安装器打开 APK，不在应用内请求“安装未知来源”设置。
                 context.startActivity(intent)
+                // 安装器打开后消费本次完成事件，避免返回应用或重建主界面时重复弹出。
+                // 不删除安装包，用户仍可通过手动检查更新再次打开它。
+                DownloadManager.resetState()
             } catch (e: Exception) {
                 Log.e(tag, "Install failed", e)
                 _error.value = "无法打开系统安装程序: ${e.message}"
+                // 即使系统没有可用的安装器，也不要让完成状态持续触发重复弹窗。
+                DownloadManager.resetState()
             }
         } ?: run {
              _error.value = "找不到安装包，请重试下载"
