@@ -212,7 +212,6 @@ class MainActivity : ComponentActivity() {
                                                 groupingMode = nodeGroupingMode,
                                                 viewModel = viewModel,
                                                 onCountrySelected = { countryCode ->
-                                                    selectedDestination = HomeDestination.HOME
                                                     viewModel.selectCountry(countryCode)
                                                 },
                                                 onNodeSelected = { node ->

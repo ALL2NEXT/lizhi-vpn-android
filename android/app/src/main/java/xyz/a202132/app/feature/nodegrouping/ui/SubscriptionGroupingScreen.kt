@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -80,11 +79,10 @@ internal fun SubscriptionGroupingScreen(
     onTcpingTest: () -> Unit,
     onUrlTest: () -> Unit,
     onRefreshAll: () -> Unit,
-    onSwitchToCountries: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp,
-    screenTitle: String = "订阅分组",
+    screenTitle: String = "按订阅仓库分组",
     screenSubtitle: String? = null
 ) {
     val context = LocalContext.current
@@ -150,17 +148,6 @@ internal fun SubscriptionGroupingScreen(
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
         actions = {
-            onSwitchToCountries?.let { switchToCountries ->
-                IconButton(
-                    onClick = switchToCountries,
-                    enabled = !isClosing
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Public,
-                        contentDescription = "切换为按地区分组"
-                    )
-                }
-            }
             NodeListTopActions(
                 enabled = !isClosing,
                 onTcpingTest = onTcpingTest,

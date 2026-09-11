@@ -9,20 +9,19 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.viewmodel.MainViewModel
 
-/** 订阅分组页面的状态绑定入口。 */
+/** 按订阅仓库分组页面的状态绑定入口。 */
 @Composable
 internal fun SubscriptionGroupingDestination(
     viewModel: MainViewModel,
     onNodeSelected: (Node) -> Unit,
     onImportFromText: (String) -> Unit,
     onScanQrCode: () -> Unit,
-    onSwitchToCountries: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp,
     nodesOverride: List<Node>? = null,
     categoryOverride: NodeListCategory? = null,
-    screenTitle: String = "订阅分组",
+    screenTitle: String = "按订阅仓库分组",
     screenSubtitle: String? = null,
     testNodes: List<Node>? = null
 ) {
@@ -64,7 +63,6 @@ internal fun SubscriptionGroupingDestination(
         onTcpingTest = { viewModel.testAllNodes(testNodes ?: nodes) },
         onUrlTest = { viewModel.urlTestAllNodes(testNodes ?: nodes) },
         onRefreshAll = viewModel::refreshNodes,
-        onSwitchToCountries = onSwitchToCountries,
         onBack = onBack,
         showBackNavigation = showBackNavigation,
         bottomContentPadding = bottomContentPadding,

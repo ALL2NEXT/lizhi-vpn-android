@@ -71,7 +71,6 @@ fun NodeGroupingDestination(
                 onNodeSelected = onNodeSelected,
                 onImportFromText = onImportFromText,
                 onScanQrCode = onScanQrCode,
-                onSwitchToCountries = null,
                 onBack = { detail = null },
                 showBackNavigation = true,
                 bottomContentPadding = bottomContentPadding
@@ -92,7 +91,6 @@ fun NodeGroupingDestination(
                 onNodeSelected = onNodeSelected,
                 onImportFromText = onImportFromText,
                 onScanQrCode = onScanQrCode,
-                onSwitchToCountries = switchToCountries,
                 onBack = { detail = null },
                 showBackNavigation = true,
                 bottomContentPadding = bottomContentPadding
@@ -110,7 +108,6 @@ fun NodeGroupingDestination(
                 onNodeSelected = onNodeSelected,
                 onImportFromText = onImportFromText,
                 onScanQrCode = onScanQrCode,
-                onSwitchToCountries = switchToCountries,
                 onBack = { detail = null },
                 showBackNavigation = true,
                 bottomContentPadding = bottomContentPadding
@@ -131,13 +128,19 @@ fun NodeGroupingDestination(
 
             NodeGroupingMode.SUBSCRIPTION -> SubscriptionGroupSelectionDestination(
                 viewModel = viewModel,
+                // 卡片点击只更新主页筛选范围，右侧箭头才进入该订阅的线路详情。
                 onSubscriptionSelected = { group ->
-                    detail = NodeGroupingDetail.Subscription(group.sourceId, group.name)
                     viewModel.setSubscriptionSource(group.sourceId)
                 },
+                onViewSubscriptionDetails = { group ->
+                    detail = NodeGroupingDetail.Subscription(group.sourceId, group.name)
+                },
+                // 收藏卡片同样区分“选中”和“查看详情”两种操作。
                 onFavoritesSelected = {
-                    detail = NodeGroupingDetail.Favorites
                     viewModel.setNodeListCategory(NodeListCategory.FAVORITES)
+                },
+                onViewFavoritesDetails = {
+                    detail = NodeGroupingDetail.Favorites
                 },
                 onSwitchToCountries = switchToCountries,
                 onBack = onBack,

@@ -1218,7 +1218,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 切换到订阅分组时立即取消地区限定，保证主页智能测速使用当前订阅组。 */
+    /** 切换到按订阅仓库分组时立即取消地区限定，保证主页智能测速使用当前订阅组。 */
     fun selectSubscriptionGrouping() {
         viewModelScope.launch {
             settingsRepository.setSelectedCountryCode(null)

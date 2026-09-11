@@ -75,15 +75,15 @@ private fun CountryGroupingScreen(
     bottomContentPadding: Dp
 ) {
     AppScreenScaffold(
-        title = "地区分组",
-        subtitle = "主页智能测试将使用所选地区",
+        title = "按地区分组",
+        subtitle = "选择地区用于主页筛选，点击右侧查看线路信息",
         onBack = onBack,
         showBackNavigation = false,
         actions = {
             IconButton(onClick = onSwitchToSubscriptions) {
                 Icon(
                     imageVector = Icons.Rounded.Subscriptions,
-                    contentDescription = "切换为按订阅分组"
+                    contentDescription = "切换为按订阅仓库分组"
                 )
             }
         },

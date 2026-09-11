@@ -46,7 +46,9 @@ import xyz.a202132.app.viewmodel.MainViewModel
 internal fun SubscriptionGroupSelectionDestination(
     viewModel: MainViewModel,
     onSubscriptionSelected: (SubscriptionGroup) -> Unit,
+    onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
     onFavoritesSelected: () -> Unit,
+    onViewFavoritesDetails: () -> Unit,
     onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp = 108.dp
@@ -74,7 +76,9 @@ internal fun SubscriptionGroupSelectionDestination(
         hideFavoriteNodeGroup = hideFavoriteNodeGroup,
         isLoading = isLoading,
         onSubscriptionSelected = onSubscriptionSelected,
+        onViewSubscriptionDetails = onViewSubscriptionDetails,
         onFavoritesSelected = onFavoritesSelected,
+        onViewFavoritesDetails = onViewFavoritesDetails,
         onSwitchToCountries = onSwitchToCountries,
         onBack = onBack,
         bottomContentPadding = bottomContentPadding
@@ -91,14 +95,16 @@ private fun SubscriptionGroupSelectionScreen(
     hideFavoriteNodeGroup: Boolean,
     isLoading: Boolean,
     onSubscriptionSelected: (SubscriptionGroup) -> Unit,
+    onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
     onFavoritesSelected: () -> Unit,
+    onViewFavoritesDetails: () -> Unit,
     onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp
 ) {
     AppScreenScaffold(
-        title = "订阅分组",
-        subtitle = "选择订阅线路查看线路信息",
+        title = "按订阅仓库分组",
+        subtitle = "选择订阅仓库用于主页筛选，点击右侧查看线路信息",
         onBack = onBack,
         showBackNavigation = false,
         actions = {
@@ -131,7 +137,8 @@ private fun SubscriptionGroupSelectionScreen(
                         group = group,
                         nodeCount = nodeCounts[group.sourceId] ?: 0,
                         selected = group.sourceId == selectedSubscriptionSourceId,
-                        onClick = { onSubscriptionSelected(group) }
+                        onClick = { onSubscriptionSelected(group) },
+                        onViewDetails = { onViewSubscriptionDetails(group) }
                     )
                 }
                 if (!hideFavoriteNodeGroup) {
@@ -139,7 +146,8 @@ private fun SubscriptionGroupSelectionScreen(
                         FavoriteGroupCard(
                             nodeCount = favoriteNodeCount,
                             selected = favoriteSelected,
-                            onClick = onFavoritesSelected
+                            onClick = onFavoritesSelected,
+                            onViewDetails = onViewFavoritesDetails
                         )
                     }
                 }
@@ -173,7 +181,8 @@ private fun SubscriptionGroupSelectionScreen(
 private fun FavoriteGroupCard(
     nodeCount: Int,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onViewDetails: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -226,16 +235,17 @@ private fun FavoriteGroupCard(
                 fontSize = 13.sp,
                 maxLines = 1
             )
-            Icon(
-                imageVector = Icons.Rounded.ChevronRight,
-                contentDescription = "查看收藏节点",
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(24.dp)
-            )
+            IconButton(onClick = onViewDetails) {
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = "查看收藏节点",
+                    tint = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
         }
     }
 }
@@ -245,7 +255,8 @@ private fun SubscriptionGroupCard(
     group: SubscriptionGroup,
     nodeCount: Int,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onViewDetails: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -299,16 +310,17 @@ private fun SubscriptionGroupCard(
                 fontSize = 13.sp,
                 maxLines = 1
             )
-            Icon(
-                imageVector = Icons.Rounded.ChevronRight,
-                contentDescription = "查看线路信息",
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(24.dp)
-            )
+            IconButton(onClick = onViewDetails) {
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = "查看线路信息",
+                    tint = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
         }
     }
 }
