@@ -178,23 +178,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val nodeGroupingMode = settingsRepository.nodeGroupingMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, NodeGroupingMode.COUNTRY)
 
-    /** 所有节点组共用的当前选中标识，旧版分散设置会在这里自动转换。 */
-    val selectedNodeGroupId = combine(
-        settingsRepository.selectedNodeGroupId,
-        nodeListCategory,
-        nodeGroupingMode,
-        selectedCountryCode,
-        activeSubscriptionSourceId
-    ) { storedGroupId, category, groupingMode, countryCode, sourceId ->
-        val storedGroup = NodeGroupKey.parse(storedGroupId)
-        when {
-            category == NodeListCategory.FAVORITES -> NodeGroupKey.Favorites.value
-            storedGroup != null && storedGroup !is NodeGroupKey.Favorites -> storedGroup.value
-            groupingMode == NodeGroupingMode.COUNTRY -> countryCode
-                ?.let { NodeGroupKey.Country(it).value }
-            else -> sourceId?.let { NodeGroupKey.Subscription(it).value }
-        }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    /** 所有节点组共用的当前选中标识，仅由统一节点组字段决定。 */
+    val selectedNodeGroupId = settingsRepository.selectedNodeGroupId
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val favoriteSourceNodeIds = nodeDaoFlow.flatMapLatest { it.getFavoriteSourceNodeIds() }
         .map { it.filterNotNull().toSet() }
@@ -753,7 +739,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val selectedId = settingsRepository.selectedNodeId.first()
             val selectedNode = selectedId?.let { nodeDao().getNodeById(it) }
-            val subscriptionNodes = currentSubscriptionNodeSnapshot()
+            val subscriptionNodes = currentNodeListSnapshot()
             val node = selectedNode ?: subscriptionNodes.firstOrNull()
             if (node == null) {
                 _error.value = "没有可用节点"
@@ -1015,7 +1001,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setHideFavoriteNodeGroup(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setHideFavoriteNodeGroup(enabled)
-            if (enabled && nodeListCategory.value == NodeListCategory.FAVORITES) {
+            if (enabled && NodeGroupKey.parse(selectedNodeGroupId.value) == NodeGroupKey.Favorites) {
+                val sourceId = activeSubscriptionSourceId.value
+                settingsRepository.setSelectedNodeGroupId(
+                    sourceId?.takeIf(String::isNotBlank)
+                        ?.let { NodeGroupKey.Subscription(it).value }
+                )
                 settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
             }
         }
@@ -1223,14 +1214,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNodeListCategory(category: NodeListCategory) {
         viewModelScope.launch {
-            val wasFavorites = nodeListCategory.value == NodeListCategory.FAVORITES
+            val wasFavorites = NodeGroupKey.parse(selectedNodeGroupId.value) == NodeGroupKey.Favorites
             settingsRepository.setSelectedCountryCode(null)
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
             settingsRepository.setNodeListCategory(category)
             if (category == NodeListCategory.FAVORITES) {
                 settingsRepository.setSelectedNodeGroupId(NodeGroupKey.Favorites.value)
             } else if (wasFavorites) {
-                val sourceId = settingsRepository.selectedSubscriptionSourceId.first()
+                val sourceId = activeSubscriptionSourceId.value
                 settingsRepository.setSelectedNodeGroupId(
                     sourceId?.takeIf(String::isNotBlank)
                         ?.let { NodeGroupKey.Subscription(it).value }
@@ -1239,7 +1230,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 统一选择节点组，并同步维护旧版设置字段，保证已有连接逻辑继续兼容。 */
+    /** 统一选择节点组，并同步当前连接流程需要的筛选字段。 */
     fun selectNodeGroup(group: NodeGroupKey) {
         viewModelScope.launch {
             settingsRepository.setSelectedNodeGroupId(group.value)
@@ -1438,6 +1429,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val (result, importedCount) = importResult
         if (result == NodeImportResult.IMPORTED) {
+            settingsRepository.setSelectedNodeGroupId(NodeGroupKey.Favorites.value)
             settingsRepository.setNodeListCategory(NodeListCategory.FAVORITES)
             Log.i(tag, "Imported $importedCount nodes to favorites")
         } else {
@@ -1995,27 +1987,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .getSubscriptionNodesBySource(selectedGroup.sourceId)
                 .first()
             is NodeGroupKey.Imported -> nodeDao().getNodesByGroup(selectedGroup.groupId).first()
-            null -> when (settingsRepository.nodeListCategory.first()) {
-                NodeListCategory.PRIMARY -> currentSubscriptionNodeSnapshot()
-                NodeListCategory.FAVORITES -> nodeDao().getFavoriteNodes().first()
-            }
+            null -> nodeDao().getSubscriptionNodes().first()
         }
         sortNodesForList(snapshot)
-    }
-
-    private suspend fun currentSubscriptionNodeSnapshot(): List<Node> = withContext(Dispatchers.Default) {
-        val groups = nodeDao().getSubscriptionGroups().first()
-        val storedSourceId = settingsRepository.selectedSubscriptionSourceId.first()
-        val sourceId = storedSourceId
-            ?.takeIf { id -> groups.any { it.sourceId == id } }
-            ?: groups.firstOrNull()?.sourceId
-        val all = nodeDao().getSubscriptionNodes().first()
-        val scoped = if (sourceId.isNullOrBlank()) {
-            all
-        } else {
-            all.filter { it.subscriptionSourceId == sourceId }
-        }
-        sortNodesForList(scoped)
     }
 
     private suspend fun currentSmartConnectNodes(

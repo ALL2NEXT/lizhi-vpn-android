@@ -207,15 +207,7 @@ class BoxVpnService : VpnService() {
                 nodes.filter { it.subscriptionSourceId == selectedGroup.sourceId }.ifEmpty { nodes }
             }
             is NodeGroupKey.Imported -> dao.getNodesByGroup(selectedGroup.groupId).first()
-            null -> when (settings.nodeListCategory.first()) {
-                NodeListCategory.FAVORITES -> dao.getFavoriteNodes().first()
-                NodeListCategory.PRIMARY -> {
-                    val source = settings.selectedSubscriptionSourceId.first()
-                    val nodes = dao.getSubscriptionNodes().first()
-                    nodes.filter { source.isNullOrBlank() || it.subscriptionSourceId == source }
-                        .ifEmpty { nodes }
-                }
-            }
+            null -> dao.getSubscriptionNodes().first()
         }
         return candidates.firstOrNull { it.type != NodeType.UNKNOWN && it.server.isNotBlank() && it.port in 1..65535 }
             ?: error("没有可用节点")
