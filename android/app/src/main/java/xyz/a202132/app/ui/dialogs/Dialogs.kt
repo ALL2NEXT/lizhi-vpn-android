@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -108,9 +111,11 @@ fun UpdateDialog(
     changelog: String,
     isForce: Boolean,
     onUpdate: () -> Unit,
-    onIgnore: () -> Unit,
+    onSkip: (ignoreCurrentVersion: Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val ignoreCurrentVersion = remember { mutableStateOf(false) }
+
     Dialog(
         onDismissRequest = {
             if (!isForce) {
@@ -164,26 +169,6 @@ fun UpdateDialog(
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))
-
-                if (!isForce) {
-                    OutlinedButton(
-                        onClick = onIgnore,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    ) {
-                        Text(
-                            text = stringResource(id = R.string.ignore_current_update),
-                            fontSize = 15.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -191,13 +176,13 @@ fun UpdateDialog(
                 ) {
                     if (!isForce) {
                         OutlinedButton(
-                            onClick = onDismiss,
+                            onClick = { onSkip(ignoreCurrentVersion.value) },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
                         ) {
                             Text(
-                                text = stringResource(id = R.string.update_later),
+                                text = stringResource(id = R.string.update_skip),
                                 fontSize = 15.sp,
                                 modifier = Modifier.padding(vertical = 4.dp)
                             )
@@ -213,10 +198,32 @@ fun UpdateDialog(
                         )
                     ) {
                         Text(
-                            text = stringResource(id = R.string.update_now),
+                            text = stringResource(id = R.string.update),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                }
+
+                if (!isForce) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .clickable {
+                                ignoreCurrentVersion.value = !ignoreCurrentVersion.value
+                            },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = ignoreCurrentVersion.value,
+                            onCheckedChange = { ignoreCurrentVersion.value = it }
+                        )
+                        Text(
+                            text = stringResource(id = R.string.ignore_current_update),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

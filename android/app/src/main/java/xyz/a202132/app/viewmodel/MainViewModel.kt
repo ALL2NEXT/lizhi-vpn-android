@@ -1515,16 +1515,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 
                 if (info.versionCode > currentVersionCode) {
-                    val ignoredVersionCode =
-                        settingsRepository.ignoredUpdateVersionCode.first()
-                    val isIgnoredOptionalUpdate =
-                        info.isForce != 1 && ignoredVersionCode == info.versionCode
+                    val isIgnoredOptionalUpdate = isAuto &&
+                        info.isForce != 1 &&
+                        settingsRepository.ignoredUpdateVersionCode.first() == info.versionCode
 
                     if (isIgnoredOptionalUpdate) {
                         _updateInfo.value = null
-                        if (!isAuto) {
-                            _error.value = "当前新版本已被忽略"
-                        }
                     } else {
                         _updateInfo.value = info
                     }
@@ -1630,15 +1626,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _updateInfo.value = null
     }
 
-    fun ignoreCurrentUpdate() {
+    fun skipUpdate(ignoreCurrentVersion: Boolean) {
         val info = _updateInfo.value ?: return
-        if (info.isForce == 1) return
-
-
         _updateInfo.value = null
-        viewModelScope.launch {
-            settingsRepository.setIgnoredUpdateVersionCode(info.versionCode)
-            Log.i(tag, "Ignored optional update: versionCode=${info.versionCode}")
+        if (ignoreCurrentVersion && info.isForce != 1) {
+            viewModelScope.launch {
+                settingsRepository.setIgnoredUpdateVersionCode(info.versionCode)
+                Log.i(tag, "Ignored optional update: versionCode=${info.versionCode}")
+            }
         }
     }
     
