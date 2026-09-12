@@ -22,7 +22,7 @@ Linux 或 macOS 使用：
 
 ### sing-box 源码构建
 
-Android 构建会自动调用根目录下锁定的 `core/sing-box` 子模块，生成本次构建使用的 `libbox.aar`。首次构建需要 Go 1.24.7+、JDK 17、Android SDK 和 NDK 28.0.13004108；Go 工具链会按 sing-box 要求自动安装 `github.com/sagernet/gomobile` v0.1.11。
+Android 构建会自动调用根目录下锁定的 `core/sing-box` 子模块，并将 sing-box CLI 编译为独立的 Android PIE 运行器 `libsingbox.so`。它和 `libxray.so` 一样由 `ProcessBuilder` 启动，不嵌入 Android 应用进程。首次构建需要 Go 1.26、JDK 17、Android SDK 和 NDK 28.0.13004108。
 
 首次获取源码后执行：
 
@@ -30,4 +30,4 @@ Android 构建会自动调用根目录下锁定的 `core/sing-box` 子模块，�
 git submodule update --init --recursive
 ```
 
-以后要添加或修改协议，直接修改根目录 `core/sing-box` 中的 sing-box 源码，然后重新执行 Gradle 构建即可。
+以后要添加或修改协议，直接修改根目录 `core/sing-box` 中的 sing-box 源码，然后重新执行 Gradle 构建即可；Android 运行器入口位于 `native/singbox-runner/`。

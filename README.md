@@ -105,7 +105,7 @@ backend/    # Cloudflare Worker 后台
 | **本地存储** | Room Database (SQLCipher 加密) + DataStore |
 | **二维码扫描** | CameraX + ML Kit Barcode Scanning |
 | **运行日志** | 应用内专用 RuntimeLog（私有文件 + FileProvider 分享） |
-| **VPN 核心** | [sing-box](https://github.com/SagerNet/sing-box) 源码构建的 libbox |
+| **VPN 核心** | [sing-box](https://github.com/SagerNet/sing-box) 与 Xray 的独立 Android PIE 运行器 |
 | **并发处理** | Kotlin Coroutines |
 
 ---
@@ -133,7 +133,7 @@ backend/    # Cloudflare Worker 后台
 
 ### 核心依赖
 
-Android 不再依赖 `android/app/libs/libbox.aar`。项目通过根目录下的 `core/sing-box` 子模块锁定 sing-box 源码版本，Gradle 构建时调用官方 `cmd/internal/build_libbox` 自动生成本次构建使用的 `libbox.aar`，生成文件位于 `android/app/build/generated/sing-box/`，不会提交到版本库。
+Android 不再依赖 `libbox.aar`。项目通过根目录下的 `core/sing-box` 子模块锁定 sing-box 源码版本，Gradle 构建时将 sing-box CLI 编译为独立的 Android PIE 运行器 `libsingbox.so`，与 `libxray.so` 一样通过 `ProcessBuilder` 启动，生成文件位于 `android/app/build/generated/singbox/`，不会提交到版本库。
 
 首次获取源码后执行：
 
@@ -252,11 +252,9 @@ android/app/src/main/java/xyz/a202132/app/
 │   ├── SpeedTestService.kt       # Cloudflare 网速测试服务
 │   ├── SubscriptionParser.kt     # 订阅链接解析器
 │   ├── NodeTestProxyManager.kt   # 节点带宽测试临时代理管理器
-│   └── UrlTestManager.kt         # 无头 sing-box URL Test 管理器
+│   └── UrlTestManager.kt         # 双核心 URL Test 管理器
 ├── service/
-│   ├── BoxPlatformInterface.kt   # sing-box 平台接口（TUN 管理、分应用代理）
-│   ├── BoxVpnService.kt          # VPN 服务（sing-box 核心）
-│   ├── HeadlessPlatformInterface.kt  # 无头平台接口（URL Test 专用）
+│   ├── BoxVpnService.kt          # VPN 服务（sing-box/Xray 核心）
 │   └── ServiceManager.kt         # VPN 服务管理器
 ├── ui/
 │   ├── components/               # 可复用 UI 组件
@@ -300,7 +298,7 @@ android/app/src/main/java/xyz/a202132/app/
 ```
 core/sing-box                       # sing-box 源码子模块（Android/Windows 构建输入）
 core/xray-core                      # Xray-core 源码子模块（Android/Windows 构建输入）
-android/app/build/generated/      # Gradle 生成的 libbox.aar（不提交）
+android/app/build/generated/      # Gradle 生成的 Android 核心运行器（不提交）
 android/app/src/main/
 ├── assets/
 │   └── rule-sets/                # 智能分流规则集
@@ -336,7 +334,7 @@ android/app/src/main/
 - 📌 APP 会记录当前订阅线路以及是否停留在收藏节点
 - ➕ 节点列表搜索按钮左侧提供导入入口，支持从剪切板导入和扫描二维码
 - 🔁 导入到收藏节点前会自动去重，成功后提示实际导入数量
-- 🛡️ 导入收藏节点前会生成单节点 sing-box 测试配置并执行 `Libbox.checkConfig()`，不兼容核心的节点不会写入收藏
+- 🛡️ 导入收藏节点前会生成单节点 sing-box 测试配置并执行 `sing-box --check`，不兼容核心的节点不会写入收藏
 - 🚦 VPN 启动时只会使用当前节点来源生成配置，并在启动前跳过核心不支持的非选中节点；如果所选节点本身不被核心支持，会直接提示错误
 
 > 💡 收藏节点适合长期保留少量手动维护的节点；切换订阅线路后，列表和测速只针对当前线路。
@@ -893,7 +891,7 @@ cd android
 target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 ```
 
-> 💡 如果使用第三方 `.so` 库（如 `libbox.so`），也需确保其支持 16 KB 对齐，否则需更新上游库版本。
+> 💡 如果使用第三方 `.so` 库（如 `libsingbox.so`），也需确保其支持 16 KB 对齐，否则需更新上游库版本。
 
 ---
 
@@ -916,7 +914,7 @@ target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 - 订阅节点与收藏节点按 `NodeSource` 独立存储，收藏节点不会被订阅刷新覆盖
 - 节点列表当前视图由 `nodeListCategory` 记录，三点菜单测试和 VPN 启动都会按当前来源取节点
 - 收藏导入时会先做解析、去重和 sing-box 单节点配置校验；不兼容核心的节点会被跳过
-- VPN 启动/重启前会再次按当前来源过滤核心不支持的节点，并对最终完整配置执行 `Libbox.checkConfig()`
+- VPN 启动/重启前会再次按当前来源过滤核心不支持的节点，并对最终完整配置执行对应核心的 `--check`
 - 若当前选中的节点不被核心支持，APP 会提示错误并停止启动，不会自动切换到其他节点
 
 ---

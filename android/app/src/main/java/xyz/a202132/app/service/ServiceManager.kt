@@ -113,7 +113,7 @@ object ServiceManager {
     }
     
     /**
-     * 通知切换到移动网络（由 BoxPlatformInterface 调用）
+     * 通知切换到移动网络（由 VPN 服务调用）
      */
     fun notifyCellularNetwork() {
         if (_vpnState.value == VpnState.CONNECTED || _vpnState.value == VpnState.CONNECTING) {

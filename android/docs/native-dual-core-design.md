@@ -12,8 +12,8 @@
 | 会话控制器 | 串行替换、取消请求、回收迟到的启动结果、停止失败时保留所有权 | [CoreSessionController](../app/src/main/java/xyz/a202132/app/core/CoreSessionController.kt) |
 | 后端契约与注册表 | `prepare/start/CoreSession`、协议与 TUN 能力、已安装后端发现 | [CoreBackend](../app/src/main/java/xyz/a202132/app/core/CoreBackend.kt)、[CoreBackends](../app/src/main/java/xyz/a202132/app/core/CoreBackends.kt) |
 | Android 平台层 | VpnService.Builder、TUN FD、protect、分应用、物理网络监测 | [AndroidVpnHost](../app/src/main/java/xyz/a202132/app/platform/AndroidVpnHost.kt) |
-| sing-box 适配器 | libbox 配置、CommandServer、原生流量统计 | [SingBoxBackend](../app/src/main/java/xyz/a202132/app/core/singbox/SingBoxBackend.kt) |
-| Xray 适配器 | SOCKS5 配置、配置预检、FD 控制通道、子进程与统计 | [XrayBackend](../app/src/main/java/xyz/a202132/app/core/xray/XrayBackend.kt)、[运行器](../native/xray-runner/main.go) |
+| sing-box 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [SingBoxBackend](../app/src/main/java/xyz/a202132/app/core/singbox/SingBoxBackend.kt)、[运行器](../native/singbox-runner/main.go) |
+| Xray 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [XrayBackend](../app/src/main/java/xyz/a202132/app/core/xray/XrayBackend.kt)、[运行器](../native/xray-runner/main.go) |
 | 规则缓存 | 从共同的 SRS 源生成域名/IP 快照 | [CoreRuleRepository](../app/src/main/java/xyz/a202132/app/core/route/CoreRuleRepository.kt) |
 | 测速 | 同一后端契约上的无 TUN 会话 | [NodeTestProxyManager](../app/src/main/java/xyz/a202132/app/network/NodeTestProxyManager.kt)、[UrlTestManager](../app/src/main/java/xyz/a202132/app/network/UrlTestManager.kt) |
 
@@ -32,23 +32,28 @@
 
 相较把所有内核编进一个 Go/AAR，这种方式允许各内核保留独立依赖和升级路径；相较自建 TCP/IP 层，它避免长期维护额外的传输栈和内核内部出站接口。它适合本项目已确认的“每次连接一个内核”要求。未来若要求同一连接同时混用多个内核，需要另行设计数据层。
 
-## 固定版本与 Xray 原生接入
+## 固定版本与双核心原生接入
 
 - sing-box：`58ccf82e0bfc5e724421d2ba03157fe7f0fee537`，`v1.13.0-rc.3`。
 - Xray：`d2758a023cd7f4174a5a5fa4ff66e487d4342ba0`，`v1.260327.0`。
 - 两者分别依赖 `github.com/sagernet/sing` 的 `v0.8.0-beta.16`、`v0.5.1`；维持独立 Go 构建。
 
-`libxray.so` 是打包到 `nativeLibraryDir` 的 Android PIE 可执行文件，通过 ProcessBuilder 运行。它不是 JNI 动态库。Xray 子进程只提供 loopback SOCKS5 和 socket protect，不直接获得 Android TUN FD。
+`libsingbox.so` 和 `libxray.so` 都是打包到 `nativeLibraryDir` 的 Android PIE 可执行文件，通过
+`ProcessBuilder` 运行；它们不是供 Kotlin 加载的 JNI 动态库。两个核心只提供 loopback
+SOCKS5，Android TUN 由 HEV 独占。
 
-控制协议位于 [XrayNativeSession](../app/src/main/java/xyz/a202132/app/core/xray/XrayNativeSession.kt) 和 [run_unix.go](../native/xray-runner/run_unix.go)：
+公共进程生命周期位于 [NativeCoreSession](../app/src/main/java/xyz/a202132/app/core/NativeCoreSession.kt)，
+sing-box 和 Xray 分别由 [SingBoxNativeSession](../app/src/main/java/xyz/a202132/app/core/singbox/SingBoxNativeSession.kt)、
+[XrayNativeSession](../app/src/main/java/xyz/a202132/app/core/xray/XrayNativeSession.kt) 接入。
+
+控制协议由两个运行器各自实现，当前统一使用 `WATCH` 存活通道：
 
 1. 为会话创建随机抽象 Unix socket 和 token，检查连接方 UID 与 token。
-2. HEV 通过自己的控制通道接收 Android TUN FD；Xray 控制通道只处理 `PROTECT` 和 `WATCH`。
-3. `PROTECT` 将待连接/监听 socket 的 FD 副本交给 Android 调用 `VpnService.protect`，收到成功响应后才继续。固定版 Xray 会忽略普通 controller 返回错误，因此运行器在保护失败时直接退出。
-4. `WATCH` 持有父进程存活通道；父进程退出或关闭通道后，运行器退出。
-5. stdout 返回就绪、每秒累计流量和通用错误事件；配置文件保存在私有缓存目录，就绪或失败后删除，不向 UI 转发原始配置及敏感错误。
+2. HEV 通过自己的控制通道接收 Android TUN FD；核心控制通道不传输业务数据包。
+3. `WATCH` 持有父进程存活通道；父进程退出或关闭通道后，运行器退出。
+4. stdout 返回就绪和通用错误事件；配置文件保存在私有缓存目录，就绪或失败后删除，不向 UI 转发原始配置及敏感错误。
 
-配置预检使用 `--check`，只进行 JSON/配置构建，不启动 Xray。即使 Xray 本身不再持有 Android TUN，也保留这个无副作用检查入口。
+配置预检使用各核心的 `--check`，只进行 JSON/配置构建，不启动代理服务。
 
 ## DNS、IPv6、规则与统计
 
@@ -72,7 +77,7 @@ HEV 不提供 ICMP 转发，不能用 ping 成败代替 TCP/UDP 连通判定。X
 
 URL 测速不再依赖正在运行的 VPN 或 Clash API，每个节点通过自己选择的后端建立临时无 TUN 会话。计时从 HTTP 请求开始，不把运行器启动耗时算入节点延迟。原生 URL 探测同时最多运行 4 个会话，避免较高的网络探测并发设置同时创建大量 Go 运行器；用户设置低于 4 时仍按用户设置执行。
 
-Xray 输出管道关闭、读取失败或事件解析异常会转换为会话失败，避免从 `SupervisorJob` 下的独立 `launch` 传播到 Android 未捕获异常处理器。读取线程不等待子进程退出，以便失败回调及时停止运行器。单节点启动及清理失败由测速层隔离；整批异常在界面层显示错误，协程取消仍正常向上传播。回归测试覆盖管道中途关闭、关闭流本身失败、事件处理异常，以及故障会话不触发未捕获异常或取消同级任务。尚无用户设备的崩溃日志，不能仅凭这些测试确认所报告闪退的实际堆栈。
+核心输出管道关闭、读取失败或事件解析异常会转换为会话失败，避免从 `SupervisorJob` 下的独立 `launch` 传播到 Android 未捕获异常处理器。读取线程不等待子进程退出，以便失败回调及时停止运行器。单节点启动及清理失败由测速层隔离；整批异常在界面层显示错误，协程取消仍正常向上传播。
 
 ## HEV 数据平面
 
@@ -94,15 +99,18 @@ Android 构建需要 JDK 17、Go 1.26、Android SDK 35 和 NDK `28.0.13004108`�
 
 # 在 android/native/xray-runner/ 下
 go test ./...
+
+# 在 android/native/singbox-runner/ 下
+go test ./...
 ```
 
 JVM 测试覆盖双核心注册、旧设置兼容、会话取消/替换/停止失败、DNS 顺序及 HEV 配置；Go 测试验证 Xray runner 不提前启动、统计缓冲所有权、socket protect 和规则内容。规则测试的 JSON 基准由 sing-box CLI decompile 生成，仅存在于测试资源，不随 APK 打包。
 
-最终本地验证：63 项 JVM 测试通过，Go 运行器和 Android UDP overlay 测试通过，Lint 为 0 errors / 29 warnings。另用真实 Xray Router 验证了“域名未命中 geosite、解析结果命中国内 IP”仍选择直连；配置依靠首个代理出站兜底，避免显式全匹配规则阻断 `IPIfNonMatch` 的二次匹配。
+最终本地验证：Android JVM 测试、sing-box/Xray 两个 Go 运行器测试和两个 ABI 的原生构建通过。另用真实 Xray Router 验证了“域名未命中 geosite、解析结果命中国内 IP”仍选择直连；配置依靠首个代理出站兜底，避免显式全匹配规则阻断 `IPIfNonMatch` 的二次匹配。
 
-构建输出为 `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` 和 `app-armeabi-v7a-debug.apk`。本机已完成源码构建和本地测试；没有连接 Android 设备，因此 TUN FD/protect 的实际运行、UDP/QUIC 连通、IPv6、网络切换、always-on 恢复及吞吐/功耗仍需设备验证。
+构建输出为 `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` 和 `app-armeabi-v7a-debug.apk`。本机已完成源码构建和本地测试；TUN FD、UDP/QUIC 连通、IPv6、网络切换、always-on 恢复及吞吐/功耗仍需在 Android 设备上验证。
 
-测速异常修复已通过 `:app:testDebugUnitTest :app:lintDebug :app:assembleRelease`。签名修复包位于 `app/build/outputs/apk/release/app-arm64-v8a-release.apk` 和 `app-armeabi-v7a-release.apk`，均通过 APK v2 签名校验；两种 ABI 中的 `libbox.so`、`libxray.so` 均与本次构建的 stripped native 输出一致。
+测速异常修复已通过 `:app:testDebugUnitTest :app:assembleDebug`。两个 ABI 的 APK 均包含 `libsingbox.so`、`libxray.so` 和 `libhev.so`，并与本次构建的 stripped native 输出一致。
 
 消除串联转发和无用内核实例是可由代码确认的结构改善，不能据此宣称实测“性能最强”。性能比较应固定节点、服务器与网络，分别记录两种内核的连接耗时、TCP/UDP 吞吐、P95 延迟、CPU/RSS 及耗电，并与旧版本对照。
 

@@ -15,17 +15,16 @@ HEV tun2socks
         `-- Xray -> 服务器
 ```
 
-## 为什么不加载第二个 GoMobile AAR
+## 为什么两个核心都采用独立 PIE 子进程
 
-`libbox.aar` 已包含 GoMobile 的 Java 类、JNI 桥和 Go runtime。再加载一个
-`libv2ray.aar` 会在同一 Android 进程中引入第二套同名运行时，容易出现类、JNI
-符号及生命周期冲突。因此 Xray-core 被编译为 Android PIE，并以独立进程运行：
+sing-box 与 Xray 都编译为 Android PIE，并以独立进程运行。这样 Kotlin 控制层
+只负责配置、启动/停止和故障回收，两个 Go runtime 不会进入 Android 应用进程：
 
 - HEV 是唯一的 TUN 所有者，不会发生双核心抢占 VPN fd；
-- Xray 崩溃与 libbox 隔离，服务会检测退出并安全断开；
+- 任一核心崩溃都与 UI、VPN 控制层隔离，服务会检测退出并安全断开；
 - 两个核心可在同一节点列表中同时使用；
 - Xray 配置和 sing-box 配置在启动前分别由各自核心校验；
-- Xray 配置读取完成后会从应用私有目录删除，减少凭据落盘时间。
+- 配置读取完成后会从应用私有目录删除，减少凭据落盘时间。
 
 ## 支持范围
 

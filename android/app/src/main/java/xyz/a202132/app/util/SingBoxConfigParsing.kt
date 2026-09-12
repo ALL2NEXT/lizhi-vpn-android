@@ -117,7 +117,7 @@ internal fun parseShadowsocksMethodPassword(linkContent: String): String {
     return decoded.substringBeforeLast("@", decoded)
 }
 
-/** Normalizes subscription transport aliases to values supported by libbox. */
+/** Normalizes subscription transport aliases to values supported by sing-box. */
 internal fun normalizeTransportType(type: String?): String = when (type?.trim()?.lowercase()) {
     null, "", "tcp", "raw" -> "tcp"
     "h2" -> "http"

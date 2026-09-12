@@ -1,98 +1,102 @@
 package xyz.a202132.app.core.singbox
 
 import android.content.Context
-import io.nekohasekai.libbox.*
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import xyz.a202132.app.core.*
+import xyz.a202132.app.core.CoreBackend
+import xyz.a202132.app.core.CoreCapabilities
+import xyz.a202132.app.core.CoreRequest
+import xyz.a202132.app.core.CoreSession
+import xyz.a202132.app.core.PreparedCore
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.platform.UnderlayController
-import xyz.a202132.app.service.BoxPlatformInterface
-import xyz.a202132.app.service.HeadlessPlatformInterface
+import xyz.a202132.app.platform.awaitExit
+import xyz.a202132.app.platform.isRunningCompat
+import xyz.a202132.app.platform.terminateCompat
 import xyz.a202132.app.util.RuleManager
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.TimeUnit
 
 internal class SingBoxBackend : CoreBackend {
     override val id = ProxyCore.SING_BOX
     override val capabilities = CoreCapabilities(NodeType.entries.filterNot { it == NodeType.UNKNOWN }.toSet())
 
     override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = withContext(Dispatchers.IO) {
-        val generator = SingBoxConfigGenerator()
-        val config = if (request.isVpn) {
-            RuleManager.ensureRuleSets(context)
-            val settings = request.settings!!
-            generator.generateConfig(listOf(request.node), request.node.id, settings.proxyMode,
-                settings.ipv6RoutingMode, internalSocksEndpoint = request.endpoint,
-                hysteriaUpMbps = request.hysteriaUpMbps, hysteriaDownMbps = request.hysteriaDownMbps,
-            )
-                .replace("\"geosite-cn.srs\"", "\"${File(context.filesDir, "sing-box/geosite-cn.srs").absolutePath}\"")
-                .replace("\"geoip-cn.srs\"", "\"${File(context.filesDir, "sing-box/geoip-cn.srs").absolutePath}\"")
-        } else generator.generateTestConfig(request.node, request.socksPort, request.hysteriaUpMbps, request.hysteriaDownMbps)
-        synchronized(setupLock) {
-            setup(context, File(context.filesDir, "sing-box"))
-            Libbox.checkConfig(config)
+        val config = SingBoxConfigGenerator().let { generator ->
+            if (request.isVpn) {
+                RuleManager.ensureRuleSets(context)
+                val settings = request.settings!!
+                generator.generateConfig(
+                    listOf(request.node), request.node.id, settings.proxyMode,
+                    settings.ipv6RoutingMode, internalSocksEndpoint = request.endpoint,
+                    hysteriaUpMbps = request.hysteriaUpMbps, hysteriaDownMbps = request.hysteriaDownMbps,
+                )
+                    .replace("\"geosite-cn.srs\"", "\"${File(context.filesDir, "sing-box/geosite-cn.srs").absolutePath}\"")
+                    .replace("\"geoip-cn.srs\"", "\"${File(context.filesDir, "sing-box/geoip-cn.srs").absolutePath}\"")
+            } else {
+                generator.generateTestConfig(
+                    request.node, request.socksPort,
+                    request.hysteriaUpMbps, request.hysteriaDownMbps
+                )
+            }
         }
+        validate(context, config)
         PreparedCore(id, request, config)
     }
 
-    override suspend fun start(context: Context, scope: CoroutineScope, prepared: PreparedCore,
-        underlay: UnderlayController?, onFailure: (String) -> Unit): CoreSession = withContext(Dispatchers.IO) {
+    override suspend fun start(
+        context: Context,
+        scope: CoroutineScope,
+        prepared: PreparedCore,
+        underlay: UnderlayController?,
+        onFailure: (String) -> Unit
+    ): CoreSession = withContext(Dispatchers.IO) {
         require(prepared.core == id)
-        val directory = File(context.cacheDir, "sb-${UUID.randomUUID().toString().take(8)}")
-        val session = Session(prepared.request.endpoint, directory)
+        SingBoxNativeSession(context, prepared.request.endpoint, onFailure).start(prepared.config)
+    }
+
+    private fun validate(context: Context, config: String) {
+        val file = File(context.cacheDir, "sing-box-check-${UUID.randomUUID()}.json")
+        var process: Process? = null
         try {
-            synchronized(setupLock) {
-                setup(context, directory)
-                val platform: PlatformInterface = if (prepared.request.isVpn) {
-                    BoxPlatformInterface(requireNotNull(underlay))
-                } else HeadlessPlatformInterface(context)
-                session.server = Libbox.newCommandServer(object : CommandServerHandler {
-                    override fun serviceStop() { onFailure("sing-box 请求停止") }
-                    override fun serviceReload() { onFailure("sing-box 请求重新连接") }
-                    override fun getSystemProxyStatus() = SystemProxyStatus()
-                    override fun setSystemProxyEnabled(enabled: Boolean) {}
-                    override fun writeDebugMessage(message: String?) {}
-                }, platform)
-                session.server!!.start()
-                session.server!!.startOrReloadService(prepared.config, OverrideOptions())
+            file.writeText(config, Charsets.UTF_8)
+            val executable = File(context.applicationInfo.nativeLibraryDir, "libsingbox.so")
+            check(executable.isFile) { "未找到 sing-box 原生运行器" }
+            process = ProcessBuilder(
+                executable.absolutePath,
+                "--check",
+                "--config", file.absolutePath,
+                "--directory", context.filesDir.absolutePath
+            ).directory(context.filesDir).redirectErrorStream(true).start()
+            val finished = process.awaitExit(15, TimeUnit.SECONDS)
+            val exitCode = if (finished) process.exitValue() else null
+            val output = if (finished) {
+                process.inputStream.bufferedReader().use { it.readText() }.trim()
+            } else {
+                ""
             }
-            session
-        } catch (error: Throwable) {
-            session.close()
-            throw error
+            if (!finished || exitCode != 0) {
+                val detail = output.takeLast(2000).ifBlank { "<no runner output>" }
+                Log.e(TAG, "sing-box config validation failed: finished=$finished exit=$exitCode output=$detail")
+                error("sing-box 配置校验失败，请检查节点协议与传输参数")
+            }
+        } finally {
+            process?.let {
+                if (it.isRunningCompat) {
+                    it.terminateCompat(force = true)
+                    it.awaitExit(3, TimeUnit.SECONDS)
+                }
+            }
+            file.delete()
         }
     }
 
-    private class Session(override val endpoint: LocalSocksEndpoint, private val directory: File) : CoreSession {
-        override val core = ProxyCore.SING_BOX
-        var server: CommandServer? = null
-        private val stopped = AtomicBoolean()
-        override fun close() {
-            if (!stopped.compareAndSet(false, true)) return
-            runCatching { server?.closeService() }
-            runCatching { server?.close() }
-            server = null
-            // 该目录仅供当前会话临时使用，不包含用户文件。
-            directory.listFiles()?.forEach { if (it.isFile) it.delete() }
-            directory.delete()
-        }
-    }
-
-    // VPN 会话与批量测速必须共用同一把初始化锁，避免并发改写 libbox 全局工作目录。
-    internal companion object {
-        val setupLock = Any()
-        fun setup(context: Context, directory: File) {
-            check(directory.isDirectory || directory.mkdirs())
-            Libbox.setup(SetupOptions().apply {
-                basePath = directory.absolutePath
-                workingPath = directory.absolutePath
-                tempPath = context.cacheDir.absolutePath
-            })
-        }
+    private companion object {
+        const val TAG = "SingBoxBackend"
     }
 }

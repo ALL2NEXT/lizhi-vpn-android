@@ -1,8 +1,5 @@
-import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
 import java.util.Properties
-import org.gradle.jvm.toolchain.JavaLanguageVersion
-import org.gradle.jvm.toolchain.JavaToolchainService
 
 plugins {
     id("com.android.application")
@@ -13,10 +10,12 @@ plugins {
 val singBoxNdkVersion = "28.0.13004108"
 
 // The repository root pins the sing-box source revision in this submodule.
-// Android builds it directly instead of consuming a checked-in/prebuilt
-// libbox.aar.
+// Android builds the CLI runner directly instead of embedding libbox in the
+// application process.
 val singBoxSourceDir = rootProject.file("../core/sing-box")
-val generatedLibboxAar = layout.buildDirectory.file("generated/sing-box/libbox.aar")
+val singBoxRunnerDir = rootProject.file("native/singbox-runner")
+val generatedSingBoxJniDir = layout.buildDirectory.dir("generated/singbox/jniLibs")
+val singBoxCoreVersion = "1.13.0-rc.3"
 val xraySourceDir = rootProject.file("../core/xray-core")
 val xrayRunnerDir = rootProject.file("native/xray-runner")
 val generatedXrayJniDir = layout.buildDirectory.dir("generated/xray/jniLibs")
@@ -26,25 +25,33 @@ val hevRunnerDir = rootProject.file("native/hev-runner")
 val generatedHevJniDir = layout.buildDirectory.dir("generated/hev/jniLibs")
 val hevTunnelVersion = "2.16.0"
 
-val buildLibbox = tasks.register("buildLibbox") {
+// sing-box is compiled as a standalone Android PIE process and packaged into
+// nativeLibraryDir. It only exposes the loopback SOCKS inbound; HEV owns TUN.
+val buildSingBoxCore = tasks.register("buildSingBoxCore") {
     group = "sing-box"
-    description = "Build libbox.aar from the pinned sing-box source submodule"
+    description = "Build the pinned sing-box source for the Android ABIs"
 
     inputs.files(fileTree(singBoxSourceDir) {
         exclude(".git/**")
         exclude("build/**")
         exclude("bin/**")
         exclude("dist/**")
-        exclude("libbox*.aar")
     })
-    outputs.file(generatedLibboxAar)
-    inputs.property("javaLanguageVersion", 17)
+    inputs.files(fileTree(singBoxRunnerDir) { exclude("*.exe") })
+    inputs.property("ndkVersion", singBoxNdkVersion)
+    inputs.property("androidApi", 24)
+    val arm32Output = generatedSingBoxJniDir.map { it.file("armeabi-v7a/libsingbox.so") }
+    val arm64Output = generatedSingBoxJniDir.map { it.file("arm64-v8a/libsingbox.so") }
+    outputs.files(arm32Output, arm64Output)
 
     doLast {
         val goExecutable = if (System.getProperty("os.name").startsWith("Windows")) "go.exe" else "go"
         check(singBoxSourceDir.resolve("go.mod").isFile) {
             "sing-box source is missing at ${singBoxSourceDir.absolutePath}. " +
                 "Run `git submodule update --init --recursive`."
+        }
+        check(singBoxRunnerDir.resolve("go.mod").isFile) {
+            "sing-box runner is missing at ${singBoxRunnerDir.absolutePath}."
         }
 
         val localProperties = Properties()
@@ -54,85 +61,58 @@ val buildLibbox = tasks.register("buildLibbox") {
         val sdkPath = localProperties.getProperty("sdk.dir")
             ?: System.getenv("ANDROID_HOME")
             ?: error("Android SDK not found. Set sdk.dir in android/local.properties or ANDROID_HOME.")
-        val sdkDir = File(sdkPath)
-        val ndkDir = sdkDir.resolve("ndk").resolve(singBoxNdkVersion)
-        check(ndkDir.resolve("source.properties").isFile) {
-            "Android NDK $singBoxNdkVersion not found at ${ndkDir.absolutePath}. " +
-                "Install it from Android Studio SDK Manager or with `sdkmanager \"ndk;$singBoxNdkVersion\"`."
+        val hostTag = when {
+            System.getProperty("os.name").startsWith("Windows") -> "windows-x86_64"
+            System.getProperty("os.name").startsWith("Mac") -> "darwin-x86_64"
+            else -> "linux-x86_64"
         }
+        val clangSuffix = if (hostTag.startsWith("windows")) ".cmd" else ""
+        val clangBin = File(sdkPath).resolve("ndk/$singBoxNdkVersion/toolchains/llvm/prebuilt/$hostTag/bin")
+        check(clangBin.isDirectory) { "Android NDK toolchain not found at ${clangBin.absolutePath}" }
 
-        fun commandOutput(vararg command: String): String {
-            val output = ByteArrayOutputStream()
+        data class SingBoxAbi(
+            val androidAbi: String,
+            val goArch: String,
+            val clangTarget: String,
+            val goArm: String? = null
+        )
+        val abis = listOf(
+            SingBoxAbi("armeabi-v7a", "arm", "armv7a-linux-androideabi", "7"),
+            SingBoxAbi("arm64-v8a", "arm64", "aarch64-linux-android")
+        )
+        val tags = listOf(
+            "with_gvisor", "with_quic", "with_wireguard", "with_utls",
+            "with_naive_outbound", "with_clash_api", "with_conntrack",
+            "badlinkname", "tfogo_checklinkname0", "with_tailscale",
+            "ts_omit_logtail", "ts_omit_ssh", "ts_omit_drive", "ts_omit_taildrop",
+            "ts_omit_webclient", "ts_omit_doctor", "ts_omit_capture", "ts_omit_kube",
+            "ts_omit_aws", "ts_omit_synology", "ts_omit_bird"
+        ).joinToString(",")
+        abis.forEach { abi ->
+            val output = generatedSingBoxJniDir.get().file("${abi.androidAbi}/libsingbox.so").asFile
+            output.parentFile.mkdirs()
+            val clang = clangBin.resolve("${abi.clangTarget}24-clang$clangSuffix")
+            check(clang.isFile) { "Android clang not found at ${clang.absolutePath}" }
             exec {
-                commandLine(*command)
-                standardOutput = output
-                errorOutput = output
-                isIgnoreExitValue = true
-            }
-            return output.toString(Charsets.UTF_8.name())
-        }
-
-        val goPath = commandOutput(goExecutable, "env", "GOPATH").trim()
-        check(goPath.isNotEmpty()) { "Unable to determine GOPATH for gomobile." }
-        val goBinDir = File(goPath).resolve("bin")
-        val executableSuffix = if (System.getProperty("os.name").startsWith("Windows")) ".exe" else ""
-        val gomobile = goBinDir.resolve("gomobile$executableSuffix")
-        val gobind = goBinDir.resolve("gobind$executableSuffix")
-
-        fun isExpectedGomobile(binary: File, commandPackage: String): Boolean {
-            if (!binary.isFile) return false
-            val info = commandOutput(goExecutable, "version", "-m", binary.absolutePath)
-                .replace(Regex("\\s+"), " ")
-            return info.contains("path $commandPackage") &&
-                info.contains("mod github.com/sagernet/gomobile v0.1.11")
-        }
-
-        // sing-box's build helper requires the SagerNet gomobile fork. Install
-        // it only when the local Go tool does not already provide that exact
-        // version (a different gomobile fork is not compatible).
-        if (!isExpectedGomobile(gomobile, "github.com/sagernet/gomobile/cmd/gomobile") ||
-            !isExpectedGomobile(gobind, "github.com/sagernet/gomobile/cmd/gobind")) {
-            exec {
-                commandLine(goExecutable, "install", "github.com/sagernet/gomobile/cmd/gomobile@v0.1.11")
-            }
-            exec {
-                commandLine(goExecutable, "install", "github.com/sagernet/gomobile/cmd/gobind@v0.1.11")
+                workingDir(singBoxRunnerDir)
+                environment("GOOS", "android")
+                environment("GOARCH", abi.goArch)
+                environment("CGO_ENABLED", "1")
+                environment("CC", clang.absolutePath)
+                if (abi.goArm != null) environment("GOARM", abi.goArm)
+                commandLine(
+                    goExecutable,
+                    "build",
+                    "-trimpath",
+                    "-buildvcs=false",
+                    "-tags", tags,
+                    "-buildmode=pie",
+                    "-ldflags=-X github.com/sagernet/sing-box/constant.Version=$singBoxCoreVersion -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0",
+                    "-o", output.absolutePath,
+                    "."
+                )
             }
         }
-
-        // The binding generator requires Java 17 even when Gradle runs on a newer JDK.
-        val javaHome = java17Launcher.get().metadata.installationPath.asFile
-        exec {
-            workingDir(singBoxSourceDir)
-            environment("ANDROID_HOME", sdkDir.absolutePath)
-            environment("ANDROID_SDK_HOME", sdkDir.absolutePath)
-            environment("ANDROID_NDK_HOME", ndkDir.absolutePath)
-            environment("NDK", ndkDir.absolutePath)
-            environment("JAVA_HOME", javaHome.absolutePath)
-            commandLine(
-                goExecutable,
-                "run",
-                "./cmd/internal/build_libbox",
-                "-target",
-                "android",
-                "-platform",
-                "android"
-            )
-        }
-
-        val sourceAar = singBoxSourceDir.resolve("libbox.aar")
-        check(sourceAar.isFile) {
-            "sing-box build completed without producing ${sourceAar.absolutePath}."
-        }
-        val outputAar = generatedLibboxAar.get().asFile
-        outputAar.parentFile.mkdirs()
-        sourceAar.copyTo(outputAar, overwrite = true)
-
-        // build_libbox also creates the legacy artifact. The Android app uses
-        // the main API-23 artifact and must not leave build products in the
-        // source submodule after Gradle finishes.
-        sourceAar.delete()
-        singBoxSourceDir.resolve("libbox-legacy.aar").delete()
     }
 }
 
@@ -316,21 +296,13 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
     }
 }
 
-// JVM tests/lint need libbox types but do not execute the Xray or HEV Android
-// binaries. Avoid rebuilding both native data paths for those tasks.
+// Native core/data-plane binaries are required only when JNI folders are merged.
 tasks.configureEach {
-    if (name.startsWith("pre") && name.endsWith("Build")) {
-        dependsOn(buildLibbox)
-    }
     if (name.startsWith("merge") && name.endsWith("JniLibFolders")) {
+        dependsOn(buildSingBoxCore)
         dependsOn(buildXrayCore)
         dependsOn(buildHevTunnel)
     }
-}
-
-val javaToolchains = extensions.getByType<JavaToolchainService>()
-val java17Launcher = javaToolchains.launcherFor {
-    languageVersion.set(JavaLanguageVersion.of(17))
 }
 
 android {
@@ -435,6 +407,7 @@ android {
     }
 
     sourceSets.getByName("main").jniLibs.srcDir(generatedXrayJniDir)
+    sourceSets.getByName("main").jniLibs.srcDir(generatedSingBoxJniDir)
     sourceSets.getByName("main").jniLibs.srcDir(generatedHevJniDir)
 
     externalNativeBuild {
@@ -493,10 +466,6 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
-    
-    // sing-box core is compiled from the pinned source submodule for every
-    // clean build; no prebuilt AAR is consumed from app/libs.
-    implementation(files(generatedLibboxAar))
     
     // Testing
     testImplementation("junit:junit:4.13.2")

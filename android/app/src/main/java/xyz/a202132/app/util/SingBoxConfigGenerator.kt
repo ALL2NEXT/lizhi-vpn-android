@@ -24,7 +24,7 @@ class SingBoxConfigGenerator {
         )
     }
 
-    // 紧凑 JSON 可以减少内存分配和 libbox 解析开销；调试日志本身会截断配置，无需美化输出。
+    // 紧凑 JSON 可以减少配置解析开销；调试日志本身会截断配置，无需美化输出。
     private val gson: Gson = Gson()
     
     /**
@@ -108,14 +108,14 @@ class SingBoxConfigGenerator {
             add("dns", JsonObject().apply {
                 add("servers", JsonArray().apply {
                     add(JsonObject().apply {
+                        addProperty("type", "udp")
                         addProperty("tag", "dns-direct")
-                        addProperty("address", AppConfig.VPN_DNS_PRIMARY)
-                        addProperty("detour", "direct")
+                        addProperty("server", AppConfig.VPN_DNS_PRIMARY)
                     })
                     add(JsonObject().apply {
+                        addProperty("type", "udp")
                         addProperty("tag", "dns-local")
-                        addProperty("address", AppConfig.VPN_DNS_CHINA)
-                        addProperty("detour", "direct")
+                        addProperty("server", AppConfig.VPN_DNS_CHINA)
                     })
                 })
                 add("rules", JsonArray().apply {
@@ -146,16 +146,12 @@ class SingBoxConfigGenerator {
                     addProperty("type", "direct")
                     addProperty("tag", "direct")
                 })
-                add(JsonObject().apply {
-                    addProperty("type", "dns")
-                    addProperty("tag", "dns-out")
-                })
             })
             add("route", JsonObject().apply {
                 add("rules", JsonArray().apply {
-                    add(JsonObject().apply {
-                        addProperty("protocol", "dns")
-                        addProperty("outbound", "dns-out")
+                add(JsonObject().apply {
+                    addProperty("protocol", "dns")
+                    addProperty("action", "hijack-dns")
                     })
                     if (isDomainServer) {
                         add(JsonObject().apply {
@@ -165,6 +161,7 @@ class SingBoxConfigGenerator {
                     }
                 })
                 addProperty("final", "proxy")
+                addProperty("default_domain_resolver", "dns-local")
             })
         }
         return gson.toJson(config)
@@ -194,14 +191,14 @@ class SingBoxConfigGenerator {
             add("dns", JsonObject().apply {
                 add("servers", JsonArray().apply {
                     add(JsonObject().apply {
+                        addProperty("type", "udp")
                         addProperty("tag", "dns-direct")
-                        addProperty("address", AppConfig.VPN_DNS_PRIMARY)
-                        addProperty("detour", "direct")
+                        addProperty("server", AppConfig.VPN_DNS_PRIMARY)
                     })
                     add(JsonObject().apply {
+                        addProperty("type", "udp")
                         addProperty("tag", "dns-local")
-                        addProperty("address", AppConfig.VPN_DNS_CHINA)
-                        addProperty("detour", "direct")
+                        addProperty("server", AppConfig.VPN_DNS_CHINA)
                     })
                 })
             })
@@ -247,6 +244,7 @@ class SingBoxConfigGenerator {
             // 无 VPN 时系统默认路由会自动走物理网络接口
             add("route", JsonObject().apply {
                 addProperty("final", "auto")
+                addProperty("default_domain_resolver", "dns-direct")
             })
             
             // 实验性 - ClashAPI
@@ -316,6 +314,7 @@ class SingBoxConfigGenerator {
                 }
             })
             addProperty("final", "direct")
+            addProperty("default_domain_resolver", "dns-direct")
         })
         return gson.toJson(config)
     }
@@ -330,14 +329,15 @@ class SingBoxConfigGenerator {
     private fun createDnsConfig(proxyMode: ProxyMode, nodeDomains: List<String>, ipv6Mode: IPv6RoutingMode): JsonObject {
         val servers = JsonArray().apply {
             add(JsonObject().apply {
+                addProperty("type", "tls")
                 addProperty("tag", "google")
-                addProperty("address", "tls://${AppConfig.VPN_DNS_PRIMARY}")
+                addProperty("server", AppConfig.VPN_DNS_PRIMARY)
                 addProperty("detour", "proxy") // DNS走代理组
             })
             add(JsonObject().apply {
+                addProperty("type", "udp")
                 addProperty("tag", "local")
-                addProperty("address", AppConfig.VPN_DNS_CHINA)
-                addProperty("detour", "direct")
+                addProperty("server", AppConfig.VPN_DNS_CHINA)
             })
         }
         
@@ -434,11 +434,6 @@ class SingBoxConfigGenerator {
         outbounds.add(JsonObject().apply {
             addProperty("type", "block")
             addProperty("tag", "block")
-        })
-        
-        outbounds.add(JsonObject().apply {
-            addProperty("type", "dns")
-            addProperty("tag", "dns-out")
         })
         
         return outbounds
@@ -1005,8 +1000,12 @@ class SingBoxConfigGenerator {
                 })
             }
             
+            // The core is now a standalone child process and HEV owns the
+            // Android VPN TUN. The child shares the app UID and is excluded
+            // from the VPN, so native interface auto-detection is neither
+            // needed nor available through the old libbox platform bridge.
             addProperty("final", "proxy")
-            addProperty("auto_detect_interface", true)
+            addProperty("default_domain_resolver", "local")
         }
     }
     
