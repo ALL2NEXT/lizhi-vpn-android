@@ -19,7 +19,7 @@ import java.io.RandomAccessFile
 
 @Database(
     entities = [Node::class, NodeGroupEntity::class, NodeGroupMemberEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -126,6 +126,11 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
         }
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `node_groups` ADD COLUMN `subscriptionUrl` TEXT")
+            }
+        }
         @Volatile
         private var sqlCipherLibLoaded = false
 
@@ -172,7 +177,13 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                    MIGRATION_7_8
+                )
                 .build()
         }
 

@@ -28,7 +28,7 @@ sealed interface NodeGroupKey {
         override val value: String = FAVORITES_ID
     }
 
-    /** 用户导入组使用数据库中持久化的组 ID。 */
+    /** 用户创建的本地订阅组使用数据库中持久化的组 ID。 */
     data class Imported(val groupId: String) : NodeGroupKey {
         override val value: String = "imported:$groupId"
     }

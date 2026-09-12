@@ -52,7 +52,6 @@ import xyz.a202132.app.ui.screens.SkinSchemeEditorScreen
 import xyz.a202132.app.ui.screens.WebNavigationScreen
 import xyz.a202132.app.ui.theme.FireflyTheme
 import xyz.a202132.app.viewmodel.MainViewModel
-import xyz.a202132.app.viewmodel.NodeImportResult
 
 class MainActivity : ComponentActivity() {
 
@@ -88,32 +87,31 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
+                    var scannedSubscriptionText by rememberSaveable { mutableStateOf<String?>(null) }
                     val navigateTo: (String) -> Unit = { route ->
                             navController.navigate(route) {
                                 launchSingleTop = true
                             }
                         }
-                        val favoriteImportMessage: (NodeImportResult, Int) -> String = { result, importedCount ->
-                            when (result) {
-                                NodeImportResult.IMPORTED -> "导入${importedCount}个节点到收藏节点"
-                                NodeImportResult.DUPLICATE -> "节点已存在，无需重复导入"
-                                NodeImportResult.INVALID -> "未找到可导入节点或链接无效"
-                                NodeImportResult.FETCH_FAILED -> "订阅链接获取失败，请检查地址和网络"
-                            }
-                        }
-                        val importNodesToFavorites: (String, Boolean, ((Boolean) -> Unit)?) -> Unit =
-                            { text, returnToNodeList, onComplete ->
-                                viewModel.importNodesToFavoritesFromText(text) { result, importedCount ->
-                                    val success = result == NodeImportResult.IMPORTED
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        favoriteImportMessage(result, importedCount),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    onComplete?.invoke(success)
-                                    if (success && returnToNodeList) {
-                                        navController.popBackStack()
+                        val createSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit =
+                            { name, input, onComplete ->
+                                viewModel.createSubscriptionGroup(name, input) { result, importedCount ->
+                                    val message = when (result) {
+                                        MainViewModel.SubscriptionGroupCreateResult.CREATED ->
+                                            if (importedCount > 0) {
+                                                "已添加订阅组，导入${importedCount}个节点"
+                                            } else {
+                                                "订阅组已创建"
+                                            }
+                                        MainViewModel.SubscriptionGroupCreateResult.INVALID ->
+                                            "未找到可导入节点或链接无效"
+                                        MainViewModel.SubscriptionGroupCreateResult.FETCH_FAILED ->
+                                            "订阅链接获取失败，请检查地址和网络"
                                     }
+                                    Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+                                    onComplete(
+                                        result == MainViewModel.SubscriptionGroupCreateResult.CREATED
+                                    )
                                 }
                             }
                         NavHost(
@@ -220,11 +218,15 @@ class MainActivity : ComponentActivity() {
                                                         viewModel.selectAndConnectNode(node)
                                                     }
                                                 },
-                                                onImportFromText = {
-                                                    importNodesToFavorites(it, false, null)
+                                                onCreateSubscriptionGroup = { name, input, onComplete ->
+                                                    createSubscriptionGroup(name, input, onComplete)
                                                 },
                                                 onScanQrCode = {
                                                     navigateTo(AppRoute.QR_SCANNER)
+                                                },
+                                                scannedSubscriptionText = scannedSubscriptionText,
+                                                onScannedSubscriptionTextConsumed = {
+                                                    scannedSubscriptionText = null
                                                 },
                                                 onBack = {
                                                     selectedDestination = HomeDestination.HOME
@@ -283,7 +285,9 @@ class MainActivity : ComponentActivity() {
                                 QrScannerScreen(
                                     onBack = { navController.popBackStack() },
                                     onQrCodeScanned = { text, onComplete ->
-                                        importNodesToFavorites(text, true, onComplete)
+                                        scannedSubscriptionText = text
+                                        onComplete(true)
+                                        navController.popBackStack()
                                     }
                                 )
                             }

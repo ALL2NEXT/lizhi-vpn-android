@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.NodeGroupKey
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -24,6 +25,11 @@ private sealed interface NodeGroupingDetail {
     ) : NodeGroupingDetail
 
     data object Favorites : NodeGroupingDetail
+
+    data class UserGroup(
+        val groupId: String,
+        val groupName: String
+    ) : NodeGroupingDetail
 }
 
 /**
@@ -37,8 +43,10 @@ fun NodeGroupingDestination(
     viewModel: MainViewModel,
     onCountrySelected: (String) -> Unit,
     onNodeSelected: (Node) -> Unit,
-    onImportFromText: (String) -> Unit,
+    onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,
+    scannedSubscriptionText: String?,
+    onScannedSubscriptionTextConsumed: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp = 108.dp
 ) {
@@ -104,6 +112,23 @@ fun NodeGroupingDestination(
             )
         }
 
+        is NodeGroupingDetail.UserGroup -> {
+            val groupNodes by remember(currentDetail.groupId) {
+                viewModel.observeNodeGroupNodes(currentDetail.groupId)
+            }.collectAsStateWithLifecycle(initialValue = emptyList())
+            SubscriptionGroupingDestination(
+                viewModel = viewModel,
+                nodesOverride = groupNodes,
+                screenTitle = "线路信息",
+                screenSubtitle = currentDetail.groupName,
+                testNodes = groupNodes,
+                onNodeSelected = onNodeSelected,
+                onBack = { detail = null },
+                showBackNavigation = true,
+                bottomContentPadding = bottomContentPadding
+            )
+        }
+
         null -> when (groupingMode) {
             NodeGroupingMode.COUNTRY -> CountryGroupingDestination(
                 viewModel = viewModel,
@@ -125,6 +150,15 @@ fun NodeGroupingDestination(
                 onViewSubscriptionDetails = { group ->
                     detail = NodeGroupingDetail.Subscription(group.sourceId, group.name)
                 },
+                onUserGroupSelected = { group ->
+                    viewModel.selectNodeGroup(NodeGroupKey.Imported(group.id.removePrefix("imported:")))
+                },
+                onViewUserGroupDetails = { group ->
+                    detail = NodeGroupingDetail.UserGroup(
+                        groupId = group.id.removePrefix("imported:"),
+                        groupName = group.name
+                    )
+                },
                 // 收藏卡片同样区分“选中”和“查看详情”两种操作。
                 onFavoritesSelected = {
                     viewModel.selectFavoritesGroup()
@@ -132,8 +166,10 @@ fun NodeGroupingDestination(
                 onViewFavoritesDetails = {
                     detail = NodeGroupingDetail.Favorites
                 },
-                onImportFromText = onImportFromText,
+                onCreateSubscriptionGroup = onCreateSubscriptionGroup,
                 onScanQrCode = onScanQrCode,
+                scannedSubscriptionText = scannedSubscriptionText,
+                onScannedSubscriptionTextConsumed = onScannedSubscriptionTextConsumed,
                 onSwitchToCountries = switchToCountries,
                 onBack = onBack,
                 bottomContentPadding = bottomContentPadding

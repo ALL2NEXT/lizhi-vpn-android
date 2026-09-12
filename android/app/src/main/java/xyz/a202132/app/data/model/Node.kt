@@ -127,7 +127,9 @@ enum class LatencyLevel {
 
 enum class NodeSource {
     SUBSCRIPTION,
-    FAVORITE
+    FAVORITE,
+    /** 用户创建的本地订阅组节点。 */
+    LOCAL_GROUP
 }
 
 enum class NodeListCategory {

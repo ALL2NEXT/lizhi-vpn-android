@@ -5,6 +5,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,18 +26,21 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Subscriptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeGroupKey
+import xyz.a202132.app.data.model.NodeGroupSummary
 import xyz.a202132.app.data.model.SubscriptionGroup
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -59,15 +64,20 @@ internal fun SubscriptionGroupSelectionDestination(
     viewModel: MainViewModel,
     onSubscriptionSelected: (SubscriptionGroup) -> Unit,
     onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
+    onUserGroupSelected: (NodeGroupSummary) -> Unit,
+    onViewUserGroupDetails: (NodeGroupSummary) -> Unit,
     onFavoritesSelected: () -> Unit,
     onViewFavoritesDetails: () -> Unit,
-    onImportFromText: (String) -> Unit,
+    onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,
+    scannedSubscriptionText: String?,
+    onScannedSubscriptionTextConsumed: () -> Unit,
     onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp = 108.dp
 ) {
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
+    val userGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
     val favoriteNodes by viewModel.favoriteNodes.collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
@@ -81,6 +91,7 @@ internal fun SubscriptionGroupSelectionDestination(
 
     SubscriptionGroupSelectionScreen(
         subscriptionGroups = subscriptionGroups,
+        userGroups = userGroups,
         selectedNodeGroupId = selectedNodeGroupId,
         nodeCounts = nodeCounts,
         favoriteNodeCount = favoriteNodes.size,
@@ -88,10 +99,14 @@ internal fun SubscriptionGroupSelectionDestination(
         isLoading = isLoading,
         onSubscriptionSelected = onSubscriptionSelected,
         onViewSubscriptionDetails = onViewSubscriptionDetails,
+        onUserGroupSelected = onUserGroupSelected,
+        onViewUserGroupDetails = onViewUserGroupDetails,
         onFavoritesSelected = onFavoritesSelected,
         onViewFavoritesDetails = onViewFavoritesDetails,
-        onImportFromText = onImportFromText,
+        onCreateSubscriptionGroup = onCreateSubscriptionGroup,
         onScanQrCode = onScanQrCode,
+        scannedSubscriptionText = scannedSubscriptionText,
+        onScannedSubscriptionTextConsumed = onScannedSubscriptionTextConsumed,
         onSwitchToCountries = onSwitchToCountries,
         onBack = onBack,
         bottomContentPadding = bottomContentPadding
@@ -101,6 +116,7 @@ internal fun SubscriptionGroupSelectionDestination(
 @Composable
 private fun SubscriptionGroupSelectionScreen(
     subscriptionGroups: List<SubscriptionGroup>,
+    userGroups: List<NodeGroupSummary>,
     selectedNodeGroupId: String?,
     nodeCounts: Map<String, Int>,
     favoriteNodeCount: Int,
@@ -108,30 +124,46 @@ private fun SubscriptionGroupSelectionScreen(
     isLoading: Boolean,
     onSubscriptionSelected: (SubscriptionGroup) -> Unit,
     onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
+    onUserGroupSelected: (NodeGroupSummary) -> Unit,
+    onViewUserGroupDetails: (NodeGroupSummary) -> Unit,
     onFavoritesSelected: () -> Unit,
     onViewFavoritesDetails: () -> Unit,
-    onImportFromText: (String) -> Unit,
+    onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,
+    scannedSubscriptionText: String?,
+    onScannedSubscriptionTextConsumed: () -> Unit,
     onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp
 ) {
     val favoriteSelected = selectedNodeGroupId == NodeGroupKey.Favorites.value
     val context = LocalContext.current
-    var importMenuExpanded by remember { mutableStateOf(false) }
+    var addDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var groupName by rememberSaveable { mutableStateOf("") }
+    var subscriptionInput by rememberSaveable { mutableStateOf("") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
-    val handleImportFromClipboard = {
+    LaunchedEffect(scannedSubscriptionText) {
+        scannedSubscriptionText?.let { text ->
+            subscriptionInput = text.trim()
+            addDialogVisible = true
+            onScannedSubscriptionTextConsumed()
+        }
+    }
+
+    fun importClipboard() {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clipText = clipboard.primaryClip
+        val text = clipboard.primaryClip
             ?.takeIf { it.itemCount > 0 }
             ?.getItemAt(0)
             ?.coerceToText(context)
             ?.toString()
             ?.trim()
-        if (clipText.isNullOrBlank()) {
-            Toast.makeText(context, "\u526a\u5207\u677f\u4e3a\u7a7a", Toast.LENGTH_SHORT).show()
+        if (text.isNullOrBlank()) {
+            Toast.makeText(context, "剪贴板为空", Toast.LENGTH_SHORT).show()
         } else {
-            onImportFromText(clipText)
+            subscriptionInput = text
+            addDialogVisible = true
         }
     }
 
@@ -147,44 +179,17 @@ private fun SubscriptionGroupSelectionScreen(
                     contentDescription = "切换为按地区分组"
                 )
             }
-            Box {
-                IconButton(onClick = { importMenuExpanded = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "添加订阅"
-                    )
+            IconButton(
+                onClick = {
+                    groupName = ""
+                    subscriptionInput = ""
+                    addDialogVisible = true
                 }
-                DropdownMenu(
-                    expanded = importMenuExpanded,
-                    onDismissRequest = { importMenuExpanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("剪贴板导入") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.ContentPaste,
-                                contentDescription = null
-                            )
-                        },
-                        onClick = {
-                            importMenuExpanded = false
-                            handleImportFromClipboard()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("二维码导入") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.QrCodeScanner,
-                                contentDescription = null
-                            )
-                        },
-                        onClick = {
-                            importMenuExpanded = false
-                            onScanQrCode()
-                        }
-                    )
-                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "添加订阅组"
+                )
             }
         },
         contentPadding = PaddingValues(
@@ -196,36 +201,47 @@ private fun SubscriptionGroupSelectionScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) {
         when {
-            subscriptionGroups.isNotEmpty() || !hideFavoriteNodeGroup -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = bottomContentPadding),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(
-                    items = subscriptionGroups,
-                    key = SubscriptionGroup::sourceId
-                ) { group ->
-                    SubscriptionGroupCard(
-                        group = group,
-                        nodeCount = nodeCounts[group.sourceId] ?: 0,
-                        // 收藏节点组和普通订阅组保持互斥选中状态。
-                        selected = selectedNodeGroupId ==
-                            NodeGroupKey.Subscription(group.sourceId).value,
-                        onClick = { onSubscriptionSelected(group) },
-                        onViewDetails = { onViewSubscriptionDetails(group) }
-                    )
-                }
-                if (!hideFavoriteNodeGroup) {
-                    item(key = "favorites") {
-                        FavoriteGroupCard(
-                            nodeCount = favoriteNodeCount,
-                            selected = favoriteSelected,
-                            onClick = onFavoritesSelected,
-                            onViewDetails = onViewFavoritesDetails
+            subscriptionGroups.isNotEmpty() || userGroups.isNotEmpty() || !hideFavoriteNodeGroup ->
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = bottomContentPadding),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(
+                        items = subscriptionGroups,
+                        key = { "subscription:${it.sourceId}" }
+                    ) { group ->
+                        SubscriptionGroupCard(
+                            group = group,
+                            nodeCount = nodeCounts[group.sourceId] ?: 0,
+                            selected = selectedNodeGroupId ==
+                                NodeGroupKey.Subscription(group.sourceId).value,
+                            onClick = { onSubscriptionSelected(group) },
+                            onViewDetails = { onViewSubscriptionDetails(group) }
                         )
                     }
+                    items(
+                        items = userGroups,
+                        key = NodeGroupSummary::id
+                    ) { group ->
+                        UserSubscriptionGroupCard(
+                            group = group,
+                            selected = selectedNodeGroupId == group.id,
+                            onClick = { onUserGroupSelected(group) },
+                            onViewDetails = { onViewUserGroupDetails(group) }
+                        )
+                    }
+                    if (!hideFavoriteNodeGroup) {
+                        item(key = "favorites") {
+                            FavoriteGroupCard(
+                                nodeCount = favoriteNodeCount,
+                                selected = favoriteSelected,
+                                onClick = onFavoritesSelected,
+                                onViewDetails = onViewFavoritesDetails
+                            )
+                        }
+                    }
                 }
-            }
 
             isLoading -> Box(
                 modifier = Modifier.fillMaxSize(),
@@ -248,6 +264,100 @@ private fun SubscriptionGroupSelectionScreen(
                 )
             }
         }
+    }
+
+    if (addDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { if (!isSubmitting) addDialogVisible = false },
+            title = { Text("添加订阅组") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = groupName,
+                        onValueChange = { groupName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("组名") },
+                        placeholder = { Text("例如：我的机场") },
+                        enabled = !isSubmitting
+                    )
+                    OutlinedTextField(
+                        value = subscriptionInput,
+                        onValueChange = { subscriptionInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4,
+                        label = { Text("订阅连接（可选）") },
+                        placeholder = { Text("输入订阅链接或节点内容") },
+                        enabled = !isSubmitting
+                    )
+                    Text(
+                        text = "也可以使用下面的图标从剪贴板或二维码填充",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            IconButton(
+                                onClick = ::importClipboard,
+                                enabled = !isSubmitting
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentPaste,
+                                    contentDescription = "剪贴板导入"
+                                )
+                            }
+                            Text("剪贴板", fontSize = 12.sp)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            IconButton(
+                                onClick = onScanQrCode,
+                                enabled = !isSubmitting
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCodeScanner,
+                                    contentDescription = "二维码导入"
+                                )
+                            }
+                            Text("二维码", fontSize = 12.sp)
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { addDialogVisible = false },
+                    enabled = !isSubmitting
+                ) {
+                    Text("取消")
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSubmitting = true
+                        onCreateSubscriptionGroup(
+                            groupName,
+                            subscriptionInput.takeIf(String::isNotBlank)
+                        ) { success ->
+                            isSubmitting = false
+                            if (success) addDialogVisible = false
+                        }
+                    },
+                    enabled = groupName.isNotBlank() && !isSubmitting
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    } else {
+                        Text("添加")
+                    }
+                }
+            }
+        )
     }
 }
 
@@ -332,6 +442,39 @@ private fun SubscriptionGroupCard(
     onClick: () -> Unit,
     onViewDetails: () -> Unit
 ) {
+    GroupCard(
+        name = group.name,
+        nodeCount = nodeCount,
+        selected = selected,
+        onClick = onClick,
+        onViewDetails = onViewDetails
+    )
+}
+
+@Composable
+private fun UserSubscriptionGroupCard(
+    group: NodeGroupSummary,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onViewDetails: () -> Unit
+) {
+    GroupCard(
+        name = group.name,
+        nodeCount = group.nodeCount,
+        selected = selected,
+        onClick = onClick,
+        onViewDetails = onViewDetails
+    )
+}
+
+@Composable
+private fun GroupCard(
+    name: String,
+    nodeCount: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onViewDetails: () -> Unit
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -362,7 +505,7 @@ private fun SubscriptionGroupCard(
                 modifier = Modifier.size(34.dp)
             )
             Text(
-                text = group.name,
+                text = name,
                 modifier = Modifier.weight(1f),
                 color = if (selected) {
                     MaterialTheme.colorScheme.onPrimaryContainer

@@ -44,21 +44,21 @@ interface NodeDao {
     @Query("SELECT favoriteSourceNodeId FROM nodes WHERE source = 'FAVORITE' AND favoriteSourceNodeId IS NOT NULL")
     fun getFavoriteSourceNodeIds(): Flow<List<String?>>
 
-    /** 用户导入组的持久化摘要，内置收藏组和地区组不写入这里。 */
-    @Query("SELECT * FROM node_groups WHERE type = 'IMPORTED' ORDER BY sortOrder ASC, createdAt ASC")
-    fun getImportedGroups(): Flow<List<NodeGroupEntity>>
+    /** 用户创建的本地订阅组摘要，内置收藏组和地区组不写入这里。 */
+    @Query("SELECT * FROM node_groups WHERE type IN ('IMPORTED', 'SUBSCRIPTION') ORDER BY sortOrder ASC, createdAt ASC")
+    fun getUserSubscriptionGroups(): Flow<List<NodeGroupEntity>>
 
     @Query(
         """
         SELECT g.*, COUNT(m.nodeId) AS nodeCount
         FROM node_groups AS g
         LEFT JOIN node_group_members AS m ON g.id = m.groupId
-        WHERE g.type = 'IMPORTED'
+        WHERE g.type IN ('IMPORTED', 'SUBSCRIPTION')
         GROUP BY g.id
         ORDER BY g.sortOrder ASC, g.createdAt ASC
         """
     )
-    fun getImportedGroupsWithCount(): Flow<List<NodeGroupWithNodeCount>>
+    fun getUserSubscriptionGroupsWithCount(): Flow<List<NodeGroupWithNodeCount>>
 
     @Query(
         """
@@ -90,6 +90,17 @@ interface NodeDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNodeGroupMembers(members: List<NodeGroupMemberEntity>)
+
+    @Transaction
+    suspend fun insertNodeGroupWithNodes(
+        group: NodeGroupEntity,
+        nodes: List<Node>,
+        members: List<NodeGroupMemberEntity>
+    ) {
+        insertNodeGroup(group)
+        if (nodes.isNotEmpty()) insertNodes(nodes)
+        if (members.isNotEmpty()) insertNodeGroupMembers(members)
+    }
 
     @Query("DELETE FROM node_group_members WHERE groupId = :groupId")
     suspend fun deleteNodeGroupMembers(groupId: String)

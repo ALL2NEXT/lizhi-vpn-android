@@ -46,13 +46,6 @@ import java.time.OffsetDateTime
 import kotlin.math.ceil
 import java.util.UUID
 
-enum class NodeImportResult {
-    IMPORTED,
-    DUPLICATE,
-    INVALID,
-    FETCH_FAILED
-}
-
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
@@ -214,9 +207,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .flatMapLatest { it.getFavoriteNodes() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 用户导入组的展示摘要，供后续统一分组列表直接复用。 */
-    val importedNodeGroups = nodeDaoFlow
-        .flatMapLatest { it.getImportedGroupsWithCount() }
+    /** 用户创建的订阅组摘要，与收藏节点完全独立。 */
+    val userSubscriptionGroups = nodeDaoFlow
+        .flatMapLatest { it.getUserSubscriptionGroupsWithCount() }
         .map { groups ->
             groups.map { item ->
                 NodeGroupSummary(
@@ -229,6 +222,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** 节点分组详情页使用的用户组节点流。 */
+    fun observeNodeGroupNodes(groupId: String): Flow<List<Node>> =
+        nodeDaoFlow.flatMapLatest { it.getNodesByGroup(groupId) }
 
     /** 当前选中用户导入组的节点；没有选中导入组时不参与主页列表。 */
     private val importedNodes = selectedNodeGroupId.flatMapLatest { groupId ->
@@ -1255,6 +1252,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 is NodeGroupKey.Imported -> {
                     settingsRepository.setSelectedCountryCode(null)
                     settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+                    settingsRepository.setSelectedSubscriptionSourceId(null)
+                    settingsRepository.setSelectedNodeId(null)
                     settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
                 }
             }
@@ -1358,84 +1357,104 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun importNodesToFavoritesFromText(text: String, onResult: (NodeImportResult, Int) -> Unit = { _, _ -> }) {
+    enum class SubscriptionGroupCreateResult {
+        CREATED,
+        INVALID,
+        FETCH_FAILED
+    }
+
+    /**
+     * 创建用户本地订阅组。输入可以是订阅链接、节点链接列表，也可以为空以先创建空组。
+     */
+    fun createSubscriptionGroup(
+        name: String,
+        input: String?,
+        onResult: (SubscriptionGroupCreateResult, Int) -> Unit = { _, _ -> }
+    ) {
         viewModelScope.launch {
-            val subscriptionUrl = SubscriptionImportUrl.detect(text)
-            val importResult = if (subscriptionUrl == null) {
+            val normalizedName = name.trim()
+            if (normalizedName.isBlank()) {
+                onResult(SubscriptionGroupCreateResult.INVALID, 0)
+                return@launch
+            }
+
+            val normalizedInput = input?.trim().orEmpty()
+            val subscriptionUrl = SubscriptionImportUrl.detect(normalizedInput)
+            val parsedNodes = if (normalizedInput.isBlank()) {
+                Result.success(emptyList())
+            } else if (subscriptionUrl != null) {
                 withContext(Dispatchers.IO) {
-                    persistNodesToFavorites(subscriptionParser.parseSubscription(text))
-                }
-            } else {
-                val fetchedNodes = withContext(Dispatchers.IO) {
                     subscriptionParser.fetchAndParse(subscriptionUrl)
                 }
-                fetchedNodes.fold(
-                    onSuccess = { nodes ->
-                        withContext(Dispatchers.IO) { persistNodesToFavorites(nodes) }
-                    },
-                    onFailure = { error ->
-                        Log.e(tag, "Unable to import favorite subscription", error)
-                        NodeImportResult.FETCH_FAILED to 0
-                    }
+            } else {
+                withContext(Dispatchers.Default) {
+                    Result.success(subscriptionParser.parseSubscription(normalizedInput))
+                }
+            }
+
+            if (parsedNodes.isFailure) {
+                Log.e(tag, "Unable to fetch user subscription group", parsedNodes.exceptionOrNull())
+                onResult(SubscriptionGroupCreateResult.FETCH_FAILED, 0)
+                return@launch
+            }
+
+            val compatibleNodes = withContext(Dispatchers.IO) {
+                parsedNodes.getOrThrow().filter { node ->
+                    isNodeCoreConfigCompatible(node)
+                }
+            }
+            if (normalizedInput.isNotBlank() && compatibleNodes.isEmpty()) {
+                onResult(SubscriptionGroupCreateResult.INVALID, 0)
+                return@launch
+            }
+
+            val groupId = "group_${UUID.randomUUID()}"
+            val createdAt = System.currentTimeMillis()
+            val group = NodeGroupEntity(
+                id = groupId,
+                name = normalizedName,
+                type = NodeGroupType.SUBSCRIPTION.name,
+                subscriptionUrl = subscriptionUrl,
+                createdAt = createdAt
+            )
+            val localNodes = compatibleNodes
+                .distinctBy(Node::getRawLinkPlain)
+                .mapIndexed { index, node ->
+                    node.copy(
+                        id = "${groupId}_$index",
+                        source = NodeSource.LOCAL_GROUP,
+                        subscriptionSourceId = groupId,
+                        subscriptionSourceName = normalizedName,
+                        favoriteSourceNodeId = null,
+                        favoriteCreatedAt = 0L,
+                        latency = -1,
+                        tcpingLatency = -1,
+                        urlTestLatency = -1,
+                        isAvailable = true,
+                        lastTestedAt = 0L,
+                        downloadMbps = 0f,
+                        uploadMbps = 0f
+                    )
+                }
+            val members = localNodes.mapIndexed { index, node ->
+                NodeGroupMemberEntity(
+                    groupId = groupId,
+                    nodeId = node.id,
+                    sortOrder = index
                 )
             }
-            finishFavoriteImport(importResult, onResult)
-        }
-    }
 
-    private suspend fun persistNodesToFavorites(
-        parsedNodes: List<Node>
-    ): Pair<NodeImportResult, Int> {
-        if (parsedNodes.isEmpty()) return NodeImportResult.INVALID to 0
-
-        val coreCompatibleNodes = parsedNodes.filter { node ->
-            isNodeCoreConfigCompatible(node)
+            withContext(Dispatchers.IO) {
+                nodeDao().insertNodeGroupWithNodes(group, localNodes, members)
+            }
+            settingsRepository.setSelectedNodeGroupId(NodeGroupKey.Imported(groupId).value)
+            settingsRepository.setSelectedCountryCode(null)
+            settingsRepository.setSelectedSubscriptionSourceId(null)
+            settingsRepository.setSelectedNodeId(null)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+            onResult(SubscriptionGroupCreateResult.CREATED, localNodes.size)
         }
-        if (coreCompatibleNodes.isEmpty()) return NodeImportResult.INVALID to 0
-
-        val existingFavoriteRawLinks = nodeDao().getFavoriteNodes().first()
-            .map { it.getRawLinkPlain() }
-            .toMutableSet()
-        val uniqueNodes = coreCompatibleNodes.filter { node ->
-            existingFavoriteRawLinks.add(node.getRawLinkPlain())
-        }
-        if (uniqueNodes.isEmpty()) return NodeImportResult.DUPLICATE to 0
-
-        val now = System.currentTimeMillis()
-        val favorites = uniqueNodes.mapIndexed { index, node ->
-            node.copy(
-                id = "fav_${UUID.randomUUID()}",
-                source = NodeSource.FAVORITE,
-                favoriteSourceNodeId = null,
-                favoriteCreatedAt = now + index,
-                subscriptionSourceId = null,
-                subscriptionSourceName = null,
-                latency = -1,
-                tcpingLatency = -1,
-                urlTestLatency = -1,
-                isAvailable = true,
-                lastTestedAt = 0L,
-                downloadMbps = 0f,
-                uploadMbps = 0f,
-            )
-        }
-        nodeDao().insertNodes(favorites)
-        return NodeImportResult.IMPORTED to favorites.size
-    }
-
-    private suspend fun finishFavoriteImport(
-        importResult: Pair<NodeImportResult, Int>,
-        onResult: (NodeImportResult, Int) -> Unit
-    ) {
-        val (result, importedCount) = importResult
-        if (result == NodeImportResult.IMPORTED) {
-            settingsRepository.setSelectedNodeGroupId(NodeGroupKey.Favorites.value)
-            settingsRepository.setNodeListCategory(NodeListCategory.FAVORITES)
-            Log.i(tag, "Imported $importedCount nodes to favorites")
-        } else {
-            Log.w(tag, "Node import finished without new nodes: result=$result")
-        }
-        onResult(result, importedCount)
     }
 
     private suspend fun isNodeCoreConfigCompatible(node: Node): Boolean {

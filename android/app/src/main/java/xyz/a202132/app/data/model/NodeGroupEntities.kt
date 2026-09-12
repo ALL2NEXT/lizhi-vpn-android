@@ -14,6 +14,7 @@ data class NodeGroupEntity(
     @PrimaryKey val id: String,
     val name: String,
     val type: String = NodeGroupType.IMPORTED.name,
+    val subscriptionUrl: String? = null,
     val sortOrder: Int = 0,
     val createdAt: Long = 0L
 )
