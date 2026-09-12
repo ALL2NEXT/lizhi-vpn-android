@@ -2,15 +2,23 @@ package xyz.a202132.app.data.model
 
 import java.util.UUID
 
+/** 测速方案的候选节点作用域。顺序与编辑页面保持一致。 */
+enum class SpeedTestScope {
+    CURRENT_GROUP,
+    SPECIFIED_GROUPS,
+    ALL_GROUPS
+}
+
 /**
  * 可复用的节点选择方案。测速阶段按 TCPing、204 URL、带宽测速的顺序执行，
- * 每个阶段都可以单独开关，并独立配置测速范围和参数。
+ * 每个阶段都可以单独开关，并独立配置测速作用域和参数。
  */
 data class SpeedTestScheme(
     val id: String,
     val name: String,
     val builtIn: Boolean = false,
-    val testAllNodes: Boolean = false,
+    val scope: SpeedTestScope = SpeedTestScope.CURRENT_GROUP,
+    val specifiedGroupIds: Set<String> = emptySet(),
     val tcpingEnabled: Boolean = true,
     val urlTestEnabled: Boolean = true,
     val bandwidthEnabled: Boolean = true,
@@ -46,7 +54,7 @@ data class SpeedTestScheme(
             id = STANDARD_ID,
             name = "默认方案1",
             builtIn = true,
-            testAllNodes = false,
+            scope = SpeedTestScope.CURRENT_GROUP,
             tcpingPercent = tcpingPercent,
             urlTestPercent = urlTestPercent,
             bandwidthPercent = bandwidthPercent,
@@ -76,7 +84,7 @@ data class SpeedTestScheme(
             id = DEEP_ID,
             name = "默认方案2",
             builtIn = true,
-            testAllNodes = true,
+            scope = SpeedTestScope.ALL_GROUPS,
             tcpingPercent = tcpingPercent,
             urlTestPercent = urlTestPercent,
             bandwidthPercent = bandwidthPercent,

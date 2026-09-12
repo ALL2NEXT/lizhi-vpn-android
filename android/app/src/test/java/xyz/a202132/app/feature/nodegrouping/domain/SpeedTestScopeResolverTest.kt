@@ -5,6 +5,7 @@ import org.junit.Test
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 
 class SpeedTestScopeResolverTest {
@@ -17,7 +18,8 @@ class SpeedTestScopeResolverTest {
             currentNodes = currentNodes,
             allSubscriptionNodes = allNodes,
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
-            testAllNodes = false,
+            scope = SpeedTestScope.CURRENT_GROUP,
+            specifiedGroupIds = emptySet(),
             selectedCountryCode = null
         )
 
@@ -37,7 +39,8 @@ class SpeedTestScopeResolverTest {
             currentNodes = listOf(allNodes.first()),
             allSubscriptionNodes = allNodes,
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
-            testAllNodes = true,
+            scope = SpeedTestScope.ALL_GROUPS,
+            specifiedGroupIds = emptySet(),
             selectedCountryCode = null
         )
 
@@ -57,7 +60,8 @@ class SpeedTestScopeResolverTest {
             currentNodes = listOf(allNodes[1]),
             allSubscriptionNodes = allNodes,
             groupingMode = NodeGroupingMode.COUNTRY,
-            testAllNodes = false,
+            scope = SpeedTestScope.CURRENT_GROUP,
+            specifiedGroupIds = emptySet(),
             selectedCountryCode = "jp"
         )
 
@@ -73,11 +77,32 @@ class SpeedTestScopeResolverTest {
             currentNodes = currentNodes,
             allSubscriptionNodes = allNodes,
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
-            testAllNodes = false,
+            scope = SpeedTestScope.CURRENT_GROUP,
+            specifiedGroupIds = emptySet(),
             selectedCountryCode = "JP"
         )
 
         assertEquals(listOf("us-current"), candidates.map(Node::id))
+    }
+
+    @Test
+    fun `指定模式支持选择多个订阅组`() {
+        val allNodes = listOf(
+            node("jp-a", "group-a", "JP"),
+            node("us-a", "group-b", "US"),
+            node("jp-b", "group-c", "JP")
+        )
+
+        val candidates = SpeedTestScopeResolver.selectCandidates(
+            currentNodes = listOf(allNodes.first()),
+            allSubscriptionNodes = allNodes,
+            groupingMode = NodeGroupingMode.SUBSCRIPTION,
+            scope = SpeedTestScope.SPECIFIED_GROUPS,
+            specifiedGroupIds = setOf("group-a", "group-c"),
+            selectedCountryCode = null
+        )
+
+        assertEquals(listOf("jp-a", "jp-b"), candidates.map(Node::id))
     }
 
     private fun node(

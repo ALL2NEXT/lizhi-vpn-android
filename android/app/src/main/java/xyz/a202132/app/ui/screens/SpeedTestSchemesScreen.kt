@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.SpeedTestScheme
+import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
@@ -263,7 +264,14 @@ private fun SpeedTestSchemeCard(
                         if (!scheme.tcpingEnabled && !scheme.urlTestEnabled && !scheme.bandwidthEnabled) {
                             append("不测速，直接连接已选节点或当前组第一个节点")
                         } else {
-                            append(if (scheme.testAllNodes) "测试所有节点" else "测试当前节点组")
+                            append(
+                                when (scheme.scope) {
+                                    SpeedTestScope.CURRENT_GROUP -> "当前组"
+                                    SpeedTestScope.SPECIFIED_GROUPS ->
+                                        "指定组（${scheme.specifiedGroupIds.size} 个）"
+                                    SpeedTestScope.ALL_GROUPS -> "所有组"
+                                }
+                            )
                             if (scheme.tcpingEnabled) append(" · 1 TCPing ${scheme.tcpingPercent}%")
                             if (scheme.urlTestEnabled) append(" · 2 204 URL ${scheme.urlTestPercent}%")
                             if (scheme.bandwidthEnabled) append(" · 3 带宽 ${scheme.bandwidthPercent}%")

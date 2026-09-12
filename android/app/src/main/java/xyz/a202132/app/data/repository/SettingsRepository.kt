@@ -20,6 +20,7 @@ import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.SkinSettings
 import xyz.a202132.app.data.model.SpeedTestScheme
+import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.util.CountryCodeResolver
@@ -733,7 +734,20 @@ class SettingsRepository(private val context: Context) {
                                         id = id,
                                         name = item.optString("name", "我的方案"),
                                         builtIn = item.optBoolean("builtIn", false),
-                                        testAllNodes = item.optBoolean("testAllNodes", false),
+                                        scope = runCatching {
+                                            SpeedTestScope.valueOf(
+                                                item.optString("scope", SpeedTestScope.CURRENT_GROUP.name)
+                                            )
+                                        }.getOrDefault(SpeedTestScope.CURRENT_GROUP),
+                                        specifiedGroupIds = buildSet {
+                                            item.optJSONArray("specifiedGroupIds")?.let { groups ->
+                                                for (groupIndex in 0 until groups.length()) {
+                                                    groups.optString(groupIndex).trim()
+                                                        .takeIf(String::isNotBlank)
+                                                        ?.let(::add)
+                                                }
+                                            }
+                                        },
                                         tcpingEnabled = item.optBoolean("tcpingEnabled", true),
                                         urlTestEnabled = item.optBoolean("urlTestEnabled", true),
                                         bandwidthEnabled = item.optBoolean("bandwidthEnabled", true),
@@ -788,6 +802,10 @@ class SettingsRepository(private val context: Context) {
         }
         return scheme.copy(
             name = normalizedName,
+            specifiedGroupIds = scheme.specifiedGroupIds
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .toSet(),
             tcpingPercent = scheme.tcpingPercent.coerceIn(1, 100),
             urlTestPercent = scheme.urlTestPercent.coerceIn(1, 100),
             bandwidthPercent = scheme.bandwidthPercent.coerceIn(1, 100),
@@ -812,7 +830,10 @@ class SettingsRepository(private val context: Context) {
                     put("id", normalized.id)
                     put("name", normalized.name)
                     put("builtIn", normalized.builtIn)
-                    put("testAllNodes", normalized.testAllNodes)
+                    put("scope", normalized.scope.name)
+                    put("specifiedGroupIds", JSONArray().apply {
+                        normalized.specifiedGroupIds.forEach(::put)
+                    })
                     put("tcpingEnabled", normalized.tcpingEnabled)
                     put("urlTestEnabled", normalized.urlTestEnabled)
                     put("bandwidthEnabled", normalized.bandwidthEnabled)

@@ -23,6 +23,7 @@ import xyz.a202132.app.data.local.NodeDao
 import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.feature.nodegrouping.domain.CountryGroupingStrategy
+import xyz.a202132.app.feature.nodegrouping.domain.SpeedTestScopeResolver
 import xyz.a202132.app.feature.nodegrouping.domain.SubscriptionGroupingStrategy
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.network.LatencyTester
@@ -488,11 +489,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             _isTesting.value = true
             try {
-                val allNodes = if (scheme.testAllNodes) {
-                    sortNodesForList(nodeDao().getAllNodes().first())
-                } else {
-                    currentNodeListSnapshot()
-                }
+                val allNodes = sortNodesForList(
+                    SpeedTestScopeResolver.selectCandidates(
+                        currentNodes = currentNodeListSnapshot(),
+                        allSubscriptionNodes = nodeDao().getSubscriptionNodes().first(),
+                        groupingMode = nodeGroupingMode.value,
+                        scope = scheme.scope,
+                        specifiedGroupIds = scheme.specifiedGroupIds,
+                        selectedCountryCode = selectedCountryCode.value
+                    )
+                )
                 if (allNodes.isEmpty()) {
                     _error.value = "没有可用节点"
                     return@launch

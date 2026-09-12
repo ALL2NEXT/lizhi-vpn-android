@@ -2,6 +2,7 @@ package xyz.a202132.app.feature.nodegrouping.domain
 
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeSource
+import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.util.CountryCodeResolver
 
@@ -11,10 +12,11 @@ internal object SpeedTestScopeResolver {
         currentNodes: List<Node>,
         allSubscriptionNodes: List<Node>,
         groupingMode: NodeGroupingMode,
-        testAllNodes: Boolean,
+        scope: SpeedTestScope,
+        specifiedGroupIds: Set<String>,
         selectedCountryCode: String?
     ): List<Node> {
-        if (groupingMode == NodeGroupingMode.COUNTRY) {
+        if (scope == SpeedTestScope.CURRENT_GROUP && groupingMode == NodeGroupingMode.COUNTRY) {
             val normalizedCountryCode =
                 CountryCodeResolver.normalizeCountryCode(selectedCountryCode)
             if (normalizedCountryCode != null) {
@@ -25,11 +27,15 @@ internal object SpeedTestScopeResolver {
             }
         }
 
-        val scopedNodes = if (testAllNodes) {
-            allSubscriptionNodes.filter { node -> node.source == NodeSource.SUBSCRIPTION }
-        } else {
-            currentNodes
+        return when (scope) {
+            SpeedTestScope.CURRENT_GROUP -> currentNodes
+            SpeedTestScope.SPECIFIED_GROUPS -> allSubscriptionNodes.filter { node ->
+                node.source == NodeSource.SUBSCRIPTION &&
+                    node.subscriptionSourceId in specifiedGroupIds
+            }
+            SpeedTestScope.ALL_GROUPS -> allSubscriptionNodes.filter { node ->
+                node.source == NodeSource.SUBSCRIPTION
+            }
         }
-        return scopedNodes
     }
 }

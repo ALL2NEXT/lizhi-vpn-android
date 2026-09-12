@@ -1,5 +1,6 @@
 package xyz.a202132.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,8 +14,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.SpeedTestScheme
+import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -50,8 +54,12 @@ fun SpeedTestSchemeEditorScreen(
         return
     }
 
+    val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
     var name by remember(scheme.id, scheme.name) { mutableStateOf(scheme.name) }
-    var testAllNodes by remember(scheme.id, scheme.testAllNodes) { mutableStateOf(scheme.testAllNodes) }
+    var scope by remember(scheme.id, scheme.scope) { mutableStateOf(scheme.scope) }
+    var specifiedGroupIds by remember(scheme.id, scheme.specifiedGroupIds) {
+        mutableStateOf(scheme.specifiedGroupIds)
+    }
     var tcpingEnabled by remember(scheme.id, scheme.tcpingEnabled) { mutableStateOf(scheme.tcpingEnabled) }
     var urlTestEnabled by remember(scheme.id, scheme.urlTestEnabled) { mutableStateOf(scheme.urlTestEnabled) }
     var bandwidthEnabled by remember(scheme.id, scheme.bandwidthEnabled) { mutableStateOf(scheme.bandwidthEnabled) }
@@ -82,16 +90,70 @@ fun SpeedTestSchemeEditorScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("测试所有节点", color = MaterialTheme.colorScheme.onSurface)
+                Text("测试作用域", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "测速节点范围按以下顺序选择，指定组支持多选。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                ScopeOption(
+                    title = "当前组",
+                    description = "跟随主页当前选中的节点组",
+                    selected = scope == SpeedTestScope.CURRENT_GROUP,
+                    onClick = { scope = SpeedTestScope.CURRENT_GROUP }
+                )
+                ScopeOption(
+                    title = "指定组",
+                    description = "仅测试下面选中的一个或多个订阅组",
+                    selected = scope == SpeedTestScope.SPECIFIED_GROUPS,
+                    onClick = { scope = SpeedTestScope.SPECIFIED_GROUPS }
+                )
+                ScopeOption(
+                    title = "所有组",
+                    description = "测试全部订阅组",
+                    selected = scope == SpeedTestScope.ALL_GROUPS,
+                    onClick = { scope = SpeedTestScope.ALL_GROUPS }
+                )
+                if (scope == SpeedTestScope.SPECIFIED_GROUPS) {
+                    Text(
+                        "选择指定组（可多选）",
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    if (subscriptionGroups.isEmpty()) {
                         Text(
-                            "关闭时只测试当前节点组",
+                            "暂无可用订阅组，请先添加订阅。",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Switch(checked = testAllNodes, onCheckedChange = { testAllNodes = it })
+                    subscriptionGroups.forEach { group ->
+                        val checked = group.sourceId in specifiedGroupIds
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    specifiedGroupIds = if (checked) {
+                                        specifiedGroupIds - group.sourceId
+                                    } else {
+                                        specifiedGroupIds + group.sourceId
+                                    }
+                                },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = { selected ->
+                                    specifiedGroupIds = if (selected) {
+                                        specifiedGroupIds + group.sourceId
+                                    } else {
+                                        specifiedGroupIds - group.sourceId
+                                    }
+                                }
+                            )
+                            Text(group.name, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
                 }
             }
 
@@ -164,6 +226,8 @@ fun SpeedTestSchemeEditorScreen(
                     val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
                     if (name.trim().isBlank()) {
                         error = "请输入方案名称"
+                    } else if (scope == SpeedTestScope.SPECIFIED_GROUPS && specifiedGroupIds.isEmpty()) {
+                        error = "请至少选择一个指定组"
                     } else if ((urlTestEnabled && normalizedUrl == null) ||
                         (bandwidthEnabled && normalizedBandwidthUrl == null)
                     ) {
@@ -172,7 +236,8 @@ fun SpeedTestSchemeEditorScreen(
                         viewModel.upsertSpeedTestScheme(
                             scheme.copy(
                                 name = name.trim(),
-                                testAllNodes = testAllNodes,
+                                scope = scope,
+                                specifiedGroupIds = specifiedGroupIds,
                                 tcpingEnabled = tcpingEnabled,
                                 urlTestEnabled = urlTestEnabled,
                                 bandwidthEnabled = bandwidthEnabled,
@@ -200,6 +265,31 @@ fun SpeedTestSchemeEditorScreen(
             ) {
                 Text("保存方案")
             }
+        }
+    }
+}
+
+@Composable
+private fun ScopeOption(
+    title: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Column(modifier = Modifier.padding(start = 4.dp)) {
+            Text(title, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                description,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
