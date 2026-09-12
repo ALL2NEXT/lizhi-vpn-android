@@ -50,6 +50,14 @@ class SettingsRepository(private val context: Context) {
             stringPreferencesKey("home_click_speed_test_scheme_id")
         private val HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_long_press_speed_test_scheme_id")
+        private val HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID =
+            stringPreferencesKey("home_swipe_up_speed_test_scheme_id")
+        private val HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID =
+            stringPreferencesKey("home_swipe_down_speed_test_scheme_id")
+        private val HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID =
+            stringPreferencesKey("home_swipe_left_speed_test_scheme_id")
+        private val HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID =
+            stringPreferencesKey("home_swipe_right_speed_test_scheme_id")
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
         private val UPDATE_DOWNLOAD_DIRECTORY_URI =
@@ -155,6 +163,46 @@ class SettingsRepository(private val context: Context) {
         )
     }
 
+    /** 主页图标上滑使用的测速方案。 */
+    val homeSwipeUpSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+        val schemes = decodeSpeedTestSchemes(preferences)
+        resolveHomeSchemeId(
+            preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID],
+            SpeedTestScheme.STANDARD_ID,
+            schemes
+        )
+    }
+
+    /** 主页图标下滑使用的测速方案。 */
+    val homeSwipeDownSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+        val schemes = decodeSpeedTestSchemes(preferences)
+        resolveHomeSchemeId(
+            preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID],
+            SpeedTestScheme.DEEP_ID,
+            schemes
+        )
+    }
+
+    /** 主页图标左滑使用的测速方案。 */
+    val homeSwipeLeftSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+        val schemes = decodeSpeedTestSchemes(preferences)
+        resolveHomeSchemeId(
+            preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID],
+            SpeedTestScheme.STANDARD_ID,
+            schemes
+        )
+    }
+
+    /** 主页图标右滑使用的测速方案。 */
+    val homeSwipeRightSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+        val schemes = decodeSpeedTestSchemes(preferences)
+        resolveHomeSchemeId(
+            preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID],
+            SpeedTestScheme.DEEP_ID,
+            schemes
+        )
+    }
+
     suspend fun setHomeClickSpeedTestSchemeId(schemeId: String) {
         context.dataStore.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
@@ -167,6 +215,38 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = schemeId
+            }
+        }
+    }
+
+    suspend fun setHomeSwipeUpSpeedTestSchemeId(schemeId: String) {
+        context.dataStore.edit { preferences ->
+            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
+                preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] = schemeId
+            }
+        }
+    }
+
+    suspend fun setHomeSwipeDownSpeedTestSchemeId(schemeId: String) {
+        context.dataStore.edit { preferences ->
+            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
+                preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] = schemeId
+            }
+        }
+    }
+
+    suspend fun setHomeSwipeLeftSpeedTestSchemeId(schemeId: String) {
+        context.dataStore.edit { preferences ->
+            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
+                preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] = schemeId
+            }
+        }
+    }
+
+    suspend fun setHomeSwipeRightSpeedTestSchemeId(schemeId: String) {
+        context.dataStore.edit { preferences ->
+            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
+                preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = schemeId
             }
         }
     }
@@ -397,6 +477,18 @@ class SettingsRepository(private val context: Context) {
             }
             if (preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] == schemeId) {
                 preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEEP_ID
+            }
+            if (preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] == schemeId) {
+                preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.STANDARD_ID
+            }
+            if (preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] == schemeId) {
+                preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEEP_ID
+            }
+            if (preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] == schemeId) {
+                preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.STANDARD_ID
+            }
+            if (preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] == schemeId) {
+                preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEEP_ID
             }
         }
     }

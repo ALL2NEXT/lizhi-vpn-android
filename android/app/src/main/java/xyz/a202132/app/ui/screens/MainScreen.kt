@@ -69,6 +69,10 @@ fun MainScreen(
     val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val homeClickSchemeId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeLongPressSchemeId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val homeSwipeUpSchemeId by viewModel.homeSwipeUpSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val homeSwipeDownSchemeId by viewModel.homeSwipeDownSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val homeSwipeLeftSchemeId by viewModel.homeSwipeLeftSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val homeSwipeRightSchemeId by viewModel.homeSwipeRightSpeedTestSchemeId.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
@@ -86,6 +90,14 @@ fun MainScreen(
     val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
     val longPressScheme = speedTestSchemes.firstOrNull { it.id == homeLongPressSchemeId }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
+    val swipeUpScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeUpSchemeId }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+    val swipeDownScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeDownSchemeId }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
+    val swipeLeftScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeLeftSchemeId }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+    val swipeRightScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeRightSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
     
     // 显示错误Toast
@@ -236,6 +248,21 @@ fun MainScreen(
                         {
                             onStartVpn {
                                 longPressScheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                            }
+                        }
+                    } else {
+                        null
+                    },
+                    onSwipe = if (vpnState == VpnState.DISCONNECTED) {
+                        { direction ->
+                            val scheme = when (direction) {
+                                ConnectButtonSwipeDirection.UP -> swipeUpScheme
+                                ConnectButtonSwipeDirection.DOWN -> swipeDownScheme
+                                ConnectButtonSwipeDirection.LEFT -> swipeLeftScheme
+                                ConnectButtonSwipeDirection.RIGHT -> swipeRightScheme
+                            }
+                            onStartVpn {
+                                scheme?.let { viewModel.startSpeedTestScheme(it.id) }
                             }
                         }
                     } else {

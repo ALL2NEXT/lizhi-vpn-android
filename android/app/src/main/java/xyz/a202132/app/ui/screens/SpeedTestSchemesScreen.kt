@@ -60,6 +60,10 @@ fun SpeedTestSchemesScreen(
     val schemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val clickId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val longPressId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val swipeUpId by viewModel.homeSwipeUpSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val swipeDownId by viewModel.homeSwipeDownSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val swipeLeftId by viewModel.homeSwipeLeftSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val swipeRightId by viewModel.homeSwipeRightSpeedTestSchemeId.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
     var newSchemeName by remember { mutableStateOf("") }
     var schemeToDelete by remember { mutableStateOf<SpeedTestScheme?>(null) }
@@ -72,7 +76,7 @@ fun SpeedTestSchemesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "主页图标的点击和长按都可以绑定一个方案。测速按 1 TCPing、2 204 URL、3 带宽测速顺序执行；全部关闭时直接连接已选节点或当前组第一个节点。",
+                text = "主页图标的点击、长按及上下左右滑动都可以绑定测速方案。测速按 1 TCPing、2 204 URL、3 带宽测速顺序执行；全部关闭时直接连接已选节点或当前组第一个节点。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
@@ -88,6 +92,30 @@ fun SpeedTestSchemesScreen(
                 schemes = schemes,
                 onSelected = viewModel::setHomeLongPressSpeedTestScheme
             )
+            HomeSchemeBinding(
+                title = "上滑主页图标",
+                selectedId = swipeUpId,
+                schemes = schemes,
+                onSelected = viewModel::setHomeSwipeUpSpeedTestScheme
+            )
+            HomeSchemeBinding(
+                title = "下滑主页图标",
+                selectedId = swipeDownId,
+                schemes = schemes,
+                onSelected = viewModel::setHomeSwipeDownSpeedTestScheme
+            )
+            HomeSchemeBinding(
+                title = "左滑主页图标",
+                selectedId = swipeLeftId,
+                schemes = schemes,
+                onSelected = viewModel::setHomeSwipeLeftSpeedTestScheme
+            )
+            HomeSchemeBinding(
+                title = "右滑主页图标",
+                selectedId = swipeRightId,
+                schemes = schemes,
+                onSelected = viewModel::setHomeSwipeRightSpeedTestScheme
+            )
 
             Text(
                 text = "方案列表",
@@ -100,6 +128,10 @@ fun SpeedTestSchemesScreen(
                     scheme = scheme,
                     assignedToClick = scheme.id == clickId,
                     assignedToLongPress = scheme.id == longPressId,
+                    assignedToSwipeUp = scheme.id == swipeUpId,
+                    assignedToSwipeDown = scheme.id == swipeDownId,
+                    assignedToSwipeLeft = scheme.id == swipeLeftId,
+                    assignedToSwipeRight = scheme.id == swipeRightId,
                     onEdit = { onOpenEditor(scheme.id) },
                     onDelete = { schemeToDelete = scheme }
                 )
@@ -221,6 +253,10 @@ private fun SpeedTestSchemeCard(
     scheme: SpeedTestScheme,
     assignedToClick: Boolean,
     assignedToLongPress: Boolean,
+    assignedToSwipeUp: Boolean,
+    assignedToSwipeDown: Boolean,
+    assignedToSwipeLeft: Boolean,
+    assignedToSwipeRight: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -231,7 +267,10 @@ private fun SpeedTestSchemeCard(
             .clickable(onClick = onEdit),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        border = if (assignedToClick || assignedToLongPress) {
+        border = if (
+            assignedToClick || assignedToLongPress || assignedToSwipeUp || assignedToSwipeDown ||
+            assignedToSwipeLeft || assignedToSwipeRight
+        ) {
             BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
         } else null
     ) {
@@ -285,6 +324,10 @@ private fun SpeedTestSchemeCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (assignedToClick) BindingBadge("点击")
                     if (assignedToLongPress) BindingBadge("长按")
+                    if (assignedToSwipeUp) BindingBadge("上滑")
+                    if (assignedToSwipeDown) BindingBadge("下滑")
+                    if (assignedToSwipeLeft) BindingBadge("左滑")
+                    if (assignedToSwipeRight) BindingBadge("右滑")
                 }
             }
             IconButton(onClick = onEdit) {

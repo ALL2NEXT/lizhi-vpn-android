@@ -343,6 +343,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SpeedTestScheme.DEEP_ID
     )
 
+    val homeSwipeUpSpeedTestSchemeId = settingsRepository.homeSwipeUpSpeedTestSchemeId.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SpeedTestScheme.STANDARD_ID
+    )
+
+    val homeSwipeDownSpeedTestSchemeId = settingsRepository.homeSwipeDownSpeedTestSchemeId.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SpeedTestScheme.DEEP_ID
+    )
+
+    val homeSwipeLeftSpeedTestSchemeId = settingsRepository.homeSwipeLeftSpeedTestSchemeId.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SpeedTestScheme.STANDARD_ID
+    )
+
+    val homeSwipeRightSpeedTestSchemeId = settingsRepository.homeSwipeRightSpeedTestSchemeId.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SpeedTestScheme.DEEP_ID
+    )
+
     val ipv6RoutingMode = settingsRepository.ipv6RoutingMode.stateIn(
         viewModelScope,
         SharingStarted.Lazily,
@@ -1451,6 +1475,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setHomeLongPressSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
             settingsRepository.setHomeLongPressSpeedTestSchemeId(schemeId)
+        }
+    }
+
+    fun setHomeSwipeUpSpeedTestScheme(schemeId: String) {
+        viewModelScope.launch {
+            settingsRepository.setHomeSwipeUpSpeedTestSchemeId(schemeId)
+        }
+    }
+
+    fun setHomeSwipeDownSpeedTestScheme(schemeId: String) {
+        viewModelScope.launch {
+            settingsRepository.setHomeSwipeDownSpeedTestSchemeId(schemeId)
+        }
+    }
+
+    fun setHomeSwipeLeftSpeedTestScheme(schemeId: String) {
+        viewModelScope.launch {
+            settingsRepository.setHomeSwipeLeftSpeedTestSchemeId(schemeId)
+        }
+    }
+
+    fun setHomeSwipeRightSpeedTestScheme(schemeId: String) {
+        viewModelScope.launch {
+            settingsRepository.setHomeSwipeRightSpeedTestSchemeId(schemeId)
         }
     }
 

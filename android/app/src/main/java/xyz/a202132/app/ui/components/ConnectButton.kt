@@ -13,6 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -23,9 +24,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.consumePositionChange
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -39,6 +43,13 @@ import kotlinx.coroutines.withContext
 import xyz.a202132.app.R
 import xyz.a202132.app.data.model.VpnState
 
+enum class ConnectButtonSwipeDirection {
+    UP,
+    DOWN,
+    LEFT,
+    RIGHT
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConnectButton(
@@ -46,6 +57,8 @@ fun ConnectButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
+    /** 主页连接图标的上下左右滑动回调。 */
+    onSwipe: ((ConnectButtonSwipeDirection) -> Unit)? = null,
     customLabel: String? = null,
     /** 是否显示按钮下方的状态文字。 */
     showStatusLabel: Boolean = true,
@@ -107,6 +120,10 @@ fun ConnectButton(
         ),
         label = "speedTestSchemeLongPressProgress"
     )
+    val swipeEnabled = onSwipe != null && enabled && !isConnecting
+    val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) {
+        48.dp.toPx()
+    }
 
     // 根据状态选择图片
     val imageRes = when (displayState) {
@@ -168,6 +185,11 @@ fun ConnectButton(
                             onLongClick = onLongClick,
                             onClick = onClick
                         )
+                        .connectButtonSwipeGesture(
+                            enabled = swipeEnabled,
+                            threshold = swipeThreshold,
+                            onSwipe = onSwipe
+                        )
                 )
                 // 自定义图片叠加在默认资源上方；图片加载失败时仍保留默认按钮。
                 customImage?.let { image ->
@@ -189,6 +211,11 @@ fun ConnectButton(
                                 interactionSource = remember { MutableInteractionSource() },
                                 onLongClick = onLongClick,
                                 onClick = onClick
+                            )
+                            .connectButtonSwipeGesture(
+                                enabled = swipeEnabled,
+                                threshold = swipeThreshold,
+                                onSwipe = onSwipe
                             )
                     )
                 }
@@ -221,5 +248,44 @@ fun ConnectButton(
                 lineHeight = if (customLabel != null) 26.sp else 20.sp
             )
         }
+    }
+}
+
+private fun Modifier.connectButtonSwipeGesture(
+    enabled: Boolean,
+    threshold: Float,
+    onSwipe: ((ConnectButtonSwipeDirection) -> Unit)?
+): Modifier {
+    if (!enabled || onSwipe == null) return this
+
+    return pointerInput(enabled, threshold, onSwipe) {
+        var totalDrag = Offset.Zero
+        detectDragGestures(
+            onDragStart = {
+                totalDrag = Offset.Zero
+            },
+            onDrag = { change, dragAmount ->
+                change.consumePositionChange()
+                totalDrag += dragAmount
+            },
+            onDragEnd = {
+                if (totalDrag.getDistance() < threshold) return@detectDragGestures
+                val direction = if (kotlin.math.abs(totalDrag.x) > kotlin.math.abs(totalDrag.y)) {
+                    if (totalDrag.x > 0) {
+                        ConnectButtonSwipeDirection.RIGHT
+                    } else {
+                        ConnectButtonSwipeDirection.LEFT
+                    }
+                } else if (totalDrag.y > 0) {
+                    ConnectButtonSwipeDirection.DOWN
+                } else {
+                    ConnectButtonSwipeDirection.UP
+                }
+                onSwipe(direction)
+            },
+            onDragCancel = {
+                totalDrag = Offset.Zero
+            }
+        )
     }
 }
