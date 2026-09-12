@@ -72,7 +72,7 @@ internal fun ConnectionRouteOverview(
         VpnState.DISCONNECTED -> MaterialTheme.colorScheme.outline
     }
     val statusTitle = if (isTesting && vpnState == VpnState.DISCONNECTED) {
-        testingLabel ?: "智能连接中..."
+        testingLabel ?: "测速方案执行中..."
     } else {
         when (displayState) {
             VpnState.CONNECTED -> "连接稳定 · 流量已受保护"

@@ -83,19 +83,6 @@ object AppConfig {
     const val URL_TEST_RECHECK_TOP_COUNT = 5 // 首轮最快节点进入稳态复测的数量
     const val URL_TEST_RECHECK_ATTEMPTS = 2 // 每个优胜节点额外执行暖连接复测的次数
 
-    // 智能连接候选比例
-    const val SMART_CONNECT_TCPING_PERCENT = 100
-    const val SMART_CONNECT_URL_TEST_PERCENT = 50
-    const val SMART_CONNECT_SPEED_TEST_PERCENT = 50
-    const val SMART_CONNECT_FULL_TEST_ENABLED = false
-
-    // 公共节点池优化：当前订阅组节点数超过阈值时提高智能连接前两阶段的并发。
-    const val PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED = true
-    const val PUBLIC_NODE_POOL_NODE_THRESHOLD = 100
-    const val PUBLIC_NODE_POOL_TCPING_CONCURRENCY = 256
-    const val PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY = 32
-    const val PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY = 1
-
     // VPN 断线恢复，默认关闭，由高级设定页面控制
     const val DISCONNECT_RECOVERY_ENABLED = false
     const val DISCONNECT_RECOVERY_CHECK_INTERVAL_MS = 5000L

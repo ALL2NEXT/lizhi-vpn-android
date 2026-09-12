@@ -36,6 +36,7 @@ enum class AppScreen {
     ACCOUNT_SETTINGS,
     BASIC_SETTINGS,
     FEATURES,
+    SPEED_TEST_SCHEMES,
     ABOUT
 }
 
@@ -173,9 +174,6 @@ data class DesktopSettings(
     val urlTestConcurrency: Int = 10,
     val bandwidthTestConcurrency: Int = 1,
     val vpnMtu: Int = 9_000,
-    val smartConnectTcpingPercent: Int = 100,
-    val smartConnectUrlTestPercent: Int = 50,
-    val smartConnectSpeedTestPercent: Int = 50,
     val disconnectRecoveryEnabled: Boolean = false,
     val hysteriaBandwidthEnabled: Boolean = true,
     val hysteriaUpMbps: Int = 1_000,
@@ -217,6 +215,12 @@ data class DesktopAppState(
     val isLoadingNodes: Boolean = true,
     val subscriptionSourceCount: Int = 0,
     val settings: DesktopSettings = DesktopSettings(),
+    val speedTestSchemes: List<SpeedTestScheme> = listOf(
+        SpeedTestScheme.standard(),
+        SpeedTestScheme.deep()
+    ),
+    val homeClickSpeedTestSchemeId: String = SpeedTestScheme.STANDARD_ID,
+    val homeLongPressSpeedTestSchemeId: String = SpeedTestScheme.DEEP_ID,
     val protocolCoreSettings: ProtocolCoreSettings = ProtocolCoreSettings(),
     val isTesting: Boolean = false,
     val isHysteriaBandwidthAdapting: Boolean = false,

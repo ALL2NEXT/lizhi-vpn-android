@@ -5,13 +5,13 @@ import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.util.CountryCodeResolver
 
-/** 根据当前分组方式解析智能连接候选范围。 */
-internal object SmartConnectScopeResolver {
+/** 根据当前分组方式解析测速方案的候选范围。 */
+internal object SpeedTestScopeResolver {
     fun selectCandidates(
         currentNodes: List<Node>,
         allSubscriptionNodes: List<Node>,
         groupingMode: NodeGroupingMode,
-        fullTestEnabled: Boolean,
+        testAllNodes: Boolean,
         selectedCountryCode: String?
     ): List<Node> {
         if (groupingMode == NodeGroupingMode.COUNTRY) {
@@ -25,7 +25,7 @@ internal object SmartConnectScopeResolver {
             }
         }
 
-        val scopedNodes = if (fullTestEnabled) {
+        val scopedNodes = if (testAllNodes) {
             allSubscriptionNodes.filter { node -> node.source == NodeSource.SUBSCRIPTION }
         } else {
             currentNodes

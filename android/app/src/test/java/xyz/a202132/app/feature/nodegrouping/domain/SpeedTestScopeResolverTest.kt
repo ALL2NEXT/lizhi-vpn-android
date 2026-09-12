@@ -7,17 +7,17 @@ import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 
-class SmartConnectScopeResolverTest {
+class SpeedTestScopeResolverTest {
     @Test
     fun `默认模式只使用当前节点范围`() {
         val currentNodes = listOf(node("current", "group-a", "JP"))
         val allNodes = currentNodes + node("other", "group-b", "US")
 
-        val candidates = SmartConnectScopeResolver.selectCandidates(
+        val candidates = SpeedTestScopeResolver.selectCandidates(
             currentNodes = currentNodes,
             allSubscriptionNodes = allNodes,
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
-            fullTestEnabled = false,
+            testAllNodes = false,
             selectedCountryCode = null
         )
 
@@ -33,11 +33,11 @@ class SmartConnectScopeResolverTest {
             node("favorite", null, "JP", NodeSource.FAVORITE)
         )
 
-        val candidates = SmartConnectScopeResolver.selectCandidates(
+        val candidates = SpeedTestScopeResolver.selectCandidates(
             currentNodes = listOf(allNodes.first()),
             allSubscriptionNodes = allNodes,
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
-            fullTestEnabled = true,
+            testAllNodes = true,
             selectedCountryCode = null
         )
 
@@ -53,11 +53,11 @@ class SmartConnectScopeResolverTest {
             node("favorite", null, "JP", NodeSource.FAVORITE)
         )
 
-        val candidates = SmartConnectScopeResolver.selectCandidates(
+        val candidates = SpeedTestScopeResolver.selectCandidates(
             currentNodes = listOf(allNodes[1]),
             allSubscriptionNodes = allNodes,
             groupingMode = NodeGroupingMode.COUNTRY,
-            fullTestEnabled = false,
+            testAllNodes = false,
             selectedCountryCode = "jp"
         )
 
@@ -69,11 +69,11 @@ class SmartConnectScopeResolverTest {
         val currentNodes = listOf(node("us-current", "group-a", "US"))
         val allNodes = currentNodes + node("jp-other", "group-b", "JP")
 
-        val candidates = SmartConnectScopeResolver.selectCandidates(
+        val candidates = SpeedTestScopeResolver.selectCandidates(
             currentNodes = currentNodes,
             allSubscriptionNodes = allNodes,
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
-            fullTestEnabled = false,
+            testAllNodes = false,
             selectedCountryCode = "JP"
         )
 

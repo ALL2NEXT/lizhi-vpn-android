@@ -49,6 +49,8 @@ import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.SkinScreen
 import xyz.a202132.app.ui.screens.SkinSchemeEditorScreen
+import xyz.a202132.app.ui.screens.SpeedTestSchemeEditorScreen
+import xyz.a202132.app.ui.screens.SpeedTestSchemesScreen
 import xyz.a202132.app.ui.screens.WebNavigationScreen
 import xyz.a202132.app.ui.theme.FireflyTheme
 import xyz.a202132.app.viewmodel.MainViewModel
@@ -183,6 +185,9 @@ class MainActivity : ComponentActivity() {
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
                                         },
+                                        onOpenSpeedTestSchemes = {
+                                            navigateTo(AppRoute.SPEED_TEST_SCHEMES)
+                                        },
                                         onOpenFeatures = {
                                             navigateTo(AppRoute.FEATURES)
                                         },
@@ -302,6 +307,24 @@ class MainActivity : ComponentActivity() {
                             composable(AppRoute.FEATURES) {
                                 FeatureScreen(
                                     viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.SPEED_TEST_SCHEMES) {
+                                SpeedTestSchemesScreen(
+                                    viewModel = viewModel,
+                                    onOpenEditor = { schemeId ->
+                                        navigateTo(AppRoute.speedTestSchemeEditor(schemeId))
+                                    },
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.SPEED_TEST_SCHEME_EDITOR) { backStackEntry ->
+                                SpeedTestSchemeEditorScreen(
+                                    viewModel = viewModel,
+                                    schemeId = backStackEntry.arguments?.getString("schemeId").orEmpty(),
                                     onBack = { navController.popBackStack() }
                                 )
                             }

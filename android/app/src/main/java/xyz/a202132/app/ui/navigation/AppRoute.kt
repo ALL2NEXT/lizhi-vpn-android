@@ -4,6 +4,8 @@ object AppRoute {
     const val MAIN = "main"
     const val PROXY_SCOPE = "proxy_scope"
     const val OTHER_CONFIG = "other_config"
+    const val SPEED_TEST_SCHEMES = "speed_test_schemes"
+    const val SPEED_TEST_SCHEME_EDITOR = "speed_test_scheme_editor/{schemeId}"
     const val FEATURES = "features"
     const val ACCOUNT_SETTINGS = "account_settings"
     const val SKIN = "skin"
@@ -11,4 +13,6 @@ object AppRoute {
     const val QR_SCANNER = "qr_scanner"
 
     fun skinEditor(schemeId: String): String = "skin_editor/$schemeId"
+
+    fun speedTestSchemeEditor(schemeId: String): String = "speed_test_scheme_editor/$schemeId"
 }

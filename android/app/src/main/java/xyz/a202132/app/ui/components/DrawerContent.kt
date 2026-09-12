@@ -41,6 +41,7 @@ fun DrawerContent(
     onCheckUpdate: () -> Unit,
     onOpenProxyScope: () -> Unit,
     onOpenOtherConfig: () -> Unit,
+    onOpenSpeedTestSchemes: () -> Unit = {},
     onOpenFeatures: () -> Unit,
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
@@ -110,6 +111,12 @@ fun DrawerContent(
                 onClick = {
                     onOpenOtherConfig()
                 }
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.Speed,
+                title = "测速方案",
+                onClick = onOpenSpeedTestSchemes
             )
 
             DrawerMenuItem(

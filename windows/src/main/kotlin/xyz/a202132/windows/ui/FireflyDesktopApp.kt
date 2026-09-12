@@ -65,11 +65,15 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -91,6 +95,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -164,6 +169,7 @@ import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProxyMode
 import xyz.a202132.windows.model.ProtocolCoreSettings
 import xyz.a202132.windows.model.ProxyCore
+import xyz.a202132.windows.model.SpeedTestScheme
 import xyz.a202132.windows.model.TunStack
 import xyz.a202132.windows.model.UrlTestTargets
 import xyz.a202132.windows.model.VpnState
@@ -402,6 +408,12 @@ fun FireflyDesktopApp(controller: VpnController) {
 private fun MainScreen(state: DesktopAppState, controller: VpnController) {
     var showToolsMenu by remember { mutableStateOf(false) }
     var showTunAdminDialog by remember { mutableStateOf(false) }
+    val clickScheme = state.speedTestSchemes.firstOrNull {
+        it.id == state.homeClickSpeedTestSchemeId
+    }
+    val longPressScheme = state.speedTestSchemes.firstOrNull {
+        it.id == state.homeLongPressSpeedTestSchemeId
+    }
 
     fun runWithTunPermission(action: () -> Unit) {
         if (state.tunEnabled && !isWindowsElevated()) {
@@ -509,13 +521,21 @@ private fun MainScreen(state: DesktopAppState, controller: VpnController) {
                 enabled = !state.isTesting,
                 isTesting = state.isTesting,
                 customLabel = if (state.vpnState == VpnState.DISCONNECTED) {
-                    state.testingLabel ?: "点击直接连接\n长按智能连接"
+                    state.testingLabel ?: "点击${clickScheme?.name ?: "测速方案"}\n长按${longPressScheme?.name ?: "测速方案"}"
                 } else {
                     null
                 },
-                onClick = { runWithTunPermission(controller::startSelectedOrFirstConnection) },
+                onClick = {
+                    runWithTunPermission {
+                        clickScheme?.let { controller.startSpeedTestScheme(it.id) }
+                    }
+                },
                 onLongClick = if (state.vpnState == VpnState.DISCONNECTED) {
-                    { runWithTunPermission(controller::startSmartConnection) }
+                    {
+                        runWithTunPermission {
+                            longPressScheme?.let { controller.startSpeedTestScheme(it.id) }
+                        }
+                    }
                 } else {
                     null
                 }
@@ -697,7 +717,7 @@ private fun ConnectButton(
             },
             easing = if (pressed) LinearEasing else FastOutSlowInEasing
         ),
-        label = "smartConnectionLongPressProgress"
+        label = "speedTestSchemeLongPressProgress"
     )
     val pulseScale = if (transitioning) {
         val transition = rememberInfiniteTransition(label = "connectionPulse")
@@ -741,7 +761,7 @@ private fun ConnectButton(
                                 )
                         )
                         if (isTesting) {
-                            // 智能连接开始后继续显示旋转进度，避免长按进度圈停在满格。
+                            // 测速方案开始后继续显示旋转进度，避免长按进度圈停在满格。
                             CircularProgressIndicator(
                                 modifier = Modifier.fillMaxSize().padding(3.dp),
                                 color = MaterialTheme.colorScheme.primary,
@@ -1474,6 +1494,9 @@ private fun AppDrawer(state: DesktopAppState, controller: VpnController) {
                 DrawerItem(Icons.Outlined.Tune, "基础设定") {
                     controller.navigate(AppScreen.BASIC_SETTINGS)
                 }
+                DrawerItem(Icons.Default.NetworkCheck, "测速方案") {
+                    controller.navigate(AppScreen.SPEED_TEST_SCHEMES)
+                }
                 DrawerItem(Icons.Outlined.Star, "特色功能") {
                     controller.navigate(AppScreen.FEATURES)
                 }
@@ -1532,6 +1555,312 @@ private fun DrawerItem(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
     }
 }
 
+@Composable
+private fun SpeedTestSchemesContent(state: DesktopAppState, controller: VpnController) {
+    var editingId by remember { mutableStateOf<String?>(null) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var newSchemeName by remember { mutableStateOf("") }
+    var deleteId by remember { mutableStateOf<String?>(null) }
+    val editing = state.speedTestSchemes.firstOrNull { it.id == editingId }
+
+    if (editing != null) {
+        SpeedTestSchemeEditorContent(
+            scheme = editing,
+            onBack = { editingId = null },
+            onSave = {
+                controller.upsertSpeedTestScheme(it)
+                editingId = null
+            },
+            onDelete = if (editing.builtIn) null else {
+                {
+                    controller.deleteSpeedTestScheme(editing.id)
+                    editingId = null
+                }
+            }
+        )
+        return
+    }
+
+    Text(
+        "主页图标的点击和长按分别绑定一个方案。每个方案都会按 TCPing、204 URL 和带宽测速结果选择节点。",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontSize = 13.sp
+    )
+    SchemeBindingSetting(
+        title = "点击主页图标",
+        selectedId = state.homeClickSpeedTestSchemeId,
+        schemes = state.speedTestSchemes
+    ) { controller.setHomeClickSpeedTestScheme(it) }
+    SchemeBindingSetting(
+        title = "长按主页图标",
+        selectedId = state.homeLongPressSpeedTestSchemeId,
+        schemes = state.speedTestSchemes
+    ) { controller.setHomeLongPressSpeedTestScheme(it) }
+
+    Text("方案列表", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    state.speedTestSchemes.forEach { scheme ->
+        DesktopSpeedTestSchemeCard(
+            scheme = scheme,
+            assignedToClick = scheme.id == state.homeClickSpeedTestSchemeId,
+            assignedToLongPress = scheme.id == state.homeLongPressSpeedTestSchemeId,
+            onEdit = { editingId = scheme.id },
+            onDelete = { deleteId = scheme.id }
+        )
+    }
+    OutlinedButton(
+        onClick = {
+            newSchemeName = ""
+            showAddDialog = true
+        },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Icon(Icons.Outlined.Add, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text("新增方案")
+    }
+
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = { Text("新增测速方案") },
+            text = {
+                OutlinedTextField(
+                    value = newSchemeName,
+                    onValueChange = { newSchemeName = it },
+                    label = { Text("方案名称") },
+                    placeholder = { Text("例如：低延迟") },
+                    singleLine = true
+                )
+            },
+            dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("取消") } },
+            confirmButton = {
+                Button(
+                    enabled = newSchemeName.trim().isNotBlank(),
+                    onClick = {
+                        val scheme = SpeedTestScheme.create(newSchemeName)
+                        controller.upsertSpeedTestScheme(scheme)
+                        showAddDialog = false
+                        editingId = scheme.id
+                    }
+                ) { Text("继续设置") }
+            }
+        )
+    }
+
+    deleteId?.let { id ->
+        val scheme = state.speedTestSchemes.firstOrNull { it.id == id }
+        if (scheme != null) {
+            AlertDialog(
+                onDismissRequest = { deleteId = null },
+                title = { Text("删除测速方案") },
+                text = { Text(if (scheme.builtIn) "内置方案不能删除。" else "确定删除“${scheme.name}”吗？") },
+                dismissButton = { TextButton(onClick = { deleteId = null }) { Text("取消") } },
+                confirmButton = {
+                    TextButton(
+                        enabled = !scheme.builtIn,
+                        onClick = {
+                            controller.deleteSpeedTestScheme(scheme.id)
+                            deleteId = null
+                        }
+                    ) { Text("删除") }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SchemeBindingSetting(
+    title: String,
+    selectedId: String,
+    schemes: List<SpeedTestScheme>,
+    onSelected: (String) -> Unit
+) {
+    val selected = schemes.firstOrNull { it.id == selectedId }
+    SettingSection(title) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            schemes.forEach { scheme ->
+                FilterChip(
+                    selected = scheme.id == selectedId,
+                    onClick = { onSelected(scheme.id) },
+                    label = { Text(scheme.name) }
+                )
+            }
+        }
+        Text(
+            "当前：${selected?.name ?: "测速方案"}",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun DesktopSpeedTestSchemeCard(
+    scheme: SpeedTestScheme,
+    assignedToClick: Boolean,
+    assignedToLongPress: Boolean,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onEdit),
+        color = if (assignedToClick || assignedToLongPress) {
+            Primary.copy(alpha = 0.12f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        shape = RoundedCornerShape(12.dp),
+        border = if (assignedToClick || assignedToLongPress) BorderStroke(1.dp, Primary) else null
+    ) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(scheme.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    if (scheme.builtIn) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Outlined.Lock, "内置方案", modifier = Modifier.size(16.dp))
+                    }
+                }
+                Text(
+                    buildString {
+                        append(if (scheme.testAllNodes) "测试所有节点" else "测试当前节点组")
+                        append(" · TCPing ${scheme.tcpingPercent}% · URL ${scheme.urlTestPercent}%")
+                        append(" · 带宽 ${scheme.bandwidthPercent}%")
+                    },
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (assignedToClick) SchemeBadge("点击")
+                    if (assignedToLongPress) SchemeBadge("长按")
+                }
+            }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Outlined.Edit, "编辑方案", tint = Primary)
+            }
+            if (scheme.builtIn) {
+                Icon(Icons.Outlined.Lock, "内置方案不可删除")
+            } else {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Outlined.Delete, "删除方案", tint = ErrorRed)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SchemeBadge(text: String) {
+    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(50)) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+}
+
+@Composable
+private fun SpeedTestSchemeEditorContent(
+    scheme: SpeedTestScheme,
+    onBack: () -> Unit,
+    onSave: (SpeedTestScheme) -> Unit,
+    onDelete: (() -> Unit)?
+) {
+    var draft by remember(scheme.id) { mutableStateOf(scheme) }
+    TextButton(onClick = onBack) { Text("返回方案列表") }
+    SettingSection("方案信息") {
+        OutlinedTextField(
+            value = draft.name,
+            onValueChange = { draft = draft.copy(name = it) },
+            label = { Text("方案名称") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("测试所有节点")
+                Text("关闭时只测试当前节点组", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(
+                checked = draft.testAllNodes,
+                onCheckedChange = { draft = draft.copy(testAllNodes = it) }
+            )
+        }
+    }
+    SettingSection("候选比例") {
+        DesktopSchemeNumberField("TCPing 比例 (%)", draft.tcpingPercent) {
+            draft = draft.copy(tcpingPercent = it)
+        }
+        DesktopSchemeNumberField("204 URL 比例 (%)", draft.urlTestPercent) {
+            draft = draft.copy(urlTestPercent = it)
+        }
+        DesktopSchemeNumberField("带宽比例 (%)", draft.bandwidthPercent) {
+            draft = draft.copy(bandwidthPercent = it)
+        }
+    }
+    SettingSection("测试参数") {
+        DesktopSchemeNumberField("TCPing 超时 (ms)", draft.tcpingTimeoutMs) {
+            draft = draft.copy(tcpingTimeoutMs = it)
+        }
+        DesktopSchemeNumberField("204 URL 超时 (ms)", draft.urlTestTimeoutMs) {
+            draft = draft.copy(urlTestTimeoutMs = it)
+        }
+        DesktopSchemeNumberField("带宽测速时长 (ms)", draft.bandwidthTestDurationMs) {
+            draft = draft.copy(bandwidthTestDurationMs = it)
+        }
+        DesktopSchemeNumberField("TCPing 并发", draft.tcpingConcurrency) {
+            draft = draft.copy(tcpingConcurrency = it)
+        }
+        DesktopSchemeNumberField("204 URL 并发", draft.urlTestConcurrency) {
+            draft = draft.copy(urlTestConcurrency = it)
+        }
+        DesktopSchemeNumberField("带宽测速并发", draft.bandwidthTestConcurrency) {
+            draft = draft.copy(bandwidthTestConcurrency = it)
+        }
+    }
+    SettingSection("测速地址") {
+        OutlinedTextField(
+            value = draft.urlTestUrl,
+            onValueChange = { draft = draft.copy(urlTestUrl = it) },
+            label = { Text("204 URL 地址") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = draft.bandwidthTestUrl,
+            onValueChange = { draft = draft.copy(bandwidthTestUrl = it) },
+            label = { Text("带宽下载地址") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button(onClick = { onSave(draft) }) { Text("保存方案") }
+        onDelete?.let { TextButton(onClick = it) { Text("删除", color = ErrorRed) } }
+    }
+}
+
+@Composable
+private fun DesktopSchemeNumberField(
+    label: String,
+    value: Int,
+    onValueChange: (Int) -> Unit
+) {
+    OutlinedTextField(
+        value = value.toString(),
+        onValueChange = { onValueChange(it.filter(Char::isDigit).toIntOrNull() ?: 0) },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controller: VpnController) {
@@ -1563,6 +1892,7 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
     val title = when (screen) {
         AppScreen.ACCOUNT_SETTINGS -> "账户设置"
         AppScreen.BASIC_SETTINGS -> "基础设定"
+        AppScreen.SPEED_TEST_SCHEMES -> "测速方案"
         AppScreen.FEATURES -> "特色功能"
         AppScreen.ABOUT -> "关于应用"
         else -> "Firefly"
@@ -1601,6 +1931,7 @@ private fun SecondaryScreen(screen: AppScreen, state: DesktopAppState, controlle
                         onSettingsChange = controller::updateSettings
                     )
                 }
+                AppScreen.SPEED_TEST_SCHEMES -> SpeedTestSchemesContent(state, controller)
                 AppScreen.ABOUT -> {
                     appIcon?.let {
                         Image(
@@ -2296,17 +2627,6 @@ private fun FeatureSettingsContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp
         )
-    }
-    SettingSection("智能连接") {
-        NumberSettingField("TCPing 节点比例 (%)", settings.smartConnectTcpingPercent) {
-            onSettingsChange(settings.copy(smartConnectTcpingPercent = it.coerceIn(1, 100)))
-        }
-        NumberSettingField("URL Test 候选比例 (%)", settings.smartConnectUrlTestPercent) {
-            onSettingsChange(settings.copy(smartConnectUrlTestPercent = it.coerceIn(1, 100)))
-        }
-        NumberSettingField("带宽测速候选比例 (%)", settings.smartConnectSpeedTestPercent) {
-            onSettingsChange(settings.copy(smartConnectSpeedTestPercent = it.coerceIn(1, 100)))
-        }
     }
     SettingsToggleRow("断线恢复", settings.disconnectRecoveryEnabled) {
         onSettingsChange(settings.copy(disconnectRecoveryEnabled = it))

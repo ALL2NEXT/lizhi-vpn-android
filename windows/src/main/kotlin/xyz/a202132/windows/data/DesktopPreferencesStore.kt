@@ -11,6 +11,7 @@ import xyz.a202132.windows.model.BandwidthTestTargets
 import xyz.a202132.windows.model.DesktopSettings
 import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProxyMode
+import xyz.a202132.windows.model.SpeedTestScheme
 import xyz.a202132.windows.model.UrlTestTargets
 
 data class DesktopPreferences(
@@ -21,6 +22,9 @@ data class DesktopPreferences(
     val selectedNodeId: String? = null,
     val favoriteNodeIds: Set<String> = emptySet(),
     val settings: DesktopSettings = DesktopSettings(),
+    val speedTestSchemes: List<SpeedTestScheme>? = null,
+    val homeClickSpeedTestSchemeId: String? = null,
+    val homeLongPressSpeedTestSchemeId: String? = null,
     // null 表示旧版本尚未保存过核心选择；空集合表示用户明确全部选择 sing-box。
     val xrayProtocols: Set<NodeType>? = null
 )
@@ -47,6 +51,7 @@ class DesktopPreferencesStore(
             Files.readString(file, Charsets.UTF_8),
             DesktopPreferences::class.java
         ) ?: DesktopPreferences()
+        val schemes = normalizeSpeedTestSchemes(loaded.speedTestSchemes)
         loaded.copy(
             settings = loaded.settings.copy(
                 urlTestUrl = UrlTestTargets.normalize(loaded.settings.urlTestUrl)
@@ -56,7 +61,14 @@ class DesktopPreferencesStore(
                 speedTestDurationMs = loaded.settings.speedTestDurationMs
                     .takeIf { it > 0 }
                     ?: DesktopSettings().speedTestDurationMs
-            )
+            ),
+            speedTestSchemes = schemes,
+            homeClickSpeedTestSchemeId = loaded.homeClickSpeedTestSchemeId
+                ?.takeIf { id -> schemes.any { it.id == id } }
+                ?: SpeedTestScheme.STANDARD_ID,
+            homeLongPressSpeedTestSchemeId = loaded.homeLongPressSpeedTestSchemeId
+                ?.takeIf { id -> schemes.any { it.id == id } }
+                ?: SpeedTestScheme.DEEP_ID
         )
     }.getOrDefault(DesktopPreferences())
 
@@ -78,6 +90,20 @@ class DesktopPreferencesStore(
 
     companion object {
         const val DEFAULT_BACKEND_URL = "https://liuying.11145149.xyz"
+
+        private fun normalizeSpeedTestSchemes(
+            stored: List<SpeedTestScheme>?
+        ): List<SpeedTestScheme> {
+            val source = stored.orEmpty()
+            val standard = source.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+                ?: SpeedTestScheme.standard()
+            val deep = source.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
+                ?: SpeedTestScheme.deep()
+            val custom = source.filterNot {
+                it.id == SpeedTestScheme.STANDARD_ID || it.id == SpeedTestScheme.DEEP_ID || it.builtIn
+            }.distinctBy(SpeedTestScheme::id)
+            return listOf(standard.copy(builtIn = true), deep.copy(builtIn = true)) + custom
+        }
 
         fun normalizeBackendUrl(value: String?): String? {
             val raw = value?.trim().orEmpty()

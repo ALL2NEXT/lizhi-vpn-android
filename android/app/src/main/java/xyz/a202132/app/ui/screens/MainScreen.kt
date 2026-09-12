@@ -22,8 +22,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.a202132.app.AppConfig
-import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.network.NetworkClient
@@ -40,6 +40,7 @@ fun MainScreen(
     onOpenProxyScope: () -> Unit = {},
     onOpenNodeList: () -> Unit = {},
     onOpenOtherConfig: () -> Unit = {},
+    onOpenSpeedTestSchemes: () -> Unit = {},
     onOpenFeatures: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
@@ -65,8 +66,9 @@ fun MainScreen(
     // Collect状态
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
-    val homeClickAction by viewModel.homeClickAction.collectAsStateWithLifecycle()
-    val homeLongPressAction by viewModel.homeLongPressAction.collectAsStateWithLifecycle()
+    val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
+    val homeClickSchemeId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val homeLongPressSchemeId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
@@ -81,8 +83,10 @@ fun MainScreen(
     val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     
-    // 自动化测试设置/状态
-    // val showBackupFailedDialog by viewModel.showBackupFailedDialog.collectAsState() // Removed
+    val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+    val longPressScheme = speedTestSchemes.firstOrNull { it.id == homeLongPressSchemeId }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
     
     // 显示错误Toast
     LaunchedEffect(error) {
@@ -113,6 +117,7 @@ fun MainScreen(
                     onCheckUpdate = { closeDrawerThen { viewModel.checkUpdate() } },
                     onOpenProxyScope = { closeDrawerThen(onOpenProxyScope) },
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
+                    onOpenSpeedTestSchemes = { closeDrawerThen(onOpenSpeedTestSchemes) },
                     onOpenFeatures = { closeDrawerThen(onOpenFeatures) },
                     onOpenAccountSettings = { closeDrawerThen(onOpenAccountSettings) },
                     onOpenSkin = { closeDrawerThen(onOpenSkin) },
@@ -222,10 +227,7 @@ fun MainScreen(
                         when (vpnState) {
                             VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
                             VpnState.DISCONNECTED -> onStartVpn {
-                                when (homeClickAction) {
-                                    HomeConnectionAction.DIRECT -> viewModel.startSelectedOrFirstConnection()
-                                    HomeConnectionAction.SMART -> viewModel.startSmartConnection()
-                                }
+                                clickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
                             }
                             else -> Unit
                         }
@@ -233,10 +235,7 @@ fun MainScreen(
                     onLongClick = if (vpnState == VpnState.DISCONNECTED) {
                         {
                             onStartVpn {
-                                when (homeLongPressAction) {
-                                    HomeConnectionAction.DIRECT -> viewModel.startSelectedOrFirstConnection()
-                                    HomeConnectionAction.SMART -> viewModel.startSmartConnection()
-                                }
+                                longPressScheme?.let { viewModel.startSpeedTestScheme(it.id) }
                             }
                         }
                     } else {
@@ -244,8 +243,8 @@ fun MainScreen(
                     },
                     // 状态提示统一由上方链路图展示，连接按钮区域只保留图标。
                     showStatusLabel = false,
-                    clickActionLabel = homeClickAction.displayName,
-                    longClickActionLabel = homeLongPressAction.displayName
+                    clickActionLabel = clickScheme?.name ?: "测速方案",
+                    longClickActionLabel = longPressScheme?.name ?: "测速方案"
                 )
                 
                 Spacer(modifier = Modifier.weight(1f))

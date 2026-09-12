@@ -50,8 +50,8 @@ fun ConnectButton(
     /** 是否显示按钮下方的状态文字。 */
     showStatusLabel: Boolean = true,
     /** 无障碍服务读取的单击和长按动作名称。 */
-    clickActionLabel: String = "普通连接",
-    longClickActionLabel: String = "智能连接",
+    clickActionLabel: String = "测速方案",
+    longClickActionLabel: String = "测速方案",
     enabled: Boolean = true,
     isTesting: Boolean = false,
     /** 三种连接状态的图片均可按当前皮肤方案单独覆盖，未设置时使用内置图片。 */
@@ -59,7 +59,7 @@ fun ConnectButton(
     customConnectingImagePath: String? = null,
     customConnectedImagePath: String? = null
 ) {
-    // 智能连接测试期间底层状态仍可能是 DISCONNECTED，主页视觉上应展示“连接中”。
+    // 测速方案执行期间底层状态仍可能是 DISCONNECTED，主页视觉上应展示“连接中”。
     val displayState = if (isTesting && vpnState == VpnState.DISCONNECTED) {
         VpnState.CONNECTING
     } else {
@@ -105,7 +105,7 @@ fun ConnectButton(
             },
             easing = if (isPressed) LinearEasing else FastOutSlowInEasing
         ),
-        label = "smartConnectionLongPressProgress"
+        label = "speedTestSchemeLongPressProgress"
     )
 
     // 根据状态选择图片

@@ -23,7 +23,6 @@ import xyz.a202132.app.data.local.NodeDao
 import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.feature.nodegrouping.domain.CountryGroupingStrategy
-import xyz.a202132.app.feature.nodegrouping.domain.SmartConnectScopeResolver
 import xyz.a202132.app.feature.nodegrouping.domain.SubscriptionGroupingStrategy
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.network.LatencyTester
@@ -286,16 +285,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ProxyMode.SMART
     )
 
-    val homeClickAction = settingsRepository.homeClickAction.stateIn(
+    val speedTestSchemes = settingsRepository.speedTestSchemes.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        HomeConnectionAction.DIRECT
+        listOf(SpeedTestScheme.standard(), SpeedTestScheme.deep())
     )
 
-    val homeLongPressAction = settingsRepository.homeLongPressAction.stateIn(
+    val homeClickSpeedTestSchemeId = settingsRepository.homeClickSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        HomeConnectionAction.SMART
+        SpeedTestScheme.STANDARD_ID
+    )
+
+    val homeLongPressSpeedTestSchemeId = settingsRepository.homeLongPressSpeedTestSchemeId.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SpeedTestScheme.DEEP_ID
     )
 
     val ipv6RoutingMode = settingsRepository.ipv6RoutingMode.stateIn(
@@ -323,81 +328,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         AppConfig.BANDWIDTH_TEST_CONCURRENCY
     )
-    val smartConnectTcpingPercent = settingsRepository.smartConnectTcpingPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_TCPING_PERCENT)
-    val smartConnectUrlTestPercent = settingsRepository.smartConnectUrlTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
-    val smartConnectSpeedTestPercent = settingsRepository.smartConnectSpeedTestPercent.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
-    val smartConnectFullTestEnabled = settingsRepository.smartConnectFullTestEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.SMART_CONNECT_FULL_TEST_ENABLED
-    )
-    val publicNodePoolOptimizationEnabled = settingsRepository.publicNodePoolOptimizationEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED
-    )
-    val publicNodePoolNodeThreshold = settingsRepository.publicNodePoolNodeThreshold.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.PUBLIC_NODE_POOL_NODE_THRESHOLD
-    )
-    val publicNodePoolTcpingPercent = settingsRepository.publicNodePoolTcpingPercent.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.SMART_CONNECT_TCPING_PERCENT
-    )
-    val publicNodePoolUrlTestPercent = settingsRepository.publicNodePoolUrlTestPercent.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.SMART_CONNECT_URL_TEST_PERCENT
-    )
-    val publicNodePoolSpeedTestPercent = settingsRepository.publicNodePoolSpeedTestPercent.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT
-    )
-    val publicNodePoolTcpingTestTimeoutMs = settingsRepository.publicNodePoolTcpingTestTimeoutMs.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.TCPING_TEST_TIMEOUT
-    )
-    val publicNodePoolUrlTestTimeoutMs = settingsRepository.publicNodePoolUrlTestTimeoutMs.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.URL_TEST_TIMEOUT
-    )
-    val publicNodePoolUrlTestUrl = settingsRepository.publicNodePoolUrlTestUrl.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.URL_TEST_URL
-    )
-    val publicNodePoolSpeedTestDownloadUrl =
-        settingsRepository.publicNodePoolSpeedTestDownloadUrl.stateIn(
-            viewModelScope,
-            SharingStarted.Eagerly,
-            AppConfig.SPEED_TEST_DOWNLOAD_URL
-        )
-    val publicNodePoolSpeedTestDurationMs = settingsRepository.publicNodePoolSpeedTestDurationMs.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS
-    )
-    val publicNodePoolTcpingConcurrency = settingsRepository.publicNodePoolTcpingConcurrency.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.PUBLIC_NODE_POOL_TCPING_CONCURRENCY
-    )
-    val publicNodePoolUrlTestConcurrency = settingsRepository.publicNodePoolUrlTestConcurrency.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        AppConfig.PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY
-    )
-    val publicNodePoolBandwidthTestConcurrency =
-        settingsRepository.publicNodePoolBandwidthTestConcurrency.stateIn(
-            viewModelScope,
-            SharingStarted.Eagerly,
-            AppConfig.PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY
-        )
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
     val hideFavoriteNodeGroup = settingsRepository.hideFavoriteNodeGroup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -533,116 +463,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 智能连接：按设置取得候选范围，再依次执行 TCPing、URL Test 和带宽测速。 */
-    fun startSmartConnection() {
+    /** 按用户选择的测速方案筛选节点并连接测速结果最好的节点。 */
+    fun startSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
             }
-            if (!GlobalTestExecution.tryStart("智能连接")) {
+            val scheme = speedTestSchemes.value.firstOrNull { it.id == schemeId }
+                ?: speedTestSchemes.value.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+                ?: run {
+                    _error.value = "测速方案不存在"
+                    return@launch
+                }
+            if (!GlobalTestExecution.tryStart("测速方案：${scheme.name}")) {
                 _error.value = GlobalTestExecution.busyHint()
                 return@launch
             }
 
             _isTesting.value = true
             try {
-                val fullTestEnabled = settingsRepository.smartConnectFullTestEnabled.first()
-                val groupingMode = settingsRepository.nodeGroupingMode.first()
-                val countryCode = settingsRepository.selectedCountryCode.first()
-                val allNodes = currentSmartConnectNodes(
-                    fullTestEnabled = fullTestEnabled,
-                    groupingMode = groupingMode,
-                    selectedCountryCode = countryCode
-                )
+                val allNodes = if (scheme.testAllNodes) {
+                    sortNodesForList(nodeDao().getAllNodes().first())
+                } else {
+                    currentNodeListSnapshot()
+                }
                 if (allNodes.isEmpty()) {
-
                     _error.value = "没有可用节点"
                     return@launch
                 }
-                if (fullTestEnabled) {
-                    Log.i(tag, "Smart connection full test enabled: nodes=${allNodes.size}")
-                }
-                if (groupingMode == NodeGroupingMode.COUNTRY && countryCode != null) {
-                    Log.i(
-                        tag,
-                        "Smart connection country scope enabled: country=$countryCode, " +
-                            "nodes=${allNodes.size}"
-                    )
-                }
 
-                val smartTestConcurrency = PublicNodePoolOptimization.resolveConcurrency(
-                    nodes = allNodes,
-                    enabled = publicNodePoolOptimizationEnabled.value,
-                    nodeThreshold = publicNodePoolNodeThreshold.value,
-                    publicPoolTcpingConcurrency = publicNodePoolTcpingConcurrency.value,
-                    publicPoolUrlTestConcurrency = publicNodePoolUrlTestConcurrency.value,
-                    defaultTcpingConcurrency = tcpingConcurrency.value,
-                    defaultUrlTestConcurrency = urlTestConcurrency.value
-                )
-                if (smartTestConcurrency.isPublicNodePool) {
-                    Log.i(
-                        tag,
-                        "Public node pool optimization enabled: nodes=${allNodes.size}, " +
-                            "tcpingConcurrency=${smartTestConcurrency.tcping}, " +
-                            "urlTestConcurrency=${smartTestConcurrency.urlTest}"
-                        )
-                }
-
-                val tcpingPercent = if (smartTestConcurrency.isPublicNodePool) {
-                    publicNodePoolTcpingPercent.value
-                } else {
-                    smartConnectTcpingPercent.value
-                }
-                val urlTestPercent = if (smartTestConcurrency.isPublicNodePool) {
-                    publicNodePoolUrlTestPercent.value
-                } else {
-                    smartConnectUrlTestPercent.value
-                }
-                val speedTestPercent = if (smartTestConcurrency.isPublicNodePool) {
-                    publicNodePoolSpeedTestPercent.value
-                } else {
-                    smartConnectSpeedTestPercent.value
-                }
-                val selectedTcpingTimeoutMs = if (smartTestConcurrency.isPublicNodePool) {
-                    publicNodePoolTcpingTestTimeoutMs.value
-                } else {
-                    tcpingTestTimeoutMs.value
-                }
-                val selectedUrlTestTimeoutMs = if (smartTestConcurrency.isPublicNodePool) {
-                    publicNodePoolUrlTestTimeoutMs.value
-                } else {
-                    urlTestTimeoutMs.value
-                }
-                val selectedUrlTestUrl = if (smartTestConcurrency.isPublicNodePool) {
-                    publicNodePoolUrlTestUrl.value
-                } else {
-                    urlTestUrl.value
-                }
-                val selectedSpeedTestDownloadUrl = if (smartTestConcurrency.isPublicNodePool) {
-                    publicNodePoolSpeedTestDownloadUrl.value
-                } else {
-                    speedTestDownloadUrl.value
-                }
-                val selectedSpeedTestDurationMs = if (smartTestConcurrency.isPublicNodePool) {
-                    publicNodePoolSpeedTestDurationMs.value
-                } else {
-                    speedTestDurationMs.value
-                }
-                val selectedSpeedTestConcurrency = if (smartTestConcurrency.isPublicNodePool) {
-                    publicNodePoolBandwidthTestConcurrency.value
-                } else {
-                    bandwidthTestConcurrency.value
-                }
-
-                val tcpingNodes = takeTopPercent(allNodes, tcpingPercent)
-                _testingLabel.value = "智能连接：TCPing 测试中..."
+                val tcpingNodes = takeTopPercent(allNodes, scheme.tcpingPercent)
+                _testingLabel.value = "${scheme.name}：TCPing 测试中..."
                 val tcpingResults = internalTestNodes(
                     currentNodes = tcpingNodes,
-                    concurrency = smartTestConcurrency.tcping,
-                    timeoutMs = selectedTcpingTimeoutMs
+                    concurrency = scheme.tcpingConcurrency,
+                    timeoutMs = scheme.tcpingTimeoutMs
                 ) { completed, total ->
-                    _testingLabel.value = "智能连接：TCPing ($completed/$total)"
+                    _testingLabel.value = "${scheme.name}：TCPing ($completed/$total)"
                 }
                 val nodesById = allNodes.associateBy { it.id }
                 val tcpingCandidates = tcpingResults
@@ -650,17 +508,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .sortedBy { it.latency }
                     .mapNotNull { nodesById[it.nodeId] }
                 if (tcpingCandidates.isEmpty()) {
-                    _error.value = "TCPing 未找到可用节点"
+                    _error.value = "${scheme.name}：TCPing 未找到可用节点"
                     return@launch
                 }
 
-                val urlTestNodes = takeTopPercent(tcpingCandidates, urlTestPercent)
+                val urlTestNodes = takeTopPercent(tcpingCandidates, scheme.urlTestPercent)
                 val urlTestResults = runUrlTestNodes(
                     nodes = urlTestNodes,
-                    labelPrefix = "智能连接：URL Test 204",
-                    concurrency = smartTestConcurrency.urlTest,
-                    timeoutMs = selectedUrlTestTimeoutMs,
-                    targetUrl = selectedUrlTestUrl
+                    labelPrefix = "${scheme.name}：URL Test 204",
+                    concurrency = scheme.urlTestConcurrency,
+                    timeoutMs = scheme.urlTestTimeoutMs,
+                    targetUrl = scheme.urlTestUrl
                 )
                 applyUrlTestResults(urlTestResults)
                 val urlTestCandidates = urlTestResults
@@ -668,31 +526,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .sortedBy { it.latency }
                     .mapNotNull { nodesById[it.nodeId] }
                 if (urlTestCandidates.isEmpty()) {
-                    _error.value = "URL Test 未找到可用节点"
+                    _error.value = "${scheme.name}：URL Test 未找到可用节点"
                     return@launch
                 }
 
-                val speedTestNodes = takeTopPercent(urlTestCandidates, speedTestPercent)
+                val speedTestNodes = takeTopPercent(urlTestCandidates, scheme.bandwidthPercent)
                 val speedResults = speedTestNodes
-                    .chunked(selectedSpeedTestConcurrency)
+                    .chunked(scheme.bandwidthTestConcurrency)
                     .flatMapIndexed { batchIndex, batch ->
                         coroutineScope {
                             batch.map { node ->
                                 async {
                                     val speedMbps = testNodeDownloadBandwidthMbps(
                                         node = node,
-                                        durationMs = selectedSpeedTestDurationMs,
-                                        downloadUrl = selectedSpeedTestDownloadUrl
+                                        durationMs = scheme.bandwidthTestDurationMs,
+                                        downloadUrl = scheme.bandwidthTestUrl
                                     )
                                     nodeDao().updateDownloadMbps(node.id, speedMbps)
                                     node to speedMbps
                                 }
                             }.awaitAll()
                         }.also {
-                            val completed = ((batchIndex + 1) * selectedSpeedTestConcurrency)
+                            val completed = ((batchIndex + 1) * scheme.bandwidthTestConcurrency)
                                 .coerceAtMost(speedTestNodes.size)
                             _testingLabel.value =
-                                "智能连接：带宽测速 ($completed/${speedTestNodes.size})"
+                                "${scheme.name}：带宽测速 ($completed/${speedTestNodes.size})"
                         }
                     }
 
@@ -709,20 +567,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 settingsRepository.setSelectedNodeId(bestNode.id)
-                if (fullTestEnabled || countryCode != null) {
-                    bestNode.subscriptionSourceId?.takeIf(String::isNotBlank)?.let { sourceId ->
-                        settingsRepository.setSelectedSubscriptionSourceId(sourceId)
-                        settingsRepository.setSelectedNodeGroupId(
-                            NodeGroupKey.Subscription(sourceId).value
-                        )
-                        settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
-                    }
-                }
-                Log.i(tag, "Smart connection selected node: ${bestNode.getDisplayName()}")
+                Log.i(tag, "Speed test scheme selected node: ${bestNode.getDisplayName()}")
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
             } catch (e: Exception) {
-                Log.e(tag, "Smart connection failed", e)
-                _error.value = "智能连接失败: ${e.message ?: "未知错误"}"
+                Log.e(tag, "Speed test scheme failed", e)
+                _error.value = "测速失败：${e.message ?: "未知错误"}"
             } finally {
                 _isTesting.value = false
                 _testingLabel.value = null
@@ -862,112 +711,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setSmartConnectTcpingPercent(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setSmartConnectTcpingPercent(value)
-        }
-    }
-
     fun setDisconnectRecoveryEnabled(enabled: Boolean) {
 
         viewModelScope.launch {
             settingsRepository.setDisconnectRecoveryEnabled(enabled)
-        }
-    }
-
-    fun setSmartConnectUrlTestPercent(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setSmartConnectUrlTestPercent(value)
-        }
-    }
-
-    fun setSmartConnectSpeedTestPercent(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setSmartConnectSpeedTestPercent(value)
-        }
-    }
-
-    fun setSmartConnectFullTestEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setSmartConnectFullTestEnabled(enabled)
-        }
-    }
-
-    fun setPublicNodePoolOptimizationEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolOptimizationEnabled(enabled)
-        }
-    }
-
-    fun setPublicNodePoolNodeThreshold(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolNodeThreshold(value)
-        }
-    }
-
-    fun setPublicNodePoolTcpingPercent(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolTcpingPercent(value)
-        }
-    }
-
-    fun setPublicNodePoolUrlTestPercent(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolUrlTestPercent(value)
-        }
-    }
-
-    fun setPublicNodePoolSpeedTestPercent(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolSpeedTestPercent(value)
-        }
-    }
-
-    fun setPublicNodePoolTcpingTestTimeoutMs(value: Long) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolTcpingTestTimeoutMs(value)
-        }
-    }
-
-    fun setPublicNodePoolUrlTestTimeoutMs(value: Long) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolUrlTestTimeoutMs(value)
-        }
-    }
-
-    fun setPublicNodePoolUrlTestUrl(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolUrlTestUrl(value)
-        }
-    }
-
-    fun setPublicNodePoolSpeedTestDownloadUrl(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolSpeedTestDownloadUrl(value)
-        }
-    }
-
-    fun setPublicNodePoolSpeedTestDurationMs(value: Long) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolSpeedTestDurationMs(value)
-        }
-    }
-
-    fun setPublicNodePoolTcpingConcurrency(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolTcpingConcurrency(value)
-        }
-    }
-
-    fun setPublicNodePoolUrlTestConcurrency(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolUrlTestConcurrency(value)
-        }
-    }
-
-    fun setPublicNodePoolBandwidthTestConcurrency(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setPublicNodePoolBandwidthTestConcurrency(value)
         }
     }
 
@@ -1485,18 +1232,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 设置主页图标单击动作。 */
-    fun setHomeClickAction(action: HomeConnectionAction) {
+    fun setHomeClickSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
-            settingsRepository.setHomeClickAction(action)
+            settingsRepository.setHomeClickSpeedTestSchemeId(schemeId)
         }
     }
 
-    /** 设置主页图标长按动作。 */
-    fun setHomeLongPressAction(action: HomeConnectionAction) {
+    fun setHomeLongPressSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
-            settingsRepository.setHomeLongPressAction(action)
+            settingsRepository.setHomeLongPressSpeedTestSchemeId(schemeId)
         }
+    }
+
+    fun upsertSpeedTestScheme(scheme: SpeedTestScheme) {
+        viewModelScope.launch { settingsRepository.upsertSpeedTestScheme(scheme) }
+    }
+
+    fun deleteSpeedTestScheme(schemeId: String) {
+        viewModelScope.launch { settingsRepository.deleteSpeedTestScheme(schemeId) }
     }
     
     /**
@@ -2009,27 +1762,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             null -> nodeDao().getSubscriptionNodes().first()
         }
         sortNodesForList(snapshot)
-    }
-
-    private suspend fun currentSmartConnectNodes(
-        fullTestEnabled: Boolean,
-        groupingMode: NodeGroupingMode,
-        selectedCountryCode: String?
-    ): List<Node> {
-        val hasCountryScope =
-            groupingMode == NodeGroupingMode.COUNTRY && selectedCountryCode != null
-        if (!fullTestEnabled && !hasCountryScope) return currentNodeListSnapshot()
-        return withContext(Dispatchers.Default) {
-            val allSubscriptionNodes = nodeDao().getSubscriptionNodes().first()
-            val candidates = SmartConnectScopeResolver.selectCandidates(
-                currentNodes = emptyList(),
-                allSubscriptionNodes = allSubscriptionNodes,
-                groupingMode = groupingMode,
-                fullTestEnabled = fullTestEnabled,
-                selectedCountryCode = selectedCountryCode
-            )
-            sortNodesForList(candidates)
-        }
     }
 
     private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {

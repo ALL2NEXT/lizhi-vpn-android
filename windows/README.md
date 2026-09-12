@@ -2,7 +2,7 @@
 
 Windows 客户端的独立 Compose Desktop 工程。UI、后台协议、节点解析和 sing-box 配置均以当前 Android 3.0.1 为兼容基线。
 
-当前 Windows 双核心版为 3.0.4；安装包运行时显式包含后台客户端所需的 `java.net.http` 模块，智能连接仅测试当前节点列表中的订阅组或收藏组。
+当前 Windows 双核心版为 3.0.4；安装包运行时显式包含后台客户端所需的 `java.net.http` 模块。测速方案可绑定主页图标的点击和长按，内置方案可编辑并支持自定义方案。
 
 ## 运行
 
@@ -64,7 +64,7 @@ Xray `v26.3.27` 已移除 `allowInsecure`。自签名证书节点选择 Xray 时
 - [x] 官方 sing-box 源码锁定、构建、探测与 TUN 启动
 - [x] 官方 Xray-core 源码锁定、独立进程桥接与按协议选择核心
 - [x] 后台账户、订阅发现、访问控制和加密订阅接入
-- [x] TCPing、可自定义/预设地址的 204 URL Test、可自定义/预设地址的带宽测速和智能连接
+- [x] TCPing、可自定义/预设地址的 204 URL Test、可自定义/预设地址的带宽测速和测速方案
 - [x] Android 基础设定、Hy2 直连带宽自适应、特色功能和账户操作迁移
 - [x] Android 同款标题连续点击五次切换后台
 - [ ] Windows Service 与 Named Pipe

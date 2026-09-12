@@ -8,6 +8,7 @@ import xyz.a202132.windows.model.NodeCategory
 import xyz.a202132.windows.model.ProxyMode
 import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProxyCore
+import xyz.a202132.windows.model.SpeedTestScheme
 
 interface VpnController : AutoCloseable {
     val state: StateFlow<DesktopAppState>
@@ -34,8 +35,12 @@ interface VpnController : AutoCloseable {
     fun updateSettings(settings: DesktopSettings)
     fun setProtocolCore(nodeType: NodeType, core: ProxyCore)
     fun adaptHysteriaBandwidth()
+    fun setHomeClickSpeedTestScheme(schemeId: String)
+    fun setHomeLongPressSpeedTestScheme(schemeId: String)
+    fun upsertSpeedTestScheme(scheme: SpeedTestScheme)
+    fun deleteSpeedTestScheme(schemeId: String)
     fun startSelectedOrFirstConnection()
-    fun startSmartConnection()
+    fun startSpeedTestScheme(schemeId: String)
     fun selectAndConnectNode(nodeId: String)
     fun requestDisconnect()
     fun clearMessage()

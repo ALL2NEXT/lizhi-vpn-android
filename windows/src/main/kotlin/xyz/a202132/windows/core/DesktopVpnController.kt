@@ -32,6 +32,7 @@ import xyz.a202132.windows.model.NodeType
 import xyz.a202132.windows.model.ProxyMode
 import xyz.a202132.windows.model.ProtocolCoreSettings
 import xyz.a202132.windows.model.ProxyCore
+import xyz.a202132.windows.model.SpeedTestScheme
 import xyz.a202132.windows.model.VpnState
 import xyz.a202132.windows.model.UrlTestTargets
 import xyz.a202132.windows.network.BackendClient
@@ -65,6 +66,11 @@ class DesktopVpnController(
             selectedNodeId = storedPreferences.selectedNodeId,
             backendUrl = storedPreferences.backendUrl,
             settings = storedPreferences.settings,
+            speedTestSchemes = storedPreferences.speedTestSchemes.orEmpty(),
+            homeClickSpeedTestSchemeId = storedPreferences.homeClickSpeedTestSchemeId
+                ?: SpeedTestScheme.STANDARD_ID,
+            homeLongPressSpeedTestSchemeId = storedPreferences.homeLongPressSpeedTestSchemeId
+                ?: SpeedTestScheme.DEEP_ID,
             protocolCoreSettings = ProtocolCoreSettings.fromStored(storedPreferences.xrayProtocols)
         )
     )
@@ -434,6 +440,66 @@ class DesktopVpnController(
         return (ceil(speedMbps / 10f).toInt() * 10).coerceIn(10, 100_000)
     }
 
+    override fun setHomeClickSpeedTestScheme(schemeId: String) {
+        if (mutableState.value.speedTestSchemes.none { it.id == schemeId }) return
+        mutableState.update { it.copy(homeClickSpeedTestSchemeId = schemeId) }
+        preferencesStore.update { it.copy(homeClickSpeedTestSchemeId = schemeId) }
+    }
+
+    override fun setHomeLongPressSpeedTestScheme(schemeId: String) {
+        if (mutableState.value.speedTestSchemes.none { it.id == schemeId }) return
+        mutableState.update { it.copy(homeLongPressSpeedTestSchemeId = schemeId) }
+        preferencesStore.update { it.copy(homeLongPressSpeedTestSchemeId = schemeId) }
+    }
+
+    override fun upsertSpeedTestScheme(scheme: SpeedTestScheme) {
+        val normalized = normalizeSpeedTestScheme(scheme)
+        val schemes = mutableState.value.speedTestSchemes
+            .filterNot { it.id == normalized.id } + normalized
+        mutableState.update { it.copy(speedTestSchemes = schemes) }
+        preferencesStore.update { it.copy(speedTestSchemes = schemes) }
+    }
+
+    override fun deleteSpeedTestScheme(schemeId: String) {
+        val target = mutableState.value.speedTestSchemes.firstOrNull { it.id == schemeId }
+        if (target == null || target.builtIn) return
+        val schemes = mutableState.value.speedTestSchemes.filterNot { it.id == schemeId }
+        val clickId = mutableState.value.homeClickSpeedTestSchemeId
+            .takeUnless { it == schemeId } ?: SpeedTestScheme.STANDARD_ID
+        val longPressId = mutableState.value.homeLongPressSpeedTestSchemeId
+            .takeUnless { it == schemeId } ?: SpeedTestScheme.DEEP_ID
+        mutableState.update {
+            it.copy(
+                speedTestSchemes = schemes,
+                homeClickSpeedTestSchemeId = clickId,
+                homeLongPressSpeedTestSchemeId = longPressId
+            )
+        }
+        preferencesStore.update {
+            it.copy(
+                speedTestSchemes = schemes,
+                homeClickSpeedTestSchemeId = clickId,
+                homeLongPressSpeedTestSchemeId = longPressId
+            )
+        }
+    }
+
+    private fun normalizeSpeedTestScheme(scheme: SpeedTestScheme): SpeedTestScheme = scheme.copy(
+        name = scheme.name.trim().ifBlank { if (scheme.builtIn) "测速方案" else "我的方案" },
+        tcpingPercent = scheme.tcpingPercent.coerceIn(1, 100),
+        urlTestPercent = scheme.urlTestPercent.coerceIn(1, 100),
+        bandwidthPercent = scheme.bandwidthPercent.coerceIn(1, 100),
+        tcpingTimeoutMs = scheme.tcpingTimeoutMs.coerceAtLeast(500),
+        urlTestTimeoutMs = scheme.urlTestTimeoutMs.coerceAtLeast(500),
+        urlTestUrl = UrlTestTargets.normalize(scheme.urlTestUrl) ?: UrlTestTargets.DEFAULT_URL,
+        bandwidthTestDurationMs = scheme.bandwidthTestDurationMs.coerceAtLeast(1_000),
+        bandwidthTestUrl = BandwidthTestTargets.normalize(scheme.bandwidthTestUrl)
+            ?: BandwidthTestTargets.DEFAULT_URL,
+        tcpingConcurrency = scheme.tcpingConcurrency.coerceIn(1, 128),
+        urlTestConcurrency = scheme.urlTestConcurrency.coerceIn(1, 128),
+        bandwidthTestConcurrency = scheme.bandwidthTestConcurrency.coerceIn(1, 3)
+    )
+
     override fun updateNickname(nickname: String) = runAccountAction("昵称已更新") {
         backendClient.updateNickname(nickname)
     }
@@ -546,13 +612,16 @@ class DesktopVpnController(
         startNode(node.id)
     }
 
-    override fun startSmartConnection() {
+    override fun startSpeedTestScheme(schemeId: String) {
         val current = mutableState.value
         if (current.vpnState != VpnState.DISCONNECTED || current.isTesting) return
-        val scopedNodes = current.visibleNodes
+        val scheme = current.speedTestSchemes.firstOrNull { it.id == schemeId }
+            ?: current.speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+            ?: return
+        val scopedNodes = if (scheme.testAllNodes) current.nodes else current.visibleNodes
         if (scopedNodes.isEmpty()) {
             mutableState.update {
-                it.copy(screen = AppScreen.NODE_LIST, message = "当前节点组没有可用节点")
+                it.copy(screen = AppScreen.NODE_LIST, message = "当前没有可用节点")
             }
             return
         }
@@ -562,8 +631,18 @@ class DesktopVpnController(
             return
         }
         scope.launch {
-            val tcpingNodes = takeTopPercent(scopedNodes, current.settings.smartConnectTcpingPercent)
-            val tcpingCandidates = runTcping(tcpingNodes)
+            val schemeSettings = current.settings.copy(
+                tcpingTimeoutMs = scheme.tcpingTimeoutMs,
+                urlTestTimeoutMs = scheme.urlTestTimeoutMs,
+                urlTestUrl = scheme.urlTestUrl,
+                speedTestDurationMs = scheme.bandwidthTestDurationMs,
+                speedTestDownloadUrl = scheme.bandwidthTestUrl,
+                tcpingConcurrency = scheme.tcpingConcurrency,
+                urlTestConcurrency = scheme.urlTestConcurrency,
+                bandwidthTestConcurrency = scheme.bandwidthTestConcurrency
+            )
+            val tcpingNodes = takeTopPercent(scopedNodes, scheme.tcpingPercent)
+            val tcpingCandidates = runTcping(tcpingNodes, schemeSettings)
                 .filter { it.isAvailable && it.tcpingLatency > 0 }
                 .sortedBy(DesktopNode::tcpingLatency)
             if (tcpingCandidates.isEmpty()) {
@@ -573,11 +652,8 @@ class DesktopVpnController(
                 return@launch
             }
 
-            val urlNodes = takeTopPercent(
-                tcpingCandidates,
-                current.settings.smartConnectUrlTestPercent
-            )
-            val urlCandidates = runUrlTest(core, urlNodes, current.settings)
+            val urlNodes = takeTopPercent(tcpingCandidates, scheme.urlTestPercent)
+            val urlCandidates = runUrlTest(core, urlNodes, schemeSettings)
                 .filter { it.isAvailable && it.urlTestLatency > 0 }
                 .sortedBy(DesktopNode::urlTestLatency)
             if (urlCandidates.isEmpty()) {
@@ -585,11 +661,8 @@ class DesktopVpnController(
                 return@launch
             }
 
-            val speedNodes = takeTopPercent(
-                urlCandidates,
-                current.settings.smartConnectSpeedTestPercent
-            )
-            val speedCandidates = runBandwidthTest(core, speedNodes, current.settings)
+            val speedNodes = takeTopPercent(urlCandidates, scheme.bandwidthPercent)
+            val speedCandidates = runBandwidthTest(core, speedNodes, schemeSettings)
                 .filter { it.downloadMbps > 0f }
             val best = speedCandidates.maxByOrNull(DesktopNode::downloadMbps)
             if (best == null) {
@@ -611,12 +684,13 @@ class DesktopVpnController(
     private fun runBandwidthTest(
         core: CoreStatus.Available,
         nodes: List<DesktopNode>,
-        settings: DesktopSettings
+        settings: DesktopSettings,
+        labelPrefix: String = "带宽测速"
     ): List<DesktopNode> {
         mutableState.update {
             it.copy(
                 isTesting = true,
-                testingLabel = "智能连接：带宽测速 (0/${nodes.size})",
+                testingLabel = "$labelPrefix (0/${nodes.size})",
                 message = null
             )
         }
@@ -875,13 +949,16 @@ class DesktopVpnController(
         }
     }
 
-    private suspend fun runTcping(nodes: List<DesktopNode>): List<DesktopNode> {
+    private suspend fun runTcping(
+        nodes: List<DesktopNode>,
+        settings: DesktopSettings = mutableState.value.settings,
+        labelPrefix: String = "TCPing"
+    ): List<DesktopNode> {
         if (mutableState.value.isTesting) return nodes
         mutableState.update {
-            it.copy(isTesting = true, testingLabel = "TCPing 测试中 (0/${nodes.size})", message = null)
+            it.copy(isTesting = true, testingLabel = "$labelPrefix 测试中 (0/${nodes.size})", message = null)
         }
         var completed = 0
-        val settings = mutableState.value.settings
         val semaphore = Semaphore(settings.tcpingConcurrency.coerceIn(1, 128))
         val results = nodes.map { node ->
             scope.async {
@@ -890,7 +967,7 @@ class DesktopVpnController(
                 }
                 completed += 1
                 mutableState.update {
-                    it.copy(testingLabel = "TCPing 测试中 ($completed/${nodes.size})")
+                    it.copy(testingLabel = "$labelPrefix 测试中 ($completed/${nodes.size})")
                 }
                 node.copy(
                     tcpingLatency = latency,

@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 import xyz.a202132.app.data.model.BandwidthTestTargets
-import xyz.a202132.app.data.model.HomeConnectionAction
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
@@ -20,6 +19,7 @@ import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.SkinSettings
+import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.util.CountryCodeResolver
@@ -45,8 +45,10 @@ class SettingsRepository(private val context: Context) {
     companion object {
         private val SELECTED_NODE_ID = stringPreferencesKey("selected_node_id")
         private val PROXY_MODE = stringPreferencesKey("proxy_mode")
-        private val HOME_CLICK_ACTION = stringPreferencesKey("home_click_action")
-        private val HOME_LONG_PRESS_ACTION = stringPreferencesKey("home_long_press_action")
+        private val HOME_CLICK_SPEED_TEST_SCHEME_ID =
+            stringPreferencesKey("home_click_speed_test_scheme_id")
+        private val HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID =
+            stringPreferencesKey("home_long_press_speed_test_scheme_id")
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
         private val UPDATE_DOWNLOAD_DIRECTORY_URI =
@@ -77,43 +79,9 @@ class SettingsRepository(private val context: Context) {
         private val URL_TEST_URL = stringPreferencesKey("url_test_url")
         private val SPEED_TEST_DOWNLOAD_URL = stringPreferencesKey("speed_test_download_url")
         private val SPEED_TEST_DURATION_MS = longPreferencesKey("speed_test_duration_ms")
-        // 兼容读取旧版本的“带宽测速超时”设置，避免升级后丢失用户配置。
-        private val LEGACY_SPEED_TEST_DOWNLOAD_TIMEOUT_MS =
-            longPreferencesKey("speed_test_download_timeout_ms")
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val URL_TEST_CONCURRENCY = intPreferencesKey("url_test_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
-        private val SMART_CONNECT_TCPING_PERCENT = intPreferencesKey("smart_connect_tcping_percent")
-        private val SMART_CONNECT_URL_TEST_PERCENT = intPreferencesKey("smart_connect_url_test_percent")
-        private val SMART_CONNECT_SPEED_TEST_PERCENT = intPreferencesKey("smart_connect_speed_test_percent")
-        private val SMART_CONNECT_FULL_TEST_ENABLED =
-            booleanPreferencesKey("smart_connect_full_test_enabled")
-        private val PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED =
-            booleanPreferencesKey("public_node_pool_optimization_enabled")
-        private val PUBLIC_NODE_POOL_NODE_THRESHOLD =
-            intPreferencesKey("public_node_pool_node_threshold")
-        private val PUBLIC_NODE_POOL_TCPING_PERCENT =
-            intPreferencesKey("public_node_pool_tcping_percent")
-        private val PUBLIC_NODE_POOL_URL_TEST_PERCENT =
-            intPreferencesKey("public_node_pool_url_test_percent")
-        private val PUBLIC_NODE_POOL_SPEED_TEST_PERCENT =
-            intPreferencesKey("public_node_pool_speed_test_percent")
-        private val PUBLIC_NODE_POOL_TCPING_TEST_TIMEOUT_MS =
-            longPreferencesKey("public_node_pool_tcping_test_timeout_ms")
-        private val PUBLIC_NODE_POOL_URL_TEST_TIMEOUT_MS =
-            longPreferencesKey("public_node_pool_url_test_timeout_ms")
-        private val PUBLIC_NODE_POOL_URL_TEST_URL =
-            stringPreferencesKey("public_node_pool_url_test_url")
-        private val PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL =
-            stringPreferencesKey("public_node_pool_speed_test_download_url")
-        private val PUBLIC_NODE_POOL_SPEED_TEST_DURATION_MS =
-            longPreferencesKey("public_node_pool_speed_test_duration_ms")
-        private val PUBLIC_NODE_POOL_TCPING_CONCURRENCY =
-            intPreferencesKey("public_node_pool_tcping_concurrency")
-        private val PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY =
-            intPreferencesKey("public_node_pool_url_test_concurrency")
-        private val PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY =
-            intPreferencesKey("public_node_pool_bandwidth_test_concurrency")
         private val DISCONNECT_RECOVERY_ENABLED = booleanPreferencesKey("disconnect_recovery_enabled")
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
@@ -129,6 +97,7 @@ class SettingsRepository(private val context: Context) {
             booleanPreferencesKey("hide_favorite_node_group")
         private val SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
         private val ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
+        private val SPEED_TEST_SCHEMES_JSON = stringPreferencesKey("speed_test_schemes_json")
         // 兼容早期单皮肤版本的数据。
         private val SKIN_BASE_COLOR_ARGB = longPreferencesKey("skin_base_color_argb")
         private val SKIN_CUSTOM_IMAGE_PATH = stringPreferencesKey("skin_custom_image_path")
@@ -160,25 +129,44 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    /** 主页图标单击动作，默认保持原来的直接连接行为。 */
-    val homeClickAction: Flow<HomeConnectionAction> = context.dataStore.data.map { preferences ->
-        enumValueOrDefault(preferences[HOME_CLICK_ACTION], HomeConnectionAction.DIRECT)
+    /** 用户保存的测速方案；首次使用时只提供两套内置方案。 */
+    val speedTestSchemes: Flow<List<SpeedTestScheme>> = context.dataStore.data.map { preferences ->
+        decodeSpeedTestSchemes(preferences)
     }
 
-    /** 主页图标长按动作，默认保持原来的智能连接行为。 */
-    val homeLongPressAction: Flow<HomeConnectionAction> = context.dataStore.data.map { preferences ->
-        enumValueOrDefault(preferences[HOME_LONG_PRESS_ACTION], HomeConnectionAction.SMART)
+    /** 主页图标单击使用的测速方案。 */
+    val homeClickSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+        val schemes = decodeSpeedTestSchemes(preferences)
+        resolveHomeSchemeId(
+            preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID],
+            SpeedTestScheme.STANDARD_ID,
+            schemes
+        )
     }
 
-    suspend fun setHomeClickAction(action: HomeConnectionAction) {
+    /** 主页图标长按使用的测速方案。 */
+    val homeLongPressSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+        val schemes = decodeSpeedTestSchemes(preferences)
+        resolveHomeSchemeId(
+            preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID],
+            SpeedTestScheme.DEEP_ID,
+            schemes
+        )
+    }
+
+    suspend fun setHomeClickSpeedTestSchemeId(schemeId: String) {
         context.dataStore.edit { preferences ->
-            preferences[HOME_CLICK_ACTION] = action.name
+            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
+                preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = schemeId
+            }
         }
     }
 
-    suspend fun setHomeLongPressAction(action: HomeConnectionAction) {
+    suspend fun setHomeLongPressSpeedTestSchemeId(schemeId: String) {
         context.dataStore.edit { preferences ->
-            preferences[HOME_LONG_PRESS_ACTION] = action.name
+            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
+                preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = schemeId
+            }
         }
     }
 
@@ -386,6 +374,32 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun upsertSpeedTestScheme(scheme: SpeedTestScheme) {
+        context.dataStore.edit { preferences ->
+            val normalized = normalizeSpeedTestScheme(scheme)
+            val schemes = decodeSpeedTestSchemes(preferences)
+                .filterNot { it.id == scheme.id } + normalized
+            preferences[SPEED_TEST_SCHEMES_JSON] = encodeSpeedTestSchemes(schemes)
+        }
+    }
+
+    suspend fun deleteSpeedTestScheme(schemeId: String) {
+        context.dataStore.edit { preferences ->
+            val schemes = decodeSpeedTestSchemes(preferences)
+            val target = schemes.firstOrNull { it.id == schemeId } ?: return@edit
+            if (target.builtIn) return@edit
+            preferences[SPEED_TEST_SCHEMES_JSON] = encodeSpeedTestSchemes(
+                schemes.filterNot { it.id == schemeId }
+            )
+            if (preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] == schemeId) {
+                preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.STANDARD_ID
+            }
+            if (preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] == schemeId) {
+                preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEEP_ID
+            }
+        }
+    }
+
     suspend fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {
         context.dataStore.edit { preferences ->
             val normalizedScheme = scheme.copy(
@@ -532,10 +546,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setUrlTestUrl(value: String) {
         val normalized = UrlTestTargets.normalize(value) ?: return
         context.dataStore.edit { preferences ->
-            if (UrlTestTargets.normalize(preferences[PUBLIC_NODE_POOL_URL_TEST_URL]) == null) {
-                preferences[PUBLIC_NODE_POOL_URL_TEST_URL] =
-                    UrlTestTargets.normalize(preferences[URL_TEST_URL]) ?: UrlTestTargets.DEFAULT_URL
-            }
             preferences[URL_TEST_URL] = normalized
         }
     }
@@ -548,18 +558,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSpeedTestDownloadUrl(value: String) {
         val normalized = BandwidthTestTargets.normalize(value) ?: return
         context.dataStore.edit { preferences ->
-            if (BandwidthTestTargets.normalize(preferences[PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL]) == null) {
-                preferences[PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL] =
-                    BandwidthTestTargets.normalize(preferences[SPEED_TEST_DOWNLOAD_URL])
-                        ?: xyz.a202132.app.AppConfig.SPEED_TEST_DOWNLOAD_URL
-            }
             preferences[SPEED_TEST_DOWNLOAD_URL] = normalized
         }
     }
 
     val speedTestDurationMs: Flow<Long> = context.dataStore.data.map { preferences ->
         (preferences[SPEED_TEST_DURATION_MS]
-            ?: preferences[LEGACY_SPEED_TEST_DOWNLOAD_TIMEOUT_MS]
             ?: xyz.a202132.app.AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
             .coerceAtLeast(1_000L)
     }
@@ -567,7 +571,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSpeedTestDurationMs(value: Long) {
         context.dataStore.edit { preferences ->
             preferences[SPEED_TEST_DURATION_MS] = value.coerceAtLeast(1_000L)
-            preferences.remove(LEGACY_SPEED_TEST_DOWNLOAD_TIMEOUT_MS)
         }
     }
 
@@ -626,198 +629,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNodeGroupingMode(mode: NodeGroupingMode) {
         context.dataStore.edit { preferences ->
             preferences[NODE_GROUPING_MODE] = mode.name
-        }
-    }
-
-    val smartConnectTcpingPercent: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[SMART_CONNECT_TCPING_PERCENT] ?: xyz.a202132.app.AppConfig.SMART_CONNECT_TCPING_PERCENT)
-            .coerceIn(1, 100)
-    }
-
-    suspend fun setSmartConnectTcpingPercent(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[SMART_CONNECT_TCPING_PERCENT] = value.coerceIn(1, 100)
-        }
-    }
-
-    val smartConnectUrlTestPercent: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[SMART_CONNECT_URL_TEST_PERCENT] ?: xyz.a202132.app.AppConfig.SMART_CONNECT_URL_TEST_PERCENT)
-            .coerceIn(1, 100)
-    }
-
-    suspend fun setSmartConnectUrlTestPercent(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[SMART_CONNECT_URL_TEST_PERCENT] = value.coerceIn(1, 100)
-        }
-    }
-
-    val smartConnectSpeedTestPercent: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[SMART_CONNECT_SPEED_TEST_PERCENT] ?: xyz.a202132.app.AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT)
-            .coerceIn(1, 100)
-    }
-
-    suspend fun setSmartConnectSpeedTestPercent(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[SMART_CONNECT_SPEED_TEST_PERCENT] = value.coerceIn(1, 100)
-        }
-    }
-
-    val smartConnectFullTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SMART_CONNECT_FULL_TEST_ENABLED]
-            ?: xyz.a202132.app.AppConfig.SMART_CONNECT_FULL_TEST_ENABLED
-    }
-
-    suspend fun setSmartConnectFullTestEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[SMART_CONNECT_FULL_TEST_ENABLED] = enabled
-        }
-    }
-
-    val publicNodePoolOptimizationEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED]
-            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED
-    }
-
-    suspend fun setPublicNodePoolOptimizationEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_OPTIMIZATION_ENABLED] = enabled
-        }
-    }
-
-    val publicNodePoolNodeThreshold: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_NODE_THRESHOLD]
-            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_NODE_THRESHOLD).coerceIn(1, 10_000)
-    }
-
-    suspend fun setPublicNodePoolNodeThreshold(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_NODE_THRESHOLD] = value.coerceIn(1, 10_000)
-        }
-    }
-
-    val publicNodePoolTcpingPercent: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_TCPING_PERCENT]
-            ?: xyz.a202132.app.AppConfig.SMART_CONNECT_TCPING_PERCENT).coerceIn(1, 100)
-    }
-
-    suspend fun setPublicNodePoolTcpingPercent(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_TCPING_PERCENT] = value.coerceIn(1, 100)
-        }
-    }
-
-    val publicNodePoolUrlTestPercent: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_URL_TEST_PERCENT]
-            ?: xyz.a202132.app.AppConfig.SMART_CONNECT_URL_TEST_PERCENT).coerceIn(1, 100)
-    }
-
-    suspend fun setPublicNodePoolUrlTestPercent(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_URL_TEST_PERCENT] = value.coerceIn(1, 100)
-        }
-    }
-
-    val publicNodePoolSpeedTestPercent: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_SPEED_TEST_PERCENT]
-            ?: xyz.a202132.app.AppConfig.SMART_CONNECT_SPEED_TEST_PERCENT).coerceIn(1, 100)
-    }
-
-    suspend fun setPublicNodePoolSpeedTestPercent(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_SPEED_TEST_PERCENT] = value.coerceIn(1, 100)
-        }
-    }
-
-    val publicNodePoolTcpingTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_TCPING_TEST_TIMEOUT_MS]
-            ?: xyz.a202132.app.AppConfig.TCPING_TEST_TIMEOUT).coerceAtLeast(500L)
-    }
-
-    suspend fun setPublicNodePoolTcpingTestTimeoutMs(value: Long) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_TCPING_TEST_TIMEOUT_MS] = value.coerceAtLeast(500L)
-        }
-    }
-
-    val publicNodePoolUrlTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_URL_TEST_TIMEOUT_MS]
-            ?: xyz.a202132.app.AppConfig.URL_TEST_TIMEOUT).coerceAtLeast(500L)
-    }
-
-    suspend fun setPublicNodePoolUrlTestTimeoutMs(value: Long) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_URL_TEST_TIMEOUT_MS] = value.coerceAtLeast(500L)
-        }
-    }
-
-    val publicNodePoolUrlTestUrl: Flow<String> = context.dataStore.data.map { preferences ->
-        UrlTestTargets.normalize(preferences[PUBLIC_NODE_POOL_URL_TEST_URL])
-            ?: UrlTestTargets.normalize(preferences[URL_TEST_URL])
-            ?: UrlTestTargets.DEFAULT_URL
-    }
-
-    suspend fun setPublicNodePoolUrlTestUrl(value: String) {
-        val normalized = UrlTestTargets.normalize(value) ?: return
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_URL_TEST_URL] = normalized
-        }
-    }
-
-    val publicNodePoolSpeedTestDownloadUrl: Flow<String> =
-        context.dataStore.data.map { preferences ->
-            BandwidthTestTargets.normalize(preferences[PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL])
-                ?: BandwidthTestTargets.normalize(preferences[SPEED_TEST_DOWNLOAD_URL])
-                ?: xyz.a202132.app.AppConfig.SPEED_TEST_DOWNLOAD_URL
-        }
-
-    suspend fun setPublicNodePoolSpeedTestDownloadUrl(value: String) {
-        val normalized = BandwidthTestTargets.normalize(value) ?: return
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_SPEED_TEST_DOWNLOAD_URL] = normalized
-        }
-    }
-
-    val publicNodePoolSpeedTestDurationMs: Flow<Long> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_SPEED_TEST_DURATION_MS]
-            ?: xyz.a202132.app.AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS).coerceAtLeast(1_000L)
-    }
-
-    suspend fun setPublicNodePoolSpeedTestDurationMs(value: Long) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_SPEED_TEST_DURATION_MS] = value.coerceAtLeast(1_000L)
-        }
-    }
-
-    val publicNodePoolTcpingConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_TCPING_CONCURRENCY]
-            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_TCPING_CONCURRENCY).coerceIn(1, 512)
-    }
-
-    suspend fun setPublicNodePoolTcpingConcurrency(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_TCPING_CONCURRENCY] = value.coerceIn(1, 512)
-        }
-    }
-
-    val publicNodePoolUrlTestConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY]
-            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY).coerceIn(1, 128)
-    }
-
-    suspend fun setPublicNodePoolUrlTestConcurrency(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_URL_TEST_CONCURRENCY] = value.coerceIn(1, 128)
-        }
-    }
-
-    val publicNodePoolBandwidthTestConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY]
-            ?: xyz.a202132.app.AppConfig.PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY).coerceIn(1, 3)
-    }
-
-    suspend fun setPublicNodePoolBandwidthTestConcurrency(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[PUBLIC_NODE_POOL_BANDWIDTH_TEST_CONCURRENCY] = value.coerceIn(1, 3)
         }
     }
 
@@ -893,6 +704,118 @@ class SettingsRepository(private val context: Context) {
 
     private fun normalizeSkinColor(argb: Long): Long {
         return 0xFF000000L or (argb and 0x00FFFFFFL)
+    }
+
+    private fun resolveHomeSchemeId(
+        storedId: String?,
+        fallbackId: String,
+        schemes: List<SpeedTestScheme>
+    ): String {
+        return listOf(storedId, fallbackId)
+            .firstOrNull { id -> id != null && schemes.any { it.id == id } }
+            ?: fallbackId
+    }
+
+    private fun decodeSpeedTestSchemes(preferences: Preferences): List<SpeedTestScheme> {
+        val stored = preferences[SPEED_TEST_SCHEMES_JSON]
+            ?.takeIf(String::isNotBlank)
+            ?.let { json ->
+                runCatching {
+                    val array = JSONArray(json)
+                    buildList {
+                        for (index in 0 until array.length()) {
+                            val item = array.optJSONObject(index) ?: continue
+                            val id = item.optString("id").trim()
+                            if (id.isBlank()) continue
+                            add(
+                                normalizeSpeedTestScheme(
+                                    SpeedTestScheme(
+                                        id = id,
+                                        name = item.optString("name", "我的方案"),
+                                        builtIn = item.optBoolean("builtIn", false),
+                                        testAllNodes = item.optBoolean("testAllNodes", false),
+                                        tcpingPercent = item.optInt("tcpingPercent", 100),
+                                        urlTestPercent = item.optInt("urlTestPercent", 50),
+                                        bandwidthPercent = item.optInt("bandwidthPercent", 50),
+                                        tcpingTimeoutMs = item.optLong("tcpingTimeoutMs", 1_000L),
+                                        urlTestTimeoutMs = item.optLong("urlTestTimeoutMs", 1_000L),
+                                        urlTestUrl = item.optString("urlTestUrl", UrlTestTargets.DEFAULT_URL),
+                                        bandwidthTestDurationMs = item.optLong(
+                                            "bandwidthTestDurationMs",
+                                            3_000L
+                                        ),
+                                        bandwidthTestUrl = item.optString(
+                                            "bandwidthTestUrl",
+                                            xyz.a202132.app.AppConfig.SPEED_TEST_DOWNLOAD_URL
+                                        ),
+                                        tcpingConcurrency = item.optInt("tcpingConcurrency", 16),
+                                        urlTestConcurrency = item.optInt("urlTestConcurrency", 10),
+                                        bandwidthTestConcurrency = item.optInt(
+                                            "bandwidthTestConcurrency",
+                                            1
+                                        )
+                                    )
+                                )
+                            )
+                        }
+                    }
+                }.getOrNull()
+            }
+
+        val standard = stored?.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+            ?: SpeedTestScheme.standard()
+        val full = stored?.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
+            ?: SpeedTestScheme.deep()
+        val custom = stored.orEmpty()
+            .filterNot { it.id == SpeedTestScheme.STANDARD_ID || it.id == SpeedTestScheme.DEEP_ID }
+            .filterNot { it.builtIn }
+            .distinctBy(SpeedTestScheme::id)
+        return listOf(standard.copy(builtIn = true), full.copy(builtIn = true)) + custom
+    }
+
+    private fun normalizeSpeedTestScheme(scheme: SpeedTestScheme): SpeedTestScheme {
+        return scheme.copy(
+            name = scheme.name.trim().ifBlank { if (scheme.builtIn) "测速方案" else "我的方案" },
+            tcpingPercent = scheme.tcpingPercent.coerceIn(1, 100),
+            urlTestPercent = scheme.urlTestPercent.coerceIn(1, 100),
+            bandwidthPercent = scheme.bandwidthPercent.coerceIn(1, 100),
+            tcpingTimeoutMs = scheme.tcpingTimeoutMs.coerceAtLeast(500L),
+            urlTestTimeoutMs = scheme.urlTestTimeoutMs.coerceAtLeast(500L),
+            urlTestUrl = UrlTestTargets.normalize(scheme.urlTestUrl) ?: UrlTestTargets.DEFAULT_URL,
+            bandwidthTestDurationMs = scheme.bandwidthTestDurationMs.coerceAtLeast(1_000L),
+            bandwidthTestUrl = BandwidthTestTargets.normalize(scheme.bandwidthTestUrl)
+                ?: xyz.a202132.app.AppConfig.SPEED_TEST_DOWNLOAD_URL,
+            tcpingConcurrency = scheme.tcpingConcurrency.coerceIn(1, 512),
+            urlTestConcurrency = scheme.urlTestConcurrency.coerceIn(1, 128),
+            bandwidthTestConcurrency = scheme.bandwidthTestConcurrency.coerceIn(1, 3)
+        )
+    }
+
+    private fun encodeSpeedTestSchemes(schemes: List<SpeedTestScheme>): String {
+        val array = JSONArray()
+        schemes.distinctBy(SpeedTestScheme::id).forEach { scheme ->
+            val normalized = normalizeSpeedTestScheme(scheme)
+            array.put(
+                JSONObject().apply {
+                    put("id", normalized.id)
+                    put("name", normalized.name)
+                    put("builtIn", normalized.builtIn)
+                    put("testAllNodes", normalized.testAllNodes)
+                    put("tcpingPercent", normalized.tcpingPercent)
+                    put("urlTestPercent", normalized.urlTestPercent)
+                    put("bandwidthPercent", normalized.bandwidthPercent)
+                    put("tcpingTimeoutMs", normalized.tcpingTimeoutMs)
+                    put("urlTestTimeoutMs", normalized.urlTestTimeoutMs)
+                    put("urlTestUrl", normalized.urlTestUrl)
+                    put("bandwidthTestDurationMs", normalized.bandwidthTestDurationMs)
+                    put("bandwidthTestUrl", normalized.bandwidthTestUrl)
+                    put("tcpingConcurrency", normalized.tcpingConcurrency)
+                    put("urlTestConcurrency", normalized.urlTestConcurrency)
+                    put("bandwidthTestConcurrency", normalized.bandwidthTestConcurrency)
+                }
+            )
+        }
+        return array.toString()
     }
 
     private fun decodeSkinSchemes(preferences: Preferences): List<SkinScheme> {
