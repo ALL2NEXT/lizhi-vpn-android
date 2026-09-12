@@ -44,6 +44,8 @@ fun NodeGroupingDestination(
     onCountrySelected: (String) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
+    onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
+    onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,
     scannedSubscriptionText: String?,
     onScannedSubscriptionTextConsumed: () -> Unit,
@@ -167,6 +169,8 @@ fun NodeGroupingDestination(
                     detail = NodeGroupingDetail.Favorites
                 },
                 onCreateSubscriptionGroup = onCreateSubscriptionGroup,
+                onUpdateSubscriptionGroup = onUpdateSubscriptionGroup,
+                onDeleteSubscriptionGroup = onDeleteSubscriptionGroup,
                 onScanQrCode = onScanQrCode,
                 scannedSubscriptionText = scannedSubscriptionText,
                 onScannedSubscriptionTextConsumed = onScannedSubscriptionTextConsumed,

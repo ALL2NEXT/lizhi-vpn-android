@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Favorite
@@ -31,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -69,6 +71,8 @@ internal fun SubscriptionGroupSelectionDestination(
     onFavoritesSelected: () -> Unit,
     onViewFavoritesDetails: () -> Unit,
     onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
+    onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
+    onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,
     scannedSubscriptionText: String?,
     onScannedSubscriptionTextConsumed: () -> Unit,
@@ -104,6 +108,8 @@ internal fun SubscriptionGroupSelectionDestination(
         onFavoritesSelected = onFavoritesSelected,
         onViewFavoritesDetails = onViewFavoritesDetails,
         onCreateSubscriptionGroup = onCreateSubscriptionGroup,
+        onUpdateSubscriptionGroup = onUpdateSubscriptionGroup,
+        onDeleteSubscriptionGroup = onDeleteSubscriptionGroup,
         onScanQrCode = onScanQrCode,
         scannedSubscriptionText = scannedSubscriptionText,
         onScannedSubscriptionTextConsumed = onScannedSubscriptionTextConsumed,
@@ -129,6 +135,8 @@ private fun SubscriptionGroupSelectionScreen(
     onFavoritesSelected: () -> Unit,
     onViewFavoritesDetails: () -> Unit,
     onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
+    onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
+    onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,
     scannedSubscriptionText: String?,
     onScannedSubscriptionTextConsumed: () -> Unit,
@@ -142,6 +150,10 @@ private fun SubscriptionGroupSelectionScreen(
     var groupName by rememberSaveable { mutableStateOf("") }
     var subscriptionInput by rememberSaveable { mutableStateOf("") }
     var isSubmitting by rememberSaveable { mutableStateOf(false) }
+    var editMode by rememberSaveable { mutableStateOf(false) }
+    var editDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var deleteDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var editingGroupId by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(scannedSubscriptionText) {
         scannedSubscriptionText?.let { text ->
@@ -179,8 +191,20 @@ private fun SubscriptionGroupSelectionScreen(
                     contentDescription = "切换为按地区分组"
                 )
             }
+            IconButton(onClick = { editMode = !editMode }) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = if (editMode) "完成编辑" else "编辑订阅组",
+                    tint = if (editMode) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        LocalContentColor.current
+                    }
+                )
+            }
             IconButton(
                 onClick = {
+                    editMode = false
                     groupName = ""
                     subscriptionInput = ""
                     addDialogVisible = true
@@ -216,7 +240,7 @@ private fun SubscriptionGroupSelectionScreen(
                             nodeCount = nodeCounts[group.sourceId] ?: 0,
                             selected = selectedNodeGroupId ==
                                 NodeGroupKey.Subscription(group.sourceId).value,
-                            onClick = { onSubscriptionSelected(group) },
+                            onClick = { if (!editMode) onSubscriptionSelected(group) },
                             onViewDetails = { onViewSubscriptionDetails(group) }
                         )
                     }
@@ -227,7 +251,16 @@ private fun SubscriptionGroupSelectionScreen(
                         UserSubscriptionGroupCard(
                             group = group,
                             selected = selectedNodeGroupId == group.id,
-                            onClick = { onUserGroupSelected(group) },
+                            onClick = {
+                                if (editMode) {
+                                    editingGroupId = group.id.removePrefix("imported:")
+                                    groupName = group.name
+                                    subscriptionInput = group.subscriptionUrl.orEmpty()
+                                    editDialogVisible = true
+                                } else {
+                                    onUserGroupSelected(group)
+                                }
+                            },
                             onViewDetails = { onViewUserGroupDetails(group) }
                         )
                     }
@@ -236,7 +269,7 @@ private fun SubscriptionGroupSelectionScreen(
                             FavoriteGroupCard(
                                 nodeCount = favoriteNodeCount,
                                 selected = favoriteSelected,
-                                onClick = onFavoritesSelected,
+                                onClick = { if (!editMode) onFavoritesSelected() },
                                 onViewDetails = onViewFavoritesDetails
                             )
                         }
@@ -355,6 +388,110 @@ private fun SubscriptionGroupSelectionScreen(
                     } else {
                         Text("添加")
                     }
+                }
+            }
+        )
+    }
+
+    if (editDialogVisible && !deleteDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { if (!isSubmitting) editDialogVisible = false },
+            title = { Text("编辑订阅组") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = groupName,
+                        onValueChange = { groupName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("组名") },
+                        enabled = !isSubmitting
+                    )
+                    OutlinedTextField(
+                        value = subscriptionInput,
+                        onValueChange = { subscriptionInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4,
+                        label = { Text("订阅连接（可选）") },
+                        placeholder = { Text("留空则保留当前节点和链接") },
+                        enabled = !isSubmitting
+                    )
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = { editDialogVisible = false },
+                        enabled = !isSubmitting
+                    ) {
+                        Text("取消")
+                    }
+                    TextButton(
+                        onClick = { deleteDialogVisible = true },
+                        enabled = !isSubmitting
+                    ) {
+                        Text("删除", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSubmitting = true
+                        onUpdateSubscriptionGroup(
+                            editingGroupId,
+                            groupName,
+                            subscriptionInput.takeIf(String::isNotBlank)
+                        ) { success ->
+                            isSubmitting = false
+                            if (success) {
+                                editDialogVisible = false
+                                editMode = false
+                            }
+                        }
+                    },
+                    enabled = groupName.isNotBlank() && !isSubmitting
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    } else {
+                        Text("保存")
+                    }
+                }
+            }
+        )
+    }
+
+    if (deleteDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { if (!isSubmitting) deleteDialogVisible = false },
+            title = { Text("删除订阅组？") },
+            text = { Text("删除后，该组及其中的节点都会被移除，且无法恢复。") },
+            dismissButton = {
+                TextButton(
+                    onClick = { deleteDialogVisible = false },
+                    enabled = !isSubmitting
+                ) {
+                    Text("取消")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isSubmitting = true
+                        onDeleteSubscriptionGroup(editingGroupId) { success ->
+                            isSubmitting = false
+                            if (success) {
+                                deleteDialogVisible = false
+                                editDialogVisible = false
+                                editMode = false
+                            }
+                        }
+                    },
+                    enabled = !isSubmitting
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
                 }
             }
         )

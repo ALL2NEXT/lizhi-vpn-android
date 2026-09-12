@@ -116,6 +116,48 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
+                        val updateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit =
+                            { groupId, name, input, onComplete ->
+                                viewModel.updateSubscriptionGroup(groupId, name, input) { result, importedCount ->
+                                    val message = when (result) {
+                                        MainViewModel.SubscriptionGroupEditResult.UPDATED ->
+                                            if (importedCount > 0) {
+                                                "订阅组已更新，导入${importedCount}个节点"
+                                            } else {
+                                                "订阅组已更新"
+                                            }
+                                        MainViewModel.SubscriptionGroupEditResult.INVALID ->
+                                            "未找到可导入节点或链接无效"
+                                        MainViewModel.SubscriptionGroupEditResult.FETCH_FAILED ->
+                                            "订阅链接获取失败，请检查地址和网络"
+                                        MainViewModel.SubscriptionGroupEditResult.NOT_FOUND ->
+                                            "订阅组不存在"
+                                    }
+                                    Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+                                    onComplete(
+                                        result == MainViewModel.SubscriptionGroupEditResult.UPDATED
+                                    )
+                                }
+                            }
+                        val deleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit =
+                            { groupId, onComplete ->
+                                viewModel.deleteSubscriptionGroup(groupId) { success ->
+                                    if (!success) {
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "订阅组不存在",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "订阅组已删除",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                    onComplete(success)
+                                }
+                            }
                         NavHost(
                             navController = navController,
                             startDestination = AppRoute.MAIN,
@@ -225,6 +267,12 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onCreateSubscriptionGroup = { name, input, onComplete ->
                                                     createSubscriptionGroup(name, input, onComplete)
+                                                },
+                                                onUpdateSubscriptionGroup = { groupId, name, input, onComplete ->
+                                                    updateSubscriptionGroup(groupId, name, input, onComplete)
+                                                },
+                                                onDeleteSubscriptionGroup = { groupId, onComplete ->
+                                                    deleteSubscriptionGroup(groupId, onComplete)
                                                 },
                                                 onScanQrCode = {
                                                     navigateTo(AppRoute.QR_SCANNER)

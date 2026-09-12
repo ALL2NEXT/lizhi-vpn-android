@@ -67,5 +67,6 @@ data class NodeGroupSummary(
     val name: String,
     val type: NodeGroupType,
     val nodeCount: Int,
-    val isVirtual: Boolean = false
+    val isVirtual: Boolean = false,
+    val subscriptionUrl: String? = null
 )

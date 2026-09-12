@@ -73,6 +73,9 @@ interface NodeDao {
     @Query("SELECT * FROM nodes WHERE id = :id")
     suspend fun getNodeById(id: String): Node?
 
+    @Query("SELECT * FROM node_groups WHERE id = :groupId LIMIT 1")
+    suspend fun getNodeGroupById(groupId: String): NodeGroupEntity?
+
     @Query("SELECT * FROM nodes WHERE id = :id")
     fun observeNodeById(id: String): Flow<Node?>
 
@@ -107,6 +110,49 @@ interface NodeDao {
 
     @Query("DELETE FROM node_groups WHERE id = :groupId")
     suspend fun deleteNodeGroup(groupId: String)
+
+    @Query("DELETE FROM nodes WHERE source = 'LOCAL_GROUP' AND subscriptionSourceId = :groupId")
+    suspend fun deleteLocalGroupNodes(groupId: String)
+
+    @Query("UPDATE node_groups SET name = :name, subscriptionUrl = :subscriptionUrl WHERE id = :groupId")
+    suspend fun updateNodeGroup(groupId: String, name: String, subscriptionUrl: String?): Int
+
+    @Query("UPDATE nodes SET subscriptionSourceName = :name WHERE source = 'LOCAL_GROUP' AND subscriptionSourceId = :groupId")
+    suspend fun updateLocalGroupNodeNames(groupId: String, name: String): Int
+
+    @Transaction
+    suspend fun updateNodeGroupMetadata(
+        groupId: String,
+        name: String,
+        subscriptionUrl: String?
+    ): Boolean {
+        if (updateNodeGroup(groupId, name, subscriptionUrl) == 0) return false
+        updateLocalGroupNodeNames(groupId, name)
+        return true
+    }
+
+    @Transaction
+    suspend fun replaceLocalGroupNodes(
+        groupId: String,
+        name: String,
+        subscriptionUrl: String?,
+        nodes: List<Node>,
+        members: List<NodeGroupMemberEntity>
+    ): Boolean {
+        if (!updateNodeGroupMetadata(groupId, name, subscriptionUrl)) return false
+        deleteNodeGroupMembers(groupId)
+        deleteLocalGroupNodes(groupId)
+        if (nodes.isNotEmpty()) insertNodes(nodes)
+        if (members.isNotEmpty()) insertNodeGroupMembers(members)
+        return true
+    }
+
+    @Transaction
+    suspend fun deleteNodeGroupWithNodes(groupId: String) {
+        deleteNodeGroupMembers(groupId)
+        deleteLocalGroupNodes(groupId)
+        deleteNodeGroup(groupId)
+    }
 
     @Transaction
     suspend fun replaceNodeGroupMembers(groupId: String, members: List<NodeGroupMemberEntity>) {

@@ -217,7 +217,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     name = item.group.name,
                     type = runCatching { NodeGroupType.valueOf(item.group.type) }
                         .getOrDefault(NodeGroupType.IMPORTED),
-                    nodeCount = item.nodeCount
+                    nodeCount = item.nodeCount,
+                    subscriptionUrl = item.group.subscriptionUrl
                 )
             }
         }
@@ -1173,6 +1174,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         FETCH_FAILED
     }
 
+    enum class SubscriptionGroupEditResult {
+        UPDATED,
+        INVALID,
+        FETCH_FAILED,
+        NOT_FOUND
+    }
+
     /**
      * 创建用户本地订阅组。输入可以是订阅链接、节点链接列表，也可以为空以先创建空组。
      */
@@ -1264,6 +1272,145 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
             settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
             onResult(SubscriptionGroupCreateResult.CREATED, localNodes.size)
+        }
+    }
+
+    /** 更新本地订阅组名称及可选订阅内容。输入链接变化时会重新导入组内节点。 */
+    fun updateSubscriptionGroup(
+        groupId: String,
+        name: String,
+        input: String?,
+        onResult: (SubscriptionGroupEditResult, Int) -> Unit = { _, _ -> }
+    ) {
+        viewModelScope.launch {
+            val normalizedName = name.trim()
+            if (normalizedName.isBlank()) {
+                onResult(SubscriptionGroupEditResult.INVALID, 0)
+                return@launch
+            }
+
+            val dao = nodeDao()
+            val existingGroup = withContext(Dispatchers.IO) {
+                dao.getNodeGroupById(groupId)
+            }
+            if (existingGroup == null) {
+                onResult(SubscriptionGroupEditResult.NOT_FOUND, 0)
+                return@launch
+            }
+
+            val normalizedInput = input?.trim().orEmpty()
+            val currentUrl = existingGroup.subscriptionUrl.orEmpty()
+            if (normalizedInput.isBlank() || normalizedInput == currentUrl) {
+                val updated = withContext(Dispatchers.IO) {
+                    dao.updateNodeGroupMetadata(
+                        groupId = groupId,
+                        name = normalizedName,
+                        subscriptionUrl = existingGroup.subscriptionUrl
+                    )
+                }
+                onResult(
+                    if (updated) SubscriptionGroupEditResult.UPDATED
+                    else SubscriptionGroupEditResult.NOT_FOUND,
+                    0
+                )
+                return@launch
+            }
+
+            val subscriptionUrl = SubscriptionImportUrl.detect(normalizedInput)
+            val parsedNodes = if (subscriptionUrl != null) {
+                withContext(Dispatchers.IO) {
+                    subscriptionParser.fetchAndParse(subscriptionUrl)
+                }
+            } else {
+                withContext(Dispatchers.Default) {
+                    Result.success(subscriptionParser.parseSubscription(normalizedInput))
+                }
+            }
+            if (parsedNodes.isFailure) {
+                Log.e(tag, "Unable to fetch updated user subscription group", parsedNodes.exceptionOrNull())
+                onResult(SubscriptionGroupEditResult.FETCH_FAILED, 0)
+                return@launch
+            }
+
+            val compatibleNodes = withContext(Dispatchers.IO) {
+                parsedNodes.getOrThrow().filter { node ->
+                    isNodeCoreConfigCompatible(node)
+                }
+            }
+            if (compatibleNodes.isEmpty()) {
+                onResult(SubscriptionGroupEditResult.INVALID, 0)
+                return@launch
+            }
+
+            val localNodes = compatibleNodes
+                .distinctBy(Node::getRawLinkPlain)
+                .mapIndexed { index, node ->
+                    node.copy(
+                        id = "${groupId}_$index",
+                        source = NodeSource.LOCAL_GROUP,
+                        subscriptionSourceId = groupId,
+                        subscriptionSourceName = normalizedName,
+                        favoriteSourceNodeId = null,
+                        favoriteCreatedAt = 0L,
+                        latency = -1,
+                        tcpingLatency = -1,
+                        urlTestLatency = -1,
+                        isAvailable = true,
+                        lastTestedAt = 0L,
+                        downloadMbps = 0f,
+                        uploadMbps = 0f
+                    )
+                }
+            val members = localNodes.mapIndexed { index, node ->
+                NodeGroupMemberEntity(
+                    groupId = groupId,
+                    nodeId = node.id,
+                    sortOrder = index
+                )
+            }
+            val updated = withContext(Dispatchers.IO) {
+                dao.replaceLocalGroupNodes(
+                    groupId = groupId,
+                    name = normalizedName,
+                    subscriptionUrl = subscriptionUrl,
+                    nodes = localNodes,
+                    members = members
+                )
+            }
+            onResult(
+                if (updated) SubscriptionGroupEditResult.UPDATED
+                else SubscriptionGroupEditResult.NOT_FOUND,
+                localNodes.size
+            )
+        }
+    }
+
+    /** 删除本地订阅组及其节点。 */
+    fun deleteSubscriptionGroup(groupId: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val deleted = withContext(Dispatchers.IO) {
+                val selectedGroupId = settingsRepository.selectedNodeGroupId.first()
+                val dao = nodeDao()
+                if (dao.getNodeGroupById(groupId) == null) {
+                    false
+                } else {
+                    dao.deleteNodeGroupWithNodes(groupId)
+                    if (selectedGroupId == NodeGroupKey.Imported(groupId).value) {
+                        val fallbackSourceId = activeSubscriptionSourceId.value
+                        settingsRepository.setSelectedCountryCode(null)
+                        settingsRepository.setSelectedSubscriptionSourceId(fallbackSourceId)
+                        settingsRepository.setSelectedNodeGroupId(
+                            fallbackSourceId
+                                ?.takeIf(String::isNotBlank)
+                                ?.let { NodeGroupKey.Subscription(it).value }
+                        )
+                        settingsRepository.setSelectedNodeId(null)
+                        settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
+                    }
+                    true
+                }
+            }
+            onResult(deleted)
         }
     }
 
