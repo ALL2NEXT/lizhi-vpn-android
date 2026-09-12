@@ -71,7 +71,7 @@ fun SpeedTestSchemesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "主页图标的点击和长按都可以绑定一个方案。方案会按 TCPing、204 URL 和带宽测速的结果选择节点。",
+                text = "主页图标的点击和长按都可以绑定一个方案。测速按 1 TCPing、2 204 URL、3 带宽测速顺序执行；全部关闭时直接连接已选节点或当前组第一个节点。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
@@ -260,10 +260,14 @@ private fun SpeedTestSchemeCard(
                 }
                 Text(
                     text = buildString {
-                        append(if (scheme.testAllNodes) "测试所有节点" else "测试当前节点组")
-                        append(" · TCPing ${scheme.tcpingPercent}%")
-                        append(" · URL ${scheme.urlTestPercent}%")
-                        append(" · 带宽 ${scheme.bandwidthPercent}%")
+                        if (!scheme.tcpingEnabled && !scheme.urlTestEnabled && !scheme.bandwidthEnabled) {
+                            append("不测速，直接连接已选节点或当前组第一个节点")
+                        } else {
+                            append(if (scheme.testAllNodes) "测试所有节点" else "测试当前节点组")
+                            if (scheme.tcpingEnabled) append(" · 1 TCPing ${scheme.tcpingPercent}%")
+                            if (scheme.urlTestEnabled) append(" · 2 204 URL ${scheme.urlTestPercent}%")
+                            if (scheme.bandwidthEnabled) append(" · 3 带宽 ${scheme.bandwidthPercent}%")
+                        }
                     },
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

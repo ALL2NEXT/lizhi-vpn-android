@@ -3,15 +3,17 @@ package xyz.a202132.app.data.model
 import java.util.UUID
 
 /**
- * A reusable node selection recipe.  A recipe always runs the same three
- * probes (TCPing, 204 URL and bandwidth) but controls their scope and
- * sampling independently.
+ * 可复用的节点选择方案。测速阶段按 TCPing、204 URL、带宽测速的顺序执行，
+ * 每个阶段都可以单独开关，并独立配置测速范围和参数。
  */
 data class SpeedTestScheme(
     val id: String,
     val name: String,
     val builtIn: Boolean = false,
     val testAllNodes: Boolean = false,
+    val tcpingEnabled: Boolean = true,
+    val urlTestEnabled: Boolean = true,
+    val bandwidthEnabled: Boolean = true,
     val tcpingPercent: Int = 100,
     val urlTestPercent: Int = 50,
     val bandwidthPercent: Int = 50,
@@ -42,7 +44,7 @@ data class SpeedTestScheme(
             bandwidthTestConcurrency: Int = 1
         ) = SpeedTestScheme(
             id = STANDARD_ID,
-            name = "标准测速",
+            name = "默认方案1",
             builtIn = true,
             testAllNodes = false,
             tcpingPercent = tcpingPercent,
@@ -72,7 +74,7 @@ data class SpeedTestScheme(
             bandwidthTestConcurrency: Int = 1
         ) = SpeedTestScheme(
             id = DEEP_ID,
-            name = "全面测速",
+            name = "默认方案2",
             builtIn = true,
             testAllNodes = true,
             tcpingPercent = tcpingPercent,

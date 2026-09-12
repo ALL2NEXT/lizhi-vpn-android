@@ -52,6 +52,9 @@ fun SpeedTestSchemeEditorScreen(
 
     var name by remember(scheme.id, scheme.name) { mutableStateOf(scheme.name) }
     var testAllNodes by remember(scheme.id, scheme.testAllNodes) { mutableStateOf(scheme.testAllNodes) }
+    var tcpingEnabled by remember(scheme.id, scheme.tcpingEnabled) { mutableStateOf(scheme.tcpingEnabled) }
+    var urlTestEnabled by remember(scheme.id, scheme.urlTestEnabled) { mutableStateOf(scheme.urlTestEnabled) }
+    var bandwidthEnabled by remember(scheme.id, scheme.bandwidthEnabled) { mutableStateOf(scheme.bandwidthEnabled) }
     var tcpingPercent by remember(scheme.id, scheme.tcpingPercent) { mutableStateOf(scheme.tcpingPercent.toString()) }
     var urlPercent by remember(scheme.id, scheme.urlTestPercent) { mutableStateOf(scheme.urlTestPercent.toString()) }
     var bandwidthPercent by remember(scheme.id, scheme.bandwidthPercent) { mutableStateOf(scheme.bandwidthPercent.toString()) }
@@ -92,22 +95,31 @@ fun SpeedTestSchemeEditorScreen(
                 }
             }
 
-            SchemeCard(title = "TCPing") {
-                NumberInput("候选比例 (%)", tcpingPercent) { tcpingPercent = it }
-                NumberInput("TCPing 超时 (ms)", tcpingTimeout) { tcpingTimeout = it }
-                NumberInput("TCPing 并发", tcpingConcurrency) { tcpingConcurrency = it }
+            SchemeCard(
+                title = "1. TCPing",
+                enabled = tcpingEnabled,
+                onEnabledChange = { tcpingEnabled = it }
+            ) {
+                NumberInput("候选比例 (%)", tcpingPercent, enabled = tcpingEnabled) { tcpingPercent = it }
+                NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) { tcpingTimeout = it }
+                NumberInput("并发", tcpingConcurrency, enabled = tcpingEnabled) { tcpingConcurrency = it }
             }
 
-            SchemeCard(title = "204 URL") {
-                NumberInput("候选比例 (%)", urlPercent) { urlPercent = it }
-                NumberInput("超时 (ms)", urlTimeout) { urlTimeout = it }
-                NumberInput("并发", urlConcurrency) { urlConcurrency = it }
+            SchemeCard(
+                title = "2. 204 URL",
+                enabled = urlTestEnabled,
+                onEnabledChange = { urlTestEnabled = it }
+            ) {
+                NumberInput("候选比例 (%)", urlPercent, enabled = urlTestEnabled) { urlPercent = it }
+                NumberInput("超时 (ms)", urlTimeout, enabled = urlTestEnabled) { urlTimeout = it }
+                NumberInput("并发", urlConcurrency, enabled = urlTestEnabled) { urlConcurrency = it }
                 OutlinedTextField(
                     value = urlTestUrl,
                     onValueChange = { urlTestUrl = it },
                     label = { Text("204 URL 地址") },
                     singleLine = true,
-                    isError = UrlTestTargets.normalize(urlTestUrl) == null,
+                    enabled = urlTestEnabled,
+                    isError = urlTestEnabled && UrlTestTargets.normalize(urlTestUrl) == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -118,16 +130,21 @@ fun SpeedTestSchemeEditorScreen(
                 )
             }
 
-            SchemeCard(title = "带宽测速") {
-                NumberInput("候选比例 (%)", bandwidthPercent) { bandwidthPercent = it }
-                NumberInput("测速时长 (ms)", bandwidthDuration) { bandwidthDuration = it }
-                NumberInput("并发", bandwidthConcurrency) { bandwidthConcurrency = it }
+            SchemeCard(
+                title = "3. 带宽测速",
+                enabled = bandwidthEnabled,
+                onEnabledChange = { bandwidthEnabled = it }
+            ) {
+                NumberInput("候选比例 (%)", bandwidthPercent, enabled = bandwidthEnabled) { bandwidthPercent = it }
+                NumberInput("测速时长 (ms)", bandwidthDuration, enabled = bandwidthEnabled) { bandwidthDuration = it }
+                NumberInput("并发", bandwidthConcurrency, enabled = bandwidthEnabled) { bandwidthConcurrency = it }
                 OutlinedTextField(
                     value = bandwidthUrl,
                     onValueChange = { bandwidthUrl = it },
                     label = { Text("带宽下载地址") },
                     singleLine = true,
-                    isError = BandwidthTestTargets.normalize(bandwidthUrl) == null,
+                    enabled = bandwidthEnabled,
+                    isError = bandwidthEnabled && BandwidthTestTargets.normalize(bandwidthUrl) == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -147,13 +164,18 @@ fun SpeedTestSchemeEditorScreen(
                     val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
                     if (name.trim().isBlank()) {
                         error = "请输入方案名称"
-                    } else if (normalizedUrl == null || normalizedBandwidthUrl == null) {
+                    } else if ((urlTestEnabled && normalizedUrl == null) ||
+                        (bandwidthEnabled && normalizedBandwidthUrl == null)
+                    ) {
                         error = "请检查测速地址"
                     } else {
                         viewModel.upsertSpeedTestScheme(
                             scheme.copy(
                                 name = name.trim(),
                                 testAllNodes = testAllNodes,
+                                tcpingEnabled = tcpingEnabled,
+                                urlTestEnabled = urlTestEnabled,
+                                bandwidthEnabled = bandwidthEnabled,
                                 tcpingPercent = tcpingPercent.toIntOrNull() ?: scheme.tcpingPercent,
                                 urlTestPercent = urlPercent.toIntOrNull() ?: scheme.urlTestPercent,
                                 bandwidthPercent = bandwidthPercent.toIntOrNull() ?: scheme.bandwidthPercent,
@@ -167,8 +189,8 @@ fun SpeedTestSchemeEditorScreen(
                                     ?: scheme.urlTestConcurrency,
                                 bandwidthTestConcurrency = bandwidthConcurrency.toIntOrNull()
                                     ?: scheme.bandwidthTestConcurrency,
-                                urlTestUrl = normalizedUrl,
-                                bandwidthTestUrl = normalizedBandwidthUrl
+                                urlTestUrl = normalizedUrl ?: scheme.urlTestUrl,
+                                bandwidthTestUrl = normalizedBandwidthUrl ?: scheme.bandwidthTestUrl
                             )
                         )
                         error = null
@@ -183,7 +205,12 @@ fun SpeedTestSchemeEditorScreen(
 }
 
 @Composable
-private fun SchemeCard(title: String, content: @Composable () -> Unit) {
+private fun SchemeCard(
+    title: String,
+    enabled: Boolean? = null,
+    onEnabledChange: ((Boolean) -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -192,19 +219,31 @@ private fun SchemeCard(title: String, content: @Composable () -> Unit) {
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                if (enabled != null && onEnabledChange != null) {
+                    Spacer(Modifier.weight(1f))
+                    Switch(checked = enabled, onCheckedChange = onEnabledChange)
+                }
+            }
             content()
         }
     }
 }
 
 @Composable
-private fun NumberInput(label: String, value: String, onValueChange: (String) -> Unit) {
+private fun NumberInput(
+    label: String,
+    value: String,
+    enabled: Boolean = true,
+    onValueChange: (String) -> Unit
+) {
     OutlinedTextField(
         value = value,
         onValueChange = { onValueChange(it.filter(Char::isDigit)) },
         label = { Text(label) },
         singleLine = true,
+        enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth()
     )

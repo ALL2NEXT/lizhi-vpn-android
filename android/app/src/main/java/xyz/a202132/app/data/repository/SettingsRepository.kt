@@ -734,6 +734,9 @@ class SettingsRepository(private val context: Context) {
                                         name = item.optString("name", "我的方案"),
                                         builtIn = item.optBoolean("builtIn", false),
                                         testAllNodes = item.optBoolean("testAllNodes", false),
+                                        tcpingEnabled = item.optBoolean("tcpingEnabled", true),
+                                        urlTestEnabled = item.optBoolean("urlTestEnabled", true),
+                                        bandwidthEnabled = item.optBoolean("bandwidthEnabled", true),
                                         tcpingPercent = item.optInt("tcpingPercent", 100),
                                         urlTestPercent = item.optInt("urlTestPercent", 50),
                                         bandwidthPercent = item.optInt("bandwidthPercent", 50),
@@ -774,8 +777,17 @@ class SettingsRepository(private val context: Context) {
     }
 
     private fun normalizeSpeedTestScheme(scheme: SpeedTestScheme): SpeedTestScheme {
+        // 兼容已保存的旧内置方案名称，同时保留用户对内置方案名称的自定义修改。
+        val trimmedName = scheme.name.trim()
+        val normalizedName = when {
+            scheme.id == SpeedTestScheme.STANDARD_ID &&
+                (trimmedName.isBlank() || trimmedName == "标准测速") -> "默认方案1"
+            scheme.id == SpeedTestScheme.DEEP_ID &&
+                (trimmedName.isBlank() || trimmedName == "全面测速") -> "默认方案2"
+            else -> trimmedName.ifBlank { if (scheme.builtIn) "测速方案" else "我的方案" }
+        }
         return scheme.copy(
-            name = scheme.name.trim().ifBlank { if (scheme.builtIn) "测速方案" else "我的方案" },
+            name = normalizedName,
             tcpingPercent = scheme.tcpingPercent.coerceIn(1, 100),
             urlTestPercent = scheme.urlTestPercent.coerceIn(1, 100),
             bandwidthPercent = scheme.bandwidthPercent.coerceIn(1, 100),
@@ -801,6 +813,9 @@ class SettingsRepository(private val context: Context) {
                     put("name", normalized.name)
                     put("builtIn", normalized.builtIn)
                     put("testAllNodes", normalized.testAllNodes)
+                    put("tcpingEnabled", normalized.tcpingEnabled)
+                    put("urlTestEnabled", normalized.urlTestEnabled)
+                    put("bandwidthEnabled", normalized.bandwidthEnabled)
                     put("tcpingPercent", normalized.tcpingPercent)
                     put("urlTestPercent", normalized.urlTestPercent)
                     put("bandwidthPercent", normalized.bandwidthPercent)

@@ -476,6 +476,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _error.value = "测速方案不存在"
                     return@launch
                 }
+            if (!scheme.tcpingEnabled && !scheme.urlTestEnabled && !scheme.bandwidthEnabled) {
+                // 三个测速阶段都关闭时按普通连接处理，不启动测速流程。
+                startSelectedOrFirstConnection()
+                return@launch
+            }
             if (!GlobalTestExecution.tryStart("测速方案：${scheme.name}")) {
                 _error.value = GlobalTestExecution.busyHint()
                 return@launch
@@ -493,74 +498,83 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                val tcpingNodes = takeTopPercent(allNodes, scheme.tcpingPercent)
-                _testingLabel.value = "${scheme.name}：TCPing 测试中..."
-                val tcpingResults = internalTestNodes(
-                    currentNodes = tcpingNodes,
-                    concurrency = scheme.tcpingConcurrency,
-                    timeoutMs = scheme.tcpingTimeoutMs
-                ) { completed, total ->
-                    _testingLabel.value = "${scheme.name}：TCPing ($completed/$total)"
-                }
                 val nodesById = allNodes.associateBy { it.id }
-                val tcpingCandidates = tcpingResults
-                    .filter { it.isAvailable && it.latency > 0 }
-                    .sortedBy { it.latency }
-                    .mapNotNull { nodesById[it.nodeId] }
-                if (tcpingCandidates.isEmpty()) {
-                    _error.value = "${scheme.name}：TCPing 未找到可用节点"
-                    return@launch
-                }
+                var candidates = allNodes
 
-                val urlTestNodes = takeTopPercent(tcpingCandidates, scheme.urlTestPercent)
-                val urlTestResults = runUrlTestNodes(
-                    nodes = urlTestNodes,
-                    labelPrefix = "${scheme.name}：URL Test 204",
-                    concurrency = scheme.urlTestConcurrency,
-                    timeoutMs = scheme.urlTestTimeoutMs,
-                    targetUrl = scheme.urlTestUrl
-                )
-                applyUrlTestResults(urlTestResults)
-                val urlTestCandidates = urlTestResults
-                    .filter { it.isAvailable && it.latency > 0 }
-                    .sortedBy { it.latency }
-                    .mapNotNull { nodesById[it.nodeId] }
-                if (urlTestCandidates.isEmpty()) {
-                    _error.value = "${scheme.name}：URL Test 未找到可用节点"
-                    return@launch
-                }
-
-                val speedTestNodes = takeTopPercent(urlTestCandidates, scheme.bandwidthPercent)
-                val speedResults = speedTestNodes
-                    .chunked(scheme.bandwidthTestConcurrency)
-                    .flatMapIndexed { batchIndex, batch ->
-                        coroutineScope {
-                            batch.map { node ->
-                                async {
-                                    val speedMbps = testNodeDownloadBandwidthMbps(
-                                        node = node,
-                                        durationMs = scheme.bandwidthTestDurationMs,
-                                        downloadUrl = scheme.bandwidthTestUrl
-                                    )
-                                    nodeDao().updateDownloadMbps(node.id, speedMbps)
-                                    node to speedMbps
-                                }
-                            }.awaitAll()
-                        }.also {
-                            val completed = ((batchIndex + 1) * scheme.bandwidthTestConcurrency)
-                                .coerceAtMost(speedTestNodes.size)
-                            _testingLabel.value =
-                                "${scheme.name}：带宽测速 ($completed/${speedTestNodes.size})"
-                        }
+                // 阶段顺序固定为 1 -> 2 -> 3；关闭任一阶段时跳过，但不改变后续顺序。
+                if (scheme.tcpingEnabled) {
+                    val tcpingNodes = takeTopPercent(candidates, scheme.tcpingPercent)
+                    _testingLabel.value = "${scheme.name}：TCPing 测试中..."
+                    val tcpingResults = internalTestNodes(
+                        currentNodes = tcpingNodes,
+                        concurrency = scheme.tcpingConcurrency,
+                        timeoutMs = scheme.tcpingTimeoutMs
+                    ) { completed, total ->
+                        _testingLabel.value = "${scheme.name}：TCPing ($completed/$total)"
                     }
+                    candidates = tcpingResults
+                        .filter { it.isAvailable && it.latency > 0 }
+                        .sortedBy { it.latency }
+                        .mapNotNull { nodesById[it.nodeId] }
+                    if (candidates.isEmpty()) {
+                        _error.value = "${scheme.name}：TCPing 未找到可用节点"
+                        return@launch
+                    }
+                }
 
-                val bestNode = speedResults
-                    .sortedWith(
-                        compareByDescending<Pair<Node, Float>> { it.second }
-                            .thenBy { it.first.latency }
+                if (scheme.urlTestEnabled) {
+                    val urlTestNodes = takeTopPercent(candidates, scheme.urlTestPercent)
+                    val urlTestResults = runUrlTestNodes(
+                        nodes = urlTestNodes,
+                        labelPrefix = "${scheme.name}：URL Test 204",
+                        concurrency = scheme.urlTestConcurrency,
+                        timeoutMs = scheme.urlTestTimeoutMs,
+                        targetUrl = scheme.urlTestUrl
                     )
-                    .firstOrNull()?.first
-                    ?: speedTestNodes.firstOrNull()
+                    applyUrlTestResults(urlTestResults)
+                    candidates = urlTestResults
+                        .filter { it.isAvailable && it.latency > 0 }
+                        .sortedBy { it.latency }
+                        .mapNotNull { nodesById[it.nodeId] }
+                    if (candidates.isEmpty()) {
+                        _error.value = "${scheme.name}：URL Test 未找到可用节点"
+                        return@launch
+                    }
+                }
+
+                val bestNode = if (scheme.bandwidthEnabled) {
+                    val speedTestNodes = takeTopPercent(candidates, scheme.bandwidthPercent)
+                    val speedResults = speedTestNodes
+                        .chunked(scheme.bandwidthTestConcurrency)
+                        .flatMapIndexed { batchIndex, batch ->
+                            coroutineScope {
+                                batch.map { node ->
+                                    async {
+                                        val speedMbps = testNodeDownloadBandwidthMbps(
+                                            node = node,
+                                            durationMs = scheme.bandwidthTestDurationMs,
+                                            downloadUrl = scheme.bandwidthTestUrl
+                                        )
+                                        nodeDao().updateDownloadMbps(node.id, speedMbps)
+                                        node to speedMbps
+                                    }
+                                }.awaitAll()
+                            }.also {
+                                val completed = ((batchIndex + 1) * scheme.bandwidthTestConcurrency)
+                                    .coerceAtMost(speedTestNodes.size)
+                                _testingLabel.value =
+                                    "${scheme.name}：带宽测速 ($completed/${speedTestNodes.size})"
+                            }
+                        }
+                    speedResults
+                        .sortedWith(
+                            compareByDescending<Pair<Node, Float>> { it.second }
+                                .thenBy { it.first.latency }
+                        )
+                        .firstOrNull()?.first
+                } else {
+                    candidates.firstOrNull()
+                }
                 if (bestNode == null) {
                     _error.value = "测速未找到可连接节点"
                     return@launch
