@@ -10,7 +10,8 @@ import xyz.a202132.app.util.CountryCodeResolver
 internal object SpeedTestScopeResolver {
     fun selectCandidates(
         currentNodes: List<Node>,
-        allSubscriptionNodes: List<Node>,
+        allNodes: List<Node>,
+        specifiedGroupNodes: Map<String, List<Node>>,
         groupingMode: NodeGroupingMode,
         scope: SpeedTestScope,
         specifiedGroupIds: Set<String>,
@@ -20,7 +21,7 @@ internal object SpeedTestScopeResolver {
             val normalizedCountryCode =
                 CountryCodeResolver.normalizeCountryCode(selectedCountryCode)
             if (normalizedCountryCode != null) {
-                return allSubscriptionNodes.filter { node ->
+                return allNodes.filter { node ->
                     node.source == NodeSource.SUBSCRIPTION &&
                         node.getCountryCode() == normalizedCountryCode
                 }
@@ -29,13 +30,10 @@ internal object SpeedTestScopeResolver {
 
         return when (scope) {
             SpeedTestScope.CURRENT_GROUP -> currentNodes
-            SpeedTestScope.SPECIFIED_GROUPS -> allSubscriptionNodes.filter { node ->
-                node.source == NodeSource.SUBSCRIPTION &&
-                    node.subscriptionSourceId in specifiedGroupIds
-            }
-            SpeedTestScope.ALL_GROUPS -> allSubscriptionNodes.filter { node ->
-                node.source == NodeSource.SUBSCRIPTION
-            }
+            SpeedTestScope.SPECIFIED_GROUPS -> specifiedGroupIds
+                .flatMap { groupId -> specifiedGroupNodes[groupId].orEmpty() }
+                .distinctBy(Node::id)
+            SpeedTestScope.ALL_GROUPS -> allNodes.distinctBy(Node::id)
         }
     }
 }

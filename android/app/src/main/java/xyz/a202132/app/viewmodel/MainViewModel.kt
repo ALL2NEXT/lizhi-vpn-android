@@ -223,6 +223,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** 测速方案可选择全部节点组：订阅组、地区组、用户组和收藏组。 */
+    val speedTestGroupOptions = combine(
+        subscriptionGroups,
+        countryOptions,
+        userSubscriptionGroups,
+        favoriteNodes
+    ) { subscriptions, countries, userGroups, favorites ->
+        buildList {
+            subscriptions.forEach { group ->
+                add(
+                    SpeedTestGroupOption(
+                        id = NodeGroupKey.Subscription(group.sourceId).value,
+                        name = "订阅组：${group.name}"
+                    )
+                )
+            }
+            countries.forEach { country ->
+                add(
+                    SpeedTestGroupOption(
+                        id = NodeGroupKey.Country(country.code).value,
+                        name = "地区组：${country.name}"
+                    )
+                )
+            }
+            userGroups.forEach { group ->
+                add(SpeedTestGroupOption(id = group.id, name = "用户组：${group.name}"))
+            }
+            if (favorites.isNotEmpty()) {
+                add(
+                    SpeedTestGroupOption(
+                        id = NodeGroupKey.Favorites.value,
+                        name = "收藏组"
+                    )
+                )
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     /** 节点分组详情页使用的用户组节点流。 */
     fun observeNodeGroupNodes(groupId: String): Flow<List<Node>> =
         nodeDaoFlow.flatMapLatest { it.getNodesByGroup(groupId) }
@@ -489,10 +527,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             _isTesting.value = true
             try {
+                val allNodeSnapshot = nodeDao().getAllNodes().first()
                 val allNodes = sortNodesForList(
                     SpeedTestScopeResolver.selectCandidates(
                         currentNodes = currentNodeListSnapshot(),
-                        allSubscriptionNodes = nodeDao().getSubscriptionNodes().first(),
+                        allNodes = allNodeSnapshot,
+                        specifiedGroupNodes = resolveSpeedTestGroupNodes(
+                            allNodes = allNodeSnapshot,
+                            groupIds = scheme.specifiedGroupIds
+                        ),
                         groupingMode = nodeGroupingMode.value,
                         scope = scheme.scope,
                         specifiedGroupIds = scheme.specifiedGroupIds,
@@ -1782,6 +1825,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             null -> nodeDao().getSubscriptionNodes().first()
         }
         sortNodesForList(snapshot)
+    }
+
+    /** 按稳定组 ID 解析指定组，支持订阅、地区、收藏和用户创建的本地组。 */
+    private suspend fun resolveSpeedTestGroupNodes(
+        allNodes: List<Node>,
+        groupIds: Set<String>
+    ): Map<String, List<Node>> {
+        if (groupIds.isEmpty()) return emptyMap()
+
+        val subscriptionNodes = allNodes.filter { it.source == NodeSource.SUBSCRIPTION }
+        val favoriteNodes = allNodes.filter { it.source == NodeSource.FAVORITE }
+        val dao = nodeDao()
+        return groupIds.associateWith { groupId ->
+            when (val group = NodeGroupKey.parse(groupId)) {
+                is NodeGroupKey.Subscription -> subscriptionNodes.filter {
+                    it.subscriptionSourceId == group.sourceId
+                }
+                is NodeGroupKey.Country -> subscriptionNodes.filter {
+                    it.getCountryCode() == group.countryCode
+                }
+                NodeGroupKey.Favorites -> favoriteNodes
+                is NodeGroupKey.Imported -> dao.getNodesByGroup(group.groupId).first()
+                null -> emptyList()
+            }
+        }
     }
 
     private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {

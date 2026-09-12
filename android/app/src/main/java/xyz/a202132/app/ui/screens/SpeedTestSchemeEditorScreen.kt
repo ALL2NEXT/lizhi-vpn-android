@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.SpeedTestScheme
+import xyz.a202132.app.data.model.SpeedTestGroupOption
 import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.ui.components.AppScreenScaffold
@@ -54,7 +55,7 @@ fun SpeedTestSchemeEditorScreen(
         return
     }
 
-    val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
+    val speedTestGroups by viewModel.speedTestGroupOptions.collectAsStateWithLifecycle()
     var name by remember(scheme.id, scheme.name) { mutableStateOf(scheme.name) }
     var scope by remember(scheme.id, scheme.scope) { mutableStateOf(scheme.scope) }
     var specifiedGroupIds by remember(scheme.id, scheme.specifiedGroupIds) {
@@ -75,6 +76,11 @@ fun SpeedTestSchemeEditorScreen(
     var urlTestUrl by remember(scheme.id, scheme.urlTestUrl) { mutableStateOf(scheme.urlTestUrl) }
     var bandwidthUrl by remember(scheme.id, scheme.bandwidthTestUrl) { mutableStateOf(scheme.bandwidthTestUrl) }
     var error by remember { mutableStateOf<String?>(null) }
+    var repositoryGroupsExpanded by remember(scheme.id) { mutableStateOf(true) }
+    var regionGroupsExpanded by remember(scheme.id) { mutableStateOf(true) }
+
+    val repositoryGroups = speedTestGroups.filterNot { it.id.startsWith("country:") }
+    val regionGroups = speedTestGroups.filter { it.id.startsWith("country:") }
 
     AppScreenScaffold(title = "编辑测速方案", subtitle = scheme.name, onBack = onBack) {
         Column(
@@ -104,13 +110,13 @@ fun SpeedTestSchemeEditorScreen(
                 )
                 ScopeOption(
                     title = "指定组",
-                    description = "仅测试下面选中的一个或多个订阅组",
+                    description = "仅测试下面选中的一个或多个节点组",
                     selected = scope == SpeedTestScope.SPECIFIED_GROUPS,
                     onClick = { scope = SpeedTestScope.SPECIFIED_GROUPS }
                 )
                 ScopeOption(
                     title = "所有组",
-                    description = "测试全部订阅组",
+                    description = "测试全部节点组",
                     selected = scope == SpeedTestScope.ALL_GROUPS,
                     onClick = { scope = SpeedTestScope.ALL_GROUPS }
                 )
@@ -120,39 +126,48 @@ fun SpeedTestSchemeEditorScreen(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(top = 4.dp)
                     )
-                    if (subscriptionGroups.isEmpty()) {
+                    if (speedTestGroups.isEmpty()) {
                         Text(
-                            "暂无可用订阅组，请先添加订阅。",
+                            "暂无可用节点组，请先添加订阅或节点组。",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    subscriptionGroups.forEach { group ->
-                        val checked = group.sourceId in specifiedGroupIds
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    specifiedGroupIds = if (checked) {
-                                        specifiedGroupIds - group.sourceId
-                                    } else {
-                                        specifiedGroupIds + group.sourceId
-                                    }
-                                },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = checked,
-                                onCheckedChange = { selected ->
-                                    specifiedGroupIds = if (selected) {
-                                        specifiedGroupIds + group.sourceId
-                                    } else {
-                                        specifiedGroupIds - group.sourceId
-                                    }
+                    CollapsibleGroupSection(
+                        title = "仓库组",
+                        count = repositoryGroups.size,
+                        expanded = repositoryGroupsExpanded,
+                        onToggle = { repositoryGroupsExpanded = !repositoryGroupsExpanded }
+                    ) {
+                        SpeedTestGroupCheckboxes(
+                            groups = repositoryGroups,
+                            selectedGroupIds = specifiedGroupIds,
+                            onCheckedChange = { groupId, selected ->
+                                specifiedGroupIds = if (selected) {
+                                    specifiedGroupIds + groupId
+                                } else {
+                                    specifiedGroupIds - groupId
                                 }
-                            )
-                            Text(group.name, color = MaterialTheme.colorScheme.onSurface)
-                        }
+                            }
+                        )
+                    }
+                    CollapsibleGroupSection(
+                        title = "地区组",
+                        count = regionGroups.size,
+                        expanded = regionGroupsExpanded,
+                        onToggle = { regionGroupsExpanded = !regionGroupsExpanded }
+                    ) {
+                        SpeedTestGroupCheckboxes(
+                            groups = regionGroups,
+                            selectedGroupIds = specifiedGroupIds,
+                            onCheckedChange = { groupId, selected ->
+                                specifiedGroupIds = if (selected) {
+                                    specifiedGroupIds + groupId
+                                } else {
+                                    specifiedGroupIds - groupId
+                                }
+                            }
+                        )
                     }
                 }
             }
@@ -290,6 +305,60 @@ private fun ScopeOption(
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun CollapsibleGroupSection(
+    title: String,
+    count: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(
+                "（$count）",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                if (expanded) "收起" else "展开",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 12.sp
+            )
+        }
+        if (expanded) content()
+    }
+}
+
+@Composable
+private fun SpeedTestGroupCheckboxes(
+    groups: List<SpeedTestGroupOption>,
+    selectedGroupIds: Set<String>,
+    onCheckedChange: (String, Boolean) -> Unit
+) {
+    groups.forEach { group ->
+        val checked = group.id in selectedGroupIds
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onCheckedChange(group.id, !checked) },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = { selected -> onCheckedChange(group.id, selected) }
+            )
+            Text(group.name, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

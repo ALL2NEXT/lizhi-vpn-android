@@ -16,7 +16,8 @@ class SpeedTestScopeResolverTest {
 
         val candidates = SpeedTestScopeResolver.selectCandidates(
             currentNodes = currentNodes,
-            allSubscriptionNodes = allNodes,
+            allNodes = allNodes,
+            specifiedGroupNodes = emptyMap(),
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
             scope = SpeedTestScope.CURRENT_GROUP,
             specifiedGroupIds = emptySet(),
@@ -27,7 +28,7 @@ class SpeedTestScopeResolverTest {
     }
 
     @Test
-    fun `全量测试使用所有订阅组`() {
+    fun `全量测试使用所有节点组`() {
         val allNodes = listOf(
             node("jp-a", "group-a", "JP"),
             node("us-a", "group-a", "US"),
@@ -37,14 +38,15 @@ class SpeedTestScopeResolverTest {
 
         val candidates = SpeedTestScopeResolver.selectCandidates(
             currentNodes = listOf(allNodes.first()),
-            allSubscriptionNodes = allNodes,
+            allNodes = allNodes,
+            specifiedGroupNodes = emptyMap(),
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
             scope = SpeedTestScope.ALL_GROUPS,
             specifiedGroupIds = emptySet(),
             selectedCountryCode = null
         )
 
-        assertEquals(listOf("jp-a", "us-a", "jp-b"), candidates.map(Node::id))
+        assertEquals(listOf("jp-a", "us-a", "jp-b", "favorite"), candidates.map(Node::id))
     }
 
     @Test
@@ -58,7 +60,8 @@ class SpeedTestScopeResolverTest {
 
         val candidates = SpeedTestScopeResolver.selectCandidates(
             currentNodes = listOf(allNodes[1]),
-            allSubscriptionNodes = allNodes,
+            allNodes = allNodes,
+            specifiedGroupNodes = emptyMap(),
             groupingMode = NodeGroupingMode.COUNTRY,
             scope = SpeedTestScope.CURRENT_GROUP,
             specifiedGroupIds = emptySet(),
@@ -75,7 +78,8 @@ class SpeedTestScopeResolverTest {
 
         val candidates = SpeedTestScopeResolver.selectCandidates(
             currentNodes = currentNodes,
-            allSubscriptionNodes = allNodes,
+            allNodes = allNodes,
+            specifiedGroupNodes = emptyMap(),
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
             scope = SpeedTestScope.CURRENT_GROUP,
             specifiedGroupIds = emptySet(),
@@ -95,10 +99,14 @@ class SpeedTestScopeResolverTest {
 
         val candidates = SpeedTestScopeResolver.selectCandidates(
             currentNodes = listOf(allNodes.first()),
-            allSubscriptionNodes = allNodes,
+            allNodes = allNodes,
+            specifiedGroupNodes = mapOf(
+                "subscription:group-a" to listOf(allNodes[0]),
+                "subscription:group-c" to listOf(allNodes[2])
+            ),
             groupingMode = NodeGroupingMode.SUBSCRIPTION,
             scope = SpeedTestScope.SPECIFIED_GROUPS,
-            specifiedGroupIds = setOf("group-a", "group-c"),
+            specifiedGroupIds = setOf("subscription:group-a", "subscription:group-c"),
             selectedCountryCode = null
         )
 

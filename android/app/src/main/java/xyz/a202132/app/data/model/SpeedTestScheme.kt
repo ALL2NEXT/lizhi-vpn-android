@@ -9,6 +9,12 @@ enum class SpeedTestScope {
     ALL_GROUPS
 }
 
+/** 测速方案编辑页可选择的节点组，ID 使用 NodeGroupKey 的稳定值。 */
+data class SpeedTestGroupOption(
+    val id: String,
+    val name: String
+)
+
 /**
  * 可复用的节点选择方案。测速阶段按 TCPing、204 URL、带宽测速的顺序执行，
  * 每个阶段都可以单独开关，并独立配置测速作用域和参数。
