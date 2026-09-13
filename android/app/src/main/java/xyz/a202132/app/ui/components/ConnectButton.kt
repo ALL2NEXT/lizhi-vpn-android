@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +35,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -163,12 +167,7 @@ fun ConnectButton(
             ) {
                 Image(
                     painter = painterResource(id = currentImage),
-                    contentDescription = when (displayState) {
-                        VpnState.CONNECTED -> "已连接"
-                        VpnState.CONNECTING -> "连接中"
-                        VpnState.DISCONNECTING -> "断开中"
-                        VpnState.DISCONNECTED -> "点击连接"
-                    },
+                    contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
@@ -176,6 +175,28 @@ fun ConnectButton(
                             scaleX = scale
                             scaleY = scale
                         }
+                )
+                // 自定义图片叠加在默认资源上方；图片加载失败时仍保留默认按钮。
+                customImage?.let { image ->
+                    Image(
+                        bitmap = image,
+                        contentDescription = null,
+                        // 连接按钮图片通常包含透明留白，保持完整显示以免裁切主体。
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val scale = pulseScale * pressScale
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                    )
+                }
+                // 手势层裁剪为圆形，图片本身保持完整显示，避免透明图片的角落可触发。
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
                         .combinedClickable(
                             enabled = enabled && !isConnecting,
                             indication = rememberRipple(bounded = true),
@@ -190,35 +211,15 @@ fun ConnectButton(
                             threshold = swipeThreshold,
                             onSwipe = onSwipe
                         )
-                )
-                // 自定义图片叠加在默认资源上方；图片加载失败时仍保留默认按钮。
-                customImage?.let { image ->
-                    Image(
-                        bitmap = image,
-                        contentDescription = "自定义连接状态图片",
-                        // 连接按钮图片通常包含透明留白，保持完整显示以免裁切主体。
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                val scale = pulseScale * pressScale
-                                scaleX = scale
-                                scaleY = scale
+                        .semantics {
+                            this.contentDescription = when (displayState) {
+                                VpnState.CONNECTED -> "已连接"
+                                VpnState.CONNECTING -> "连接中"
+                                VpnState.DISCONNECTING -> "断开中"
+                                VpnState.DISCONNECTED -> "点击连接"
                             }
-                            .combinedClickable(
-                                enabled = enabled && !isConnecting,
-                                indication = rememberRipple(bounded = true),
-                                interactionSource = remember { MutableInteractionSource() },
-                                onLongClick = onLongClick,
-                                onClick = onClick
-                            )
-                            .connectButtonSwipeGesture(
-                                enabled = swipeEnabled,
-                                threshold = swipeThreshold,
-                                onSwipe = onSwipe
-                            )
-                    )
-                }
+                        }
+                )
                 if (longPressEnabled && longPressProgress > 0f) {
                     CircularProgressIndicator(
                         progress = longPressProgress,
