@@ -12,6 +12,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.withFrameNanos
 import xyz.a202132.app.R
 import xyz.a202132.app.data.model.VpnState
 
@@ -156,33 +159,23 @@ fun ConnectButton(
         modifier = modifier
     ) {
         // 按钮图片 - 使用 Crossfade 实现平滑过渡，去除涟漪效果
-        Crossfade(
+    Crossfade(
             targetState = imageRes,
             animationSpec = tween(220),
             label = "buttonImage"
         ) { currentImage ->
             Box(
-                modifier = Modifier.size(buttonSize.dp),
+                modifier = Modifier.size((buttonSize * 1.42f).dp),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = currentImage),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val scale = pulseScale * pressScale
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                )
-                // 自定义图片叠加在默认资源上方；图片加载失败时仍保留默认按钮。
-                customImage?.let { image ->
+                RadialParticleEffect(modifier = Modifier.matchParentSize())
+                Box(
+                    modifier = Modifier.size(buttonSize.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Image(
-                        bitmap = image,
+                        painter = painterResource(id = currentImage),
                         contentDescription = null,
-                        // 连接按钮图片通常包含透明留白，保持完整显示以免裁切主体。
-                        contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
@@ -191,42 +184,58 @@ fun ConnectButton(
                                 scaleY = scale
                             }
                     )
-                }
-                // 手势层裁剪为圆形，图片本身保持完整显示，避免透明图片的角落可触发。
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .combinedClickable(
-                            enabled = enabled && !isConnecting,
-                            indication = rememberRipple(bounded = true),
-                            interactionSource = interactionSource,
-                            onClickLabel = if (vpnState == VpnState.DISCONNECTED) clickActionLabel else null,
-                            onLongClickLabel = if (onLongClick != null) longClickActionLabel else null,
-                            onLongClick = onLongClick,
-                            onClick = onClick
+                    // 自定义图片叠加在默认资源上方；图片加载失败时仍保留默认按钮。
+                    customImage?.let { image ->
+                        Image(
+                            bitmap = image,
+                            contentDescription = null,
+                            // 连接按钮图片通常包含透明留白，保持完整显示以免裁切主体。
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    val scale = pulseScale * pressScale
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
                         )
-                        .connectButtonSwipeGesture(
-                            enabled = swipeEnabled,
-                            threshold = swipeThreshold,
-                            onSwipe = onSwipe
-                        )
-                        .semantics {
-                            this.contentDescription = when (displayState) {
-                                VpnState.CONNECTED -> "已连接"
-                                VpnState.CONNECTING -> "连接中"
-                                VpnState.DISCONNECTING -> "断开中"
-                                VpnState.DISCONNECTED -> "点击连接"
+                    }
+                    // 手势层裁剪为圆形，图片本身保持完整显示，避免透明图片的角落可触发。
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .combinedClickable(
+                                enabled = enabled && !isConnecting,
+                                indication = rememberRipple(bounded = true),
+                                interactionSource = interactionSource,
+                                onClickLabel = if (vpnState == VpnState.DISCONNECTED) clickActionLabel else null,
+                                onLongClickLabel = if (onLongClick != null) longClickActionLabel else null,
+                                onLongClick = onLongClick,
+                                onClick = onClick
+                            )
+                            .connectButtonSwipeGesture(
+                                enabled = swipeEnabled,
+                                threshold = swipeThreshold,
+                                onSwipe = onSwipe
+                            )
+                            .semantics {
+                                this.contentDescription = when (displayState) {
+                                    VpnState.CONNECTED -> "已连接"
+                                    VpnState.CONNECTING -> "连接中"
+                                    VpnState.DISCONNECTING -> "断开中"
+                                    VpnState.DISCONNECTED -> "点击连接"
+                                }
                             }
-                        }
-                )
-                if (longPressEnabled && longPressProgress > 0f) {
-                    CircularProgressIndicator(
-                        progress = longPressProgress,
-                        modifier = Modifier.fillMaxSize().padding(3.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 5.dp
                     )
+                    if (longPressEnabled && longPressProgress > 0f) {
+                        CircularProgressIndicator(
+                            progress = longPressProgress,
+                            modifier = Modifier.fillMaxSize().padding(3.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 5.dp
+                        )
+                    }
                 }
             }
         }
@@ -247,6 +256,67 @@ fun ConnectButton(
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
                 lineHeight = if (customLabel != null) 26.sp else 20.sp
+            )
+        }
+    }
+}
+
+private data class RadialParticle(
+    val angle: Float,
+    val phase: Float,
+    val speed: Float,
+    val radiusDp: Float,
+    val color: Color
+)
+
+@Composable
+private fun RadialParticleEffect(modifier: Modifier = Modifier) {
+    // 使用持续帧时间并让每个粒子拥有独立速度，避免整组粒子同步重播。
+    val elapsedNanos = remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        val startedAt = withFrameNanos { it }
+        while (true) {
+            elapsedNanos.longValue = withFrameNanos { it - startedAt }
+        }
+    }
+    val particles = remember {
+        val colors = listOf(
+            Color(0xFF35D6FF),
+            Color(0xFF6C63FF),
+            Color(0xFFFF5CA8),
+            Color(0xFFFFC857),
+            Color(0xFF56E39F)
+        )
+        List(44) { index ->
+            RadialParticle(
+                angle = (index * 2.399963f) % (2f * Math.PI.toFloat()),
+                phase = ((index * 37) % 100) / 100f,
+                speed = 0.72f + index * 0.013f,
+                radiusDp = 1.1f + (index % 3) * 0.35f,
+                color = colors[index % colors.size]
+            )
+        }
+    }
+
+    Canvas(modifier = modifier) {
+        val center = Offset(size.width / 2f, size.height / 2f)
+        // 从图标内部开始发散，点阵会透过 PNG 的透明区域显示出来，实色图案仍在上层遮挡点阵。
+        val innerRadius = size.minDimension * 0.08f
+        val outerRadius = size.minDimension * 0.49f
+        val elapsedSeconds = elapsedNanos.longValue / 1_000_000_000f
+        particles.forEachIndexed { index, particle ->
+            val particleProgress = (elapsedSeconds * particle.speed / 3.2f + particle.phase) % 1f
+            val distance = innerRadius + (outerRadius - innerRadius) * particleProgress
+            val angle = particle.angle + kotlin.math.sin(elapsedSeconds * 0.4f + index) * 0.035f
+            val alpha = kotlin.math.sin(particleProgress * Math.PI.toFloat()) * 0.72f
+            val point = Offset(
+                x = center.x + kotlin.math.cos(angle) * distance,
+                y = center.y + kotlin.math.sin(angle) * distance
+            )
+            drawCircle(
+                color = particle.color.copy(alpha = alpha.coerceAtLeast(0f)),
+                radius = particle.radiusDp.dp.toPx() * (1f - particleProgress * 0.28f),
+                center = point
             )
         }
     }
