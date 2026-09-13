@@ -7,6 +7,8 @@ data class SkinScheme(
     val id: String,
     val name: String,
     val baseColorArgb: Long = SkinSettings.DEFAULT_BASE_COLOR_ARGB,
+    /** 主题模式，默认跟随系统。 */
+    val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,
     /** Android 12 及以上使用系统壁纸生成的动态配色，低版本回退到基础颜色。 */
     val monetEnabled: Boolean = false,
     /** 左侧设置栏顶部背景图。 */
@@ -25,6 +27,7 @@ data class SkinScheme(
         fun default(): SkinScheme = SkinScheme(
             id = DEFAULT_SCHEME_ID,
             name = "默认方案",
+            themeMode = SkinThemeMode.SYSTEM,
             monetEnabled = true
         )
 
@@ -38,6 +41,7 @@ data class SkinScheme(
 /** 用户可持久化的应用皮肤配置。 */
 data class SkinSettings(
     val baseColorArgb: Long = DEFAULT_BASE_COLOR_ARGB,
+    val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,
     val monetEnabled: Boolean = true,
     val customImagePath: String? = null,
     val homeDisconnectedImagePath: String? = null,

@@ -20,6 +20,7 @@ import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.SkinSettings
+import xyz.a202132.app.data.model.SkinThemeMode
 import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.data.model.UrlTestTargets
@@ -352,6 +353,7 @@ class SettingsRepository(private val context: Context) {
             ?: SkinScheme.default()
         SkinSettings(
             baseColorArgb = activeScheme.baseColorArgb,
+            themeMode = activeScheme.themeMode,
             monetEnabled = activeScheme.monetEnabled,
             customImagePath = activeScheme.customImagePath,
             homeDisconnectedImagePath = activeScheme.homeDisconnectedImagePath,
@@ -1100,6 +1102,9 @@ class SettingsRepository(private val context: Context) {
                                         SkinSettings.DEFAULT_BASE_COLOR_ARGB
                                     )
                                 ),
+                                themeMode = SkinThemeMode.fromStorage(
+                                    item.optString("themeMode").takeIf { it.isNotBlank() }
+                                ),
                                 monetEnabled = item.optBoolean("monetEnabled", false),
                                 customImagePath = item.optString("customImagePath")
                                     .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
@@ -1154,6 +1159,7 @@ class SettingsRepository(private val context: Context) {
                         put("id", scheme.id)
                         put("name", scheme.name)
                         put("baseColorArgb", normalizeSkinColor(scheme.baseColorArgb))
+                        put("themeMode", scheme.themeMode.storageName)
                         put("monetEnabled", scheme.monetEnabled)
                         scheme.customImagePath?.let { put("customImagePath", it) }
                         scheme.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }

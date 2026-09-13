@@ -6,12 +6,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.SideEffect
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import xyz.a202132.app.data.model.SkinThemeMode
 import xyz.a202132.app.data.model.SkinSettings
 
 private val DefaultLightColorScheme = lightColorScheme(
@@ -66,6 +68,33 @@ private fun skinColorScheme(baseColor: Color): ColorScheme {
     )
 }
 
+private fun skinDarkColorScheme(baseColor: Color): ColorScheme {
+    val primary = scaleColor(baseColor, 1.35f)
+    val secondary = scaleColor(primary, 1.08f)
+    val onPrimary = contentColorFor(primary)
+    val onSecondary = contentColorFor(secondary)
+
+    return darkColorScheme(
+        primary = primary,
+        onPrimary = onPrimary,
+        primaryContainer = scaleColor(primary, 0.72f),
+        onPrimaryContainer = Color.White,
+        secondary = secondary,
+        onSecondary = onSecondary,
+        secondaryContainer = scaleColor(secondary, 0.62f),
+        onSecondaryContainer = Color.White,
+        background = BackgroundDark,
+        onBackground = TextPrimaryDark,
+        surface = SurfaceDark,
+        onSurface = TextPrimaryDark,
+        surfaceVariant = CardDark,
+        onSurfaceVariant = TextSecondaryDark,
+        error = ErrorRed,
+        onError = Color.White,
+        outline = DividerDark
+    )
+}
+
 private fun scaleColor(color: Color, factor: Float): Color {
     return Color(
         red = (color.red * factor).coerceIn(0f, 1f),
@@ -94,12 +123,18 @@ fun FireflyTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
+    val isDarkTheme = when (skinSettings.themeMode) {
+        SkinThemeMode.LIGHT -> false
+        SkinThemeMode.DARK -> true
+        SkinThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
     val useMonetColors = skinSettings.monetEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val fallbackColorScheme = remember(skinSettings.baseColorArgb) {
-        skinColorScheme(Color(skinSettings.baseColorArgb))
+    val fallbackColorScheme = remember(skinSettings.baseColorArgb, isDarkTheme) {
+        val baseColor = Color(skinSettings.baseColorArgb)
+        if (isDarkTheme) skinDarkColorScheme(baseColor) else skinColorScheme(baseColor)
     }
     val colorScheme = if (useMonetColors) {
-        dynamicLightColorScheme(context)
+        if (isDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
         fallbackColorScheme
     }
@@ -110,9 +145,8 @@ fun FireflyTheme(
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
             window.navigationBarColor = colorScheme.background.toArgb()
-            // 亮色主题使用深色系统栏图标
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = true
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDarkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !isDarkTheme
         }
     }
 

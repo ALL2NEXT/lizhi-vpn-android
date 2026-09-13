@@ -25,3 +25,12 @@ val CardLight = Color(0xFFF8FAFC)
 val TextPrimaryLight = Color(0xFF0F172A)
 val TextSecondaryLight = Color(0xFF475569)
 val DividerLight = Color(0xFFE2E8F0)
+
+// 暗色主题颜色
+val BackgroundDark = Color(0xFF0F172A)
+val SurfaceDark = Color(0xFF111827)
+val CardDark = Color(0xFF1E293B)
+
+val TextPrimaryDark = Color(0xFFF8FAFC)
+val TextSecondaryDark = Color(0xFFCBD5E1)
+val DividerDark = Color(0xFF334155)

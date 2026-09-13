@@ -11,6 +11,7 @@ class SkinSettingsTest {
         val scheme = SkinScheme.default()
 
         assertTrue(scheme.monetEnabled)
+        assertEquals(SkinThemeMode.SYSTEM, scheme.themeMode)
         assertEquals(0xFF37474FL, scheme.baseColorArgb)
         assertEquals(SkinSettings.DEFAULT_BASE_COLOR_ARGB, scheme.baseColorArgb)
     }
@@ -20,6 +21,7 @@ class SkinSettingsTest {
         val scheme = SkinScheme.create("自定义")
 
         assertFalse(scheme.monetEnabled)
+        assertEquals(SkinThemeMode.SYSTEM, scheme.themeMode)
         assertEquals(SkinSettings.DEFAULT_BASE_COLOR_ARGB, scheme.baseColorArgb)
     }
 
@@ -28,6 +30,7 @@ class SkinSettingsTest {
         val settings = SkinSettings()
 
         assertTrue(settings.monetEnabled)
+        assertEquals(SkinThemeMode.SYSTEM, settings.themeMode)
         assertEquals(SkinScheme.DEFAULT_SCHEME_ID, settings.activeSchemeId)
         assertEquals(settings.activeScheme.monetEnabled, settings.monetEnabled)
         assertEquals(settings.activeScheme.baseColorArgb, settings.baseColorArgb)

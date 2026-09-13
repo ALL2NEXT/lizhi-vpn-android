@@ -52,6 +52,7 @@ import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 import java.io.File
 import java.util.Locale
+import xyz.a202132.app.data.model.SkinThemeMode
 
 private val EDITOR_PRESET_COLORS = listOf(
     "青绿色" to 0xFF00BFA5L,
@@ -258,6 +259,41 @@ fun SkinSchemeEditorScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("保存名称")
+                    }
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Text(
+                        text = "主题模式",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SkinThemeMode.entries.forEach { mode ->
+                            val buttonModifier = Modifier.weight(1f)
+                            if (scheme.themeMode == mode) {
+                                Button(
+                                    onClick = {
+                                        viewModel.upsertSkinScheme(scheme.copy(themeMode = mode))
+                                    },
+                                    modifier = buttonModifier
+                                ) {
+                                    Text(mode.displayName())
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.upsertSkinScheme(scheme.copy(themeMode = mode))
+                                    },
+                                    modifier = buttonModifier
+                                ) {
+                                    Text(mode.displayName())
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -466,4 +502,10 @@ fun SkinSchemeEditorScreen(
             }
         }
     }
+}
+
+private fun SkinThemeMode.displayName(): String = when (this) {
+    SkinThemeMode.LIGHT -> "明"
+    SkinThemeMode.DARK -> "暗"
+    SkinThemeMode.SYSTEM -> "跟随系统"
 }
