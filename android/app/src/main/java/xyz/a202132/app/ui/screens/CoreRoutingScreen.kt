@@ -1,6 +1,10 @@
 package xyz.a202132.app.ui.screens
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -9,22 +13,37 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import xyz.a202132.app.BuildConfig
+import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
-/** 展示核心在入站和出站之间执行的路由决策，当前按照只读设置处理。 */
+/** 展示核心在入站和出站之间执行的路由决策，并提供协议核心选择。 */
 @Composable
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 fun CoreRoutingScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
@@ -47,6 +66,31 @@ fun CoreRoutingScreen(
                     text = "运行核心是流量处理引擎，不属于入站或出站对象。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            CoreRoutingSection(
+                title = "协议核心",
+                collapsible = true,
+                initiallyExpanded = false
+            ) {
+                Text(
+                    text = "可为支持的协议选择 sing-box 或 Xray，修改后会在下次连接时生效。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
+                    ProtocolCoreRow(
+                        label = nodeType.displayName(),
+                        selectedCore = protocolCoreSettings.coreFor(nodeType),
+                        availableCores = xyz.a202132.app.core.CoreBackends.registry.availableFor(nodeType),
+                        onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
+                    )
+                }
+                Text(
+                    text = "内置 Xray ${BuildConfig.XRAY_CORE_VERSION}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
                 )
             }
 
@@ -90,21 +134,101 @@ fun CoreRoutingScreen(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+private fun ProtocolCoreRow(
+    label: String,
+    selectedCore: ProxyCore,
+    availableCores: List<ProxyCore>,
+    onSelected: (ProxyCore) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        FlowRow(
+            modifier = Modifier.weight(2f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+        ) {
+            availableCores.forEach { core ->
+                FilterChip(
+                    selected = selectedCore == core,
+                    onClick = { onSelected(core) },
+                    label = { Text(core.displayName) }
+                )
+            }
+        }
+    }
+}
+
+private fun NodeType.displayName(): String = when (this) {
+    NodeType.VLESS -> "VLESS"
+    NodeType.VMESS -> "VMess"
+    NodeType.TROJAN -> "Trojan"
+    NodeType.HYSTERIA2 -> "Hysteria2"
+    NodeType.ANYTLS -> "AnyTLS"
+    NodeType.TUIC -> "TUIC"
+    NodeType.NAIVE -> "Naive"
+    NodeType.WIREGUARD -> "WireGuard"
+    NodeType.SHADOWSOCKS -> "Shadowsocks"
+    NodeType.SOCKS -> "SOCKS"
+    NodeType.HTTP -> "HTTP"
+    NodeType.UNKNOWN -> "Unknown"
+}
+
+@Composable
 private fun CoreRoutingSection(
     title: String,
+    collapsible: Boolean = false,
+    initiallyExpanded: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            text = title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        content()
+        if (collapsible) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Icon(
+                    imageVector = if (expanded) {
+                        Icons.Default.KeyboardArrowUp
+                    } else {
+                        Icons.Default.KeyboardArrowDown
+                    },
+                    contentDescription = if (expanded) "折叠$title" else "展开$title",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (expanded) content()
+        } else {
+            Text(
+                text = title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            content()
+        }
     }
 }
 

@@ -11,7 +11,6 @@ object AppRoute {
     const val OUTBOUND_AFTER = "outbound_after"
     const val SPEED_TEST_SCHEMES = "speed_test_schemes"
     const val SPEED_TEST_SCHEME_EDITOR = "speed_test_scheme_editor/{schemeId}"
-    const val FEATURES = "features"
     const val ACCOUNT_SETTINGS = "account_settings"
     const val SKIN = "skin"
     const val SKIN_EDITOR = "skin_editor/{schemeId}"

@@ -45,7 +45,6 @@ fun DrawerContent(
     onOpenInboundBefore: () -> Unit = {},
     onOpenOutboundAfter: () -> Unit = {},
     onOpenCoreRouting: () -> Unit = {},
-    onOpenFeatures: () -> Unit,
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     onOpenBackendDialog: () -> Unit = {},
@@ -113,14 +112,6 @@ fun DrawerContent(
                 title = "基础设定",
                 onClick = {
                     onOpenOtherConfig()
-                }
-            )
-
-            DrawerMenuItem(
-                icon = Icons.Outlined.Star,
-                title = "高级设定",
-                onClick = {
-                    onOpenFeatures()
                 }
             )
 

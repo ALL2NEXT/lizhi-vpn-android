@@ -41,7 +41,6 @@ import xyz.a202132.app.feature.nodegrouping.ui.NodeGroupingDestination
 import xyz.a202132.app.ui.components.FloatingHomeNavigationLayout
 import xyz.a202132.app.ui.components.HomeDestination
 import xyz.a202132.app.ui.navigation.AppRoute
-import xyz.a202132.app.ui.screens.FeatureScreen
 import xyz.a202132.app.ui.screens.AccountSettingsScreen
 import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
@@ -244,9 +243,6 @@ class MainActivity : ComponentActivity() {
                                         onOpenOutboundAfter = {
                                             navigateTo(AppRoute.OUTBOUND_AFTER)
                                         },
-                                        onOpenFeatures = {
-                                            navigateTo(AppRoute.FEATURES)
-                                        },
                                         onOpenAccountSettings = {
                                             navigateTo(AppRoute.ACCOUNT_SETTINGS)
                                         },
@@ -401,13 +397,6 @@ class MainActivity : ComponentActivity() {
 
                             composable(AppRoute.OUTBOUND_AFTER) {
                                 OutboundAfterScreen(
-                                    onBack = { navController.popBackStack() }
-                                )
-                            }
-
-                            composable(AppRoute.FEATURES) {
-                                FeatureScreen(
-                                    viewModel = viewModel,
                                     onBack = { navController.popBackStack() }
                                 )
                             }

@@ -16,12 +16,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
@@ -33,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +70,7 @@ fun OtherConfigScreen(
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
     val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
     val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
+    val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
 
     val updateDownloadDirectoryName = updateDownloadDirectoryUri?.let { uriString ->
         runCatching {
@@ -133,6 +140,30 @@ fun OtherConfigScreen(
                         )
                     }
                 )
+            }
+
+            OtherConfigSection(
+                title = "节点标签显示",
+                collapsible = true,
+                initiallyExpanded = false
+            ) {
+                Text(
+                    text = "协议、安全层、传输方式和核心可独立显示，默认全部关闭；全部关闭后隐藏节点标签。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                ConfigSwitchRow("显示协议", nodeDisplaySettings.showProtocol) {
+                    viewModel.setNodeLabelShowProtocol(it)
+                }
+                ConfigSwitchRow("显示安全层", nodeDisplaySettings.showSecurity) {
+                    viewModel.setNodeLabelShowSecurity(it)
+                }
+                ConfigSwitchRow("显示传输方式", nodeDisplaySettings.showTransport) {
+                    viewModel.setNodeLabelShowTransport(it)
+                }
+                ConfigSwitchRow("显示核心", nodeDisplaySettings.showCore) {
+                    viewModel.setNodeLabelShowCore(it)
+                }
             }
 
             OtherConfigSection(
@@ -271,6 +302,29 @@ fun OtherConfigScreen(
 }
 
 @Composable
+private fun ConfigSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = visibleSwitchColors()
+        )
+    }
+}
+
+@Composable
 private fun BasicNumberField(
     label: String,
     value: String,
@@ -293,15 +347,28 @@ private fun BasicNumberField(
 private fun OtherConfigSection(
     title: String? = null,
     titleAction: (@Composable () -> Unit)? = null,
+    collapsible: Boolean = false,
+    initiallyExpanded: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    var expanded by rememberSaveable(title ?: "") { mutableStateOf(initiallyExpanded) }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (!title.isNullOrBlank()) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = if (collapsible) 48.dp else 0.dp)
+                    .then(
+                        if (collapsible) {
+                            Modifier.clickable { expanded = !expanded }
+                        } else {
+                            Modifier
+                        }
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -312,9 +379,20 @@ private fun OtherConfigSection(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 titleAction?.invoke()
+                if (collapsible) {
+                    Icon(
+                        imageVector = if (expanded) {
+                            Icons.Default.KeyboardArrowUp
+                        } else {
+                            Icons.Default.KeyboardArrowDown
+                        },
+                        contentDescription = if (expanded) "折叠$title" else "展开$title",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
-        content()
+        if (!collapsible || expanded) content()
     }
 }
 

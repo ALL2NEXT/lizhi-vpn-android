@@ -44,7 +44,6 @@ fun MainScreen(
     onOpenOutbound: () -> Unit = {},
     onOpenInboundBefore: () -> Unit = {},
     onOpenOutboundAfter: () -> Unit = {},
-    onOpenFeatures: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     bottomNavigationDestination: HomeDestination,
@@ -142,7 +141,6 @@ fun MainScreen(
                     onOpenInboundBefore = { closeDrawerThen(onOpenInboundBefore) },
                     onOpenOutboundAfter = { closeDrawerThen(onOpenOutboundAfter) },
                     onOpenCoreRouting = { closeDrawerThen(onOpenCoreRouting) },
-                    onOpenFeatures = { closeDrawerThen(onOpenFeatures) },
                     onOpenAccountSettings = { closeDrawerThen(onOpenAccountSettings) },
                     onOpenSkin = { closeDrawerThen(onOpenSkin) },
                     onOpenBackendDialog = {
