@@ -49,6 +49,7 @@ import xyz.a202132.app.ui.screens.InboundScreen
 import xyz.a202132.app.ui.screens.OutboundScreen
 import xyz.a202132.app.ui.screens.InboundBeforeScreen
 import xyz.a202132.app.ui.screens.OutboundAfterScreen
+import xyz.a202132.app.ui.screens.CoreRoutingScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.SkinScreen
@@ -231,6 +232,9 @@ class MainActivity : ComponentActivity() {
                                         onOpenInbound = {
                                             navigateTo(AppRoute.INBOUND)
                                         },
+                                        onOpenCoreRouting = {
+                                            navigateTo(AppRoute.CORE_ROUTING)
+                                        },
                                         onOpenOutbound = {
                                             navigateTo(AppRoute.OUTBOUND)
                                         },
@@ -376,6 +380,13 @@ class MainActivity : ComponentActivity() {
 
                             composable(AppRoute.INBOUND) {
                                 InboundScreen(
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.CORE_ROUTING) {
+                                CoreRoutingScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() }
                                 )

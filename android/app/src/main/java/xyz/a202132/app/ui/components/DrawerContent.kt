@@ -44,6 +44,7 @@ fun DrawerContent(
     onOpenOutbound: () -> Unit = {},
     onOpenInboundBefore: () -> Unit = {},
     onOpenOutboundAfter: () -> Unit = {},
+    onOpenCoreRouting: () -> Unit = {},
     onOpenFeatures: () -> Unit,
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
@@ -133,6 +134,12 @@ fun DrawerContent(
                 icon = Icons.Outlined.SwapVert,
                 title = "入站",
                 onClick = onOpenInbound
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.Route,
+                title = "核心路由",
+                onClick = onOpenCoreRouting
             )
 
             DrawerMenuItem(

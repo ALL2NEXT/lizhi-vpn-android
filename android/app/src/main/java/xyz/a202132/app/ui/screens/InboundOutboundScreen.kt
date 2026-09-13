@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import xyz.a202132.app.data.model.LanInboundSettings
-import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.util.NetworkUtils
@@ -193,15 +192,13 @@ fun InboundScreen(
     }
 }
 
-/** 只展示核心出站对象及其路由结果；节点选择仍由主页节点列表负责。 */
+/** 只展示核心实际的出站对象；节点选择仍由主页节点列表负责。 */
 @Composable
 fun OutboundScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
-    val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
-    val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
@@ -213,25 +210,6 @@ fun OutboundScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            CoreSection(title = "核心运行") {
-                val currentCore = currentNode?.let { protocolCoreSettings.coreFor(it.type) }
-                OutboundValueRow("运行核心", currentCore?.displayName ?: "未选择节点")
-                Text(
-                    text = "运行核心是流量处理引擎，不属于入站或出站对象。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            CoreSection(title = "核心路由") {
-                OutboundValueRow("分流模式", if (proxyMode == ProxyMode.GLOBAL) "全局" else "智能")
-                Text(
-                    text = "全局全部走代理节点；智能按域名和 IP 规则在直连与代理之间选择。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
             CoreSection(title = "核心出站") {
                 OutboundValueRow("当前节点", currentNode?.name ?: "未选择节点")
                 Text(

@@ -6,6 +6,7 @@ object AppRoute {
     const val OTHER_CONFIG = "other_config"
     const val INBOUND_BEFORE = "inbound_before"
     const val INBOUND = "inbound"
+    const val CORE_ROUTING = "core_routing"
     const val OUTBOUND = "outbound"
     const val OUTBOUND_AFTER = "outbound_after"
     const val SPEED_TEST_SCHEMES = "speed_test_schemes"
