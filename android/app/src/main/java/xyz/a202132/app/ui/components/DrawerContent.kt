@@ -114,12 +114,6 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Speed,
-                title = "测速方案",
-                onClick = onOpenSpeedTestSchemes
-            )
-
-            DrawerMenuItem(
                 icon = Icons.Outlined.Star,
                 title = "高级设定",
                 onClick = {
@@ -133,6 +127,12 @@ fun DrawerContent(
                 onClick = {
                     onOpenProxyScope()
                 }
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.Speed,
+                title = "测试",
+                onClick = onOpenSpeedTestSchemes
             )
 
             DrawerMenuItem(

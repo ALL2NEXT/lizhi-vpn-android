@@ -181,7 +181,7 @@ fun AboutDialog(
 
                     // 描述
                     Text(
-                        text = "一款基于 sing-box 核心，支持多种代理协议和智能分流的 Android VPN 客户端。",
+                        text = "基于xray和sing-box的现代化双核智能代理程序",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,

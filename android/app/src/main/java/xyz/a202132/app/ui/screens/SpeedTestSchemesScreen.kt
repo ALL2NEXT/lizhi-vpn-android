@@ -78,7 +78,7 @@ fun SpeedTestSchemesScreen(
     var newSchemeName by remember { mutableStateOf("") }
     var schemeToDelete by remember { mutableStateOf<SpeedTestScheme?>(null) }
 
-    AppScreenScaffold(title = "测速方案", onBack = onBack) {
+    AppScreenScaffold(title = "测试", onBack = onBack) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
