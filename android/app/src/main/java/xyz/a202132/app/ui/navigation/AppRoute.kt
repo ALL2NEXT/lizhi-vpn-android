@@ -4,6 +4,7 @@ object AppRoute {
     const val MAIN = "main"
     const val PROXY_SCOPE = "proxy_scope"
     const val OTHER_CONFIG = "other_config"
+    const val INBOUND_OUTBOUND = "inbound_outbound"
     const val SPEED_TEST_SCHEMES = "speed_test_schemes"
     const val SPEED_TEST_SCHEME_EDITOR = "speed_test_scheme_editor/{schemeId}"
     const val FEATURES = "features"

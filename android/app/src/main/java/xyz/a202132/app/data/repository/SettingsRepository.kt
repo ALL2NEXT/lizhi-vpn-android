@@ -11,6 +11,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.IPv6RoutingMode
+import xyz.a202132.app.data.model.LanInboundSettings
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeType
@@ -24,6 +25,7 @@ import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.util.CountryCodeResolver
+import java.util.UUID
 
 data class PerAppProxySettings(
     val enabled: Boolean,
@@ -36,7 +38,8 @@ data class VpnRuntimeSettings(
     val hysteriaUpMbps: Int,
     val hysteriaDownMbps: Int,
     val protocolCoreSettings: ProtocolCoreSettings,
-    val perAppProxy: PerAppProxySettings
+    val perAppProxy: PerAppProxySettings,
+    val lanInbound: LanInboundSettings = LanInboundSettings()
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -46,6 +49,10 @@ class SettingsRepository(private val context: Context) {
     companion object {
         private val SELECTED_NODE_ID = stringPreferencesKey("selected_node_id")
         private val PROXY_MODE = stringPreferencesKey("proxy_mode")
+        private val LAN_INBOUND_ENABLED = booleanPreferencesKey("lan_inbound_enabled")
+        private val LAN_INBOUND_PORT = intPreferencesKey("lan_inbound_port")
+        private val LAN_INBOUND_USERNAME = stringPreferencesKey("lan_inbound_username")
+        private val LAN_INBOUND_PASSWORD = stringPreferencesKey("lan_inbound_password")
         private val HOME_CLICK_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_click_speed_test_scheme_id")
         private val HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID =
@@ -153,6 +160,11 @@ class SettingsRepository(private val context: Context) {
     /** 用户保存的测速方案；首次使用时只提供两套内置方案。 */
     val speedTestSchemes: Flow<List<SpeedTestScheme>> = context.dataStore.data.map { preferences ->
         decodeSpeedTestSchemes(preferences)
+    }
+
+    /** 局域网入站设置默认关闭，避免意外暴露代理端口。 */
+    val lanInboundSettings: Flow<LanInboundSettings> = context.dataStore.data.map { preferences ->
+        decodeLanInboundSettings(preferences)
     }
 
     /** 主页图标单击使用的测速方案。 */
@@ -425,6 +437,7 @@ class SettingsRepository(private val context: Context) {
                 enabled = preferences[PER_APP_PROXY_ENABLED] ?: false,
                 selectedPackages = preferences[SELECTED_PACKAGES] ?: emptySet()
             ),
+            lanInbound = decodeLanInboundSettings(preferences),
         )
     }
 
@@ -496,6 +509,18 @@ class SettingsRepository(private val context: Context) {
         return ProtocolCoreSettings(selected, assignments)
     }
 
+    private fun decodeLanInboundSettings(preferences: Preferences): LanInboundSettings =
+        LanInboundSettings(
+            enabled = preferences[LAN_INBOUND_ENABLED] ?: false,
+            port = (preferences[LAN_INBOUND_PORT] ?: LanInboundSettings.DEFAULT_PORT)
+                .coerceIn(1, 65_535),
+            username = preferences[LAN_INBOUND_USERNAME]
+                ?.trim()
+                ?.ifBlank { LanInboundSettings.DEFAULT_USERNAME }
+                ?: LanInboundSettings.DEFAULT_USERNAME,
+            password = preferences[LAN_INBOUND_PASSWORD].orEmpty()
+        )
+
     private inline fun <reified T : Enum<T>> enumValueOrDefault(
         value: String?,
         default: T
@@ -530,6 +555,35 @@ class SettingsRepository(private val context: Context) {
     suspend fun setProxyMode(mode: ProxyMode) {
         context.dataStore.edit { preferences ->
             preferences[PROXY_MODE] = mode.name
+        }
+    }
+
+    suspend fun setLanInboundEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[LAN_INBOUND_ENABLED] = enabled
+            if (enabled && preferences[LAN_INBOUND_PASSWORD].isNullOrBlank()) {
+                // 首次开启时生成随机密码，并持久化到设置中供局域网设备使用。
+                preferences[LAN_INBOUND_PASSWORD] = UUID.randomUUID()
+                    .toString()
+                    .replace("-", "")
+                    .take(12)
+            }
+        }
+    }
+
+    suspend fun setLanInboundDetails(
+        port: Int,
+        username: String,
+        password: String
+    ) {
+        context.dataStore.edit { preferences ->
+            preferences[LAN_INBOUND_PORT] = port.coerceIn(1, 65_535)
+            preferences[LAN_INBOUND_USERNAME] = username.trim().ifBlank {
+                LanInboundSettings.DEFAULT_USERNAME
+            }
+            if (password.isNotBlank()) {
+                preferences[LAN_INBOUND_PASSWORD] = password
+            }
         }
     }
 

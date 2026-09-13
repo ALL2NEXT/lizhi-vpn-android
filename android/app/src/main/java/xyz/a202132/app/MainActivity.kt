@@ -45,6 +45,7 @@ import xyz.a202132.app.ui.screens.FeatureScreen
 import xyz.a202132.app.ui.screens.AccountSettingsScreen
 import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
+import xyz.a202132.app.ui.screens.InboundOutboundScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.SkinScreen
@@ -227,6 +228,9 @@ class MainActivity : ComponentActivity() {
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
                                         },
+                                        onOpenInboundOutbound = {
+                                            navigateTo(AppRoute.INBOUND_OUTBOUND)
+                                        },
                                         onOpenSpeedTestSchemes = {
                                             navigateTo(AppRoute.SPEED_TEST_SCHEMES)
                                         },
@@ -347,6 +351,13 @@ class MainActivity : ComponentActivity() {
 
                             composable(AppRoute.OTHER_CONFIG) {
                                 OtherConfigScreen(
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.INBOUND_OUTBOUND) {
+                                InboundOutboundScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() }
                                 )

@@ -10,6 +10,7 @@ import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
+import xyz.a202132.app.data.model.LanInboundSettings
 import xyz.a202132.app.data.model.UrlTestTargets
 import android.net.Uri
 
@@ -39,6 +40,7 @@ class SingBoxConfigGenerator {
         proxyMode: ProxyMode,
         ipv6Mode: IPv6RoutingMode = IPv6RoutingMode.DISABLED,
         internalSocksEndpoint: LocalSocksEndpoint? = null,
+        lanInbound: LanInboundSettings = LanInboundSettings(),
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS
     ): String {
@@ -57,7 +59,7 @@ class SingBoxConfigGenerator {
                 
             add("log", createLogConfig())
             add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode))
-            add("inbounds", createInbounds(internalSocksEndpoint))
+            add("inbounds", createInbounds(internalSocksEndpoint, lanInbound))
             add(
                 "outbounds",
                 createOutbounds(
@@ -78,7 +80,7 @@ class SingBoxConfigGenerator {
             add("log", createLogConfig())
             add(
                 "inbounds",
-                createInbounds(null)
+                createInbounds(null, LanInboundSettings())
             )
             add("outbounds", JsonArray().apply {
                 add(JsonObject().apply {
@@ -376,7 +378,13 @@ class SingBoxConfigGenerator {
         }
     }
     
-    private fun createInbounds(endpoint: LocalSocksEndpoint?): JsonArray {
+    private fun createInbounds(endpoint: LocalSocksEndpoint?): JsonArray =
+        createInbounds(endpoint, LanInboundSettings())
+
+    private fun createInbounds(
+        endpoint: LocalSocksEndpoint?,
+        lanInbound: LanInboundSettings
+    ): JsonArray {
         return JsonArray().apply {
             // HEV 独占 Android VPN TUN，并将数据包转发到这个环回 SOCKS5 入口。
             endpoint?.let { socks ->
@@ -390,6 +398,24 @@ class SingBoxConfigGenerator {
                             add(JsonObject().apply {
                                 addProperty("username", credentials.username)
                                 addProperty("password", credentials.password)
+                            })
+                        })
+                    }
+                })
+            }
+
+            // 局域网入站不经过 HEV TUN，直接复用当前核心的出站和分流规则。
+            if (lanInbound.enabled) {
+                add(JsonObject().apply {
+                    addProperty("type", "socks")
+                    addProperty("tag", "lan-socks-in")
+                    addProperty("listen", "0.0.0.0")
+                    addProperty("listen_port", lanInbound.port)
+                    if (lanInbound.username.isNotBlank() && lanInbound.password.isNotBlank()) {
+                        add("users", JsonArray().apply {
+                            add(JsonObject().apply {
+                                addProperty("username", lanInbound.username)
+                                addProperty("password", lanInbound.password)
                             })
                         })
                     }

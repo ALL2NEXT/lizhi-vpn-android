@@ -12,7 +12,11 @@ import xyz.a202132.app.util.XrayConfigGenerator
 internal object XrayVpnConfig {
     fun generate(request: CoreRequest, cnRules: JsonObject? = null): String {
         val base = JsonParser.parseString(XrayConfigGenerator().generateCoreConfig(
-            request.node, request.endpoint, request.hysteriaUpMbps, request.hysteriaDownMbps
+            request.node,
+            request.endpoint,
+            request.hysteriaUpMbps,
+            request.hysteriaDownMbps,
+            request.settings?.lanInbound ?: xyz.a202132.app.data.model.LanInboundSettings()
         )).asJsonObject
         return compose(base, request, cnRules)
     }
@@ -103,7 +107,14 @@ internal object XrayVpnConfig {
             })
             rules.add(rule("dns-out").apply {
                 addProperty("port", "53")
-                add("inboundTag", strings("internal-socks-in"))
+                add(
+                    "inboundTag",
+                    if (settings.lanInbound.enabled) {
+                        strings("internal-socks-in", "lan-socks-in")
+                    } else {
+                        strings("internal-socks-in")
+                    }
+                )
             })
             rules.add(rule("direct").apply { add("inboundTag", strings("dns-bootstrap")) })
             rules.add(rule("proxy").apply { add("inboundTag", strings("dns-remote")) })

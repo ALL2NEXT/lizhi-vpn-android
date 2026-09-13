@@ -26,7 +26,7 @@ val generatedHevJniDir = layout.buildDirectory.dir("generated/hev/jniLibs")
 val hevTunnelVersion = "2.16.0"
 
 // sing-box is compiled as a standalone Android PIE process and packaged into
-// nativeLibraryDir. It only exposes the loopback SOCKS inbound; HEV owns TUN.
+// nativeLibraryDir. HEV owns TUN; LAN sharing can add a separate SOCKS inbound.
 val buildSingBoxCore = tasks.register("buildSingBoxCore") {
     group = "sing-box"
     description = "Build the pinned sing-box source for the Android ABIs"

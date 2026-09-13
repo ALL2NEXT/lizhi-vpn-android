@@ -41,6 +41,7 @@ fun DrawerContent(
     onCheckUpdate: () -> Unit,
     onOpenProxyScope: () -> Unit,
     onOpenOtherConfig: () -> Unit,
+    onOpenInboundOutbound: () -> Unit = {},
     onOpenSpeedTestSchemes: () -> Unit = {},
     onOpenFeatures: () -> Unit,
     onOpenAccountSettings: () -> Unit = {},
@@ -119,6 +120,12 @@ fun DrawerContent(
                 onClick = {
                     onOpenFeatures()
                 }
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.SwapVert,
+                title = "出入站",
+                onClick = onOpenInboundOutbound
             )
 
             DrawerMenuItem(

@@ -325,6 +325,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ProxyMode.SMART
     )
 
+    val lanInboundSettings = settingsRepository.lanInboundSettings.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        LanInboundSettings()
+    )
+
     val speedTestSchemes = settingsRepository.speedTestSchemes.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -1505,6 +1511,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setHomeClickSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
             settingsRepository.setHomeClickSpeedTestSchemeId(schemeId)
+        }
+    }
+
+    fun setLanInboundEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setLanInboundEnabled(enabled)
+            // 局域网入站由 VPN 核心配置创建，运行中修改后需要重启核心。
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setLanInboundDetails(port: Int, username: String, password: String) {
+        viewModelScope.launch {
+            settingsRepository.setLanInboundDetails(port, username, password)
+            // 端口和认证信息属于核心启动配置，保存后立即应用到运行中的 VPN。
+            restartVpnIfNeeded()
         }
     }
 

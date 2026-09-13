@@ -8,6 +8,7 @@ import com.google.gson.JsonParser
 import xyz.a202132.app.core.LocalSocksEndpoint
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.data.model.LanInboundSettings
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 
 /** Builds a single-node native Xray configuration with a local probe/API entry. */
@@ -30,12 +31,16 @@ class XrayConfigGenerator {
         node: Node,
         endpoint: LocalSocksEndpoint,
         hysteriaUpMbps: Int = 0,
-        hysteriaDownMbps: Int = 0
+        hysteriaDownMbps: Int = 0,
+        lanInbound: LanInboundSettings = LanInboundSettings()
     ): String {
         require(node.type in XRAY_SUPPORTED_TYPES) { "Unsupported Xray protocol" }
         return gson.toJson(JsonObject().apply {
             add("log", JsonObject().apply { addProperty("loglevel", "warning") })
-            add("inbounds", JsonArray().apply { add(createSocksInbound(endpoint)) })
+            add("inbounds", JsonArray().apply {
+                add(createSocksInbound(endpoint))
+                if (lanInbound.enabled) add(createLanSocksInbound(lanInbound))
+            })
             add("outbounds", JsonArray().apply {
                 add(createNodeOutbound(node, "proxy", hysteriaUpMbps, hysteriaDownMbps))
                 add(JsonObject().apply {
@@ -63,6 +68,36 @@ class XrayConfigGenerator {
                     add(JsonObject().apply {
                         addProperty("user", it.username)
                         addProperty("pass", it.password)
+                    })
+                })
+            }
+            addProperty("udp", true)
+            addProperty("ip", "127.0.0.1")
+        })
+        add("sniffing", JsonObject().apply {
+            addProperty("enabled", true)
+            addProperty("routeOnly", true)
+            add("destOverride", JsonArray().apply {
+                add("http")
+                add("tls")
+                add("quic")
+            })
+        })
+    }
+
+    /** 局域网入站直接进入当前 Xray 出站，不经过 Android VPN TUN。 */
+    private fun createLanSocksInbound(settings: LanInboundSettings): JsonObject = JsonObject().apply {
+        addProperty("listen", "0.0.0.0")
+        addProperty("port", settings.port)
+        addProperty("protocol", "socks")
+        addProperty("tag", "lan-socks-in")
+        add("settings", JsonObject().apply {
+            addProperty("auth", if (settings.username.isNotBlank() && settings.password.isNotBlank()) "password" else "noauth")
+            if (settings.username.isNotBlank() && settings.password.isNotBlank()) {
+                add("accounts", JsonArray().apply {
+                    add(JsonObject().apply {
+                        addProperty("user", settings.username)
+                        addProperty("pass", settings.password)
                     })
                 })
             }
