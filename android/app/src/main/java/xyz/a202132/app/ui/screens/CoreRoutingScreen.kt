@@ -1,10 +1,16 @@
 package xyz.a202132.app.ui.screens
 
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -13,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -33,7 +40,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import xyz.a202132.app.BuildConfig
+import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyMode
@@ -50,6 +60,7 @@ fun CoreRoutingScreen(
 ) {
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
+    val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val currentCore = currentNode?.let { protocolCoreSettings.coreFor(it.type) }
 
@@ -66,6 +77,33 @@ fun CoreRoutingScreen(
                     text = "运行核心是流量处理引擎，不属于入站或出站对象。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            CoreRoutingSection(title = "网络路由") {
+                Text(
+                    text = "IPv6 路由",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                MultiPositionSwitch(
+                    options = listOf("优先", "启用", "禁用"),
+                    selectedIndex = when (ipv6RoutingMode) {
+                        IPv6RoutingMode.ONLY -> 1
+                        IPv6RoutingMode.PREFER -> 0
+                        IPv6RoutingMode.ENABLED -> 1
+                        IPv6RoutingMode.DISABLED -> 2
+                    },
+                    onOptionSelected = { index ->
+                        viewModel.setIPv6RoutingMode(
+                            when (index) {
+                                0 -> IPv6RoutingMode.PREFER
+                                1 -> IPv6RoutingMode.ENABLED
+                                else -> IPv6RoutingMode.DISABLED
+                            }
+                        )
+                    }
                 )
             }
 
@@ -228,6 +266,65 @@ private fun CoreRoutingSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
             content()
+        }
+    }
+}
+
+@Composable
+internal fun MultiPositionSwitch(
+    options: List<String>,
+    selectedIndex: Int,
+    onOptionSelected: (Int) -> Unit
+) {
+    if (options.isEmpty()) return
+
+    val safeSelectedIndex = selectedIndex.coerceIn(options.indices)
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(4.dp)
+    ) {
+        val segmentWidth = maxWidth / options.size
+        val thumbOffset by animateDpAsState(
+            targetValue = segmentWidth * safeSelectedIndex,
+            label = "multi-position-switch"
+        )
+
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset)
+                .width(segmentWidth)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        )
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, option ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onOptionSelected(index) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = option,
+                        maxLines = 1,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (index == safeSelectedIndex) {
+                            Color.White
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            }
         }
     }
 }

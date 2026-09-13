@@ -5,30 +5,20 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -37,21 +27,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.documentfile.provider.DocumentFile
-import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
@@ -62,13 +48,8 @@ fun OtherConfigScreen(
 ) {
     val context = LocalContext.current
     val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
-    val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
-    val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
-    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
-    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
-    val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
     val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
     val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
 
@@ -95,13 +76,6 @@ fun OtherConfigScreen(
         }
     }
 
-    var hysteriaUpMbpsInput by remember(hysteriaUpMbps) {
-        mutableStateOf(hysteriaUpMbps.toString())
-    }
-    var hysteriaDownMbpsInput by remember(hysteriaDownMbps) {
-        mutableStateOf(hysteriaDownMbps.toString())
-    }
-
     AppScreenScaffold(
         title = "基础设定",
         onBack = onBack
@@ -112,36 +86,6 @@ fun OtherConfigScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            OtherConfigSection(
-                title = "网络配置"
-            ) {
-                Text(
-                    text = "IPV6路由",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                MultiPositionSwitch(
-                    options = listOf("优先", "启用", "禁用"),
-                    selectedIndex = when (ipv6RoutingMode) {
-                        IPv6RoutingMode.ONLY -> 1
-                        IPv6RoutingMode.PREFER -> 0
-                        IPv6RoutingMode.ENABLED -> 1
-                        IPv6RoutingMode.DISABLED -> 2
-                    },
-                    onOptionSelected = { index ->
-                        viewModel.setIPv6RoutingMode(
-                            when (index) {
-                                0 -> IPv6RoutingMode.PREFER
-                                1 -> IPv6RoutingMode.ENABLED
-                                else -> IPv6RoutingMode.DISABLED
-                            }
-                        )
-                    }
-                )
-            }
-
             OtherConfigSection(
                 title = "节点标签显示",
                 collapsible = true,
@@ -249,54 +193,6 @@ fun OtherConfigScreen(
                 }
             ) {}
 
-            OtherConfigSection(
-                title = "Hy2 加速",
-                titleAction = {
-                    Switch(
-                        checked = hysteriaBandwidthEnabled,
-                        onCheckedChange = { viewModel.setHysteriaBandwidthEnabled(it) },
-                        colors = visibleSwitchColors()
-                    )
-                }
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    BasicNumberField(
-                        label = "Up",
-                        value = hysteriaUpMbpsInput,
-                        onValueChange = {
-                            hysteriaUpMbpsInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setHysteriaUpMbps(value.coerceIn(0, 100_000))
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = hysteriaBandwidthEnabled
-                    )
-                    BasicNumberField(
-                        label = "Dw",
-                        value = hysteriaDownMbpsInput,
-                        onValueChange = {
-                            hysteriaDownMbpsInput = it.filter(Char::isDigit)
-                            it.toIntOrNull()?.let { value ->
-                                viewModel.setHysteriaDownMbps(value.coerceIn(0, 100_000))
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = hysteriaBandwidthEnabled
-                    )
-                    TextButton(
-                        onClick = { viewModel.adaptHysteriaBandwidth() },
-                        enabled = hysteriaBandwidthEnabled && !isHysteriaBandwidthAdapting
-                    ) {
-                        Text(if (isHysteriaBandwidthAdapting) "测试中..." else "自适应")
-                    }
-                }
-            }
-
         }
     }
 }
@@ -322,25 +218,6 @@ private fun ConfigSwitchRow(
             colors = visibleSwitchColors()
         )
     }
-}
-
-@Composable
-private fun BasicNumberField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier,
-        label = { Text(label) },
-        enabled = enabled,
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-    )
 }
 
 @Composable
@@ -393,65 +270,6 @@ private fun OtherConfigSection(
             }
         }
         if (!collapsible || expanded) content()
-    }
-}
-
-@Composable
-internal fun MultiPositionSwitch(
-    options: List<String>,
-    selectedIndex: Int,
-    onOptionSelected: (Int) -> Unit
-) {
-    if (options.isEmpty()) return
-
-    val safeSelectedIndex = selectedIndex.coerceIn(options.indices)
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(4.dp)
-    ) {
-        val segmentWidth = maxWidth / options.size
-        val thumbOffset by animateDpAsState(
-            targetValue = segmentWidth * safeSelectedIndex,
-            label = "multi-position-switch"
-        )
-
-        Box(
-            modifier = Modifier
-                .offset(x = thumbOffset)
-                .width(segmentWidth)
-                .fillMaxHeight()
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.primary)
-        )
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, option ->
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable { onOptionSelected(index) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = option,
-                        maxLines = 1,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (index == safeSelectedIndex) {
-                            Color.White
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-            }
-        }
     }
 }
 

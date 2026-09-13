@@ -8,6 +8,12 @@ plugins {
 }
 
 val singBoxNdkVersion = "28.0.13004108"
+val targetAbis = when (providers.gradleProperty("targetAbi").orNull) {
+    null, "", "all" -> listOf("armeabi-v7a", "arm64-v8a")
+    "arm64-v8a" -> listOf("arm64-v8a")
+    "armeabi-v7a" -> listOf("armeabi-v7a")
+    else -> error("Unsupported targetAbi. Use arm64-v8a, armeabi-v7a, or all.")
+}
 
 // The repository root pins the sing-box source revision in this submodule.
 // Android builds the CLI runner directly instead of embedding libbox in the
@@ -40,9 +46,7 @@ val buildSingBoxCore = tasks.register("buildSingBoxCore") {
     inputs.files(fileTree(singBoxRunnerDir) { exclude("*.exe") })
     inputs.property("ndkVersion", singBoxNdkVersion)
     inputs.property("androidApi", 24)
-    val arm32Output = generatedSingBoxJniDir.map { it.file("armeabi-v7a/libsingbox.so") }
-    val arm64Output = generatedSingBoxJniDir.map { it.file("arm64-v8a/libsingbox.so") }
-    outputs.files(arm32Output, arm64Output)
+    outputs.files(targetAbis.map { generatedSingBoxJniDir.map { dir -> dir.file("$it/libsingbox.so") } })
 
     doLast {
         val goExecutable = if (System.getProperty("os.name").startsWith("Windows")) "go.exe" else "go"
@@ -79,7 +83,7 @@ val buildSingBoxCore = tasks.register("buildSingBoxCore") {
         val abis = listOf(
             SingBoxAbi("armeabi-v7a", "arm", "armv7a-linux-androideabi", "7"),
             SingBoxAbi("arm64-v8a", "arm64", "aarch64-linux-android")
-        )
+        ).filter { it.androidAbi in targetAbis }
         val tags = listOf(
             "with_gvisor", "with_quic", "with_wireguard", "with_utls",
             "with_naive_outbound", "with_clash_api", "with_conntrack",
@@ -130,9 +134,7 @@ val buildXrayCore = tasks.register("buildXrayCore") {
     inputs.files(fileTree(xrayRunnerDir) { exclude("*.exe") })
     inputs.property("ndkVersion", singBoxNdkVersion)
     inputs.property("androidApi", 24)
-    val arm32Output = generatedXrayJniDir.map { it.file("armeabi-v7a/libxray.so") }
-    val arm64Output = generatedXrayJniDir.map { it.file("arm64-v8a/libxray.so") }
-    outputs.files(arm32Output, arm64Output)
+    outputs.files(targetAbis.map { generatedXrayJniDir.map { dir -> dir.file("$it/libxray.so") } })
 
     doLast {
         val goExecutable = if (System.getProperty("os.name").startsWith("Windows")) "go.exe" else "go"
@@ -166,7 +168,7 @@ val buildXrayCore = tasks.register("buildXrayCore") {
         val abis = listOf(
             XrayAbi("armeabi-v7a", "arm", "armv7a-linux-androideabi", "7"),
             XrayAbi("arm64-v8a", "arm64", "aarch64-linux-android")
-        )
+        ).filter { it.androidAbi in targetAbis }
         abis.forEach { abi ->
             val output = generatedXrayJniDir.get().file("${abi.androidAbi}/libxray.so").asFile
             output.parentFile.mkdirs()
@@ -211,9 +213,7 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
     inputs.property("version", hevTunnelVersion)
     inputs.property("ndkVersion", singBoxNdkVersion)
     inputs.property("androidApi", 24)
-    val arm32Output = generatedHevJniDir.map { it.file("armeabi-v7a/libhev.so") }
-    val arm64Output = generatedHevJniDir.map { it.file("arm64-v8a/libhev.so") }
-    outputs.files(arm32Output, arm64Output)
+    outputs.files(targetAbis.map { generatedHevJniDir.map { dir -> dir.file("$it/libhev.so") } })
 
     doLast {
         check(hevSourceDir.resolve("Android.mk").isFile &&
@@ -275,7 +275,7 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
             commandLine(ndkBuild.absolutePath,
                 "NDK_PROJECT_PATH=null",
                 "APP_BUILD_SCRIPT=${hevRunnerDir.resolve("Android.mk").absolutePath}",
-                "APP_ABI=armeabi-v7a arm64-v8a",
+                "APP_ABI=${targetAbis.joinToString(" ")}",
                 "APP_PLATFORM=android-24",
                 "NDK_OUT=${outputRoot.absolutePath}",
                 "NDK_LIBS_OUT=${libsRoot.absolutePath}",
@@ -283,7 +283,7 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
                 "REV_ID=$hevTunnelVersion",
                 "V=1")
         }
-        listOf("armeabi-v7a", "arm64-v8a").forEach { abi ->
+        targetAbis.forEach { abi ->
             val binary = outputRoot.resolve("local/$abi/hev-runner")
             check(binary.isFile) { "HEV runner was not built for $abi" }
             val packaged = libsRoot.resolve("$abi/libhev.so")
@@ -326,7 +326,7 @@ android {
             cmake {
                 cppFlags("")
                 // 限制只打包 ARM 架构的 .so 文件
-                abiFilters("armeabi-v7a", "arm64-v8a")
+                abiFilters(*targetAbis.toTypedArray())
             }
         }
     }
@@ -336,7 +336,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("armeabi-v7a", "arm64-v8a")
+            include(*targetAbis.toTypedArray())
             isUniversalApk = false
         }
     }

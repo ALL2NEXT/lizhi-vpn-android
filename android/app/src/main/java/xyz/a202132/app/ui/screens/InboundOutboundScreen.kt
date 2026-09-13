@@ -202,6 +202,14 @@ fun OutboundScreen(
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
+    val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
+
+    var hysteriaUpMbpsInput by remember(hysteriaUpMbps) {
+        mutableStateOf(hysteriaUpMbps.toString())
+    }
+    var hysteriaDownMbpsInput by remember(hysteriaDownMbps) {
+        mutableStateOf(hysteriaDownMbps.toString())
+    }
 
     AppScreenScaffold(title = "出站", onBack = onBack) {
         Column(
@@ -220,7 +228,24 @@ fun OutboundScreen(
                 OutboundHysteriaCard(
                     enabled = hysteriaBandwidthEnabled,
                     upMbps = hysteriaUpMbps,
-                    downMbps = hysteriaDownMbps
+                    downMbps = hysteriaDownMbps,
+                    upMbpsInput = hysteriaUpMbpsInput,
+                    downMbpsInput = hysteriaDownMbpsInput,
+                    isAdapting = isHysteriaBandwidthAdapting,
+                    onEnabledChange = viewModel::setHysteriaBandwidthEnabled,
+                    onUpMbpsChange = { value ->
+                        hysteriaUpMbpsInput = value.filter(Char::isDigit)
+                        value.toIntOrNull()?.let { upMbpsValue ->
+                            viewModel.setHysteriaUpMbps(upMbpsValue.coerceIn(0, 100_000))
+                        }
+                    },
+                    onDownMbpsChange = { value ->
+                        hysteriaDownMbpsInput = value.filter(Char::isDigit)
+                        value.toIntOrNull()?.let { downMbpsValue ->
+                            viewModel.setHysteriaDownMbps(downMbpsValue.coerceIn(0, 100_000))
+                        }
+                    },
+                    onAdapt = viewModel::adaptHysteriaBandwidth
                 )
             }
         }
@@ -232,7 +257,14 @@ fun OutboundScreen(
 private fun OutboundHysteriaCard(
     enabled: Boolean,
     upMbps: Int,
-    downMbps: Int
+    downMbps: Int,
+    upMbpsInput: String,
+    downMbpsInput: String,
+    isAdapting: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    onUpMbpsChange: (String) -> Unit,
+    onDownMbpsChange: (String) -> Unit,
+    onAdapt: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -260,18 +292,51 @@ private fun OutboundHysteriaCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = if (enabled) "已启用" else "未启用",
-                    fontSize = 12.sp,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange
                 )
             }
-            OutboundValueRow("上行带宽", "$upMbps Mbps")
-            OutboundValueRow("下行带宽", "$downMbps Mbps")
+            Text(
+                text = "启用后仅对 Hysteria2 节点的核心出站生效。",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = upMbpsInput,
+                    onValueChange = onUpMbpsChange,
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Up") },
+                    enabled = enabled,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = downMbpsInput,
+                    onValueChange = onDownMbpsChange,
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Dw") },
+                    enabled = enabled,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                TextButton(
+                    onClick = onAdapt,
+                    enabled = enabled && !isAdapting
+                ) {
+                    Text(if (isAdapting) "测试中..." else "自适应")
+                }
+            }
+            Text(
+                text = "当前上行 $upMbps Mbps，下行 $downMbps Mbps",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
