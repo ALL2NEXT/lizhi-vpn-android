@@ -37,12 +37,12 @@ import xyz.a202132.app.viewmodel.MainViewModel
 fun MainScreen(
     viewModel: MainViewModel = viewModel(),
     onStartVpn: (action: () -> Unit) -> Unit,
-    onOpenProxyScope: () -> Unit = {},
     onOpenNodeList: () -> Unit = {},
     onOpenOtherConfig: () -> Unit = {},
     onOpenInbound: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
-    onOpenSpeedTestSchemes: () -> Unit = {},
+    onOpenInboundBefore: () -> Unit = {},
+    onOpenOutboundAfter: () -> Unit = {},
     onOpenFeatures: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
@@ -135,11 +135,11 @@ fun MainScreen(
             ) {
                 DrawerContent(
                     onCheckUpdate = { closeDrawerThen { viewModel.checkUpdate() } },
-                    onOpenProxyScope = { closeDrawerThen(onOpenProxyScope) },
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
                     onOpenInbound = { closeDrawerThen(onOpenInbound) },
                     onOpenOutbound = { closeDrawerThen(onOpenOutbound) },
-                    onOpenSpeedTestSchemes = { closeDrawerThen(onOpenSpeedTestSchemes) },
+                    onOpenInboundBefore = { closeDrawerThen(onOpenInboundBefore) },
+                    onOpenOutboundAfter = { closeDrawerThen(onOpenOutboundAfter) },
                     onOpenFeatures = { closeDrawerThen(onOpenFeatures) },
                     onOpenAccountSettings = { closeDrawerThen(onOpenAccountSettings) },
                     onOpenSkin = { closeDrawerThen(onOpenSkin) },

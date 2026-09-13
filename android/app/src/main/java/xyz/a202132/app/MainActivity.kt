@@ -47,6 +47,8 @@ import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.InboundScreen
 import xyz.a202132.app.ui.screens.OutboundScreen
+import xyz.a202132.app.ui.screens.InboundBeforeScreen
+import xyz.a202132.app.ui.screens.OutboundAfterScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.SkinScreen
@@ -219,9 +221,6 @@ class MainActivity : ComponentActivity() {
                                         onStartVpn = { action ->
                                             requestVpnPermission(action)
                                         },
-                                        onOpenProxyScope = {
-                                            navigateTo(AppRoute.PROXY_SCOPE)
-                                        },
                                         onOpenNodeList = {
                                             viewModel.selectSubscriptionGrouping()
                                             selectedDestination = HomeDestination.NODE_GROUPING
@@ -235,8 +234,11 @@ class MainActivity : ComponentActivity() {
                                         onOpenOutbound = {
                                             navigateTo(AppRoute.OUTBOUND)
                                         },
-                                        onOpenSpeedTestSchemes = {
-                                            navigateTo(AppRoute.SPEED_TEST_SCHEMES)
+                                        onOpenInboundBefore = {
+                                            navigateTo(AppRoute.INBOUND_BEFORE)
+                                        },
+                                        onOpenOutboundAfter = {
+                                            navigateTo(AppRoute.OUTBOUND_AFTER)
                                         },
                                         onOpenFeatures = {
                                             navigateTo(AppRoute.FEATURES)
@@ -360,6 +362,18 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            composable(AppRoute.INBOUND_BEFORE) {
+                                InboundBeforeScreen(
+                                    onBack = { navController.popBackStack() },
+                                    onOpenProxyScope = {
+                                        navigateTo(AppRoute.PROXY_SCOPE)
+                                    },
+                                    onOpenSpeedTestSchemes = {
+                                        navigateTo(AppRoute.SPEED_TEST_SCHEMES)
+                                    }
+                                )
+                            }
+
                             composable(AppRoute.INBOUND) {
                                 InboundScreen(
                                     viewModel = viewModel,
@@ -370,6 +384,12 @@ class MainActivity : ComponentActivity() {
                             composable(AppRoute.OUTBOUND) {
                                 OutboundScreen(
                                     viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.OUTBOUND_AFTER) {
+                                OutboundAfterScreen(
                                     onBack = { navController.popBackStack() }
                                 )
                             }

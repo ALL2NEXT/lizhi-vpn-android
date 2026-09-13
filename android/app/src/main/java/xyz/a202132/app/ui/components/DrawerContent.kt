@@ -39,11 +39,11 @@ import xyz.a202132.app.ui.dialogs.AboutDialog
 @Composable
 fun DrawerContent(
     onCheckUpdate: () -> Unit,
-    onOpenProxyScope: () -> Unit,
     onOpenOtherConfig: () -> Unit,
     onOpenInbound: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
-    onOpenSpeedTestSchemes: () -> Unit = {},
+    onOpenInboundBefore: () -> Unit = {},
+    onOpenOutboundAfter: () -> Unit = {},
     onOpenFeatures: () -> Unit,
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
@@ -124,6 +124,12 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
+                icon = Icons.Outlined.Login,
+                title = "入站前",
+                onClick = onOpenInboundBefore
+            )
+
+            DrawerMenuItem(
                 icon = Icons.Outlined.SwapVert,
                 title = "入站",
                 onClick = onOpenInbound
@@ -136,17 +142,9 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Apps,
-                title = "分应用代理",
-                onClick = {
-                    onOpenProxyScope()
-                }
-            )
-
-            DrawerMenuItem(
-                icon = Icons.Outlined.Speed,
-                title = "测试",
-                onClick = onOpenSpeedTestSchemes
+                icon = Icons.Outlined.Logout,
+                title = "出站后",
+                onClick = onOpenOutboundAfter
             )
 
             DrawerMenuItem(
