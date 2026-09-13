@@ -45,7 +45,8 @@ import xyz.a202132.app.ui.screens.FeatureScreen
 import xyz.a202132.app.ui.screens.AccountSettingsScreen
 import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
-import xyz.a202132.app.ui.screens.InboundOutboundScreen
+import xyz.a202132.app.ui.screens.InboundScreen
+import xyz.a202132.app.ui.screens.OutboundScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.SkinScreen
@@ -228,8 +229,11 @@ class MainActivity : ComponentActivity() {
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
                                         },
-                                        onOpenInboundOutbound = {
-                                            navigateTo(AppRoute.INBOUND_OUTBOUND)
+                                        onOpenInbound = {
+                                            navigateTo(AppRoute.INBOUND)
+                                        },
+                                        onOpenOutbound = {
+                                            navigateTo(AppRoute.OUTBOUND)
                                         },
                                         onOpenSpeedTestSchemes = {
                                             navigateTo(AppRoute.SPEED_TEST_SCHEMES)
@@ -356,8 +360,15 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            composable(AppRoute.INBOUND_OUTBOUND) {
-                                InboundOutboundScreen(
+                            composable(AppRoute.INBOUND) {
+                                InboundScreen(
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.OUTBOUND) {
+                                OutboundScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() }
                                 )

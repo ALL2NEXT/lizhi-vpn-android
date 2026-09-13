@@ -43,22 +43,15 @@ import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.viewmodel.MainViewModel
 
-/** 只展示核心实际拥有的入站、路由、出站及核心运行信息。 */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+/** 只展示核心实际拥有的入站对象；应用过滤和 TUN 参数不属于核心入站。 */
 @Composable
-fun InboundOutboundScreen(
+fun InboundScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val lanInbound by viewModel.lanInboundSettings.collectAsStateWithLifecycle()
-    val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
-    val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
-    val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
-    val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
-    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
-    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
     val lanIpv4Addresses by produceState(initialValue = emptyList<String>(), key1 = context) {
         while (true) {
             value = NetworkUtils.lanIpv4Addresses(context)
@@ -72,14 +65,14 @@ fun InboundOutboundScreen(
     var passwordInput by remember(lanInbound.password) { mutableStateOf(lanInbound.password) }
     var validationMessage by remember { mutableStateOf<String?>(null) }
 
-    AppScreenScaffold(title = "出入站面板", onBack = onBack) {
+    AppScreenScaffold(title = "入站", onBack = onBack) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            InboundOutboundSection(title = "核心入站") {
+            CoreSection(title = "核心入站") {
                 InboundCard(
                     title = "本地 SOCKS5 入站（HEV 对接）",
                     description = "核心实际监听 127.0.0.1 端口，接收 HEV 数据面转换后的 SOCKS5 请求。",
@@ -101,7 +94,7 @@ fun InboundOutboundScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "局域网入站",
+                                    text = "局域网 SOCKS5 入站",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -123,7 +116,7 @@ fun InboundOutboundScreen(
                         }
 
                         Text(
-                            text = "VPN 运行后监听 0.0.0.0:$portInput，局域网设备通过 SOCKS5 使用当前出站节点和分流规则。",
+                            text = "VPN 运行后监听 0.0.0.0:$portInput，局域网设备通过 SOCKS5 使用核心出站。",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -196,11 +189,32 @@ fun InboundOutboundScreen(
                     }
                 }
             }
+        }
+    }
+}
 
-            InboundOutboundSection(title = "核心运行") {
-                val node = currentNode
-                val currentCore = node?.let { protocolCoreSettings.coreFor(it.type) }
+/** 只展示核心出站对象及其路由结果；节点选择仍由主页节点列表负责。 */
+@Composable
+fun OutboundScreen(
+    viewModel: MainViewModel,
+    onBack: () -> Unit
+) {
+    val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
+    val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
+    val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
+    val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
+    val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
+    val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
 
+    AppScreenScaffold(title = "出站", onBack = onBack) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            CoreSection(title = "核心运行") {
+                val currentCore = currentNode?.let { protocolCoreSettings.coreFor(it.type) }
                 OutboundValueRow("运行核心", currentCore?.displayName ?: "未选择节点")
                 Text(
                     text = "运行核心是流量处理引擎，不属于入站或出站对象。",
@@ -209,7 +223,7 @@ fun InboundOutboundScreen(
                 )
             }
 
-            InboundOutboundSection(title = "核心路由") {
+            CoreSection(title = "核心路由") {
                 OutboundValueRow("分流模式", if (proxyMode == ProxyMode.GLOBAL) "全局" else "智能")
                 Text(
                     text = "全局全部走代理节点；智能按域名和 IP 规则在直连与代理之间选择。",
@@ -218,15 +232,13 @@ fun InboundOutboundScreen(
                 )
             }
 
-            InboundOutboundSection(title = "核心出站") {
+            CoreSection(title = "核心出站") {
                 OutboundValueRow("当前节点", currentNode?.name ?: "未选择节点")
-
                 Text(
-                    text = "局域网入站不会再次经过本机 TUN，直接复用当前节点出站。",
+                    text = "局域网入站会直接复用当前节点出站，不会再次经过本机 TUN。",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
                 OutboundHysteriaCard(
                     enabled = hysteriaBandwidthEnabled,
                     upMbps = hysteriaUpMbps,
@@ -359,7 +371,7 @@ private fun buildSocksImportUri(address: String, settings: LanInboundSettings): 
 }
 
 @Composable
-private fun InboundOutboundSection(
+private fun CoreSection(
     title: String,
     content: @Composable () -> Unit
 ) {
