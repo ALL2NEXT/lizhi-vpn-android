@@ -33,6 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,6 +68,12 @@ fun SpeedTestSchemesScreen(
     val swipeDownId by viewModel.homeSwipeDownSpeedTestSchemeId.collectAsStateWithLifecycle()
     val swipeLeftId by viewModel.homeSwipeLeftSpeedTestSchemeId.collectAsStateWithLifecycle()
     val swipeRightId by viewModel.homeSwipeRightSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val clickEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
+    val longPressEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
+    val swipeUpEnabled by viewModel.homeSwipeUpSpeedTestEnabled.collectAsStateWithLifecycle()
+    val swipeDownEnabled by viewModel.homeSwipeDownSpeedTestEnabled.collectAsStateWithLifecycle()
+    val swipeLeftEnabled by viewModel.homeSwipeLeftSpeedTestEnabled.collectAsStateWithLifecycle()
+    val swipeRightEnabled by viewModel.homeSwipeRightSpeedTestEnabled.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
     var newSchemeName by remember { mutableStateOf("") }
     var schemeToDelete by remember { mutableStateOf<SpeedTestScheme?>(null) }
@@ -79,7 +86,7 @@ fun SpeedTestSchemesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "主页图标的点击、长按及上下左右滑动都可以绑定测速方案。测速按 1 TCPing、2 204 URL、3 带宽测速顺序执行；全部关闭时直接连接已选节点或当前组第一个节点。",
+                text = "主页图标的点击、长按及上下左右滑动都可以绑定测速方案，并可分别启用或关闭。点击关闭时直接连接已选节点；测速按 1 TCPing、2 204 URL、3 带宽测速顺序执行。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
@@ -87,37 +94,49 @@ fun SpeedTestSchemesScreen(
                 title = "点击主页图标",
                 selectedId = clickId,
                 schemes = schemes,
-                onSelected = viewModel::setHomeClickSpeedTestScheme
+                enabled = clickEnabled,
+                onSelected = viewModel::setHomeClickSpeedTestScheme,
+                onEnabledChange = viewModel::setHomeClickSpeedTestEnabled
             )
             HomeSchemeBinding(
                 title = "长按主页图标",
                 selectedId = longPressId,
                 schemes = schemes,
-                onSelected = viewModel::setHomeLongPressSpeedTestScheme
+                enabled = longPressEnabled,
+                onSelected = viewModel::setHomeLongPressSpeedTestScheme,
+                onEnabledChange = viewModel::setHomeLongPressSpeedTestEnabled
             )
             HomeSchemeBinding(
                 title = "上滑主页图标",
                 selectedId = swipeUpId,
                 schemes = schemes,
-                onSelected = viewModel::setHomeSwipeUpSpeedTestScheme
+                enabled = swipeUpEnabled,
+                onSelected = viewModel::setHomeSwipeUpSpeedTestScheme,
+                onEnabledChange = viewModel::setHomeSwipeUpSpeedTestEnabled
             )
             HomeSchemeBinding(
                 title = "下滑主页图标",
                 selectedId = swipeDownId,
                 schemes = schemes,
-                onSelected = viewModel::setHomeSwipeDownSpeedTestScheme
+                enabled = swipeDownEnabled,
+                onSelected = viewModel::setHomeSwipeDownSpeedTestScheme,
+                onEnabledChange = viewModel::setHomeSwipeDownSpeedTestEnabled
             )
             HomeSchemeBinding(
                 title = "左滑主页图标",
                 selectedId = swipeLeftId,
                 schemes = schemes,
-                onSelected = viewModel::setHomeSwipeLeftSpeedTestScheme
+                enabled = swipeLeftEnabled,
+                onSelected = viewModel::setHomeSwipeLeftSpeedTestScheme,
+                onEnabledChange = viewModel::setHomeSwipeLeftSpeedTestEnabled
             )
             HomeSchemeBinding(
                 title = "右滑主页图标",
                 selectedId = swipeRightId,
                 schemes = schemes,
-                onSelected = viewModel::setHomeSwipeRightSpeedTestScheme
+                enabled = swipeRightEnabled,
+                onSelected = viewModel::setHomeSwipeRightSpeedTestScheme,
+                onEnabledChange = viewModel::setHomeSwipeRightSpeedTestEnabled
             )
 
             Text(
@@ -129,12 +148,12 @@ fun SpeedTestSchemesScreen(
             schemes.forEach { scheme ->
                 SpeedTestSchemeCard(
                     scheme = scheme,
-                    assignedToClick = scheme.id == clickId,
-                    assignedToLongPress = scheme.id == longPressId,
-                    assignedToSwipeUp = scheme.id == swipeUpId,
-                    assignedToSwipeDown = scheme.id == swipeDownId,
-                    assignedToSwipeLeft = scheme.id == swipeLeftId,
-                    assignedToSwipeRight = scheme.id == swipeRightId,
+                    assignedToClick = clickEnabled && scheme.id == clickId,
+                    assignedToLongPress = longPressEnabled && scheme.id == longPressId,
+                    assignedToSwipeUp = swipeUpEnabled && scheme.id == swipeUpId,
+                    assignedToSwipeDown = swipeDownEnabled && scheme.id == swipeDownId,
+                    assignedToSwipeLeft = swipeLeftEnabled && scheme.id == swipeLeftId,
+                    assignedToSwipeRight = swipeRightEnabled && scheme.id == swipeRightId,
                     onEdit = { onOpenEditor(scheme.id) },
                     onDelete = { schemeToDelete = scheme }
                 )
@@ -216,7 +235,9 @@ private fun HomeSchemeBinding(
     title: String,
     selectedId: String,
     schemes: List<SpeedTestScheme>,
-    onSelected: (String) -> Unit
+    enabled: Boolean,
+    onSelected: (String) -> Unit,
+    onEnabledChange: (Boolean) -> Unit
 ) {
     var showSelectionDialog by remember { mutableStateOf(false) }
     val selectedScheme = schemes.firstOrNull { it.id == selectedId }
@@ -231,7 +252,7 @@ private fun HomeSchemeBinding(
                 .fillMaxWidth()
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = title,
@@ -243,7 +264,7 @@ private fun HomeSchemeBinding(
             )
             Surface(
                 modifier = Modifier
-                    .widthIn(max = 190.dp)
+                    .widthIn(max = 150.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable { showSelectionDialog = true },
                 shape = RoundedCornerShape(12.dp),
@@ -269,6 +290,10 @@ private fun HomeSchemeBinding(
                     )
                 }
             }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange
+            )
         }
     }
 

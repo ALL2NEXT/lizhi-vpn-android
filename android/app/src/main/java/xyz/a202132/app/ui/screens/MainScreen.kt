@@ -73,6 +73,12 @@ fun MainScreen(
     val homeSwipeDownSchemeId by viewModel.homeSwipeDownSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeSwipeLeftSchemeId by viewModel.homeSwipeLeftSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeSwipeRightSchemeId by viewModel.homeSwipeRightSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val homeClickSpeedTestEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
+    val homeLongPressSpeedTestEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
+    val homeSwipeUpSpeedTestEnabled by viewModel.homeSwipeUpSpeedTestEnabled.collectAsStateWithLifecycle()
+    val homeSwipeDownSpeedTestEnabled by viewModel.homeSwipeDownSpeedTestEnabled.collectAsStateWithLifecycle()
+    val homeSwipeLeftSpeedTestEnabled by viewModel.homeSwipeLeftSpeedTestEnabled.collectAsStateWithLifecycle()
+    val homeSwipeRightSpeedTestEnabled by viewModel.homeSwipeRightSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
@@ -239,12 +245,18 @@ fun MainScreen(
                         when (vpnState) {
                             VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
                             VpnState.DISCONNECTED -> onStartVpn {
-                                clickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                                if (homeClickSpeedTestEnabled) {
+                                    clickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                                } else {
+                                    viewModel.startSelectedOrFirstConnection()
+                                }
                             }
                             else -> Unit
                         }
                     },
-                    onLongClick = if (vpnState == VpnState.DISCONNECTED) {
+                    onLongClick = if (
+                        vpnState == VpnState.DISCONNECTED && homeLongPressSpeedTestEnabled
+                    ) {
                         {
                             onStartVpn {
                                 longPressScheme?.let { viewModel.startSpeedTestScheme(it.id) }
@@ -261,8 +273,16 @@ fun MainScreen(
                                 ConnectButtonSwipeDirection.LEFT -> swipeLeftScheme
                                 ConnectButtonSwipeDirection.RIGHT -> swipeRightScheme
                             }
-                            onStartVpn {
-                                scheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                            val enabled = when (direction) {
+                                ConnectButtonSwipeDirection.UP -> homeSwipeUpSpeedTestEnabled
+                                ConnectButtonSwipeDirection.DOWN -> homeSwipeDownSpeedTestEnabled
+                                ConnectButtonSwipeDirection.LEFT -> homeSwipeLeftSpeedTestEnabled
+                                ConnectButtonSwipeDirection.RIGHT -> homeSwipeRightSpeedTestEnabled
+                            }
+                            if (enabled) {
+                                onStartVpn {
+                                    scheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                                }
                             }
                         }
                     } else {
@@ -270,8 +290,16 @@ fun MainScreen(
                     },
                     // 状态提示统一由上方链路图展示，连接按钮区域只保留图标。
                     showStatusLabel = false,
-                    clickActionLabel = clickScheme?.name ?: "测速方案",
-                    longClickActionLabel = longPressScheme?.name ?: "测速方案"
+                    clickActionLabel = if (homeClickSpeedTestEnabled) {
+                        clickScheme?.name ?: "测速方案"
+                    } else {
+                        "直接连接"
+                    },
+                    longClickActionLabel = if (homeLongPressSpeedTestEnabled) {
+                        longPressScheme?.name ?: "测速方案"
+                    } else {
+                        "点击连接"
+                    }
                 )
                 
                 Spacer(modifier = Modifier.weight(1f))

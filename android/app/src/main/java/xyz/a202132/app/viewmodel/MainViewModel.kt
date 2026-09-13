@@ -367,6 +367,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SpeedTestScheme.DEEP_ID
     )
 
+    val homeClickSpeedTestEnabled = settingsRepository.homeClickSpeedTestEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true
+    )
+
+    val homeLongPressSpeedTestEnabled = settingsRepository.homeLongPressSpeedTestEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true
+    )
+
+    val homeSwipeUpSpeedTestEnabled = settingsRepository.homeSwipeUpSpeedTestEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        false
+    )
+
+    val homeSwipeDownSpeedTestEnabled = settingsRepository.homeSwipeDownSpeedTestEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        false
+    )
+
+    val homeSwipeLeftSpeedTestEnabled = settingsRepository.homeSwipeLeftSpeedTestEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        false
+    )
+
+    val homeSwipeRightSpeedTestEnabled = settingsRepository.homeSwipeRightSpeedTestEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        false
+    )
+
     val ipv6RoutingMode = settingsRepository.ipv6RoutingMode.stateIn(
         viewModelScope,
         SharingStarted.Lazily,
@@ -1499,6 +1535,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setHomeSwipeRightSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
             settingsRepository.setHomeSwipeRightSpeedTestSchemeId(schemeId)
+        }
+    }
+
+    fun setHomeClickSpeedTestEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHomeClickSpeedTestEnabled(enabled)
+        }
+    }
+
+    fun setHomeLongPressSpeedTestEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHomeLongPressSpeedTestEnabled(enabled)
+        }
+    }
+
+    fun setHomeSwipeUpSpeedTestEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHomeSwipeUpSpeedTestEnabled(enabled)
+        }
+    }
+
+    fun setHomeSwipeDownSpeedTestEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHomeSwipeDownSpeedTestEnabled(enabled)
+        }
+    }
+
+    fun setHomeSwipeLeftSpeedTestEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHomeSwipeLeftSpeedTestEnabled(enabled)
+        }
+    }
+
+    fun setHomeSwipeRightSpeedTestEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHomeSwipeRightSpeedTestEnabled(enabled)
         }
     }
 

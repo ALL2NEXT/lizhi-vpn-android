@@ -58,6 +58,18 @@ class SettingsRepository(private val context: Context) {
             stringPreferencesKey("home_swipe_left_speed_test_scheme_id")
         private val HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_swipe_right_speed_test_scheme_id")
+        private val HOME_CLICK_SPEED_TEST_ENABLED =
+            booleanPreferencesKey("home_click_speed_test_enabled")
+        private val HOME_LONG_PRESS_SPEED_TEST_ENABLED =
+            booleanPreferencesKey("home_long_press_speed_test_enabled")
+        private val HOME_SWIPE_UP_SPEED_TEST_ENABLED =
+            booleanPreferencesKey("home_swipe_up_speed_test_enabled")
+        private val HOME_SWIPE_DOWN_SPEED_TEST_ENABLED =
+            booleanPreferencesKey("home_swipe_down_speed_test_enabled")
+        private val HOME_SWIPE_LEFT_SPEED_TEST_ENABLED =
+            booleanPreferencesKey("home_swipe_left_speed_test_enabled")
+        private val HOME_SWIPE_RIGHT_SPEED_TEST_ENABLED =
+            booleanPreferencesKey("home_swipe_right_speed_test_enabled")
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
         private val UPDATE_DOWNLOAD_DIRECTORY_URI =
@@ -203,6 +215,36 @@ class SettingsRepository(private val context: Context) {
         )
     }
 
+    /** 主页图标单击是否启用测速方案；默认开启以保持原有行为。 */
+    val homeClickSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[HOME_CLICK_SPEED_TEST_ENABLED] ?: true
+    }
+
+    /** 主页图标长按是否启用测速方案；默认开启以保持原有行为。 */
+    val homeLongPressSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[HOME_LONG_PRESS_SPEED_TEST_ENABLED] ?: true
+    }
+
+    /** 主页图标上滑是否启用测速方案；默认关闭避免误触。 */
+    val homeSwipeUpSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[HOME_SWIPE_UP_SPEED_TEST_ENABLED] ?: false
+    }
+
+    /** 主页图标下滑是否启用测速方案；默认关闭避免误触。 */
+    val homeSwipeDownSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[HOME_SWIPE_DOWN_SPEED_TEST_ENABLED] ?: false
+    }
+
+    /** 主页图标左滑是否启用测速方案；默认关闭避免误触。 */
+    val homeSwipeLeftSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[HOME_SWIPE_LEFT_SPEED_TEST_ENABLED] ?: false
+    }
+
+    /** 主页图标右滑是否启用测速方案；默认关闭避免误触。 */
+    val homeSwipeRightSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[HOME_SWIPE_RIGHT_SPEED_TEST_ENABLED] ?: false
+    }
+
     suspend fun setHomeClickSpeedTestSchemeId(schemeId: String) {
         context.dataStore.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
@@ -248,6 +290,42 @@ class SettingsRepository(private val context: Context) {
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = schemeId
             }
+        }
+    }
+
+    suspend fun setHomeClickSpeedTestEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_CLICK_SPEED_TEST_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setHomeLongPressSpeedTestEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_LONG_PRESS_SPEED_TEST_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setHomeSwipeUpSpeedTestEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_SWIPE_UP_SPEED_TEST_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setHomeSwipeDownSpeedTestEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_SWIPE_DOWN_SPEED_TEST_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setHomeSwipeLeftSpeedTestEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_SWIPE_LEFT_SPEED_TEST_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setHomeSwipeRightSpeedTestEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HOME_SWIPE_RIGHT_SPEED_TEST_ENABLED] = enabled
         }
     }
 
