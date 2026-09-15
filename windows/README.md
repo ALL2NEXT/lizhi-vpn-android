@@ -38,7 +38,7 @@ TUN 连接需要管理员权限。开发运行时请先打开“管理员 PowerS
 3. `windows/runtime/windows-x64/sing-box.exe`；
 4. 当前用户的 `PATH`。
 
-核心由 Windows 客户端生成与 Android 1.13.0-rc.3 兼容的配置，并在连接前执行 `sing-box check`。当前开发版直接启动 TUN 进程，因此连接时要求应用本身具有管理员权限；独立高权限 Service 仍是后续安装版的加固项。
+核心由 Windows 客户端生成与 Android 1.14.1 兼容的配置，并在连接前执行 `sing-box check`。当前开发版直接启动 TUN 进程，因此连接时要求应用本身具有管理员权限；独立高权限 Service 仍是后续安装版的加固项。
 
 ## Xray 双核心
 

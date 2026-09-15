@@ -8,8 +8,8 @@ class SingBoxLocatorTest {
     @Test
     fun parsesStableVersionOutput() {
         assertEquals(
-            "1.13.0",
-            SingBoxLocator.parseSingBoxVersion("sing-box version 1.13.0\nEnvironment: go1.25 windows/amd64")
+            "1.14.1",
+            SingBoxLocator.parseSingBoxVersion("sing-box version 1.14.1\nEnvironment: go1.25 windows/amd64")
         )
     }
 

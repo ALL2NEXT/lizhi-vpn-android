@@ -11,9 +11,9 @@ $sourceDirectory = Join-Path $repositoryDirectory 'core\sing-box'
 $runtimeDirectory = Join-Path $projectDirectory 'runtime\windows-x64'
 $executable = Join-Path $runtimeDirectory 'sing-box.exe'
 $cronetLibrary = Join-Path $runtimeDirectory 'libcronet.dll'
-$expectedRevision = '58ccf82e0bfc5e724421d2ba03157fe7f0fee537'
-$version = '1.13.0-rc.3'
-$goToolchain = 'go1.25.4'
+$expectedRevision = '1ac1a339cb1223e9c70eae14c44411c75033c02d'
+$version = '1.14.1'
+$goToolchain = 'go1.25.5'
 $buildTags = 'with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_ccm,with_ocm,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0'
 $linkerFlags = "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=$version -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0"
 
@@ -37,7 +37,7 @@ try {
     $env:CGO_ENABLED = '0'
     $env:GOOS = 'windows'
     $env:GOARCH = $Architecture
-    # This tag's official Windows workflow uses Go 1.25.4. Go 1.26 removed an
+    # This tag requires Go 1.25.5. Go 1.26 removed an
     # internal poll symbol still referenced by the pinned tfo-go dependency.
     $env:GOTOOLCHAIN = $goToolchain
 
@@ -50,15 +50,17 @@ try {
             throw "sing-box.exe build failed with exit code $LASTEXITCODE."
         }
 
-        $cronetVersion = (& go list -m -f '{{.Version}}' github.com/sagernet/cronet-go).Trim()
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($cronetVersion)) {
-            throw 'Unable to resolve the cronet-go version.'
+        $cronetModule = 'github.com/sagernet/cronet-go/lib/windows_amd64'
+        $cronetDirectory = (& go list -m -f '{{.Dir}}' $cronetModule).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($cronetDirectory)) {
+            throw 'Unable to resolve the Windows cronet-go library module.'
         }
 
-        & go run "github.com/sagernet/cronet-go/cmd/build-naive@$cronetVersion" extract-lib --target "windows/$Architecture" -o $runtimeDirectory
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $cronetLibrary)) {
-            throw 'libcronet.dll extraction failed.'
+        $cronetSource = Join-Path $cronetDirectory 'libcronet.dll'
+        if (-not (Test-Path -LiteralPath $cronetSource)) {
+            throw "The Windows cronet-go library is missing: $cronetSource"
         }
+        Copy-Item -LiteralPath $cronetSource -Destination $cronetLibrary -Force
     }
     finally {
         Pop-Location

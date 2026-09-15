@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"net/netip"
 	"os"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -38,6 +40,10 @@ func (s *platformInterfaceStub) OpenInterface(options *tun.Options, platformOpti
 	return nil, os.ErrInvalid
 }
 
+func (s *platformInterfaceStub) ProcessPlatformOptions(options option.TunPlatformOptions) error {
+	return nil
+}
+
 func (s *platformInterfaceStub) UsePlatformDefaultInterfaceMonitor() bool {
 	return true
 }
@@ -69,7 +75,7 @@ func (s *platformInterfaceStub) RequestPermissionForWIFIState() error {
 	return nil
 }
 
-func (s *platformInterfaceStub) ReadWIFIState() adapter.WIFIState {
+func (s *platformInterfaceStub) ReadWIFIState(_ context.Context) adapter.WIFIState {
 	return adapter.WIFIState{}
 }
 
@@ -95,6 +101,62 @@ func (s *platformInterfaceStub) UsePlatformNotification() bool {
 
 func (s *platformInterfaceStub) SendNotification(notification *adapter.Notification) error {
 	return nil
+}
+
+func (s *platformInterfaceStub) CancelNotification(identifier string, typeID int32) error {
+	return nil
+}
+
+func (s *platformInterfaceStub) MyInterfaceAddress() []netip.Addr {
+	return nil
+}
+
+func (s *platformInterfaceStub) UsePlatformNeighborResolver() bool {
+	return false
+}
+
+func (s *platformInterfaceStub) StartNeighborMonitor(listener adapter.NeighborUpdateListener) error {
+	return os.ErrInvalid
+}
+
+func (s *platformInterfaceStub) CloseNeighborMonitor(listener adapter.NeighborUpdateListener) error {
+	return nil
+}
+
+func (s *platformInterfaceStub) UsePlatformShell() bool {
+	return false
+}
+
+func (s *platformInterfaceStub) CheckPlatformShell() error {
+	return nil
+}
+
+func (s *platformInterfaceStub) OpenShellSession(user *adapter.PlatformUser, command string, env []string, term string, rows int32, cols int32) (adapter.ShellSession, error) {
+	return nil, os.ErrInvalid
+}
+
+func (s *platformInterfaceStub) LookupUser(username string) (*adapter.PlatformUser, error) {
+	return nil, os.ErrInvalid
+}
+
+func (s *platformInterfaceStub) LookupSFTPServer() (string, error) {
+	return "", os.ErrInvalid
+}
+
+func (s *platformInterfaceStub) ReadSystemSSHHostKey() ([]byte, error) {
+	return nil, os.ErrInvalid
+}
+
+func (s *platformInterfaceStub) TailscaleHostname() string {
+	return ""
+}
+
+func (s *platformInterfaceStub) UsePlatformBridge() bool {
+	return false
+}
+
+func (s *platformInterfaceStub) CreateBridge(options adapter.BridgeOptions) (adapter.BridgeSession, error) {
+	return nil, os.ErrInvalid
 }
 
 type interfaceMonitorStub struct{}
@@ -131,4 +193,8 @@ func (s *interfaceMonitorStub) RegisterMyInterface(interfaceName string) {
 
 func (s *interfaceMonitorStub) MyInterface() string {
 	return ""
+}
+
+func (s *interfaceMonitorStub) MyInterfaces() []string {
+	return nil
 }
