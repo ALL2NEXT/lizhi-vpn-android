@@ -1,12 +1,10 @@
 package xyz.a202132.app.ui.screens
 
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
@@ -23,8 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -42,18 +38,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
-import xyz.a202132.app.BuildConfig
 import xyz.a202132.app.data.model.IPv6RoutingMode
-import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyMode
-import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
 /** 展示核心引擎及其内部 Routing 模块的配置与当前路由决策。 */
 @Composable
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 fun CoreRoutingScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
@@ -128,31 +120,6 @@ fun CoreRoutingScreen(
                 RoutingRuleText("嗅探结果仅用于恢复目标信息和执行核心内部 Routing。")
             }
 
-            CoreRoutingSection(
-                title = "协议核心",
-                collapsible = true,
-                initiallyExpanded = false
-            ) {
-                Text(
-                    text = "可为支持的协议选择 sing-box 或 Xray，修改后会在下次连接时生效。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-                ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
-                    ProtocolCoreRow(
-                        label = nodeType.displayName(),
-                        selectedCore = protocolCoreSettings.coreFor(nodeType),
-                        availableCores = xyz.a202132.app.core.CoreBackends.registry.availableFor(nodeType),
-                        onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
-                    )
-                }
-                Text(
-                    text = "内置 Xray ${BuildConfig.XRAY_CORE_VERSION}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
-
             CoreRoutingSection(title = "分流模式") {
                 RoutingValueRow(
                     "当前模式",
@@ -190,54 +157,6 @@ fun CoreRoutingScreen(
             }
         }
     }
-}
-
-@Composable
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
-private fun ProtocolCoreRow(
-    label: String,
-    selectedCore: ProxyCore,
-    availableCores: List<ProxyCore>,
-    onSelected: (ProxyCore) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        FlowRow(
-            modifier = Modifier.weight(2f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
-        ) {
-            availableCores.forEach { core ->
-                FilterChip(
-                    selected = selectedCore == core,
-                    onClick = { onSelected(core) },
-                    label = { Text(core.displayName) }
-                )
-            }
-        }
-    }
-}
-
-private fun NodeType.displayName(): String = when (this) {
-    NodeType.VLESS -> "VLESS"
-    NodeType.VMESS -> "VMess"
-    NodeType.TROJAN -> "Trojan"
-    NodeType.HYSTERIA2 -> "Hysteria2"
-    NodeType.ANYTLS -> "AnyTLS"
-    NodeType.TUIC -> "TUIC"
-    NodeType.NAIVE -> "Naive"
-    NodeType.WIREGUARD -> "WireGuard"
-    NodeType.SHADOWSOCKS -> "Shadowsocks"
-    NodeType.SOCKS -> "SOCKS"
-    NodeType.HTTP -> "HTTP"
-    NodeType.UNKNOWN -> "Unknown"
 }
 
 @Composable
