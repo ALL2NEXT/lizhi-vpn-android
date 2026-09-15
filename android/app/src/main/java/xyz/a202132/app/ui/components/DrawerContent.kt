@@ -117,7 +117,7 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Login,
-                title = "入站前",
+                title = "流量接管",
                 onClick = onOpenInboundBefore
             )
 
@@ -129,7 +129,7 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Route,
-                title = "核心路由",
+                title = "核心与路由",
                 onClick = onOpenCoreRouting
             )
 
@@ -141,7 +141,7 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Logout,
-                title = "出站后",
+                title = "检测与诊断",
                 onClick = onOpenOutboundAfter
             )
 

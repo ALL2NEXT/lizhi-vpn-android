@@ -51,7 +51,7 @@ import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
-/** 展示核心在入站和出站之间执行的路由决策，并提供协议核心选择。 */
+/** 展示核心引擎及其内部 Routing 模块的配置与当前路由决策。 */
 @Composable
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 fun CoreRoutingScreen(
@@ -64,23 +64,34 @@ fun CoreRoutingScreen(
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val currentCore = currentNode?.let { protocolCoreSettings.coreFor(it.type) }
 
-    AppScreenScaffold(title = "核心路由", onBack = onBack) {
+    AppScreenScaffold(title = "核心与路由", onBack = onBack) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            CoreRoutingSection(title = "核心运行") {
+            Text(
+                text = "核心引擎负责处理流量；Routing 是核心内部的路由模块，二者不是同一个概念。",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            CoreRoutingSection(title = "核心引擎") {
                 RoutingValueRow("运行核心", currentCore?.displayName ?: "未选择节点")
                 Text(
-                    text = "运行核心是流量处理引擎，不属于入站或出站对象。",
+                    text = "运行核心是流量处理引擎，负责承载入站、内部 Routing 与出站处理。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            CoreRoutingSection(title = "网络路由") {
+            CoreRoutingSection(title = "核心内部 Routing") {
+                Text(
+                    text = "本页集中展示核心与其内部 Routing 相关的设置；IPv6 还会同时影响 Android VPN/TUN 的地址策略。",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Text(
                     text = "IPv6 路由",
                     fontSize = 14.sp,
@@ -105,6 +116,16 @@ fun CoreRoutingScreen(
                         )
                     }
                 )
+            }
+
+            CoreRoutingSection(title = "DNS") {
+                RoutingRuleText("DNS 请求由代理核心接管并处理。")
+                RoutingRuleText("IPv6 路由模式会同步影响 DNS 解析地址策略。")
+            }
+
+            CoreRoutingSection(title = "嗅探") {
+                RoutingRuleText("核心会在内部入站处理 HTTP、TLS、QUIC 目标信息。")
+                RoutingRuleText("嗅探结果仅用于恢复目标信息和执行核心内部 Routing。")
             }
 
             CoreRoutingSection(
@@ -138,13 +159,13 @@ fun CoreRoutingScreen(
                     if (proxyMode == ProxyMode.GLOBAL) "全局" else "智能"
                 )
                 Text(
-                    text = "本页只展示当前核心路由模式；模式切换入口仍保留在主页。",
+                    text = "分流模式由核心内部 Routing 模块应用到出站选择；模式切换入口仍保留在主页。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            CoreRoutingSection(title = "规则概览") {
+            CoreRoutingSection(title = "路由规则") {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceVariant,

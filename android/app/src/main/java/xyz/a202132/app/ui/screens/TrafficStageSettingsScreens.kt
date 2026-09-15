@@ -19,14 +19,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.a202132.app.ui.components.AppScreenScaffold
 
-/** 入站前设置只承载核心入站前已经生效的功能入口。 */
+/** 流量接管设置只承载进入 Android VPN/TUN 与代理核心前的应用范围选择。 */
 @Composable
 fun InboundBeforeScreen(
     onBack: () -> Unit,
-    onOpenProxyScope: () -> Unit,
-    onOpenSpeedTestSchemes: () -> Unit
+    onOpenProxyScope: () -> Unit
 ) {
-    AppScreenScaffold(title = "入站前", onBack = onBack) {
+    AppScreenScaffold(title = "流量接管", onBack = onBack) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -34,39 +33,47 @@ fun InboundBeforeScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "这里的设置发生在核心入站之前。",
+                text = "决定哪些应用流量进入 Android VPN/TUN 与代理核心",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             StageSettingCard(
                 title = "分应用代理",
-                description = "在 Android VPN/TUN 接入前筛选应用，决定哪些应用流量交给本地数据面。",
+                description = "选择进入 Android VPN/TUN 与代理核心的应用流量。",
                 actionLabel = "打开分应用代理",
                 onAction = onOpenProxyScope
-            )
-            StageSettingCard(
-                title = "测试",
-                description = "配置主页测速方案及其触发方式，在建立核心入站前选择测速节点。",
-                actionLabel = "打开测试设置",
-                onAction = onOpenSpeedTestSchemes
             )
         }
     }
 }
 
-/** 出站后暂时只提供位置占位，不提前引入尚未定义的处理逻辑。 */
+/** 检测与诊断是独立辅助模块，不代表正常数据流必经的阶段。 */
 @Composable
-fun OutboundAfterScreen(onBack: () -> Unit) {
-    AppScreenScaffold(title = "出站后", onBack = onBack) {
+fun OutboundAfterScreen(
+    onBack: () -> Unit,
+    onOpenSpeedTestSchemes: () -> Unit
+) {
+    AppScreenScaffold(title = "检测与诊断", onBack = onBack) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            Text(
+                text = "提供独立的连接检测与诊断工具，不属于正常数据流的必经阶段。",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             StageSettingCard(
-                title = "暂无设置",
-                description = "出站后处理功能暂未接入，后续可在这里增加核心出站完成后的处理。",
+                title = "启动前节点选择/测速",
+                description = "在连接启动前按测速方案选择节点，是连接启动流程的辅助功能，不属于 Android VPN/TUN 或代理核心的数据路径。",
+                actionLabel = "打开测速设置",
+                onAction = onOpenSpeedTestSchemes
+            )
+            StageSettingCard(
+                title = "检测工具（后续扩展）",
+                description = "后续可在此加入 TCPing、URL Test、出口 IP、DNS 泄漏、IPv6 检测、流媒体解锁、送中测试等独立检测。",
                 actionLabel = null,
                 onAction = {}
             )

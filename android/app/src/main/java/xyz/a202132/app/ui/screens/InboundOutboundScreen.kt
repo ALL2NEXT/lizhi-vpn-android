@@ -219,9 +219,9 @@ fun OutboundScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             CoreSection(title = "核心出站") {
-                OutboundValueRow("当前节点", currentNode?.name ?: "未选择节点")
+                OutboundValueRow("当前代理出站", currentNode?.name ?: "未选择节点")
                 Text(
-                    text = "局域网入站会直接复用当前节点出站，不会再次经过本机 TUN。",
+                    text = "局域网入站会直接复用当前代理出站，不会再次经过本机 TUN。",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

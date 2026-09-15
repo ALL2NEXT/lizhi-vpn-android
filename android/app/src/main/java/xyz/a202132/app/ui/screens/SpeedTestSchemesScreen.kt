@@ -78,7 +78,7 @@ fun SpeedTestSchemesScreen(
     var newSchemeName by remember { mutableStateOf("") }
     var schemeToDelete by remember { mutableStateOf<SpeedTestScheme?>(null) }
 
-    AppScreenScaffold(title = "测试", onBack = onBack) {
+    AppScreenScaffold(title = "启动前节点选择/测速", onBack = onBack) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -86,7 +86,7 @@ fun SpeedTestSchemesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "主页图标的点击、长按及上下左右滑动都可以绑定测速方案，并可分别启用或关闭。点击关闭时直接连接已选节点；测速按 1 TCPing、2 204 URL、3 带宽测速顺序执行。",
+                text = "连接启动前可通过主页图标的点击、长按及上下左右滑动触发测速方案，并按结果选择节点。关闭测速时直接连接已选节点；此功能仅辅助连接启动，不属于正常网络数据路径。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )

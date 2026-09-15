@@ -367,9 +367,6 @@ class MainActivity : ComponentActivity() {
                                     onBack = { navController.popBackStack() },
                                     onOpenProxyScope = {
                                         navigateTo(AppRoute.PROXY_SCOPE)
-                                    },
-                                    onOpenSpeedTestSchemes = {
-                                        navigateTo(AppRoute.SPEED_TEST_SCHEMES)
                                     }
                                 )
                             }
@@ -397,7 +394,10 @@ class MainActivity : ComponentActivity() {
 
                             composable(AppRoute.OUTBOUND_AFTER) {
                                 OutboundAfterScreen(
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onOpenSpeedTestSchemes = {
+                                        navigateTo(AppRoute.SPEED_TEST_SCHEMES)
+                                    }
                                 )
                             }
 

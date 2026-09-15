@@ -96,7 +96,7 @@ fun SpeedTestSchemeEditorScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(6.dp))
-                Text("测试作用域", fontWeight = FontWeight.SemiBold)
+                Text("启动前测速作用域", fontWeight = FontWeight.SemiBold)
                 Text(
                     "测速节点范围按以下顺序选择，指定组支持多选。",
                     fontSize = 12.sp,
