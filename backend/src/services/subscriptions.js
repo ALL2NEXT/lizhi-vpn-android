@@ -357,9 +357,8 @@ export async function readExternalSubscription(env, source) {
 export async function validateAndWarmSubscriptionSources(env, subscriptions) {
   for (const source of subscriptions) {
     if (source.enabled === false) continue;
-    if (source.content) {
-      assertPlainSubscriptionContent(source.content);
-    } else if (source.url) {
+    // 后台直接维护的文本订阅原样保存，不要求内容匹配特定节点协议。
+    if (source.url && !source.content) {
       await readExternalSubscription(env, source);
     }
   }

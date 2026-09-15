@@ -3,7 +3,6 @@ import { normalizeAccountType } from "../domain/account.js";
 import { beijingTimestamp } from "../domain/time.js";
 import { cleanText, parseFlag, plainObject } from "../lib/values.js";
 import {
-  assertPlainSubscriptionContent,
   normalizeManagedContent,
   normalizeMinimumAppVersion,
   normalizeSubscriptionCacheMinutes,
@@ -60,7 +59,6 @@ export function normalizeState(input) {
       const content = normalizeManagedContent(
         item.content ?? item.managedContent ?? item.nodesText,
       );
-      if (content) assertPlainSubscriptionContent(content);
       const externalUrl = typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
         ? item.url.trim()
         : "";
