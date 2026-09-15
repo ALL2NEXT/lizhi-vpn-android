@@ -39,48 +39,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import xyz.a202132.app.data.model.IPv6RoutingMode
-import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
-/** 展示核心引擎及其内部 Routing 模块的配置与当前路由决策。 */
+/** 展示路由相关设置与当前路由决策。 */
 @Composable
 fun CoreRoutingScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
-    val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
-    val currentCore = currentNode?.let { protocolCoreSettings.coreFor(it.type) }
 
-    AppScreenScaffold(title = "核心与路由", onBack = onBack) {
+    AppScreenScaffold(title = "路由", onBack = onBack) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Text(
-                text = "核心引擎负责处理流量；Routing 是核心内部的路由模块，二者不是同一个概念。",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            CoreRoutingSection(title = "核心引擎") {
-                RoutingValueRow("运行核心", currentCore?.displayName ?: "未选择节点")
+            RoutingSection(title = "路由设置") {
                 Text(
-                    text = "运行核心是流量处理引擎，负责承载入站、内部 Routing 与出站处理。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            CoreRoutingSection(title = "核心内部 Routing") {
-                Text(
-                    text = "本页集中展示核心与其内部 Routing 相关的设置；IPv6 还会同时影响 Android VPN/TUN 的地址策略。",
+                    text = "本页集中管理 IPv6、DNS、嗅探、分流模式和路由规则。",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -110,29 +91,28 @@ fun CoreRoutingScreen(
                 )
             }
 
-            CoreRoutingSection(title = "DNS") {
-                RoutingRuleText("DNS 请求由代理核心接管并处理。")
+            RoutingSection(title = "DNS") {
+                RoutingRuleText("DNS 请求由代理服务接管并处理。")
                 RoutingRuleText("IPv6 路由模式会同步影响 DNS 解析地址策略。")
             }
 
-            CoreRoutingSection(title = "嗅探") {
-                RoutingRuleText("核心会在内部入站处理 HTTP、TLS、QUIC 目标信息。")
-                RoutingRuleText("嗅探结果仅用于恢复目标信息和执行核心内部 Routing。")
+            RoutingSection(title = "嗅探") {
+                RoutingRuleText("识别 HTTP、TLS、QUIC 等流量的目标域名信息，嗅探结果用于恢复目标信息并参与路由规则匹配。")
             }
 
-            CoreRoutingSection(title = "分流模式") {
+            RoutingSection(title = "分流模式") {
                 RoutingValueRow(
                     "当前模式",
                     if (proxyMode == ProxyMode.GLOBAL) "全局" else "智能"
                 )
                 Text(
-                    text = "分流模式由核心内部 Routing 模块应用到出站选择；模式切换入口仍保留在主页。",
+                    text = "分流模式决定流量使用哪个出站；模式切换入口仍保留在主页。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            CoreRoutingSection(title = "路由规则") {
+            RoutingSection(title = "路由规则") {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceVariant,
@@ -142,7 +122,7 @@ fun CoreRoutingScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        RoutingRuleText("DNS 请求交由核心处理。")
+                        RoutingRuleText("DNS 请求交由代理服务处理。")
                         RoutingRuleText("内网地址、回环地址和当前节点服务器地址直连，避免路由循环。")
                         RoutingRuleText(
                             if (proxyMode == ProxyMode.SMART) {
@@ -151,7 +131,7 @@ fun CoreRoutingScreen(
                                 "全局模式：除必要的内网和节点例外外，流量走代理出站。"
                             }
                         )
-                        RoutingRuleText("未命中前置规则的流量使用 proxy 作为最终出站。")
+                        RoutingRuleText("未命中前置规则的流量使用代理出站。")
                     }
                 }
             }
@@ -160,7 +140,7 @@ fun CoreRoutingScreen(
 }
 
 @Composable
-private fun CoreRoutingSection(
+private fun RoutingSection(
     title: String,
     collapsible: Boolean = false,
     initiallyExpanded: Boolean = true,

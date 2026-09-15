@@ -129,7 +129,7 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Route,
-                title = "核心与路由",
+                title = "路由",
                 onClick = onOpenCoreRouting
             )
 
