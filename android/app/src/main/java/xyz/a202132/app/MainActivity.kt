@@ -46,7 +46,6 @@ import xyz.a202132.app.ui.screens.MainScreen
 import xyz.a202132.app.ui.screens.OtherConfigScreen
 import xyz.a202132.app.ui.screens.InboundScreen
 import xyz.a202132.app.ui.screens.OutboundScreen
-import xyz.a202132.app.ui.screens.InboundBeforeScreen
 import xyz.a202132.app.ui.screens.OutboundAfterScreen
 import xyz.a202132.app.ui.screens.CoreRoutingScreen
 import xyz.a202132.app.ui.screens.ProxyScopeScreen
@@ -237,8 +236,8 @@ class MainActivity : ComponentActivity() {
                                         onOpenOutbound = {
                                             navigateTo(AppRoute.OUTBOUND)
                                         },
-                                        onOpenInboundBefore = {
-                                            navigateTo(AppRoute.INBOUND_BEFORE)
+                                        onOpenProxyScope = {
+                                            navigateTo(AppRoute.PROXY_SCOPE)
                                         },
                                         onOpenOutboundAfter = {
                                             navigateTo(AppRoute.OUTBOUND_AFTER)
@@ -359,15 +358,6 @@ class MainActivity : ComponentActivity() {
                                 OtherConfigScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() }
-                                )
-                            }
-
-                            composable(AppRoute.INBOUND_BEFORE) {
-                                InboundBeforeScreen(
-                                    onBack = { navController.popBackStack() },
-                                    onOpenProxyScope = {
-                                        navigateTo(AppRoute.PROXY_SCOPE)
-                                    }
                                 )
                             }
 

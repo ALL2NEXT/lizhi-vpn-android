@@ -42,7 +42,7 @@ fun DrawerContent(
     onOpenOtherConfig: () -> Unit,
     onOpenInbound: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
-    onOpenInboundBefore: () -> Unit = {},
+    onOpenProxyScope: () -> Unit = {},
     onOpenOutboundAfter: () -> Unit = {},
     onOpenCoreRouting: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
@@ -116,9 +116,9 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.SwapVert,
-                title = "流量接管",
-                onClick = onOpenInboundBefore
+                icon = Icons.Outlined.Android,
+                title = "分应用入站",
+                onClick = onOpenProxyScope
             )
 
             DrawerMenuItem(
@@ -140,8 +140,8 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.SwapHoriz,
-                title = "检测与诊断",
+                icon = Icons.Outlined.FlashOn,
+                title = "测试",
                 onClick = onOpenOutboundAfter
             )
 

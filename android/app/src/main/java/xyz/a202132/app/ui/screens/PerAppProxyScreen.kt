@@ -113,7 +113,7 @@ fun ProxyScopeScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("分应用代理")
+                        Text("分应用入站")
                         Spacer(modifier = Modifier.width(8.dp))
                         Switch(
                             checked = isEnabled,

@@ -4,7 +4,6 @@ object AppRoute {
     const val MAIN = "main"
     const val PROXY_SCOPE = "proxy_scope"
     const val OTHER_CONFIG = "other_config"
-    const val INBOUND_BEFORE = "inbound_before"
     const val INBOUND = "inbound"
     const val CORE_ROUTING = "core_routing"
     const val OUTBOUND = "outbound"
