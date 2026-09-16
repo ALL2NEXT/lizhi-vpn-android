@@ -11,6 +11,8 @@ import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.LanInboundSettings
+import xyz.a202132.app.data.model.DnsDomainStrategy
+import xyz.a202132.app.data.model.DnsSettings
 import xyz.a202132.app.data.model.UrlTestTargets
 import android.net.Uri
 
@@ -39,6 +41,7 @@ class SingBoxConfigGenerator {
         selectedNodeId: String?,
         proxyMode: ProxyMode,
         ipv6Mode: IPv6RoutingMode = IPv6RoutingMode.DISABLED,
+        dnsSettings: DnsSettings = DnsSettings(),
         internalSocksEndpoint: LocalSocksEndpoint? = null,
         lanInbound: LanInboundSettings = LanInboundSettings(),
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
@@ -58,7 +61,7 @@ class SingBoxConfigGenerator {
             }
                 
             add("log", createLogConfig())
-            add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode))
+            add("dns", createDnsConfig(proxyMode, nodeDomains, ipv6Mode, dnsSettings, lanInbound.enabled))
             add("inbounds", createInbounds(internalSocksEndpoint, lanInbound))
             add(
                 "outbounds",
@@ -163,7 +166,6 @@ class SingBoxConfigGenerator {
                     }
                 })
                 addProperty("final", "proxy")
-                addProperty("default_domain_resolver", "dns-local")
             })
         }
         return gson.toJson(config)
@@ -328,54 +330,166 @@ class SingBoxConfigGenerator {
         }
     }
     
-    private fun createDnsConfig(proxyMode: ProxyMode, nodeDomains: List<String>, ipv6Mode: IPv6RoutingMode): JsonObject {
+    private fun createDnsConfig(
+        proxyMode: ProxyMode,
+        nodeDomains: List<String>,
+        ipv6Mode: IPv6RoutingMode,
+        dnsSettings: DnsSettings,
+        lanInboundEnabled: Boolean
+    ): JsonObject {
         val servers = JsonArray().apply {
+            // 使用系统 DNS 解析自定义 DNS 服务器的域名，避免解析链路自引用。
             add(JsonObject().apply {
-                addProperty("type", "tls")
-                addProperty("tag", "google")
-                addProperty("server", AppConfig.VPN_DNS_PRIMARY)
-                addProperty("detour", "proxy") // DNS走代理组
+                addProperty("type", "local")
+                addProperty("tag", "dns-local")
             })
-            add(JsonObject().apply {
-                addProperty("type", "udp")
-                addProperty("tag", "local")
-                addProperty("server", AppConfig.VPN_DNS_CHINA)
-            })
+            dnsSettings.directDns.lineSequence()
+                .map(String::trim)
+                .firstOrNull(String::isNotEmpty)
+                ?.let { address ->
+                    addDnsServer(
+                        address = address,
+                        tag = "dns-direct",
+                        detour = null,
+                        domainResolver = "dns-local",
+                        serverAddressStrategy = resolveDnsStrategy(
+                            dnsSettings.serverDomainStrategy,
+                            ipv6Mode,
+                            forServerAddress = true
+                        )
+                    )
+                }
+            dnsSettings.remoteDns.lineSequence()
+                .map(String::trim)
+                .firstOrNull(String::isNotEmpty)
+                ?.let { address ->
+                    addDnsServer(
+                        address = address,
+                        tag = "dns-remote",
+                        detour = "proxy",
+                        domainResolver = "dns-direct",
+                        serverAddressStrategy = resolveDnsStrategy(
+                            dnsSettings.serverDomainStrategy,
+                            ipv6Mode,
+                            forServerAddress = true
+                        )
+                    )
+                }
         }
-        
+
         val rules = JsonArray()
-        
-        // 1. 通过本地 DNS 解析代理服务器域名（对于基于域名的代理至关重要！）
+
+        // 1. 通过直连 DNS 解析代理服务器域名，避免代理出口和 DNS 之间互相等待。
         if (nodeDomains.isNotEmpty()) {
             rules.add(JsonObject().apply {
                 add("domain", JsonArray().apply { nodeDomains.forEach { add(it) } })
-                addProperty("server", "local")
+                addProperty("server", "dns-direct")
+                addProperty("strategy", resolveDnsStrategy(
+                    dnsSettings.directDomainStrategy,
+                    ipv6Mode
+                ))
             })
         }
-        
-        // 2. 通过本地 DNS 解析 CN 域名（使用 rule_set）
-        if (proxyMode == ProxyMode.SMART) {
+
+        // 2. DNS 路由开启时，智能模式的国内域名使用直连 DNS。
+        if (dnsSettings.dnsRoutingEnabled && proxyMode == ProxyMode.SMART) {
             rules.add(JsonObject().apply {
-                add("rule_set", JsonArray().apply {
-                    add("geosite-cn")
-                })
-                addProperty("server", "local")
+                add("rule_set", JsonArray().apply { add("geosite-cn") })
+                addProperty("server", "dns-direct")
+                addProperty("strategy", resolveDnsStrategy(
+                    dnsSettings.directDomainStrategy,
+                    ipv6Mode
+                ))
             })
         }
-        
-        // 基于 IPv6 模式的 DNS 策略
-        val dnsStrategy = when (ipv6Mode) {
-            IPv6RoutingMode.ONLY -> "ipv6_only"
-            IPv6RoutingMode.PREFER -> "prefer_ipv6"
-            else -> "prefer_ipv4"
+
+        // FakeIP 服务器是独立的 DNS 传输，仅为来自代理入站的请求返回映射地址。
+        if (dnsSettings.fakeDnsEnabled) {
+            servers.add(JsonObject().apply {
+                addProperty("type", "fakeip")
+                addProperty("tag", "dns-fake")
+                addProperty("inet4_range", "198.18.0.0/15")
+                addProperty("inet6_range", "fc00::/18")
+            })
+            rules.add(JsonObject().apply {
+                add("inbound", JsonArray().apply {
+                    add("internal-socks-in")
+                    if (lanInboundEnabled) add("lan-socks-in")
+                })
+                addProperty("server", "dns-fake")
+                addProperty("disable_cache", true)
+            })
         }
-        
+
         return JsonObject().apply {
             add("servers", servers)
             add("rules", rules)
-            addProperty("final", "google")
-            addProperty("strategy", dnsStrategy)
+            addProperty("final", "dns-remote")
+            addProperty("strategy", resolveDnsStrategy(
+                dnsSettings.remoteDomainStrategy,
+                ipv6Mode
+            ))
         }
+    }
+
+    private fun JsonArray.addDnsServer(
+        address: String,
+        tag: String,
+        detour: String?,
+        domainResolver: String,
+        serverAddressStrategy: String
+    ) {
+        val uri = runCatching {
+            java.net.URI(if (address.contains("://")) address else "udp://$address")
+        }.getOrNull() ?: java.net.URI("udp://${AppConfig.VPN_DNS_CHINA}")
+        val scheme = uri.scheme?.lowercase() ?: "udp"
+        val type = when (scheme) {
+            "https" -> "https"
+            "tls" -> "tls"
+            "tcp", "h2c" -> "tcp"
+            else -> "udp"
+        }
+        val server = uri.host ?: address.substringBefore(':')
+        val defaultPort = when (type) {
+            "https" -> 443
+            "tls" -> 853
+            else -> 53
+        }
+        val port = if (uri.port > 0) uri.port else defaultPort
+        add(JsonObject().apply {
+            addProperty("type", type)
+            addProperty("tag", tag)
+            addProperty("server", server)
+            addProperty("server_port", port)
+            detour?.let { addProperty("detour", it) }
+            add("domain_resolver", JsonObject().apply {
+                addProperty("server", domainResolver)
+                addProperty("strategy", serverAddressStrategy)
+            })
+            if (type == "https") {
+                addProperty("path", uri.path?.takeIf(String::isNotBlank) ?: "/dns-query")
+            }
+            // 当前端点策略用于 DNS 结果，服务器地址策略用于解析上面的 server 字段。
+        })
+    }
+
+    private fun resolveDnsStrategy(
+        strategy: DnsDomainStrategy,
+        ipv6Mode: IPv6RoutingMode,
+        forServerAddress: Boolean = false
+    ): String = when (strategy) {
+        DnsDomainStrategy.AUTO -> if (forServerAddress) {
+            // 与 NekoBox 一致：DNS 服务器地址默认优先使用 IPv4，减少启动时的解析失败。
+            "prefer_ipv4"
+        } else {
+            when (ipv6Mode) {
+                IPv6RoutingMode.ONLY -> "ipv6_only"
+                IPv6RoutingMode.PREFER -> "prefer_ipv6"
+                IPv6RoutingMode.ENABLED -> "prefer_ipv4"
+                IPv6RoutingMode.DISABLED -> "ipv4_only"
+            }
+        }
+        else -> strategy.configValue
     }
     
     private fun createInbounds(endpoint: LocalSocksEndpoint?): JsonArray =
@@ -1031,7 +1145,7 @@ class SingBoxConfigGenerator {
             // from the VPN, so native interface auto-detection is neither
             // needed nor available through the old libbox platform bridge.
             addProperty("final", "proxy")
-            addProperty("default_domain_resolver", "local")
+            addProperty("default_domain_resolver", "dns-direct")
         }
     }
     

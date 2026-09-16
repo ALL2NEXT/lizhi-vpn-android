@@ -414,6 +414,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Lazily,
         IPv6RoutingMode.DISABLED
     )
+
+    val dnsSettings = settingsRepository.dnsSettings.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        DnsSettings()
+    )
     
     val isUserAgreementAccepted = settingsRepository.isUserAgreementAccepted.stateIn(
         viewModelScope,
@@ -2138,6 +2144,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 is NodeGroupKey.Imported -> dao.getNodesByGroup(group.groupId).first()
                 null -> emptyList()
             }
+        }
+    }
+
+    fun setRemoteDns(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setRemoteDns(value)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setRemoteDnsStrategy(strategy: DnsDomainStrategy) {
+        viewModelScope.launch {
+            settingsRepository.setRemoteDnsStrategy(strategy)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setDirectDns(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setDirectDns(value)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setDirectDnsStrategy(strategy: DnsDomainStrategy) {
+        viewModelScope.launch {
+            settingsRepository.setDirectDnsStrategy(strategy)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setServerDnsStrategy(strategy: DnsDomainStrategy) {
+        viewModelScope.launch {
+            settingsRepository.setServerDnsStrategy(strategy)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setDnsRoutingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDnsRoutingEnabled(enabled)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setFakeDnsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setFakeDnsEnabled(enabled)
+            restartVpnIfNeeded()
         }
     }
 

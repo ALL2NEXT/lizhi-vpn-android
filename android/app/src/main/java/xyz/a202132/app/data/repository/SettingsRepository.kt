@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 import xyz.a202132.app.data.model.BandwidthTestTargets
+import xyz.a202132.app.data.model.DnsDomainStrategy
+import xyz.a202132.app.data.model.DnsSettings
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.LanInboundSettings
 import xyz.a202132.app.data.model.NodeListCategory
@@ -40,7 +42,8 @@ data class VpnRuntimeSettings(
     val hysteriaDownMbps: Int,
     val protocolCoreSettings: ProtocolCoreSettings,
     val perAppProxy: PerAppProxySettings,
-    val lanInbound: LanInboundSettings = LanInboundSettings()
+    val lanInbound: LanInboundSettings = LanInboundSettings(),
+    val dnsSettings: DnsSettings = DnsSettings()
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -96,6 +99,15 @@ class SettingsRepository(private val context: Context) {
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
+
+        // DNS 设置（与 NekoBox 的远程/直连及策略分组对应）
+        private val DNS_REMOTE = stringPreferencesKey("dns_remote")
+        private val DNS_REMOTE_STRATEGY = stringPreferencesKey("dns_remote_strategy")
+        private val DNS_DIRECT = stringPreferencesKey("dns_direct")
+        private val DNS_DIRECT_STRATEGY = stringPreferencesKey("dns_direct_strategy")
+        private val DNS_SERVER_STRATEGY = stringPreferencesKey("dns_server_strategy")
+        private val DNS_ROUTING_ENABLED = booleanPreferencesKey("dns_routing_enabled")
+        private val DNS_FAKE_ENABLED = booleanPreferencesKey("dns_fake_enabled")
         
         // 自动化测试设置
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
@@ -440,6 +452,7 @@ class SettingsRepository(private val context: Context) {
                 selectedPackages = preferences[SELECTED_PACKAGES] ?: emptySet()
             ),
             lanInbound = decodeLanInboundSettings(preferences),
+            dnsSettings = decodeDnsSettings(preferences),
         )
     }
 
@@ -522,6 +535,18 @@ class SettingsRepository(private val context: Context) {
                 ?: LanInboundSettings.DEFAULT_USERNAME,
             password = preferences[LAN_INBOUND_PASSWORD].orEmpty()
         )
+
+    private fun decodeDnsSettings(preferences: Preferences): DnsSettings = DnsSettings(
+        remoteDns = DnsSettings.normalizeServerList(preferences[DNS_REMOTE])
+            ?: DnsSettings.DEFAULT_REMOTE_DNS,
+        remoteDomainStrategy = DnsDomainStrategy.fromStorage(preferences[DNS_REMOTE_STRATEGY]),
+        directDns = DnsSettings.normalizeServerList(preferences[DNS_DIRECT])
+            ?: DnsSettings.DEFAULT_DIRECT_DNS,
+        directDomainStrategy = DnsDomainStrategy.fromStorage(preferences[DNS_DIRECT_STRATEGY]),
+        serverDomainStrategy = DnsDomainStrategy.fromStorage(preferences[DNS_SERVER_STRATEGY]),
+        dnsRoutingEnabled = preferences[DNS_ROUTING_ENABLED] ?: true,
+        fakeDnsEnabled = preferences[DNS_FAKE_ENABLED] ?: true
+    )
 
     private inline fun <reified T : Enum<T>> enumValueOrDefault(
         value: String?,
@@ -740,6 +765,42 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences[IPV6_ROUTING_MODE] = normalizeIpv6RoutingMode(mode).name
         }
+    }
+
+    val dnsSettings: Flow<DnsSettings> = context.dataStore.data.map { preferences ->
+        decodeDnsSettings(preferences)
+    }
+
+    suspend fun setRemoteDns(value: String) {
+        DnsSettings.normalizeServerList(value)?.let { normalized ->
+            context.dataStore.edit { preferences -> preferences[DNS_REMOTE] = normalized }
+        }
+    }
+
+    suspend fun setRemoteDnsStrategy(strategy: DnsDomainStrategy) {
+        context.dataStore.edit { preferences -> preferences[DNS_REMOTE_STRATEGY] = strategy.name }
+    }
+
+    suspend fun setDirectDns(value: String) {
+        DnsSettings.normalizeServerList(value)?.let { normalized ->
+            context.dataStore.edit { preferences -> preferences[DNS_DIRECT] = normalized }
+        }
+    }
+
+    suspend fun setDirectDnsStrategy(strategy: DnsDomainStrategy) {
+        context.dataStore.edit { preferences -> preferences[DNS_DIRECT_STRATEGY] = strategy.name }
+    }
+
+    suspend fun setServerDnsStrategy(strategy: DnsDomainStrategy) {
+        context.dataStore.edit { preferences -> preferences[DNS_SERVER_STRATEGY] = strategy.name }
+    }
+
+    suspend fun setDnsRoutingEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[DNS_ROUTING_ENABLED] = enabled }
+    }
+
+    suspend fun setFakeDnsEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[DNS_FAKE_ENABLED] = enabled }
     }
 
     /** HEV does not provide an IPv6-only DNS/data path, so migrate old native-only values. */

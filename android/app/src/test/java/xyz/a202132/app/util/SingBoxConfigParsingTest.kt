@@ -6,8 +6,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 import xyz.a202132.app.core.LocalSocksEndpoint
+import xyz.a202132.app.data.model.DnsSettings
+import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.data.model.ProxyMode
 
 class SingBoxConfigParsingTest {
     @Test
@@ -82,5 +85,33 @@ class SingBoxConfigParsingTest {
         assertEquals("node-b", rules[1].get("outbound").asString)
         assertEquals("node-a", result.getAsJsonArray("outbounds")[0].asJsonObject.get("tag").asString)
         assertFalse(result.has("experimental"))
+    }
+
+    @Test
+    fun dnsServersUseSingBox114DomainResolverFormat() {
+        val method = SingBoxConfigGenerator::class.java.getDeclaredMethod(
+            "createDnsConfig",
+            ProxyMode::class.java,
+            List::class.java,
+            IPv6RoutingMode::class.java,
+            DnsSettings::class.java,
+            Boolean::class.javaPrimitiveType
+        ).apply { isAccessible = true }
+        val dns = method.invoke(
+            SingBoxConfigGenerator(),
+            ProxyMode.GLOBAL,
+            emptyList<String>(),
+            IPv6RoutingMode.DISABLED,
+            DnsSettings(),
+            false
+        ) as com.google.gson.JsonObject
+
+        val direct = dns.getAsJsonArray("servers")[1].asJsonObject
+        assertFalse(direct.has("strategy"))
+        assertFalse(direct.has("domain_strategy"))
+        assertEquals(
+            "dns-local",
+            direct.getAsJsonObject("domain_resolver").get("server").asString
+        )
     }
 }

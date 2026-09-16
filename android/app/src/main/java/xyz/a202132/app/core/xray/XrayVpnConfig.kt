@@ -5,6 +5,8 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.core.CoreRequest
+import xyz.a202132.app.data.model.DnsDomainStrategy
+import xyz.a202132.app.data.model.DnsSettings
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.util.XrayConfigGenerator
@@ -72,6 +74,7 @@ internal object XrayVpnConfig {
         val rules = JsonArray()
         if (request.isVpn) {
             val settings = request.settings!!
+            val dnsSettings = settings.dnsSettings
             val strategy = when (settings.ipv6RoutingMode) {
                 IPv6RoutingMode.DISABLED -> "UseIPv4"
                 IPv6RoutingMode.ONLY -> "UseIPv6"
@@ -105,6 +108,34 @@ internal object XrayVpnConfig {
                     add("sockopt", JsonObject().apply { addProperty("dialerProxy", "proxy") })
                 })
             })
+            if (dnsSettings.fakeDnsEnabled) {
+                base.add("fakeDns", if (settings.ipv6RoutingMode == IPv6RoutingMode.DISABLED) {
+                    JsonObject().apply {
+                        addProperty("ipPool", "198.18.0.0/15")
+                        addProperty("poolSize", 65_535)
+                    }
+                } else {
+                    JsonArray().apply {
+                        add(JsonObject().apply {
+                            addProperty("ipPool", "198.18.0.0/15")
+                            addProperty("poolSize", 32_768)
+                        })
+                        add(JsonObject().apply {
+                            addProperty("ipPool", "fc00::/18")
+                            addProperty("poolSize", 32_768)
+                        })
+                    }
+                })
+                base.getAsJsonArray("inbounds").forEach { element ->
+                    val sniffing = element.asJsonObject.getAsJsonObject("sniffing")
+                        ?: JsonObject().also { element.asJsonObject.add("sniffing", it) }
+                    val overrides = sniffing.getAsJsonArray("destOverride")
+                        ?: JsonArray().also { sniffing.add("destOverride", it) }
+                    if (!overrides.any { it.asString.equals("fakedns", ignoreCase = true) }) {
+                        overrides.add("fakedns")
+                    }
+                }
+            }
             rules.add(rule("dns-out").apply {
                 addProperty("port", "53")
                 add(
@@ -135,22 +166,46 @@ internal object XrayVpnConfig {
                 domains.forEach { localDomains.add(it.deepCopy()) }
             }
             base.add("dns", JsonObject().apply {
-                addProperty("queryStrategy", when (settings.ipv6RoutingMode) {
-                    IPv6RoutingMode.DISABLED -> "UseIPv4"
-                    IPv6RoutingMode.ONLY -> "UseIPv6"
-                    else -> "UseIP"
-                })
+                addProperty("queryStrategy", resolveXrayDnsStrategy(
+                    dnsSettings.remoteDomainStrategy,
+                    settings.ipv6RoutingMode
+                ))
                 addProperty("disableFallbackIfMatch", true)
                 add("servers", JsonArray().apply {
                     add(JsonObject().apply {
-                        addProperty("address", AppConfig.VPN_DNS_CHINA)
+                        addProperty("address", firstDnsAddress(
+                            dnsSettings.directDns,
+                            DnsSettings.DEFAULT_DIRECT_DNS
+                        ))
                         addProperty("tag", "dns-bootstrap")
                         addProperty("skipFallback", true)
+                        addProperty("queryStrategy", resolveXrayDnsStrategy(
+                            dnsSettings.directDomainStrategy,
+                            settings.ipv6RoutingMode
+                        ))
                         add("domains", localDomains)
                     })
+                    if (dnsSettings.fakeDnsEnabled) {
+                        add(JsonObject().apply {
+                            addProperty("address", "fakedns")
+                            addProperty("tag", "dns-fake")
+                            addProperty("finalQuery", true)
+                            addProperty("queryStrategy", resolveXrayDnsStrategy(
+                                dnsSettings.remoteDomainStrategy,
+                                settings.ipv6RoutingMode
+                            ))
+                        })
+                    }
                     add(JsonObject().apply {
-                        addProperty("address", "https://${AppConfig.VPN_DNS_PRIMARY}/dns-query")
+                        addProperty("address", firstDnsAddress(
+                            dnsSettings.remoteDns,
+                            DnsSettings.DEFAULT_REMOTE_DNS
+                        ))
                         addProperty("tag", "dns-remote")
+                        addProperty("queryStrategy", resolveXrayDnsStrategy(
+                            dnsSettings.remoteDomainStrategy,
+                            settings.ipv6RoutingMode
+                        ))
                     })
                 })
             })
@@ -169,4 +224,26 @@ internal object XrayVpnConfig {
         addProperty("outboundTag", outbound)
     }
     private fun strings(vararg values: String) = JsonArray().apply { values.forEach(::add) }
+
+    private fun firstDnsAddress(value: String, fallback: String): String =
+        DnsSettings.normalizeServerList(value)
+            ?.lineSequence()
+            ?.firstOrNull()
+            ?: fallback
+
+    private fun resolveXrayDnsStrategy(
+        strategy: DnsDomainStrategy,
+        ipv6Mode: IPv6RoutingMode
+    ): String = when (strategy) {
+        DnsDomainStrategy.AUTO -> when (ipv6Mode) {
+            IPv6RoutingMode.DISABLED -> "UseIPv4"
+            IPv6RoutingMode.ONLY -> "UseIPv6"
+            IPv6RoutingMode.PREFER -> "UseIPv6v4"
+            IPv6RoutingMode.ENABLED -> "UseIPv4v6"
+        }
+        DnsDomainStrategy.IPV4_ONLY -> "UseIPv4"
+        DnsDomainStrategy.IPV6_ONLY -> "UseIPv6"
+        DnsDomainStrategy.PREFER_IPV6 -> "UseIPv6v4"
+        DnsDomainStrategy.PREFER_IPV4 -> "UseIPv4v6"
+    }
 }
