@@ -13,6 +13,7 @@ import xyz.a202132.app.core.route.CoreRuleRepository
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.SmartRoutingRuleType
 import xyz.a202132.app.platform.UnderlayController
 import java.io.File
 import java.util.UUID
@@ -23,7 +24,17 @@ internal class XrayBackend : CoreBackend {
     override val capabilities = CoreCapabilities(ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS.toSet())
 
     override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = withContext(Dispatchers.IO) {
-        val rules = if (request.settings?.proxyMode == ProxyMode.SMART) {
+        val smartRulesEnabled = request.settings?.let {
+            it.proxyMode == ProxyMode.SMART && (
+                it.smartRoutingSettings.rules.any { rule ->
+                    rule.enabled && (
+                        rule.type == SmartRoutingRuleType.DOMESTIC_DOMAIN ||
+                            rule.type == SmartRoutingRuleType.DOMESTIC_IP
+                    )
+                }
+                )
+        } == true
+        val rules = if (smartRulesEnabled) {
             CoreRuleRepository.load(context)
         } else null
         val config = XrayVpnConfig.generate(request, rules)

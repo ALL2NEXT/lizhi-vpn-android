@@ -420,6 +420,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         DnsSettings()
     )
+
+    val smartRoutingSettings = settingsRepository.smartRoutingSettings.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SmartRoutingSettings()
+    )
     
     val isUserAgreementAccepted = settingsRepository.isUserAgreementAccepted.stateIn(
         viewModelScope,
@@ -2192,6 +2198,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setFakeDnsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setFakeDnsEnabled(enabled)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setSmartRoutingDomains(action: SmartRoutingRuleAction, domains: List<String>) {
+        viewModelScope.launch {
+            settingsRepository.setSmartRoutingDomains(action, domains)
             restartVpnIfNeeded()
         }
     }

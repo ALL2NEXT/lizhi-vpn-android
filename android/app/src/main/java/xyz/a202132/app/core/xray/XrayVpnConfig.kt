@@ -9,6 +9,9 @@ import xyz.a202132.app.data.model.DnsDomainStrategy
 import xyz.a202132.app.data.model.DnsSettings
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.SmartRoutingRule
+import xyz.a202132.app.data.model.SmartRoutingRuleAction
+import xyz.a202132.app.data.model.SmartRoutingRuleType
 import xyz.a202132.app.util.XrayConfigGenerator
 
 internal object XrayVpnConfig {
@@ -156,14 +159,63 @@ internal object XrayVpnConfig {
             })
             val localDomains = strings("full:${request.node.server}")
             if (settings.proxyMode == ProxyMode.SMART) {
-                require(cnRules?.get("schema")?.asInt == 1) { "缺少公共分流规则" }
-                val snapshot = requireNotNull(cnRules)
-                val domains = snapshot.getAsJsonArray("domains")
-                val ips = snapshot.getAsJsonArray("ips")
-                require(domains.size() > 0 && ips.size() > 0)
-                rules.add(rule("direct").apply { add("domain", domains.deepCopy()) })
-                rules.add(rule("direct").apply { add("ip", ips.deepCopy()) })
-                domains.forEach { localDomains.add(it.deepCopy()) }
+                val enabledSmartRules = settings.smartRoutingSettings.rules.filter { it.enabled }
+                val needsDomesticRules = enabledSmartRules.any {
+                    it.type == SmartRoutingRuleType.DOMESTIC_DOMAIN ||
+                        it.type == SmartRoutingRuleType.DOMESTIC_IP
+                }
+                val domesticDomains: JsonArray?
+                val domesticIps: JsonArray?
+                if (needsDomesticRules) {
+                    require(cnRules?.get("schema")?.asInt == 1) { "Missing routing rules" }
+                    val snapshot = requireNotNull(cnRules)
+                    domesticDomains = snapshot.getAsJsonArray("domains")
+                    domesticIps = snapshot.getAsJsonArray("ips")
+                    require(domesticDomains.size() > 0 && domesticIps.size() > 0)
+                } else {
+                    domesticDomains = null
+                    domesticIps = null
+                }
+                enabledSmartRules.sortedBy(::smartRulePriority).forEach { smartRule ->
+                    when (smartRule.type) {
+                        SmartRoutingRuleType.DOMESTIC_DOMAIN -> {
+                            val domains = requireNotNull(domesticDomains)
+                            rules.add(rule(smartRule.action.configTag).apply {
+                                add("domain", domains.deepCopy())
+                            })
+                            if (smartRule.action == SmartRoutingRuleAction.DIRECT) {
+                                domains.forEach { localDomains.add(it.deepCopy()) }
+                            }
+                        }
+                        SmartRoutingRuleType.DOMESTIC_IP -> {
+                            rules.add(rule(smartRule.action.configTag).apply {
+                                add("ip", requireNotNull(domesticIps).deepCopy())
+                            })
+                        }
+                        SmartRoutingRuleType.CUSTOM_DOMAIN -> {
+                            if (smartRule.values.isNotEmpty()) {
+                                rules.add(rule(smartRule.action.configTag).apply {
+                                    add(
+                                        "domain",
+                                        strings(*smartRule.values.map(::normalizeXrayDomain).toTypedArray())
+                                    )
+                                })
+                                if (smartRule.action == SmartRoutingRuleAction.DIRECT) {
+                                    smartRule.values.forEach {
+                                        localDomains.add(normalizeXrayDomain(it))
+                                    }
+                                }
+                            }
+                        }
+                        SmartRoutingRuleType.CUSTOM_IP -> {
+                            if (smartRule.values.isNotEmpty()) {
+                                rules.add(rule(smartRule.action.configTag).apply {
+                                    add("ip", strings(*smartRule.values.toTypedArray()))
+                                })
+                            }
+                        }
+                    }
+                }
             }
             base.add("dns", JsonObject().apply {
                 addProperty("queryStrategy", resolveXrayDnsStrategy(
@@ -224,6 +276,27 @@ internal object XrayVpnConfig {
         addProperty("outboundTag", outbound)
     }
     private fun strings(vararg values: String) = JsonArray().apply { values.forEach(::add) }
+
+    private fun smartRulePriority(rule: SmartRoutingRule): Int = when {
+        rule.action == SmartRoutingRuleAction.BLOCK -> 0
+        rule.action == SmartRoutingRuleAction.PROXY -> 1
+        rule.type == SmartRoutingRuleType.CUSTOM_DOMAIN -> 2
+        rule.type == SmartRoutingRuleType.DOMESTIC_DOMAIN -> 3
+        rule.type == SmartRoutingRuleType.DOMESTIC_IP -> 4
+        else -> 5
+    }
+
+    private fun normalizeXrayDomain(value: String): String {
+        val normalized = value.trim()
+        return if (normalized.substringBefore(':').lowercase() in setOf(
+                "domain", "full", "regexp", "keyword", "geosite"
+            )
+        ) {
+            normalized
+        } else {
+            "domain:$normalized"
+        }
+    }
 
     private fun firstDnsAddress(value: String, fallback: String): String =
         DnsSettings.normalizeServerList(value)

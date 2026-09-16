@@ -25,6 +25,10 @@ import xyz.a202132.app.data.model.SkinSettings
 import xyz.a202132.app.data.model.SkinThemeMode
 import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.data.model.SpeedTestScope
+import xyz.a202132.app.data.model.SmartRoutingRule
+import xyz.a202132.app.data.model.SmartRoutingRuleAction
+import xyz.a202132.app.data.model.SmartRoutingRuleType
+import xyz.a202132.app.data.model.SmartRoutingSettings
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.util.CountryCodeResolver
@@ -43,7 +47,8 @@ data class VpnRuntimeSettings(
     val protocolCoreSettings: ProtocolCoreSettings,
     val perAppProxy: PerAppProxySettings,
     val lanInbound: LanInboundSettings = LanInboundSettings(),
-    val dnsSettings: DnsSettings = DnsSettings()
+    val dnsSettings: DnsSettings = DnsSettings(),
+    val smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings()
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -108,6 +113,7 @@ class SettingsRepository(private val context: Context) {
         private val DNS_SERVER_STRATEGY = stringPreferencesKey("dns_server_strategy")
         private val DNS_ROUTING_ENABLED = booleanPreferencesKey("dns_routing_enabled")
         private val DNS_FAKE_ENABLED = booleanPreferencesKey("dns_fake_enabled")
+        private val SMART_ROUTING_RULES_JSON = stringPreferencesKey("smart_routing_rules_json")
         
         // 自动化测试设置
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
@@ -456,6 +462,7 @@ class SettingsRepository(private val context: Context) {
             ),
             lanInbound = decodeLanInboundSettings(preferences),
             dnsSettings = decodeDnsSettings(preferences),
+            smartRoutingSettings = decodeSmartRoutingSettings(preferences),
         )
     }
 
@@ -550,6 +557,111 @@ class SettingsRepository(private val context: Context) {
         dnsRoutingEnabled = preferences[DNS_ROUTING_ENABLED] ?: true,
         fakeDnsEnabled = preferences[DNS_FAKE_ENABLED] ?: true
     )
+
+    private fun decodeSmartRoutingSettings(preferences: Preferences): SmartRoutingSettings {
+        val stored = preferences[SMART_ROUTING_RULES_JSON]
+            ?.takeIf(String::isNotBlank)
+            ?.let(::decodeSmartRoutingRules)
+        if (stored != null) {
+            return SmartRoutingSettings(ensureBuiltInSmartRules(stored))
+        }
+
+        return SmartRoutingSettings()
+    }
+
+    private fun decodeSmartRoutingRules(json: String): List<SmartRoutingRule>? = runCatching {
+        val array = JSONArray(json)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val id = item.optString("id").trim()
+                val name = item.optString("name").trim()
+                val type = runCatching {
+                    SmartRoutingRuleType.valueOf(item.optString("type"))
+                }.getOrNull() ?: continue
+                val action = runCatching {
+                    SmartRoutingRuleAction.valueOf(item.optString("action"))
+                }.getOrNull() ?: continue
+                if (id.isBlank() || name.isBlank()) continue
+                val values = buildList {
+                    item.optJSONArray("values")?.let { valueArray ->
+                        for (valueIndex in 0 until valueArray.length()) {
+                            valueArray.optString(valueIndex)
+                                .trim()
+                                .takeIf(String::isNotBlank)
+                                ?.let(::add)
+                        }
+                    }
+                }
+                add(
+                    SmartRoutingRule(
+                        id = id,
+                        name = name,
+                        type = type,
+                        action = action,
+                        values = values,
+                        enabled = item.optBoolean("enabled", true),
+                        locked = item.optBoolean(
+                            "locked",
+                            type == SmartRoutingRuleType.DOMESTIC_DOMAIN ||
+                                type == SmartRoutingRuleType.DOMESTIC_IP
+                        )
+                    )
+                )
+            }
+        }
+    }.getOrNull()?.takeIf { it.isNotEmpty() }
+
+    private fun ensureBuiltInSmartRules(rules: List<SmartRoutingRule>): List<SmartRoutingRule> {
+        val defaults = SmartRoutingSettings.defaultRules()
+        val defaultDomain = defaults
+            .first { it.id == SmartRoutingSettings.DOMESTIC_DOMAIN_RULE_ID }
+            .copy(name = "国内域名（内置）", enabled = true)
+        val defaultIp = defaults
+            .first { it.id == SmartRoutingSettings.DOMESTIC_IP_RULE_ID }
+            .copy(enabled = true)
+        var domainPresent = false
+        var ipPresent = false
+
+        return buildList {
+            rules.forEach { rule ->
+                when (rule.id) {
+                    SmartRoutingSettings.DOMESTIC_DOMAIN_RULE_ID -> {
+                        if (!domainPresent) {
+                            add(defaultDomain)
+                            domainPresent = true
+                        }
+                    }
+                    SmartRoutingSettings.DOMESTIC_IP_RULE_ID -> {
+                        if (!ipPresent) {
+                            add(defaultIp)
+                            ipPresent = true
+                        }
+                    }
+                    else -> if (rule.type == SmartRoutingRuleType.CUSTOM_DOMAIN) {
+                        add(rule.copy(locked = false))
+                    }
+                }
+            }
+            if (!domainPresent) add(defaultDomain)
+            if (!ipPresent) add(defaultIp)
+        }
+    }
+
+    private fun encodeSmartRoutingRules(rules: List<SmartRoutingRule>): String =
+        JSONArray().apply {
+            rules.forEach { rule ->
+                put(JSONObject().apply {
+                    put("id", rule.id)
+                    put("name", rule.name)
+                    put("type", rule.type.name)
+                    put("action", rule.action.name)
+                    put("values", JSONArray().apply { rule.values.forEach(::put) })
+                    put("enabled", rule.enabled)
+                    put("locked", rule.locked)
+                })
+            }
+        }.toString()
 
     private inline fun <reified T : Enum<T>> enumValueOrDefault(
         value: String?,
@@ -804,6 +916,41 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setFakeDnsEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[DNS_FAKE_ENABLED] = enabled }
+    }
+
+    val smartRoutingSettings: Flow<SmartRoutingSettings> = context.dataStore.data.map { preferences ->
+        decodeSmartRoutingSettings(preferences)
+    }
+
+    suspend fun setSmartRoutingDomains(
+        action: SmartRoutingRuleAction,
+        values: List<String>
+    ) {
+        context.dataStore.edit { preferences ->
+            val current = decodeSmartRoutingSettings(preferences).rules
+            val normalizedValues = values
+                .flatMap { it.split(',', '\n') }
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .distinct()
+            val remaining = current.filterNot {
+                it.type == SmartRoutingRuleType.CUSTOM_DOMAIN && it.action == action
+            }
+            val updated = if (normalizedValues.isEmpty()) {
+                remaining
+            } else {
+                listOf(
+                    SmartRoutingRule(
+                        id = "custom_smart_${action.name.lowercase()}",
+                        name = action.name,
+                        type = SmartRoutingRuleType.CUSTOM_DOMAIN,
+                        action = action,
+                        values = normalizedValues
+                    )
+                ) + remaining
+            }
+            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(updated)
+        }
     }
 
     /** HEV does not provide an IPv6-only DNS/data path, so migrate old native-only values. */

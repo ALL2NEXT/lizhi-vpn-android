@@ -36,6 +36,7 @@ internal class SingBoxBackend : CoreBackend {
                     settings.ipv6RoutingMode, internalSocksEndpoint = request.endpoint,
                     lanInbound = settings.lanInbound,
                     dnsSettings = settings.dnsSettings,
+                    smartRoutingSettings = settings.smartRoutingSettings,
                     hysteriaUpMbps = request.hysteriaUpMbps, hysteriaDownMbps = request.hysteriaDownMbps,
                 )
                     .replace("\"geosite-cn.srs\"", "\"${File(context.filesDir, "sing-box/geosite-cn.srs").absolutePath}\"")

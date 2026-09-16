@@ -31,6 +31,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,7 +48,9 @@ import androidx.compose.ui.draw.clip
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.DnsDomainStrategy
 import xyz.a202132.app.data.model.DnsSettings
-import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.SmartRoutingRuleAction
+import xyz.a202132.app.data.model.SmartRoutingRuleType
+import xyz.a202132.app.data.model.SmartRoutingSettings
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
@@ -57,9 +60,21 @@ fun CoreRoutingScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
     val dnsSettings by viewModel.dnsSettings.collectAsStateWithLifecycle()
+    val smartRoutingSettings by viewModel.smartRoutingSettings.collectAsStateWithLifecycle()
+    var showSmartRuleSettings by remember { mutableStateOf(false) }
+    var smartRuleSettingsAction by remember { mutableStateOf(SmartRoutingRuleAction.DIRECT) }
+    var smartRuleSettingsDomains by remember { mutableStateOf(emptyList<String>()) }
+    fun customDomainsFor(action: SmartRoutingRuleAction): List<String> =
+        smartRoutingSettings.rules
+            .filter {
+                it.type == SmartRoutingRuleType.CUSTOM_DOMAIN &&
+                    it.action == action &&
+                    it.enabled
+            }
+            .flatMap { it.values }
+            .distinct()
 
     AppScreenScaffold(title = "路由", onBack = onBack) {
         Column(
@@ -145,39 +160,41 @@ fun CoreRoutingScreen(
                 RoutingRuleText("识别 HTTP、TLS、QUIC 等流量的目标域名信息，嗅探结果用于恢复目标信息并参与路由规则匹配。")
             }
 
-            RoutingSection(title = "分流模式") {
-                RoutingValueRow(
-                    "当前模式",
-                    if (proxyMode == ProxyMode.GLOBAL) "全局" else "智能"
-                )
-                Text(
-                    text = "分流模式决定流量使用哪个出站；模式切换入口仍保留在主页。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            RoutingSection(title = "路由规则") {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        RoutingRuleText("DNS 请求交由代理服务处理。")
-                        RoutingRuleText("内网地址、回环地址和当前节点服务器地址直连，避免路由循环。")
-                        RoutingRuleText(
-                            if (proxyMode == ProxyMode.SMART) {
-                                "智能模式：国内域名和国内 IP 直连，其余流量走代理出站。"
-                            } else {
-                                "全局模式：除必要的内网和节点例外外，流量走代理出站。"
-                            }
-                        )
-                        RoutingRuleText("未命中前置规则的流量使用代理出站。")
+            RoutingSection(title = "智能分流规则") {
+                SmartRoutingCategory(
+                    title = "直连域设置",
+                    onSet = {
+                        smartRuleSettingsAction = SmartRoutingRuleAction.DIRECT
+                        smartRuleSettingsDomains = customDomainsFor(SmartRoutingRuleAction.DIRECT)
+                        showSmartRuleSettings = true
                     }
+                )
+                SmartRoutingCategory(
+                    title = "代理域设置",
+                    onSet = {
+                        smartRuleSettingsAction = SmartRoutingRuleAction.PROXY
+                        smartRuleSettingsDomains = customDomainsFor(SmartRoutingRuleAction.PROXY)
+                        showSmartRuleSettings = true
+                    }
+                )
+                SmartRoutingCategory(
+                    title = "阻断域设置",
+                    onSet = {
+                        smartRuleSettingsAction = SmartRoutingRuleAction.BLOCK
+                        smartRuleSettingsDomains = customDomainsFor(SmartRoutingRuleAction.BLOCK)
+                        showSmartRuleSettings = true
+                    }
+                )
+                if (showSmartRuleSettings) {
+                    SmartRoutingDomainSettingsDialog(
+                        action = smartRuleSettingsAction,
+                        initialDomains = smartRuleSettingsDomains,
+                        onDismiss = { showSmartRuleSettings = false },
+                        onSave = { domains ->
+                            viewModel.setSmartRoutingDomains(smartRuleSettingsAction, domains)
+                            showSmartRuleSettings = false
+                        }
+                    )
                 }
             }
         }
@@ -291,27 +308,6 @@ internal fun MultiPositionSwitch(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun RoutingValueRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium
-        )
     }
 }
 
