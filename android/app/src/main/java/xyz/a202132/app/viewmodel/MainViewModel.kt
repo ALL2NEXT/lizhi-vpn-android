@@ -334,49 +334,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val speedTestSchemes = settingsRepository.speedTestSchemes.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        listOf(SpeedTestScheme.standard(), SpeedTestScheme.deep())
+        listOf(SpeedTestScheme.default())
     )
 
     val homeClickSpeedTestSchemeId = settingsRepository.homeClickSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        SpeedTestScheme.STANDARD_ID
+        SpeedTestScheme.DEFAULT_ID
     )
 
     val homeLongPressSpeedTestSchemeId = settingsRepository.homeLongPressSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        SpeedTestScheme.DEEP_ID
+        SpeedTestScheme.DEFAULT_ID
     )
 
     val homeSwipeUpSpeedTestSchemeId = settingsRepository.homeSwipeUpSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        SpeedTestScheme.STANDARD_ID
+        SpeedTestScheme.DEFAULT_ID
     )
 
     val homeSwipeDownSpeedTestSchemeId = settingsRepository.homeSwipeDownSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        SpeedTestScheme.DEEP_ID
+        SpeedTestScheme.DEFAULT_ID
     )
 
     val homeSwipeLeftSpeedTestSchemeId = settingsRepository.homeSwipeLeftSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        SpeedTestScheme.STANDARD_ID
+        SpeedTestScheme.DEFAULT_ID
     )
 
     val homeSwipeRightSpeedTestSchemeId = settingsRepository.homeSwipeRightSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        SpeedTestScheme.DEEP_ID
+        SpeedTestScheme.DEFAULT_ID
     )
 
     val homeClickSpeedTestEnabled = settingsRepository.homeClickSpeedTestEnabled.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        true
+        false
     )
 
     val homeLongPressSpeedTestEnabled = settingsRepository.homeLongPressSpeedTestEnabled.stateIn(
@@ -583,7 +583,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             val scheme = speedTestSchemes.value.firstOrNull { it.id == schemeId }
-                ?: speedTestSchemes.value.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+                ?: speedTestSchemes.value.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
                 ?: run {
                     _error.value = "测速方案不存在"
                     return@launch

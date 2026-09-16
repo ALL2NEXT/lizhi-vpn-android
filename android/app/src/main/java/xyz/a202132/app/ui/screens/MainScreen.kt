@@ -96,17 +96,17 @@ fun MainScreen(
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     
     val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val longPressScheme = speedTestSchemes.firstOrNull { it.id == homeLongPressSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val swipeUpScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeUpSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val swipeDownScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeDownSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val swipeLeftScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeLeftSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val swipeRightScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeRightSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     
     // 显示错误Toast
     LaunchedEffect(error) {

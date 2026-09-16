@@ -139,6 +139,9 @@ class SettingsRepository(private val context: Context) {
         private val SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
         private val ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
         private val SPEED_TEST_SCHEMES_JSON = stringPreferencesKey("speed_test_schemes_json")
+        // 旧版两个内置测速方案的 ID，仅用于升级时过滤旧数据。
+        private const val LEGACY_STANDARD_SPEED_TEST_SCHEME_ID = "builtin_speed_test_standard"
+        private const val LEGACY_DEEP_SPEED_TEST_SCHEME_ID = "builtin_speed_test_deep"
         // 兼容早期单皮肤版本的数据。
         private val SKIN_BASE_COLOR_ARGB = longPreferencesKey("skin_base_color_argb")
         private val SKIN_CUSTOM_IMAGE_PATH = stringPreferencesKey("skin_custom_image_path")
@@ -170,7 +173,7 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    /** 用户保存的测速方案；首次使用时只提供两套内置方案。 */
+    /** 用户保存的测速方案；首次使用时提供一套当前组内置方案。 */
     val speedTestSchemes: Flow<List<SpeedTestScheme>> = context.dataStore.data.map { preferences ->
         decodeSpeedTestSchemes(preferences)
     }
@@ -185,7 +188,7 @@ class SettingsRepository(private val context: Context) {
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.STANDARD_ID,
+            SpeedTestScheme.DEFAULT_ID,
             schemes
         )
     }
@@ -195,7 +198,7 @@ class SettingsRepository(private val context: Context) {
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEEP_ID,
+            SpeedTestScheme.DEFAULT_ID,
             schemes
         )
     }
@@ -205,7 +208,7 @@ class SettingsRepository(private val context: Context) {
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.STANDARD_ID,
+            SpeedTestScheme.DEFAULT_ID,
             schemes
         )
     }
@@ -215,7 +218,7 @@ class SettingsRepository(private val context: Context) {
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEEP_ID,
+            SpeedTestScheme.DEFAULT_ID,
             schemes
         )
     }
@@ -225,7 +228,7 @@ class SettingsRepository(private val context: Context) {
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.STANDARD_ID,
+            SpeedTestScheme.DEFAULT_ID,
             schemes
         )
     }
@@ -235,14 +238,14 @@ class SettingsRepository(private val context: Context) {
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEEP_ID,
+            SpeedTestScheme.DEFAULT_ID,
             schemes
         )
     }
 
-    /** 主页图标单击是否启用测速方案；默认开启以保持原有行为。 */
+    /** 主页图标单击是否启用测速方案；默认关闭，避免普通点击触发测速。 */
     val homeClickSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[HOME_CLICK_SPEED_TEST_ENABLED] ?: true
+        preferences[HOME_CLICK_SPEED_TEST_ENABLED] ?: false
     }
 
     /** 主页图标长按是否启用测速方案；默认开启以保持原有行为。 */
@@ -632,22 +635,22 @@ class SettingsRepository(private val context: Context) {
                 schemes.filterNot { it.id == schemeId }
             )
             if (preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.STANDARD_ID
+                preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
             if (preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEEP_ID
+                preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
             if (preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.STANDARD_ID
+                preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
             if (preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEEP_ID
+                preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
             if (preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.STANDARD_ID
+                preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
             if (preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEEP_ID
+                preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
         }
     }
@@ -1066,25 +1069,24 @@ class SettingsRepository(private val context: Context) {
                 }.getOrNull()
             }
 
-        val standard = stored?.firstOrNull { it.id == SpeedTestScheme.STANDARD_ID }
-            ?: SpeedTestScheme.standard()
-        val full = stored?.firstOrNull { it.id == SpeedTestScheme.DEEP_ID }
-            ?: SpeedTestScheme.deep()
+        val defaultScheme = stored?.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
+            ?: SpeedTestScheme.default()
         val custom = stored.orEmpty()
-            .filterNot { it.id == SpeedTestScheme.STANDARD_ID || it.id == SpeedTestScheme.DEEP_ID }
+            .filterNot {
+                it.id == SpeedTestScheme.DEFAULT_ID ||
+                    it.id == LEGACY_STANDARD_SPEED_TEST_SCHEME_ID ||
+                    it.id == LEGACY_DEEP_SPEED_TEST_SCHEME_ID
+            }
             .filterNot { it.builtIn }
             .distinctBy(SpeedTestScheme::id)
-        return listOf(standard.copy(builtIn = true), full.copy(builtIn = true)) + custom
+        return listOf(defaultScheme.copy(builtIn = true)) + custom
     }
 
     private fun normalizeSpeedTestScheme(scheme: SpeedTestScheme): SpeedTestScheme {
-        // 兼容已保存的旧内置方案名称，同时保留用户对内置方案名称的自定义修改。
+        // 兼容已保存的内置方案名称，同时保留用户对内置方案名称的自定义修改。
         val trimmedName = scheme.name.trim()
         val normalizedName = when {
-            scheme.id == SpeedTestScheme.STANDARD_ID &&
-                (trimmedName.isBlank() || trimmedName == "标准测速") -> "默认方案1"
-            scheme.id == SpeedTestScheme.DEEP_ID &&
-                (trimmedName.isBlank() || trimmedName == "全面测速") -> "默认方案2"
+            scheme.id == SpeedTestScheme.DEFAULT_ID && trimmedName.isBlank() -> "默认测速"
             else -> trimmedName.ifBlank { if (scheme.builtIn) "测速方案" else "我的方案" }
         }
         return scheme.copy(

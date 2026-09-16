@@ -27,7 +27,7 @@ data class SpeedTestScheme(
     val specifiedGroupIds: Set<String> = emptySet(),
     val tcpingEnabled: Boolean = true,
     val urlTestEnabled: Boolean = true,
-    val bandwidthEnabled: Boolean = true,
+    val bandwidthEnabled: Boolean = false,
     val tcpingPercent: Int = 100,
     val urlTestPercent: Int = 50,
     val bandwidthPercent: Int = 50,
@@ -41,70 +41,27 @@ data class SpeedTestScheme(
     val bandwidthTestConcurrency: Int = 1
 ) {
     companion object {
-        const val STANDARD_ID = "builtin_speed_test_standard"
-        const val DEEP_ID = "builtin_speed_test_deep"
+        /** 当前版本唯一的内置测速方案；旧的标准/全面方案不再展示。 */
+        const val DEFAULT_ID = "builtin_speed_test_default"
 
-        fun standard(
-            tcpingPercent: Int = 100,
-            urlTestPercent: Int = 50,
-            bandwidthPercent: Int = 50,
-            tcpingTimeoutMs: Long = 1_000L,
-            urlTestTimeoutMs: Long = 1_000L,
-            urlTestUrl: String = UrlTestTargets.DEFAULT_URL,
-            bandwidthTestDurationMs: Long = 3_000L,
-            bandwidthTestUrl: String = BandwidthTestTargets.DEFAULT_URL,
-            tcpingConcurrency: Int = 16,
-            urlTestConcurrency: Int = 10,
-            bandwidthTestConcurrency: Int = 1
-        ) = SpeedTestScheme(
-            id = STANDARD_ID,
-            name = "默认方案1",
+        fun default() = SpeedTestScheme(
+            id = DEFAULT_ID,
+            name = "默认测速",
             builtIn = true,
             scope = SpeedTestScope.CURRENT_GROUP,
-            tcpingPercent = tcpingPercent,
-            urlTestPercent = urlTestPercent,
-            bandwidthPercent = bandwidthPercent,
-            tcpingTimeoutMs = tcpingTimeoutMs,
-            urlTestTimeoutMs = urlTestTimeoutMs,
-            urlTestUrl = urlTestUrl,
-            bandwidthTestDurationMs = bandwidthTestDurationMs,
-            bandwidthTestUrl = bandwidthTestUrl,
-            tcpingConcurrency = tcpingConcurrency,
-            urlTestConcurrency = urlTestConcurrency,
-            bandwidthTestConcurrency = bandwidthTestConcurrency
+            tcpingEnabled = true,
+            urlTestEnabled = true,
+            bandwidthEnabled = false,
+            tcpingPercent = 100,
+            urlTestPercent = 50,
+            tcpingTimeoutMs = 1_000L,
+            urlTestTimeoutMs = 1_000L,
+            urlTestUrl = UrlTestTargets.DEFAULT_URL,
+            tcpingConcurrency = 16,
+            urlTestConcurrency = 10
         )
 
-        fun deep(
-            tcpingPercent: Int = 100,
-            urlTestPercent: Int = 50,
-            bandwidthPercent: Int = 50,
-            tcpingTimeoutMs: Long = 1_000L,
-            urlTestTimeoutMs: Long = 1_000L,
-            urlTestUrl: String = UrlTestTargets.DEFAULT_URL,
-            bandwidthTestDurationMs: Long = 3_000L,
-            bandwidthTestUrl: String = BandwidthTestTargets.DEFAULT_URL,
-            tcpingConcurrency: Int = 256,
-            urlTestConcurrency: Int = 32,
-            bandwidthTestConcurrency: Int = 1
-        ) = SpeedTestScheme(
-            id = DEEP_ID,
-            name = "默认方案2",
-            builtIn = true,
-            scope = SpeedTestScope.ALL_GROUPS,
-            tcpingPercent = tcpingPercent,
-            urlTestPercent = urlTestPercent,
-            bandwidthPercent = bandwidthPercent,
-            tcpingTimeoutMs = tcpingTimeoutMs,
-            urlTestTimeoutMs = urlTestTimeoutMs,
-            urlTestUrl = urlTestUrl,
-            bandwidthTestDurationMs = bandwidthTestDurationMs,
-            bandwidthTestUrl = bandwidthTestUrl,
-            tcpingConcurrency = tcpingConcurrency,
-            urlTestConcurrency = urlTestConcurrency,
-            bandwidthTestConcurrency = bandwidthTestConcurrency
-        )
-
-        fun create(name: String, template: SpeedTestScheme = standard()): SpeedTestScheme =
+        fun create(name: String, template: SpeedTestScheme = default()): SpeedTestScheme =
             template.copy(
                 id = UUID.randomUUID().toString(),
                 name = name.trim().ifBlank { "我的方案" },
