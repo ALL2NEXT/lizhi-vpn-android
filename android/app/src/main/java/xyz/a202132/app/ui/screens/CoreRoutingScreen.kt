@@ -70,11 +70,6 @@ fun CoreRoutingScreen(
         ) {
             RoutingSection(title = "路由设置") {
                 Text(
-                    text = "本页集中管理 IPv6、DNS、嗅探、分流模式和路由规则。",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
                     text = "IPv6 路由",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
@@ -100,12 +95,11 @@ fun CoreRoutingScreen(
                 )
             }
 
-            RoutingSection(title = "DNS 设置") {
-                Text(
-                    text = "选择远程与直连 DNS，并分别设置域名解析策略。",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            RoutingSection(
+                title = "DNS 设置",
+                collapsible = true,
+                initiallyExpanded = false
+            ) {
                 DnsEndpointField(
                     label = "远程 DNS",
                     value = dnsSettings.remoteDns,
