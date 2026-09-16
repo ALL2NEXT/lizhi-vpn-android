@@ -116,13 +116,13 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Login,
+                icon = Icons.Outlined.SwapVert,
                 title = "流量接管",
                 onClick = onOpenInboundBefore
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.SwapVert,
+                icon = Icons.Outlined.Login,
                 title = "入站",
                 onClick = onOpenInbound
             )
@@ -134,13 +134,13 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.SwapHoriz,
+                icon = Icons.Outlined.Logout,
                 title = "出站",
                 onClick = onOpenOutbound
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Logout,
+                icon = Icons.Outlined.SwapHoriz,
                 title = "检测与诊断",
                 onClick = onOpenOutboundAfter
             )
