@@ -15,8 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Deselect
-import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -69,6 +67,7 @@ fun ProxyScopeScreen(
     val selectedPackages by viewModel.selectedPackages.collectAsStateWithLifecycle()
     val filteredApps by viewModel.filteredApps.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isAutoDetecting by viewModel.isAutoDetecting.collectAsStateWithLifecycle()
     val selectedCount by viewModel.selectedCount.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val showSystemApps by viewModel.showSystemApps.collectAsStateWithLifecycle()
@@ -98,6 +97,17 @@ fun ProxyScopeScreen(
     val isPermissionDenied by viewModel.isPermissionDenied.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    LaunchedEffect(Unit) {
+        viewModel.autoDetectResult.collect { newlySelectedCount ->
+            val message = if (newlySelectedCount > 0) {
+                "自动识别完成，新增 $newlySelectedCount 个应用"
+            } else {
+                "未发现新的代理应用"
+            }
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -121,16 +131,6 @@ fun ProxyScopeScreen(
                 navigationIcon = {
                     IconButton(onClick = { onBack(viewModel.hasChanges.value) }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    // 反选按钮
-                    IconButton(onClick = { viewModel.invertSelection() }) {
-                        Icon(Icons.Filled.Flip, contentDescription = "反选")
-                    }
-                    // 取消全选按钮
-                    IconButton(onClick = { viewModel.deselectAll() }) {
-                        Icon(Icons.Filled.Deselect, contentDescription = "取消选择")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -224,6 +224,20 @@ fun ProxyScopeScreen(
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                OutlinedButton(
+                    onClick = { viewModel.autoSelectProxyApps() },
+                    enabled = !isLoading && !isAutoDetecting
+                ) {
+                    Text(if (isAutoDetecting) "识别中..." else "自动识别")
+                }
             }
             
             // 搜索框
