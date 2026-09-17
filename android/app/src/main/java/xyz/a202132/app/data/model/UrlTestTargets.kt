@@ -10,6 +10,10 @@ data class UrlTestPreset(
 object UrlTestTargets {
     const val DEFAULT_URL = "https://www.google.com/generate_204"
 
+    /** Empty input disables the optional backup target. */
+    fun normalizeOptional(value: String?): String? =
+        if (value.isNullOrBlank()) "" else normalize(value)
+
     val PRESETS = listOf(
         UrlTestPreset("Cloudflare", "https://cp.cloudflare.com/generate_204"),
         UrlTestPreset("Google", DEFAULT_URL),

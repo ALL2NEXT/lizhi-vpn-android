@@ -34,6 +34,7 @@ data class SpeedTestScheme(
     val tcpingTimeoutMs: Long = 1_000L,
     val urlTestTimeoutMs: Long = 1_000L,
     val urlTestUrl: String = UrlTestTargets.DEFAULT_URL,
+    val urlTestBackupUrl: String = "",
     val bandwidthTestDurationMs: Long = 3_000L,
     val bandwidthTestUrl: String = BandwidthTestTargets.DEFAULT_URL,
     val tcpingConcurrency: Int = 16,

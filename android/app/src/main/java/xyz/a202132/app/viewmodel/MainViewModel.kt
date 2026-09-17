@@ -435,12 +435,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // 自动化测试设置
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
-    val urlTestTimeoutMs = settingsRepository.urlTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_TIMEOUT)
-    val urlTestUrl = settingsRepository.urlTestUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_URL)
     val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
     val speedTestDurationMs = settingsRepository.speedTestDurationMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
     val tcpingConcurrency = settingsRepository.tcpingConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_CONCURRENCY)
-    val urlTestConcurrency = settingsRepository.urlTestConcurrency.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.URL_TEST_CONCURRENCY)
     val bandwidthTestConcurrency = settingsRepository.bandwidthTestConcurrency.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -668,7 +665,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         labelPrefix = "${scheme.name}：URL Test 204",
                         concurrency = scheme.urlTestConcurrency,
                         timeoutMs = scheme.urlTestTimeoutMs,
-                        targetUrl = scheme.urlTestUrl
+                        targetUrl = scheme.urlTestUrl,
+                        fallbackUrl = scheme.urlTestBackupUrl
                     )
                     applyUrlTestResults(urlTestResults)
                     candidates = urlTestResults
@@ -812,9 +810,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _error.value = "没有可用节点"
                     return@launch
                 }
+                val defaultScheme = speedTestSchemes.value.firstOrNull {
+                    it.id == SpeedTestScheme.DEFAULT_ID
+                } ?: SpeedTestScheme.default()
                 val results = runUrlTestNodes(
                     nodes = currentNodes,
                     labelPrefix = "URL Test",
+                    concurrency = defaultScheme.urlTestConcurrency,
+                    timeoutMs = defaultScheme.urlTestTimeoutMs,
+                    targetUrl = defaultScheme.urlTestUrl,
+                    fallbackUrl = defaultScheme.urlTestBackupUrl,
                     onProgress = onProgress
                 )
                 applyUrlTestResults(results)
@@ -839,18 +844,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setUrlTestTimeoutMs(value: Long) {
-        viewModelScope.launch {
-            settingsRepository.setUrlTestTimeoutMs(value)
-        }
-    }
-
-    fun setUrlTestUrl(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setUrlTestUrl(value)
-        }
-    }
-
     fun setSpeedTestDownloadUrl(value: String) {
         viewModelScope.launch {
             settingsRepository.setSpeedTestDownloadUrl(value)
@@ -866,12 +859,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setTcpingConcurrency(value: Int) {
         viewModelScope.launch {
             settingsRepository.setTcpingConcurrency(value)
-        }
-    }
-
-    fun setUrlTestConcurrency(value: Int) {
-        viewModelScope.launch {
-            settingsRepository.setUrlTestConcurrency(value)
         }
     }
 
@@ -1030,9 +1017,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun runUrlTestNodes(
         nodes: List<Node>,
         labelPrefix: String,
-        concurrency: Int = urlTestConcurrency.value,
-        timeoutMs: Long = urlTestTimeoutMs.value,
-        targetUrl: String = urlTestUrl.value,
+        concurrency: Int,
+        timeoutMs: Long,
+        targetUrl: String,
+        fallbackUrl: String,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
         val batch = xyz.a202132.app.network.UrlTestManager.start(
@@ -1043,6 +1031,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val testedResults = latencyTester.urlTestAllNodes(
                 nodes = batch.nodes,
                 targetUrl = targetUrl,
+                fallbackUrl = fallbackUrl,
                 timeoutMs = timeoutMs,
                 concurrency = concurrency
             ) { completed, total ->

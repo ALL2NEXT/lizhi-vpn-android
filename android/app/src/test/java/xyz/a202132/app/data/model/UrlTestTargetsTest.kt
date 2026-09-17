@@ -31,4 +31,14 @@ class UrlTestTargetsTest {
         assertNull(UrlTestTargets.normalize("https://user@example.com/generate_204"))
         assertNull(UrlTestTargets.normalize("https://example.com/generate_204#fragment"))
     }
+
+    @Test
+    fun `optional backup URL accepts blank input`() {
+        assertEquals("", UrlTestTargets.normalizeOptional("  "))
+        assertEquals(
+            "https://backup.example/generate_204",
+            UrlTestTargets.normalizeOptional("backup.example/generate_204")
+        )
+        assertNull(UrlTestTargets.normalizeOptional("ftp://backup.example/generate_204"))
+    }
 }

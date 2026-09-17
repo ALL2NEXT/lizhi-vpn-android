@@ -74,6 +74,9 @@ fun SpeedTestSchemeEditorScreen(
     var urlConcurrency by remember(scheme.id, scheme.urlTestConcurrency) { mutableStateOf(scheme.urlTestConcurrency.toString()) }
     var bandwidthConcurrency by remember(scheme.id, scheme.bandwidthTestConcurrency) { mutableStateOf(scheme.bandwidthTestConcurrency.toString()) }
     var urlTestUrl by remember(scheme.id, scheme.urlTestUrl) { mutableStateOf(scheme.urlTestUrl) }
+    var urlTestBackupUrl by remember(scheme.id, scheme.urlTestBackupUrl) {
+        mutableStateOf(scheme.urlTestBackupUrl)
+    }
     var bandwidthUrl by remember(scheme.id, scheme.bandwidthTestUrl) { mutableStateOf(scheme.bandwidthTestUrl) }
     var error by remember { mutableStateOf<String?>(null) }
     var repositoryGroupsExpanded by remember(scheme.id) { mutableStateOf(true) }
@@ -200,8 +203,19 @@ fun SpeedTestSchemeEditorScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedTextField(
+                    value = urlTestBackupUrl,
+                    onValueChange = { urlTestBackupUrl = it },
+                    label = { Text("备用 204 URL（可留空）") },
+                    singleLine = true,
+                    enabled = urlTestEnabled,
+                    isError = urlTestEnabled &&
+                        UrlTestTargets.normalizeOptional(urlTestBackupUrl) == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Text(
-                    "用于检测节点通过 204 URL 请求的延迟。",
+                    "主地址超时或遇到临时连接错误时尝试备用地址；留空则不使用备用地址。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -238,12 +252,13 @@ fun SpeedTestSchemeEditorScreen(
             Button(
                 onClick = {
                     val normalizedUrl = UrlTestTargets.normalize(urlTestUrl)
+                    val normalizedBackupUrl = UrlTestTargets.normalizeOptional(urlTestBackupUrl)
                     val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
                     if (name.trim().isBlank()) {
                         error = "请输入方案名称"
                     } else if (scope == SpeedTestScope.SPECIFIED_GROUPS && specifiedGroupIds.isEmpty()) {
                         error = "请至少选择一个指定组"
-                    } else if ((urlTestEnabled && normalizedUrl == null) ||
+                    } else if ((urlTestEnabled && (normalizedUrl == null || normalizedBackupUrl == null)) ||
                         (bandwidthEnabled && normalizedBandwidthUrl == null)
                     ) {
                         error = "请检查测速地址"
@@ -270,6 +285,7 @@ fun SpeedTestSchemeEditorScreen(
                                 bandwidthTestConcurrency = bandwidthConcurrency.toIntOrNull()
                                     ?: scheme.bandwidthTestConcurrency,
                                 urlTestUrl = normalizedUrl ?: scheme.urlTestUrl,
+                                urlTestBackupUrl = normalizedBackupUrl ?: scheme.urlTestBackupUrl,
                                 bandwidthTestUrl = normalizedBandwidthUrl ?: scheme.bandwidthTestUrl
                             )
                         )

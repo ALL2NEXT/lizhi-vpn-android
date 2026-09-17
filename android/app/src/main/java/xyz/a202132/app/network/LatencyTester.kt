@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.*
 import xyz.a202132.app.BuildConfig
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.util.parallelMapOrdered
 
 /**
@@ -142,25 +143,45 @@ class LatencyTester {
     private suspend fun urlTestNode(
         node: Node,
         targetUrl: String,
+        fallbackUrl: String?,
         timeoutMs: Long,
         retryCount: Int
     ): LatencyResult = withContext(Dispatchers.IO) {
-        var lastResult = LatencyResult(node.id, -2, false)
-        repeat(retryCount.coerceAtLeast(0) + 1) { attempt ->
-            val attemptResult = urlTestNodeOnce(node, targetUrl, timeoutMs)
-            lastResult = attemptResult.result
-            if (lastResult.isAvailable || !attemptResult.shouldRetry || attempt >= retryCount) {
-                return@withContext lastResult
-            }
-            debugNode { "URL Test retry ${attempt + 1}/$retryCount: ${node.name} (${node.id})" }
+        val primaryResult = urlTestNodeWithRetries(node, targetUrl, timeoutMs, retryCount)
+        if (primaryResult.result.isAvailable || !primaryResult.shouldRetry) {
+            return@withContext primaryResult.result
         }
-        lastResult
+
+        val normalizedFallbackUrl = UrlTestTargets.normalizeOptional(fallbackUrl)
+            ?.takeIf { it.isNotBlank() && it != targetUrl }
+            ?: return@withContext primaryResult.result
+
+        debugNode { "URL Test primary failed; trying backup target: ${node.name} (${node.id})" }
+        urlTestNodeWithRetries(node, normalizedFallbackUrl, timeoutMs, retryCount).result
+    }
+
+    private suspend fun urlTestNodeWithRetries(
+        node: Node,
+        targetUrl: String,
+        timeoutMs: Long,
+        retryCount: Int
+    ): UrlTestAttemptResult {
+        var lastAttempt = UrlTestAttemptResult(LatencyResult(node.id, -2, false), false)
+        repeat(retryCount.coerceAtLeast(0) + 1) { attempt ->
+            lastAttempt = urlTestNodeOnce(node, targetUrl, timeoutMs)
+            if (lastAttempt.result.isAvailable || !lastAttempt.shouldRetry) return lastAttempt
+            if (attempt < retryCount) {
+                debugNode { "URL Test retry ${attempt + 1}/$retryCount: ${node.name} (${node.id})" }
+            }
+        }
+        return lastAttempt
     }
     
     /** Bounded concurrent probes; independent of the active VPN backend. */
     suspend fun urlTestAllNodes(
         nodes: List<Node>,
         targetUrl: String = xyz.a202132.app.AppConfig.URL_TEST_URL,
+        fallbackUrl: String? = "",
         timeoutMs: Long = xyz.a202132.app.AppConfig.URL_TEST_TIMEOUT,
         retryCount: Int = xyz.a202132.app.AppConfig.URL_TEST_RETRY_COUNT,
         concurrency: Int = xyz.a202132.app.AppConfig.URL_TEST_CONCURRENCY,
@@ -171,9 +192,11 @@ class LatencyTester {
         val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
         val lastProgressAt = java.util.concurrent.atomic.AtomicLong(0L)
         val totalCount = nodes.size
+        val normalizedFallbackUrl = UrlTestTargets.normalizeOptional(fallbackUrl)
+            ?.takeIf { it.isNotBlank() && it != targetUrl }
 
         val firstPass = parallelMapOrdered(nodes, concurrency) { node ->
-            val result = urlTestNode(node, targetUrl, timeoutMs, retryCount)
+            val result = urlTestNode(node, targetUrl, normalizedFallbackUrl, timeoutMs, retryCount)
             val current = completedCount.incrementAndGet()
             reportProgress(current, totalCount, lastProgressAt, onProgress)
             result
@@ -192,7 +215,7 @@ class LatencyTester {
             parallelMapOrdered(finalists, concurrency.coerceAtMost(finalists.size)) { node ->
                 node.id to buildList {
                     repeat(xyz.a202132.app.AppConfig.URL_TEST_RECHECK_ATTEMPTS) {
-                        add(urlTestNode(node, targetUrl, timeoutMs, retryCount))
+                        add(urlTestNode(node, targetUrl, normalizedFallbackUrl, timeoutMs, retryCount))
                     }
                 }
             }.toMap()

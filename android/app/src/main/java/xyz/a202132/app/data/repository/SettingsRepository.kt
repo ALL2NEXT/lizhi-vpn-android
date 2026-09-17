@@ -122,12 +122,9 @@ class SettingsRepository(private val context: Context) {
         private val NODE_LIST_CATEGORY = stringPreferencesKey("node_list_category")
         private val SELECTED_NODE_GROUP_ID = stringPreferencesKey("selected_node_group_id")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
-        private val URL_TEST_TIMEOUT_MS = longPreferencesKey("url_test_timeout_ms")
-        private val URL_TEST_URL = stringPreferencesKey("url_test_url")
         private val SPEED_TEST_DOWNLOAD_URL = stringPreferencesKey("speed_test_download_url")
         private val SPEED_TEST_DURATION_MS = longPreferencesKey("speed_test_duration_ms")
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
-        private val URL_TEST_CONCURRENCY = intPreferencesKey("url_test_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
         private val DISCONNECT_RECOVERY_ENABLED = booleanPreferencesKey("disconnect_recovery_enabled")
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
@@ -975,27 +972,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val urlTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
-        (preferences[URL_TEST_TIMEOUT_MS] ?: xyz.a202132.app.AppConfig.URL_TEST_TIMEOUT).coerceAtLeast(500L)
-    }
-
-    suspend fun setUrlTestTimeoutMs(value: Long) {
-        context.dataStore.edit { preferences ->
-            preferences[URL_TEST_TIMEOUT_MS] = value.coerceAtLeast(500L)
-        }
-    }
-
-    val urlTestUrl: Flow<String> = context.dataStore.data.map { preferences ->
-        UrlTestTargets.normalize(preferences[URL_TEST_URL]) ?: UrlTestTargets.DEFAULT_URL
-    }
-
-    suspend fun setUrlTestUrl(value: String) {
-        val normalized = UrlTestTargets.normalize(value) ?: return
-        context.dataStore.edit { preferences ->
-            preferences[URL_TEST_URL] = normalized
-        }
-    }
-
     val speedTestDownloadUrl: Flow<String> = context.dataStore.data.map { preferences ->
         BandwidthTestTargets.normalize(preferences[SPEED_TEST_DOWNLOAD_URL])
             ?: xyz.a202132.app.AppConfig.SPEED_TEST_DOWNLOAD_URL
@@ -1027,16 +1003,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTcpingConcurrency(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[TCPING_CONCURRENCY] = value.coerceIn(1, 128)
-        }
-    }
-
-    val urlTestConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
-        (preferences[URL_TEST_CONCURRENCY] ?: xyz.a202132.app.AppConfig.URL_TEST_CONCURRENCY).coerceIn(1, 128)
-    }
-
-    suspend fun setUrlTestConcurrency(value: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[URL_TEST_CONCURRENCY] = value.coerceIn(1, 128)
         }
     }
 
@@ -1232,6 +1198,7 @@ class SettingsRepository(private val context: Context) {
                                         tcpingTimeoutMs = item.optLong("tcpingTimeoutMs", 1_000L),
                                         urlTestTimeoutMs = item.optLong("urlTestTimeoutMs", 1_000L),
                                         urlTestUrl = item.optString("urlTestUrl", UrlTestTargets.DEFAULT_URL),
+                                        urlTestBackupUrl = item.optString("urlTestBackupUrl", ""),
                                         bandwidthTestDurationMs = item.optLong(
                                             "bandwidthTestDurationMs",
                                             3_000L
@@ -1286,6 +1253,7 @@ class SettingsRepository(private val context: Context) {
             tcpingTimeoutMs = scheme.tcpingTimeoutMs.coerceAtLeast(500L),
             urlTestTimeoutMs = scheme.urlTestTimeoutMs.coerceAtLeast(500L),
             urlTestUrl = UrlTestTargets.normalize(scheme.urlTestUrl) ?: UrlTestTargets.DEFAULT_URL,
+            urlTestBackupUrl = UrlTestTargets.normalizeOptional(scheme.urlTestBackupUrl) ?: "",
             bandwidthTestDurationMs = scheme.bandwidthTestDurationMs.coerceAtLeast(1_000L),
             bandwidthTestUrl = BandwidthTestTargets.normalize(scheme.bandwidthTestUrl)
                 ?: xyz.a202132.app.AppConfig.SPEED_TEST_DOWNLOAD_URL,
@@ -1317,6 +1285,7 @@ class SettingsRepository(private val context: Context) {
                     put("tcpingTimeoutMs", normalized.tcpingTimeoutMs)
                     put("urlTestTimeoutMs", normalized.urlTestTimeoutMs)
                     put("urlTestUrl", normalized.urlTestUrl)
+                    put("urlTestBackupUrl", normalized.urlTestBackupUrl)
                     put("bandwidthTestDurationMs", normalized.bandwidthTestDurationMs)
                     put("bandwidthTestUrl", normalized.bandwidthTestUrl)
                     put("tcpingConcurrency", normalized.tcpingConcurrency)
