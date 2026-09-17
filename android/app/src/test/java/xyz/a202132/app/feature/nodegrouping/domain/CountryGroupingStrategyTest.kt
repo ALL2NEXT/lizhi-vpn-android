@@ -23,6 +23,21 @@ class CountryGroupingStrategyTest {
         assertEquals(1, optionsByCode.getValue("US").nodeCount)
     }
 
+    @Test
+    fun `地区选项固定按靠近中国的顺序排列`() {
+        val options = CountryGroupingStrategy.groups(
+            listOf(
+                node("us", "美国"),
+                node("sg", "新加坡"),
+                node("jp", "日本"),
+                node("hk", "香港"),
+                node("de", "德国")
+            )
+        )
+
+        assertEquals(listOf("HK", "JP", "SG", "DE", "US"), options.map(CountryOption::code))
+    }
+
     private fun node(
         id: String,
         name: String,

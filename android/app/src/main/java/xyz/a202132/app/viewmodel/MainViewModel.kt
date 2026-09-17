@@ -23,6 +23,8 @@ import xyz.a202132.app.data.local.NodeDao
 import xyz.a202132.app.data.model.*
 import xyz.a202132.app.data.repository.SettingsRepository
 import xyz.a202132.app.feature.nodegrouping.domain.CountryGroupingStrategy
+import xyz.a202132.app.feature.nodegrouping.domain.NodeTestResultOrdering
+import xyz.a202132.app.feature.nodegrouping.domain.NodeTestResultSortMode
 import xyz.a202132.app.feature.nodegrouping.domain.SpeedTestScopeResolver
 import xyz.a202132.app.feature.nodegrouping.domain.SubscriptionGroupingStrategy
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
@@ -87,6 +89,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
+
+    /** 线路信息按当前最近完成的测速阶段展示结果。 */
+    private val _nodeTestResultSortMode = MutableStateFlow(
+        NodeTestResultSortMode.TCPING_LATENCY
+    )
+    val nodeTestResultSortMode = _nodeTestResultSortMode.asStateFlow()
 
     private val _isHysteriaBandwidthAdapting = MutableStateFlow(false)
     val isHysteriaBandwidthAdapting = _isHysteriaBandwidthAdapting.asStateFlow()
@@ -704,6 +712,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                     "${scheme.name}：带宽测速 ($completed/${speedTestNodes.size})"
                             }
                         }
+                    _nodeTestResultSortMode.value =
+                        NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
                     val deleteLowBandwidth = autoDeleteLowBandwidthNodes.value
                     val bandwidthThreshold = autoDeleteBandwidthThresholdMbps.value
                     if (deleteLowBandwidth) {
@@ -1066,6 +1076,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (updatedRows != updates.size) {
             Log.w(tag, "Only $updatedRows/${updates.size} URL test results were applied")
         }
+        _nodeTestResultSortMode.value = NodeTestResultSortMode.URL_TEST_LATENCY
         deleteTimedOutNodes(results, isTcping = false)
     }
 
@@ -1112,6 +1123,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /** 供线路信息页根据最后完成的测试阶段排列节点。 */
+    fun sortNodesByTestResult(
+        list: List<Node>,
+        mode: NodeTestResultSortMode
+    ): List<Node> = NodeTestResultOrdering.sort(list, mode)
+
     /**
      * 内部测试逻辑 (Suspend)
      */
@@ -1139,6 +1156,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
         }
         nodeDao().updateTcpingResults(updates, System.currentTimeMillis())
+        _nodeTestResultSortMode.value = NodeTestResultSortMode.TCPING_LATENCY
         deleteTimedOutNodes(results, isTcping = true)
         return results
     }

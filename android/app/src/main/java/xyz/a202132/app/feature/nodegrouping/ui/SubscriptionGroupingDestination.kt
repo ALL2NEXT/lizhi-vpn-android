@@ -2,6 +2,7 @@ package xyz.a202132.app.feature.nodegrouping.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,7 +23,11 @@ internal fun SubscriptionGroupingDestination(
     testNodes: List<Node>? = null
 ) {
     val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
-    val nodes = nodesOverride ?: viewModelNodes
+    val resultSortMode by viewModel.nodeTestResultSortMode.collectAsStateWithLifecycle()
+    val sourceNodes = nodesOverride ?: viewModelNodes
+    val nodes = remember(sourceNodes, resultSortMode) {
+        viewModel.sortNodesByTestResult(sourceNodes, resultSortMode)
+    }
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
     val favoriteSourceNodeIds by
         viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()

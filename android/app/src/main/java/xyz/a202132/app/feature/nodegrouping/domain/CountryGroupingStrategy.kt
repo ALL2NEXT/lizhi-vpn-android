@@ -6,6 +6,18 @@ import xyz.a202132.app.util.CountryCodeResolver
 
 /** 地区分组策略：跨订阅聚合地区并统计节点数量。 */
 internal object CountryGroupingStrategy {
+    // 按从中国周边向外扩展的顺序展示常见地区，避免地区名排序导致位置变化。
+    private val proximityOrder = listOf(
+        "CN", "HK", "MO", "TW", "KR", "JP", "MN", "RU",
+        "VN", "LA", "MM", "TH", "KH", "SG", "MY", "BN", "PH", "ID",
+        "BT", "NP", "BD", "IN", "PK", "AF", "KZ", "KG", "TJ", "UZ", "TM",
+        "AU", "NZ",
+        "DE", "GB", "FR", "NL", "CH", "IT", "ES", "SE", "NO", "FI", "DK",
+        "TR", "AE", "IL", "SA",
+        "CA", "US", "MX", "BR", "AR", "CL",
+        "ZA", "EG", "NG", "KE"
+    ).withIndex().associate { (index, code) -> code to index }
+
     fun groups(nodes: List<Node>): List<CountryOption> =
         nodes.asSequence()
             .mapNotNull(Node::getCountryCode)
@@ -20,5 +32,9 @@ internal object CountryGroupingStrategy {
                     nodeCount = nodeCount
                 )
             }
-            .sortedWith(compareBy(CountryOption::name, CountryOption::code))
+            .sortedWith(
+                compareBy<CountryOption> { proximityOrder[it.code] ?: Int.MAX_VALUE }
+                    .thenBy(CountryOption::name)
+                    .thenBy(CountryOption::code)
+            )
 }
