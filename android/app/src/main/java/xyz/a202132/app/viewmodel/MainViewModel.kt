@@ -447,7 +447,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         AppConfig.BANDWIDTH_TEST_CONCURRENCY
     )
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
-    val autoDeleteTimeoutNodes = settingsRepository.autoDeleteTimeoutNodes.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TIMEOUT_NODES)
+    val autoDeleteTcpingTimeoutNodes = settingsRepository.autoDeleteTcpingTimeoutNodes.stateIn(
+        viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES
+    )
+    val autoDeleteUrlTestTimeoutNodes = settingsRepository.autoDeleteUrlTestTimeoutNodes.stateIn(
+        viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES
+    )
+    val autoDeleteLowBandwidthNodes = settingsRepository.autoDeleteLowBandwidthNodes.stateIn(
+        viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_LOW_BANDWIDTH_NODES
+    )
+    val autoDeleteBandwidthThresholdMbps = settingsRepository.autoDeleteBandwidthThresholdMbps.stateIn(
+        viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS
+    )
     val hideFavoriteNodeGroup = settingsRepository.hideFavoriteNodeGroup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val updateDownloadDirectoryUri = settingsRepository.updateDownloadDirectoryUri.stateIn(
         viewModelScope,
@@ -694,7 +705,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                     "${scheme.name}：带宽测速 ($completed/${speedTestNodes.size})"
                             }
                         }
+                    val deleteLowBandwidth = autoDeleteLowBandwidthNodes.value
+                    val bandwidthThreshold = autoDeleteBandwidthThresholdMbps.value
+                    if (deleteLowBandwidth) {
+                        deleteNodes(
+                            nodeIds = speedResults
+                                .filter { (_, speedMbps) -> speedMbps < bandwidthThreshold.toFloat() }
+                                .map { (node, _) -> node.id },
+                            reason = "带宽低于 ${bandwidthThreshold} Mbps"
+                        )
+                    }
                     speedResults
+                        .filter { (_, speedMbps) ->
+                            !deleteLowBandwidth || speedMbps >= bandwidthThreshold.toFloat()
+                        }
                         .sortedWith(
                             compareByDescending<Pair<Node, Float>> { it.second }
                                 .thenBy { it.first.latency }
@@ -704,7 +728,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     candidates.firstOrNull()
                 }
                 if (bestNode == null) {
-                    _error.value = "测速未找到可连接节点"
+                    _error.value = if (scheme.bandwidthEnabled && autoDeleteLowBandwidthNodes.value) {
+                        "没有节点达到带宽阈值（${autoDeleteBandwidthThresholdMbps.value} Mbps）"
+                    } else {
+                        "测速未找到可连接节点"
+                    }
                     return@launch
                 }
 
@@ -878,10 +906,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setAutoDeleteTimeoutNodes(enabled: Boolean) {
+    fun setAutoDeleteTcpingTimeoutNodes(enabled: Boolean) {
         viewModelScope.launch {
-            settingsRepository.setAutoDeleteTimeoutNodes(enabled)
+            settingsRepository.setAutoDeleteTcpingTimeoutNodes(enabled)
         }
+    }
+
+    fun setAutoDeleteUrlTestTimeoutNodes(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAutoDeleteUrlTestTimeoutNodes(enabled) }
+    }
+
+    fun setAutoDeleteLowBandwidthNodes(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAutoDeleteLowBandwidthNodes(enabled) }
+    }
+
+    fun setAutoDeleteBandwidthThresholdMbps(value: Int) {
+        viewModelScope.launch { settingsRepository.setAutoDeleteBandwidthThresholdMbps(value) }
     }
 
     fun setHideFavoriteNodeGroup(enabled: Boolean) {
@@ -1033,26 +1073,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (updatedRows != updates.size) {
             Log.w(tag, "Only $updatedRows/${updates.size} URL test results were applied")
         }
-        deleteTimedOutNodes(results)
+        deleteTimedOutNodes(results, isTcping = false)
     }
 
-    private suspend fun deleteTimedOutNodes(results: List<LatencyTester.LatencyResult>) {
-        if (!autoDeleteTimeoutNodes.value) return
+    private suspend fun deleteTimedOutNodes(
+        results: List<LatencyTester.LatencyResult>,
+        isTcping: Boolean
+    ) {
+        val enabled = if (isTcping) {
+            autoDeleteTcpingTimeoutNodes.value
+        } else {
+            autoDeleteUrlTestTimeoutNodes.value
+        }
+        if (!enabled) return
 
+        deleteNodes(
+            nodeIds = results.filter { it.latency == -2 }.map { it.nodeId },
+            reason = if (isTcping) "TCPing 超时" else "URL Test 超时"
+        )
+    }
+
+    private suspend fun deleteNodes(nodeIds: List<String>, reason: String) {
         val connectedNodeId = activeConnectionNode.value?.id
-        val timedOutNodeIds = results
-            .filter { it.latency == -2 }
-            .map { it.nodeId }
-            .distinct()
-            .filterNot { it == connectedNodeId }
-        if (timedOutNodeIds.isEmpty()) return
+        val deletableNodeIds = nodeIds.distinct().filterNot { it == connectedNodeId }
+        if (deletableNodeIds.isEmpty()) return
 
         val selectedNodeId = settingsRepository.selectedNodeId.first()
-        nodeDao().deleteNodesByIds(timedOutNodeIds)
-        if (selectedNodeId != null && selectedNodeId in timedOutNodeIds) {
+        val deletedCount = nodeDao().deleteNodesByIds(deletableNodeIds)
+        if (deletedCount == 0) return
+        if (selectedNodeId != null && selectedNodeId in deletableNodeIds) {
             settingsRepository.setSelectedNodeId(null)
         }
-        _error.value = "已自动删除${timedOutNodeIds.size}个超时节点"
+        _error.value = "已自动删除 $deletedCount 个${reason}节点"
     }
 
     private fun sortNodesForList(
@@ -1094,7 +1146,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
         }
         nodeDao().updateTcpingResults(updates, System.currentTimeMillis())
-        deleteTimedOutNodes(results)
+        deleteTimedOutNodes(results, isTcping = true)
         return results
     }
 

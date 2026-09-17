@@ -140,6 +140,14 @@ class SettingsRepository(private val context: Context) {
         private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
         private val NODE_LABEL_SHOW_CORE = booleanPreferencesKey("node_label_show_core")
         private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
+        private val AUTO_DELETE_TCPING_TIMEOUT_NODES =
+            booleanPreferencesKey("auto_delete_tcping_timeout_nodes")
+        private val AUTO_DELETE_URL_TEST_TIMEOUT_NODES =
+            booleanPreferencesKey("auto_delete_url_test_timeout_nodes")
+        private val AUTO_DELETE_LOW_BANDWIDTH_NODES =
+            booleanPreferencesKey("auto_delete_low_bandwidth_nodes")
+        private val AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS =
+            intPreferencesKey("auto_delete_bandwidth_threshold_mbps")
         private val HIDE_FAVORITE_NODE_GROUP =
             booleanPreferencesKey("hide_favorite_node_group")
         private val SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
@@ -1120,13 +1128,43 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val autoDeleteTimeoutNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[AUTO_DELETE_TIMEOUT_NODES] ?: xyz.a202132.app.AppConfig.AUTO_DELETE_TIMEOUT_NODES
+    val autoDeleteTcpingTimeoutNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES]
+            ?: preferences[AUTO_DELETE_TIMEOUT_NODES]
+            ?: xyz.a202132.app.AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES
     }
 
-    suspend fun setAutoDeleteTimeoutNodes(enabled: Boolean) {
+    suspend fun setAutoDeleteTcpingTimeoutNodes(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES] = enabled }
+    }
+
+    val autoDeleteUrlTestTimeoutNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES]
+            ?: preferences[AUTO_DELETE_TIMEOUT_NODES]
+            ?: xyz.a202132.app.AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES
+    }
+
+    suspend fun setAutoDeleteUrlTestTimeoutNodes(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES] = enabled }
+    }
+
+    val autoDeleteLowBandwidthNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES]
+            ?: xyz.a202132.app.AppConfig.AUTO_DELETE_LOW_BANDWIDTH_NODES
+    }
+
+    suspend fun setAutoDeleteLowBandwidthNodes(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES] = enabled }
+    }
+
+    val autoDeleteBandwidthThresholdMbps: Flow<Int> = context.dataStore.data.map { preferences ->
+        (preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS]
+            ?: xyz.a202132.app.AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS).coerceIn(0, 100_000)
+    }
+
+    suspend fun setAutoDeleteBandwidthThresholdMbps(value: Int) {
         context.dataStore.edit { preferences ->
-            preferences[AUTO_DELETE_TIMEOUT_NODES] = enabled
+            preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS] = value.coerceIn(0, 100_000)
         }
     }
 

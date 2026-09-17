@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -24,11 +25,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,7 +60,14 @@ fun OtherConfigScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val autoDeleteTimeoutNodes by viewModel.autoDeleteTimeoutNodes.collectAsStateWithLifecycle()
+    val autoDeleteTcpingTimeoutNodes by viewModel.autoDeleteTcpingTimeoutNodes.collectAsStateWithLifecycle()
+    val autoDeleteUrlTestTimeoutNodes by viewModel.autoDeleteUrlTestTimeoutNodes.collectAsStateWithLifecycle()
+    val autoDeleteLowBandwidthNodes by viewModel.autoDeleteLowBandwidthNodes.collectAsStateWithLifecycle()
+    val autoDeleteBandwidthThresholdMbps by viewModel.autoDeleteBandwidthThresholdMbps.collectAsStateWithLifecycle()
+    var bandwidthThresholdInput by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(autoDeleteBandwidthThresholdMbps) {
+        bandwidthThresholdInput = autoDeleteBandwidthThresholdMbps.toString()
+    }
     val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
@@ -185,20 +196,53 @@ fun OtherConfigScreen(
                 )
             }
 
-            OtherConfigSection(
-                title = "自动删除超时节点"
-            ) {
+            OtherConfigSection(title = "测速后自动删除节点") {
+                Text(
+                    text = "仅删除对应测速结果中的节点；当前正在连接的节点会保留。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                ConfigSwitchRow("自动删除 TCPing 超时节点", autoDeleteTcpingTimeoutNodes) {
+                    viewModel.setAutoDeleteTcpingTimeoutNodes(it)
+                }
+                ConfigSwitchRow("自动删除 URL Test 超时节点", autoDeleteUrlTestTimeoutNodes) {
+                    viewModel.setAutoDeleteUrlTestTimeoutNodes(it)
+                }
+                ConfigSwitchRow("自动删除低带宽节点", autoDeleteLowBandwidthNodes) {
+                    viewModel.setAutoDeleteLowBandwidthNodes(it)
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Switch(
-                        checked = autoDeleteTimeoutNodes,
-                        onCheckedChange = { viewModel.setAutoDeleteTimeoutNodes(it) },
-                        colors = visibleSwitchColors()
+                    OutlinedTextField(
+                        value = bandwidthThresholdInput,
+                        onValueChange = { input ->
+                            bandwidthThresholdInput = input.filter(Char::isDigit)
+                        },
+                        label = { Text("带宽阈值 (Mbps)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f)
                     )
+                    TextButton(
+                        enabled = bandwidthThresholdInput.toIntOrNull()
+                            ?.let { it in 0..100_000 && it != autoDeleteBandwidthThresholdMbps } == true,
+                        onClick = {
+                            bandwidthThresholdInput.toIntOrNull()?.let(
+                                viewModel::setAutoDeleteBandwidthThresholdMbps
+                            )
+                        }
+                    ) {
+                        Text("保存")
+                    }
                 }
+                Text(
+                    text = "低于该值的节点会在测速方案完成带宽测试后删除。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
             }
 
             OtherConfigSection(
