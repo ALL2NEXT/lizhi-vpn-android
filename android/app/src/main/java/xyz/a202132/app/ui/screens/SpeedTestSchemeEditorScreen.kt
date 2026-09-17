@@ -68,7 +68,12 @@ fun SpeedTestSchemeEditorScreen(
     var urlPercent by remember(scheme.id, scheme.urlTestPercent) { mutableStateOf(scheme.urlTestPercent.toString()) }
     var bandwidthPercent by remember(scheme.id, scheme.bandwidthPercent) { mutableStateOf(scheme.bandwidthPercent.toString()) }
     var tcpingTimeout by remember(scheme.id, scheme.tcpingTimeoutMs) { mutableStateOf(scheme.tcpingTimeoutMs.toString()) }
-    var urlTimeout by remember(scheme.id, scheme.urlTestTimeoutMs) { mutableStateOf(scheme.urlTestTimeoutMs.toString()) }
+    var urlWarmupTimeout by remember(scheme.id, scheme.urlTestWarmupTimeoutMs) {
+        mutableStateOf(scheme.urlTestWarmupTimeoutMs.toString())
+    }
+    var urlMeasurementTimeout by remember(scheme.id, scheme.urlTestMeasurementTimeoutMs) {
+        mutableStateOf(scheme.urlTestMeasurementTimeoutMs.toString())
+    }
     var bandwidthDuration by remember(scheme.id, scheme.bandwidthTestDurationMs) { mutableStateOf(scheme.bandwidthTestDurationMs.toString()) }
     var tcpingConcurrency by remember(scheme.id, scheme.tcpingConcurrency) { mutableStateOf(scheme.tcpingConcurrency.toString()) }
     var urlConcurrency by remember(scheme.id, scheme.urlTestConcurrency) { mutableStateOf(scheme.urlTestConcurrency.toString()) }
@@ -191,7 +196,17 @@ fun SpeedTestSchemeEditorScreen(
                 onEnabledChange = { urlTestEnabled = it }
             ) {
                 NumberInput("候选比例 (%)", urlPercent, enabled = urlTestEnabled) { urlPercent = it }
-                NumberInput("超时 (ms)", urlTimeout, enabled = urlTestEnabled) { urlTimeout = it }
+                NumberInput("预热建连超时 (ms)", urlWarmupTimeout, enabled = urlTestEnabled) {
+                    urlWarmupTimeout = it
+                }
+                NumberInput("延迟测量超时 (ms)", urlMeasurementTimeout, enabled = urlTestEnabled) {
+                    urlMeasurementTimeout = it
+                }
+                Text(
+                    "预热超时限制首次请求的建连和响应；测量超时只限制第二次暖连接请求。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 NumberInput("并发", urlConcurrency, enabled = urlTestEnabled) { urlConcurrency = it }
                 OutlinedTextField(
                     value = urlTestUrl,
@@ -275,7 +290,10 @@ fun SpeedTestSchemeEditorScreen(
                                 urlTestPercent = urlPercent.toIntOrNull() ?: scheme.urlTestPercent,
                                 bandwidthPercent = bandwidthPercent.toIntOrNull() ?: scheme.bandwidthPercent,
                                 tcpingTimeoutMs = tcpingTimeout.toLongOrNull() ?: scheme.tcpingTimeoutMs,
-                                urlTestTimeoutMs = urlTimeout.toLongOrNull() ?: scheme.urlTestTimeoutMs,
+                                urlTestWarmupTimeoutMs = urlWarmupTimeout.toLongOrNull()
+                                    ?: scheme.urlTestWarmupTimeoutMs,
+                                urlTestMeasurementTimeoutMs = urlMeasurementTimeout.toLongOrNull()
+                                    ?: scheme.urlTestMeasurementTimeoutMs,
                                 bandwidthTestDurationMs = bandwidthDuration.toLongOrNull()
                                     ?: scheme.bandwidthTestDurationMs,
                                 tcpingConcurrency = tcpingConcurrency.toIntOrNull()

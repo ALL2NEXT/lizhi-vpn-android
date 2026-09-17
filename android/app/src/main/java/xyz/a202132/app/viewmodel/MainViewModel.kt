@@ -664,7 +664,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         nodes = urlTestNodes,
                         labelPrefix = "${scheme.name}：URL Test 204",
                         concurrency = scheme.urlTestConcurrency,
-                        timeoutMs = scheme.urlTestTimeoutMs,
+                        warmupTimeoutMs = scheme.urlTestWarmupTimeoutMs,
+                        measurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs,
                         targetUrl = scheme.urlTestUrl,
                         fallbackUrl = scheme.urlTestBackupUrl
                     )
@@ -775,7 +776,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * 使用临时无头原生核心测试全部节点；sing-box 与 Xray 各自共享一个批量实例，
-     * 每个节点通过独立 SOCKS 入站执行相同的 HTTP HEAD 探测。
+     * 每个节点通过独立 SOCKS 入站执行相同的 HTTP GET 探测。
      */
     fun urlTestAllNodes(targetNodes: List<Node>? = null) {
         urlTestAllNodesInternal(
@@ -817,7 +818,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     nodes = currentNodes,
                     labelPrefix = "URL Test",
                     concurrency = defaultScheme.urlTestConcurrency,
-                    timeoutMs = defaultScheme.urlTestTimeoutMs,
+                    warmupTimeoutMs = defaultScheme.urlTestWarmupTimeoutMs,
+                    measurementTimeoutMs = defaultScheme.urlTestMeasurementTimeoutMs,
                     targetUrl = defaultScheme.urlTestUrl,
                     fallbackUrl = defaultScheme.urlTestBackupUrl,
                     onProgress = onProgress
@@ -1018,7 +1020,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         nodes: List<Node>,
         labelPrefix: String,
         concurrency: Int,
-        timeoutMs: Long,
+        warmupTimeoutMs: Long,
+        measurementTimeoutMs: Long,
         targetUrl: String,
         fallbackUrl: String,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
@@ -1032,7 +1035,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 nodes = batch.nodes,
                 targetUrl = targetUrl,
                 fallbackUrl = fallbackUrl,
-                timeoutMs = timeoutMs,
+                warmupTimeoutMs = warmupTimeoutMs,
+                measurementTimeoutMs = measurementTimeoutMs,
                 concurrency = concurrency
             ) { completed, total ->
                 _testingLabel.value = "$labelPrefix ($completed/$total)"

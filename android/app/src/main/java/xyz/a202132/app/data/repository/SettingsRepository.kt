@@ -1169,6 +1169,11 @@ class SettingsRepository(private val context: Context) {
                             val item = array.optJSONObject(index) ?: continue
                             val id = item.optString("id").trim()
                             if (id.isBlank()) continue
+                            // 兼容旧方案：将原来的单一超时作为首次建连与预热请求的超时。
+                            val legacyUrlTestTimeoutMs = item.optLong(
+                                "urlTestTimeoutMs",
+                                xyz.a202132.app.AppConfig.URL_TEST_WARMUP_TIMEOUT
+                            ).coerceAtLeast(xyz.a202132.app.AppConfig.URL_TEST_WARMUP_TIMEOUT)
                             add(
                                 normalizeSpeedTestScheme(
                                     SpeedTestScheme(
@@ -1196,7 +1201,14 @@ class SettingsRepository(private val context: Context) {
                                         urlTestPercent = item.optInt("urlTestPercent", 50),
                                         bandwidthPercent = item.optInt("bandwidthPercent", 50),
                                         tcpingTimeoutMs = item.optLong("tcpingTimeoutMs", 1_000L),
-                                        urlTestTimeoutMs = item.optLong("urlTestTimeoutMs", 1_000L),
+                                        urlTestWarmupTimeoutMs = item.optLong(
+                                            "urlTestWarmupTimeoutMs",
+                                            legacyUrlTestTimeoutMs
+                                        ),
+                                        urlTestMeasurementTimeoutMs = item.optLong(
+                                            "urlTestMeasurementTimeoutMs",
+                                            xyz.a202132.app.AppConfig.URL_TEST_MEASUREMENT_TIMEOUT
+                                        ),
                                         urlTestUrl = item.optString("urlTestUrl", UrlTestTargets.DEFAULT_URL),
                                         urlTestBackupUrl = item.optString("urlTestBackupUrl", ""),
                                         bandwidthTestDurationMs = item.optLong(
@@ -1251,7 +1263,8 @@ class SettingsRepository(private val context: Context) {
             urlTestPercent = scheme.urlTestPercent.coerceIn(1, 100),
             bandwidthPercent = scheme.bandwidthPercent.coerceIn(1, 100),
             tcpingTimeoutMs = scheme.tcpingTimeoutMs.coerceAtLeast(500L),
-            urlTestTimeoutMs = scheme.urlTestTimeoutMs.coerceAtLeast(500L),
+            urlTestWarmupTimeoutMs = scheme.urlTestWarmupTimeoutMs.coerceIn(500L, 60_000L),
+            urlTestMeasurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs.coerceIn(500L, 60_000L),
             urlTestUrl = UrlTestTargets.normalize(scheme.urlTestUrl) ?: UrlTestTargets.DEFAULT_URL,
             urlTestBackupUrl = UrlTestTargets.normalizeOptional(scheme.urlTestBackupUrl) ?: "",
             bandwidthTestDurationMs = scheme.bandwidthTestDurationMs.coerceAtLeast(1_000L),
@@ -1283,7 +1296,10 @@ class SettingsRepository(private val context: Context) {
                     put("urlTestPercent", normalized.urlTestPercent)
                     put("bandwidthPercent", normalized.bandwidthPercent)
                     put("tcpingTimeoutMs", normalized.tcpingTimeoutMs)
-                    put("urlTestTimeoutMs", normalized.urlTestTimeoutMs)
+                    // Keep the old key for downgrade compatibility.
+                    put("urlTestTimeoutMs", normalized.urlTestWarmupTimeoutMs)
+                    put("urlTestWarmupTimeoutMs", normalized.urlTestWarmupTimeoutMs)
+                    put("urlTestMeasurementTimeoutMs", normalized.urlTestMeasurementTimeoutMs)
                     put("urlTestUrl", normalized.urlTestUrl)
                     put("urlTestBackupUrl", normalized.urlTestBackupUrl)
                     put("bandwidthTestDurationMs", normalized.bandwidthTestDurationMs)

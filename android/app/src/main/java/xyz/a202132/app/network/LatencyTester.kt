@@ -132,9 +132,12 @@ class LatencyTester {
     private suspend fun urlTestNodeOnce(
         node: Node,
         targetUrl: String,
-        timeoutMs: Long
+        warmupTimeoutMs: Long,
+        measurementTimeoutMs: Long
     ): UrlTestAttemptResult {
-        val probe = checkNotNull(UrlTestManager.testNode(node, targetUrl, timeoutMs)) {
+        val probe = checkNotNull(
+            UrlTestManager.testNode(node, targetUrl, warmupTimeoutMs, measurementTimeoutMs)
+        ) {
             "Native probe batch has not started"
         }
         return UrlTestAttemptResult(LatencyResult(node.id, probe.delayMs, probe.delayMs > 0), probe.retryable)
@@ -144,10 +147,13 @@ class LatencyTester {
         node: Node,
         targetUrl: String,
         fallbackUrl: String?,
-        timeoutMs: Long,
+        warmupTimeoutMs: Long,
+        measurementTimeoutMs: Long,
         retryCount: Int
     ): LatencyResult = withContext(Dispatchers.IO) {
-        val primaryResult = urlTestNodeWithRetries(node, targetUrl, timeoutMs, retryCount)
+        val primaryResult = urlTestNodeWithRetries(
+            node, targetUrl, warmupTimeoutMs, measurementTimeoutMs, retryCount
+        )
         if (primaryResult.result.isAvailable || !primaryResult.shouldRetry) {
             return@withContext primaryResult.result
         }
@@ -157,18 +163,23 @@ class LatencyTester {
             ?: return@withContext primaryResult.result
 
         debugNode { "URL Test primary failed; trying backup target: ${node.name} (${node.id})" }
-        urlTestNodeWithRetries(node, normalizedFallbackUrl, timeoutMs, retryCount).result
+        urlTestNodeWithRetries(
+            node, normalizedFallbackUrl, warmupTimeoutMs, measurementTimeoutMs, retryCount
+        ).result
     }
 
     private suspend fun urlTestNodeWithRetries(
         node: Node,
         targetUrl: String,
-        timeoutMs: Long,
+        warmupTimeoutMs: Long,
+        measurementTimeoutMs: Long,
         retryCount: Int
     ): UrlTestAttemptResult {
         var lastAttempt = UrlTestAttemptResult(LatencyResult(node.id, -2, false), false)
         repeat(retryCount.coerceAtLeast(0) + 1) { attempt ->
-            lastAttempt = urlTestNodeOnce(node, targetUrl, timeoutMs)
+            lastAttempt = urlTestNodeOnce(
+                node, targetUrl, warmupTimeoutMs, measurementTimeoutMs
+            )
             if (lastAttempt.result.isAvailable || !lastAttempt.shouldRetry) return lastAttempt
             if (attempt < retryCount) {
                 debugNode { "URL Test retry ${attempt + 1}/$retryCount: ${node.name} (${node.id})" }
@@ -182,7 +193,8 @@ class LatencyTester {
         nodes: List<Node>,
         targetUrl: String = xyz.a202132.app.AppConfig.URL_TEST_URL,
         fallbackUrl: String? = "",
-        timeoutMs: Long = xyz.a202132.app.AppConfig.URL_TEST_TIMEOUT,
+        warmupTimeoutMs: Long = xyz.a202132.app.AppConfig.URL_TEST_WARMUP_TIMEOUT,
+        measurementTimeoutMs: Long = xyz.a202132.app.AppConfig.URL_TEST_MEASUREMENT_TIMEOUT,
         retryCount: Int = xyz.a202132.app.AppConfig.URL_TEST_RETRY_COUNT,
         concurrency: Int = xyz.a202132.app.AppConfig.URL_TEST_CONCURRENCY,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
@@ -196,7 +208,10 @@ class LatencyTester {
             ?.takeIf { it.isNotBlank() && it != targetUrl }
 
         val firstPass = parallelMapOrdered(nodes, concurrency) { node ->
-            val result = urlTestNode(node, targetUrl, normalizedFallbackUrl, timeoutMs, retryCount)
+            val result = urlTestNode(
+                node, targetUrl, normalizedFallbackUrl,
+                warmupTimeoutMs, measurementTimeoutMs, retryCount
+            )
             val current = completedCount.incrementAndGet()
             reportProgress(current, totalCount, lastProgressAt, onProgress)
             result
@@ -215,7 +230,12 @@ class LatencyTester {
             parallelMapOrdered(finalists, concurrency.coerceAtMost(finalists.size)) { node ->
                 node.id to buildList {
                     repeat(xyz.a202132.app.AppConfig.URL_TEST_RECHECK_ATTEMPTS) {
-                        add(urlTestNode(node, targetUrl, normalizedFallbackUrl, timeoutMs, retryCount))
+                        add(
+                            urlTestNode(
+                                node, targetUrl, normalizedFallbackUrl,
+                                warmupTimeoutMs, measurementTimeoutMs, retryCount
+                            )
+                        )
                     }
                 }
             }.toMap()

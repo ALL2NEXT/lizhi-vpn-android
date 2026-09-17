@@ -27,20 +27,22 @@ internal object Socks5HttpProbe {
         timeoutMs: Long
     ): Boolean = execute(endpoint, targetUrl, timeoutMs, "GET").statusCode == expectedStatus
 
-    /** 使用单一递减截止时间且不跟随重定向，避免分阶段超时叠加导致延迟虚高。 */
+    /** 首次建连和预热请求、后续暖连接测量请求各自使用独立超时。 */
     fun measureLatency(
         endpoint: LocalSocksEndpoint,
         targetUrl: String,
-        timeoutMs: Long
+        warmupTimeoutMs: Long,
+        measurementTimeoutMs: Long
     ): Result {
         // 同一客户端连续请求两次：第一次建立并预热隧道，第二次只统计暖连接首包。
         require(endpoint.credentials == null) { "暖连接测速仅支持应用内部免认证 SOCKS 入站" }
-        val effectiveTimeoutMs = timeoutMs.coerceIn(1L, 60_000L)
-        val deadline = System.nanoTime() + effectiveTimeoutMs * NANOS_PER_MILLISECOND
+        val effectiveWarmupTimeoutMs = warmupTimeoutMs.coerceIn(1L, 60_000L)
+        val effectiveMeasurementTimeoutMs = measurementTimeoutMs.coerceIn(1L, 60_000L)
+        val clientTimeoutMs = maxOf(effectiveWarmupTimeoutMs, effectiveMeasurementTimeoutMs)
         val client = OkHttpClient.Builder()
             .proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress(endpoint.address, endpoint.port)))
-            .connectTimeout(effectiveTimeoutMs, TimeUnit.MILLISECONDS)
-            .readTimeout(effectiveTimeoutMs, TimeUnit.MILLISECONDS)
+            .connectTimeout(clientTimeoutMs, TimeUnit.MILLISECONDS)
+            .readTimeout(clientTimeoutMs, TimeUnit.MILLISECONDS)
             .followRedirects(false)
             .followSslRedirects(false)
             .build()
@@ -50,28 +52,26 @@ internal object Socks5HttpProbe {
             .get()
             .build()
         try {
-            var measured: Result? = null
-            repeat(WARM_REQUEST_COUNT) { index ->
-                val call = client.newCall(request)
-                call.timeout().timeout(remainingMillis(deadline).toLong(), TimeUnit.MILLISECONDS)
-                val startedAt = System.nanoTime()
-                call.execute().use { response ->
-                    val headersAt = System.nanoTime()
-                    if (index == 0) {
-                        // 完整消费首个响应，OkHttp 才能把底层 TCP/TLS 连接交给第二次请求复用。
-                        val input = response.body?.byteStream()
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        while (input != null && input.read(buffer) != -1) Unit
-                    } else {
-                        measured = Result(
-                            response.code,
-                            ((headersAt - startedAt) / NANOS_PER_MILLISECOND)
-                                .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
-                        )
-                    }
-                }
+            val warmupCall = client.newCall(request)
+            warmupCall.timeout().timeout(effectiveWarmupTimeoutMs, TimeUnit.MILLISECONDS)
+            warmupCall.execute().use { response ->
+                // 读取完预热响应，确保 OkHttp 能复用 TCP/TLS 连接。
+                val input = response.body?.byteStream()
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (input != null && input.read(buffer) != -1) Unit
             }
-            return requireNotNull(measured)
+
+            val measurementCall = client.newCall(request)
+            measurementCall.timeout().timeout(effectiveMeasurementTimeoutMs, TimeUnit.MILLISECONDS)
+            val startedAt = System.nanoTime()
+            return measurementCall.execute().use { response ->
+                val headersAt = System.nanoTime()
+                Result(
+                    response.code,
+                    ((headersAt - startedAt) / NANOS_PER_MILLISECOND)
+                        .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+                )
+            }
         } finally {
             client.connectionPool.evictAll()
             client.dispatcher.executorService.shutdown()
@@ -229,7 +229,6 @@ internal object Socks5HttpProbe {
     }
 
     private const val MAX_STATUS_LINE = 8_192
-    private const val WARM_REQUEST_COUNT = 2
     private const val NANOS_PER_MILLISECOND = 1_000_000L
     private const val VERSION: Byte = 5
     private const val AUTH_VERSION: Byte = 1

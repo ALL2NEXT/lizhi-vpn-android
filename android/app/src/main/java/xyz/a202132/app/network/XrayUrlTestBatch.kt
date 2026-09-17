@@ -54,14 +54,15 @@ internal class XrayUrlTestBatch(
     suspend fun testNode(
         node: Node,
         targetUrl: String,
-        timeoutMs: Long
+        warmupTimeoutMs: Long,
+        measurementTimeoutMs: Long
     ): UrlTestManager.ProbeResult =
         withContext(Dispatchers.IO) {
             val endpoint = endpoints[node.id]
             if (closed.get() || endpoint == null) {
                 return@withContext UrlTestManager.ProbeResult(-2, false)
             }
-            UrlTestManager.probeEndpoint(endpoint, targetUrl, timeoutMs)
+            UrlTestManager.probeEndpoint(endpoint, targetUrl, warmupTimeoutMs, measurementTimeoutMs)
         }
 
     override fun close() {

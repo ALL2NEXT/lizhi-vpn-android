@@ -70,16 +70,17 @@ object UrlTestManager {
     suspend fun testNode(
         node: Node,
         url: String,
-        timeoutMs: Long
+        warmupTimeoutMs: Long,
+        measurementTimeoutMs: Long
     ): ProbeResult? = withContext(Dispatchers.IO) {
         val active = batch ?: return@withContext null
         if (node.id !in active.nodes) return@withContext ProbeResult(-2, false)
         when (active.settings.coreFor(node.type)) {
             ProxyCore.SING_BOX -> active.singBox?.let {
-                return@withContext it.testNode(node, url, timeoutMs)
+                return@withContext it.testNode(node, url, warmupTimeoutMs, measurementTimeoutMs)
             }
             ProxyCore.XRAY -> active.xray?.let {
-                return@withContext it.testNode(node, url, timeoutMs)
+                return@withContext it.testNode(node, url, warmupTimeoutMs, measurementTimeoutMs)
             }
         }
 
@@ -96,7 +97,7 @@ object UrlTestManager {
                 }
                 if (withTimeoutOrNull(20_000) { created.start() } != true) return@withContext ProbeResult(-2, false)
                 if (batch !== active) return@withContext ProbeResult(-2, false)
-                probeEndpoint(created.endpoint, url, timeoutMs)
+                probeEndpoint(created.endpoint, url, warmupTimeoutMs, measurementTimeoutMs)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -132,12 +133,14 @@ object UrlTestManager {
     internal fun probeEndpoint(
         endpoint: LocalSocksEndpoint,
         url: String,
-        timeoutMs: Long
+        warmupTimeoutMs: Long,
+        measurementTimeoutMs: Long
     ): ProbeResult = try {
         val result = Socks5HttpProbe.measureLatency(
             endpoint,
             url,
-            timeoutMs.coerceIn(500L, 60_000L)
+            warmupTimeoutMs.coerceIn(500L, 60_000L),
+            measurementTimeoutMs.coerceIn(500L, 60_000L)
         )
         if (result.statusCode in 200..399) ProbeResult(result.delayMs, false)
         else ProbeResult(-2, result.statusCode == 503 || result.statusCode == 504)

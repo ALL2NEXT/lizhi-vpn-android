@@ -91,7 +91,7 @@ internal class DisconnectRecoveryManager(
                 endpoint,
                 AppConfig.URL_TEST_URL,
                 expectedStatus = 204,
-                timeoutMs = AppConfig.URL_TEST_TIMEOUT
+                timeoutMs = AppConfig.URL_TEST_WARMUP_TIMEOUT
             )
         }.onFailure { error ->
             Log.w(TAG, "204 probe failed: ${error.message}")
@@ -185,7 +185,7 @@ internal class DisconnectRecoveryManager(
     }
 
     private fun createPhysicalNetworkClient(): OkHttpClient {
-        val timeoutMs = AppConfig.URL_TEST_TIMEOUT.coerceAtLeast(5000L)
+        val timeoutMs = SUBSCRIPTION_FETCH_TIMEOUT_MS
         val builder = NetworkClient.withUserAgent(OkHttpClient.Builder())
             .connectTimeout(timeoutMs, TimeUnit.MILLISECONDS)
             .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
@@ -207,5 +207,6 @@ internal class DisconnectRecoveryManager(
 
     private companion object {
         const val TAG = "DisconnectRecovery"
+        const val SUBSCRIPTION_FETCH_TIMEOUT_MS = 5_000L
     }
 }

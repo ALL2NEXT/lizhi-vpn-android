@@ -36,14 +36,15 @@ class Socks5HttpProbeTest {
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
             val failure = AtomicReference<Throwable?>()
             val worker = thread(name = "fake-socks5-warm-latency") {
-                runCatching { serveWarmProbe(server) }.onFailure(failure::set)
+                runCatching { serveWarmProbe(server, warmupDelayMs = 700) }.onFailure(failure::set)
             }
             val endpoint = LocalSocksEndpoint.unauthenticated(server.localPort)
 
             val result = Socks5HttpProbe.measureLatency(
                 endpoint,
                 "http://warm.test/generate_204",
-                2_000
+                warmupTimeoutMs = 2_000,
+                measurementTimeoutMs = 500
             )
 
             assertEquals(204, result.statusCode)
@@ -93,7 +94,7 @@ class Socks5HttpProbeTest {
         }
     }
 
-    private fun serveWarmProbe(server: ServerSocket) {
+    private fun serveWarmProbe(server: ServerSocket, warmupDelayMs: Long = 0) {
         server.accept().use { socket ->
             socket.soTimeout = 2_000
             val input = BufferedInputStream(socket.getInputStream())
@@ -116,6 +117,7 @@ class Socks5HttpProbeTest {
             repeat(2) { index ->
                 val request = readHttpHeaders(input)
                 assertTrue(request.startsWith("GET /generate_204 HTTP/1.1\r\n"))
+                if (index == 0 && warmupDelayMs > 0) Thread.sleep(warmupDelayMs)
                 val connection = if (index == 0) "keep-alive" else "close"
                 output.write(
                     "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: $connection\r\n\r\n"
