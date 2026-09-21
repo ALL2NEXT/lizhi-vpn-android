@@ -96,7 +96,6 @@ object AppConfig {
     const val HYSTERIA_DOWN_MBPS = 1000
 
     // 测试后自动删除超时节点，默认关闭
-    const val AUTO_DELETE_TIMEOUT_NODES = false // Legacy preference fallback.
     const val AUTO_DELETE_TCPING_TIMEOUT_NODES = false
     const val AUTO_DELETE_URL_TEST_TIMEOUT_NODES = false
     const val AUTO_DELETE_LOW_BANDWIDTH_NODES = false

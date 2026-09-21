@@ -41,8 +41,7 @@ object TrafficReporter {
             records = records,
             report = { record ->
                 val result = accountManager.reportTraffic(
-                    // Keep the historical prefix so records retained across an app
-                    // update preserve the backend idempotency key.
+                    // Namespace daily records while keeping the backend idempotency key stable.
                     sessionId = "daily-${record.id}",
                     subscriptionGroupName = "",
                     startedAt = LocalTrafficUsageStore.dayStartMillis(record.day),

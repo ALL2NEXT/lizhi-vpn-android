@@ -7,6 +7,7 @@ import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.ProtocolCoreSettings
+import xyz.a202132.app.data.model.ProxyCore
 
 class NodeProtocolDisplayTest {
     @Test
@@ -112,7 +113,9 @@ class NodeProtocolDisplayTest {
 
     @Test
     fun displaysTheCurrentlySelectedCore() {
-        val coreSettings = ProtocolCoreSettings(xrayProtocols = setOf(NodeType.TROJAN))
+        val coreSettings = ProtocolCoreSettings(
+            assignments = mapOf(NodeType.TROJAN to ProxyCore.XRAY)
+        )
         assertEquals(
             "vless+reality+tcp+sing-box",
             node(

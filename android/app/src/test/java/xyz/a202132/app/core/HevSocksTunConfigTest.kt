@@ -21,11 +21,4 @@ class HevSocksTunConfigTest {
         assertTrue(yaml.contains("password: 'secret'"))
         assertFalse(yaml.contains("mapdns:"))
     }
-
-    @Test fun ipv6OnlyIsRejectedByPureHevMode() {
-        try {
-            HevSocksTunConfig.tunnel(IPv6RoutingMode.ONLY)
-            fail("HEV fallback must reject IPv6-only mode")
-        } catch (_: IllegalArgumentException) { }
-    }
 }

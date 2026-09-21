@@ -104,7 +104,7 @@ go test ./...
 go test ./...
 ```
 
-JVM 测试覆盖双核心注册、旧设置兼容、会话取消/替换/停止失败、DNS 顺序及 HEV 配置；Go 测试验证 Xray runner 不提前启动、统计缓冲所有权、socket protect 和规则内容。规则测试的 JSON 基准由 sing-box CLI decompile 生成，仅存在于测试资源，不随 APK 打包。
+JVM 测试覆盖双核心注册、会话取消/替换/停止失败、DNS 顺序及 HEV 配置；Go 测试验证 Xray runner 不提前启动、统计缓冲所有权、socket protect 和规则内容。规则测试的 JSON 基准由 sing-box CLI decompile 生成，仅存在于测试资源，不随 APK 打包。
 
 最终本地验证：Android JVM 测试、sing-box/Xray 两个 Go 运行器测试和两个 ABI 的原生构建通过。另用真实 Xray Router 验证了“域名未命中 geosite、解析结果命中国内 IP”仍选择直连；配置依靠首个代理出站兜底，避免显式全匹配规则阻断 `IPIfNonMatch` 的二次匹配。
 
@@ -126,6 +126,6 @@ AndroidVpnHost TUN -> hev-runner (HEV 2.16.0) -> core loopback SOCKS5 -> selecte
 
 The HEV runner is a standalone Android PIE executable. It exchanges the TUN descriptor, liveness, and statistics through a private abstract Unix socket; packet data does not cross Kotlin or JNI. The build pins HEV 2.16.0, stages the source to resolve Git symlink headers on Windows, and packages only `libhev.so` for `armeabi-v7a` and `arm64-v8a`. URL Test never starts HEV.
 
-Mapped DNS is enabled for domain preservation (`198.18.0.2` with the `198.18.0.0/16` fake-IP map). IPv6-only routing is migrated to dual-stack because the pure HEV path does not expose an IPv6-only DNS/data path. The HEV adapter is mandatory for VPN sessions; device-level TUN, socket protection, IPv6, UDP/QUIC, and teardown validation still require an Android device.
+Mapped DNS is enabled for domain preservation (`198.18.0.2` with the `198.18.0.0/16` fake-IP map). The HEV adapter is mandatory for VPN sessions; device-level TUN, socket protection, IPv6, UDP/QUIC, and teardown validation still require an Android device.
 
-VPN settings no longer expose a per-core TUN selector. The Android TUN is always opened by HEV and each selected core only provides the loopback SOCKS5 inbound. Legacy native-TUN preferences are ignored, so upgrades converge on the single HEV data plane.
+VPN settings do not expose a per-core TUN selector. The Android TUN is always opened by HEV and each selected core only provides the loopback SOCKS5 inbound.

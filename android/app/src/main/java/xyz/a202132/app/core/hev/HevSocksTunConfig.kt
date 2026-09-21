@@ -9,15 +9,8 @@ import xyz.a202132.app.platform.TunnelSpec
 /** HEV's external-TUN configuration; the core behind it only needs SOCKS5. */
 internal object HevSocksTunConfig {
     fun tunnel(mode: IPv6RoutingMode): TunnelSpec {
-        require(mode != IPv6RoutingMode.ONLY) {
-            "HEV tun2socks does not support IPv6-only routing"
-        }
-        val addresses = mutableListOf<IpPrefix>()
-        val routes = mutableListOf<IpPrefix>()
-        if (mode != IPv6RoutingMode.ONLY) {
-            addresses += IpPrefix("172.19.0.1", 30)
-            routes += IpPrefix("0.0.0.0", 0)
-        }
+        val addresses = mutableListOf(IpPrefix("172.19.0.1", 30))
+        val routes = mutableListOf(IpPrefix("0.0.0.0", 0))
         if (mode != IPv6RoutingMode.DISABLED) {
             addresses += IpPrefix("fdfe:dcba:9876::1", 126)
             routes += IpPrefix("::", 0)

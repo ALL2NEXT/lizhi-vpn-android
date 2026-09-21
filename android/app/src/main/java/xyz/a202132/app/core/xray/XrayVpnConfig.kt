@@ -80,7 +80,6 @@ internal object XrayVpnConfig {
             val dnsSettings = settings.dnsSettings
             val strategy = when (settings.ipv6RoutingMode) {
                 IPv6RoutingMode.DISABLED -> "UseIPv4"
-                IPv6RoutingMode.ONLY -> "UseIPv6"
                 IPv6RoutingMode.PREFER -> "UseIPv6v4"
                 IPv6RoutingMode.ENABLED -> "UseIPv4v6"
             }
@@ -310,7 +309,6 @@ internal object XrayVpnConfig {
     ): String = when (strategy) {
         DnsDomainStrategy.AUTO -> when (ipv6Mode) {
             IPv6RoutingMode.DISABLED -> "UseIPv4"
-            IPv6RoutingMode.ONLY -> "UseIPv6"
             IPv6RoutingMode.PREFER -> "UseIPv6v4"
             IPv6RoutingMode.ENABLED -> "UseIPv4v6"
         }

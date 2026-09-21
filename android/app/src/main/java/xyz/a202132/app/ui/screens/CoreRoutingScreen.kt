@@ -93,7 +93,6 @@ fun CoreRoutingScreen(
                 MultiPositionSwitch(
                     options = listOf("优先", "启用", "禁用"),
                     selectedIndex = when (ipv6RoutingMode) {
-                        IPv6RoutingMode.ONLY -> 1
                         IPv6RoutingMode.PREFER -> 0
                         IPv6RoutingMode.ENABLED -> 1
                         IPv6RoutingMode.DISABLED -> 2

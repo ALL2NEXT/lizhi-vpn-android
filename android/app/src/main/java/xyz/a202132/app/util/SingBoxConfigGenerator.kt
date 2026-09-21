@@ -552,7 +552,6 @@ class SingBoxConfigGenerator {
             "prefer_ipv4"
         } else {
             when (ipv6Mode) {
-                IPv6RoutingMode.ONLY -> "ipv6_only"
                 IPv6RoutingMode.PREFER -> "prefer_ipv6"
                 IPv6RoutingMode.ENABLED -> "prefer_ipv4"
                 IPv6RoutingMode.DISABLED -> "ipv4_only"

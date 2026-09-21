@@ -20,11 +20,5 @@ enum class IPv6RoutingMode {
      * 优先 IPv6
      * DNS策略: prefer_ipv6, 添加 inet6_address
      */
-    PREFER,
-    
-    /**
-     * 仅 IPv6 (实验性)
-     * DNS策略: ipv6_only, 仅 inet6_address
-     */
-    ONLY
+    PREFER
 }

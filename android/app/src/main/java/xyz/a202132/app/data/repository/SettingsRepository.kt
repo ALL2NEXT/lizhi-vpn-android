@@ -131,12 +131,10 @@ class SettingsRepository(private val context: Context) {
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
         private val CORE_ASSIGNMENTS = stringSetPreferencesKey("protocol_core_assignments")
-        private val XRAY_CORE_PROTOCOLS = stringSetPreferencesKey("xray_core_protocols")
         private val NODE_LABEL_SHOW_PROTOCOL = booleanPreferencesKey("node_label_show_protocol")
         private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
         private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
         private val NODE_LABEL_SHOW_CORE = booleanPreferencesKey("node_label_show_core")
-        private val AUTO_DELETE_TIMEOUT_NODES = booleanPreferencesKey("auto_delete_timeout_nodes")
         private val AUTO_DELETE_TCPING_TIMEOUT_NODES =
             booleanPreferencesKey("auto_delete_tcping_timeout_nodes")
         private val AUTO_DELETE_URL_TEST_TIMEOUT_NODES =
@@ -150,13 +148,6 @@ class SettingsRepository(private val context: Context) {
         private val SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
         private val ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
         private val SPEED_TEST_SCHEMES_JSON = stringPreferencesKey("speed_test_schemes_json")
-        // 旧版两个内置测速方案的 ID，仅用于升级时过滤旧数据。
-        private const val LEGACY_STANDARD_SPEED_TEST_SCHEME_ID = "builtin_speed_test_standard"
-        private const val LEGACY_DEEP_SPEED_TEST_SCHEME_ID = "builtin_speed_test_deep"
-        // 兼容早期单皮肤版本的数据。
-        private val SKIN_BASE_COLOR_ARGB = longPreferencesKey("skin_base_color_argb")
-        private val SKIN_CUSTOM_IMAGE_PATH = stringPreferencesKey("skin_custom_image_path")
-        private const val LEGACY_DEFAULT_BASE_COLOR_ARGB: Long = 0xFF00BFA5L
 
     }
     
@@ -443,10 +434,10 @@ class SettingsRepository(private val context: Context) {
             ?: xyz.a202132.app.AppConfig.HYSTERIA_BANDWIDTH_ENABLED
         return VpnRuntimeSettings(
             proxyMode = enumValueOrDefault(preferences[PROXY_MODE], ProxyMode.SMART),
-            ipv6RoutingMode = normalizeIpv6RoutingMode(enumValueOrDefault(
+            ipv6RoutingMode = enumValueOrDefault(
                 preferences[IPV6_ROUTING_MODE],
                 IPv6RoutingMode.DISABLED
-            )),
+            ),
             // 关闭 Hy2 带宽参数时必须向两个核心都传 0，避免运行时仍启用 Brutal。
             hysteriaUpMbps = if (hysteriaBandwidthEnabled) {
                 (preferences[HYSTERIA_UP_MBPS]
@@ -460,7 +451,7 @@ class SettingsRepository(private val context: Context) {
             } else {
                 0
             },
-            protocolCoreSettings = decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS], preferences[CORE_ASSIGNMENTS]),
+            protocolCoreSettings = decodeProtocolCoreSettings(preferences[CORE_ASSIGNMENTS]),
             perAppProxy = PerAppProxySettings(
                 enabled = preferences[PER_APP_PROXY_ENABLED] ?: false,
                 selectedPackages = preferences[SELECTED_PACKAGES] ?: emptySet()
@@ -472,7 +463,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val protocolCoreSettings: Flow<ProtocolCoreSettings> = context.dataStore.data.map { preferences ->
-        decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS], preferences[CORE_ASSIGNMENTS])
+        decodeProtocolCoreSettings(preferences[CORE_ASSIGNMENTS])
     }
 
     val nodeDisplaySettings: Flow<NodeDisplaySettings> = context.dataStore.data.map { preferences ->
@@ -511,7 +502,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setProtocolCore(nodeType: NodeType, core: ProxyCore) {
         require(core in xyz.a202132.app.core.CoreBackends.registry.availableFor(nodeType))
         context.dataStore.edit { preferences ->
-            val current = decodeProtocolCoreSettings(preferences[XRAY_CORE_PROTOCOLS], preferences[CORE_ASSIGNMENTS])
+            val current = decodeProtocolCoreSettings(preferences[CORE_ASSIGNMENTS])
                 .assignments.toMutableMap()
             current[nodeType] = core
             preferences[CORE_ASSIGNMENTS] = current.mapTo(mutableSetOf()) { (type, selected) ->
@@ -520,7 +511,7 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    private fun decodeProtocolCoreSettings(values: Set<String>?, entries: Set<String>?): ProtocolCoreSettings {
+    private fun decodeProtocolCoreSettings(entries: Set<String>?): ProtocolCoreSettings {
         val assignments = entries.orEmpty().mapNotNull { entry ->
             val pair = entry.split('=', limit = 2)
             if (pair.size != 2) return@mapNotNull null
@@ -528,15 +519,7 @@ class SettingsRepository(private val context: Context) {
             val selected = runCatching { ProxyCore.valueOf(pair[1]) }.getOrNull() ?: return@mapNotNull null
             type to selected
         }.toMap()
-        val supported = ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS.toSet()
-        val storedValues = values ?: ProtocolCoreSettings.DEFAULT_XRAY_PROTOCOLS
-            .mapTo(mutableSetOf()) { it.protocol }
-        val selected = storedValues.mapNotNullTo(mutableSetOf()) { value ->
-            NodeType.entries.firstOrNull {
-                it.protocol.equals(value, ignoreCase = true) || it.name.equals(value, ignoreCase = true)
-            }
-        }.intersect(supported)
-        return ProtocolCoreSettings(selected, assignments)
+        return ProtocolCoreSettings(assignments = assignments)
     }
 
     private fun decodeLanInboundSettings(preferences: Preferences): LanInboundSettings =
@@ -874,16 +857,16 @@ class SettingsRepository(private val context: Context) {
     // IPv6 路由模式
     val ipv6RoutingMode: Flow<IPv6RoutingMode> = context.dataStore.data.map { preferences ->
         val mode = preferences[IPV6_ROUTING_MODE] ?: IPv6RoutingMode.DISABLED.name
-        normalizeIpv6RoutingMode(try {
+        try {
             IPv6RoutingMode.valueOf(mode)
         } catch (e: Exception) {
             IPv6RoutingMode.DISABLED
-        })
+        }
     }
     
     suspend fun setIPv6RoutingMode(mode: IPv6RoutingMode) {
         context.dataStore.edit { preferences ->
-            preferences[IPV6_ROUTING_MODE] = normalizeIpv6RoutingMode(mode).name
+            preferences[IPV6_ROUTING_MODE] = mode.name
         }
     }
 
@@ -957,10 +940,6 @@ class SettingsRepository(private val context: Context) {
             preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(updated)
         }
     }
-
-    /** HEV does not provide an IPv6-only DNS/data path, so migrate old native-only values. */
-    private fun normalizeIpv6RoutingMode(mode: IPv6RoutingMode): IPv6RoutingMode =
-        if (mode == IPv6RoutingMode.ONLY) IPv6RoutingMode.ENABLED else mode
 
     val tcpingTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
         (preferences[TCPING_TEST_TIMEOUT_MS] ?: xyz.a202132.app.AppConfig.TCPING_TEST_TIMEOUT).coerceAtLeast(500L)
@@ -1096,7 +1075,6 @@ class SettingsRepository(private val context: Context) {
 
     val autoDeleteTcpingTimeoutNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES]
-            ?: preferences[AUTO_DELETE_TIMEOUT_NODES]
             ?: xyz.a202132.app.AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES
     }
 
@@ -1106,7 +1084,6 @@ class SettingsRepository(private val context: Context) {
 
     val autoDeleteUrlTestTimeoutNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES]
-            ?: preferences[AUTO_DELETE_TIMEOUT_NODES]
             ?: xyz.a202132.app.AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES
     }
 
@@ -1169,11 +1146,6 @@ class SettingsRepository(private val context: Context) {
                             val item = array.optJSONObject(index) ?: continue
                             val id = item.optString("id").trim()
                             if (id.isBlank()) continue
-                            // 兼容旧方案：将原来的单一超时作为首次建连与预热请求的超时。
-                            val legacyUrlTestTimeoutMs = item.optLong(
-                                "urlTestTimeoutMs",
-                                xyz.a202132.app.AppConfig.URL_TEST_WARMUP_TIMEOUT
-                            ).coerceAtLeast(xyz.a202132.app.AppConfig.URL_TEST_WARMUP_TIMEOUT)
                             add(
                                 normalizeSpeedTestScheme(
                                     SpeedTestScheme(
@@ -1203,7 +1175,7 @@ class SettingsRepository(private val context: Context) {
                                         tcpingTimeoutMs = item.optLong("tcpingTimeoutMs", 1_000L),
                                         urlTestWarmupTimeoutMs = item.optLong(
                                             "urlTestWarmupTimeoutMs",
-                                            legacyUrlTestTimeoutMs
+                                            xyz.a202132.app.AppConfig.URL_TEST_WARMUP_TIMEOUT
                                         ),
                                         urlTestMeasurementTimeoutMs = item.optLong(
                                             "urlTestMeasurementTimeoutMs",
@@ -1236,18 +1208,14 @@ class SettingsRepository(private val context: Context) {
         val defaultScheme = stored?.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
             ?: SpeedTestScheme.default()
         val custom = stored.orEmpty()
-            .filterNot {
-                it.id == SpeedTestScheme.DEFAULT_ID ||
-                    it.id == LEGACY_STANDARD_SPEED_TEST_SCHEME_ID ||
-                    it.id == LEGACY_DEEP_SPEED_TEST_SCHEME_ID
-            }
+            .filterNot { it.id == SpeedTestScheme.DEFAULT_ID }
             .filterNot { it.builtIn }
             .distinctBy(SpeedTestScheme::id)
         return listOf(defaultScheme.copy(builtIn = true)) + custom
     }
 
     private fun normalizeSpeedTestScheme(scheme: SpeedTestScheme): SpeedTestScheme {
-        // 兼容已保存的内置方案名称，同时保留用户对内置方案名称的自定义修改。
+        // 规范空名称，同时保留用户对方案名称的自定义修改。
         val trimmedName = scheme.name.trim()
         val normalizedName = when {
             scheme.id == SpeedTestScheme.DEFAULT_ID && trimmedName.isBlank() -> "默认测速"
@@ -1358,28 +1326,7 @@ class SettingsRepository(private val context: Context) {
                 .distinctBy { it.id }
         }
 
-        val legacyColor = preferences[SKIN_BASE_COLOR_ARGB]
-        val legacyImage = preferences[SKIN_CUSTOM_IMAGE_PATH]
-            ?.takeIf { it.isNotBlank() }
-        val normalizedLegacyColor = legacyColor?.let(::normalizeSkinColor)
-        val legacyScheme = if (
-            legacyImage != null ||
-            normalizedLegacyColor != null &&
-                normalizedLegacyColor != SkinSettings.DEFAULT_BASE_COLOR_ARGB &&
-                normalizedLegacyColor != LEGACY_DEFAULT_BASE_COLOR_ARGB
-        ) {
-            SkinScheme(
-                id = "legacy_custom",
-                name = "我的皮肤",
-                baseColorArgb = normalizedLegacyColor
-                    ?.takeUnless { it == LEGACY_DEFAULT_BASE_COLOR_ARGB }
-                    ?: SkinSettings.DEFAULT_BASE_COLOR_ARGB,
-                customImagePath = legacyImage
-            )
-        } else {
-            null
-        }
-        return listOfNotNull(SkinScheme.default(), legacyScheme)
+        return listOf(SkinScheme.default())
     }
 
     private fun encodeSkinSchemes(schemes: List<SkinScheme>): String {

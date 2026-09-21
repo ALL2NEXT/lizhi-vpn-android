@@ -10,7 +10,6 @@ class ProtocolCoreSettingsTest {
     fun defaultsEveryProtocolToSingBox() {
         val settings = ProtocolCoreSettings()
 
-        assertTrue(ProtocolCoreSettings.DEFAULT_XRAY_PROTOCOLS.isEmpty())
         ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
             assertEquals(ProxyCore.SING_BOX, settings.coreFor(nodeType))
         }
@@ -39,9 +38,12 @@ class ProtocolCoreSettingsTest {
     }
 
     @Test
-    fun selectsXrayOnlyForExplicitlySupportedProtocols() {
+    fun selectsXrayOnlyForExplicitAssignments() {
         val settings = ProtocolCoreSettings(
-            setOf(NodeType.VLESS, NodeType.HYSTERIA2, NodeType.ANYTLS)
+            assignments = mapOf(
+                NodeType.VLESS to ProxyCore.XRAY,
+                NodeType.HYSTERIA2 to ProxyCore.XRAY
+            )
         )
 
         assertTrue(settings.usesXray(NodeType.VLESS))

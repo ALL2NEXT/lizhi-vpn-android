@@ -29,8 +29,13 @@ class CoreRegistryTest {
         try { registry.backend(ProxyCore.XRAY); fail("Missing core must fail") }
         catch (error: IllegalStateException) { assertTrue(error.message!!.contains("Xray")) }
     }
-    @Test fun assignmentsPreserveLegacySettingsAndAllowExplicitCoreSelection() {
-        val settings = ProtocolCoreSettings(setOf(NodeType.VLESS), mapOf(NodeType.TROJAN to ProxyCore.XRAY))
+    @Test fun assignmentsAllowExplicitCoreSelection() {
+        val settings = ProtocolCoreSettings(
+            assignments = mapOf(
+                NodeType.VLESS to ProxyCore.XRAY,
+                NodeType.TROJAN to ProxyCore.XRAY
+            )
+        )
         assertEquals(ProxyCore.XRAY, settings.coreFor(NodeType.VLESS))
         assertEquals(ProxyCore.XRAY, settings.coreFor(NodeType.TROJAN))
         assertEquals(ProxyCore.SING_BOX, settings.coreFor(NodeType.TUIC))

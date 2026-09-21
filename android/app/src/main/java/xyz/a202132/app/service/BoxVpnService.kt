@@ -123,9 +123,6 @@ class BoxVpnService : VpnService() {
                     if (mode != null) settingsRepo.setProxyMode(mode)
                     val settings = settingsRepo.getVpnRuntimeSettings()
                     val node = knownNode ?: findNode(raw, name, settingsRepo)
-                    require(settings.ipv6RoutingMode != IPv6RoutingMode.ONLY) {
-                        "HEV tun2socks does not support IPv6-only routing"
-                    }
                     val prepared = sessionFactory.prepare(applicationContext, node, settings)
                     try {
                         ensureActive()
