@@ -42,6 +42,10 @@ class BoxVpnService : VpnService() {
         @Volatile var downloadTotal = 0L
             private set
         @Volatile private var internalSocksEndpoint: LocalSocksEndpoint? = null
+
+        /** 当前 VPN 的应用内探测出口；仅在核心和 TUN 均已就绪时返回。 */
+        internal fun activeSocksEndpoint(): LocalSocksEndpoint? =
+            internalSocksEndpoint?.takeIf { isRunning }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

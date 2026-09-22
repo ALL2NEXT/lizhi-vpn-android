@@ -32,6 +32,33 @@ class Socks5HttpProbeTest {
     }
 
     @Test
+    fun `authenticated fetch reads response body for unlock detection`() {
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
+            val failure = AtomicReference<Throwable?>()
+            val worker = thread(name = "fake-socks5-body") {
+                runCatching { serveBodyResponse(server) }.onFailure(failure::set)
+            }
+            val endpoint = LocalSocksEndpoint(
+                "127.0.0.1",
+                server.localPort,
+                SocksCredentials("vpn", "secret")
+            )
+
+            val response = Socks5HttpProbe.fetch(
+                endpoint,
+                "http://example.com/unlock",
+                timeoutMs = 2_000,
+                headers = mapOf("User-Agent" to "unlock-test")
+            )
+
+            assertEquals(200, response.statusCode)
+            assertEquals("Gemini supported", response.body)
+            worker.join(2_000)
+            failure.get()?.let { throw AssertionError("Fake SOCKS5 server failed", it) }
+        }
+    }
+
+    @Test
     fun `latency probe reuses one socks tunnel for two get requests`() {
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
             val failure = AtomicReference<Throwable?>()
@@ -125,6 +152,41 @@ class Socks5HttpProbeTest {
                 )
                 output.flush()
             }
+        }
+    }
+
+    private fun serveBodyResponse(server: ServerSocket) {
+        server.accept().use { socket ->
+            socket.soTimeout = 2_000
+            val input = BufferedInputStream(socket.getInputStream())
+            val output = socket.getOutputStream()
+
+            assertEquals(listOf(5, 1, 2), input.readExactly(3))
+            output.write(byteArrayOf(5, 2))
+            output.flush()
+
+            assertEquals(1, input.read())
+            assertEquals("vpn", input.readExactly(input.read()).toAscii())
+            assertEquals("secret", input.readExactly(input.read()).toAscii())
+            output.write(byteArrayOf(1, 0))
+            output.flush()
+
+            assertEquals(listOf(5, 1, 0, 3), input.readExactly(4))
+            assertEquals("example.com", input.readExactly(input.read()).toAscii())
+            assertEquals(80, (input.read() shl 8) or input.read())
+            output.write(byteArrayOf(5, 0, 0, 1, 127, 0, 0, 1, 0, 80))
+            output.flush()
+
+            val request = readHttpHeaders(input)
+            assertTrue(request.startsWith("GET /unlock HTTP/1.1\r\n"))
+            assertTrue(request.contains("User-Agent: unlock-test\r\n"))
+            val body = "Gemini supported"
+            output.write(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\n".toByteArray()
+            )
+            output.write("Content-Length: ${body.toByteArray().size}\r\nConnection: close\r\n\r\n".toByteArray())
+            output.write(body.toByteArray())
+            output.flush()
         }
     }
 
