@@ -109,7 +109,7 @@ fun DrawerContent(
 
              DrawerMenuItem(
                 icon = Icons.Outlined.Tune,
-                title = "基础设定",
+                title = "设置",
                 onClick = {
                     onOpenOtherConfig()
                 }

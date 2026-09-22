@@ -90,7 +90,6 @@ fun MainScreen(
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
-    val isUserAgreementAccepted by viewModel.isUserAgreementAccepted.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
     val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
@@ -494,12 +493,4 @@ fun MainScreen(
         }
     }
     
-    // 用户协议弹窗 (仅在未同意时显示)
-    if (isUserAgreementAccepted == false) {
-        UserAgreementDialog(
-            onAgree = { viewModel.acceptUserAgreement() },
-            onDisagree = { (context as? android.app.Activity)?.finish() }
-        )
-    }
-
 }

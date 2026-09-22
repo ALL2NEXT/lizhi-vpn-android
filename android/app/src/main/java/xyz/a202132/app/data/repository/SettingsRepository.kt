@@ -90,10 +90,6 @@ class SettingsRepository(private val context: Context) {
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
         private val UPDATE_DOWNLOAD_DIRECTORY_URI =
             stringPreferencesKey("update_download_directory_uri")
-        private val USER_AGREEMENT_ACCEPTED = booleanPreferencesKey("user_agreement_accepted")
-        private val USER_AGREEMENT_VERSION = stringPreferencesKey("user_agreement_version")
-        private val USER_AGREEMENT_ACCEPTED_AT = longPreferencesKey("user_agreement_accepted_at")
-        private const val CURRENT_USER_AGREEMENT_VERSION = "2026-08-19-v2"
         
         // 分应用代理设置
         private val PER_APP_PROXY_ENABLED = booleanPreferencesKey("per_app_proxy_enabled")
@@ -816,25 +812,7 @@ class SettingsRepository(private val context: Context) {
         }
     }
     
-    val isUserAgreementAccepted: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[USER_AGREEMENT_ACCEPTED] == true &&
-                preferences[USER_AGREEMENT_VERSION] == CURRENT_USER_AGREEMENT_VERSION
-    }
-    
-    suspend fun setUserAgreementAccepted(accepted: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[USER_AGREEMENT_ACCEPTED] = accepted
-            if (accepted) {
-                preferences[USER_AGREEMENT_VERSION] = CURRENT_USER_AGREEMENT_VERSION
-                preferences[USER_AGREEMENT_ACCEPTED_AT] = System.currentTimeMillis()
-            } else {
-                preferences.remove(USER_AGREEMENT_VERSION)
-                preferences.remove(USER_AGREEMENT_ACCEPTED_AT)
-            }
-        }
-    }
-
-    /** 注销账户时清除本地设置，下一次进入应用需要重新同意用户协议。 */
+    /** 注销账户时清除全部本地设置。 */
     suspend fun clearAll() {
         context.dataStore.edit { preferences ->
             preferences.clear()

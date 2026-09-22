@@ -512,7 +512,7 @@ fun AccountSettingsScreen(
             title = { Text("注销账户并清除数据后退出") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("账户数据、流量记录和本地数据将永久删除，注销成功后软件会立即退出。下次进入软件需要重新同意用户协议。此操作不可恢复。")
+                    Text("账户数据、流量记录和本地数据将永久删除，注销成功后软件会立即退出。此操作不可恢复。")
                     if (account.email.isNotBlank()) {
                         OutlinedTextField(
                             value = deletePassword,

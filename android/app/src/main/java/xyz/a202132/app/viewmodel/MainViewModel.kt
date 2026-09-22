@@ -435,12 +435,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SmartRoutingSettings()
     )
     
-    val isUserAgreementAccepted = settingsRepository.isUserAgreementAccepted.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        null
-    )
-
     // 自动化测试设置
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
     val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
@@ -516,8 +510,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // data should not blank and rewrite DataStore on every launch.
                 _isInitialized.value = true
 
-                // Preload cached and remote data during startup. User-agreement
-                // presentation must not serialize the resource-loading pipeline.
+                // Preload cached and remote data during startup.
 
                 subscriptionDataLoader.loadCachedSubscriptionList()
                 if (!initializeSubscriptionsWithRefreshState(forceRefresh = true)) {
@@ -2168,12 +2161,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-
-    fun acceptUserAgreement() {
-        viewModelScope.launch {
-            settingsRepository.setUserAgreementAccepted(true)
-        }
-    }
 
     private suspend fun currentNodeListSnapshot(): List<Node> = withContext(Dispatchers.Default) {
         val selectedGroup = NodeGroupKey.parse(settingsRepository.selectedNodeGroupId.first())

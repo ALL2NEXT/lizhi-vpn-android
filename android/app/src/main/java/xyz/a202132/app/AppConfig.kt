@@ -84,7 +84,7 @@ object AppConfig {
     const val URL_TEST_RECHECK_TOP_COUNT = 5 // 首轮最快节点进入稳态复测的数量
     const val URL_TEST_RECHECK_ATTEMPTS = 2 // 每个优胜节点额外执行暖连接复测的次数
 
-    // VPN 断线恢复，默认关闭，由基础设定页面控制
+    // VPN 断线恢复，默认关闭，由设置页面控制
     const val DISCONNECT_RECOVERY_ENABLED = false
     const val DISCONNECT_RECOVERY_CHECK_INTERVAL_MS = 5000L
     const val DISCONNECT_RECOVERY_CONFIRM_INTERVAL_MS = 1000L

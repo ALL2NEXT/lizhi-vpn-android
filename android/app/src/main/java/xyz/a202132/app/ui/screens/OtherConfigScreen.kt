@@ -98,7 +98,7 @@ fun OtherConfigScreen(
     }
 
     AppScreenScaffold(
-        title = "基础设定",
+        title = "设置",
         onBack = onBack
     ) {
         Column(
