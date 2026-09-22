@@ -220,10 +220,6 @@ class MainActivity : ComponentActivity() {
                                         onStartVpn = { action ->
                                             requestVpnPermission(action)
                                         },
-                                        onOpenNodeList = {
-                                            viewModel.selectSubscriptionGrouping()
-                                            selectedDestination = HomeDestination.NODE_GROUPING
-                                        },
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
                                         },

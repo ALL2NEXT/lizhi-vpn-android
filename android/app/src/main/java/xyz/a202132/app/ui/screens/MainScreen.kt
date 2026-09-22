@@ -37,7 +37,6 @@ import xyz.a202132.app.viewmodel.MainViewModel
 fun MainScreen(
     viewModel: MainViewModel = viewModel(),
     onStartVpn: (action: () -> Unit) -> Unit,
-    onOpenNodeList: () -> Unit = {},
     onOpenOtherConfig: () -> Unit = {},
     onOpenInbound: () -> Unit = {},
     onOpenCoreRouting: () -> Unit = {},
@@ -66,7 +65,6 @@ fun MainScreen(
     }
     
     // Collect状态
-    val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val homeClickSchemeId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
@@ -83,7 +81,6 @@ fun MainScreen(
     val homeSwipeRightSpeedTestEnabled by viewModel.homeSwipeRightSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
-    val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
@@ -91,8 +88,6 @@ fun MainScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
-    val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
-    val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     
     val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
@@ -220,21 +215,7 @@ fun MainScreen(
                         .padding(bottom = 86.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                Spacer(modifier = Modifier.height(64.dp))
-                
-                // 主页直接展示设备、加密隧道、节点服务器与互联网之间的链路。
-                ConnectionRouteOverview(
-                    node = currentNode,
-                    vpnState = vpnState,
-                    isTesting = isTesting,
-                    testingLabel = testingLabel,
-                    enabled = !isTesting,
-                    displaySettings = nodeDisplaySettings,
-                    coreSettings = protocolCoreSettings,
-                    onNodeClick = onOpenNodeList
-                )
-                
-                Spacer(modifier = Modifier.weight(0.7f))
+                Spacer(modifier = Modifier.weight(1f))
                 
                 // 连接按钮
                 ConnectButton(
@@ -291,7 +272,7 @@ fun MainScreen(
                     } else {
                         null
                     },
-                    // 状态提示统一由上方链路图展示，连接按钮区域只保留图标。
+                    // 主页连接区域只保留图标。
                     showStatusLabel = false,
                     clickActionLabel = if (homeClickSpeedTestEnabled) {
                         clickScheme?.name ?: "测速方案"
@@ -306,8 +287,6 @@ fun MainScreen(
                 )
                 
                 Spacer(modifier = Modifier.weight(1f))
-                
-                    Spacer(modifier = Modifier.height(32.dp))
                 }
             }
         }
