@@ -18,15 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -65,9 +58,6 @@ internal fun SubscriptionGroupingScreen(
     onNodeSelected: (Node) -> Unit,
     onToggleFavorite: (Node) -> Unit,
     onSkipFavoriteRemovalConfirmationForSession: () -> Unit,
-    onTcpingTest: () -> Unit,
-    onUrlTest: () -> Unit,
-    onRefreshAll: () -> Unit,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp,
@@ -112,14 +102,6 @@ internal fun SubscriptionGroupingScreen(
         onBack = handleBack,
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
-        actions = {
-            NodeListTopActions(
-                enabled = !isClosing,
-                onTcpingTest = onTcpingTest,
-                onUrlTest = onUrlTest,
-                onRefresh = onRefreshAll
-            )
-        },
         contentPadding = PaddingValues(
             start = 20.dp,
             top = 16.dp,
@@ -133,7 +115,6 @@ internal fun SubscriptionGroupingScreen(
             selectedNodeId = selectedNodeId,
             favoriteSourceNodeIds = favoriteSourceNodeIds,
             isTesting = isTesting,
-            isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
             nodeDisplaySettings = nodeDisplaySettings,
             protocolCoreSettings = protocolCoreSettings,
             onNodeSelected = handleNodeSelected,
@@ -208,53 +189,13 @@ internal fun SubscriptionGroupingScreen(
     }
 
 }
-@Composable
-private fun NodeListTopActions(
-    enabled: Boolean,
-    onTcpingTest: () -> Unit,
-    onUrlTest: () -> Unit,
-    onRefresh: () -> Unit
-) {
-    IconButton(
-        onClick = onTcpingTest,
-        enabled = enabled
-    ) {
-        Icon(
-            imageVector = Icons.Default.NetworkCheck,
-            contentDescription = "TCPing",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
 
-    IconButton(
-        onClick = onUrlTest,
-        enabled = enabled
-    ) {
-        Icon(
-            imageVector = Icons.Default.Language,
-            contentDescription = "URL Test",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-
-    IconButton(
-        onClick = onRefresh,
-        enabled = enabled
-    ) {
-        Icon(
-            imageVector = Icons.Default.Refresh,
-            contentDescription = "刷新",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
 @Composable
 private fun NodeListContent(
     nodes: List<Node>,
     selectedNodeId: String?,
     favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
-    isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onNodeSelected: (Node) -> Unit,
@@ -287,14 +228,6 @@ private fun NodeListContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        if (isTesting || isRefreshingAllSubscriptions) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
         when {
             displayNodes.isEmpty() -> {
                 Box(

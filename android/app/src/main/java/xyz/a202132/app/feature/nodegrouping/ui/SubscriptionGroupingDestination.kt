@@ -19,8 +19,7 @@ internal fun SubscriptionGroupingDestination(
     bottomContentPadding: Dp = 16.dp,
     nodesOverride: List<Node>? = null,
     screenTitle: String = "按订阅仓库分组",
-    screenSubtitle: String? = null,
-    testNodes: List<Node>? = null
+    screenSubtitle: String? = null
 ) {
     val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
     val resultSortMode by viewModel.nodeTestResultSortMode.collectAsStateWithLifecycle()
@@ -56,9 +55,6 @@ internal fun SubscriptionGroupingDestination(
         onToggleFavorite = viewModel::toggleFavoriteNode,
         onSkipFavoriteRemovalConfirmationForSession =
             viewModel::skipFavoriteRemovalConfirmationForSession,
-        onTcpingTest = { viewModel.testAllNodes(testNodes ?: nodes) },
-        onUrlTest = { viewModel.urlTestAllNodes(testNodes ?: nodes) },
-        onRefreshAll = viewModel::refreshNodes,
         onBack = onBack,
         showBackNavigation = showBackNavigation,
         bottomContentPadding = bottomContentPadding,

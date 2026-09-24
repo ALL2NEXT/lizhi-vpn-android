@@ -4,6 +4,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -21,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Favorite
@@ -30,9 +31,9 @@ import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -150,7 +151,6 @@ private fun SubscriptionGroupSelectionScreen(
     var groupName by rememberSaveable { mutableStateOf("") }
     var subscriptionInput by rememberSaveable { mutableStateOf("") }
     var isSubmitting by rememberSaveable { mutableStateOf(false) }
-    var editMode by rememberSaveable { mutableStateOf(false) }
     var editDialogVisible by rememberSaveable { mutableStateOf(false) }
     var deleteDialogVisible by rememberSaveable { mutableStateOf(false) }
     var editingGroupId by rememberSaveable { mutableStateOf("") }
@@ -179,9 +179,15 @@ private fun SubscriptionGroupSelectionScreen(
         }
     }
 
+    fun editGroup(group: NodeGroupSummary) {
+        editingGroupId = group.id.removePrefix("imported:")
+        groupName = group.name
+        subscriptionInput = group.subscriptionUrl.orEmpty()
+        editDialogVisible = true
+    }
+
     AppScreenScaffold(
         title = "按订阅仓库分组",
-        subtitle = "选择订阅仓库用于主页筛选，点击右侧查看线路信息",
         onBack = onBack,
         showBackNavigation = false,
         actions = {
@@ -189,30 +195,6 @@ private fun SubscriptionGroupSelectionScreen(
                 Icon(
                     imageVector = Icons.Rounded.Public,
                     contentDescription = "切换为按地区分组"
-                )
-            }
-            IconButton(onClick = { editMode = !editMode }) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = if (editMode) "完成编辑" else "编辑订阅组",
-                    tint = if (editMode) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        LocalContentColor.current
-                    }
-                )
-            }
-            IconButton(
-                onClick = {
-                    editMode = false
-                    groupName = ""
-                    subscriptionInput = ""
-                    addDialogVisible = true
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "添加订阅组"
                 )
             }
         },
@@ -224,76 +206,86 @@ private fun SubscriptionGroupSelectionScreen(
         ),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) {
-        when {
-            subscriptionGroups.isNotEmpty() || userGroups.isNotEmpty() || !hideFavoriteNodeGroup ->
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = bottomContentPadding),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(
-                        items = subscriptionGroups,
-                        key = { "subscription:${it.sourceId}" }
-                    ) { group ->
-                        SubscriptionGroupCard(
-                            group = group,
-                            nodeCount = nodeCounts[group.sourceId] ?: 0,
-                            selected = selectedNodeGroupId ==
-                                NodeGroupKey.Subscription(group.sourceId).value,
-                            onClick = { if (!editMode) onSubscriptionSelected(group) },
-                            onViewDetails = { onViewSubscriptionDetails(group) }
-                        )
-                    }
-                    items(
-                        items = userGroups,
-                        key = NodeGroupSummary::id
-                    ) { group ->
-                        UserSubscriptionGroupCard(
-                            group = group,
-                            selected = selectedNodeGroupId == group.id,
-                            onClick = {
-                                if (editMode) {
-                                    editingGroupId = group.id.removePrefix("imported:")
-                                    groupName = group.name
-                                    subscriptionInput = group.subscriptionUrl.orEmpty()
-                                    editDialogVisible = true
-                                } else {
-                                    onUserGroupSelected(group)
-                                }
-                            },
-                            onViewDetails = { onViewUserGroupDetails(group) }
-                        )
-                    }
-                    if (!hideFavoriteNodeGroup) {
-                        item(key = "favorites") {
-                            FavoriteGroupCard(
-                                nodeCount = favoriteNodeCount,
-                                selected = favoriteSelected,
-                                onClick = { if (!editMode) onFavoritesSelected() },
-                                onViewDetails = onViewFavoritesDetails
+        Box(modifier = Modifier.fillMaxSize()) {
+            when {
+                subscriptionGroups.isNotEmpty() || userGroups.isNotEmpty() || !hideFavoriteNodeGroup ->
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = bottomContentPadding),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(
+                            items = subscriptionGroups,
+                            key = { "subscription:${it.sourceId}" }
+                        ) { group ->
+                            SubscriptionGroupCard(
+                                group = group,
+                                nodeCount = nodeCounts[group.sourceId] ?: 0,
+                                selected = selectedNodeGroupId ==
+                                    NodeGroupKey.Subscription(group.sourceId).value,
+                                onClick = { onSubscriptionSelected(group) },
+                                onViewDetails = { onViewSubscriptionDetails(group) }
                             )
                         }
+                        items(
+                            items = userGroups,
+                            key = NodeGroupSummary::id
+                        ) { group ->
+                            UserSubscriptionGroupCard(
+                                group = group,
+                                selected = selectedNodeGroupId == group.id,
+                                onClick = { onUserGroupSelected(group) },
+                                onLongClick = { editGroup(group) },
+                                onViewDetails = { onViewUserGroupDetails(group) }
+                            )
+                        }
+                        if (!hideFavoriteNodeGroup) {
+                            item(key = "favorites") {
+                                FavoriteGroupCard(
+                                    nodeCount = favoriteNodeCount,
+                                    selected = favoriteSelected,
+                                    onClick = onFavoritesSelected,
+                                    onViewDetails = onViewFavoritesDetails
+                                )
+                            }
+                        }
                     }
+
+                isLoading -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
                 }
 
-            isLoading -> Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                else -> Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = bottomContentPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "暂无可用订阅线路",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
 
-            else -> Box(
+            FloatingActionButton(
+                onClick = {
+                    groupName = ""
+                    subscriptionInput = ""
+                    addDialogVisible = true
+                },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = bottomContentPadding),
-                contentAlignment = Alignment.Center
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = bottomContentPadding)
             ) {
-                Text(
-                    text = "暂无可用订阅线路",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "添加订阅组"
                 )
             }
         }
@@ -447,7 +439,6 @@ private fun SubscriptionGroupSelectionScreen(
                             isSubmitting = false
                             if (success) {
                                 editDialogVisible = false
-                                editMode = false
                             }
                         }
                     },
@@ -485,7 +476,6 @@ private fun SubscriptionGroupSelectionScreen(
                             if (success) {
                                 deleteDialogVisible = false
                                 editDialogVisible = false
-                                editMode = false
                             }
                         }
                     },
@@ -593,6 +583,7 @@ private fun UserSubscriptionGroupCard(
     group: NodeGroupSummary,
     selected: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     onViewDetails: () -> Unit
 ) {
     GroupCard(
@@ -600,22 +591,29 @@ private fun UserSubscriptionGroupCard(
         nodeCount = group.nodeCount,
         selected = selected,
         onClick = onClick,
-        onViewDetails = onViewDetails
+        onViewDetails = onViewDetails,
+        onLongClick = onLongClick
     )
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun GroupCard(
     name: String,
     nodeCount: Int,
     selected: Boolean,
     onClick: () -> Unit,
-    onViewDetails: () -> Unit
+    onViewDetails: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClickLabel = onLongClick?.let { "编辑订阅组" },
+                onLongClick = onLongClick
+            ),
         shape = RoundedCornerShape(18.dp),
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer

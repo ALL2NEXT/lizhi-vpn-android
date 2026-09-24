@@ -565,31 +565,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (updates.isNotEmpty()) nodeDao().updateNodeLocations(updates)
     }
 
-    fun testAllNodes(targetNodes: List<Node>? = null) {
-        viewModelScope.launch {
-            if (GlobalTestExecution.isFetching()) {
-                _error.value = GlobalTestExecution.fetchingHint()
-                return@launch
-            }
-            if (!GlobalTestExecution.tryStart("TCPing 测试")) {
-                _error.value = GlobalTestExecution.busyHint()
-                return@launch
-            }
-            _isTesting.value = true
-            _testingLabel.value = "TCPing 测试中..."
-            try {
-                val currentNodes = targetNodes ?: currentNodeListSnapshot()
-                internalTestNodes(currentNodes) { completed, total ->
-                    _testingLabel.value = "TCPing 测试中 ($completed/$total)"
-                }
-            } finally {
-                _isTesting.value = false
-                _testingLabel.value = null
-                GlobalTestExecution.finish()
-            }
-        }
-    }
-
     /** 按用户选择的测速方案筛选节点并连接测速结果最好的节点。 */
     fun startSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
@@ -777,72 +752,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * 使用临时无头原生核心测试全部节点；sing-box 与 Xray 各自共享一个批量实例，
-     * 每个节点通过独立 SOCKS 入站执行相同的 HTTP GET 探测。
-     */
-    fun urlTestAllNodes(targetNodes: List<Node>? = null) {
-        urlTestAllNodesInternal(
-            targetNodes = targetNodes,
-            requireGlobalLock = true
-        )
-    }
-
-    private fun urlTestAllNodesInternal(
-        targetNodes: List<Node>? = null,
-        requireGlobalLock: Boolean,
-        onProgress: ((completed: Int, total: Int) -> Unit)? = null
-    ) {
-        viewModelScope.launch {
-            var locked = false
-            if (requireGlobalLock) {
-                if (GlobalTestExecution.isFetching()) {
-                    _error.value = GlobalTestExecution.fetchingHint()
-                    return@launch
-                }
-                if (!GlobalTestExecution.tryStart("URL Test 测试")) {
-                    _error.value = GlobalTestExecution.busyHint()
-                    return@launch
-                }
-                locked = true
-            }
-            _isTesting.value = true
-            _testingLabel.value = "URL Test 测试中..."
-            try {
-                val currentNodes = targetNodes ?: currentNodeListSnapshot()
-                if (currentNodes.isEmpty()) {
-                    _error.value = "没有可用节点"
-                    return@launch
-                }
-                val defaultScheme = speedTestSchemes.value.firstOrNull {
-                    it.id == SpeedTestScheme.DEFAULT_ID
-                } ?: SpeedTestScheme.default()
-                val results = runUrlTestNodes(
-                    nodes = currentNodes,
-                    labelPrefix = "URL Test",
-                    concurrency = defaultScheme.urlTestConcurrency,
-                    warmupTimeoutMs = defaultScheme.urlTestWarmupTimeoutMs,
-                    measurementTimeoutMs = defaultScheme.urlTestMeasurementTimeoutMs,
-                    targetUrl = defaultScheme.urlTestUrl,
-                    fallbackUrl = defaultScheme.urlTestBackupUrl,
-                    onProgress = onProgress
-                )
-                applyUrlTestResults(results)
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                Log.e(tag, "URL Test batch failed", error)
-                _error.value = "延迟测速未完成，请重试（${error.javaClass.simpleName}）"
-            } finally {
-                _isTesting.value = false
-                _testingLabel.value = null
-                if (locked) {
-                    GlobalTestExecution.finish()
-                }
-            }
-        }
-    }
-    
     fun setTcpingTestTimeoutMs(value: Long) {
         viewModelScope.launch {
             settingsRepository.setTcpingTestTimeoutMs(value)
@@ -1026,8 +935,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         warmupTimeoutMs: Long,
         measurementTimeoutMs: Long,
         targetUrl: String,
-        fallbackUrl: String,
-        onProgress: ((completed: Int, total: Int) -> Unit)? = null
+        fallbackUrl: String
     ): List<LatencyTester.LatencyResult> {
         val batch = xyz.a202132.app.network.UrlTestManager.start(
             getApplication(), nodes, hysteriaUpMbps.value, hysteriaDownMbps.value,
@@ -1043,7 +951,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 concurrency = concurrency
             ) { completed, total ->
                 _testingLabel.value = "$labelPrefix ($completed/$total)"
-                onProgress?.invoke(completed, total)
             }
             val testedById = testedResults.associateBy(LatencyTester.LatencyResult::nodeId)
             val results = nodes.map { node ->

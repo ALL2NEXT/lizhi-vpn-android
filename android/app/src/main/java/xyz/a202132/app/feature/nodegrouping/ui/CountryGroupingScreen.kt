@@ -77,7 +77,6 @@ private fun CountryGroupingScreen(
 ) {
     AppScreenScaffold(
         title = "按地区分组",
-        subtitle = "选择地区用于主页筛选，点击右侧查看线路信息",
         onBack = onBack,
         showBackNavigation = false,
         actions = {
