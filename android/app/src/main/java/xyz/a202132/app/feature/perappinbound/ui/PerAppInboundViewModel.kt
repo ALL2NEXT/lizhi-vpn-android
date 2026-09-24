@@ -1,8 +1,6 @@
 package xyz.a202132.app.feature.perappinbound.ui
 
 import android.app.Application
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
@@ -153,47 +151,6 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
             } finally {
                 _isLoading.value = false
             }
-        }
-    }
-
-    fun importProxyAppsFromClipboard() {
-        viewModelScope.launch {
-            val context = getApplication<Application>()
-            val content = withContext(Dispatchers.Main.immediate) {
-                val clipboard = context.getSystemService(ClipboardManager::class.java)
-                clipboard?.primaryClip?.takeIf { it.itemCount > 0 }
-                    ?.getItemAt(0)?.coerceToText(context)?.toString()
-            }
-            if (content.isNullOrBlank()) {
-                _messages.emit(R.string.per_app_inbound_import_empty)
-                return@launch
-            }
-            val current = settingsRepository.perAppInboundSettings.first()
-            val packages = _allApps.value.map { it.packageName }
-            val selected = withContext(Dispatchers.Default) {
-                selectFromProxyList(packages, content, current.bypassMode, forceGoogleApps = false)
-            }
-            updateSettings { it.copy(enabled = true, selectedPackages = selected) }
-        }
-    }
-
-    fun exportProxyAppsToClipboard() {
-        viewModelScope.launch {
-            val current = settingsRepository.perAppInboundSettings.first()
-            val content = buildString {
-                append(current.bypassMode)
-                current.selectedPackages.sorted().forEach { packageName ->
-                    append('\n')
-                    append(packageName)
-                }
-            }
-            val context = getApplication<Application>()
-            withContext(Dispatchers.Main.immediate) {
-                context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(
-                    ClipData.newPlainText(context.getString(R.string.per_app_inbound_clipboard_label), content)
-                )
-            }
-            _messages.emit(R.string.per_app_inbound_exported)
         }
     }
 

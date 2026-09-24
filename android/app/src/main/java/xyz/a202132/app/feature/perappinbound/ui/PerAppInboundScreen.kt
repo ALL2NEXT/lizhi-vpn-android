@@ -160,15 +160,6 @@ fun PerAppInboundScreen(
                             enabled = !isLoading,
                             onClick = { showMenu = false; viewModel.selectProxyAppsAutomatically() }
                         )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.per_app_inbound_import)) },
-                            enabled = !isLoading,
-                            onClick = { showMenu = false; viewModel.importProxyAppsFromClipboard() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.per_app_inbound_export)) },
-                            onClick = { showMenu = false; viewModel.exportProxyAppsToClipboard() }
-                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -246,7 +237,13 @@ fun PerAppInboundScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = stringResource(R.string.per_app_inbound_bypass_mode),
+                        text = stringResource(
+                            if (settings.bypassMode) {
+                                R.string.per_app_inbound_blacklist_mode
+                            } else {
+                                R.string.per_app_inbound_whitelist_mode
+                            }
+                        ),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
