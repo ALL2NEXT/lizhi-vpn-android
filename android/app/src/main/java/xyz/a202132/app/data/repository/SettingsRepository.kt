@@ -17,6 +17,7 @@ import xyz.a202132.app.data.model.LanInboundSettings
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeType
+import xyz.a202132.app.data.model.PerAppInboundSettings
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.data.model.ProxyCore
 import xyz.a202132.app.data.model.ProxyMode
@@ -42,7 +43,8 @@ data class VpnRuntimeSettings(
     val protocolCoreSettings: ProtocolCoreSettings,
     val lanInbound: LanInboundSettings = LanInboundSettings(),
     val dnsSettings: DnsSettings = DnsSettings(),
-    val smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings()
+    val smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings(),
+    val perAppInboundSettings: PerAppInboundSettings = PerAppInboundSettings()
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -52,6 +54,10 @@ class SettingsRepository(private val context: Context) {
     companion object {
         private val SELECTED_NODE_ID = stringPreferencesKey("selected_node_id")
         private val PROXY_MODE = stringPreferencesKey("proxy_mode")
+        // Keep these persisted names so the terminology change preserves existing selections.
+        private val PER_APP_INBOUND_ENABLED = booleanPreferencesKey("per_app_proxy_enabled")
+        private val PER_APP_INBOUND_BYPASS_MODE = booleanPreferencesKey("per_app_proxy_bypass_mode")
+        private val PER_APP_INBOUND_PACKAGES = stringSetPreferencesKey("per_app_proxy_packages")
         private val LAN_INBOUND_ENABLED = booleanPreferencesKey("lan_inbound_enabled")
         private val LAN_INBOUND_PORT = intPreferencesKey("lan_inbound_port")
         private val LAN_INBOUND_USERNAME = stringPreferencesKey("lan_inbound_username")
@@ -159,6 +165,14 @@ class SettingsRepository(private val context: Context) {
         } catch (e: Exception) {
             ProxyMode.SMART
         }
+    }
+
+    val perAppInboundSettings: Flow<PerAppInboundSettings> = context.dataStore.data.map { preferences ->
+        PerAppInboundSettings(
+            enabled = preferences[PER_APP_INBOUND_ENABLED] ?: false,
+            bypassMode = preferences[PER_APP_INBOUND_BYPASS_MODE] ?: false,
+            selectedPackages = preferences[PER_APP_INBOUND_PACKAGES]?.toSet() ?: emptySet()
+        )
     }
 
     /** 用户保存的测速方案；首次使用时提供一套当前组内置方案。 */
@@ -431,7 +445,28 @@ class SettingsRepository(private val context: Context) {
             lanInbound = decodeLanInboundSettings(preferences),
             dnsSettings = decodeDnsSettings(preferences),
             smartRoutingSettings = decodeSmartRoutingSettings(preferences),
+            perAppInboundSettings = PerAppInboundSettings(
+                enabled = preferences[PER_APP_INBOUND_ENABLED] ?: false,
+                bypassMode = preferences[PER_APP_INBOUND_BYPASS_MODE] ?: false,
+                selectedPackages = preferences[PER_APP_INBOUND_PACKAGES]?.toSet() ?: emptySet()
+            ),
         )
+    }
+
+    suspend fun setPerAppInboundSettings(settings: PerAppInboundSettings) {
+        context.dataStore.edit { preferences ->
+            preferences[PER_APP_INBOUND_ENABLED] = settings.enabled
+            preferences[PER_APP_INBOUND_BYPASS_MODE] = settings.bypassMode
+            val cleanPackages = settings.selectedPackages.asSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toSet()
+            if (cleanPackages.isEmpty()) {
+                preferences.remove(PER_APP_INBOUND_PACKAGES)
+            } else {
+                preferences[PER_APP_INBOUND_PACKAGES] = cleanPackages
+            }
+        }
     }
 
     val protocolCoreSettings: Flow<ProtocolCoreSettings> = context.dataStore.data.map { preferences ->

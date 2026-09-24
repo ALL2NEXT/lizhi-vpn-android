@@ -3,6 +3,7 @@ package xyz.a202132.app.ui.navigation
 object AppRoute {
     const val MAIN = "main"
     const val OTHER_CONFIG = "other_config"
+    const val PER_APP_INBOUND = "per_app_inbound"
     const val INBOUND = "inbound"
     const val CORE_ROUTING = "core_routing"
     const val OUTBOUND = "outbound"

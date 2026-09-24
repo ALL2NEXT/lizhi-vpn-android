@@ -38,6 +38,7 @@ fun MainScreen(
     viewModel: MainViewModel = viewModel(),
     onStartVpn: (action: () -> Unit) -> Unit,
     onOpenOtherConfig: () -> Unit = {},
+    onOpenPerAppInbound: () -> Unit = {},
     onOpenInbound: () -> Unit = {},
     onOpenCoreRouting: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
@@ -129,6 +130,7 @@ fun MainScreen(
                 DrawerContent(
                     onCheckUpdate = { closeDrawerThen { viewModel.checkUpdate() } },
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
+                    onOpenPerAppInbound = { closeDrawerThen(onOpenPerAppInbound) },
                     onOpenInbound = { closeDrawerThen(onOpenInbound) },
                     onOpenOutbound = { closeDrawerThen(onOpenOutbound) },
                     onOpenOutboundAfter = { closeDrawerThen(onOpenOutboundAfter) },

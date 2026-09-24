@@ -35,6 +35,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.saveable.rememberSaveable
 import xyz.a202132.app.feature.nodegrouping.ui.NodeGroupingDestination
+import xyz.a202132.app.feature.perappinbound.ui.PerAppInboundScreen
+import xyz.a202132.app.feature.perappinbound.ui.PerAppInboundViewModel
 import xyz.a202132.app.ui.components.FloatingHomeNavigationLayout
 import xyz.a202132.app.ui.components.HomeDestination
 import xyz.a202132.app.ui.navigation.AppRoute
@@ -219,6 +221,9 @@ class MainActivity : ComponentActivity() {
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
                                         },
+                                        onOpenPerAppInbound = {
+                                            navigateTo(AppRoute.PER_APP_INBOUND)
+                                        },
                                         onOpenInbound = {
                                             navigateTo(AppRoute.INBOUND)
                                         },
@@ -349,6 +354,13 @@ class MainActivity : ComponentActivity() {
                                     onOpenSpeedTestSchemes = {
                                         navigateTo(AppRoute.SPEED_TEST_SCHEMES)
                                     }
+                                )
+                            }
+
+                            composable(AppRoute.PER_APP_INBOUND) {
+                                PerAppInboundScreen(
+                                    viewModel = viewModel<PerAppInboundViewModel>(),
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
 

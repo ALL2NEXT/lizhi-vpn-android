@@ -1,6 +1,7 @@
 package xyz.a202132.app.platform
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -10,6 +11,7 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import java.io.FileDescriptor
 import java.net.NetworkInterface
+import xyz.a202132.app.data.model.PerAppInboundSettings
 
 internal data class IpPrefix(val address: String, val length: Int)
 internal data class TunnelSpec(
@@ -36,7 +38,8 @@ internal interface TunProvider {
 /** Coordinates one system-default underlay and one Android TUN. */
 internal class AndroidVpnHost(
     private val service: VpnService,
-    private val onCellular: () -> Unit = {}
+    private val onCellular: () -> Unit = {},
+    private val perAppInboundSettings: PerAppInboundSettings = PerAppInboundSettings()
 ) : UnderlayController, TunProvider, AutoCloseable {
     override val vpnService: VpnService get() = service
     private val connectivity = service.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -121,12 +124,45 @@ internal class AndroidVpnHost(
         spec.routes.forEach { builder.addRoute(it.address, it.length) }
         spec.dnsServers.forEach(builder::addDnsServer)
         currentNetwork?.let { builder.setUnderlyingNetworks(arrayOf(it)) }
-        // The core process shares the app UID, so exclude the client itself to
-        // keep core traffic on the physical default network and avoid a VPN loop.
-        builder.addDisallowedApplication(service.packageName)
+        configurePerAppInbound(builder)
         tun = builder.establish() ?: error("系统未授予 VPN 接口")
         applyUnderlyingNetwork()
         return tun!!.fd
+    }
+
+    private fun configurePerAppInbound(builder: VpnService.Builder) {
+        val selectedPackages = perAppInboundSettings.selectedPackages
+            .filterNot { it == service.packageName }
+
+        if (!perAppInboundSettings.enabled || selectedPackages.isEmpty()) {
+            // The core process shares this UID, so keep it outside the TUN to avoid a VPN loop.
+            builder.addDisallowedApplication(service.packageName)
+            return
+        }
+
+        if (perAppInboundSettings.bypassMode) {
+            builder.addDisallowedApplication(service.packageName)
+            selectedPackages.forEach { packageName ->
+                addApplication(builder, packageName, allow = false)
+            }
+        } else {
+            selectedPackages.forEach { packageName ->
+                addApplication(builder, packageName, allow = true)
+            }
+        }
+    }
+
+    private fun addApplication(
+        builder: VpnService.Builder,
+        packageName: String,
+        allow: Boolean
+    ) {
+        try {
+            if (allow) builder.addAllowedApplication(packageName)
+            else builder.addDisallowedApplication(packageName)
+        } catch (error: PackageManager.NameNotFoundException) {
+            Log.w(TAG, "Skipping unavailable per-app VPN package: $packageName", error)
+        }
     }
 
     @Synchronized override fun tunDescriptor(): FileDescriptor =

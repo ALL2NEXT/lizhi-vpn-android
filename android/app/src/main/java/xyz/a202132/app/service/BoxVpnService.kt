@@ -131,7 +131,8 @@ class BoxVpnService : VpnService() {
                     try {
                         ensureActive()
                         val vpnHost = AndroidVpnHost(this@BoxVpnService,
-                            onCellular = ServiceManager::notifyCellularNetwork)
+                            onCellular = ServiceManager::notifyCellularNetwork,
+                            perAppInboundSettings = settings.perAppInboundSettings)
                         host = vpnHost
                         vpnHost.start()
                         val session = controller.replace(ticket) {
