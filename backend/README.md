@@ -17,6 +17,14 @@
 - `schema.sql`：D1 schema 的可读副本。
 - `migrations/`：后续 D1 增量迁移目录。
 
+## 客户端应用名单端点
+
+```http
+GET /api/app/proxy-packages
+```
+
+Worker 固定从上游获取 Android 代理应用包名列表，并以 `text/plain` 返回；上游不可用或名单格式异常时返回 `502`。客户端只需访问当前配置的后台域名。
+
 ## Cloudflare 绑定
 
 - KV 命名空间绑定：`CONFIG`

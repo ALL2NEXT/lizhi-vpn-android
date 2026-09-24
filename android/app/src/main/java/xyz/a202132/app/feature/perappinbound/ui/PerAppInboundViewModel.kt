@@ -27,12 +27,11 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import xyz.a202132.app.AppConfig
 import xyz.a202132.app.R
 import xyz.a202132.app.data.model.PerAppInboundSettings
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.data.repository.SettingsRepository
-import xyz.a202132.app.network.Socks5HttpProbe
-import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.service.ServiceManager
 import java.text.Collator
 import java.util.concurrent.TimeUnit
@@ -238,70 +237,17 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
     }
 
     private suspend fun downloadProxyAppList(): String = withContext(Dispatchers.IO) {
-        // 先直连获取最新名单，网络不可达时再尝试当前 VPN 核心的 SOCKS 入站。
-        var directFailure: Exception? = null
-        val directContent = try {
-            val request = Request.Builder()
-                .url(PROXY_APP_LIST_URL)
-                .header("Accept", "text/plain")
-                .header("User-Agent", "Firefly-Android")
-                .build()
-            httpClient.newCall(request).execute().use { response ->
-                check(response.isSuccessful) { "Proxy app list request failed: ${response.code}" }
-                response.body?.string().orEmpty().also {
-                    check(it.isNotBlank()) { "Proxy app list is empty" }
-                }
+        val request = Request.Builder()
+            .url("${AppConfig.BACKEND_URL.trimEnd('/')}$PROXY_APP_LIST_PATH")
+            .header("Accept", "text/plain")
+            .header("User-Agent", "Firefly-Android")
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            check(response.isSuccessful) { "Proxy app list request failed: ${response.code}" }
+            response.body?.string().orEmpty().also {
+                check(it.isNotBlank()) { "Proxy app list is empty" }
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            directFailure = error
-            Log.w(TAG, "Direct download of automatic app list failed", error)
-            null
         }
-        directContent?.let { return@withContext it }
-
-        val activeEndpoint = BoxVpnService.activeSocksEndpoint()
-        var inboundFailure: Exception? = null
-        if (activeEndpoint != null) {
-            val inboundContent = try {
-                val response = Socks5HttpProbe.fetch(
-                    endpoint = activeEndpoint,
-                    targetUrl = PROXY_APP_LIST_URL,
-                    timeoutMs = PROXY_APP_LIST_TIMEOUT_MS,
-                    headers = mapOf(
-                        "Accept" to "text/plain",
-                        "User-Agent" to "Firefly-Android"
-                    ),
-                    maxBodyBytes = MAX_PROXY_APP_LIST_BYTES
-                )
-                check(response.statusCode in 200..299) {
-                    "Proxy app list request failed through the active inbound: ${response.statusCode}"
-                }
-                response.body.also { check(it.isNotBlank()) { "Proxy app list is empty" } }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                inboundFailure = error
-                directFailure?.let(error::addSuppressed)
-                Log.w(TAG, "Download of automatic app list through active inbound failed", error)
-                null
-            }
-            inboundContent?.let { return@withContext it }
-        }
-
-        // 直连和当前入站都不可用时，使用随应用打包的名单，保证离线时也能自动选择。
-        val bundledContent = try {
-            getApplication<Application>().assets.open(PROXY_APP_LIST_ASSET)
-                .bufferedReader(Charsets.UTF_8)
-                .use { it.readText().trim() }
-                .also { check(it.isNotBlank()) { "Bundled proxy app list is empty" } }
-        } catch (error: Exception) {
-            inboundFailure?.let(error::addSuppressed) ?: directFailure?.let(error::addSuppressed)
-            throw error
-        }
-        Log.w(TAG, "Using bundled app list because remote downloads failed", inboundFailure ?: directFailure)
-        bundledContent
     }
 
     private fun updateSettings(transform: (PerAppInboundSettings) -> PerAppInboundSettings) {
@@ -341,11 +287,7 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
 
     private companion object {
         const val TAG = "PerAppInbound"
-        const val PROXY_APP_LIST_URL =
-            "https://raw.githubusercontent.com/2dust/androidpackagenamelist/master/proxy.txt"
-        const val PROXY_APP_LIST_ASSET = "proxy_package_name"
-        const val PROXY_APP_LIST_TIMEOUT_MS = 8_000L
-        const val MAX_PROXY_APP_LIST_BYTES = 1_048_576
+        const val PROXY_APP_LIST_PATH = "/api/app/proxy-packages"
         val httpClient = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)

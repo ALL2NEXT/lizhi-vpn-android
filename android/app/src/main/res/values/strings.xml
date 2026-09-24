@@ -36,6 +36,6 @@
     <string name="per_app_inbound_clipboard_label">分应用入站应用列表</string>
     <string name="per_app_inbound_exported">已复制到剪贴板</string>
     <string name="per_app_inbound_import_empty">剪贴板内容为空</string>
-    <string name="per_app_inbound_auto_select_failed">获取应用列表失败，请检查网络或当前入站</string>
+    <string name="per_app_inbound_auto_select_failed">获取应用列表失败，请检查后台连接</string>
     <string name="per_app_inbound_load_failed">无法加载已安装的应用</string>
 </resources>

@@ -136,7 +136,12 @@ const routeDeps = {
   readAdminLoginRecords,
 };
 
-const { handleClient, handleManagedSubscription, handleDebugSubscription } = createClientRoutes(routeDeps);
+const {
+  handleClient,
+  handleProxyAppList,
+  handleManagedSubscription,
+  handleDebugSubscription,
+} = createClientRoutes(routeDeps);
 const { handleAccount } = createAccountRoutes(routeDeps);
 const { handleAdmin } = createAdminRoutes(routeDeps);
 
@@ -185,6 +190,10 @@ const worker = {
 
       if (path === "/api/client" && request.method === "GET") {
         return handleClient(request, env);
+      }
+
+      if (path === "/api/app/proxy-packages" && request.method === "GET") {
+        return handleProxyAppList();
       }
 
       if (path.startsWith("/api/subscription/debug/") && request.method === "GET") {

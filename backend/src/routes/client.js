@@ -4,6 +4,10 @@
  * Handlers receive only the shared runtime dependencies they use.
  */
 
+const PROXY_APP_LIST_URL =
+  "https://raw.githubusercontent.com/2dust/androidpackagenamelist/master/proxy.txt";
+const MAX_PROXY_APP_LIST_BYTES = 1024 * 1024;
+
 export function createClientRoutes(deps) {
   const {
     CLIENT_IP_HEADER,
@@ -43,6 +47,61 @@ async function handleClient(request, env) {
     appUpdate: state.appUpdate,
     settings: publicClientSettings(state.settings),
     generatedAt: beijingTimestamp(),
+  });
+}
+
+async function handleProxyAppList() {
+  let upstream;
+  try {
+    // 固定上游名单地址，只代理这一份资源，避免端点成为任意 URL 代理。
+    upstream = await fetch(PROXY_APP_LIST_URL, {
+      headers: {
+        accept: "text/plain",
+        "user-agent": "Firefly-Worker",
+      },
+      cf: { cacheTtl: 900, cacheEverything: true },
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "proxy_app_list_upstream_fetch_failed",
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return json({ error: "proxy_app_list_unavailable" }, 502);
+  }
+
+  if (!upstream.ok) {
+    return json({ error: "proxy_app_list_upstream_failed" }, 502);
+  }
+
+  const contentLength = Number.parseInt(upstream.headers.get("content-length") || "", 10);
+  if (Number.isFinite(contentLength) && contentLength > MAX_PROXY_APP_LIST_BYTES) {
+    return json({ error: "proxy_app_list_too_large" }, 502);
+  }
+
+  let content;
+  try {
+    content = await upstream.text();
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "proxy_app_list_upstream_read_failed",
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return json({ error: "proxy_app_list_unavailable" }, 502);
+  }
+
+  const byteLength = new TextEncoder().encode(content).byteLength;
+  const hasPackageName = content.split(/\r?\n/).some((line) =>
+    /^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*$/.test(line.trim()));
+  if (byteLength > MAX_PROXY_APP_LIST_BYTES || !content.trim() || !hasPackageName) {
+    return json({ error: "proxy_app_list_invalid" }, 502);
+  }
+
+  return new Response(content, {
+    headers: {
+      ...corsHeaders(),
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "public, max-age=300, s-maxage=900",
+    },
   });
 }
 
@@ -144,5 +203,10 @@ async function handleDebugSubscription(path, _request, env) {
   });
 }
 
-  return { handleClient, handleManagedSubscription, handleDebugSubscription };
+  return {
+    handleClient,
+    handleProxyAppList,
+    handleManagedSubscription,
+    handleDebugSubscription,
+  };
 }
