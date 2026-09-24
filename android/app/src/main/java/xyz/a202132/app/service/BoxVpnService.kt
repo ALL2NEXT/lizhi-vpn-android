@@ -130,7 +130,7 @@ class BoxVpnService : VpnService() {
                     val prepared = sessionFactory.prepare(applicationContext, node, settings)
                     try {
                         ensureActive()
-                        val vpnHost = AndroidVpnHost(this@BoxVpnService, settings.perAppProxy,
+                        val vpnHost = AndroidVpnHost(this@BoxVpnService,
                             onCellular = ServiceManager::notifyCellularNetwork)
                         host = vpnHost
                         vpnHost.start()

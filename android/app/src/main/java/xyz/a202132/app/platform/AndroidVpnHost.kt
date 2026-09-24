@@ -8,7 +8,6 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import xyz.a202132.app.data.repository.PerAppProxySettings
 import java.io.FileDescriptor
 import java.net.NetworkInterface
 
@@ -37,7 +36,6 @@ internal interface TunProvider {
 /** Coordinates one system-default underlay and one Android TUN. */
 internal class AndroidVpnHost(
     private val service: VpnService,
-    private val perApp: PerAppProxySettings,
     private val onCellular: () -> Unit = {}
 ) : UnderlayController, TunProvider, AutoCloseable {
     override val vpnService: VpnService get() = service
@@ -123,24 +121,9 @@ internal class AndroidVpnHost(
         spec.routes.forEach { builder.addRoute(it.address, it.length) }
         spec.dnsServers.forEach(builder::addDnsServer)
         currentNetwork?.let { builder.setUnderlyingNetworks(arrayOf(it)) }
-        if (perApp.enabled) {
-            val selected = perApp.selectedPackages - service.packageName
-            var allowed = 0
-            selected.forEach { name ->
-                try {
-                    builder.addAllowedApplication(name)
-                    allowed++
-                } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
-                    // The package may have been removed since settings were saved.
-                }
-            }
-            // An empty Android allow-list means ALL apps. Reject it explicitly.
-            require(allowed > 0) { "请至少选择一个已安装的代理应用" }
-        } else {
-            // The core process inherits the app UID and therefore always uses
-            // the physical default network instead of looping into this VPN.
-            builder.addDisallowedApplication(service.packageName)
-        }
+        // The core process shares the app UID, so exclude the client itself to
+        // keep core traffic on the physical default network and avoid a VPN loop.
+        builder.addDisallowedApplication(service.packageName)
         tun = builder.establish() ?: error("系统未授予 VPN 接口")
         applyUnderlyingNetwork()
         return tun!!.fd

@@ -34,18 +34,12 @@ import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.util.CountryCodeResolver
 import java.util.UUID
 
-data class PerAppProxySettings(
-    val enabled: Boolean,
-    val selectedPackages: Set<String>
-)
-
 data class VpnRuntimeSettings(
     val proxyMode: ProxyMode,
     val ipv6RoutingMode: IPv6RoutingMode,
     val hysteriaUpMbps: Int,
     val hysteriaDownMbps: Int,
     val protocolCoreSettings: ProtocolCoreSettings,
-    val perAppProxy: PerAppProxySettings,
     val lanInbound: LanInboundSettings = LanInboundSettings(),
     val dnsSettings: DnsSettings = DnsSettings(),
     val smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings()
@@ -91,10 +85,6 @@ class SettingsRepository(private val context: Context) {
         private val UPDATE_DOWNLOAD_DIRECTORY_URI =
             stringPreferencesKey("update_download_directory_uri")
         
-        // 分应用代理设置
-        private val PER_APP_PROXY_ENABLED = booleanPreferencesKey("per_app_proxy_enabled")
-        private val SELECTED_PACKAGES = stringSetPreferencesKey("selected_packages")
-
         // 订阅列表缓存
         private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
         
@@ -390,16 +380,6 @@ class SettingsRepository(private val context: Context) {
         preferences[UPDATE_DOWNLOAD_DIRECTORY_URI]
     }
     
-    // 分应用代理 - 是否启用
-    val perAppProxyEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[PER_APP_PROXY_ENABLED] ?: false
-    }
-    
-    // 分应用代理 - 选中的应用包名列表
-    val selectedPackages: Flow<Set<String>> = context.dataStore.data.map { preferences ->
-        preferences[SELECTED_PACKAGES] ?: emptySet()
-    }
-
     val selectedSubscriptionSourceId: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[SELECTED_SUBSCRIPTION_SOURCE_ID]
     }
@@ -448,10 +428,6 @@ class SettingsRepository(private val context: Context) {
                 0
             },
             protocolCoreSettings = decodeProtocolCoreSettings(preferences[CORE_ASSIGNMENTS]),
-            perAppProxy = PerAppProxySettings(
-                enabled = preferences[PER_APP_PROXY_ENABLED] ?: false,
-                selectedPackages = preferences[SELECTED_PACKAGES] ?: emptySet()
-            ),
             lanInbound = decodeLanInboundSettings(preferences),
             dnsSettings = decodeDnsSettings(preferences),
             smartRoutingSettings = decodeSmartRoutingSettings(preferences),
@@ -816,19 +792,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun clearAll() {
         context.dataStore.edit { preferences ->
             preferences.clear()
-        }
-    }
-    
-    // 分应用代理设置方法
-    suspend fun setPerAppProxyEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[PER_APP_PROXY_ENABLED] = enabled
-        }
-    }
-    
-    suspend fun setSelectedPackages(packages: Set<String>) {
-        context.dataStore.edit { preferences ->
-            preferences[SELECTED_PACKAGES] = packages
         }
     }
     

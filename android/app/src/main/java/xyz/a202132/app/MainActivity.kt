@@ -16,10 +16,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
@@ -48,7 +45,6 @@ import xyz.a202132.app.ui.screens.InboundScreen
 import xyz.a202132.app.ui.screens.OutboundScreen
 import xyz.a202132.app.ui.screens.OutboundAfterScreen
 import xyz.a202132.app.ui.screens.CoreRoutingScreen
-import xyz.a202132.app.ui.screens.ProxyScopeScreen
 import xyz.a202132.app.ui.screens.QrScannerScreen
 import xyz.a202132.app.ui.screens.SkinScreen
 import xyz.a202132.app.ui.screens.SkinSchemeEditorScreen
@@ -232,9 +228,6 @@ class MainActivity : ComponentActivity() {
                                         onOpenOutbound = {
                                             navigateTo(AppRoute.OUTBOUND)
                                         },
-                                        onOpenProxyScope = {
-                                            navigateTo(AppRoute.PROXY_SCOPE)
-                                        },
                                         onOpenOutboundAfter = {
                                             navigateTo(AppRoute.OUTBOUND_AFTER)
                                         },
@@ -308,34 +301,6 @@ class MainActivity : ComponentActivity() {
                                                 bottomContentPadding = 108.dp
                                             )
                                         }
-                                }
-                            }
-
-                            composable(AppRoute.PROXY_SCOPE) {
-                                var isLeavingProxyScope by remember { mutableStateOf(false) }
-
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    ProxyScopeScreen(
-                                        onBack = { hasChanges ->
-                                            if (isLeavingProxyScope) return@ProxyScopeScreen
-                                            isLeavingProxyScope = true
-                                            navController.popBackStack()
-                                            if (hasChanges) {
-                                                viewModel.restartVpnIfNeeded()
-                                            }
-                                        }
-                                    )
-
-                                    if (isLeavingProxyScope) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clickable(
-                                                    interactionSource = remember { MutableInteractionSource() },
-                                                    indication = null
-                                                ) { }
-                                        )
-                                    }
                                 }
                             }
 

@@ -11,7 +11,7 @@
 | Android 服务 | 前台通知、设置、节点选择、断线恢复、流量持久化 | [BoxVpnService](../app/src/main/java/xyz/a202132/app/service/BoxVpnService.kt) |
 | 会话控制器 | 串行替换、取消请求、回收迟到的启动结果、停止失败时保留所有权 | [CoreSessionController](../app/src/main/java/xyz/a202132/app/core/CoreSessionController.kt) |
 | 后端契约与注册表 | `prepare/start/CoreSession`、协议与 TUN 能力、已安装后端发现 | [CoreBackend](../app/src/main/java/xyz/a202132/app/core/CoreBackend.kt)、[CoreBackends](../app/src/main/java/xyz/a202132/app/core/CoreBackends.kt) |
-| Android 平台层 | VpnService.Builder、TUN FD、protect、分应用、物理网络监测 | [AndroidVpnHost](../app/src/main/java/xyz/a202132/app/platform/AndroidVpnHost.kt) |
+| Android 平台层 | VpnService.Builder、TUN FD、protect、本应用回环排除、物理网络监测 | [AndroidVpnHost](../app/src/main/java/xyz/a202132/app/platform/AndroidVpnHost.kt) |
 | sing-box 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [SingBoxBackend](../app/src/main/java/xyz/a202132/app/core/singbox/SingBoxBackend.kt)、[运行器](../native/singbox-runner/main.go) |
 | Xray 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [XrayBackend](../app/src/main/java/xyz/a202132/app/core/xray/XrayBackend.kt)、[运行器](../native/xray-runner/main.go) |
 | 规则缓存 | 从共同的 SRS 源生成域名/IP 快照 | [CoreRuleRepository](../app/src/main/java/xyz/a202132/app/core/route/CoreRuleRepository.kt) |
@@ -73,7 +73,7 @@ HEV 不提供 ICMP 转发，不能用 ping 成败代替 TCP/UDP 连通判定。X
 
 新请求立即使旧请求过期。原生启动返回后，即使协程已取消，也必须接管并关闭其结果；停止旧会话后才允许新会话读取 TUN。Android 服务销毁后的异步清理与新服务实例启动共用锁及所有者检查，避免旧清理关闭新连接。
 
-保留前台通知、分应用、断线恢复及系统 sticky/always-on 重新启动入口。重新建立 VPN 后同步实际节点，恢复和通知操作继续走同一个控制层。允许列表为空时明确拒绝建立 VPN，防止 Android 将空列表解释为全应用代理。
+VPN 默认接管设备上的应用流量，并将客户端自身排除在 TUN 外，避免核心上游流量回环。前台通知、断线恢复及系统 sticky/always-on 重新启动入口继续保留；重新建立 VPN 后同步实际节点，恢复和通知操作继续走同一个控制层。
 
 URL 测速不再依赖正在运行的 VPN 或 Clash API，每个节点通过自己选择的后端建立临时无 TUN 会话。计时从 HTTP 请求开始，不把运行器启动耗时算入节点延迟。原生 URL 探测同时最多运行 4 个会话，避免较高的网络探测并发设置同时创建大量 Go 运行器；用户设置低于 4 时仍按用户设置执行。
 

@@ -6,7 +6,6 @@ import org.junit.Assert.*
 import org.junit.Test
 import xyz.a202132.app.core.xray.XrayVpnConfig
 import xyz.a202132.app.data.model.*
-import xyz.a202132.app.data.repository.PerAppProxySettings
 import xyz.a202132.app.data.repository.VpnRuntimeSettings
 import java.io.File
 
@@ -20,7 +19,7 @@ class XrayVpnConfigTest {
     """).asJsonObject
 
     private fun request(mode: ProxyMode, ipv6: IPv6RoutingMode) = CoreRequest(node, 20800,
-        VpnRuntimeSettings(mode, ipv6, 0, 0, ProtocolCoreSettings(), PerAppProxySettings(false, emptySet())))
+        VpnRuntimeSettings(mode, ipv6, 0, 0, ProtocolCoreSettings()))
 
     @Test fun vpnUsesHevSocksInboundAndRoutesDnsBeforePrivateNetworks() {
         val result = JsonParser.parseString(XrayVpnConfig.compose(base(), request(ProxyMode.GLOBAL, IPv6RoutingMode.DISABLED))).asJsonObject

@@ -42,7 +42,6 @@ fun DrawerContent(
     onOpenOtherConfig: () -> Unit,
     onOpenInbound: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
-    onOpenProxyScope: () -> Unit = {},
     onOpenOutboundAfter: () -> Unit = {},
     onOpenCoreRouting: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
@@ -113,12 +112,6 @@ fun DrawerContent(
                 onClick = {
                     onOpenOtherConfig()
                 }
-            )
-
-            DrawerMenuItem(
-                icon = Icons.Outlined.Android,
-                title = "分应用入站",
-                onClick = onOpenProxyScope
             )
 
             DrawerMenuItem(
