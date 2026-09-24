@@ -14,7 +14,7 @@
     <string name="per_app_inbound_more_actions">更多操作</string>
     <string name="per_app_inbound_clear_search">清空搜索</string>
     <string name="per_app_inbound_search_hint">搜索应用名或包名</string>
-    <string name="per_app_inbound_enable">启用分应用</string>
+    <string name="per_app_inbound_enable">开关</string>
     <string name="per_app_inbound_blacklist_mode">黑名单模式</string>
     <string name="per_app_inbound_whitelist_mode">白名单模式</string>
     <string name="per_app_inbound_selected">已选中</string>
@@ -26,7 +26,7 @@
     <string name="per_app_inbound_ok">确定</string>
     <string name="per_app_inbound_select_all">全选</string>
     <string name="per_app_inbound_invert_selection">反选</string>
-    <string name="per_app_inbound_auto_select">自动选择需要代理的应用</string>
+    <string name="per_app_inbound_auto_select">从网络获取配置</string>
     <string name="per_app_inbound_auto_select_failed">获取应用列表失败，请检查后台连接</string>
     <string name="per_app_inbound_load_failed">无法加载已安装的应用</string>
 </resources>

@@ -117,7 +117,7 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Apps,
+                icon = Icons.Outlined.Android,
                 title = stringResource(R.string.per_app_inbound_settings),
                 onClick = onOpenPerAppInbound
             )
