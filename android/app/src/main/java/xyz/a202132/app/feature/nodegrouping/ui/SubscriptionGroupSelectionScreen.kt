@@ -26,7 +26,7 @@ import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -193,7 +193,7 @@ private fun SubscriptionGroupSelectionScreen(
         actions = {
             IconButton(onClick = onSwitchToCountries) {
                 Icon(
-                    imageVector = Icons.Rounded.Public,
+                    imageVector = Icons.Rounded.SwapHoriz,
                     contentDescription = "切换为按地区分组"
                 )
             }

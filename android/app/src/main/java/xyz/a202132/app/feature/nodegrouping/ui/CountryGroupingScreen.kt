@@ -16,7 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Subscriptions
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,7 +82,7 @@ private fun CountryGroupingScreen(
         actions = {
             IconButton(onClick = onSwitchToSubscriptions) {
                 Icon(
-                    imageVector = Icons.Rounded.Subscriptions,
+                    imageVector = Icons.Rounded.SwapHoriz,
                     contentDescription = "切换为按订阅仓库分组"
                 )
             }
