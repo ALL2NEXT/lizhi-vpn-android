@@ -4,8 +4,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -25,6 +23,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Subscriptions
@@ -61,6 +61,11 @@ import xyz.a202132.app.data.model.NodeGroupSummary
 import xyz.a202132.app.data.model.SubscriptionGroup
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
+
+private enum class GroupActionMode {
+    EDIT,
+    DELETE
+}
 
 @Composable
 internal fun SubscriptionGroupSelectionDestination(
@@ -154,6 +159,7 @@ private fun SubscriptionGroupSelectionScreen(
     var editDialogVisible by rememberSaveable { mutableStateOf(false) }
     var deleteDialogVisible by rememberSaveable { mutableStateOf(false) }
     var editingGroupId by rememberSaveable { mutableStateOf("") }
+    var groupActionMode by rememberSaveable { mutableStateOf<GroupActionMode?>(null) }
 
     LaunchedEffect(scannedSubscriptionText) {
         scannedSubscriptionText?.let { text ->
@@ -183,7 +189,13 @@ private fun SubscriptionGroupSelectionScreen(
         editingGroupId = group.id.removePrefix("imported:")
         groupName = group.name
         subscriptionInput = group.subscriptionUrl.orEmpty()
+        groupActionMode = null
         editDialogVisible = true
+    }
+
+    fun confirmDeleteGroup(group: NodeGroupSummary) {
+        editingGroupId = group.id.removePrefix("imported:")
+        deleteDialogVisible = true
     }
 
     AppScreenScaffold(
@@ -234,9 +246,11 @@ private fun SubscriptionGroupSelectionScreen(
                             UserSubscriptionGroupCard(
                                 group = group,
                                 selected = selectedNodeGroupId == group.id,
+                                actionMode = groupActionMode,
                                 onClick = { onUserGroupSelected(group) },
-                                onLongClick = { editGroup(group) },
-                                onViewDetails = { onViewUserGroupDetails(group) }
+                                onViewDetails = { onViewUserGroupDetails(group) },
+                                onEdit = { editGroup(group) },
+                                onDelete = { confirmDeleteGroup(group) }
                             )
                         }
                         if (!hideFavoriteNodeGroup) {
@@ -273,20 +287,63 @@ private fun SubscriptionGroupSelectionScreen(
                 }
             }
 
-            FloatingActionButton(
-                onClick = {
-                    groupName = ""
-                    subscriptionInput = ""
-                    addDialogVisible = true
-                },
+            // 底部按钮依次为新增、编辑和删除；编辑或删除模式会替换用户订阅组卡片右侧的箭头。
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = bottomContentPadding)
+                    .padding(end = 20.dp, bottom = bottomContentPadding),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "添加订阅组"
-                )
+                FloatingActionButton(
+                    onClick = {
+                        groupActionMode = null
+                        groupName = ""
+                        subscriptionInput = ""
+                        addDialogVisible = true
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "添加订阅组"
+                    )
+                }
+                FloatingActionButton(
+                    onClick = {
+                        groupActionMode = if (groupActionMode == GroupActionMode.EDIT) {
+                            null
+                        } else {
+                            GroupActionMode.EDIT
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = if (groupActionMode == GroupActionMode.EDIT) {
+                            "退出编辑分组模式"
+                        } else {
+                            "进入编辑分组模式"
+                        }
+                    )
+                }
+                FloatingActionButton(
+                    onClick = {
+                        groupActionMode = if (groupActionMode == GroupActionMode.DELETE) {
+                            null
+                        } else {
+                            GroupActionMode.DELETE
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = if (groupActionMode == GroupActionMode.DELETE) {
+                            "退出删除分组模式"
+                        } else {
+                            "进入删除分组模式"
+                        }
+                    )
+                }
             }
         }
     }
@@ -412,19 +469,11 @@ private fun SubscriptionGroupSelectionScreen(
                 }
             },
             dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(
-                        onClick = { editDialogVisible = false },
-                        enabled = !isSubmitting
-                    ) {
-                        Text("取消")
-                    }
-                    TextButton(
-                        onClick = { deleteDialogVisible = true },
-                        enabled = !isSubmitting
-                    ) {
-                        Text("删除", color = MaterialTheme.colorScheme.error)
-                    }
+                TextButton(
+                    onClick = { editDialogVisible = false },
+                    enabled = !isSubmitting
+                ) {
+                    Text("取消")
                 }
             },
             confirmButton = {
@@ -476,6 +525,7 @@ private fun SubscriptionGroupSelectionScreen(
                             if (success) {
                                 deleteDialogVisible = false
                                 editDialogVisible = false
+                                groupActionMode = null
                             }
                         }
                     },
@@ -582,9 +632,11 @@ private fun SubscriptionGroupCard(
 private fun UserSubscriptionGroupCard(
     group: NodeGroupSummary,
     selected: Boolean,
+    actionMode: GroupActionMode?,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onViewDetails: () -> Unit
+    onViewDetails: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
     GroupCard(
         name = group.name,
@@ -592,28 +644,46 @@ private fun UserSubscriptionGroupCard(
         selected = selected,
         onClick = onClick,
         onViewDetails = onViewDetails,
-        onLongClick = onLongClick
+        actionMode = actionMode,
+        onGroupAction = when (actionMode) {
+            GroupActionMode.EDIT -> onEdit
+            GroupActionMode.DELETE -> onDelete
+            null -> onViewDetails
+        }
     )
 }
 
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
 private fun GroupCard(
     name: String,
     nodeCount: Int,
     selected: Boolean,
     onClick: () -> Unit,
     onViewDetails: () -> Unit,
-    onLongClick: (() -> Unit)? = null
+    actionMode: GroupActionMode? = null,
+    onGroupAction: () -> Unit = onViewDetails
 ) {
+    val trailingIcon = when (actionMode) {
+        GroupActionMode.EDIT -> Icons.Rounded.Edit
+        GroupActionMode.DELETE -> Icons.Rounded.Delete
+        null -> Icons.Rounded.ChevronRight
+    }
+    val trailingDescription = when (actionMode) {
+        GroupActionMode.EDIT -> "编辑订阅组"
+        GroupActionMode.DELETE -> "删除订阅组"
+        null -> "查看线路信息"
+    }
+    val trailingTint = when {
+        selected -> MaterialTheme.colorScheme.onPrimaryContainer
+        actionMode == GroupActionMode.DELETE -> MaterialTheme.colorScheme.error
+        actionMode == GroupActionMode.EDIT -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClickLabel = onLongClick?.let { "编辑订阅组" },
-                onLongClick = onLongClick
-            ),
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
@@ -662,15 +732,11 @@ private fun GroupCard(
                 fontSize = 13.sp,
                 maxLines = 1
             )
-            IconButton(onClick = onViewDetails) {
+            IconButton(onClick = onGroupAction) {
                 Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = "查看线路信息",
-                    tint = if (selected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
+                    imageVector = trailingIcon,
+                    contentDescription = trailingDescription,
+                    tint = trailingTint
                 )
             }
         }
