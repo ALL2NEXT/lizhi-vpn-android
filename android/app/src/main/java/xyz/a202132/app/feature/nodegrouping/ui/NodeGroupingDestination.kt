@@ -120,6 +120,7 @@ fun NodeGroupingDestination(
                 nodesOverride = groupNodes,
                 screenTitle = "线路信息",
                 screenSubtitle = currentDetail.groupName,
+                importTargetGroupId = currentDetail.groupId,
                 onNodeSelected = onNodeSelected,
                 onBack = { detail = null },
                 showBackNavigation = true,

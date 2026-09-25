@@ -105,11 +105,23 @@ interface NodeDao {
         if (members.isNotEmpty()) insertNodeGroupMembers(members)
     }
 
+    @Transaction
+    suspend fun appendNodesToGroup(
+        nodes: List<Node>,
+        members: List<NodeGroupMemberEntity>
+    ) {
+        if (nodes.isNotEmpty()) insertNodes(nodes)
+        if (members.isNotEmpty()) insertNodeGroupMembers(members)
+    }
+
     @Query("DELETE FROM node_group_members WHERE groupId = :groupId")
     suspend fun deleteNodeGroupMembers(groupId: String)
 
     @Query("DELETE FROM node_groups WHERE id = :groupId")
     suspend fun deleteNodeGroup(groupId: String)
+
+    @Query("DELETE FROM node_group_members WHERE groupId = :groupId AND nodeId = :nodeId")
+    suspend fun deleteNodeGroupMember(groupId: String, nodeId: String): Int
 
     @Query("DELETE FROM nodes WHERE source = 'LOCAL_GROUP' AND subscriptionSourceId = :groupId")
     suspend fun deleteLocalGroupNodes(groupId: String)
@@ -152,6 +164,15 @@ interface NodeDao {
         deleteNodeGroupMembers(groupId)
         deleteLocalGroupNodes(groupId)
         deleteNodeGroup(groupId)
+    }
+
+    @Query("DELETE FROM nodes WHERE id = :nodeId AND source = 'LOCAL_GROUP' AND subscriptionSourceId = :groupId")
+    suspend fun deleteLocalGroupNode(groupId: String, nodeId: String): Int
+
+    @Transaction
+    suspend fun deleteLocalGroupNodeFromGroup(groupId: String, nodeId: String): Boolean {
+        if (deleteNodeGroupMember(groupId, nodeId) == 0) return false
+        return deleteLocalGroupNode(groupId, nodeId) > 0
     }
 
     @Transaction

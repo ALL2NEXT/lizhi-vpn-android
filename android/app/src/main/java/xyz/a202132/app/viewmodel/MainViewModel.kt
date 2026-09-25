@@ -1222,6 +1222,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         NOT_FOUND
     }
 
+    enum class SubscriptionGroupNodeImportResult {
+        IMPORTED,
+        ALREADY_EXISTS,
+        INVALID,
+        FETCH_FAILED,
+        NOT_FOUND
+    }
+
+    enum class LocalGroupNodeEditResult {
+        UPDATED,
+        INVALID,
+        NOT_FOUND
+    }
+
+    enum class LocalGroupNodeDeleteResult {
+        DELETED,
+        NOT_FOUND,
+        IN_USE
+    }
+
     /**
      * 创建用户本地订阅组。输入可以是订阅链接、节点链接列表，也可以为空以先创建空组。
      */
@@ -1313,6 +1333,208 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
             settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
             onResult(SubscriptionGroupCreateResult.CREATED, localNodes.size)
+        }
+    }
+
+    /** 将节点 URI 追加到本地订阅组，保留组内已有节点。 */
+    fun importNodeUrisIntoSubscriptionGroup(
+        groupId: String,
+        input: String,
+        onResult: (SubscriptionGroupNodeImportResult, Int) -> Unit = { _, _ -> }
+    ) {
+        viewModelScope.launch {
+            val normalizedInput = input.trim()
+            if (normalizedInput.isBlank()) {
+                onResult(SubscriptionGroupNodeImportResult.INVALID, 0)
+                return@launch
+            }
+
+            val dao = nodeDao()
+            val group = withContext(Dispatchers.IO) {
+                dao.getNodeGroupById(groupId)
+            }
+            if (group == null || group.type !in setOf(
+                    NodeGroupType.IMPORTED.name,
+                    NodeGroupType.SUBSCRIPTION.name
+                )
+            ) {
+                onResult(SubscriptionGroupNodeImportResult.NOT_FOUND, 0)
+                return@launch
+            }
+
+            val subscriptionUrl = SubscriptionImportUrl.detect(normalizedInput)
+            val parsedNodes = if (subscriptionUrl != null) {
+                withContext(Dispatchers.IO) {
+                    subscriptionParser.fetchAndParse(subscriptionUrl)
+                }
+            } else {
+                withContext(Dispatchers.Default) {
+                    Result.success(subscriptionParser.parseSubscription(normalizedInput))
+                }
+            }
+            if (parsedNodes.isFailure) {
+                Log.e(tag, "Unable to import nodes into local subscription group", parsedNodes.exceptionOrNull())
+                onResult(SubscriptionGroupNodeImportResult.FETCH_FAILED, 0)
+                return@launch
+            }
+
+            // 手动 URI 导入按开源客户端的流程只做链接解析；避免本机内核预校验失败时误报“未找到”。
+            // 订阅链接仍过滤当前内核无法生成配置的节点，保持订阅导入行为。
+            val nodesToImport = if (subscriptionUrl == null) {
+                parsedNodes.getOrThrow()
+            } else {
+                withContext(Dispatchers.IO) {
+                    parsedNodes.getOrThrow().filter { node ->
+                        isNodeCoreConfigCompatible(node)
+                    }
+                }
+            }
+            if (nodesToImport.isEmpty()) {
+                onResult(SubscriptionGroupNodeImportResult.INVALID, 0)
+                return@launch
+            }
+
+            val existingNodes = withContext(Dispatchers.IO) {
+                dao.getNodesByGroup(groupId).first()
+            }
+            val existingRawLinks = existingNodes.map(Node::getRawLinkPlain).toSet()
+            val nodesToAdd = nodesToImport
+                .distinctBy(Node::getRawLinkPlain)
+                .filterNot { it.getRawLinkPlain() in existingRawLinks }
+            if (nodesToAdd.isEmpty()) {
+                onResult(SubscriptionGroupNodeImportResult.ALREADY_EXISTS, 0)
+                return@launch
+            }
+
+            val localNodes = nodesToAdd.mapIndexed { index, node ->
+                node.copy(
+                    id = "${groupId}_${UUID.randomUUID()}",
+                    source = NodeSource.LOCAL_GROUP,
+                    subscriptionSourceId = groupId,
+                    subscriptionSourceName = group.name,
+                    favoriteSourceNodeId = null,
+                    favoriteCreatedAt = 0L,
+                    latency = -1,
+                    tcpingLatency = -1,
+                    urlTestLatency = -1,
+                    isAvailable = true,
+                    lastTestedAt = 0L,
+                    sortOrder = existingNodes.size + index,
+                    downloadMbps = 0f,
+                    uploadMbps = 0f
+                )
+            }
+            val members = localNodes.mapIndexed { index, node ->
+                NodeGroupMemberEntity(
+                    groupId = groupId,
+                    nodeId = node.id,
+                    sortOrder = existingNodes.size + index
+                )
+            }
+
+            withContext(Dispatchers.IO) {
+                dao.appendNodesToGroup(localNodes, members)
+            }
+            onResult(SubscriptionGroupNodeImportResult.IMPORTED, localNodes.size)
+        }
+    }
+
+    /** 更新本地订阅组中的单个节点，保留节点 ID 和组内排序。 */
+    fun updateLocalGroupNode(
+        groupId: String,
+        nodeId: String,
+        name: String,
+        rawLink: String,
+        onResult: (LocalGroupNodeEditResult) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val normalizedName = name.trim()
+            if (normalizedName.isBlank()) {
+                onResult(LocalGroupNodeEditResult.INVALID)
+                return@launch
+            }
+
+            val dao = nodeDao()
+            val group = withContext(Dispatchers.IO) {
+                dao.getNodeGroupById(groupId)
+            } ?: run {
+                onResult(LocalGroupNodeEditResult.NOT_FOUND)
+                return@launch
+            }
+            val existingNode = withContext(Dispatchers.IO) {
+                dao.getNodesByGroup(groupId).first().firstOrNull { it.id == nodeId }
+            } ?: run {
+                onResult(LocalGroupNodeEditResult.NOT_FOUND)
+                return@launch
+            }
+
+            val normalizedLink = rawLink.trim()
+            if (normalizedLink.isBlank() || normalizedLink == existingNode.rawLink) {
+                withContext(Dispatchers.IO) {
+                    dao.insertNode(existingNode.copy(name = normalizedName))
+                }
+                onResult(LocalGroupNodeEditResult.UPDATED)
+                return@launch
+            }
+
+            val parsedNode = withContext(Dispatchers.Default) {
+                subscriptionParser.parseSubscription(normalizedLink).singleOrNull()
+            } ?: run {
+                onResult(LocalGroupNodeEditResult.INVALID)
+                return@launch
+            }
+            if (!withContext(Dispatchers.IO) { isNodeCoreConfigCompatible(parsedNode) }) {
+                onResult(LocalGroupNodeEditResult.INVALID)
+                return@launch
+            }
+
+            val updatedNode = parsedNode.copy(
+                id = existingNode.id,
+                name = normalizedName,
+                subscriptionSourceId = groupId,
+                subscriptionSourceName = group.name,
+                source = NodeSource.LOCAL_GROUP,
+                favoriteSourceNodeId = null,
+                favoriteCreatedAt = 0L,
+                latency = -1,
+                tcpingLatency = -1,
+                urlTestLatency = -1,
+                isAvailable = true,
+                lastTestedAt = 0L,
+                sortOrder = existingNode.sortOrder,
+                downloadMbps = 0f,
+                uploadMbps = 0f
+            )
+            withContext(Dispatchers.IO) {
+                dao.insertNode(updatedNode)
+            }
+            onResult(LocalGroupNodeEditResult.UPDATED)
+        }
+    }
+
+    /** 从本地订阅组移除一个节点；当前正在使用的节点不能删除。 */
+    fun deleteLocalGroupNode(
+        groupId: String,
+        nodeId: String,
+        onResult: (LocalGroupNodeDeleteResult) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            if (activeConnectionNode.value?.id == nodeId) {
+                onResult(LocalGroupNodeDeleteResult.IN_USE)
+                return@launch
+            }
+
+            val deleted = withContext(Dispatchers.IO) {
+                nodeDao().deleteLocalGroupNodeFromGroup(groupId, nodeId)
+            }
+            if (!deleted) {
+                onResult(LocalGroupNodeDeleteResult.NOT_FOUND)
+                return@launch
+            }
+            if (settingsRepository.selectedNodeId.first() == nodeId) {
+                settingsRepository.setSelectedNodeId(null)
+            }
+            onResult(LocalGroupNodeDeleteResult.DELETED)
         }
     }
 

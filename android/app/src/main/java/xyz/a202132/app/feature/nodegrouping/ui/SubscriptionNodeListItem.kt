@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,8 +47,11 @@ internal fun NodeListItem(
     enabled: Boolean,
     displaySettings: NodeDisplaySettings,
     coreSettings: ProtocolCoreSettings,
+    actionMode: NodeActionMode?,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    onEditNode: () -> Unit,
+    onDeleteNode: () -> Unit
 ) {
     val backgroundColor =
         if (isSelected) {
@@ -108,21 +113,47 @@ internal fun NodeListItem(
                     )
                 }
 
-                IconButton(
-                    onClick = onToggleFavorite,
-                    enabled = enabled,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "收藏节点",
-                        tint = if (isFavorite) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                        },
-                        modifier = Modifier.size(20.dp)
-                    )
+                when (actionMode) {
+                    null -> IconButton(
+                        onClick = onToggleFavorite,
+                        enabled = enabled,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "收藏节点",
+                            tint = if (isFavorite) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            },
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    NodeActionMode.EDIT -> IconButton(
+                        onClick = onEditNode,
+                        enabled = enabled,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = "编辑节点",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    NodeActionMode.DELETE -> IconButton(
+                        onClick = onDeleteNode,
+                        enabled = enabled,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Delete,
+                            contentDescription = "删除节点",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 

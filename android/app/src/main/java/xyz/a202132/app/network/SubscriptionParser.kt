@@ -15,6 +15,7 @@ import java.net.URLDecoder
 import java.security.MessageDigest
 import kotlinx.coroutines.withTimeout
 import xyz.a202132.app.util.RuntimeTuner
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
  * 订阅解析器 - 解析Base64编码的节点列表
@@ -117,19 +118,23 @@ class SubscriptionParser {
      */
     fun parseNodeLink(link: String): Node? {
         return try {
-            val lowerLink = link.lowercase()
+            // 支持从 Markdown 等文本中复制的转义 URI，例如 vless\://...\@host。
+            val normalizedLink = link.trim()
+                .replace("\\://", "://")
+                .replace("\\@", "@")
+            val lowerLink = normalizedLink.lowercase()
             when {
-                lowerLink.startsWith("vless://") -> parseVlessLink(link)
-                lowerLink.startsWith("vmess://") -> parseVmessLink(link)
-                lowerLink.startsWith("trojan://") -> parseTrojanLink(link)
-                lowerLink.startsWith("hysteria2://") || lowerLink.startsWith("hy2://") -> parseHysteria2Link(link)
-                lowerLink.startsWith("anytls://") -> parseAnyTlsLink(link)
-                lowerLink.startsWith("tuic://") -> parseTuicLink(link)
-                lowerLink.startsWith("naive://") || lowerLink.startsWith("naive+https://") -> parseNaiveLink(link)
-                lowerLink.startsWith("wireguard://") -> parseWireGuardLink(link)
-                lowerLink.startsWith("ss://") -> parseShadowsocksLink(link)
-                lowerLink.startsWith("socks://") || lowerLink.startsWith("socks5://") || lowerLink.startsWith("socks4://") || lowerLink.startsWith("socks4a://") -> parseSocksLink(link)
-                lowerLink.startsWith("http://") || lowerLink.startsWith("https://") -> parseHttpLink(link)
+                lowerLink.startsWith("vless://") -> parseVlessLink(normalizedLink)
+                lowerLink.startsWith("vmess://") -> parseVmessLink(normalizedLink)
+                lowerLink.startsWith("trojan://") -> parseTrojanLink(normalizedLink)
+                lowerLink.startsWith("hysteria2://") || lowerLink.startsWith("hy2://") -> parseHysteria2Link(normalizedLink)
+                lowerLink.startsWith("anytls://") -> parseAnyTlsLink(normalizedLink)
+                lowerLink.startsWith("tuic://") -> parseTuicLink(normalizedLink)
+                lowerLink.startsWith("naive://") || lowerLink.startsWith("naive+https://") -> parseNaiveLink(normalizedLink)
+                lowerLink.startsWith("wireguard://") -> parseWireGuardLink(normalizedLink)
+                lowerLink.startsWith("ss://") -> parseShadowsocksLink(normalizedLink)
+                lowerLink.startsWith("socks://") || lowerLink.startsWith("socks5://") || lowerLink.startsWith("socks4://") || lowerLink.startsWith("socks4a://") -> parseSocksLink(normalizedLink)
+                lowerLink.startsWith("http://") || lowerLink.startsWith("https://") -> parseHttpLink(normalizedLink)
                 else -> null
             }
         } catch (e: Exception) {
@@ -144,10 +149,13 @@ class SubscriptionParser {
      * 格式: vless://uuid@host:port?params#name
      */
     private fun parseVlessLink(link: String): Node {
-        val uri = Uri.parse(link)
-        val name = URLDecoder.decode(uri.fragment ?: "VLESS Node", "UTF-8")
-        val server = uri.host ?: ""
-        val port = if (uri.port == -1) 80 else uri.port
+        // 参考 NekoBox 的 VLESS 导入方式：借用 OkHttp URL 解析器处理 authority、IPv6 和转义字符。
+        val url = link.replaceFirst(Regex("(?i)^vless://"), "https://").toHttpUrlOrNull()
+            ?: throw IllegalArgumentException("Invalid VLESS URI")
+        require(url.username.isNotBlank() && url.host.isNotBlank()) { "VLESS URI is missing credentials or host" }
+        val name = url.fragment?.takeIf { it.isNotBlank() } ?: "VLESS Node"
+        val server = url.host
+        val port = url.port
         
         return Node(
             id = generateId(link),
