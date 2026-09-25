@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.AlertDialog
@@ -62,6 +63,7 @@ import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
 private enum class GroupActionMode {
+    UPDATE,
     EDIT,
     DELETE
 }
@@ -115,6 +117,15 @@ internal fun SubscriptionGroupSelectionDestination(
         onCreateSubscriptionGroup = onCreateSubscriptionGroup,
         onUpdateSubscriptionGroup = onUpdateSubscriptionGroup,
         onDeleteSubscriptionGroup = onDeleteSubscriptionGroup,
+        onRefreshOfficialSubscription = { sourceId, onResult ->
+            viewModel.refreshOfficialSubscription(sourceId, onResult)
+        },
+        onRefreshUserGroup = { groupId, onResult ->
+            viewModel.refreshUserSubscriptionGroup(groupId, onResult)
+        },
+        onDeleteOfficialSubscription = { sourceId, onResult ->
+            viewModel.deleteOfficialSubscription(sourceId, onResult)
+        },
         onScanQrCode = onScanQrCode,
         scannedSubscriptionText = scannedSubscriptionText,
         onScannedSubscriptionTextConsumed = onScannedSubscriptionTextConsumed,
@@ -142,6 +153,9 @@ private fun SubscriptionGroupSelectionScreen(
     onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
     onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
     onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
+    onRefreshOfficialSubscription: (String, (Boolean) -> Unit) -> Unit,
+    onRefreshUserGroup: (String, (MainViewModel.SubscriptionGroupRefreshResult) -> Unit) -> Unit,
+    onDeleteOfficialSubscription: (String, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,
     scannedSubscriptionText: String?,
     onScannedSubscriptionTextConsumed: () -> Unit,
@@ -158,6 +172,7 @@ private fun SubscriptionGroupSelectionScreen(
     var editDialogVisible by rememberSaveable { mutableStateOf(false) }
     var deleteDialogVisible by rememberSaveable { mutableStateOf(false) }
     var editingGroupId by rememberSaveable { mutableStateOf("") }
+    var deletingOfficialSubscription by rememberSaveable { mutableStateOf(false) }
     var groupActionMode by rememberSaveable { mutableStateOf<GroupActionMode?>(null) }
 
     LaunchedEffect(scannedSubscriptionText) {
@@ -194,6 +209,13 @@ private fun SubscriptionGroupSelectionScreen(
 
     fun confirmDeleteGroup(group: NodeGroupSummary) {
         editingGroupId = group.id.removePrefix("imported:")
+        deletingOfficialSubscription = false
+        deleteDialogVisible = true
+    }
+
+    fun confirmDeleteOfficialSubscription(group: SubscriptionGroup) {
+        editingGroupId = group.sourceId
+        deletingOfficialSubscription = true
         deleteDialogVisible = true
     }
 
@@ -234,8 +256,19 @@ private fun SubscriptionGroupSelectionScreen(
                                 nodeCount = nodeCounts[group.sourceId] ?: 0,
                                 selected = selectedNodeGroupId ==
                                     NodeGroupKey.Subscription(group.sourceId).value,
+                                actionMode = groupActionMode,
                                 onClick = { onSubscriptionSelected(group) },
-                                onViewDetails = { onViewSubscriptionDetails(group) }
+                                onViewDetails = { onViewSubscriptionDetails(group) },
+                                onRefresh = {
+                                    onRefreshOfficialSubscription(group.sourceId) { success ->
+                                        Toast.makeText(
+                                            context,
+                                            if (success) "订阅组已更新" else "订阅组更新失败或当前操作繁忙",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                onDelete = { confirmDeleteOfficialSubscription(group) }
                             )
                         }
                         items(
@@ -249,7 +282,24 @@ private fun SubscriptionGroupSelectionScreen(
                                 onClick = { onUserGroupSelected(group) },
                                 onViewDetails = { onViewUserGroupDetails(group) },
                                 onEdit = { editGroup(group) },
-                                onDelete = { confirmDeleteGroup(group) }
+                                onDelete = { confirmDeleteGroup(group) },
+                                onRefresh = {
+                                    onRefreshUserGroup(group.id.removePrefix("imported:")) { result ->
+                                        val message = when (result) {
+                                            MainViewModel.SubscriptionGroupRefreshResult.REFRESHED ->
+                                                "订阅组已更新"
+                                            MainViewModel.SubscriptionGroupRefreshResult.INVALID ->
+                                                "订阅内容中未找到可用节点"
+                                            MainViewModel.SubscriptionGroupRefreshResult.FETCH_FAILED ->
+                                                "订阅链接获取失败"
+                                            MainViewModel.SubscriptionGroupRefreshResult.NOT_FOUND ->
+                                                "订阅组不存在"
+                                            MainViewModel.SubscriptionGroupRefreshResult.BUSY ->
+                                                "当前操作繁忙，请稍后重试"
+                                        }
+                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             )
                         }
                         if (!hideFavoriteNodeGroup) {
@@ -292,7 +342,22 @@ private fun SubscriptionGroupSelectionScreen(
                     .align(Alignment.BottomEnd)
                     .padding(bottom = bottomContentPadding),
                 actions = listOf(
-                    SideMenuAction(Icons.Default.Add, "添加订阅组") {
+                    SideMenuAction(
+                        icon = Icons.Rounded.Refresh,
+                        label = "更新",
+                        contentDescription = if (groupActionMode == GroupActionMode.UPDATE) {
+                            "退出更新订阅组模式"
+                        } else {
+                            "进入更新订阅组模式"
+                        }
+                    ) {
+                        groupActionMode = if (groupActionMode == GroupActionMode.UPDATE) {
+                            null
+                        } else {
+                            GroupActionMode.UPDATE
+                        }
+                    },
+                    SideMenuAction(Icons.Default.Add, "添加", "添加订阅组") {
                         groupActionMode = null
                         groupName = ""
                         subscriptionInput = ""
@@ -300,6 +365,7 @@ private fun SubscriptionGroupSelectionScreen(
                     },
                     SideMenuAction(
                         Icons.Rounded.Edit,
+                        "编辑",
                         if (groupActionMode == GroupActionMode.EDIT) {
                             "退出编辑分组模式"
                         } else {
@@ -314,6 +380,7 @@ private fun SubscriptionGroupSelectionScreen(
                     },
                     SideMenuAction(
                         Icons.Rounded.Delete,
+                        "删除",
                         if (groupActionMode == GroupActionMode.DELETE) {
                             "退出删除分组模式"
                         } else {
@@ -490,7 +557,15 @@ private fun SubscriptionGroupSelectionScreen(
         AlertDialog(
             onDismissRequest = { if (!isSubmitting) deleteDialogVisible = false },
             title = { Text("删除订阅组？") },
-            text = { Text("删除后，该组及其中的节点都会被移除，且无法恢复。") },
+            text = {
+                Text(
+                    if (deletingOfficialSubscription) {
+                        "将从本机移除此官方订阅的节点；下次刷新后订阅可能重新出现。"
+                    } else {
+                        "删除后，该组及其中的节点都会被移除，且无法恢复。"
+                    }
+                )
+            },
             dismissButton = {
                 TextButton(
                     onClick = { deleteDialogVisible = false },
@@ -503,13 +578,19 @@ private fun SubscriptionGroupSelectionScreen(
                 TextButton(
                     onClick = {
                         isSubmitting = true
-                        onDeleteSubscriptionGroup(editingGroupId) { success ->
+                        val onComplete: (Boolean) -> Unit = { success ->
                             isSubmitting = false
                             if (success) {
                                 deleteDialogVisible = false
                                 editDialogVisible = false
                                 groupActionMode = null
+                                deletingOfficialSubscription = false
                             }
+                        }
+                        if (deletingOfficialSubscription) {
+                            onDeleteOfficialSubscription(editingGroupId, onComplete)
+                        } else {
+                            onDeleteSubscriptionGroup(editingGroupId, onComplete)
                         }
                     },
                     enabled = !isSubmitting
@@ -599,15 +680,27 @@ private fun SubscriptionGroupCard(
     group: SubscriptionGroup,
     nodeCount: Int,
     selected: Boolean,
+    actionMode: GroupActionMode?,
     onClick: () -> Unit,
-    onViewDetails: () -> Unit
+    onViewDetails: () -> Unit,
+    onRefresh: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    val subscriptionActionMode = actionMode.takeIf {
+        it == GroupActionMode.UPDATE || it == GroupActionMode.DELETE
+    }
     GroupCard(
         name = group.name,
         nodeCount = nodeCount,
         selected = selected,
         onClick = onClick,
-        onViewDetails = onViewDetails
+        onViewDetails = onViewDetails,
+        actionMode = subscriptionActionMode,
+        onGroupAction = when (subscriptionActionMode) {
+            GroupActionMode.UPDATE -> onRefresh
+            GroupActionMode.DELETE -> onDelete
+            else -> onViewDetails
+        }
     )
 }
 
@@ -619,8 +712,10 @@ private fun UserSubscriptionGroupCard(
     onClick: () -> Unit,
     onViewDetails: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onRefresh: () -> Unit
 ) {
+    val supportsRefresh = !group.subscriptionUrl.isNullOrBlank()
     GroupCard(
         name = group.name,
         nodeCount = group.nodeCount,
@@ -629,10 +724,12 @@ private fun UserSubscriptionGroupCard(
         onViewDetails = onViewDetails,
         actionMode = actionMode,
         onGroupAction = when (actionMode) {
+            GroupActionMode.UPDATE -> onRefresh
             GroupActionMode.EDIT -> onEdit
             GroupActionMode.DELETE -> onDelete
             null -> onViewDetails
-        }
+        },
+        actionEnabled = actionMode != GroupActionMode.UPDATE || supportsRefresh
     )
 }
 
@@ -644,14 +741,17 @@ private fun GroupCard(
     onClick: () -> Unit,
     onViewDetails: () -> Unit,
     actionMode: GroupActionMode? = null,
-    onGroupAction: () -> Unit = onViewDetails
+    onGroupAction: () -> Unit = onViewDetails,
+    actionEnabled: Boolean = true
 ) {
     val trailingIcon = when (actionMode) {
+        GroupActionMode.UPDATE -> Icons.Rounded.Refresh
         GroupActionMode.EDIT -> Icons.Rounded.Edit
         GroupActionMode.DELETE -> Icons.Rounded.Delete
         null -> Icons.Rounded.ChevronRight
     }
     val trailingDescription = when (actionMode) {
+        GroupActionMode.UPDATE -> "更新订阅组"
         GroupActionMode.EDIT -> "编辑订阅组"
         GroupActionMode.DELETE -> "删除订阅组"
         null -> "查看线路信息"
@@ -659,7 +759,8 @@ private fun GroupCard(
     val trailingTint = when {
         selected -> MaterialTheme.colorScheme.onPrimaryContainer
         actionMode == GroupActionMode.DELETE -> MaterialTheme.colorScheme.error
-        actionMode == GroupActionMode.EDIT -> MaterialTheme.colorScheme.primary
+        actionMode == GroupActionMode.EDIT || actionMode == GroupActionMode.UPDATE ->
+            MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -715,7 +816,7 @@ private fun GroupCard(
                 fontSize = 13.sp,
                 maxLines = 1
             )
-            IconButton(onClick = onGroupAction) {
+            IconButton(onClick = onGroupAction, enabled = actionEnabled) {
                 Icon(
                     imageVector = trailingIcon,
                     contentDescription = trailingDescription,

@@ -1222,6 +1222,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         NOT_FOUND
     }
 
+    enum class SubscriptionGroupRefreshResult {
+        REFRESHED,
+        INVALID,
+        FETCH_FAILED,
+        NOT_FOUND,
+        BUSY
+    }
+
     enum class SubscriptionGroupNodeImportResult {
         IMPORTED,
         ALREADY_EXISTS,
@@ -1648,6 +1656,99 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 立即重新获取带订阅链接的本地分组，并替换组内节点。 */
+    fun refreshUserSubscriptionGroup(
+        groupId: String,
+        onResult: (SubscriptionGroupRefreshResult) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            if (
+                subscriptionDataLoader.isLoading.value ||
+                GlobalTestExecution.isFetching() ||
+                _isTesting.value ||
+                GlobalTestExecution.mutex.isLocked
+            ) {
+                onResult(SubscriptionGroupRefreshResult.BUSY)
+                return@launch
+            }
+
+            val dao = nodeDao()
+            val group = withContext(Dispatchers.IO) {
+                dao.getNodeGroupById(groupId)
+            } ?: run {
+                onResult(SubscriptionGroupRefreshResult.NOT_FOUND)
+                return@launch
+            }
+            if (group.type !in setOf(NodeGroupType.IMPORTED.name, NodeGroupType.SUBSCRIPTION.name)) {
+                onResult(SubscriptionGroupRefreshResult.NOT_FOUND)
+                return@launch
+            }
+
+            val subscriptionUrl = SubscriptionImportUrl.detect(group.subscriptionUrl.orEmpty())
+                ?: run {
+                    onResult(SubscriptionGroupRefreshResult.INVALID)
+                    return@launch
+                }
+            val parsedNodes = withContext(Dispatchers.IO) {
+                subscriptionParser.fetchAndParse(subscriptionUrl)
+            }
+            if (parsedNodes.isFailure) {
+                Log.e(tag, "Unable to refresh user subscription group", parsedNodes.exceptionOrNull())
+                onResult(SubscriptionGroupRefreshResult.FETCH_FAILED)
+                return@launch
+            }
+
+            val compatibleNodes = withContext(Dispatchers.IO) {
+                parsedNodes.getOrThrow().filter { node ->
+                    isNodeCoreConfigCompatible(node)
+                }
+            }.distinctBy(Node::getRawLinkPlain)
+            if (compatibleNodes.isEmpty()) {
+                onResult(SubscriptionGroupRefreshResult.INVALID)
+                return@launch
+            }
+
+            val localNodes = compatibleNodes.mapIndexed { index, node ->
+                node.copy(
+                    id = "${groupId}_$index",
+                    source = NodeSource.LOCAL_GROUP,
+                    subscriptionSourceId = groupId,
+                    subscriptionSourceName = group.name,
+                    favoriteSourceNodeId = null,
+                    favoriteCreatedAt = 0L,
+                    latency = -1,
+                    tcpingLatency = -1,
+                    urlTestLatency = -1,
+                    isAvailable = true,
+                    lastTestedAt = 0L,
+                    sortOrder = index,
+                    downloadMbps = 0f,
+                    uploadMbps = 0f
+                )
+            }
+            val members = localNodes.mapIndexed { index, node ->
+                NodeGroupMemberEntity(
+                    groupId = groupId,
+                    nodeId = node.id,
+                    sortOrder = index
+                )
+            }
+            val refreshed = withContext(Dispatchers.IO) {
+                dao.replaceLocalGroupNodes(
+                    groupId = groupId,
+                    name = group.name,
+                    subscriptionUrl = subscriptionUrl,
+                    nodes = localNodes,
+                    members = members
+                )
+            }
+            onResult(
+                if (refreshed) SubscriptionGroupRefreshResult.REFRESHED
+                else SubscriptionGroupRefreshResult.NOT_FOUND
+            )
+        }
+    }
+
     /** 删除本地订阅组及其节点。 */
     fun deleteSubscriptionGroup(groupId: String, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
@@ -1674,6 +1775,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             onResult(deleted)
+        }
+    }
+
+    /** 从本机移除一个官方订阅源的节点；远端订阅源仍可在后续刷新时重新导入。 */
+    fun deleteOfficialSubscription(sourceId: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            if (sourceId.isBlank()) {
+                onResult(false)
+                return@launch
+            }
+
+            val dao = nodeDao()
+            val sourceNodes = withContext(Dispatchers.IO) {
+                dao.getSubscriptionNodesBySource(sourceId).first()
+            }
+            if (sourceNodes.isEmpty()) {
+                onResult(false)
+                return@launch
+            }
+
+            withContext(Dispatchers.IO) {
+                dao.deleteSubscriptionNodesBySource(sourceId)
+            }
+
+            val sourceNodeIds = sourceNodes.mapTo(mutableSetOf(), Node::id)
+            if (settingsRepository.selectedNodeId.first() in sourceNodeIds) {
+                settingsRepository.setSelectedNodeId(null)
+            }
+            if (settingsRepository.selectedNodeGroupId.first() == NodeGroupKey.Subscription(sourceId).value) {
+                settingsRepository.setSelectedNodeGroupId(null)
+            }
+            if (settingsRepository.selectedSubscriptionSourceId.first() == sourceId) {
+                settingsRepository.setSelectedSubscriptionSourceId(null)
+            }
+            onResult(true)
         }
     }
 
@@ -2399,21 +2535,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Refresh all subscriptions when no source is specified, otherwise only the selected source. */
     fun refreshNodes(sourceId: String? = null) {
+        refreshSubscriptions(sourceId, onResult = null)
+    }
+
+    /** 刷新单个官方订阅源，并将结果返回给分组界面。 */
+    fun refreshOfficialSubscription(sourceId: String, onResult: (Boolean) -> Unit) {
+        refreshSubscriptions(sourceId, onResult)
+    }
+
+    private fun refreshSubscriptions(
+        sourceId: String?,
+        onResult: ((Boolean) -> Unit)?
+    ) {
         viewModelScope.launch {
-            if (subscriptionDataLoader.isLoading.value) return@launch
+            if (subscriptionDataLoader.isLoading.value) {
+                onResult?.invoke(false)
+                return@launch
+            }
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
+                onResult?.invoke(false)
                 return@launch
             }
             if (_isTesting.value || GlobalTestExecution.mutex.isLocked) {
                 _error.value = GlobalTestExecution.busyHint()
+                onResult?.invoke(false)
                 return@launch
             }
             val fetchOk = initializeSubscriptionsWithRefreshState(
                 forceRefresh = true,
                 sourceId = sourceId
             )
-            if (!fetchOk) return@launch
+            onResult?.invoke(fetchOk)
         }
     }
 

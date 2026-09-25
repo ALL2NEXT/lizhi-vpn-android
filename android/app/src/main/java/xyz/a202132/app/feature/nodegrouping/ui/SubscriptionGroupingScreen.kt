@@ -169,13 +169,14 @@ internal fun SubscriptionGroupingScreen(
                         .align(Alignment.BottomEnd)
                         .padding(bottom = bottomContentPadding),
                     actions = listOf(
-                        SideMenuAction(Icons.Default.Add, "添加节点") {
+                        SideMenuAction(Icons.Default.Add, "添加", "添加节点") {
                             actionMode = null
                             nodeUris = ""
                             addNodeDialogVisible = true
                         },
                         SideMenuAction(
                             Icons.Rounded.Edit,
+                            "编辑",
                             if (actionMode == NodeActionMode.EDIT) {
                                 "退出编辑节点模式"
                             } else {
@@ -190,6 +191,7 @@ internal fun SubscriptionGroupingScreen(
                         },
                         SideMenuAction(
                             Icons.Rounded.Delete,
+                            "删除",
                             if (actionMode == NodeActionMode.DELETE) {
                                 "退出删除节点模式"
                             } else {
