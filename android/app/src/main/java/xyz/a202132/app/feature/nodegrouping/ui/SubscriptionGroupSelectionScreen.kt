@@ -31,7 +31,6 @@ import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -287,64 +286,48 @@ private fun SubscriptionGroupSelectionScreen(
                 }
             }
 
-            // 底部按钮依次为新增、编辑和删除；编辑或删除模式会替换用户订阅组卡片右侧的箭头。
-            Row(
+            // 操作栏默认收纳在屏幕侧边，展开后依次显示新增、编辑和删除按钮。
+            SideExpandableActionMenu(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = bottomContentPadding),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FloatingActionButton(
-                    onClick = {
+                    .padding(bottom = bottomContentPadding),
+                actions = listOf(
+                    SideMenuAction(Icons.Default.Add, "添加订阅组") {
                         groupActionMode = null
                         groupName = ""
                         subscriptionInput = ""
                         addDialogVisible = true
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "添加订阅组"
-                    )
-                }
-                FloatingActionButton(
-                    onClick = {
+                    },
+                    SideMenuAction(
+                        Icons.Rounded.Edit,
+                        if (groupActionMode == GroupActionMode.EDIT) {
+                            "退出编辑分组模式"
+                        } else {
+                            "进入编辑分组模式"
+                        }
+                    ) {
                         groupActionMode = if (groupActionMode == GroupActionMode.EDIT) {
                             null
                         } else {
                             GroupActionMode.EDIT
                         }
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = if (groupActionMode == GroupActionMode.EDIT) {
-                            "退出编辑分组模式"
+                    },
+                    SideMenuAction(
+                        Icons.Rounded.Delete,
+                        if (groupActionMode == GroupActionMode.DELETE) {
+                            "退出删除分组模式"
                         } else {
-                            "进入编辑分组模式"
+                            "进入删除分组模式"
                         }
-                    )
-                }
-                FloatingActionButton(
-                    onClick = {
+                    ) {
                         groupActionMode = if (groupActionMode == GroupActionMode.DELETE) {
                             null
                         } else {
                             GroupActionMode.DELETE
                         }
                     }
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Delete,
-                        contentDescription = if (groupActionMode == GroupActionMode.DELETE) {
-                            "退出删除分组模式"
-                        } else {
-                            "进入删除分组模式"
-                        }
-                    )
-                }
-            }
+                )
+            )
         }
     }
 

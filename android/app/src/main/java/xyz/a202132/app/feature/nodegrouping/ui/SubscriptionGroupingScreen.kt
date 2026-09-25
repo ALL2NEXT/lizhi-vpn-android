@@ -29,7 +29,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -165,59 +164,46 @@ internal fun SubscriptionGroupingScreen(
             )
 
             if (canManageNodes) {
-                Row(
+                SideExpandableActionMenu(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 20.dp, bottom = bottomContentPadding),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FloatingActionButton(
-                        onClick = {
+                        .padding(bottom = bottomContentPadding),
+                    actions = listOf(
+                        SideMenuAction(Icons.Default.Add, "添加节点") {
                             actionMode = null
                             nodeUris = ""
                             addNodeDialogVisible = true
-                        }
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "添加节点")
-                    }
-                    FloatingActionButton(
-                        onClick = {
+                        },
+                        SideMenuAction(
+                            Icons.Rounded.Edit,
+                            if (actionMode == NodeActionMode.EDIT) {
+                                "退出编辑节点模式"
+                            } else {
+                                "进入编辑节点模式"
+                            }
+                        ) {
                             actionMode = if (actionMode == NodeActionMode.EDIT) {
                                 null
                             } else {
                                 NodeActionMode.EDIT
                             }
-                        }
-                    ) {
-                        Icon(
-                            Icons.Rounded.Edit,
-                            contentDescription = if (actionMode == NodeActionMode.EDIT) {
-                                "退出编辑节点模式"
+                        },
+                        SideMenuAction(
+                            Icons.Rounded.Delete,
+                            if (actionMode == NodeActionMode.DELETE) {
+                                "退出删除节点模式"
                             } else {
-                                "进入编辑节点模式"
+                                "进入删除节点模式"
                             }
-                        )
-                    }
-                    FloatingActionButton(
-                        onClick = {
+                        ) {
                             actionMode = if (actionMode == NodeActionMode.DELETE) {
                                 null
                             } else {
                                 NodeActionMode.DELETE
                             }
                         }
-                    ) {
-                        Icon(
-                            Icons.Rounded.Delete,
-                            contentDescription = if (actionMode == NodeActionMode.DELETE) {
-                                "退出删除节点模式"
-                            } else {
-                                "进入删除节点模式"
-                            }
-                        )
-                    }
-                }
+                    )
+                )
             }
         }
     }
