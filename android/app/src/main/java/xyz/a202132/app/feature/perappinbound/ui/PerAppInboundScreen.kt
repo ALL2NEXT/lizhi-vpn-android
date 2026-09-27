@@ -75,6 +75,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import xyz.a202132.app.R
+import xyz.a202132.app.ui.components.SegmentedToggle
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -212,7 +213,7 @@ fun PerAppInboundScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.weight(1.15f),
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -232,33 +233,13 @@ fun PerAppInboundScreen(
                         )
                     )
                 }
-                Row(
-                    modifier = Modifier.weight(0.9f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(
-                            if (settings.bypassMode) {
-                                R.string.per_app_inbound_blacklist_mode
-                            } else {
-                                R.string.per_app_inbound_whitelist_mode
-                            }
-                        ),
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Switch(
-                        checked = settings.bypassMode,
-                        modifier = Modifier.scale(0.72f),
-                        onCheckedChange = viewModel::setBypassMode,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
-                            checkedTrackColor = MaterialTheme.colorScheme.secondary
-                        )
-                    )
-                }
+                SegmentedToggle(
+                    firstLabel = stringResource(R.string.per_app_inbound_blacklist_mode),
+                    secondLabel = stringResource(R.string.per_app_inbound_whitelist_mode),
+                    selectedFirst = settings.bypassMode,
+                    onSelectionChange = viewModel::setBypassMode,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
                 IconButton(onClick = { showInformation = true }) {
                     Icon(
                         imageVector = Icons.Outlined.Info,
