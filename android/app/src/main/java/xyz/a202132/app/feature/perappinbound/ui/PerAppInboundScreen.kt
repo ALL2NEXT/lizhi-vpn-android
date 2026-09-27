@@ -233,12 +233,19 @@ fun PerAppInboundScreen(
                         )
                     )
                 }
+                Text(
+                    text = stringResource(R.string.per_app_inbound_mode_label),
+                    modifier = Modifier.padding(start = 4.dp, end = 4.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1
+                )
                 SegmentedToggle(
-                    firstLabel = stringResource(R.string.per_app_inbound_blacklist_mode),
-                    secondLabel = stringResource(R.string.per_app_inbound_whitelist_mode),
-                    selectedFirst = settings.bypassMode,
-                    onSelectionChange = viewModel::setBypassMode,
-                    modifier = Modifier.padding(start = 4.dp)
+                    firstLabel = stringResource(R.string.per_app_inbound_whitelist_option),
+                    secondLabel = stringResource(R.string.per_app_inbound_blacklist_option),
+                    selectedFirst = !settings.bypassMode,
+                    onSelectionChange = { isWhitelist ->
+                        viewModel.setBypassMode(!isWhitelist)
+                    }
                 )
                 IconButton(onClick = { showInformation = true }) {
                     Icon(

@@ -15,6 +15,9 @@
     <string name="per_app_inbound_clear_search">清空搜索</string>
     <string name="per_app_inbound_search_hint">搜索应用名或包名</string>
     <string name="per_app_inbound_enable">开关</string>
+    <string name="per_app_inbound_mode_label">模式</string>
+    <string name="per_app_inbound_whitelist_option">白名单</string>
+    <string name="per_app_inbound_blacklist_option">黑名单</string>
     <string name="per_app_inbound_blacklist_mode">黑名单模式</string>
     <string name="per_app_inbound_whitelist_mode">白名单模式</string>
     <string name="per_app_inbound_selected">已选中</string>
