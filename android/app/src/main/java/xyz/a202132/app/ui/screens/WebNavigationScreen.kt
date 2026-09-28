@@ -88,7 +88,7 @@ private val faviconCache = ConcurrentHashMap<String, Bitmap>()
 @Composable
 fun WebNavigationScreen(
     onBack: () -> Unit,
-    bottomContentPadding: Dp = 108.dp
+    bottomContentPadding: Dp = 16.dp
 ) {
     val context = LocalContext.current
 

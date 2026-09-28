@@ -27,12 +27,10 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -84,9 +82,8 @@ internal fun SubscriptionGroupSelectionDestination(
     onScanQrCode: () -> Unit,
     scannedSubscriptionText: String?,
     onScannedSubscriptionTextConsumed: () -> Unit,
-    onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
-    bottomContentPadding: Dp = 108.dp
+    bottomContentPadding: Dp = 16.dp
 ) {
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
     val userGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
@@ -130,7 +127,6 @@ internal fun SubscriptionGroupSelectionDestination(
         onScanQrCode = onScanQrCode,
         scannedSubscriptionText = scannedSubscriptionText,
         onScannedSubscriptionTextConsumed = onScannedSubscriptionTextConsumed,
-        onSwitchToCountries = onSwitchToCountries,
         onBack = onBack,
         bottomContentPadding = bottomContentPadding
     )
@@ -160,7 +156,6 @@ private fun SubscriptionGroupSelectionScreen(
     onScanQrCode: () -> Unit,
     scannedSubscriptionText: String?,
     onScannedSubscriptionTextConsumed: () -> Unit,
-    onSwitchToCountries: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp
 ) {
@@ -411,18 +406,6 @@ private fun SubscriptionGroupSelectionScreen(
                         textAlign = TextAlign.Center
                     )
                 }
-            }
-
-            FloatingActionButton(
-                onClick = onSwitchToCountries,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = bottomContentPadding)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.SwapHoriz,
-                    contentDescription = "切换为按地区分组"
-                )
             }
         }
     }

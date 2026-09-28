@@ -34,10 +34,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.saveable.rememberSaveable
+import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.feature.nodegrouping.ui.NodeGroupingDestination
 import xyz.a202132.app.feature.perappinbound.ui.PerAppInboundScreen
 import xyz.a202132.app.feature.perappinbound.ui.PerAppInboundViewModel
-import xyz.a202132.app.ui.components.FloatingHomeNavigationLayout
+import xyz.a202132.app.ui.components.HomeNavigationLayout
 import xyz.a202132.app.ui.components.HomeDestination
 import xyz.a202132.app.ui.navigation.AppRoute
 import xyz.a202132.app.ui.screens.AccountSettingsScreen
@@ -83,7 +84,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = viewModel()
             val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
-            val nodeGroupingMode by viewModel.nodeGroupingMode.collectAsStateWithLifecycle()
             FireflyTheme(skinSettings = skinSettings) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -212,6 +212,17 @@ class MainActivity : ComponentActivity() {
                                 var selectedDestination by rememberSaveable {
                                     mutableStateOf(HomeDestination.HOME)
                                 }
+                                val onBottomNavigationDestinationSelected:
+                                    (HomeDestination) -> Unit = { destination ->
+                                        when (destination) {
+                                            HomeDestination.NODE_GROUPING ->
+                                                viewModel.selectCountryGrouping()
+                                            HomeDestination.SUBSCRIPTION_GROUPING ->
+                                                viewModel.selectSubscriptionGrouping()
+                                            else -> Unit
+                                        }
+                                        selectedDestination = destination
+                                    }
                                 when (selectedDestination) {
                                     HomeDestination.HOME -> MainScreen(
                                         viewModel = viewModel,
@@ -242,22 +253,25 @@ class MainActivity : ComponentActivity() {
                                         onOpenSkin = { navigateTo(AppRoute.SKIN) },
                                         bottomNavigationDestination =
                                             selectedDestination,
-                                        nodeGroupingMode = nodeGroupingMode,
-                                        onBottomNavigationDestinationSelected = {
-                                            selectedDestination = it
-                                        }
+                                        onBottomNavigationDestinationSelected =
+                                            onBottomNavigationDestinationSelected
                                     )
 
-                                    HomeDestination.NODE_GROUPING ->
-                                        FloatingHomeNavigationLayout(
-                                            selectedDestination = selectedDestination,
-                                            groupingMode = nodeGroupingMode,
-                                            onDestinationSelected = {
-                                                selectedDestination = it
+                                    HomeDestination.NODE_GROUPING,
+                                    HomeDestination.SUBSCRIPTION_GROUPING -> {
+                                        val groupingMode =
+                                            if (selectedDestination == HomeDestination.NODE_GROUPING) {
+                                                NodeGroupingMode.COUNTRY
+                                            } else {
+                                                NodeGroupingMode.SUBSCRIPTION
                                             }
+                                        HomeNavigationLayout(
+                                            selectedDestination = selectedDestination,
+                                            onDestinationSelected =
+                                                onBottomNavigationDestinationSelected
                                         ) {
                                             NodeGroupingDestination(
-                                                groupingMode = nodeGroupingMode,
+                                                groupingMode = groupingMode,
                                                 viewModel = viewModel,
                                                 onCountrySelected = { countryCode ->
                                                     viewModel.selectCountry(countryCode)
@@ -287,23 +301,22 @@ class MainActivity : ComponentActivity() {
                                                 onBack = {
                                                     selectedDestination = HomeDestination.HOME
                                                 },
-                                                bottomContentPadding = 108.dp
+                                                bottomContentPadding = 16.dp
                                             )
                                         }
+                                    }
 
                                     HomeDestination.NAVIGATION ->
-                                        FloatingHomeNavigationLayout(
+                                        HomeNavigationLayout(
                                             selectedDestination = selectedDestination,
-                                            groupingMode = nodeGroupingMode,
-                                            onDestinationSelected = {
-                                                selectedDestination = it
-                                            }
+                                            onDestinationSelected =
+                                                onBottomNavigationDestinationSelected
                                         ) {
                                             WebNavigationScreen(
                                                 onBack = {
                                                     selectedDestination = HomeDestination.HOME
                                                 },
-                                                bottomContentPadding = 108.dp
+                                                bottomContentPadding = 16.dp
                                             )
                                         }
                                 }

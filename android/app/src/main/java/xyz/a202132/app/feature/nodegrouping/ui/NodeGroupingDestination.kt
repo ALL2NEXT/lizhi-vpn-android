@@ -33,9 +33,8 @@ private sealed interface NodeGroupingDetail {
 }
 
 /**
- * 节点分组的统一页面入口。
- *
- * 导航层只需要打开该入口；地区与订阅页面的切换、状态绑定由模块内部维护。
+ * 节点分组的统一页面入口，根据底部导航当前选项显示地区或订阅仓库分组。
+ * 分组详情的页面状态由本模块维护。
  */
 @Composable
 fun NodeGroupingDestination(
@@ -50,20 +49,11 @@ fun NodeGroupingDestination(
     scannedSubscriptionText: String?,
     onScannedSubscriptionTextConsumed: () -> Unit,
     onBack: () -> Unit,
-    bottomContentPadding: Dp = 108.dp
+    bottomContentPadding: Dp = 16.dp
 ) {
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
     val favoriteNodes by viewModel.favoriteNodes.collectAsStateWithLifecycle()
-    var detail by remember { mutableStateOf<NodeGroupingDetail?>(null) }
-
-    val switchToCountries = {
-        detail = null
-        viewModel.selectCountryGrouping()
-    }
-    val switchToSubscriptions = {
-        detail = null
-        viewModel.selectSubscriptionGrouping()
-    }
+    var detail by remember(groupingMode) { mutableStateOf<NodeGroupingDetail?>(null) }
 
     when (val currentDetail = detail) {
         is NodeGroupingDetail.Country -> {
@@ -135,7 +125,6 @@ fun NodeGroupingDestination(
                 onViewCountryDetails = { country ->
                     detail = NodeGroupingDetail.Country(country.code, country.name)
                 },
-                onSwitchToSubscriptions = switchToSubscriptions,
                 onBack = onBack,
                 bottomContentPadding = bottomContentPadding
             )
@@ -171,7 +160,6 @@ fun NodeGroupingDestination(
                 onScanQrCode = onScanQrCode,
                 scannedSubscriptionText = scannedSubscriptionText,
                 onScannedSubscriptionTextConsumed = onScannedSubscriptionTextConsumed,
-                onSwitchToCountries = switchToCountries,
                 onBack = onBack,
                 bottomContentPadding = bottomContentPadding
             )

@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,9 +43,8 @@ internal fun CountryGroupingDestination(
     viewModel: MainViewModel,
     onCountrySelected: (String) -> Unit,
     onViewCountryDetails: (CountryOption) -> Unit,
-    onSwitchToSubscriptions: () -> Unit,
     onBack: () -> Unit,
-    bottomContentPadding: Dp = 108.dp
+    bottomContentPadding: Dp = 16.dp
 ) {
     val countries by viewModel.countryOptions.collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
@@ -58,7 +56,6 @@ internal fun CountryGroupingDestination(
         isLoading = isLoading,
         onCountrySelected = onCountrySelected,
         onViewCountryDetails = onViewCountryDetails,
-        onSwitchToSubscriptions = onSwitchToSubscriptions,
         onBack = onBack,
         bottomContentPadding = bottomContentPadding
     )
@@ -71,7 +68,6 @@ private fun CountryGroupingScreen(
     isLoading: Boolean,
     onCountrySelected: (String) -> Unit,
     onViewCountryDetails: (CountryOption) -> Unit,
-    onSwitchToSubscriptions: () -> Unit,
     onBack: () -> Unit,
     bottomContentPadding: Dp
 ) {
@@ -79,14 +75,6 @@ private fun CountryGroupingScreen(
         title = "按地区分组",
         onBack = onBack,
         showBackNavigation = false,
-        actions = {
-            IconButton(onClick = onSwitchToSubscriptions) {
-                Icon(
-                    imageVector = Icons.Rounded.SwapHoriz,
-                    contentDescription = "切换为按订阅仓库分组"
-                )
-            }
-        },
         contentPadding = PaddingValues(
             start = 20.dp,
             top = 16.dp,

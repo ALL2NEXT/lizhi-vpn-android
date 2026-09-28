@@ -25,7 +25,6 @@ import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.data.model.VpnState
-import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
 import xyz.a202132.app.network.NetworkClient
 import xyz.a202132.app.ui.components.*
 import xyz.a202132.app.ui.dialogs.*
@@ -46,7 +45,6 @@ fun MainScreen(
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     bottomNavigationDestination: HomeDestination,
-    nodeGroupingMode: NodeGroupingMode,
     onBottomNavigationDestinationSelected: (HomeDestination) -> Unit
 ) {
     val context = LocalContext.current
@@ -155,9 +153,8 @@ fun MainScreen(
         },
         gesturesEnabled = true
     ) {
-        FloatingHomeNavigationLayout(
+        HomeNavigationLayout(
             selectedDestination = bottomNavigationDestination,
-            groupingMode = nodeGroupingMode,
             onDestinationSelected = onBottomNavigationDestinationSelected
         ) {
             Scaffold(
@@ -210,9 +207,7 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
-                        .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
-                        .padding(horizontal = 24.dp)
-                        .padding(bottom = 86.dp),
+                        .padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                 Spacer(modifier = Modifier.weight(1f))
