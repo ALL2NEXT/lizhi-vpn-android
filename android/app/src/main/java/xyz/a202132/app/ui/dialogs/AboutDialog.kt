@@ -100,7 +100,6 @@ fun AboutDialog(
             val contentVerticalPadding = if (isLargeScreen) 26.dp else 16.dp
             val iconSize = if (isLargeScreen) 88.dp else 64.dp
             val sectionSpacer = if (isLargeScreen) 24.dp else 14.dp
-            val itemSpacer = if (isLargeScreen) 16.dp else 10.dp
 
             Box(
                 modifier = Modifier
@@ -284,54 +283,6 @@ fun AboutDialog(
                     Spacer(modifier = Modifier.height(sectionSpacer))
 
                     Divider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                    Spacer(modifier = Modifier.height(sectionSpacer))
-
-                    // 免责声明
-                    Text(
-                        text = "免责声明",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "本项目为个人开源作品，与米哈游 (HoYoverse) 无关。本项目不盈利、不接受捐赠。所有涉及的游戏角色名称及设计版权归米哈游所有。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 19.sp,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(itemSpacer))
-
-                    // 免责声明
-                    Text(
-                        text = "Disclaimers",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "This project is an open-source creation and is not related to miHoYo (HoYoverse). This project is non-profit and not for sale. All game character names and design copyrights belong to miHoYo.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 19.sp,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(sectionSpacer))
-
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                    Spacer(modifier = Modifier.height(itemSpacer))
 
                     Spacer(modifier = Modifier.height(sectionSpacer))
 

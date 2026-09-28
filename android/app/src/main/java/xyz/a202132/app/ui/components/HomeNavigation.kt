@@ -96,7 +96,7 @@ fun HomeNavigationBar(
                     selected = selectedDestination == HomeDestination.HOME,
                     selectedIcon = Icons.Rounded.Home,
                     unselectedIcon = Icons.Outlined.Home,
-                    label = "主页",
+                    label = "首页",
                     onClick = { onDestinationSelected(HomeDestination.HOME) }
                 )
                 HomeNavigationItem(
