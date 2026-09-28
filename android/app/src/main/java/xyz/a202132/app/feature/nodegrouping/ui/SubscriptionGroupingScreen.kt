@@ -30,6 +30,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -133,6 +134,69 @@ internal fun SubscriptionGroupingScreen(
         onBack = handleBack,
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
+        actions = {
+            // 个人订阅组详情沿用仓库页的顶部操作栏，只保留添加、编辑和删除。
+            if (canManageNodes) {
+                IconButton(
+                    onClick = {
+                        actionMode = null
+                        nodeUris = ""
+                        addNodeDialogVisible = true
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "添加节点"
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        actionMode = if (actionMode == NodeActionMode.EDIT) {
+                            null
+                        } else {
+                            NodeActionMode.EDIT
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = if (actionMode == NodeActionMode.EDIT) {
+                            "退出编辑节点模式"
+                        } else {
+                            "进入编辑节点模式"
+                        },
+                        tint = if (actionMode == NodeActionMode.EDIT) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        actionMode = if (actionMode == NodeActionMode.DELETE) {
+                            null
+                        } else {
+                            NodeActionMode.DELETE
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = if (actionMode == NodeActionMode.DELETE) {
+                            "退出删除节点模式"
+                        } else {
+                            "进入删除节点模式"
+                        },
+                        tint = if (actionMode == NodeActionMode.DELETE) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            }
+        },
         contentPadding = PaddingValues(
             start = 20.dp,
             top = 16.dp,
@@ -163,50 +227,6 @@ internal fun SubscriptionGroupingScreen(
                 onDeleteNode = { node -> deleteCandidate = node }
             )
 
-            if (canManageNodes) {
-                SideExpandableActionMenu(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = bottomContentPadding),
-                    actions = listOf(
-                        SideMenuAction(Icons.Default.Add, "添加", "添加节点") {
-                            actionMode = null
-                            nodeUris = ""
-                            addNodeDialogVisible = true
-                        },
-                        SideMenuAction(
-                            Icons.Rounded.Edit,
-                            "编辑",
-                            if (actionMode == NodeActionMode.EDIT) {
-                                "退出编辑节点模式"
-                            } else {
-                                "进入编辑节点模式"
-                            }
-                        ) {
-                            actionMode = if (actionMode == NodeActionMode.EDIT) {
-                                null
-                            } else {
-                                NodeActionMode.EDIT
-                            }
-                        },
-                        SideMenuAction(
-                            Icons.Rounded.Delete,
-                            "删除",
-                            if (actionMode == NodeActionMode.DELETE) {
-                                "退出删除节点模式"
-                            } else {
-                                "进入删除节点模式"
-                            }
-                        ) {
-                            actionMode = if (actionMode == NodeActionMode.DELETE) {
-                                null
-                            } else {
-                                NodeActionMode.DELETE
-                            }
-                        }
-                    )
-                )
-            }
         }
     }
 
