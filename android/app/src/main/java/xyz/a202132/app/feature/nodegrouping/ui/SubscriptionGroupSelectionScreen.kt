@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -224,10 +225,86 @@ private fun SubscriptionGroupSelectionScreen(
         onBack = onBack,
         showBackNavigation = false,
         actions = {
-            IconButton(onClick = onSwitchToCountries) {
+            IconButton(
+                onClick = {
+                    groupActionMode = if (groupActionMode == GroupActionMode.UPDATE) {
+                        null
+                    } else {
+                        GroupActionMode.UPDATE
+                    }
+                }
+            ) {
                 Icon(
-                    imageVector = Icons.Rounded.SwapHoriz,
-                    contentDescription = "切换为按地区分组"
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = if (groupActionMode == GroupActionMode.UPDATE) {
+                        "退出更新订阅组模式"
+                    } else {
+                        "进入更新订阅组模式"
+                    },
+                    tint = if (groupActionMode == GroupActionMode.UPDATE) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+            IconButton(
+                onClick = {
+                    groupActionMode = null
+                    groupName = ""
+                    subscriptionInput = ""
+                    addDialogVisible = true
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "添加订阅组"
+                )
+            }
+            IconButton(
+                onClick = {
+                    groupActionMode = if (groupActionMode == GroupActionMode.EDIT) {
+                        null
+                    } else {
+                        GroupActionMode.EDIT
+                    }
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Edit,
+                    contentDescription = if (groupActionMode == GroupActionMode.EDIT) {
+                        "退出编辑分组模式"
+                    } else {
+                        "进入编辑分组模式"
+                    },
+                    tint = if (groupActionMode == GroupActionMode.EDIT) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+            IconButton(
+                onClick = {
+                    groupActionMode = if (groupActionMode == GroupActionMode.DELETE) {
+                        null
+                    } else {
+                        GroupActionMode.DELETE
+                    }
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Delete,
+                    contentDescription = if (groupActionMode == GroupActionMode.DELETE) {
+                        "退出删除分组模式"
+                    } else {
+                        "进入删除分组模式"
+                    },
+                    tint = if (groupActionMode == GroupActionMode.DELETE) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
             }
         },
@@ -336,65 +413,17 @@ private fun SubscriptionGroupSelectionScreen(
                 }
             }
 
-            // 操作栏默认收纳在屏幕侧边，展开后依次显示新增、编辑和删除按钮。
-            SideExpandableActionMenu(
+            FloatingActionButton(
+                onClick = onSwitchToCountries,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = bottomContentPadding),
-                actions = listOf(
-                    SideMenuAction(
-                        icon = Icons.Rounded.Refresh,
-                        label = "更新",
-                        contentDescription = if (groupActionMode == GroupActionMode.UPDATE) {
-                            "退出更新订阅组模式"
-                        } else {
-                            "进入更新订阅组模式"
-                        }
-                    ) {
-                        groupActionMode = if (groupActionMode == GroupActionMode.UPDATE) {
-                            null
-                        } else {
-                            GroupActionMode.UPDATE
-                        }
-                    },
-                    SideMenuAction(Icons.Default.Add, "添加", "添加订阅组") {
-                        groupActionMode = null
-                        groupName = ""
-                        subscriptionInput = ""
-                        addDialogVisible = true
-                    },
-                    SideMenuAction(
-                        Icons.Rounded.Edit,
-                        "编辑",
-                        if (groupActionMode == GroupActionMode.EDIT) {
-                            "退出编辑分组模式"
-                        } else {
-                            "进入编辑分组模式"
-                        }
-                    ) {
-                        groupActionMode = if (groupActionMode == GroupActionMode.EDIT) {
-                            null
-                        } else {
-                            GroupActionMode.EDIT
-                        }
-                    },
-                    SideMenuAction(
-                        Icons.Rounded.Delete,
-                        "删除",
-                        if (groupActionMode == GroupActionMode.DELETE) {
-                            "退出删除分组模式"
-                        } else {
-                            "进入删除分组模式"
-                        }
-                    ) {
-                        groupActionMode = if (groupActionMode == GroupActionMode.DELETE) {
-                            null
-                        } else {
-                            GroupActionMode.DELETE
-                        }
-                    }
+                    .padding(bottom = bottomContentPadding)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.SwapHoriz,
+                    contentDescription = "切换为按地区分组"
                 )
-            )
+            }
         }
     }
 
