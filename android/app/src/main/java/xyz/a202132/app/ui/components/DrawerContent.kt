@@ -1,7 +1,5 @@
 package xyz.a202132.app.ui.components
 
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
@@ -14,23 +12,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.R
 import xyz.a202132.app.data.model.AccountInfo
@@ -54,51 +45,23 @@ fun DrawerContent(
     feedbackUrl: String = "",
     githubUrl: String = "",
     telegramUrl: String = "",
-    accountInfo: AccountInfo? = null,
-    customImagePath: String? = null
+    accountInfo: AccountInfo? = null
 ) {
     var showAboutDialog by remember { mutableStateOf(false) }
-    val customImage by produceState<ImageBitmap?>(
-        initialValue = null,
-        key1 = customImagePath
-    ) {
-        value = withContext(Dispatchers.IO) {
-            customImagePath
-                ?.takeIf { it.isNotBlank() }
-                ?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
-        }
-    }
     
     Column(
         modifier = Modifier
             .fillMaxHeight()
             .width(280.dp)
-            // 全面屏模式下避开状态栏，避免顶部自定义图片被系统状态栏遮挡。
             .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
             .padding(bottom = 24.dp)
     ) {
-        val drawerImage = customImage
-        if (drawerImage != null) {
-            Image(
-                bitmap = drawerImage,
-                contentDescription = "自定义样式图片",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-            )
-        } else {
-            Image(
-                painter = painterResource(id = R.drawable.drawer_wallpaper),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-            )
-        }
-        
-        Divider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 8.dp))
+        UserAccountCard(
+            accountInfo = accountInfo,
+            onClick = onOpenAccountSettings
+        )
+
+        Divider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 8.dp))
         
         Column(
             modifier = Modifier
@@ -161,13 +124,6 @@ fun DrawerContent(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        Divider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(vertical = 8.dp))
-
-        UserAccountCard(
-            accountInfo = accountInfo,
-            onClick = onOpenAccountSettings
-        )
-        
     }
     
     // 关于弹窗

@@ -146,8 +146,7 @@ fun MainScreen(
                     feedbackUrl = backendSettings.feedbackUrl,
                     githubUrl = backendSettings.githubUrl,
                     telegramUrl = backendSettings.telegramUrl,
-                    accountInfo = accountInfo,
-                    customImagePath = skinSettings.customImagePath
+                    accountInfo = accountInfo
                 )
             }
         },
