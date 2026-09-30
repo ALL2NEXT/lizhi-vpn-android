@@ -13,6 +13,7 @@ import xyz.a202132.app.data.model.BandwidthTestTargets
 import xyz.a202132.app.data.model.DnsDomainStrategy
 import xyz.a202132.app.data.model.DnsSettings
 import xyz.a202132.app.data.model.IPv6RoutingMode
+import xyz.a202132.app.data.model.HomeNavigationStyle
 import xyz.a202132.app.data.model.LanInboundSettings
 import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
@@ -1290,6 +1291,9 @@ class SettingsRepository(private val context: Context) {
                                 themeMode = SkinThemeMode.fromStorage(
                                     item.optString("themeMode").takeIf { it.isNotBlank() }
                                 ),
+                                navigationStyle = HomeNavigationStyle.fromStorage(
+                                    item.optString("navigationStyle").takeIf { it.isNotBlank() }
+                                ),
                                 monetEnabled = item.optBoolean("monetEnabled", false),
                                 customImagePath = item.optString("customImagePath")
                                     .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
@@ -1326,6 +1330,7 @@ class SettingsRepository(private val context: Context) {
                         put("appIconPresetId", scheme.appIconPresetId)
                         put("baseColorArgb", normalizeSkinColor(scheme.baseColorArgb))
                         put("themeMode", scheme.themeMode.storageName)
+                        put("navigationStyle", scheme.navigationStyle.storageName)
                         put("monetEnabled", scheme.monetEnabled)
                         scheme.customImagePath?.let { put("customImagePath", it) }
                         scheme.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }

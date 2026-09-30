@@ -48,6 +48,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.a202132.app.data.model.SkinScheme
+import xyz.a202132.app.data.model.HomeNavigationStyle
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.platform.LauncherIdentityPreset
 import xyz.a202132.app.platform.LauncherIdentityPresets
@@ -372,6 +373,49 @@ fun SkinSchemeEditorScreen(
                                     modifier = buttonModifier
                                 ) {
                                     Text(mode.displayName())
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Text(
+                        text = "导航栏样式",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "经典、胶囊式或原生式；当前主题会立即生效。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        HomeNavigationStyle.entries.forEach { style ->
+                            val buttonModifier = Modifier.weight(1f)
+                            if (scheme.navigationStyle == style) {
+                                Button(
+                                    onClick = {
+                                        viewModel.upsertSkinScheme(
+                                            scheme.copy(navigationStyle = style)
+                                        )
+                                    },
+                                    modifier = buttonModifier
+                                ) {
+                                    Text(style.displayName, fontSize = 12.sp, maxLines = 1)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.upsertSkinScheme(
+                                            scheme.copy(navigationStyle = style)
+                                        )
+                                    },
+                                    modifier = buttonModifier
+                                ) {
+                                    Text(style.displayName, fontSize = 12.sp, maxLines = 1)
                                 }
                             }
                         }

@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.ProxyMode
+import xyz.a202132.app.data.model.HomeNavigationStyle
 import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.network.NetworkClient
@@ -46,6 +47,7 @@ fun MainScreen(
     onOpenOutboundAfter: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
+    navigationStyle: HomeNavigationStyle = HomeNavigationStyle.CLASSIC,
     bottomNavigationDestination: HomeDestination,
     onBottomNavigationDestinationSelected: (HomeDestination) -> Unit
 ) {
@@ -159,7 +161,8 @@ fun MainScreen(
     ) {
         HomeNavigationLayout(
             selectedDestination = bottomNavigationDestination,
-            onDestinationSelected = onBottomNavigationDestinationSelected
+            onDestinationSelected = onBottomNavigationDestinationSelected,
+            navigationStyle = navigationStyle
         ) {
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),

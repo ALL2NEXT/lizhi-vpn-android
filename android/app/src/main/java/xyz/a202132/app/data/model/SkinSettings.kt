@@ -13,6 +13,8 @@ data class SkinScheme(
     val baseColorArgb: Long = SkinSettings.DEFAULT_BASE_COLOR_ARGB,
     /** 主题模式，默认跟随系统。 */
     val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,
+    /** 主题方案的底部导航栏样式。 */
+    val navigationStyle: HomeNavigationStyle = HomeNavigationStyle.CLASSIC,
     /** Android 12 及以上使用系统壁纸生成的动态配色，低版本回退到基础颜色。 */
     val monetEnabled: Boolean = false,
     /** 旧版自定义启动器图标路径，保留用于读取旧配置。 */

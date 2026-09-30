@@ -259,6 +259,7 @@ class MainActivity : ComponentActivity() {
                                             navigateTo(AppRoute.ACCOUNT_SETTINGS)
                                         },
                                         onOpenSkin = { navigateTo(AppRoute.SKIN) },
+                                        navigationStyle = skinSettings.activeScheme.navigationStyle,
                                         bottomNavigationDestination =
                                             selectedDestination,
                                         onBottomNavigationDestinationSelected =
@@ -276,7 +277,8 @@ class MainActivity : ComponentActivity() {
                                         HomeNavigationLayout(
                                             selectedDestination = selectedDestination,
                                             onDestinationSelected =
-                                                onBottomNavigationDestinationSelected
+                                                onBottomNavigationDestinationSelected,
+                                            navigationStyle = skinSettings.activeScheme.navigationStyle
                                         ) {
                                             NodeGroupingDestination(
                                                 groupingMode = groupingMode,
@@ -318,7 +320,8 @@ class MainActivity : ComponentActivity() {
                                         HomeNavigationLayout(
                                             selectedDestination = selectedDestination,
                                             onDestinationSelected =
-                                                onBottomNavigationDestinationSelected
+                                                onBottomNavigationDestinationSelected,
+                                            navigationStyle = skinSettings.activeScheme.navigationStyle
                                         ) {
                                             WebNavigationScreen(
                                                 onBack = {
