@@ -38,7 +38,6 @@
 
 ```text
 android/    # Android 客户端（独立 Gradle 工程）
-windows/    # Windows 客户端（独立 Compose Desktop 工程）
 backend/    # Cloudflare Worker 后台
 ```
 
@@ -141,7 +140,7 @@ Android 不再依赖 `libbox.aar`。项目通过根目录下的 `core/sing-box` 
 git submodule update --init --recursive
 ```
 
-源码构建需要 Go、JDK 17、Android SDK 和 NDK 28.0.13004108。协议扩展或核心修改直接在根目录 `core/sing-box` 中进行，重新构建 Android 或 Windows 项目即可生效。
+源码构建需要 Go、JDK 17、Android SDK 和 NDK 28.0.13004108。协议扩展或核心修改直接在根目录 `core/sing-box` 中进行，重新构建 Android 项目即可生效。
 
 项目还依赖 [SQLCipher for Android](https://github.com/niceyun/sqlcipher-android)（`net.zetetic:sqlcipher-android:4.13.0`）用于本地数据库加密，Gradle 会自动下载，无需手动配置。
 
@@ -296,8 +295,8 @@ android/app/src/main/java/xyz/a202132/app/
 ### 资源文件结构
 
 ```
-core/sing-box                       # sing-box 源码子模块（Android/Windows 构建输入）
-core/xray-core                      # Xray-core 源码子模块（Android/Windows 构建输入）
+core/sing-box                       # sing-box 源码子模块（Android 构建输入）
+core/xray-core                      # Xray-core 源码子模块（Android 构建输入）
 android/app/build/generated/      # Gradle 生成的 Android 核心运行器（不提交）
 android/app/src/main/
 ├── assets/
