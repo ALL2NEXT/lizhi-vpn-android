@@ -35,7 +35,7 @@ fun DrawerContent(
     onOpenPerAppInbound: () -> Unit = {},
     onOpenInbound: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
-    onOpenOutboundAfter: () -> Unit = {},
+    onOpenSpeedTestSchemes: () -> Unit = {},
     onOpenCoreRouting: () -> Unit = {},
     onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
@@ -108,7 +108,7 @@ fun DrawerContent(
             DrawerMenuItem(
                 icon = Icons.Outlined.FlashOn,
                 title = "测试",
-                onClick = onOpenOutboundAfter
+                onClick = onOpenSpeedTestSchemes
             )
 
             DrawerMenuItem(

@@ -7,7 +7,6 @@ object AppRoute {
     const val INBOUND = "inbound"
     const val CORE_ROUTING = "core_routing"
     const val OUTBOUND = "outbound"
-    const val OUTBOUND_AFTER = "outbound_after"
     const val SPEED_TEST_SCHEMES = "speed_test_schemes"
     const val SPEED_TEST_SCHEME_EDITOR = "speed_test_scheme_editor/{schemeId}"
     const val ACCOUNT_SETTINGS = "account_settings"
