@@ -572,15 +572,33 @@ async function pushSection(section) {
   }
 
   const form = formState();
-  if (section === 'app-settings') {
+  if (section === 'navigation-page') {
     const validationError = validateWebNavigationGroups(form.settings.webNavigationGroups);
     if (validationError) return show(validationError, true);
   }
   const settings = section === 'app-settings'
     ? Object.assign({}, form.settings, {
+      webNavigationGroups: currentState.settings.webNavigationGroups,
       registrationEnabled: currentState.settings.registrationEnabled,
-      requireAdminRegistrationCode: currentState.settings.requireAdminRegistrationCode
+      requireAdminRegistrationCode: currentState.settings.requireAdminRegistrationCode,
+      websiteUrl: currentState.settings.websiteUrl,
+      feedbackEmail: currentState.settings.feedbackEmail,
+      feedbackUrl: currentState.settings.feedbackUrl,
+      githubUrl: currentState.settings.githubUrl,
+      telegramUrl: currentState.settings.telegramUrl
     })
+    : section === 'navigation-page'
+      ? Object.assign({}, currentState.settings, {
+        webNavigationGroups: form.settings.webNavigationGroups
+      })
+    : section === 'about-page'
+      ? Object.assign({}, currentState.settings, {
+        websiteUrl: form.settings.websiteUrl,
+        feedbackEmail: form.settings.feedbackEmail,
+        feedbackUrl: form.settings.feedbackUrl,
+        githubUrl: form.settings.githubUrl,
+        telegramUrl: form.settings.telegramUrl
+      })
     : section === 'registration-control'
       ? Object.assign({}, currentState.settings, {
         registrationEnabled: form.settings.registrationEnabled,
@@ -595,7 +613,7 @@ async function pushSection(section) {
     subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,
     settings: settings,
     notice: section === 'notice' ? form.notice : currentState.notice,
-    appUpdate: section === 'app-update' ? form.appUpdate : currentState.appUpdate
+    appUpdate: section === 'about-page' || section === 'app-update' ? form.appUpdate : currentState.appUpdate
   };
   const response = await fetch(ADMIN_API_BASE + '/state', {
     method: 'PUT',
