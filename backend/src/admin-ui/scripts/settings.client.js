@@ -107,12 +107,150 @@ function updateSourceMode(row) {
     });
   });
 }
+
+// 后台用可视化表单维护导航配置，分组与网站顺序对应客户端显示顺序。
+function addWebNavigationGroup(group) {
+  group = group || {};
+  const row = document.createElement('section');
+  row.className = 'web-nav-group';
+  row.innerHTML = '<div class="web-nav-group-heading">' +
+    '<label class="web-nav-group-name">分组名称<input data-field="title" type="text" placeholder="例如：国内测速"></label>' +
+    '<div class="web-nav-controls" role="group" aria-label="分组排序和删除操作">' +
+      '<button class="secondary" type="button" data-action="group-up" aria-label="上移分组" title="上移分组">↑</button>' +
+      '<button class="secondary" type="button" data-action="group-down" aria-label="下移分组" title="下移分组">↓</button>' +
+      '<button class="danger" type="button" data-action="group-delete">删除分组</button>' +
+    '</div>' +
+  '</div>' +
+  '<div class="web-nav-items"></div>' +
+  '<button class="secondary web-nav-add-site" type="button" data-action="add-site">添加网站</button>';
+  row.querySelector('[data-field="title"]').value = String(group.title || '');
+  const container = el('webNavigationGroups');
+  container.appendChild(row);
+  const items = Array.isArray(group.items) ? group.items : [{}];
+  items.forEach(function(item) { addWebNavigationItem(row, item); });
+  row.querySelector('[data-action="group-up"]').onclick = function() {
+    moveWebNavigationRow(row, -1);
+  };
+  row.querySelector('[data-action="group-down"]').onclick = function() {
+    moveWebNavigationRow(row, 1);
+  };
+  row.querySelector('[data-action="group-delete"]').onclick = function() {
+    row.remove();
+    updateWebNavigationControls();
+  };
+  row.querySelector('[data-action="add-site"]').onclick = function() {
+    addWebNavigationItem(row, {});
+  };
+  updateWebNavigationControls();
+}
+
+function addWebNavigationItem(groupRow, item) {
+  item = item || {};
+  const row = document.createElement('div');
+  row.className = 'web-nav-item';
+  row.innerHTML = '<label>网站名称<input data-field="title" type="text" placeholder="例如：中科大测速"></label>' +
+    '<label>网站网址<input data-field="url" type="url" placeholder="https://example.com"></label>' +
+    '<div class="web-nav-item-controls" role="group" aria-label="网站排序和删除操作">' +
+      '<button class="secondary" type="button" data-action="item-up" aria-label="上移网站" title="上移网站">↑</button>' +
+      '<button class="secondary" type="button" data-action="item-down" aria-label="下移网站" title="下移网站">↓</button>' +
+      '<button class="danger" type="button" data-action="item-delete">删除</button>' +
+    '</div>';
+  row.querySelector('[data-field="title"]').value = String(item.title || '');
+  row.querySelector('[data-field="url"]').value = String(item.url || '');
+  groupRow.querySelector('.web-nav-items').appendChild(row);
+  row.querySelector('[data-action="item-up"]').onclick = function() {
+    moveWebNavigationRow(row, -1);
+  };
+  row.querySelector('[data-action="item-down"]').onclick = function() {
+    moveWebNavigationRow(row, 1);
+  };
+  row.querySelector('[data-action="item-delete"]').onclick = function() {
+    row.remove();
+    updateWebNavigationControls();
+  };
+  updateWebNavigationControls();
+}
+
+function moveWebNavigationRow(row, direction) {
+  const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+  if (!sibling) return;
+  if (direction < 0) row.parentElement.insertBefore(row, sibling);
+  else row.parentElement.insertBefore(sibling, row);
+  updateWebNavigationControls();
+}
+
+function updateWebNavigationControls() {
+  const groups = Array.from(el('webNavigationGroups').children);
+  groups.forEach(function(group, groupIndex) {
+    const groupUp = group.querySelector('[data-action="group-up"]');
+    const groupDown = group.querySelector('[data-action="group-down"]');
+    if (groupUp) groupUp.disabled = groupIndex === 0;
+    if (groupDown) groupDown.disabled = groupIndex === groups.length - 1;
+    const items = Array.from(group.querySelector('.web-nav-items').children);
+    items.forEach(function(item, itemIndex) {
+      const itemUp = item.querySelector('[data-action="item-up"]');
+      const itemDown = item.querySelector('[data-action="item-down"]');
+      if (itemUp) itemUp.disabled = itemIndex === 0;
+      if (itemDown) itemDown.disabled = itemIndex === items.length - 1;
+    });
+  });
+}
+
+function readWebNavigationGroups() {
+  return Array.from(el('webNavigationGroups').children).map(function(group) {
+    return {
+      title: group.querySelector('[data-field="title"]').value.trim(),
+      items: Array.from(group.querySelector('.web-nav-items').children).map(function(item) {
+        return {
+          title: item.querySelector('[data-field="title"]').value.trim(),
+          url: item.querySelector('[data-field="url"]').value.trim()
+        };
+      })
+    };
+  });
+}
+
+// 推送前校验必填项和网址格式，避免错误配置下发到客户端。
+function validateWebNavigationGroups(groups) {
+  if (groups.length > 50) return '导航网站分组最多 50 个';
+  let itemCount = 0;
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const group = groups[groupIndex];
+    if (!group.title || group.title.length > 60) {
+      return '第 ' + (groupIndex + 1) + ' 个分组请填写名称（最多 60 个字符）';
+    }
+    for (let itemIndex = 0; itemIndex < group.items.length; itemIndex += 1) {
+      const item = group.items[itemIndex];
+      if (!item.title || item.title.length > 80) {
+        return '“' + group.title + '”中的第 ' + (itemIndex + 1) + ' 个网站请填写名称（最多 80 个字符）';
+      }
+      if (!item.url || item.url.length > 2048) {
+        return '请填写“' + item.title + '”的网址（最多 2048 个字符）';
+      }
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(item.url);
+      } catch (_) {
+        return '“' + item.title + '”的网址格式无效';
+      }
+      if (!['http:', 'https:'].includes(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password) {
+        return '“' + item.title + '”的网址需使用 http:// 或 https://，且不能包含账号密码';
+      }
+      itemCount += 1;
+      if (itemCount > 250) return '导航网站最多 250 个';
+    }
+  }
+  return '';
+}
+
 function fillState(state) {
   currentState = state || {};
   el('subscriptionRows').innerHTML = '';
   (currentState.subscriptions || []).forEach(addSource);
   if (!currentState.subscriptions || currentState.subscriptions.length === 0) addSource();
   const settings = currentState.settings || {};
+  el('webNavigationGroups').innerHTML = '';
+  (Array.isArray(settings.webNavigationGroups) ? settings.webNavigationGroups : []).forEach(addWebNavigationGroup);
   setValue('websiteUrl', settings.websiteUrl);
   setValue('feedbackEmail', settings.feedbackEmail);
   setValue('feedbackUrl', settings.feedbackUrl);
@@ -258,6 +396,7 @@ function formState() {
     subscriptions: subscriptions,
     settings: {
       websiteUrl: value('websiteUrl'),
+      webNavigationGroups: readWebNavigationGroups(),
       feedbackEmail: value('feedbackEmail'),
        feedbackUrl: value('feedbackUrl'),
        githubUrl: value('githubUrl'),
@@ -328,6 +467,10 @@ async function pushSection(section) {
   }
 
   const form = formState();
+  if (section === 'app-settings') {
+    const validationError = validateWebNavigationGroups(form.settings.webNavigationGroups);
+    if (validationError) return show(validationError, true);
+  }
   const settings = section === 'app-settings'
     ? Object.assign({}, form.settings, {
       registrationEnabled: currentState.settings.registrationEnabled,

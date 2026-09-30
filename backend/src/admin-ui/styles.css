@@ -106,6 +106,20 @@
     .settings-sections { display: grid; gap: 14px; }
     .settings-section { padding: 14px; background: #172033; border: 1px solid #374151; border-radius: 10px; }
     .settings-section-title { margin: 0 0 6px; color: #f8fafc; font-size: 16px; }
+    .web-nav-groups { display: grid; gap: 12px; margin: 12px 0; }
+    .web-nav-group { min-width: 0; padding: 14px; background: #111827; border: 1px solid #4b5563; border-radius: 10px; }
+    .web-nav-group-heading { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #374151; }
+    .web-nav-group-name { display: flex; flex: 1 1 240px; flex-direction: column; gap: 6px; min-width: 0; color: #aab4c5; font-size: 12px; }
+    .web-nav-group-name input { min-height: 38px; }
+    .web-nav-controls, .web-nav-item-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .web-nav-controls button, .web-nav-item-controls button { min-width: 38px; margin: 0; padding: 8px 10px; }
+    .web-nav-controls .danger, .web-nav-item-controls .danger { min-width: auto; }
+    .web-nav-items { display: grid; gap: 10px; }
+    .web-nav-item { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(220px, 1.5fr) auto; align-items: end; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #374151; }
+    .web-nav-item label { display: flex; flex-direction: column; gap: 6px; color: #aab4c5; font-size: 12px; }
+    .web-nav-item-controls { padding-bottom: 1px; }
+    .web-nav-add-site { margin: 12px 0 0; }
+    .web-nav-empty { padding: 8px 0; color: #94a3b8; font-size: 13px; }
      .settings-section-description { margin: 0 0 12px; color: #94a3b8; font-size: 12px; }
      .settings-section .grid { margin-top: 0; }
      .debug-interface-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
@@ -301,6 +315,8 @@
        .source-row-header { align-items: flex-start; flex-direction: column; }
        .source-row-heading { width: 100%; grid-template-columns: 1fr; }
        .source-row-controls { width: 100%; justify-content: flex-start; }
+       .web-nav-group-heading { align-items: stretch; flex-direction: column; }
+       .web-nav-item { grid-template-columns: 1fr; }
        .debug-interface-url-row { align-items: stretch; flex-direction: column; }
        .device-relation-detail-grid { grid-template-columns: 1fr; }
      }

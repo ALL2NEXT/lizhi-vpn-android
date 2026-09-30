@@ -155,8 +155,15 @@ export function normalizeSettings(value, subscriptions = []) {
     Object.prototype.hasOwnProperty.call(settings, "registrationEnabled") ||
     Object.prototype.hasOwnProperty.call(settings, "formalRegistrationEnabled");
   const timeout = Number(settings.nodeRequestTimeoutMs);
+  const webNavigationGroups = settings.webNavigationGroups == null
+    ? DEFAULT_STATE.settings.webNavigationGroups.map((group) => ({
+      title: group.title,
+      items: group.items.map((item) => ({ ...item })),
+    }))
+    : normalizeWebNavigationGroups(settings.webNavigationGroups);
   return {
     websiteUrl: cleanText(settings.websiteUrl),
+    webNavigationGroups,
     feedbackEmail: cleanText(settings.feedbackEmail),
     feedbackUrl: cleanText(settings.feedbackUrl),
     githubUrl: cleanText(settings.githubUrl),
@@ -174,6 +181,49 @@ export function normalizeSettings(value, subscriptions = []) {
     ),
     debugInterface: normalizeDebugInterface(settings.debugInterface, subscriptions),
   };
+}
+
+function normalizeWebNavigationGroups(value) {
+  if (!Array.isArray(value) || value.length > 50) {
+    throw new Error("invalid_web_navigation_groups");
+  }
+
+  let itemCount = 0;
+  return value.map((rawGroup) => {
+    if (!rawGroup || typeof rawGroup !== "object" || Array.isArray(rawGroup)) {
+      throw new Error("invalid_web_navigation_group");
+    }
+    const title = cleanText(rawGroup.title);
+    if (!title || title.length > 60 || !Array.isArray(rawGroup.items)) {
+      throw new Error("invalid_web_navigation_group");
+    }
+
+    const items = rawGroup.items.map((rawItem) => {
+      if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) {
+        throw new Error("invalid_web_navigation_item");
+      }
+      const itemTitle = cleanText(rawItem.title);
+      const url = cleanText(rawItem.url);
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        throw new Error("invalid_web_navigation_url");
+      }
+      if (
+        !itemTitle || itemTitle.length > 80 || url.length > 2048 ||
+        !["http:", "https:"].includes(parsedUrl.protocol) ||
+        parsedUrl.username || parsedUrl.password
+      ) {
+        throw new Error("invalid_web_navigation_item");
+      }
+      itemCount += 1;
+      if (itemCount > 250) throw new Error("too_many_web_navigation_items");
+      return { title: itemTitle, url };
+    });
+
+    return { title, items };
+  });
 }
 
 export function publicClientSettings(settings) {

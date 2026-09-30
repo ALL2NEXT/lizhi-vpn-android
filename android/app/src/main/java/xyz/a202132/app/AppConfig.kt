@@ -121,9 +121,5 @@ object AppConfig {
     // Bandwidth test
     const val SPEED_TEST_DOWNLOAD_URL = BandwidthTestTargets.DEFAULT_URL
     const val SPEED_TEST_UPLOAD_URL = "https://speed.cloudflare.com/__up"
-    const val USTC_SPEED_TEST_URL = "https://test.ustc.edu.cn/"
-    const val NJU_SPEED_TEST_URL = "https://test.nju.edu.cn/"
-    const val NETFLIX_SPEED_TEST_URL = "https://fast.com/"
-    const val GOOGLE_SPEED_TEST_URL = "https://fiber.google.com/speedtest/"
     const val AUTO_TEST_BANDWIDTH_DURATION_MS = 3000L // 单次带宽测试时长（毫秒）
 }

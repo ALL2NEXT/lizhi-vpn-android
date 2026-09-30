@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,35 +46,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import xyz.a202132.app.AppConfig
+import xyz.a202132.app.data.model.BackendWebNavigationGroup
+import xyz.a202132.app.data.model.BackendWebNavigationItem
 import xyz.a202132.app.network.NetworkClient
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-
-private data class WebNavigationItem(
-    val title: String,
-    val url: String
-)
-
-private val WEB_NAVIGATION_ITEMS = listOf(
-    WebNavigationItem(
-        title = "中科大测速",
-        url = AppConfig.USTC_SPEED_TEST_URL
-    ),
-    WebNavigationItem(
-        title = "南大测速",
-        url = AppConfig.NJU_SPEED_TEST_URL
-    ),
-    WebNavigationItem(
-        title = "奈飞测速",
-        url = AppConfig.NETFLIX_SPEED_TEST_URL
-    ),
-    WebNavigationItem(
-        title = "Google 测速",
-        url = AppConfig.GOOGLE_SPEED_TEST_URL
-    )
-)
 
 private val faviconClient: OkHttpClient by lazy {
     NetworkClient.withUserAgent(OkHttpClient.Builder())
@@ -87,6 +65,7 @@ private val faviconCache = ConcurrentHashMap<String, Bitmap>()
 
 @Composable
 fun WebNavigationScreen(
+    websiteGroups: List<BackendWebNavigationGroup>,
     onBack: () -> Unit,
     bottomContentPadding: Dp = 16.dp
 ) {
@@ -94,7 +73,7 @@ fun WebNavigationScreen(
 
     AppScreenScaffold(
         title = "导航",
-        subtitle = "常用测速网站",
+        subtitle = "按类别整理的常用网站",
         onBack = onBack,
         showBackNavigation = false,
         contentPadding = PaddingValues(
@@ -105,21 +84,53 @@ fun WebNavigationScreen(
         ),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 72.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = bottomContentPadding),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(
-                items = WEB_NAVIGATION_ITEMS,
-                key = WebNavigationItem::url
-            ) { item ->
-                WebNavigationCard(
-                    item = item,
-                    onClick = { openWebsite(context, item.url) }
+        val visibleGroups = websiteGroups.filter { group ->
+            group.title.isNotBlank() && group.items.isNotEmpty()
+        }
+        if (visibleGroups.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(top = 24.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Text(
+                    text = "暂无导航网站配置",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp
                 )
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 72.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = bottomContentPadding),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                visibleGroups.forEachIndexed { groupIndex, group ->
+                    item(
+                        key = "group:$groupIndex:${group.title}",
+                        span = { GridItemSpan(maxLineSpan) }
+                    ) {
+                        Text(
+                            text = group.title,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = if (groupIndex == 0) 0.dp else 8.dp, bottom = 2.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    items(
+                        items = group.items,
+                        key = { item -> "$groupIndex:${item.url}" }
+                    ) { item ->
+                        WebNavigationCard(
+                            item = item,
+                            onClick = { openWebsite(context, item.url) }
+                        )
+                    }
+                }
             }
         }
     }
@@ -127,7 +138,7 @@ fun WebNavigationScreen(
 
 @Composable
 private fun WebNavigationCard(
-    item: WebNavigationItem,
+    item: BackendWebNavigationItem,
     onClick: () -> Unit
 ) {
     Surface(
@@ -162,7 +173,7 @@ private fun WebNavigationCard(
 
 @Composable
 private fun WebsiteFavicon(
-    item: WebNavigationItem,
+    item: BackendWebNavigationItem,
     modifier: Modifier = Modifier
 ) {
     val bitmap by produceState<Bitmap?>(initialValue = null, key1 = item.url) {

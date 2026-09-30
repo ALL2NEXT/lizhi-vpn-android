@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = viewModel()
             val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
+            val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
             LaunchedEffect(skinSettings.activeScheme.appIconPresetId) {
                 LauncherIdentityManager.apply(
                     this@MainActivity,
@@ -324,6 +325,7 @@ class MainActivity : ComponentActivity() {
                                             navigationStyle = skinSettings.activeScheme.navigationStyle
                                         ) {
                                             WebNavigationScreen(
+                                                websiteGroups = backendSettings.webNavigationGroups,
                                                 onBack = {
                                                     selectedDestination = HomeDestination.HOME
                                                 },
