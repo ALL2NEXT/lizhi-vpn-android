@@ -1122,6 +1122,7 @@ class SettingsRepository(private val context: Context) {
                                         tcpingEnabled = item.optBoolean("tcpingEnabled", true),
                                         urlTestEnabled = item.optBoolean("urlTestEnabled", true),
                                         bandwidthEnabled = item.optBoolean("bandwidthEnabled", true),
+                                        unlockTestsEnabled = item.optBoolean("unlockTestsEnabled", false),
                                         unlockTestIds = buildSet {
                                             item.optJSONArray("unlockTestIds")?.let { tests ->
                                                 for (testIndex in 0 until tests.length()) {
@@ -1225,6 +1226,7 @@ class SettingsRepository(private val context: Context) {
                     put("tcpingEnabled", normalized.tcpingEnabled)
                     put("urlTestEnabled", normalized.urlTestEnabled)
                     put("bandwidthEnabled", normalized.bandwidthEnabled)
+                    put("unlockTestsEnabled", normalized.unlockTestsEnabled)
                     put("unlockTestIds", JSONArray().apply {
                         normalized.unlockTestIds.forEach(::put)
                     })

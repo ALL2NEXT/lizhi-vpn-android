@@ -28,6 +28,8 @@ data class SpeedTestScheme(
     val tcpingEnabled: Boolean = true,
     val urlTestEnabled: Boolean = true,
     val bandwidthEnabled: Boolean = false,
+    /** 第四步解锁检测的总开关。 */
+    val unlockTestsEnabled: Boolean = false,
     /** 第四步要在 VPN 连接后执行的流媒体与 AI 解锁检测项目。 */
     val unlockTestIds: Set<String> = emptySet(),
     val tcpingPercent: Int = 100,

@@ -66,6 +66,9 @@ fun SpeedTestSchemeEditorScreen(
     var tcpingEnabled by remember(scheme.id, scheme.tcpingEnabled) { mutableStateOf(scheme.tcpingEnabled) }
     var urlTestEnabled by remember(scheme.id, scheme.urlTestEnabled) { mutableStateOf(scheme.urlTestEnabled) }
     var bandwidthEnabled by remember(scheme.id, scheme.bandwidthEnabled) { mutableStateOf(scheme.bandwidthEnabled) }
+    var unlockTestsEnabled by remember(scheme.id, scheme.unlockTestsEnabled) {
+        mutableStateOf(scheme.unlockTestsEnabled)
+    }
     var unlockTestIds by remember(scheme.id, scheme.unlockTestIds) {
         mutableStateOf(scheme.unlockTestIds)
     }
@@ -186,7 +189,7 @@ fun SpeedTestSchemeEditorScreen(
             }
 
             SchemeCard(
-                title = "1. TCPing",
+                title = "1. TCPing（可达性测试）",
                 enabled = tcpingEnabled,
                 onEnabledChange = { tcpingEnabled = it }
             ) {
@@ -196,7 +199,7 @@ fun SpeedTestSchemeEditorScreen(
             }
 
             SchemeCard(
-                title = "2. 204 URL",
+                title = "2. 204 URL（连通性测试）",
                 enabled = urlTestEnabled,
                 onEnabledChange = { urlTestEnabled = it }
             ) {
@@ -266,7 +269,11 @@ fun SpeedTestSchemeEditorScreen(
                 )
             }
 
-            SchemeCard(title = "4. 流媒体与 AI 解锁检测") {
+            SchemeCard(
+                title = "4. 流媒体与 AI 解锁检测",
+                enabled = unlockTestsEnabled,
+                onEnabledChange = { unlockTestsEnabled = it }
+            ) {
                 Text(
                     "完成前面的节点筛选并连接后，通过当前节点检测所选服务。",
                     fontSize = 12.sp,
@@ -285,7 +292,7 @@ fun SpeedTestSchemeEditorScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable {
+                                        .clickable(enabled = unlockTestsEnabled) {
                                             unlockTestIds = if (checked) {
                                                 unlockTestIds - definition.id
                                             } else {
@@ -296,6 +303,7 @@ fun SpeedTestSchemeEditorScreen(
                                 ) {
                                     Checkbox(
                                         checked = checked,
+                                        enabled = unlockTestsEnabled,
                                         onCheckedChange = { selected ->
                                             unlockTestIds = if (selected) {
                                                 unlockTestIds + definition.id
@@ -335,6 +343,7 @@ fun SpeedTestSchemeEditorScreen(
                                 tcpingEnabled = tcpingEnabled,
                                 urlTestEnabled = urlTestEnabled,
                                 bandwidthEnabled = bandwidthEnabled,
+                                unlockTestsEnabled = unlockTestsEnabled,
                                 unlockTestIds = unlockTestIds,
                                 tcpingPercent = tcpingPercent.toIntOrNull() ?: scheme.tcpingPercent,
                                 urlTestPercent = urlPercent.toIntOrNull() ?: scheme.urlTestPercent,

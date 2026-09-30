@@ -572,9 +572,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _error.value = "测速方案不存在"
                     return@launch
                 }
+            val shouldRunUnlockTests =
+                scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()
             _unlockTestState.value = UnlockTestUiState()
             if (!scheme.tcpingEnabled && !scheme.urlTestEnabled && !scheme.bandwidthEnabled &&
-                scheme.unlockTestIds.isEmpty()
+                !shouldRunUnlockTests
             ) {
                 // 三个测速阶段都关闭时按普通连接处理，不启动测速流程。
                 startSelectedOrFirstConnection()
@@ -713,7 +715,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 settingsRepository.setSelectedNodeId(bestNode.id)
                 Log.i(tag, "Speed test scheme selected node: ${bestNode.getDisplayName()}")
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
-                if (scheme.unlockTestIds.isNotEmpty()) {
+                if (shouldRunUnlockTests) {
                     // 连接阶段结束后才能通过当前 VPN 的 SOCKS 入口执行解锁检测。
                     _isTesting.value = false
                     runUnlockTests(scheme.unlockTestIds)
