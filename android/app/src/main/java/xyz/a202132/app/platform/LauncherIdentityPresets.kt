@@ -1,22 +1,20 @@
 package xyz.a202132.app.platform
 
+import xyz.a202132.app.R
+
 data class LauncherIdentityPreset(
     val id: String,
     val displayName: String,
-    val iconDescription: String,
+    val previewIconResource: Int,
     val aliasName: String
 )
 
 object LauncherIdentityPresets {
+    // 仅保留前三种名称和图标组合，供主题设置与桌面入口共用。
     val all = listOf(
-        LauncherIdentityPreset("android", "Firefly", "Android 机器人", "LauncherAliasAndroid"),
-        LauncherIdentityPreset("shield", "流萤", "盾牌", "LauncherAliasShield"),
-        LauncherIdentityPreset("bolt", "星桥", "闪电", "LauncherAliasBolt"),
-        LauncherIdentityPreset("cloud", "云舟", "云朵", "LauncherAliasCloud"),
-        LauncherIdentityPreset("public", "极光", "地球", "LauncherAliasPublic"),
-        LauncherIdentityPreset("rocket", "蓝鲸", "火箭", "LauncherAliasRocket"),
-        LauncherIdentityPreset("wifi", "轻舟", "Wi-Fi", "LauncherAliasWifi"),
-        LauncherIdentityPreset("hub", "夜航", "节点", "LauncherAliasHub")
+        LauncherIdentityPreset("android", "Firefly", R.mipmap.ic_launcher, "LauncherAliasAndroid"),
+        LauncherIdentityPreset("shield", "流萤", R.mipmap.ic_launcher_shield, "LauncherAliasShield"),
+        LauncherIdentityPreset("bolt", "星桥", R.mipmap.ic_launcher_bolt, "LauncherAliasBolt")
     )
 
     fun find(id: String): LauncherIdentityPreset =

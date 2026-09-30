@@ -2,6 +2,7 @@ package xyz.a202132.app.ui.screens
 
 import android.net.Uri
 import android.os.Build
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -289,56 +291,58 @@ fun SkinSchemeEditorScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "启动器名称与图标",
+                        text = "名称与图标",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "名称和图标采用内置组合。图标只会显示在手机启动器，不会显示在应用界面。",
+                        text = "选择一个组合，预览布局与手机主页图标一致。",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedButton(
-                        onClick = {
-                            val nextIdentity = LauncherIdentityPresets.all
-                                .filterNot { it.id == scheme.appIconPresetId }
-                                .randomOrNull()
-                                ?: LauncherIdentityPresets.all.random()
-                            applyLauncherIdentity(nextIdentity)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("随机名称测试")
-                    }
-                    LauncherIdentityPresets.all.forEach { preset ->
-                        val selected = scheme.appIconPresetId == preset.id
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = { applyLauncherIdentity(preset) },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(
-                                width = if (selected) 1.5.dp else 1.dp,
-                                color = if (selected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.outlineVariant
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LauncherIdentityPresets.all.forEach { preset ->
+                            val selected =
+                                LauncherIdentityPresets.find(scheme.appIconPresetId).id == preset.id
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(104.dp),
+                                onClick = { applyLauncherIdentity(preset) },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(
+                                    width = if (selected) 1.5.dp else 1.dp,
+                                    color = if (selected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outlineVariant
+                                )
                             ) {
-                                Text(
-                                    text = preset.displayName,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "启动器图标：${preset.iconDescription}",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 6.dp, vertical = 8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    AndroidView(
+                                        factory = { viewContext ->
+                                            ImageView(viewContext).apply {
+                                                setImageResource(preset.previewIconResource)
+                                                scaleType = ImageView.ScaleType.FIT_CENTER
+                                                contentDescription = preset.displayName
+                                            }
+                                        },
+                                        modifier = Modifier.size(56.dp)
+                                    )
+                                    Text(
+                                        text = preset.displayName,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }

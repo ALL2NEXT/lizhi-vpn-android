@@ -4,11 +4,6 @@
     <string name="launcher_name_firefly">Firefly</string>
     <string name="launcher_name_shield">流萤</string>
     <string name="launcher_name_bolt">星桥</string>
-    <string name="launcher_name_cloud">云舟</string>
-    <string name="launcher_name_public">极光</string>
-    <string name="launcher_name_rocket">蓝鲸</string>
-    <string name="launcher_name_wifi">轻舟</string>
-    <string name="launcher_name_hub">夜航</string>
     <string name="version">版本</string>
     <string name="update_title">发现新版本</string>
     <string name="update">更新</string>
