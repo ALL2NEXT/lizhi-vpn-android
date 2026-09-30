@@ -46,7 +46,8 @@ fun DrawerContent(
     githubUrl: String = "",
     telegramUrl: String = "",
     accountInfo: AccountInfo? = null,
-    appDisplayName: String = "Firefly"
+    appDisplayName: String = "Firefly",
+    appIconResourceId: Int = R.mipmap.ic_launcher
 ) {
     var showAboutDialog by remember { mutableStateOf(false) }
     
@@ -136,6 +137,7 @@ fun DrawerContent(
             feedbackUrl = feedbackUrl,
             telegramUrl = telegramUrl,
             appDisplayName = appDisplayName,
+            appIconResourceId = appIconResourceId,
             showUpdateAction = AppConfig.BACKEND_URL.isNotBlank(),
             onCheckUpdate = {
                 showAboutDialog = false

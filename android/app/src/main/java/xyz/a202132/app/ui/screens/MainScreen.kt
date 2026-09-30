@@ -153,7 +153,10 @@ fun MainScreen(
                     accountInfo = accountInfo,
                     appDisplayName = LauncherIdentityPresets.find(
                         skinSettings.activeScheme.appIconPresetId
-                    ).displayName
+                    ).displayName,
+                    appIconResourceId = LauncherIdentityPresets.find(
+                        skinSettings.activeScheme.appIconPresetId
+                    ).previewIconResource
                 )
             }
         },
