@@ -15,7 +15,6 @@ import xyz.a202132.app.data.model.DnsSettings
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.HomeNavigationStyle
 import xyz.a202132.app.data.model.LanInboundSettings
-import xyz.a202132.app.data.model.NodeListCategory
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.PerAppInboundSettings
@@ -112,7 +111,6 @@ class SettingsRepository(private val context: Context) {
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
         private val SELECTED_COUNTRY_CODE = stringPreferencesKey("selected_country_code")
         private val NODE_GROUPING_MODE = stringPreferencesKey("node_grouping_mode")
-        private val NODE_LIST_CATEGORY = stringPreferencesKey("node_list_category")
         private val SELECTED_NODE_GROUP_ID = stringPreferencesKey("selected_node_group_id")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         private val SPEED_TEST_DOWNLOAD_URL = stringPreferencesKey("speed_test_download_url")
@@ -136,8 +134,6 @@ class SettingsRepository(private val context: Context) {
             booleanPreferencesKey("auto_delete_low_bandwidth_nodes")
         private val AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS =
             intPreferencesKey("auto_delete_bandwidth_threshold_mbps")
-        private val HIDE_FAVORITE_NODE_GROUP =
-            booleanPreferencesKey("hide_favorite_node_group")
         private val SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
         private val ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
         private val SPEED_TEST_SCHEMES_JSON = stringPreferencesKey("speed_test_schemes_json")
@@ -146,12 +142,6 @@ class SettingsRepository(private val context: Context) {
     
     val selectedNodeId: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[SELECTED_NODE_ID]
-    }
-
-    val nodeListCategory: Flow<NodeListCategory> = context.dataStore.data.map { preferences ->
-        runCatching {
-            NodeListCategory.valueOf(preferences[NODE_LIST_CATEGORY] ?: NodeListCategory.PRIMARY.name)
-        }.getOrDefault(NodeListCategory.PRIMARY)
     }
 
     /** 统一的当前节点组标识。 */
@@ -674,12 +664,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setNodeListCategory(category: NodeListCategory) {
-        context.dataStore.edit { preferences ->
-            preferences[NODE_LIST_CATEGORY] = category.name
-        }
-    }
-
     suspend fun setSelectedNodeGroupId(groupId: String?) {
         context.dataStore.edit { preferences ->
             if (groupId.isNullOrBlank()) {
@@ -1085,16 +1069,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoDeleteBandwidthThresholdMbps(value: Int) {
         context.dataStore.edit { preferences ->
             preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS] = value.coerceIn(0, 100_000)
-        }
-    }
-
-    val hideFavoriteNodeGroup: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[HIDE_FAVORITE_NODE_GROUP] ?: false
-    }
-
-    suspend fun setHideFavoriteNodeGroup(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[HIDE_FAVORITE_NODE_GROUP] = enabled
         }
     }
 

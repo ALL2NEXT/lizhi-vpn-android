@@ -33,10 +33,7 @@ data class Node(
     val uploadMbps: Float = 0f,           // 上传带宽(Mbps)
     val autoTestStatus: String = "",      // 自动化测试状态
     val autoTestedAt: Long = 0,           // 自动化测试时间戳
-    // Node source metadata.
-    val source: NodeSource = NodeSource.SUBSCRIPTION,
-    val favoriteSourceNodeId: String? = null,
-    val favoriteCreatedAt: Long = 0L
+    val source: NodeSource = NodeSource.SUBSCRIPTION
 ) {
     /**
      * 读取原始节点链接。
@@ -87,14 +84,11 @@ data class Node(
         return result.toString().trim()
     }
 
-    /**
-     * 获取连接信息中展示的订阅组名称。
-     * 收藏自订阅的节点保留原订阅组名称；手动导入的收藏节点显示为“收藏节点”。
-     */
+    /** 获取连接信息中展示的订阅组名称。 */
     fun getConnectionGroupName(): String =
         subscriptionSourceName?.trim()?.takeIf(String::isNotEmpty)
             ?: subscriptionSourceId?.trim()?.takeIf(String::isNotEmpty)
-            ?: if (source == NodeSource.FAVORITE) "收藏节点" else "未分组订阅"
+            ?: "未分组订阅"
     
     /**
      * 获取延迟显示文本
@@ -127,14 +121,8 @@ enum class LatencyLevel {
 
 enum class NodeSource {
     SUBSCRIPTION,
-    FAVORITE,
     /** 用户创建的本地订阅组节点。 */
     LOCAL_GROUP
-}
-
-enum class NodeListCategory {
-    PRIMARY,
-    FAVORITES
 }
 
 /** A distinct subscription source currently available in the local node database. */

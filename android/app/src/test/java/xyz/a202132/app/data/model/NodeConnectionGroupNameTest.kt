@@ -24,17 +24,9 @@ class NodeConnectionGroupNameTest {
         assertEquals("42", node.getConnectionGroupName())
     }
 
-    @Test
-    fun importedFavoriteUsesFavoriteLabel() {
-        val node = testNode(source = NodeSource.FAVORITE)
-
-        assertEquals("收藏节点", node.getConnectionGroupName())
-    }
-
     private fun testNode(
         subscriptionSourceId: String? = null,
-        subscriptionSourceName: String? = null,
-        source: NodeSource = NodeSource.SUBSCRIPTION
+        subscriptionSourceName: String? = null
     ) = Node(
         id = "node-1",
         name = "测试节点",
@@ -43,7 +35,6 @@ class NodeConnectionGroupNameTest {
         port = 443,
         rawLink = "vless://node-1",
         subscriptionSourceId = subscriptionSourceId,
-        subscriptionSourceName = subscriptionSourceName,
-        source = source
+        subscriptionSourceName = subscriptionSourceName
     )
 }

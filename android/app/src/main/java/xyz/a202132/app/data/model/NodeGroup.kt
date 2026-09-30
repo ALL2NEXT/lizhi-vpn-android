@@ -6,7 +6,6 @@ package xyz.a202132.app.data.model
 enum class NodeGroupType {
     SUBSCRIPTION,
     COUNTRY,
-    FAVORITE,
     IMPORTED
 }
 
@@ -24,22 +23,15 @@ sealed interface NodeGroupKey {
         override val value: String = "country:$countryCode"
     }
 
-    data object Favorites : NodeGroupKey {
-        override val value: String = FAVORITES_ID
-    }
-
     /** 用户创建的本地订阅组使用数据库中持久化的组 ID。 */
     data class Imported(val groupId: String) : NodeGroupKey {
         override val value: String = "imported:$groupId"
     }
 
     companion object {
-        const val FAVORITES_ID = "favorites"
-
         fun parse(value: String?): NodeGroupKey? {
             val normalized = value?.trim().orEmpty()
             return when {
-                normalized == FAVORITES_ID -> Favorites
                 normalized.startsWith("subscription:") -> {
                     normalized.substringAfter("subscription:")
                         .takeIf(String::isNotBlank)

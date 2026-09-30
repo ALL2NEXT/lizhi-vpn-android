@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.AlertDialog
@@ -74,8 +73,6 @@ internal fun SubscriptionGroupSelectionDestination(
     onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
     onUserGroupSelected: (NodeGroupSummary) -> Unit,
     onViewUserGroupDetails: (NodeGroupSummary) -> Unit,
-    onFavoritesSelected: () -> Unit,
-    onViewFavoritesDetails: () -> Unit,
     onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
     onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
     onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
@@ -88,9 +85,7 @@ internal fun SubscriptionGroupSelectionDestination(
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
     val userGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
-    val favoriteNodes by viewModel.favoriteNodes.collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
-    val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val nodeCounts = allSubscriptionNodes
         .asSequence()
@@ -103,15 +98,11 @@ internal fun SubscriptionGroupSelectionDestination(
         userGroups = userGroups,
         selectedNodeGroupId = selectedNodeGroupId,
         nodeCounts = nodeCounts,
-        favoriteNodeCount = favoriteNodes.size,
-        hideFavoriteNodeGroup = hideFavoriteNodeGroup,
         isLoading = isLoading,
         onSubscriptionSelected = onSubscriptionSelected,
         onViewSubscriptionDetails = onViewSubscriptionDetails,
         onUserGroupSelected = onUserGroupSelected,
         onViewUserGroupDetails = onViewUserGroupDetails,
-        onFavoritesSelected = onFavoritesSelected,
-        onViewFavoritesDetails = onViewFavoritesDetails,
         onCreateSubscriptionGroup = onCreateSubscriptionGroup,
         onUpdateSubscriptionGroup = onUpdateSubscriptionGroup,
         onDeleteSubscriptionGroup = onDeleteSubscriptionGroup,
@@ -138,15 +129,11 @@ private fun SubscriptionGroupSelectionScreen(
     userGroups: List<NodeGroupSummary>,
     selectedNodeGroupId: String?,
     nodeCounts: Map<String, Int>,
-    favoriteNodeCount: Int,
-    hideFavoriteNodeGroup: Boolean,
     isLoading: Boolean,
     onSubscriptionSelected: (SubscriptionGroup) -> Unit,
     onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
     onUserGroupSelected: (NodeGroupSummary) -> Unit,
     onViewUserGroupDetails: (NodeGroupSummary) -> Unit,
-    onFavoritesSelected: () -> Unit,
-    onViewFavoritesDetails: () -> Unit,
     onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
     onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
     onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
@@ -159,7 +146,6 @@ private fun SubscriptionGroupSelectionScreen(
     onBack: () -> Unit,
     bottomContentPadding: Dp
 ) {
-    val favoriteSelected = selectedNodeGroupId == NodeGroupKey.Favorites.value
     val context = LocalContext.current
     var addDialogVisible by rememberSaveable { mutableStateOf(false) }
     var groupName by rememberSaveable { mutableStateOf("") }
@@ -313,7 +299,7 @@ private fun SubscriptionGroupSelectionScreen(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when {
-                subscriptionGroups.isNotEmpty() || userGroups.isNotEmpty() || !hideFavoriteNodeGroup ->
+                subscriptionGroups.isNotEmpty() || userGroups.isNotEmpty() ->
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = bottomContentPadding),
@@ -373,16 +359,6 @@ private fun SubscriptionGroupSelectionScreen(
                                     }
                                 }
                             )
-                        }
-                        if (!hideFavoriteNodeGroup) {
-                            item(key = "favorites") {
-                                FavoriteGroupCard(
-                                    nodeCount = favoriteNodeCount,
-                                    selected = favoriteSelected,
-                                    onClick = onFavoritesSelected,
-                                    onViewDetails = onViewFavoritesDetails
-                                )
-                            }
                         }
                     }
 
@@ -611,79 +587,6 @@ private fun SubscriptionGroupSelectionScreen(
                 }
             }
         )
-    }
-}
-
-@Composable
-private fun FavoriteGroupCard(
-    nodeCount: Int,
-    selected: Boolean,
-    onClick: () -> Unit,
-    onViewDetails: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        }
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 72.dp)
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Favorite,
-                contentDescription = null,
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-                modifier = Modifier.size(34.dp)
-            )
-            Text(
-                text = "收藏节点",
-                modifier = Modifier.weight(1f),
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
-            )
-            Text(
-                text = "$nodeCount 个节点",
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                fontSize = 13.sp,
-                maxLines = 1
-            )
-            IconButton(onClick = onViewDetails) {
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = "查看收藏节点",
-                    tint = if (selected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-            }
-        }
     }
 }
 

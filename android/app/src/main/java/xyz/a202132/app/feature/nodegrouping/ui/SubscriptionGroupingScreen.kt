@@ -27,7 +27,6 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,10 +50,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogProperties
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeDisplaySettings
-import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.ProtocolCoreSettings
 import xyz.a202132.app.ui.components.AppScreenScaffold
 
@@ -67,16 +64,12 @@ internal enum class NodeActionMode {
 internal fun SubscriptionGroupingScreen(
     nodes: List<Node>,
     selectedNodeId: String?,
-    favoriteSourceNodeIds: Set<String>,
-    skipFavoriteRemovalConfirmation: Boolean,
     isTesting: Boolean,
     isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     testingLabel: String? = null,
     onNodeSelected: (Node) -> Unit,
-    onToggleFavorite: (Node) -> Unit,
-    onSkipFavoriteRemovalConfirmationForSession: () -> Unit,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp,
@@ -87,8 +80,6 @@ internal fun SubscriptionGroupingScreen(
     onDeleteNode: ((Node, (String, Boolean) -> Unit) -> Unit)? = null
 ) {
     var isClosing by remember { mutableStateOf(false) }
-    var favoriteRemovalCandidate by remember { mutableStateOf<Node?>(null) }
-    var skipConfirmationForSessionChecked by remember { mutableStateOf(false) }
     val canManageNodes = onImportNodeUris != null && onUpdateNode != null && onDeleteNode != null
     val context = LocalContext.current
     var actionMode by rememberSaveable { mutableStateOf<NodeActionMode?>(null) }
@@ -111,16 +102,6 @@ internal fun SubscriptionGroupingScreen(
         if (!isClosing) {
             isClosing = true
             onNodeSelected(node)
-        }
-    }
-
-    val handleToggleFavorite: (Node, Boolean) -> Unit = { node, isFavorite ->
-        when {
-            !isFavorite || skipFavoriteRemovalConfirmation -> onToggleFavorite(node)
-            else -> {
-                skipConfirmationForSessionChecked = false
-                favoriteRemovalCandidate = node
-            }
         }
     }
 
@@ -209,12 +190,10 @@ internal fun SubscriptionGroupingScreen(
             NodeListContent(
                 nodes = nodes,
                 selectedNodeId = selectedNodeId,
-                favoriteSourceNodeIds = favoriteSourceNodeIds,
                 isTesting = isTesting,
                 nodeDisplaySettings = nodeDisplaySettings,
                 protocolCoreSettings = protocolCoreSettings,
                 onNodeSelected = handleNodeSelected,
-                onToggleFavorite = handleToggleFavorite,
                 interactionEnabled = !isClosing,
                 bottomContentPadding = bottomContentPadding,
                 actionMode = actionMode,
@@ -398,82 +377,16 @@ internal fun SubscriptionGroupingScreen(
         }
     }
 
-    favoriteRemovalCandidate?.let { node ->
-        AlertDialog(
-            onDismissRequest = {},
-            title = {
-                Text(text = "取消收藏")
-            },
-            text = {
-                Column {
-                    Text(text = "取消收藏的节点会从收藏节点中删除，是否确认删除？")
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                skipConfirmationForSessionChecked =
-                                    !skipConfirmationForSessionChecked
-                            }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = skipConfirmationForSessionChecked,
-                            onCheckedChange = { skipConfirmationForSessionChecked = it }
-                        )
-                        Text(
-                            text = "本次使用 APP 不再提示",
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        if (skipConfirmationForSessionChecked) {
-                            onSkipFavoriteRemovalConfirmationForSession()
-                        }
-                        favoriteRemovalCandidate = null
-                    }
-                ) {
-                    Text("取消")
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (skipConfirmationForSessionChecked) {
-                            onSkipFavoriteRemovalConfirmationForSession()
-                        }
-                        favoriteRemovalCandidate = null
-                        onToggleFavorite(node)
-                    }
-                ) {
-                    Text("确认")
-                }
-            },
-            properties = DialogProperties(
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false
-            )
-        )
-    }
-
 }
 
 @Composable
 private fun NodeListContent(
     nodes: List<Node>,
     selectedNodeId: String?,
-    favoriteSourceNodeIds: Set<String>,
     isTesting: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onNodeSelected: (Node) -> Unit,
-    onToggleFavorite: (Node, Boolean) -> Unit,
     interactionEnabled: Boolean,
     bottomContentPadding: Dp,
     actionMode: NodeActionMode?,
@@ -538,18 +451,13 @@ private fun NodeListContent(
                             items = displayNodes,
                             key = { it.id }
                         ) { node ->
-                            val isFavorite =
-                                node.source == NodeSource.FAVORITE ||
-                                    favoriteSourceNodeIds.contains(node.id)
                             NodeListItem(
                                 node = node,
                                 isSelected = node.id == selectedNodeId,
-                                isFavorite = isFavorite,
                                 enabled = interactionEnabled,
                                 displaySettings = nodeDisplaySettings,
                                 coreSettings = protocolCoreSettings,
                                 onClick = { onNodeSelected(node) },
-                                onToggleFavorite = { onToggleFavorite(node, isFavorite) },
                                 actionMode = actionMode,
                                 onEditNode = { onEditNode(node) },
                                 onDeleteNode = { onDeleteNode(node) }

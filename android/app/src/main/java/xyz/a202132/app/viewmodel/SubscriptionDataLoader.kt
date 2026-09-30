@@ -257,8 +257,6 @@ internal class SubscriptionDataLoader(
                     val taggedNode = node.copy(
                         id = scopedNodeId,
                         source = NodeSource.SUBSCRIPTION,
-                        favoriteSourceNodeId = null,
-                        favoriteCreatedAt = 0L,
                         subscriptionSourceId = subscription.id,
                         subscriptionSourceName = subscription.name
                     )

@@ -3,7 +3,6 @@ package xyz.a202132.app.feature.nodegrouping.domain
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import xyz.a202132.app.data.model.Node
-import xyz.a202132.app.data.model.NodeSource
 import xyz.a202132.app.data.model.NodeType
 import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
@@ -32,8 +31,7 @@ class SpeedTestScopeResolverTest {
         val allNodes = listOf(
             node("jp-a", "group-a", "JP"),
             node("us-a", "group-a", "US"),
-            node("jp-b", "group-b", "JP"),
-            node("favorite", null, "JP", NodeSource.FAVORITE)
+            node("jp-b", "group-b", "JP")
         )
 
         val candidates = SpeedTestScopeResolver.selectCandidates(
@@ -46,7 +44,7 @@ class SpeedTestScopeResolverTest {
             selectedCountryCode = null
         )
 
-        assertEquals(listOf("jp-a", "us-a", "jp-b", "favorite"), candidates.map(Node::id))
+        assertEquals(listOf("jp-a", "us-a", "jp-b"), candidates.map(Node::id))
     }
 
     @Test
@@ -54,8 +52,7 @@ class SpeedTestScopeResolverTest {
         val allNodes = listOf(
             node("jp-a", "group-a", "JP"),
             node("us-a", "group-a", "US"),
-            node("jp-b", "group-b", "JP"),
-            node("favorite", null, "JP", NodeSource.FAVORITE)
+            node("jp-b", "group-b", "JP")
         )
 
         val candidates = SpeedTestScopeResolver.selectCandidates(
@@ -116,8 +113,7 @@ class SpeedTestScopeResolverTest {
     private fun node(
         id: String,
         sourceId: String?,
-        country: String,
-        source: NodeSource = NodeSource.SUBSCRIPTION
+        country: String
     ) = Node(
         id = id,
         name = id,
@@ -127,7 +123,6 @@ class SpeedTestScopeResolverTest {
         rawLink = "vless://$id@example.com:443",
         country = country,
         subscriptionSourceId = sourceId,
-        subscriptionSourceName = sourceId,
-        source = source
+        subscriptionSourceName = sourceId
     )
 }

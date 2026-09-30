@@ -132,8 +132,6 @@ internal class DisconnectRecoveryManager(
                 node.copy(
                     id = "${source.id}:${node.id}",
                     source = NodeSource.SUBSCRIPTION,
-                    favoriteSourceNodeId = null,
-                    favoriteCreatedAt = 0L,
                     subscriptionSourceId = source.id,
                     subscriptionSourceName = source.name
                 )

@@ -29,10 +29,6 @@ internal fun SubscriptionGroupingDestination(
         viewModel.sortNodesByTestResult(sourceNodes, resultSortMode)
     }
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
-    val favoriteSourceNodeIds by
-        viewModel.favoriteSourceNodeIds.collectAsStateWithLifecycle()
-    val skipFavoriteRemovalConfirmation by
-        viewModel.skipFavoriteRemovalConfirmation.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val isRefreshingAllSubscriptions by
         viewModel.isRefreshingAllSubscriptions.collectAsStateWithLifecycle()
@@ -94,17 +90,12 @@ internal fun SubscriptionGroupingDestination(
     SubscriptionGroupingScreen(
         nodes = nodes,
         selectedNodeId = selectedNodeId,
-        favoriteSourceNodeIds = favoriteSourceNodeIds,
-        skipFavoriteRemovalConfirmation = skipFavoriteRemovalConfirmation,
         isTesting = isTesting,
         isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
         testingLabel = testingLabel,
         onNodeSelected = onNodeSelected,
-        onToggleFavorite = viewModel::toggleFavoriteNode,
-        onSkipFavoriteRemovalConfirmationForSession =
-            viewModel::skipFavoriteRemovalConfirmationForSession,
         onBack = onBack,
         showBackNavigation = showBackNavigation,
         bottomContentPadding = bottomContentPadding,

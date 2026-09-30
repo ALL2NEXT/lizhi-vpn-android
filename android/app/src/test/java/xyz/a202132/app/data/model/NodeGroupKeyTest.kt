@@ -10,7 +10,6 @@ class NodeGroupKeyTest {
         val keys = listOf(
             NodeGroupKey.Subscription("source-1"),
             NodeGroupKey.Country("JP"),
-            NodeGroupKey.Favorites,
             NodeGroupKey.Imported("group-1")
         )
 

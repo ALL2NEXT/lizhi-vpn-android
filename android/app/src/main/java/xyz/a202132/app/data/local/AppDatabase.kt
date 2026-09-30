@@ -6,6 +6,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeGroupEntity
@@ -16,7 +18,7 @@ import java.io.File
 
 @Database(
     entities = [Node::class, NodeGroupEntity::class, NodeGroupMemberEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -26,6 +28,19 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         private const val TAG = "AppDatabase"
         private const val DB_NAME = "firefly_vpn.db"
+        // 清理旧版收藏节点及其专属字段，升级后只保留订阅组和本地用户组数据。
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "DELETE FROM node_group_members WHERE nodeId IN " +
+                        "(SELECT id FROM nodes WHERE source = 'FAVORITE')"
+                )
+                db.execSQL("DELETE FROM nodes WHERE source = 'FAVORITE'")
+                db.execSQL("ALTER TABLE nodes DROP COLUMN favoriteSourceNodeId")
+                db.execSQL("ALTER TABLE nodes DROP COLUMN favoriteCreatedAt")
+            }
+        }
+
         @Volatile
         private var sqlCipherLibLoaded = false
 
@@ -71,6 +86,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_8_9)
                 .build()
         }
 

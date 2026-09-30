@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Icon
@@ -43,13 +42,11 @@ import xyz.a202132.app.util.protocolDisplayLabel
 internal fun NodeListItem(
     node: Node,
     isSelected: Boolean,
-    isFavorite: Boolean,
     enabled: Boolean,
     displaySettings: NodeDisplaySettings,
     coreSettings: ProtocolCoreSettings,
     actionMode: NodeActionMode?,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit,
     onEditNode: () -> Unit,
     onDeleteNode: () -> Unit
 ) {
@@ -114,22 +111,7 @@ internal fun NodeListItem(
                 }
 
                 when (actionMode) {
-                    null -> IconButton(
-                        onClick = onToggleFavorite,
-                        enabled = enabled,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "收藏节点",
-                            tint = if (isFavorite) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                            },
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    null -> Unit
                     NodeActionMode.EDIT -> IconButton(
                         onClick = onEditNode,
                         enabled = enabled,

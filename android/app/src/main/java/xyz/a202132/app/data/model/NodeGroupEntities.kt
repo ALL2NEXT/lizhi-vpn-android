@@ -5,7 +5,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-/** 用户创建的持久化节点组；地区组和收藏组仍由应用提供虚拟入口。 */
+/** 用户创建的持久化节点组；地区组由应用提供虚拟入口。 */
 @Entity(
     tableName = "node_groups",
     indices = [Index(value = ["type"])]
@@ -19,7 +19,7 @@ data class NodeGroupEntity(
     val createdAt: Long = 0L
 )
 
-/** 节点与用户组的多对多关系，允许一个节点同时属于收藏组和导入组。 */
+/** 节点与用户组的多对多关系。 */
 @Entity(
     tableName = "node_group_members",
     primaryKeys = ["groupId", "nodeId"],

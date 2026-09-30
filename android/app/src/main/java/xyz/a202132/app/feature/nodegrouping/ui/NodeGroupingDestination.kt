@@ -24,8 +24,6 @@ private sealed interface NodeGroupingDetail {
         val sourceName: String
     ) : NodeGroupingDetail
 
-    data object Favorites : NodeGroupingDetail
-
     data class UserGroup(
         val groupId: String,
         val groupName: String
@@ -52,7 +50,6 @@ fun NodeGroupingDestination(
     bottomContentPadding: Dp = 16.dp
 ) {
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
-    val favoriteNodes by viewModel.favoriteNodes.collectAsStateWithLifecycle()
     var detail by remember(groupingMode) { mutableStateOf<NodeGroupingDetail?>(null) }
 
     when (val currentDetail = detail) {
@@ -81,19 +78,6 @@ fun NodeGroupingDestination(
                 nodesOverride = subscriptionNodes,
                 screenTitle = "线路信息",
                 screenSubtitle = currentDetail.sourceName,
-                onNodeSelected = onNodeSelected,
-                onBack = { detail = null },
-                showBackNavigation = true,
-                bottomContentPadding = bottomContentPadding
-            )
-        }
-
-        NodeGroupingDetail.Favorites -> {
-            SubscriptionGroupingDestination(
-                viewModel = viewModel,
-                nodesOverride = favoriteNodes,
-                screenTitle = "收藏节点",
-                screenSubtitle = "管理收藏的节点",
                 onNodeSelected = onNodeSelected,
                 onBack = { detail = null },
                 showBackNavigation = true,
@@ -146,13 +130,6 @@ fun NodeGroupingDestination(
                         groupId = group.id.removePrefix("imported:"),
                         groupName = group.name
                     )
-                },
-                // 收藏卡片同样区分“选中”和“查看详情”两种操作。
-                onFavoritesSelected = {
-                    viewModel.selectFavoritesGroup()
-                },
-                onViewFavoritesDetails = {
-                    detail = NodeGroupingDetail.Favorites
                 },
                 onCreateSubscriptionGroup = onCreateSubscriptionGroup,
                 onUpdateSubscriptionGroup = onUpdateSubscriptionGroup,

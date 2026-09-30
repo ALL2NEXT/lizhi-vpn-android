@@ -68,7 +68,6 @@ fun OtherConfigScreen(
     LaunchedEffect(autoDeleteBandwidthThresholdMbps) {
         bandwidthThresholdInput = autoDeleteBandwidthThresholdMbps.toString()
     }
-    val hideFavoriteNodeGroup by viewModel.hideFavoriteNodeGroup.collectAsStateWithLifecycle()
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
     val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
@@ -243,22 +242,6 @@ fun OtherConfigScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
-            }
-
-            OtherConfigSection(
-                title = "隐藏节点列表中的“收藏节点”订阅组"
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Switch(
-                        checked = hideFavoriteNodeGroup,
-                        onCheckedChange = { viewModel.setHideFavoriteNodeGroup(it) },
-                        colors = visibleSwitchColors()
-                    )
-                }
             }
 
             OtherConfigSection(

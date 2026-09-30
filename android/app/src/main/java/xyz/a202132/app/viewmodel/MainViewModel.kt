@@ -132,10 +132,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val error = _error.asStateFlow()
     private val _infoDialogMessage = MutableStateFlow<String?>(null)
     val infoDialogMessage = _infoDialogMessage.asStateFlow()
-    // 仅在本次 APP 进程存活期间有效，不写入 DataStore。
-    private val _skipFavoriteRemovalConfirmation = MutableStateFlow(false)
-    val skipFavoriteRemovalConfirmation = _skipFavoriteRemovalConfirmation.asStateFlow()
-
     val vpnState = ServiceManager.vpnState
 
     /** The node owned by the live VPN session, independent of Room refreshes and UI filters. */
@@ -152,12 +148,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     )
     
-    val nodeListCategory = settingsRepository.nodeListCategory.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        NodeListCategory.PRIMARY
-    )
-
     val subscriptionGroups = nodeDaoFlow.flatMapLatest { it.getSubscriptionGroups() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -180,16 +170,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, NodeGroupingMode.COUNTRY)
 
     /** 所有节点组共用的当前选中标识，仅由统一节点组字段决定。 */
-    val selectedNodeGroupId = settingsRepository.selectedNodeGroupId
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
-    val favoriteSourceNodeIds = nodeDaoFlow.flatMapLatest { it.getFavoriteSourceNodeIds() }
-        .map { it.filterNotNull().toSet() }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.Lazily,
-            emptySet()
-        )
+    val selectedNodeGroupId = combine(
+        settingsRepository.selectedNodeGroupId,
+        activeSubscriptionSourceId
+    ) { groupId, sourceId ->
+        NodeGroupKey.parse(groupId)?.value
+            ?: sourceId?.let { NodeGroupKey.Subscription(it).value }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val allSubscriptionNodes = nodeDaoFlow.flatMapLatest { dao ->
         dao.getSubscriptionNodes()
@@ -211,11 +198,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-    val favoriteNodes = nodeDaoFlow
-        .flatMapLatest { it.getFavoriteNodes() }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /** 用户创建的订阅组摘要，与收藏节点完全独立。 */
+    /** 用户创建的订阅组摘要。 */
     val userSubscriptionGroups = nodeDaoFlow
         .flatMapLatest { it.getUserSubscriptionGroupsWithCount() }
         .map { groups ->
@@ -232,13 +215,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 测速方案可选择全部节点组：订阅组、地区组、用户组和收藏组。 */
+    /** 测速方案可选择订阅组、地区组和用户组。 */
     val speedTestGroupOptions = combine(
         subscriptionGroups,
         countryOptions,
-        userSubscriptionGroups,
-        favoriteNodes
-    ) { subscriptions, countries, userGroups, favorites ->
+        userSubscriptionGroups
+    ) { subscriptions, countries, userGroups ->
         buildList {
             subscriptions.forEach { group ->
                 add(
@@ -258,14 +240,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             userGroups.forEach { group ->
                 add(SpeedTestGroupOption(id = group.id, name = "用户组：${group.name}"))
-            }
-            if (favorites.isNotEmpty()) {
-                add(
-                    SpeedTestGroupOption(
-                        id = NodeGroupKey.Favorites.value,
-                        name = "收藏组"
-                    )
-                )
             }
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -287,12 +261,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Data
     private val visibleNodes = combine(
         subscriptionNodes,
-        favoriteNodes,
         importedNodes,
         selectedNodeGroupId
-    ) { subscription, favorites, imported, groupId ->
+    ) { subscription, imported, groupId ->
         when (NodeGroupKey.parse(groupId)) {
-            NodeGroupKey.Favorites -> favorites
             is NodeGroupKey.Imported -> imported
             else -> subscription
         }
@@ -458,7 +430,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val autoDeleteBandwidthThresholdMbps = settingsRepository.autoDeleteBandwidthThresholdMbps.stateIn(
         viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS
     )
-    val hideFavoriteNodeGroup = settingsRepository.hideFavoriteNodeGroup.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val updateDownloadDirectoryUri = settingsRepository.updateDownloadDirectoryUri.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -825,20 +796,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsRepository.setAutoDeleteBandwidthThresholdMbps(value) }
     }
 
-    fun setHideFavoriteNodeGroup(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setHideFavoriteNodeGroup(enabled)
-            if (enabled && NodeGroupKey.parse(selectedNodeGroupId.value) == NodeGroupKey.Favorites) {
-                val sourceId = activeSubscriptionSourceId.value
-                settingsRepository.setSelectedNodeGroupId(
-                    sourceId?.takeIf(String::isNotBlank)
-                        ?.let { NodeGroupKey.Subscription(it).value }
-                )
-                settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
-            }
-        }
-    }
-
     /**
      * 使用直连网络分别测试下行和上行带宽，并按 10 Mbps 档位向上取整后写入 Hy2 设置。
      */
@@ -1061,24 +1018,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return results
     }
 
-    fun setNodeListCategory(category: NodeListCategory) {
-        viewModelScope.launch {
-            val wasFavorites = NodeGroupKey.parse(selectedNodeGroupId.value) == NodeGroupKey.Favorites
-            settingsRepository.setSelectedCountryCode(null)
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
-            settingsRepository.setNodeListCategory(category)
-            if (category == NodeListCategory.FAVORITES) {
-                settingsRepository.setSelectedNodeGroupId(NodeGroupKey.Favorites.value)
-            } else if (wasFavorites) {
-                val sourceId = activeSubscriptionSourceId.value
-                settingsRepository.setSelectedNodeGroupId(
-                    sourceId?.takeIf(String::isNotBlank)
-                        ?.let { NodeGroupKey.Subscription(it).value }
-                )
-            }
-        }
-    }
-
     /** 统一选择节点组，并同步当前连接流程需要的筛选字段。 */
     fun selectNodeGroup(group: NodeGroupKey) {
         viewModelScope.launch {
@@ -1089,31 +1028,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
                     settingsRepository.setSelectedSubscriptionSourceId(group.sourceId)
                     settingsRepository.setSelectedNodeId(null)
-                    settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
                 }
                 is NodeGroupKey.Country -> {
                     settingsRepository.setSelectedCountryCode(group.countryCode)
                     settingsRepository.setNodeGroupingMode(NodeGroupingMode.COUNTRY)
-                    settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
-                }
-                NodeGroupKey.Favorites -> {
-                    settingsRepository.setSelectedCountryCode(null)
-                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
-                    settingsRepository.setNodeListCategory(NodeListCategory.FAVORITES)
                 }
                 is NodeGroupKey.Imported -> {
                     settingsRepository.setSelectedCountryCode(null)
                     settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
                     settingsRepository.setSelectedSubscriptionSourceId(null)
                     settingsRepository.setSelectedNodeId(null)
-                    settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
                 }
             }
         }
-    }
-
-    fun selectFavoritesGroup() {
-        selectNodeGroup(NodeGroupKey.Favorites)
     }
 
     /** Select a node from the node list and connect to it immediately. */
@@ -1159,7 +1086,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             settingsRepository.setSelectedCountryCode(null)
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
-            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
             activeSubscriptionSourceId.value?.let { sourceId ->
                 settingsRepository.setSelectedNodeGroupId(
                     NodeGroupKey.Subscription(sourceId).value
@@ -1171,41 +1097,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun selectCountryGrouping() {
         viewModelScope.launch {
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.COUNTRY)
-        }
-    }
-
-    fun skipFavoriteRemovalConfirmationForSession() {
-        _skipFavoriteRemovalConfirmation.value = true
-    }
-
-    fun toggleFavoriteNode(node: Node) {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (node.source == NodeSource.FAVORITE) {
-                nodeDao().deleteNodeById(node.id)
-                if (settingsRepository.selectedNodeId.first() == node.id) {
-                    settingsRepository.setSelectedNodeId(null)
-                }
-                return@launch
-            }
-
-            val existingFavorite = nodeDao().getFavoriteBySourceNodeId(node.id)
-            if (existingFavorite != null) {
-                nodeDao().deleteNodeById(existingFavorite.id)
-                if (settingsRepository.selectedNodeId.first() == existingFavorite.id) {
-                    settingsRepository.setSelectedNodeId(null)
-                }
-                return@launch
-            }
-
-            val now = System.currentTimeMillis()
-            nodeDao().insertNode(
-                node.copy(
-                    id = "fav_${UUID.randomUUID()}",
-                    source = NodeSource.FAVORITE,
-                    favoriteSourceNodeId = node.id,
-                    favoriteCreatedAt = now
-                )
-            )
         }
     }
 
@@ -1312,8 +1203,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         source = NodeSource.LOCAL_GROUP,
                         subscriptionSourceId = groupId,
                         subscriptionSourceName = normalizedName,
-                        favoriteSourceNodeId = null,
-                        favoriteCreatedAt = 0L,
                         latency = -1,
                         tcpingLatency = -1,
                         urlTestLatency = -1,
@@ -1339,7 +1228,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setSelectedSubscriptionSourceId(null)
             settingsRepository.setSelectedNodeId(null)
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
-            settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
             onResult(SubscriptionGroupCreateResult.CREATED, localNodes.size)
         }
     }
@@ -1420,8 +1308,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     source = NodeSource.LOCAL_GROUP,
                     subscriptionSourceId = groupId,
                     subscriptionSourceName = group.name,
-                    favoriteSourceNodeId = null,
-                    favoriteCreatedAt = 0L,
                     latency = -1,
                     tcpingLatency = -1,
                     urlTestLatency = -1,
@@ -1502,8 +1388,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 subscriptionSourceId = groupId,
                 subscriptionSourceName = group.name,
                 source = NodeSource.LOCAL_GROUP,
-                favoriteSourceNodeId = null,
-                favoriteCreatedAt = 0L,
                 latency = -1,
                 tcpingLatency = -1,
                 urlTestLatency = -1,
@@ -1621,8 +1505,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         source = NodeSource.LOCAL_GROUP,
                         subscriptionSourceId = groupId,
                         subscriptionSourceName = normalizedName,
-                        favoriteSourceNodeId = null,
-                        favoriteCreatedAt = 0L,
                         latency = -1,
                         tcpingLatency = -1,
                         urlTestLatency = -1,
@@ -1714,8 +1596,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     source = NodeSource.LOCAL_GROUP,
                     subscriptionSourceId = groupId,
                     subscriptionSourceName = group.name,
-                    favoriteSourceNodeId = null,
-                    favoriteCreatedAt = 0L,
                     latency = -1,
                     tcpingLatency = -1,
                     urlTestLatency = -1,
@@ -1769,7 +1649,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 ?.let { NodeGroupKey.Subscription(it).value }
                         )
                         settingsRepository.setSelectedNodeId(null)
-                        settingsRepository.setNodeListCategory(NodeListCategory.PRIMARY)
                     }
                     true
                 }
@@ -2430,7 +2309,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun currentNodeListSnapshot(): List<Node> = withContext(Dispatchers.Default) {
         val selectedGroup = NodeGroupKey.parse(settingsRepository.selectedNodeGroupId.first())
         val snapshot = when (selectedGroup) {
-            NodeGroupKey.Favorites -> nodeDao().getFavoriteNodes().first()
             is NodeGroupKey.Country -> nodeDao().getSubscriptionNodes().first().filter {
                 it.getCountryCode() == selectedGroup.countryCode
             }
@@ -2443,7 +2321,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sortNodesForList(snapshot)
     }
 
-    /** 按稳定组 ID 解析指定组，支持订阅、地区、收藏和用户创建的本地组。 */
+    /** 按稳定组 ID 解析指定组，支持订阅、地区和用户创建的本地组。 */
     private suspend fun resolveSpeedTestGroupNodes(
         allNodes: List<Node>,
         groupIds: Set<String>
@@ -2451,7 +2329,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (groupIds.isEmpty()) return emptyMap()
 
         val subscriptionNodes = allNodes.filter { it.source == NodeSource.SUBSCRIPTION }
-        val favoriteNodes = allNodes.filter { it.source == NodeSource.FAVORITE }
         val dao = nodeDao()
         return groupIds.associateWith { groupId ->
             when (val group = NodeGroupKey.parse(groupId)) {
@@ -2461,7 +2338,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 is NodeGroupKey.Country -> subscriptionNodes.filter {
                     it.getCountryCode() == group.countryCode
                 }
-                NodeGroupKey.Favorites -> favoriteNodes
                 is NodeGroupKey.Imported -> dao.getNodesByGroup(group.groupId).first()
                 null -> emptyList()
             }

@@ -38,13 +38,7 @@ interface NodeDao {
     @Query("SELECT DISTINCT subscriptionSourceId AS sourceId, subscriptionSourceName AS name FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId IS NOT NULL ORDER BY CAST(subscriptionSourceId AS INTEGER) ASC, subscriptionSourceName ASC")
     fun getSubscriptionGroups(): Flow<List<SubscriptionGroup>>
 
-    @Query("SELECT * FROM nodes WHERE source = 'FAVORITE' ORDER BY favoriteCreatedAt ASC, sortOrder ASC, latency ASC")
-    fun getFavoriteNodes(): Flow<List<Node>>
-
-    @Query("SELECT favoriteSourceNodeId FROM nodes WHERE source = 'FAVORITE' AND favoriteSourceNodeId IS NOT NULL")
-    fun getFavoriteSourceNodeIds(): Flow<List<String?>>
-
-    /** 用户创建的本地订阅组摘要，内置收藏组和地区组不写入这里。 */
+    /** 用户创建的本地订阅组摘要，地区组不写入这里。 */
     @Query("SELECT * FROM node_groups WHERE type IN ('IMPORTED', 'SUBSCRIPTION') ORDER BY sortOrder ASC, createdAt ASC")
     fun getUserSubscriptionGroups(): Flow<List<NodeGroupEntity>>
 
@@ -79,9 +73,6 @@ interface NodeDao {
     @Query("SELECT * FROM nodes WHERE id = :id")
     fun observeNodeById(id: String): Flow<Node?>
 
-    @Query("SELECT * FROM nodes WHERE source = 'FAVORITE' AND favoriteSourceNodeId = :sourceNodeId LIMIT 1")
-    suspend fun getFavoriteBySourceNodeId(sourceNodeId: String): Node?
-    
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNode(node: Node)
     
