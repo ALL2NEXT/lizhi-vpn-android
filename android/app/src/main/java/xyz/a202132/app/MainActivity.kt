@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,6 +56,7 @@ import xyz.a202132.app.ui.screens.SpeedTestSchemeEditorScreen
 import xyz.a202132.app.ui.screens.SpeedTestSchemesScreen
 import xyz.a202132.app.ui.screens.WebNavigationScreen
 import xyz.a202132.app.ui.theme.FireflyTheme
+import xyz.a202132.app.platform.LauncherIdentityManager
 import xyz.a202132.app.viewmodel.MainViewModel
 
 class MainActivity : ComponentActivity() {
@@ -84,6 +86,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = viewModel()
             val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
+            LaunchedEffect(skinSettings.activeScheme.appIconPresetId) {
+                LauncherIdentityManager.apply(
+                    this@MainActivity,
+                    skinSettings.activeScheme.appIconPresetId
+                )
+            }
             FireflyTheme(skinSettings = skinSettings) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

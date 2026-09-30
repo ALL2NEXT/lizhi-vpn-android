@@ -1270,9 +1270,17 @@ class SettingsRepository(private val context: Context) {
                         add(
                             SkinScheme(
                                 id = id,
-                                name = item.optString("name", "我的方案")
+                                name = item.optString("name", "我的主题")
                                     .trim()
-                                    .ifBlank { "我的方案" },
+                                    .ifBlank { "我的主题" },
+                                appDisplayName = item.optString(
+                                    "appDisplayName",
+                                    SkinScheme.DEFAULT_APP_DISPLAY_NAME
+                                ).trim().ifBlank { SkinScheme.DEFAULT_APP_DISPLAY_NAME },
+                                appIconPresetId = item.optString(
+                                    "appIconPresetId",
+                                    SkinScheme.DEFAULT_APP_ICON_PRESET_ID
+                                ).trim().ifBlank { SkinScheme.DEFAULT_APP_ICON_PRESET_ID },
                                 baseColorArgb = normalizeSkinColor(
                                     item.optLong(
                                         "baseColorArgb",
@@ -1314,6 +1322,8 @@ class SettingsRepository(private val context: Context) {
                     JSONObject().apply {
                         put("id", scheme.id)
                         put("name", scheme.name)
+                        put("appDisplayName", scheme.appDisplayName)
+                        put("appIconPresetId", scheme.appIconPresetId)
                         put("baseColorArgb", normalizeSkinColor(scheme.baseColorArgb))
                         put("themeMode", scheme.themeMode.storageName)
                         put("monetEnabled", scheme.monetEnabled)

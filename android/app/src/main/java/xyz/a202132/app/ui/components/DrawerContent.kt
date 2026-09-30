@@ -45,7 +45,8 @@ fun DrawerContent(
     feedbackUrl: String = "",
     githubUrl: String = "",
     telegramUrl: String = "",
-    accountInfo: AccountInfo? = null
+    accountInfo: AccountInfo? = null,
+    appDisplayName: String = "Firefly"
 ) {
     var showAboutDialog by remember { mutableStateOf(false) }
     
@@ -111,7 +112,7 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Palette,
-                title = "样式",
+                title = "主题",
                 onClick = onOpenSkin
             )
 
@@ -134,6 +135,7 @@ fun DrawerContent(
             feedbackEmail = feedbackEmail,
             feedbackUrl = feedbackUrl,
             telegramUrl = telegramUrl,
+            appDisplayName = appDisplayName,
             showUpdateAction = AppConfig.BACKEND_URL.isNotBlank(),
             onCheckUpdate = {
                 showAboutDialog = false

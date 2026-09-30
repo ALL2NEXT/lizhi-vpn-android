@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="launcher_identity_shield_background">#3367D6</color>
+    <color name="launcher_identity_bolt_background">#FF8F00</color>
+    <color name="launcher_identity_cloud_background">#039BE5</color>
+    <color name="launcher_identity_public_background">#7E57C2</color>
+    <color name="launcher_identity_rocket_background">#E53935</color>
+    <color name="launcher_identity_wifi_background">#00897B</color>
+    <color name="launcher_identity_hub_background">#5C6BC0</color>
+</resources>

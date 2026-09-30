@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -30,6 +31,7 @@ import xyz.a202132.app.ui.components.*
 import xyz.a202132.app.ui.dialogs.*
 import xyz.a202132.app.ui.theme.*
 import xyz.a202132.app.viewmodel.MainViewModel
+import xyz.a202132.app.platform.LauncherIdentityPresets
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -146,7 +148,10 @@ fun MainScreen(
                     feedbackUrl = backendSettings.feedbackUrl,
                     githubUrl = backendSettings.githubUrl,
                     telegramUrl = backendSettings.telegramUrl,
-                    accountInfo = accountInfo
+                    accountInfo = accountInfo,
+                    appDisplayName = LauncherIdentityPresets.find(
+                        skinSettings.activeScheme.appIconPresetId
+                    ).displayName
                 )
             }
         },
@@ -179,10 +184,14 @@ fun MainScreen(
                     },
                     title = {
                         Text(
-                            text = "Firefly",
+                            text = LauncherIdentityPresets.find(
+                                skinSettings.activeScheme.appIconPresetId
+                            ).displayName,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     },
                     actions = {

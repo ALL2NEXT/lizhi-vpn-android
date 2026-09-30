@@ -1,6 +1,6 @@
 package xyz.a202132.app.data.model
 
-/** 样式方案使用的主题模式。 */
+/** 主题方案使用的显示模式。 */
 enum class SkinThemeMode(val storageName: String) {
     LIGHT("light"),
     DARK("dark"),

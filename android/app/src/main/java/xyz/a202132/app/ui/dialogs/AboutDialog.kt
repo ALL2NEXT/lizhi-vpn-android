@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -22,8 +21,6 @@ import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
@@ -47,6 +44,7 @@ fun AboutDialog(
     onCheckUpdate: () -> Unit = {},
     onOpenBackendDialog: () -> Unit = {},
     telegramUrl: String = "",
+    appDisplayName: String = "Firefly",
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -54,7 +52,7 @@ fun AboutDialog(
     var iconClickCount by remember { mutableIntStateOf(0) }
     var lastIconClickAt by remember { mutableLongStateOf(0L) }
 
-    fun handleAppIconClick() {
+    fun handleAppNameClick() {
         val now = SystemClock.elapsedRealtime()
         iconClickCount = if (
             lastIconClickAt > 0L && now - lastIconClickAt <= 1_500L
@@ -98,7 +96,6 @@ fun AboutDialog(
             val dialogMaxHeight = if (isLargeScreen) maxHeight * 0.94f else maxHeight
             val contentHorizontalPadding = if (isLargeScreen) 28.dp else 18.dp
             val contentVerticalPadding = if (isLargeScreen) 26.dp else 16.dp
-            val iconSize = if (isLargeScreen) 88.dp else 64.dp
             val sectionSpacer = if (isLargeScreen) 24.dp else 14.dp
 
             Box(
@@ -133,45 +130,24 @@ fun AboutDialog(
                         .padding(horizontal = contentHorizontalPadding, vertical = contentVerticalPadding),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // App Icon
-                    val iconDrawable = remember {
-                        context.packageManager.getApplicationIcon(context.packageName)
-                    }
-                    val iconBitmap = remember(iconDrawable) {
-                        val bitmap = android.graphics.Bitmap.createBitmap(
-                            iconDrawable.intrinsicWidth.coerceAtLeast(1),
-                            iconDrawable.intrinsicHeight.coerceAtLeast(1),
-                            android.graphics.Bitmap.Config.ARGB_8888
-                        )
-                        val canvas = android.graphics.Canvas(bitmap)
-                        iconDrawable.setBounds(0, 0, canvas.width, canvas.height)
-                        iconDrawable.draw(canvas)
-                        bitmap.asImageBitmap()
-                    }
-                    Image(
-                        bitmap = iconBitmap,
-                        contentDescription = "Firefly 应用图标",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .size(iconSize)
-                            .clickable(onClick = ::handleAppIconClick)
-                    )
-
-                    Spacer(modifier = Modifier.height(if (isLargeScreen) 16.dp else 10.dp))
-
                     // App名字
                     Text(
-                        text = "Firefly",
+                        text = appDisplayName.trim().ifBlank { "Firefly" },
                         fontSize = if (isLargeScreen) 24.sp else 22.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = ::handleAppNameClick
+                        )
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
 
                     // 标语
                     Text(
-                        text = "Firefly",
+                        text = appDisplayName.trim().ifBlank { "Firefly" },
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

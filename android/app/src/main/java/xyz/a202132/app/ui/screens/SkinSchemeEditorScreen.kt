@@ -49,6 +49,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.ui.components.AppScreenScaffold
+import xyz.a202132.app.platform.LauncherIdentityPreset
+import xyz.a202132.app.platform.LauncherIdentityPresets
 import xyz.a202132.app.viewmodel.MainViewModel
 import java.io.File
 import java.util.Locale
@@ -116,9 +118,9 @@ fun SkinSchemeEditorScreen(
     val scheme = skinSettings.schemes.firstOrNull { it.id == schemeId }
 
     if (scheme == null) {
-        AppScreenScaffold(title = "编辑样式方案", onBack = onBack) {
+        AppScreenScaffold(title = "编辑主题", onBack = onBack) {
             Text(
-                text = "正在加载方案…",
+                text = "正在加载主题…",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -132,25 +134,17 @@ fun SkinSchemeEditorScreen(
     var colorError by remember { mutableStateOf(false) }
     val isActive = scheme.id == skinSettings.activeSchemeId
 
-    val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri ?: return@rememberLauncherForActivityResult
-        val previousPath = scheme.customImagePath
-        scope.launch {
-            val copiedPath = withContext(Dispatchers.IO) {
-                copySkinImage(context, uri, scheme.id)
-            }
-            if (copiedPath == null) {
-                Toast.makeText(context, "图片读取失败，请重试", Toast.LENGTH_SHORT).show()
-            } else {
-                if (previousPath != null && previousPath != copiedPath) {
-                    withContext(Dispatchers.IO) { File(previousPath).delete() }
-                }
-                viewModel.upsertSkinScheme(
-                    scheme.copy(customImagePath = copiedPath)
-                )
-            }
+    fun applyLauncherIdentity(preset: LauncherIdentityPreset) {
+        val oldCustomIconPath = scheme.customImagePath
+        viewModel.upsertSkinScheme(
+            scheme.copy(
+                appDisplayName = preset.displayName,
+                appIconPresetId = preset.id,
+                customImagePath = null
+            )
+        )
+        if (oldCustomIconPath != null) {
+            scope.launch(Dispatchers.IO) { File(oldCustomIconPath).delete() }
         }
     }
 
@@ -209,7 +203,7 @@ fun SkinSchemeEditorScreen(
     }
 
     AppScreenScaffold(
-        title = "编辑方案",
+        title = "编辑主题",
         subtitle = scheme.name,
         onBack = onBack
     ) {
@@ -219,13 +213,100 @@ fun SkinSchemeEditorScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            SkinImagePreview(
-                imagePath = scheme.customImagePath,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .clip(RoundedCornerShape(16.dp))
-            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = LauncherIdentityPresets.find(
+                                scheme.appIconPresetId
+                            ).displayName,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "名称会同步显示在应用内和手机启动器",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "启动器名称与图标",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "名称和图标采用内置组合。图标只会显示在手机启动器，不会显示在应用界面。",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val nextIdentity = LauncherIdentityPresets.all
+                                .filterNot { it.id == scheme.appIconPresetId }
+                                .randomOrNull()
+                                ?: LauncherIdentityPresets.all.random()
+                            applyLauncherIdentity(nextIdentity)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("随机名称测试")
+                    }
+                    LauncherIdentityPresets.all.forEach { preset ->
+                        val selected = scheme.appIconPresetId == preset.id
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { applyLauncherIdentity(preset) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(
+                                width = if (selected) 1.5.dp else 1.dp,
+                                color = if (selected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outlineVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text(
+                                    text = preset.displayName,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "启动器图标：${preset.iconDescription}",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -235,7 +316,7 @@ fun SkinSchemeEditorScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "方案信息",
+                        text = "主题方案信息",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -244,7 +325,7 @@ fun SkinSchemeEditorScreen(
                     OutlinedTextField(
                         value = nameInput,
                         onValueChange = { nameInput = it },
-                        label = { Text("方案名称") },
+                        label = { Text("主题名称") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -292,41 +373,6 @@ fun SkinSchemeEditorScreen(
                                 ) {
                                     Text(mode.displayName())
                                 }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "方案图片",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = { imagePicker.launch(arrayOf("image/*")) }) {
-                            Text("选择图片")
-                        }
-                        if (scheme.customImagePath != null) {
-                            OutlinedButton(
-                                onClick = {
-                                    val oldPath = scheme.customImagePath
-                                    viewModel.upsertSkinScheme(scheme.copy(customImagePath = null))
-                                    scope.launch(Dispatchers.IO) {
-                                        File(oldPath).delete()
-                                    }
-                                }
-                            ) {
-                                Text("使用默认图片")
                             }
                         }
                     }

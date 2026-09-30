@@ -4,7 +4,6 @@ import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -44,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import java.io.File
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.ui.components.AppScreenScaffold
+import xyz.a202132.app.platform.LauncherIdentityPresets
 import xyz.a202132.app.viewmodel.MainViewModel
 
 @Composable
@@ -68,7 +69,7 @@ fun SkinScreen(
     var schemeToDelete by remember { mutableStateOf<SkinScheme?>(null) }
 
     AppScreenScaffold(
-        title = "样式方案",
+        title = "主题",
         onBack = onBack
     ) {
         Column(
@@ -78,10 +79,15 @@ fun SkinScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "选择方案",
+                text = "主题方案",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "每个主题都可以单独设置应用内名称、图标、配色和主页状态图。",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             skinSettings.schemes.forEach { scheme ->
                 SkinSchemeCard(
@@ -102,7 +108,7 @@ fun SkinScreen(
             ) {
                 Icon(Icons.Outlined.Add, contentDescription = null)
                 Spacer(modifier = Modifier.size(8.dp))
-                Text("新增方案")
+                Text("新增主题")
             }
 
         }
@@ -111,12 +117,12 @@ fun SkinScreen(
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
-            title = { Text("新增样式方案") },
+            title = { Text("新增主题") },
             text = {
                 OutlinedTextField(
                     value = newSchemeName,
                     onValueChange = { newSchemeName = it },
-                    label = { Text("方案名称") },
+                    label = { Text("主题名称") },
                     placeholder = { Text("例如：深海蓝") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -146,8 +152,8 @@ fun SkinScreen(
     schemeToDelete?.let { scheme ->
         AlertDialog(
             onDismissRequest = { schemeToDelete = null },
-            title = { Text("删除样式方案") },
-            text = { Text("确定删除“${scheme.name}”吗？图片和颜色设置也会一并删除。") },
+            title = { Text("删除主题") },
+            text = { Text("确定删除“${scheme.name}”吗？自定义图标和颜色设置也会一并删除。") },
             dismissButton = {
                 TextButton(onClick = { schemeToDelete = null }) {
                     Text("取消")
@@ -213,25 +219,14 @@ private fun SkinSchemeCard(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            Surface(
                 modifier = Modifier
-                    .size(66.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            ) {
-                SkinImagePreview(
-                    imagePath = scheme.customImagePath,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(6.dp)
-                        .size(18.dp),
-                    shape = CircleShape,
-                    color = previewColor,
-                    border = BorderStroke(1.dp, Color.White)
-                ) {}
-            }
+                    .size(42.dp)
+                    .clip(CircleShape),
+                shape = CircleShape,
+                color = previewColor,
+                border = BorderStroke(1.dp, Color.White)
+            ) {}
             Spacer(modifier = Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -240,12 +235,19 @@ private fun SkinSchemeCard(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                Text(
+                    text = LauncherIdentityPresets.find(scheme.appIconPresetId).displayName,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
             if (scheme.isDefault) {
                 IconButton(onClick = onEdit) {
                     Icon(
                         imageVector = Icons.Outlined.Edit,
-                        contentDescription = "编辑方案",
+                        contentDescription = "编辑主题",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -259,7 +261,7 @@ private fun SkinSchemeCard(
                 IconButton(onClick = onEdit) {
                     Icon(
                         imageVector = Icons.Outlined.Edit,
-                        contentDescription = "编辑方案",
+                        contentDescription = "编辑主题",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }

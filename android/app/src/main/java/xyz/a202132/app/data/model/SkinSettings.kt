@@ -2,16 +2,20 @@ package xyz.a202132.app.data.model
 
 import java.util.UUID
 
-/** 一个可切换、可编辑的皮肤方案。 */
+/** 一个可切换、可编辑的主题方案。 */
 data class SkinScheme(
     val id: String,
     val name: String,
+    /** 与启动器名称一致的内置身份名称，显示名由图标预设 ID 决定。 */
+    val appDisplayName: String = DEFAULT_APP_DISPLAY_NAME,
+    /** 内置启动器名称与图标组合的稳定 ID。 */
+    val appIconPresetId: String = DEFAULT_APP_ICON_PRESET_ID,
     val baseColorArgb: Long = SkinSettings.DEFAULT_BASE_COLOR_ARGB,
     /** 主题模式，默认跟随系统。 */
     val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,
     /** Android 12 及以上使用系统壁纸生成的动态配色，低版本回退到基础颜色。 */
     val monetEnabled: Boolean = false,
-    /** 左侧设置栏顶部背景图。 */
+    /** 旧版自定义启动器图标路径，保留用于读取旧配置。 */
     val customImagePath: String? = null,
     /** 主页连接按钮在未连接、连接中、已连接状态下的自定义图片。 */
     val homeDisconnectedImagePath: String? = null,
@@ -23,22 +27,24 @@ data class SkinScheme(
 
     companion object {
         const val DEFAULT_SCHEME_ID = "default"
+        const val DEFAULT_APP_DISPLAY_NAME = "Firefly"
+        const val DEFAULT_APP_ICON_PRESET_ID = "android"
 
         fun default(): SkinScheme = SkinScheme(
             id = DEFAULT_SCHEME_ID,
-            name = "默认方案",
+            name = "默认主题",
             themeMode = SkinThemeMode.SYSTEM,
             monetEnabled = true
         )
 
         fun create(name: String): SkinScheme = SkinScheme(
             id = UUID.randomUUID().toString(),
-            name = name.trim().ifBlank { "我的方案" }
+            name = name.trim().ifBlank { "我的主题" }
         )
     }
 }
 
-/** 用户可持久化的应用皮肤配置。 */
+/** 用户可持久化的应用主题配置。 */
 data class SkinSettings(
     val baseColorArgb: Long = DEFAULT_BASE_COLOR_ARGB,
     val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,

@@ -17,7 +17,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import xyz.a202132.app.R
 import java.io.File
 import java.util.Locale
 
@@ -25,7 +24,7 @@ import java.util.Locale
 internal fun SkinImagePreview(
     imagePath: String?,
     modifier: Modifier = Modifier,
-    defaultImageRes: Int = R.drawable.drawer_wallpaper,
+    defaultImageRes: Int,
     contentDescription: String = "样式图片"
 ) {
     val customImage by produceState<ImageBitmap?>(
@@ -63,7 +62,7 @@ internal fun SkinImagePreview(
 }
 
 internal fun copySkinImage(context: Context, uri: Uri, schemeId: String): String? {
-    return copySkinAsset(context, uri, schemeId, "wallpaper")
+    return copySkinAsset(context, uri, schemeId, "app_icon")
 }
 
 /** 将方案中的主页状态图复制到应用私有目录，避免不同方案互相覆盖。 */
