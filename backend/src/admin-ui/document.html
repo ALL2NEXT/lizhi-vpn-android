@@ -50,7 +50,6 @@
               <span>应用设置</span><span class="nav-chevron" aria-hidden="true">⌄</span>
             </button>
              <div id="app-settings-subnav" class="nav-submenu" role="group" aria-label="应用设置子菜单">
-               <button class="tab-button" role="tab" type="button" data-tab="app-settings">应用基础设置</button>
                <button class="tab-button" role="tab" type="button" data-tab="about-page">关于页</button>
                <button class="tab-button" role="tab" type="button" data-tab="navigation-page">导航页</button>
                <button class="tab-button" role="tab" type="button" data-tab="subscriptions">订阅线路</button>
@@ -258,20 +257,6 @@
     <div id="subscriptionRows"></div>
      <button class="secondary" onclick="addSource()">添加线路</button>
      <button type="button" onclick="pushSection('subscriptions')">推送</button>
-   </section>
-
-  <section class="card tab-panel" role="tabpanel" data-panel="app-settings">
-    <h2>应用基础设置</h2>
-    <div class="settings-sections">
-      <section class="settings-section">
-        <h3 class="settings-section-title">服务请求设置</h3>
-        <p class="settings-section-description">设置后台请求超时时间，避免外部服务响应过慢。</p>
-        <div class="grid">
-          <div class="field"><label>后台请求超时（毫秒）<input id="nodeRequestTimeoutMs" type="number" min="5000" max="60000" step="1000"></label></div>
-        </div>
-      </section>
-    </div>
-    <button type="button" onclick="pushSection('app-settings')">推送</button>
    </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="about-page">

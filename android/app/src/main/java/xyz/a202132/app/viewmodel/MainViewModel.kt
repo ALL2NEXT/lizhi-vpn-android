@@ -431,6 +431,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     
     // 自动化测试设置
+    val serviceRequestTimeoutMs = settingsRepository.serviceRequestTimeoutMs.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SettingsRepository.DEFAULT_SERVICE_REQUEST_TIMEOUT_MS
+    )
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
     val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
     val speedTestDurationMs = settingsRepository.speedTestDurationMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
@@ -873,6 +878,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setTcpingTestTimeoutMs(value: Long) {
         viewModelScope.launch {
             settingsRepository.setTcpingTestTimeoutMs(value)
+        }
+    }
+
+    fun setServiceRequestTimeoutMs(value: Long) {
+        viewModelScope.launch {
+            settingsRepository.setServiceRequestTimeoutMs(value)
         }
     }
 
@@ -2266,7 +2277,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 accountManager.updateNickname(
                     nickname = nickname,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                    timeoutMs = serviceRequestTimeoutMs.value
                 ).onFailure { error ->
                     Log.w(tag, "Failed to update nickname", error)
                     val message = error.message ?: "昵称修改失败"
@@ -2294,7 +2305,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _accountMessage.value = null
             try {
                 accountManager.syncCurrentAccount(
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                    timeoutMs = serviceRequestTimeoutMs.value
                 ).onSuccess {
                     _accountMessage.value = "账户信息已同步"
                 }.onFailure { error ->
@@ -2334,7 +2345,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     email = email,
                     password = password,
                     registrationCode = registrationCode,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                    timeoutMs = serviceRequestTimeoutMs.value
                 ).onSuccess {
                     _accountMessage.value = "绑定成功，已获得绑定经验"
                 }.onFailure { error ->
@@ -2364,7 +2375,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val result = accountManager.loginAccount(
                     email = email,
                     password = password,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                    timeoutMs = serviceRequestTimeoutMs.value
                 )
                 result.onFailure { error ->
                     Log.w(tag, "Failed to switch account", error)
@@ -2397,7 +2408,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val result = accountManager.deleteAccount(
                     password = password,
-                    timeoutMs = backendSettings.value.nodeRequestTimeoutMs
+                    timeoutMs = serviceRequestTimeoutMs.value
                 )
                 result.onFailure { error ->
                     Log.w(tag, "Failed to delete account", error)

@@ -54,6 +54,10 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class SettingsRepository(private val context: Context) {
     
     companion object {
+        const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
+        private const val MIN_SERVICE_REQUEST_TIMEOUT_MS = 5_000L
+        private const val MAX_SERVICE_REQUEST_TIMEOUT_MS = 60_000L
+
         private val SELECTED_NODE_ID = stringPreferencesKey("selected_node_id")
         private val PROXY_MODE = stringPreferencesKey("proxy_mode")
         // Keep these persisted names so the terminology change preserves existing selections.
@@ -115,6 +119,8 @@ class SettingsRepository(private val context: Context) {
         private val NODE_GROUPING_MODE = stringPreferencesKey("node_grouping_mode")
         private val SELECTED_NODE_GROUP_ID = stringPreferencesKey("selected_node_group_id")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
+        // 请求超时保存在本机，首次获取后台配置时也能读取。
+        private val SERVICE_REQUEST_TIMEOUT_MS = longPreferencesKey("service_request_timeout_ms")
         private val SPEED_TEST_DOWNLOAD_URL = stringPreferencesKey("speed_test_download_url")
         private val SPEED_TEST_DURATION_MS = longPreferencesKey("speed_test_duration_ms")
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
@@ -906,6 +912,20 @@ class SettingsRepository(private val context: Context) {
 
     val tcpingTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
         (preferences[TCPING_TEST_TIMEOUT_MS] ?: xyz.a202132.app.AppConfig.TCPING_TEST_TIMEOUT).coerceAtLeast(500L)
+    }
+
+    val serviceRequestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
+        (preferences[SERVICE_REQUEST_TIMEOUT_MS] ?: DEFAULT_SERVICE_REQUEST_TIMEOUT_MS)
+            .coerceIn(MIN_SERVICE_REQUEST_TIMEOUT_MS, MAX_SERVICE_REQUEST_TIMEOUT_MS)
+    }
+
+    suspend fun setServiceRequestTimeoutMs(value: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[SERVICE_REQUEST_TIMEOUT_MS] = value.coerceIn(
+                MIN_SERVICE_REQUEST_TIMEOUT_MS,
+                MAX_SERVICE_REQUEST_TIMEOUT_MS
+            )
+        }
     }
 
     suspend fun setTcpingTestTimeoutMs(value: Long) {

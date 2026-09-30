@@ -65,9 +65,6 @@ data class BackendAppSettings(
     @SerializedName("telegramUrl")
     val telegramUrl: String = "",
 
-    @SerializedName("nodeRequestTimeoutMs")
-    val nodeRequestTimeoutMs: Long = 25000L,
-
     @SerializedName("registrationEnabled")
     val registrationEnabled: Boolean = true,
 

@@ -154,7 +154,6 @@ export function normalizeSettings(value, subscriptions = []) {
   const hasRegistrationControl =
     Object.prototype.hasOwnProperty.call(settings, "registrationEnabled") ||
     Object.prototype.hasOwnProperty.call(settings, "formalRegistrationEnabled");
-  const timeout = Number(settings.nodeRequestTimeoutMs);
   const webNavigationGroups = settings.webNavigationGroups == null
     ? DEFAULT_STATE.settings.webNavigationGroups.map((group) => ({
       title: group.title,
@@ -168,9 +167,6 @@ export function normalizeSettings(value, subscriptions = []) {
     feedbackUrl: cleanText(settings.feedbackUrl),
     githubUrl: cleanText(settings.githubUrl),
     telegramUrl: cleanText(settings.telegramUrl),
-    nodeRequestTimeoutMs: Number.isFinite(timeout)
-      ? Math.round(Math.min(Math.max(timeout, 5000), 60000))
-      : 25000,
     registrationEnabled: parseFlag(
       settings.registrationEnabled ?? settings.formalRegistrationEnabled,
       true,

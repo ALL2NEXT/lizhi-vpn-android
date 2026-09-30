@@ -361,7 +361,6 @@ function fillState(state) {
   setValue('feedbackUrl', settings.feedbackUrl);
    setValue('githubUrl', settings.githubUrl);
   setValue('telegramUrl', settings.telegramUrl);
-  setValue('nodeRequestTimeoutMs', settings.nodeRequestTimeoutMs || 25000);
   checked('registrationEnabled', settings.registrationEnabled !== false);
   checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
   const notice = currentState.notice || {};
@@ -506,7 +505,6 @@ function formState() {
        feedbackUrl: value('feedbackUrl'),
        githubUrl: value('githubUrl'),
        telegramUrl: value('telegramUrl'),
-       nodeRequestTimeoutMs: Number(value('nodeRequestTimeoutMs') || 25000),
        registrationEnabled: el('registrationEnabled').checked,
        requireAdminRegistrationCode: el('requireAdminRegistrationCode').checked,
        },
@@ -576,18 +574,7 @@ async function pushSection(section) {
     const validationError = validateWebNavigationGroups(form.settings.webNavigationGroups);
     if (validationError) return show(validationError, true);
   }
-  const settings = section === 'app-settings'
-    ? Object.assign({}, form.settings, {
-      webNavigationGroups: currentState.settings.webNavigationGroups,
-      registrationEnabled: currentState.settings.registrationEnabled,
-      requireAdminRegistrationCode: currentState.settings.requireAdminRegistrationCode,
-      websiteUrl: currentState.settings.websiteUrl,
-      feedbackEmail: currentState.settings.feedbackEmail,
-      feedbackUrl: currentState.settings.feedbackUrl,
-      githubUrl: currentState.settings.githubUrl,
-      telegramUrl: currentState.settings.telegramUrl
-    })
-    : section === 'navigation-page'
+  const settings = section === 'navigation-page'
       ? Object.assign({}, currentState.settings, {
         webNavigationGroups: form.settings.webNavigationGroups
       })

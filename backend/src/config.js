@@ -310,7 +310,6 @@ export const DEFAULT_STATE = {
     feedbackUrl: "",
     githubUrl: "",
     telegramUrl: "",
-    nodeRequestTimeoutMs: 25000,
     // 后台可关闭游客注册正式用户；默认保持现有注册流程开放。
     registrationEnabled: true,
     requireAdminRegistrationCode: false,

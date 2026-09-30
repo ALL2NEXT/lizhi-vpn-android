@@ -554,8 +554,7 @@ App 使用的唯一公开接口是 `GET /api/client`：
     "websiteUrl": "https://example.com",
     "feedbackEmail": "support@example.com",
     "feedbackUrl": "https://github.com/example/issues",
-    "githubUrl": "https://github.com/example/project",
-    "nodeRequestTimeoutMs": 25000
+    "githubUrl": "https://github.com/example/project"
   },
   "notice": null,
   "appUpdate": null

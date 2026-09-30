@@ -72,6 +72,11 @@ fun OtherConfigScreen(
     val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
     val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
+    val serviceRequestTimeoutMs by viewModel.serviceRequestTimeoutMs.collectAsStateWithLifecycle()
+    var serviceRequestTimeoutSecondsInput by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(serviceRequestTimeoutMs) {
+        serviceRequestTimeoutSecondsInput = (serviceRequestTimeoutMs / 1000L).toString()
+    }
 
     val updateDownloadDirectoryName = updateDownloadDirectoryUri?.let { uriString ->
         runCatching {
@@ -193,6 +198,41 @@ fun OtherConfigScreen(
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            OtherConfigSection(title = "服务请求超时") {
+                Text(
+                    text = "设置本机请求后台接口和订阅源的最长等待时间。默认 25 秒，范围 5–60 秒。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = serviceRequestTimeoutSecondsInput,
+                        onValueChange = { input ->
+                            serviceRequestTimeoutSecondsInput = input.filter(Char::isDigit).take(2)
+                        },
+                        label = { Text("超时时间（秒）") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f)
+                    )
+                    val timeoutSeconds = serviceRequestTimeoutSecondsInput.toLongOrNull()
+                    TextButton(
+                        enabled = timeoutSeconds?.let {
+                            it in 5L..60L && it * 1000L != serviceRequestTimeoutMs
+                        } == true,
+                        onClick = {
+                            timeoutSeconds?.let { viewModel.setServiceRequestTimeoutMs(it * 1000L) }
+                        }
+                    ) {
+                        Text("保存")
+                    }
+                }
             }
 
             OtherConfigSection(title = "测速后自动删除节点") {

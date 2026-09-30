@@ -150,7 +150,7 @@ internal class SubscriptionDataLoader(
     }
 
     private suspend fun registerAccountForSession() =
-        accountManager.register(backendSettings.value.nodeRequestTimeoutMs)
+        accountManager.register(settingsRepository.serviceRequestTimeoutMs.first())
             .onFailure { error ->
                 Log.w(TAG, "Account registration failed; continuing without a fresh account response", error)
             }
@@ -166,9 +166,9 @@ internal class SubscriptionDataLoader(
         }
 
         return try {
-            suspend fun request() = withTimeout(
-                backendSettings.value.nodeRequestTimeoutMs.coerceIn(5_000L, 60_000L)
-            ) {
+            // 首次配置请求使用本机超时值，不能依赖本次响应下发的配置。
+            val requestTimeoutMs = settingsRepository.serviceRequestTimeoutMs.first()
+            suspend fun request() = withTimeout(requestTimeoutMs) {
                 NetworkClient.apiService.getBackendConfig(backendClientUrl(forceRefresh))
             }
             var response = runCatching { request() }
@@ -214,12 +214,13 @@ internal class SubscriptionDataLoader(
     private suspend fun fetchNodesFromSubscriptions(
         sources: List<SubscriptionSource>
     ): Result<SubscriptionFetchResult> = coroutineScope {
+        val requestTimeoutMs = settingsRepository.serviceRequestTimeoutMs.first()
         val results = sources.map { subscription ->
             async {
                 val requestUrl = subscriptionRequestUrl(subscription.url)
                 var result = subscriptionParser.fetchAndParse(
                     requestUrl,
-                    backendSettings.value.nodeRequestTimeoutMs,
+                    requestTimeoutMs,
                     subscription.encrypted
                 )
                 if (result.isFailure) {
@@ -230,7 +231,7 @@ internal class SubscriptionDataLoader(
                     )
                     result = subscriptionParser.fetchAndParse(
                         requestUrl,
-                        backendSettings.value.nodeRequestTimeoutMs,
+                        requestTimeoutMs,
                         subscription.encrypted
                     )
                 }
