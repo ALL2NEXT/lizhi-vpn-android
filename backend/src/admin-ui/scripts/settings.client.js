@@ -150,6 +150,16 @@ function addWebNavigationItem(groupRow, item) {
   row.className = 'web-nav-item';
   row.innerHTML = '<label>网站名称<input data-field="title" type="text" placeholder="例如：中科大测速"></label>' +
     '<label>网站网址<input data-field="url" type="url" placeholder="https://example.com"></label>' +
+    '<div class="web-nav-icon-editor">' +
+      '<div class="web-nav-icon-preview" data-role="icon-preview" hidden><img alt="网站图标预览"></div>' +
+      '<div class="web-nav-icon-actions">' +
+        '<input data-field="icon-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon" hidden>' +
+        '<button class="secondary" type="button" data-action="icon-upload">上传图标</button>' +
+        '<button class="secondary" type="button" data-action="icon-fetch">从网站获取</button>' +
+        '<button class="secondary" type="button" data-action="icon-clear">清除图标</button>' +
+      '</div>' +
+      '<small>支持 PNG、JPEG、WebP、GIF、ICO，单张不超过 128 KB。</small>' +
+    '</div>' +
     '<div class="web-nav-item-controls" role="group" aria-label="网站排序和删除操作">' +
       '<button class="secondary" type="button" data-action="item-up" aria-label="上移网站" title="上移网站">↑</button>' +
       '<button class="secondary" type="button" data-action="item-down" aria-label="下移网站" title="下移网站">↓</button>' +
@@ -157,7 +167,17 @@ function addWebNavigationItem(groupRow, item) {
     '</div>';
   row.querySelector('[data-field="title"]').value = String(item.title || '');
   row.querySelector('[data-field="url"]').value = String(item.url || '');
+  setWebNavigationIcon(row, item.iconBase64 || '', item.iconMimeType || '');
   groupRow.querySelector('.web-nav-items').appendChild(row);
+  const fileInput = row.querySelector('[data-field="icon-file"]');
+  row.querySelector('[data-action="icon-upload"]').onclick = function() { fileInput.click(); };
+  fileInput.onchange = function() { readWebNavigationIconFile(row, fileInput); };
+  row.querySelector('[data-action="icon-fetch"]').onclick = function() { fetchWebNavigationIcon(row); };
+  row.querySelector('[data-action="icon-clear"]').onclick = function() {
+    setWebNavigationIcon(row, '', '');
+    fileInput.value = '';
+    show('已清除网站图标，推送应用设置后生效');
+  };
   row.querySelector('[data-action="item-up"]').onclick = function() {
     moveWebNavigationRow(row, -1);
   };
@@ -169,6 +189,80 @@ function addWebNavigationItem(groupRow, item) {
     updateWebNavigationControls();
   };
   updateWebNavigationControls();
+}
+
+// 后台上传和抓取的图标统一保存为 MIME 类型加原始 Base64 数据。
+function setWebNavigationIcon(row, iconBase64, iconMimeType) {
+  row.dataset.iconBase64 = String(iconBase64 || '');
+  row.dataset.iconMimeType = String(iconMimeType || '');
+  const preview = row.querySelector('[data-role="icon-preview"]');
+  const image = preview.querySelector('img');
+  const hasIcon = Boolean(row.dataset.iconBase64 && row.dataset.iconMimeType);
+  preview.hidden = !hasIcon;
+  image.src = hasIcon
+    ? 'data:' + row.dataset.iconMimeType + ';base64,' + row.dataset.iconBase64
+    : '';
+}
+
+function readWebNavigationIconFile(row, input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const supportedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon'];
+  if (!supportedTypes.includes(file.type)) {
+    input.value = '';
+    return show('图标格式需为 PNG、JPEG、WebP、GIF 或 ICO', true);
+  }
+  if (file.size > 128 * 1024) {
+    input.value = '';
+    return show('单张网站图标不能超过 128 KB', true);
+  }
+  const reader = new FileReader();
+  reader.onload = function() {
+    const dataUrl = String(reader.result || '');
+    const encoded = dataUrl.match(/^data:(image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon));base64,([A-Za-z0-9+/=]+)$/);
+    if (!encoded) return show('无法读取该图标文件', true);
+    setWebNavigationIcon(row, encoded[2], encoded[1]);
+    show('图标已载入，推送应用设置后生效');
+  };
+  reader.onerror = function() { show('读取图标文件失败', true); };
+  reader.readAsDataURL(file);
+}
+
+async function fetchWebNavigationIcon(row) {
+  const url = row.querySelector('[data-field="url"]').value.trim();
+  if (!url) return show('请先填写网站网址', true);
+  let parsedUrl;
+  try { parsedUrl = new URL(url); } catch (_) { return show('网站网址格式无效', true); }
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) return show('网站网址需使用 http:// 或 https://', true);
+
+  const button = row.querySelector('[data-action="icon-fetch"]');
+  button.disabled = true;
+  const originalText = button.textContent;
+  button.textContent = '获取中…';
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/navigation-icon', {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({url: url})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || '网站图标获取失败');
+    setWebNavigationIcon(row, data.iconBase64, data.iconMimeType);
+    show('网站图标已获取，推送应用设置后生效');
+  } catch (error) {
+    const errorCode = error && error.message ? error.message : '';
+    const errorMessages = {
+      invalid_navigation_icon_url: '只支持获取公网网站的图标，请检查网址',
+      navigation_icon_redirect_blocked: '网站跳转到了受限制的地址，后台已停止获取',
+      navigation_icon_not_found: '目标网站没有提供图标，请尝试上传图片',
+      navigation_icon_site_challenge: '目标网站启用了机器人验证，后台无法自动读取，请上传图标',
+      navigation_icon_unsupported_format: '目标网站返回了暂不支持的图标格式，请上传 PNG、JPEG、WebP、GIF 或 ICO 图片'
+    };
+    show(errorMessages[errorCode] || '网站图标获取失败，请检查网址后重试', true);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
 }
 
 function moveWebNavigationRow(row, direction) {
@@ -203,7 +297,9 @@ function readWebNavigationGroups() {
       items: Array.from(group.querySelector('.web-nav-items').children).map(function(item) {
         return {
           title: item.querySelector('[data-field="title"]').value.trim(),
-          url: item.querySelector('[data-field="url"]').value.trim()
+          url: item.querySelector('[data-field="url"]').value.trim(),
+          iconBase64: item.dataset.iconBase64 || '',
+          iconMimeType: item.dataset.iconMimeType || ''
         };
       })
     };
@@ -214,6 +310,7 @@ function readWebNavigationGroups() {
 function validateWebNavigationGroups(groups) {
   if (groups.length > 50) return '导航网站分组最多 50 个';
   let itemCount = 0;
+  let iconTotalSize = 0;
   for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
     const group = groups[groupIndex];
     if (!group.title || group.title.length > 60) {
@@ -236,6 +333,14 @@ function validateWebNavigationGroups(groups) {
       if (!['http:', 'https:'].includes(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password) {
         return '“' + item.title + '”的网址需使用 http:// 或 https://，且不能包含账号密码';
       }
+      const iconBase64 = item.iconBase64 || '';
+      const iconMimeType = item.iconMimeType || '';
+      if (iconBase64 && (iconBase64.length > 180000 || !['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon'].includes(iconMimeType))) {
+        return '“' + item.title + '”的网站图标格式无效或超过 128 KB';
+      }
+      if (!iconBase64 && iconMimeType) return '“' + item.title + '”的网站图标数据不完整';
+      iconTotalSize += iconBase64.length;
+      if (iconTotalSize > 4 * 1024 * 1024) return '导航网站图标数据总量不能超过 4 MB';
       itemCount += 1;
       if (itemCount > 250) return '导航网站最多 250 个';
     }

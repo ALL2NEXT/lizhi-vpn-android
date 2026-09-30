@@ -89,7 +89,13 @@ data class BackendWebNavigationItem(
     val title: String,
 
     @SerializedName("url")
-    val url: String
+    val url: String,
+
+    @SerializedName("iconBase64")
+    val iconBase64: String? = null,
+
+    @SerializedName("iconMimeType")
+    val iconMimeType: String? = null
 )
 
 data class AccountRegisterRequest(

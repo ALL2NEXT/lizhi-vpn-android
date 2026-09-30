@@ -117,6 +117,13 @@
     .web-nav-items { display: grid; gap: 10px; }
     .web-nav-item { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(220px, 1.5fr) auto; align-items: end; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #374151; }
     .web-nav-item label { display: flex; flex-direction: column; gap: 6px; color: #aab4c5; font-size: 12px; }
+    .web-nav-icon-editor { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
+    .web-nav-icon-preview { display: grid; width: 48px; height: 48px; place-items: center; overflow: hidden; background: #0b1220; border: 1px solid #4b5563; border-radius: 9px; }
+    .web-nav-icon-preview[hidden] { display: none !important; }
+    .web-nav-icon-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .web-nav-icon-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .web-nav-icon-actions button { margin: 0; }
+    .web-nav-icon-editor small { flex-basis: 100%; margin: 0; color: #94a3b8; }
     .web-nav-item-controls { padding-bottom: 1px; }
     .web-nav-add-site { margin: 12px 0 0; }
     .web-nav-empty { padding: 8px 0; color: #94a3b8; font-size: 13px; }

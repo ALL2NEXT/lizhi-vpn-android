@@ -2,6 +2,8 @@
  * KV-backed application settings and managed subscription configuration.
  */
 
+import { fetchWebsiteIcon } from "../../services/navigation-icons.js";
+
 export function createAdminStateRoutes(deps) {
   const {
     beijingTimestamp,
@@ -13,7 +15,24 @@ export function createAdminStateRoutes(deps) {
   } = deps;
 
   return async function handleAdminState(path, request, env) {
-  if (path === "/api/state" && request.method === "GET") {
+    if (path === "/api/navigation-icon" && request.method === "POST") {
+      try {
+        const incoming = await request.json();
+        return json(await fetchWebsiteIcon(typeof incoming.url === "string" ? incoming.url.trim() : ""));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const status = message === "navigation_icon_not_found"
+          ? 404
+          : message.startsWith("invalid_navigation_icon") || message === "navigation_icon_redirect_blocked"
+            ? 400
+            : message === "navigation_icon_site_challenge" || message === "navigation_icon_unsupported_format"
+              ? 422
+            : 502;
+        return json({ error: message }, status);
+      }
+    }
+
+    if (path === "/api/state" && request.method === "GET") {
       return json(await readState(env));
     }
 
@@ -36,4 +55,3 @@ export function createAdminStateRoutes(deps) {
     return null;
   };
 }
-
