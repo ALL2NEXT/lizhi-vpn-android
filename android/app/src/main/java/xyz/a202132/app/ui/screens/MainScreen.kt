@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.ProxyMode
 import xyz.a202132.app.data.model.HomeNavigationStyle
+import xyz.a202132.app.data.model.NodeGroupKey
 import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.network.NetworkClient
@@ -33,6 +34,16 @@ import xyz.a202132.app.ui.dialogs.*
 import xyz.a202132.app.ui.theme.*
 import xyz.a202132.app.viewmodel.MainViewModel
 import xyz.a202132.app.platform.LauncherIdentityPresets
+import java.util.Locale
+
+private fun Int.toHomeLatency(): String = when {
+    this >= 0 -> "${this}ms"
+    this == -2 -> "超时"
+    else -> "未测速"
+}
+
+private fun Float.toHomeSpeed(): String =
+    if (isFinite() && this > 0f) "${"%.2f".format(Locale.ROOT, this)} Mbps" else "未测速"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -82,6 +93,11 @@ fun MainScreen(
     val homeSwipeLeftSpeedTestEnabled by viewModel.homeSwipeLeftSpeedTestEnabled.collectAsStateWithLifecycle()
     val homeSwipeRightSpeedTestEnabled by viewModel.homeSwipeRightSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
+    val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
+    val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
+    val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
+    val countryOptions by viewModel.countryOptions.collectAsStateWithLifecycle()
+    val userSubscriptionGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
@@ -90,6 +106,19 @@ fun MainScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
+
+    val selectedGroupName = when (val selectedGroup = NodeGroupKey.parse(selectedNodeGroupId)) {
+        is NodeGroupKey.Subscription -> subscriptionGroups
+            .firstOrNull { it.sourceId == selectedGroup.sourceId }
+            ?.name ?: "未知订阅组"
+        is NodeGroupKey.Country -> countryOptions
+            .firstOrNull { it.code.equals(selectedGroup.countryCode, ignoreCase = true) }
+            ?.name ?: selectedGroup.countryCode
+        is NodeGroupKey.Imported -> userSubscriptionGroups
+            .firstOrNull { it.id == NodeGroupKey.Imported(selectedGroup.groupId).value }
+            ?.name ?: "未知仓库组"
+        null -> "未选择"
+    }
     
     val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
@@ -217,13 +246,17 @@ fun MainScreen(
                 },
                 containerColor = MaterialTheme.colorScheme.background
             ) { paddingValues ->
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                 Spacer(modifier = Modifier.weight(1f))
                 
                 // 连接按钮
@@ -298,6 +331,72 @@ fun MainScreen(
                 )
                 
                 Spacer(modifier = Modifier.weight(1f))
+                    }
+
+                    // 主页左上角以纯文本展示当前分组和节点参数。
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 24.dp, top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = "选中组：$selectedGroupName",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        val node = currentNode
+                        val isConnected = vpnState == VpnState.CONNECTED
+                        Text(
+                            text = "${if (isConnected) "连接节点" else "选中节点"}：${node?.name ?: "未选择"}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        if (node != null) {
+                            val countryCode = node.getCountryCode()
+                            val regionName = countryCode?.let { code ->
+                                countryOptions.firstOrNull {
+                                    it.code.equals(code, ignoreCase = true)
+                                }?.name
+                            } ?: node.countryName?.takeIf(String::isNotBlank)
+                                ?: countryCode
+                                ?: "未知地区"
+                            Text(
+                                text = "地区组：$regionName",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "仓库组：${node.getConnectionGroupName()}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "延迟：${node.latency.toHomeLatency()}  TCPing：${node.tcpingLatency.toHomeLatency()}  URLTest：${node.urlTestLatency.toHomeLatency()}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "下载：${node.downloadMbps.toHomeSpeed()}  上传：${node.uploadMbps.toHomeSpeed()}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
         }
