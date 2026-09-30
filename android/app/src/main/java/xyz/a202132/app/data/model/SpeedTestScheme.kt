@@ -17,7 +17,7 @@ data class SpeedTestGroupOption(
 
 /**
  * 可复用的节点选择方案。测速阶段按 TCPing、204 URL、带宽测速的顺序执行，
- * 每个阶段都可以单独开关，并独立配置测速作用域和参数。
+ * 三个测速阶段可单独开关；第四步可选连接后的服务解锁检测项目。
  */
 data class SpeedTestScheme(
     val id: String,
@@ -28,6 +28,8 @@ data class SpeedTestScheme(
     val tcpingEnabled: Boolean = true,
     val urlTestEnabled: Boolean = true,
     val bandwidthEnabled: Boolean = false,
+    /** 第四步要在 VPN 连接后执行的流媒体与 AI 解锁检测项目。 */
+    val unlockTestIds: Set<String> = emptySet(),
     val tcpingPercent: Int = 100,
     val urlTestPercent: Int = 50,
     val bandwidthPercent: Int = 50,

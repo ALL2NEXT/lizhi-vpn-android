@@ -93,6 +93,7 @@ fun MainScreen(
     val homeSwipeLeftSpeedTestEnabled by viewModel.homeSwipeLeftSpeedTestEnabled.collectAsStateWithLifecycle()
     val homeSwipeRightSpeedTestEnabled by viewModel.homeSwipeRightSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
+    val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
@@ -337,7 +338,8 @@ fun MainScreen(
                     Column(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(start = 24.dp, top = 12.dp),
+                            .fillMaxWidth()
+                            .padding(start = 24.dp, end = 24.dp, top = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Text(
@@ -395,6 +397,33 @@ fun MainScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                        }
+
+                        if (unlockTestState.items.isNotEmpty()) {
+                            Text(
+                                text = "流媒体与 AI：${if (unlockTestState.isRunning) "${unlockTestState.completedCount}/${unlockTestState.items.size}，" else ""}${unlockTestState.message}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            FlowRow(
+                                maxItemsInEachRow = 3,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                unlockTestState.items.forEach { result ->
+                                    val region = result.region.takeIf(String::isNotBlank)
+                                        ?.let { "（$it）" }.orEmpty()
+                                    Text(
+                                        text = "${result.definition.name}：${result.statusText}$region",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
                         }
                     }
                 }

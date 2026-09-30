@@ -37,6 +37,8 @@ import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.data.model.SpeedTestGroupOption
 import xyz.a202132.app.data.model.SpeedTestScope
 import xyz.a202132.app.data.model.UrlTestTargets
+import xyz.a202132.app.network.UnlockTestCatalog
+import xyz.a202132.app.network.UnlockTestCategory
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.viewmodel.MainViewModel
 
@@ -64,6 +66,9 @@ fun SpeedTestSchemeEditorScreen(
     var tcpingEnabled by remember(scheme.id, scheme.tcpingEnabled) { mutableStateOf(scheme.tcpingEnabled) }
     var urlTestEnabled by remember(scheme.id, scheme.urlTestEnabled) { mutableStateOf(scheme.urlTestEnabled) }
     var bandwidthEnabled by remember(scheme.id, scheme.bandwidthEnabled) { mutableStateOf(scheme.bandwidthEnabled) }
+    var unlockTestIds by remember(scheme.id, scheme.unlockTestIds) {
+        mutableStateOf(scheme.unlockTestIds)
+    }
     var tcpingPercent by remember(scheme.id, scheme.tcpingPercent) { mutableStateOf(scheme.tcpingPercent.toString()) }
     var urlPercent by remember(scheme.id, scheme.urlTestPercent) { mutableStateOf(scheme.urlTestPercent.toString()) }
     var bandwidthPercent by remember(scheme.id, scheme.bandwidthPercent) { mutableStateOf(scheme.bandwidthPercent.toString()) }
@@ -261,6 +266,50 @@ fun SpeedTestSchemeEditorScreen(
                 )
             }
 
+            SchemeCard(title = "4. 流媒体与 AI 解锁检测") {
+                Text(
+                    "完成前面的节点筛选并连接后，通过当前节点检测所选服务。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                UnlockTestCategory.entries.forEach { category ->
+                        Text(
+                            text = category.title,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                        UnlockTestCatalog.schemeDefinitions
+                            .filter { it.category == category }
+                            .forEach { definition ->
+                                val checked = definition.id in unlockTestIds
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            unlockTestIds = if (checked) {
+                                                unlockTestIds - definition.id
+                                            } else {
+                                                unlockTestIds + definition.id
+                                            }
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = checked,
+                                        onCheckedChange = { selected ->
+                                            unlockTestIds = if (selected) {
+                                                unlockTestIds + definition.id
+                                            } else {
+                                                unlockTestIds - definition.id
+                                            }
+                                        }
+                                    )
+                                    Text(definition.name, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                    }
+            }
+
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
@@ -286,6 +335,7 @@ fun SpeedTestSchemeEditorScreen(
                                 tcpingEnabled = tcpingEnabled,
                                 urlTestEnabled = urlTestEnabled,
                                 bandwidthEnabled = bandwidthEnabled,
+                                unlockTestIds = unlockTestIds,
                                 tcpingPercent = tcpingPercent.toIntOrNull() ?: scheme.tcpingPercent,
                                 urlTestPercent = urlPercent.toIntOrNull() ?: scheme.urlTestPercent,
                                 bandwidthPercent = bandwidthPercent.toIntOrNull() ?: scheme.bandwidthPercent,

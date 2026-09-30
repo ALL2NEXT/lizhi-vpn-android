@@ -33,6 +33,7 @@ import xyz.a202132.app.data.model.SmartRoutingRuleType
 import xyz.a202132.app.data.model.SmartRoutingSettings
 import xyz.a202132.app.data.model.UrlTestTargets
 import xyz.a202132.app.feature.nodegrouping.model.NodeGroupingMode
+import xyz.a202132.app.network.UnlockTestCatalog
 import xyz.a202132.app.util.CountryCodeResolver
 import java.util.UUID
 
@@ -1121,6 +1122,15 @@ class SettingsRepository(private val context: Context) {
                                         tcpingEnabled = item.optBoolean("tcpingEnabled", true),
                                         urlTestEnabled = item.optBoolean("urlTestEnabled", true),
                                         bandwidthEnabled = item.optBoolean("bandwidthEnabled", true),
+                                        unlockTestIds = buildSet {
+                                            item.optJSONArray("unlockTestIds")?.let { tests ->
+                                                for (testIndex in 0 until tests.length()) {
+                                                    tests.optString(testIndex).trim()
+                                                        .takeIf { id -> UnlockTestCatalog.schemeDefinitions.any { it.id == id } }
+                                                        ?.let(::add)
+                                                }
+                                            }
+                                        },
                                         tcpingPercent = item.optInt("tcpingPercent", 100),
                                         urlTestPercent = item.optInt("urlTestPercent", 50),
                                         bandwidthPercent = item.optInt("bandwidthPercent", 50),
@@ -1179,6 +1189,9 @@ class SettingsRepository(private val context: Context) {
                 .map(String::trim)
                 .filter(String::isNotBlank)
                 .toSet(),
+            unlockTestIds = scheme.unlockTestIds.intersect(
+                UnlockTestCatalog.schemeDefinitions.mapTo(mutableSetOf()) { it.id }
+            ),
             tcpingPercent = scheme.tcpingPercent.coerceIn(1, 100),
             urlTestPercent = scheme.urlTestPercent.coerceIn(1, 100),
             bandwidthPercent = scheme.bandwidthPercent.coerceIn(1, 100),
@@ -1212,6 +1225,9 @@ class SettingsRepository(private val context: Context) {
                     put("tcpingEnabled", normalized.tcpingEnabled)
                     put("urlTestEnabled", normalized.urlTestEnabled)
                     put("bandwidthEnabled", normalized.bandwidthEnabled)
+                    put("unlockTestIds", JSONArray().apply {
+                        normalized.unlockTestIds.forEach(::put)
+                    })
                     put("tcpingPercent", normalized.tcpingPercent)
                     put("urlTestPercent", normalized.urlTestPercent)
                     put("bandwidthPercent", normalized.bandwidthPercent)

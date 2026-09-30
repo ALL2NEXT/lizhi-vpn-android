@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.NonCancellable
@@ -15,6 +16,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.local.AppDatabase
 import xyz.a202132.app.data.local.NodeLatencyUpdate
@@ -35,9 +39,16 @@ import xyz.a202132.app.network.SubscriptionParser
 import xyz.a202132.app.network.SubscriptionImportUrl
 import xyz.a202132.app.network.DownloadManager
 import xyz.a202132.app.network.DownloadArtifact
+import xyz.a202132.app.network.UnlockTestCatalog
+import xyz.a202132.app.network.UnlockTestClassifier
+import xyz.a202132.app.network.UnlockTestDefinition
+import xyz.a202132.app.network.UnlockTestResult
+import xyz.a202132.app.network.UnlockTestRunner
+import xyz.a202132.app.network.UnlockTestState
 import xyz.a202132.app.network.NodeLocationResolver
 import xyz.a202132.app.network.AccountManager
 import xyz.a202132.app.service.ServiceManager
+import xyz.a202132.app.service.BoxVpnService
 import xyz.a202132.app.util.NetworkUtils
 import xyz.a202132.app.util.SingBoxConfigGenerator
 import xyz.a202132.app.util.XrayConfigGenerator
@@ -47,6 +58,15 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import kotlin.math.ceil
 import java.util.UUID
+
+internal data class UnlockTestUiState(
+    val items: List<UnlockTestResult> = emptyList(),
+    val isRunning: Boolean = false,
+    val message: String = ""
+) {
+    val completedCount: Int
+        get() = items.count { it.state !in setOf(UnlockTestState.IDLE, UnlockTestState.TESTING) }
+}
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -89,6 +109,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
+
+    private val _unlockTestState = MutableStateFlow(UnlockTestUiState())
+    internal val unlockTestState = _unlockTestState.asStateFlow()
 
     /** 线路信息按当前最近完成的测速阶段展示结果。 */
     private val _nodeTestResultSortMode = MutableStateFlow(
@@ -549,7 +572,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _error.value = "测速方案不存在"
                     return@launch
                 }
-            if (!scheme.tcpingEnabled && !scheme.urlTestEnabled && !scheme.bandwidthEnabled) {
+            _unlockTestState.value = UnlockTestUiState()
+            if (!scheme.tcpingEnabled && !scheme.urlTestEnabled && !scheme.bandwidthEnabled &&
+                scheme.unlockTestIds.isEmpty()
+            ) {
                 // 三个测速阶段都关闭时按普通连接处理，不启动测速流程。
                 startSelectedOrFirstConnection()
                 return@launch
@@ -687,6 +713,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 settingsRepository.setSelectedNodeId(bestNode.id)
                 Log.i(tag, "Speed test scheme selected node: ${bestNode.getDisplayName()}")
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
+                if (scheme.unlockTestIds.isNotEmpty()) {
+                    // 连接阶段结束后才能通过当前 VPN 的 SOCKS 入口执行解锁检测。
+                    _isTesting.value = false
+                    runUnlockTests(scheme.unlockTestIds)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Log.e(tag, "Speed test scheme failed", e)
                 _error.value = "测速失败：${e.message ?: "未知错误"}"
@@ -698,9 +731,121 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 等待方案选出的节点连通，再运行用户勾选的流媒体与 AI 检测。 */
+    private suspend fun runUnlockTests(selectedIds: Set<String>) {
+        val definitions = UnlockTestCatalog.schemeDefinitions.filter { it.id in selectedIds }
+        if (definitions.isEmpty()) return
+
+        _unlockTestState.value = UnlockTestUiState(
+            items = definitions.map { definition ->
+                UnlockTestResult(
+                    definition = definition,
+                    state = UnlockTestState.TESTING,
+                    statusText = "等待连接",
+                    description = definition.testingDescription
+                )
+            },
+            isRunning = true,
+            message = "等待 VPN 节点连接"
+        )
+
+        val finalVpnState = withTimeoutOrNull(90_000L) {
+            ServiceManager.vpnState.first {
+                it == VpnState.CONNECTED || it == VpnState.DISCONNECTED
+            }
+        }
+        if (finalVpnState != VpnState.CONNECTED) {
+            finishUnlockTestsAsNotConnected(
+                definitions,
+                if (finalVpnState == null) "等待 VPN 连接超时" else "VPN 连接失败"
+            )
+            return
+        }
+
+        val endpoint = BoxVpnService.activeSocksEndpoint()
+        if (endpoint == null) {
+            finishUnlockTestsAsNotConnected(definitions, "无法获取当前 VPN 检测入口")
+            return
+        }
+
+        _unlockTestState.update { it.copy(message = "正在通过当前节点检测") }
+        try {
+            val semaphore = Semaphore(MAX_CONCURRENT_UNLOCK_TESTS)
+            UnlockTestRunner(endpoint).use { runner ->
+                coroutineScope {
+                    definitions.map { definition ->
+                        async {
+                            val result = semaphore.withPermit {
+                                try {
+                                    runner.run(definition)
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (throwable: Throwable) {
+                                    UnlockTestClassifier.error(definition, throwable)
+                                }
+                            }
+                            _unlockTestState.update { state ->
+                                state.copy(items = state.items.map {
+                                    if (it.definition.id == definition.id) result else it
+                                })
+                            }
+                        }
+                    }.awaitAll()
+                }
+            }
+            _unlockTestState.update { state ->
+                val usable = state.items.count {
+                    it.state == UnlockTestState.UNLOCKED || it.state == UnlockTestState.PARTIAL
+                }
+                state.copy(
+                    isRunning = false,
+                    message = "检测完成：${state.items.size} 项中 $usable 项可用或部分可用"
+                )
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (throwable: Throwable) {
+            _unlockTestState.update { state ->
+                state.copy(
+                    items = state.items.map { item ->
+                        if (item.state == UnlockTestState.TESTING) {
+                            UnlockTestClassifier.error(item.definition, throwable)
+                        } else {
+                            item
+                        }
+                    },
+                    isRunning = false,
+                    message = "检测未能完成，请稍后重试"
+                )
+            }
+        }
+    }
+
+    private fun finishUnlockTestsAsNotConnected(
+        definitions: List<UnlockTestDefinition>,
+        message: String
+    ) {
+        _unlockTestState.value = UnlockTestUiState(
+            items = definitions.map { definition ->
+                UnlockTestResult(
+                    definition = definition,
+                    state = UnlockTestState.NOT_CONNECTED,
+                    statusText = "未连接",
+                    description = message
+                )
+            },
+            message = message
+        )
+    }
+
+    private companion object {
+        const val MAX_CONCURRENT_UNLOCK_TESTS = 4
+    }
+
     /** Connect to the selected node, or to the first node in the active subscription. */
     fun startSelectedOrFirstConnection() {
         viewModelScope.launch {
+            _unlockTestState.value = UnlockTestUiState()
             val selectedId = settingsRepository.selectedNodeId.first()
             val selectedNode = selectedId?.let { nodeDao().getNodeById(it) }
             val subscriptionNodes = currentNodeListSnapshot()
@@ -1058,6 +1203,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun connectNode(node: Node) {
+        _unlockTestState.value = UnlockTestUiState()
         settingsRepository.setSelectedNodeId(node.id)
         Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
         when (vpnState.value) {
@@ -1829,6 +1975,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 viewModelScope.launch {
+                    _unlockTestState.value = UnlockTestUiState()
                     // 4. 无网络连接节点时给用户发Toast，但不阻止
                     if (!NetworkUtils.isNetworkAvailable(getApplication())) {
                         Log.w(tag, "VPN start requested while network is unavailable")

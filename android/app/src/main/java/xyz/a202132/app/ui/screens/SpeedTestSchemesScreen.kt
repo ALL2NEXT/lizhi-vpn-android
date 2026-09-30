@@ -86,7 +86,7 @@ fun SpeedTestSchemesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "连接启动前可通过主页图标的点击、长按及上下左右滑动触发测速方案，并按结果选择节点。关闭测速时直接连接已选节点；此功能仅辅助连接启动，不属于正常网络数据路径。",
+                text = "可通过主页图标的点击、长按及上下左右滑动触发方案。方案按前三步筛选节点，连接后执行第四步勾选的服务检测，结果显示在主页。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
