@@ -48,6 +48,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.withFrameNanos
 import xyz.a202132.app.R
+import xyz.a202132.app.data.model.HomeIconEffect
 import xyz.a202132.app.data.model.VpnState
 
 enum class ConnectButtonSwipeDirection {
@@ -77,7 +78,9 @@ fun ConnectButton(
     /** 三种连接状态的图片均可按当前皮肤方案单独覆盖，未设置时使用内置图片。 */
     customDisconnectedImagePath: String? = null,
     customConnectingImagePath: String? = null,
-    customConnectedImagePath: String? = null
+    customConnectedImagePath: String? = null,
+    homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
+    homeIconEffectEnabled: Boolean = true
 ) {
     // 测速方案执行期间底层状态仍可能是 DISCONNECTED，主页视觉上应展示“连接中”。
     val displayState = if (isTesting && vpnState == VpnState.DISCONNECTED) {
@@ -168,7 +171,12 @@ fun ConnectButton(
                 modifier = Modifier.size((buttonSize * 1.42f).dp),
                 contentAlignment = Alignment.Center
             ) {
-                RadialParticleEffect(modifier = Modifier.matchParentSize())
+                if (homeIconEffectEnabled) {
+                    when (homeIconEffect) {
+                        HomeIconEffect.RADIAL_PARTICLE ->
+                            RadialParticleEffect(modifier = Modifier.matchParentSize())
+                    }
+                }
                 Box(
                     modifier = Modifier.size(buttonSize.dp),
                     contentAlignment = Alignment.Center

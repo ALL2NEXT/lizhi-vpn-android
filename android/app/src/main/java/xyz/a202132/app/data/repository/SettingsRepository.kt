@@ -14,6 +14,7 @@ import xyz.a202132.app.data.model.DnsDomainStrategy
 import xyz.a202132.app.data.model.DnsSettings
 import xyz.a202132.app.data.model.IPv6RoutingMode
 import xyz.a202132.app.data.model.HomeNavigationStyle
+import xyz.a202132.app.data.model.HomeIconEffect
 import xyz.a202132.app.data.model.LanInboundSettings
 import xyz.a202132.app.data.model.NodeDisplaySettings
 import xyz.a202132.app.data.model.NodeType
@@ -1276,7 +1277,14 @@ class SettingsRepository(private val context: Context) {
                                 homeConnectingImagePath = item.optString("homeConnectingImagePath")
                                     .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
                                 homeConnectedImagePath = item.optString("homeConnectedImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() }
+                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
+                                homeIconEffect = HomeIconEffect.fromStorage(
+                                    item.optString("homeIconEffect").takeIf { it.isNotBlank() }
+                                ),
+                                homeIconEffectEnabled = item.optBoolean(
+                                    "homeIconEffectEnabled",
+                                    true
+                                )
                             )
                         )
                     }
@@ -1310,6 +1318,8 @@ class SettingsRepository(private val context: Context) {
                         scheme.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }
                         scheme.homeConnectingImagePath?.let { put("homeConnectingImagePath", it) }
                         scheme.homeConnectedImagePath?.let { put("homeConnectedImagePath", it) }
+                        put("homeIconEffect", scheme.homeIconEffect.storageName)
+                        put("homeIconEffectEnabled", scheme.homeIconEffectEnabled)
                     }
                 )
             }

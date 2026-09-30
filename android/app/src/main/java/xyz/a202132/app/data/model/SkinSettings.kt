@@ -2,6 +2,17 @@ package xyz.a202132.app.data.model
 
 import java.util.UUID
 
+/** 主页连接图标可用的动画特效，后续可按需扩展。 */
+enum class HomeIconEffect(val storageName: String, val displayName: String) {
+    RADIAL_PARTICLE("radial_particle", "环绕粒子");
+
+    companion object {
+        fun fromStorage(value: String?): HomeIconEffect = entries.firstOrNull {
+            it.storageName == value
+        } ?: RADIAL_PARTICLE
+    }
+}
+
 /** 一个可切换、可编辑的主题方案。 */
 data class SkinScheme(
     val id: String,
@@ -22,7 +33,11 @@ data class SkinScheme(
     /** 主页连接按钮在未连接、连接中、已连接状态下的自定义图片。 */
     val homeDisconnectedImagePath: String? = null,
     val homeConnectingImagePath: String? = null,
-    val homeConnectedImagePath: String? = null
+    val homeConnectedImagePath: String? = null,
+    /** 主页连接图标周围显示的动画类型。 */
+    val homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
+    /** 默认开启以保持升级前的主页显示效果。 */
+    val homeIconEffectEnabled: Boolean = true
 ) {
     val isDefault: Boolean
         get() = id == DEFAULT_SCHEME_ID

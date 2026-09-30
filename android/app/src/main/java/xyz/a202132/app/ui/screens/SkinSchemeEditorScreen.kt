@@ -26,10 +26,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
@@ -53,6 +56,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.HomeNavigationStyle
+import xyz.a202132.app.data.model.HomeIconEffect
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.platform.LauncherIdentityPreset
 import xyz.a202132.app.platform.LauncherIdentityPresets
@@ -146,6 +150,7 @@ private fun SkinColorOption(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun SkinSchemeEditorScreen(
     viewModel: MainViewModel,
     schemeId: String,
@@ -446,7 +451,7 @@ fun SkinSchemeEditorScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "主页状态图片",
+                        text = "主页状态",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -487,6 +492,48 @@ fun SkinSchemeEditorScreen(
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
                         }
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "主页图标特效",
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "控制连接图标周围的动画效果",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = scheme.homeIconEffectEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.upsertSkinScheme(
+                                    scheme.copy(homeIconEffectEnabled = enabled)
+                                )
+                            }
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HomeIconEffect.entries.forEach { effect ->
+                            FilterChip(
+                                selected = scheme.homeIconEffect == effect,
+                                onClick = {
+                                    viewModel.upsertSkinScheme(
+                                        scheme.copy(homeIconEffect = effect)
+                                    )
+                                },
+                                label = { Text(effect.displayName) }
+                            )
+                        }
+                    }
                 }
             }
 
