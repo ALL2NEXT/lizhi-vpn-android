@@ -1,6 +1,7 @@
 package xyz.a202132.app.ui.screens
 
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,8 +29,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -104,6 +106,40 @@ private fun HomeStateImageRow(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SkinColorOption(
+    name: String,
+    color: Color,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.width(56.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Surface(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape),
+            shape = CircleShape,
+            color = color,
+            border = if (selected) {
+                BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface)
+            } else {
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            },
+            onClick = onClick
+        ) {}
+        Text(
+            text = name,
+            fontSize = 10.sp,
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -482,62 +518,49 @@ fun SkinSchemeEditorScreen(
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "莫奈取色",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Switch(
-                            checked = scheme.monetEnabled,
-                            onCheckedChange = { enabled ->
-                                viewModel.upsertSkinScheme(
-                                    scheme.copy(monetEnabled = enabled)
-                                )
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                    Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = if (scheme.monetEnabled) "备用基础颜色" else "基础颜色",
+                        text = "颜色",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "莫奈色会根据系统壁纸自适应（Android 12 及以上）。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        EDITOR_PRESET_COLORS.forEach { (_, colorArgb) ->
-                            Surface(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape),
-                                shape = CircleShape,
+                        val monetSwatchColor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            dynamicLightColorScheme(context).primary
+                        } else {
+                            Color(scheme.baseColorArgb)
+                        }
+                        SkinColorOption(
+                            name = "莫奈色",
+                            color = monetSwatchColor,
+                            selected = scheme.monetEnabled,
+                            onClick = {
+                                viewModel.upsertSkinScheme(scheme.copy(monetEnabled = true))
+                            }
+                        )
+                        EDITOR_PRESET_COLORS.forEach { (name, colorArgb) ->
+                            SkinColorOption(
+                                name = name,
                                 color = Color(colorArgb),
-                                border = if (scheme.baseColorArgb == colorArgb) {
-                                    BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface)
-                                } else {
-                                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                                },
+                                selected = !scheme.monetEnabled && scheme.baseColorArgb == colorArgb,
                                 onClick = {
                                     colorInput = colorArgb.toSkinHex()
                                     colorError = false
                                     viewModel.upsertSkinScheme(
-                                        scheme.copy(baseColorArgb = colorArgb)
+                                        scheme.copy(baseColorArgb = colorArgb, monetEnabled = false)
                                     )
                                 }
-                            ) {}
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(14.dp))
@@ -571,7 +594,7 @@ fun SkinSchemeEditorScreen(
                             } else {
                                 colorError = false
                                 viewModel.upsertSkinScheme(
-                                    scheme.copy(baseColorArgb = color)
+                                    scheme.copy(baseColorArgb = color, monetEnabled = false)
                                 )
                             }
                         },
