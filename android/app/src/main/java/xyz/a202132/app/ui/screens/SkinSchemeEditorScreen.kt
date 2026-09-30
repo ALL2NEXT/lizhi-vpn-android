@@ -258,34 +258,6 @@ fun SkinSchemeEditorScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = LauncherIdentityPresets.find(
-                                scheme.appIconPresetId
-                            ).displayName,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "名称会同步显示在应用内和手机启动器",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -395,7 +367,10 @@ fun SkinSchemeEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SkinThemeMode.entries.forEach { mode ->
-                            val buttonModifier = Modifier.weight(1f)
+                            // “跟随系统”文字较长，增加按钮宽度并保持单行显示。
+                            val buttonModifier = Modifier.weight(
+                                if (mode == SkinThemeMode.SYSTEM) 1.5f else 1f
+                            )
                             if (scheme.themeMode == mode) {
                                 Button(
                                     onClick = {
@@ -403,7 +378,7 @@ fun SkinSchemeEditorScreen(
                                     },
                                     modifier = buttonModifier
                                 ) {
-                                    Text(mode.displayName())
+                                    Text(mode.displayName(), maxLines = 1, softWrap = false)
                                 }
                             } else {
                                 OutlinedButton(
@@ -412,7 +387,7 @@ fun SkinSchemeEditorScreen(
                                     },
                                     modifier = buttonModifier
                                 ) {
-                                    Text(mode.displayName())
+                                    Text(mode.displayName(), maxLines = 1, softWrap = false)
                                 }
                             }
                         }
@@ -622,7 +597,7 @@ fun SkinSchemeEditorScreen(
 }
 
 private fun SkinThemeMode.displayName(): String = when (this) {
-    SkinThemeMode.LIGHT -> "明"
-    SkinThemeMode.DARK -> "暗"
+    SkinThemeMode.LIGHT -> "明亮"
+    SkinThemeMode.DARK -> "暗黑"
     SkinThemeMode.SYSTEM -> "跟随系统"
 }
