@@ -1,22 +1,12 @@
 package xyz.a202132.app.ui.screens
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.net.Uri
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import xyz.a202132.app.R
+import xyz.a202132.app.ui.components.AnimatedImage
 import java.io.File
 import java.util.Locale
 
@@ -24,41 +14,15 @@ import java.util.Locale
 internal fun SkinImagePreview(
     imagePath: String?,
     modifier: Modifier = Modifier,
-    defaultImageRes: Int,
     contentDescription: String = "样式图片"
 ) {
-    val customImage by produceState<ImageBitmap?>(
-        initialValue = null,
-        key1 = imagePath
-    ) {
-        value = withContext(Dispatchers.IO) {
-            imagePath
-                ?.takeIf { it.isNotBlank() }
-                ?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
-        }
-    }
-
-    Box(
+    AnimatedImage(
+        imagePath = imagePath,
+        defaultResource = R.raw.home_button_test,
         modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        val image = customImage
-        if (image != null) {
-            Image(
-                bitmap = image,
-                contentDescription = "当前样式图片",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Image(
-                painter = painterResource(id = defaultImageRes),
-                contentDescription = "默认$contentDescription",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-    }
+        contentScale = ContentScale.Crop,
+        contentDescription = contentDescription
+    )
 }
 
 internal fun copySkinImage(context: Context, uri: Uri, schemeId: String): String? {

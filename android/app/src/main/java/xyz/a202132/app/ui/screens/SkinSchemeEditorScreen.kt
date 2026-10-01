@@ -78,7 +78,6 @@ private val EDITOR_PRESET_COLORS = listOf(
 private fun HomeStateImageRow(
     title: String,
     imagePath: String?,
-    defaultImageRes: Int,
     onChoose: () -> Unit,
     onReset: () -> Unit
 ) {
@@ -89,7 +88,6 @@ private fun HomeStateImageRow(
     ) {
         SkinImagePreview(
             imagePath = imagePath,
-            defaultImageRes = defaultImageRes,
             contentDescription = title,
             modifier = Modifier
                 .size(68.dp)
@@ -460,7 +458,6 @@ fun SkinSchemeEditorScreen(
                     HomeStateImageRow(
                         title = "未连接",
                         imagePath = scheme.homeDisconnectedImagePath,
-                        defaultImageRes = xyz.a202132.app.R.drawable.btn_disconnected,
                         onChoose = { disconnectedImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeDisconnectedImagePath
@@ -472,7 +469,6 @@ fun SkinSchemeEditorScreen(
                     HomeStateImageRow(
                         title = "连接中",
                         imagePath = scheme.homeConnectingImagePath,
-                        defaultImageRes = xyz.a202132.app.R.drawable.btn_connecting,
                         onChoose = { connectingImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeConnectingImagePath
@@ -484,7 +480,6 @@ fun SkinSchemeEditorScreen(
                     HomeStateImageRow(
                         title = "已连接",
                         imagePath = scheme.homeConnectedImagePath,
-                        defaultImageRes = xyz.a202132.app.R.drawable.btn_connected,
                         onChoose = { connectedImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeConnectedImagePath

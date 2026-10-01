@@ -1,17 +1,11 @@
 package xyz.a202132.app.ui.components
 
-import android.graphics.BitmapFactory
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -28,15 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.consumePositionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
@@ -44,8 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.runtime.withFrameNanos
 import xyz.a202132.app.R
 import xyz.a202132.app.data.model.HomeIconEffect
@@ -94,29 +82,8 @@ fun ConnectButton(
     val configuration = LocalConfiguration.current
     val buttonSize = minOf(250, (configuration.screenWidthDp * 0.65).toInt())
 
-    // 只在连接状态创建循环动画；缩放仅发生在绘制阶段，不触发布局。
-    val pulseScale = if (isConnecting) {
-        val infiniteTransition = rememberInfiniteTransition(label = "connectionPulse")
-        val animatedScale by infiniteTransition.animateFloat(
-            initialValue = 0.99f,
-            targetValue = 1.035f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(560, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "pulseScale"
-        )
-        animatedScale
-    } else {
-        1f
-    }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed && enabled && !isConnecting) 0.97f else 1f,
-        animationSpec = tween(durationMillis = if (isPressed) 90 else 140),
-        label = "pressScale"
-    )
     val longPressEnabled = onLongClick != null && enabled && !isConnecting
     val longPressProgress by animateFloatAsState(
         targetValue = if (isPressed && longPressEnabled) 1f else 0f,
@@ -135,38 +102,21 @@ fun ConnectButton(
         48.dp.toPx()
     }
 
-    // 根据状态选择图片
-    val imageRes = when (displayState) {
-        VpnState.DISCONNECTED -> R.drawable.btn_disconnected
-        VpnState.CONNECTING, VpnState.DISCONNECTING -> R.drawable.btn_connecting
-        VpnState.CONNECTED -> R.drawable.btn_connected
-    }
-    val customImagePath = when (displayState) {
-        VpnState.DISCONNECTED -> customDisconnectedImagePath
-        VpnState.CONNECTING, VpnState.DISCONNECTING -> customConnectingImagePath
-        VpnState.CONNECTED -> customConnectedImagePath
-    }
-    val customImage by produceState<ImageBitmap?>(
-        initialValue = null,
-        key1 = customImagePath
-    ) {
-        value = withContext(Dispatchers.IO) {
-            customImagePath
-                ?.takeIf { it.isNotBlank() }
-                ?.let { BitmapFactory.decodeFile(it)?.asImageBitmap() }
-        }
-    }
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
     ) {
-        // 按钮图片 - 使用 Crossfade 实现平滑过渡，去除涟漪效果
-    Crossfade(
-            targetState = imageRes,
+        // 各连接状态继续交叉淡入，图片本身支持 GIF 动图。
+        Crossfade(
+            targetState = displayState,
             animationSpec = tween(220),
             label = "buttonImage"
-        ) { currentImage ->
+        ) { currentState ->
+            val currentImagePath = when (currentState) {
+                VpnState.DISCONNECTED -> customDisconnectedImagePath
+                VpnState.CONNECTING, VpnState.DISCONNECTING -> customConnectingImagePath
+                VpnState.CONNECTED -> customConnectedImagePath
+            }
             Box(
                 modifier = Modifier.size((buttonSize * 1.42f).dp),
                 contentAlignment = Alignment.Center
@@ -181,33 +131,12 @@ fun ConnectButton(
                     modifier = Modifier.size(buttonSize.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        painter = painterResource(id = currentImage),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                val scale = pulseScale * pressScale
-                                scaleX = scale
-                                scaleY = scale
-                            }
+                    AnimatedImage(
+                        imagePath = currentImagePath,
+                        defaultResource = R.raw.home_button_test,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
                     )
-                    // 自定义图片叠加在默认资源上方；图片加载失败时仍保留默认按钮。
-                    customImage?.let { image ->
-                        Image(
-                            bitmap = image,
-                            contentDescription = null,
-                            // 连接按钮图片通常包含透明留白，保持完整显示以免裁切主体。
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    val scale = pulseScale * pressScale
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
-                        )
-                    }
                     // 手势层裁剪为圆形，图片本身保持完整显示，避免透明图片的角落可触发。
                     Box(
                         modifier = Modifier
