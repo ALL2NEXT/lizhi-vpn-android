@@ -74,6 +74,7 @@ internal fun SubscriptionGroupingScreen(
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     groupManualSpeedTestScheme: SpeedTestScheme?,
+    groupManualSpeedTestEnabled: Boolean,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
@@ -123,7 +124,7 @@ internal fun SubscriptionGroupingScreen(
         showBackNavigation = showBackNavigation,
         actions = {
             val testScheme = groupManualSpeedTestScheme
-            if (testScheme != null &&
+            if (groupManualSpeedTestEnabled && testScheme != null &&
                 (testScheme.tcpingEnabled || testScheme.urlTestEnabled || testScheme.bandwidthEnabled)
             ) {
                 Box {

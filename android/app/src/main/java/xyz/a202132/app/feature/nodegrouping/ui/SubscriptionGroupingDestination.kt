@@ -36,6 +36,8 @@ internal fun SubscriptionGroupingDestination(
     val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val groupManualSpeedTestSchemeId by
         viewModel.groupManualSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val groupManualSpeedTestEnabled by
+        viewModel.groupManualSpeedTestEnabled.collectAsStateWithLifecycle()
     val groupManualSpeedTestScheme = speedTestSchemes.firstOrNull {
         it.id == groupManualSpeedTestSchemeId
     } ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
@@ -101,6 +103,7 @@ internal fun SubscriptionGroupingDestination(
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
         groupManualSpeedTestScheme = groupManualSpeedTestScheme,
+        groupManualSpeedTestEnabled = groupManualSpeedTestEnabled,
         onRunManualGroupTest = { stage ->
             viewModel.runManualGroupTest(nodes, stage)
         },

@@ -378,6 +378,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SpeedTestScheme.DEFAULT_ID
     )
 
+    val groupManualSpeedTestEnabled = settingsRepository.groupManualSpeedTestEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true
+    )
+
     val homeClickSpeedTestEnabled = settingsRepository.homeClickSpeedTestEnabled.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -733,6 +739,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** 按配置方案的单阶段参数手动测试当前线路详情页中的节点。 */
     fun runManualGroupTest(groupNodes: List<Node>, stage: ManualGroupTestStage) {
         viewModelScope.launch {
+            if (!groupManualSpeedTestEnabled.value) {
+                _error.value = "分组内手动测试已关闭"
+                return@launch
+            }
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
@@ -2023,6 +2033,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setGroupManualSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
             settingsRepository.setGroupManualSpeedTestSchemeId(schemeId)
+        }
+    }
+
+    fun setGroupManualSpeedTestEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setGroupManualSpeedTestEnabled(enabled)
         }
     }
 

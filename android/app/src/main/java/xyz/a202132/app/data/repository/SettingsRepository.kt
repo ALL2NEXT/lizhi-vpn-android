@@ -82,6 +82,8 @@ class SettingsRepository(private val context: Context) {
             stringPreferencesKey("home_swipe_right_speed_test_scheme_id")
         private val GROUP_MANUAL_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("group_manual_speed_test_scheme_id")
+        private val GROUP_MANUAL_SPEED_TEST_ENABLED =
+            booleanPreferencesKey("group_manual_speed_test_enabled")
         private val HOME_CLICK_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_click_speed_test_enabled")
         private val HOME_LONG_PRESS_SPEED_TEST_ENABLED =
@@ -256,6 +258,11 @@ class SettingsRepository(private val context: Context) {
         )
     }
 
+    /** 分组线路详情中的手动测速是否启用；默认启用以保留现有入口。 */
+    val groupManualSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[GROUP_MANUAL_SPEED_TEST_ENABLED] ?: true
+    }
+
     /** 主页图标单击是否启用测速方案；默认关闭，避免普通点击触发测速。 */
     val homeClickSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[HOME_CLICK_SPEED_TEST_ENABLED] ?: false
@@ -339,6 +346,12 @@ class SettingsRepository(private val context: Context) {
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] = schemeId
             }
+        }
+    }
+
+    suspend fun setGroupManualSpeedTestEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[GROUP_MANUAL_SPEED_TEST_ENABLED] = enabled
         }
     }
 

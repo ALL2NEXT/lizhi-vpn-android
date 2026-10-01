@@ -69,6 +69,7 @@ fun SpeedTestSchemesScreen(
     val swipeLeftId by viewModel.homeSwipeLeftSpeedTestSchemeId.collectAsStateWithLifecycle()
     val swipeRightId by viewModel.homeSwipeRightSpeedTestSchemeId.collectAsStateWithLifecycle()
     val groupManualId by viewModel.groupManualSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val groupManualEnabled by viewModel.groupManualSpeedTestEnabled.collectAsStateWithLifecycle()
     val clickEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
     val longPressEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
     val swipeUpEnabled by viewModel.homeSwipeUpSpeedTestEnabled.collectAsStateWithLifecycle()
@@ -143,7 +144,9 @@ fun SpeedTestSchemesScreen(
                 title = "分组内手动测试",
                 selectedId = groupManualId,
                 schemes = schemes,
-                onSelected = viewModel::setGroupManualSpeedTestScheme
+                enabled = groupManualEnabled,
+                onSelected = viewModel::setGroupManualSpeedTestScheme,
+                onEnabledChange = viewModel::setGroupManualSpeedTestEnabled
             )
 
             Text(
@@ -161,7 +164,7 @@ fun SpeedTestSchemesScreen(
                     assignedToSwipeDown = swipeDownEnabled && scheme.id == swipeDownId,
                     assignedToSwipeLeft = swipeLeftEnabled && scheme.id == swipeLeftId,
                     assignedToSwipeRight = swipeRightEnabled && scheme.id == swipeRightId,
-                    assignedToGroupManual = scheme.id == groupManualId,
+                    assignedToGroupManual = groupManualEnabled && scheme.id == groupManualId,
                     onEdit = { onOpenEditor(scheme.id) },
                     onDelete = { schemeToDelete = scheme }
                 )
