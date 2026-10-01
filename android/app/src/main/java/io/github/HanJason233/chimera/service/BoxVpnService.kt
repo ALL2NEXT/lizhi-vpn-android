@@ -200,7 +200,7 @@ class BoxVpnService : VpnService() {
         all.firstOrNull { it.id == selectedId && it.type != NodeType.UNKNOWN }?.let { return it }
         val selectedGroup = NodeGroupKey.parse(settings.selectedNodeGroupId.first())
         val candidates = when (selectedGroup) {
-            is NodeGroupKey.Country -> dao.getSubscriptionNodes().first().filter {
+            is NodeGroupKey.Country -> dao.getAllNodes().first().filter {
                 it.getCountryCode() == selectedGroup.countryCode
             }
             is NodeGroupKey.Subscription -> {

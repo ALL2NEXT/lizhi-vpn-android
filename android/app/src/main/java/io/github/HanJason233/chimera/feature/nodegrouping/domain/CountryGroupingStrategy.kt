@@ -4,7 +4,7 @@ import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.feature.nodegrouping.model.CountryOption
 import io.github.HanJason233.chimera.util.CountryCodeResolver
 
-/** 地区分组策略：跨订阅聚合地区并统计节点数量。 */
+/** 地区组策略：跨官方与个人仓库组聚合地区并统计节点数量。 */
 internal object CountryGroupingStrategy {
     // 按从中国周边向外扩展的顺序展示常见地区，避免地区名排序导致位置变化。
     private val proximityOrder = listOf(

@@ -1,11 +1,20 @@
 package io.github.HanJason233.chimera.data.model
 
-/**
- * 节点组的统一类型。地区组是动态虚拟组，其余类型可以由本地数据持久化。
- */
+/** 顶层分组只有仓库组和由仓库组按地区规则动态汇总的地区组。 */
 enum class NodeGroupType {
+    WAREHOUSE,
+    REGION
+}
+
+/** 仓库组下的两种来源分类。 */
+enum class WarehouseGroupType {
+    OFFICIAL,
+    PERSONAL
+}
+
+/** node_groups 表内部使用的记录标记，与面向用户的分组分类分开。 */
+enum class NodeGroupStorageType {
     SUBSCRIPTION,
-    COUNTRY,
     IMPORTED
 }
 
@@ -23,7 +32,7 @@ sealed interface NodeGroupKey {
         override val value: String = "country:$countryCode"
     }
 
-    /** 用户创建的本地订阅组使用数据库中持久化的组 ID。 */
+    /** 个人组继续使用既有 imported: 标识，保留本地选中状态兼容性。 */
     data class Imported(val groupId: String) : NodeGroupKey {
         override val value: String = "imported:$groupId"
     }
@@ -58,6 +67,7 @@ data class NodeGroupSummary(
     val id: String,
     val name: String,
     val type: NodeGroupType,
+    val warehouseType: WarehouseGroupType = WarehouseGroupType.PERSONAL,
     val nodeCount: Int,
     val isVirtual: Boolean = false,
     val subscriptionUrl: String? = null

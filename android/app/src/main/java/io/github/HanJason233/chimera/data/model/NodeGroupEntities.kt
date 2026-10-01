@@ -5,7 +5,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-/** 用户创建的持久化节点组；地区组由应用提供虚拟入口。 */
+/** 个人仓库组的持久化记录；官方仓库组来自订阅源，地区组由应用动态汇总。 */
 @Entity(
     tableName = "node_groups",
     indices = [Index(value = ["type"])]
@@ -13,7 +13,7 @@ import androidx.room.PrimaryKey
 data class NodeGroupEntity(
     @PrimaryKey val id: String,
     val name: String,
-    val type: String = NodeGroupType.IMPORTED.name,
+    val type: String = NodeGroupStorageType.IMPORTED.name,
     val subscriptionUrl: String? = null,
     val sortOrder: Int = 0,
     val createdAt: Long = 0L

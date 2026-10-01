@@ -186,7 +186,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val nodeGroupingMode = settingsRepository.nodeGroupingMode
-        .stateIn(viewModelScope, SharingStarted.Eagerly, NodeGroupingMode.COUNTRY)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, NodeGroupingMode.REGION)
 
     /** 所有节点组共用的当前选中标识，仅由统一节点组字段决定。 */
     val selectedNodeGroupId = combine(
@@ -201,8 +201,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         dao.getSubscriptionNodes()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 面向小白的地区选项跨全部普通订阅组聚合，不受订阅页筛选状态影响。 */
-    val countryOptions = allSubscriptionNodes
+    /** 官方与个人仓库组中的全部节点；地区组从该流动态生成。 */
+    val allWarehouseNodes = nodeDaoFlow.flatMapLatest { dao ->
+        dao.getAllNodes()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** 地区组按地区规则聚合官方与个人仓库组，不受仓库页筛选状态影响。 */
+    val countryOptions = allWarehouseNodes
         .map(CountryGroupingStrategy::groups)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -217,7 +222,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-    /** 用户创建的订阅组摘要。 */
+    /** 个人仓库组摘要。 */
     val userSubscriptionGroups = nodeDaoFlow
         .flatMapLatest { it.getUserSubscriptionGroupsWithCount() }
         .map { groups ->
@@ -225,8 +230,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 NodeGroupSummary(
                     id = NodeGroupKey.Imported(item.group.id).value,
                     name = item.group.name,
-                    type = runCatching { NodeGroupType.valueOf(item.group.type) }
-                        .getOrDefault(NodeGroupType.IMPORTED),
+                    type = NodeGroupType.WAREHOUSE,
+                    warehouseType = WarehouseGroupType.PERSONAL,
                     nodeCount = item.nodeCount,
                     subscriptionUrl = item.group.subscriptionUrl
                 )
@@ -234,7 +239,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 测速方案可选择订阅组、地区组和用户组。 */
+    /** 测速方案可选择官方组、地区组和个人组。 */
     val speedTestGroupOptions = combine(
         subscriptionGroups,
         countryOptions,
@@ -245,7 +250,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 add(
                     SpeedTestGroupOption(
                         id = NodeGroupKey.Subscription(group.sourceId).value,
-                        name = "订阅组：${group.name}"
+                        name = "官方组：${group.name}"
                     )
                 )
             }
@@ -258,16 +263,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             userGroups.forEach { group ->
-                add(SpeedTestGroupOption(id = group.id, name = "用户组：${group.name}"))
+                add(SpeedTestGroupOption(id = group.id, name = "个人组：${group.name}"))
             }
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 节点分组详情页使用的用户组节点流。 */
+    /** 仓库组详情页使用的个人组节点流。 */
     fun observeNodeGroupNodes(groupId: String): Flow<List<Node>> =
         nodeDaoFlow.flatMapLatest { it.getNodesByGroup(groupId) }
 
-    /** 当前选中用户导入组的节点；没有选中导入组时不参与主页列表。 */
+    /** 当前选中个人组的节点；没有选中个人组时不参与主页列表。 */
     private val importedNodes = selectedNodeGroupId.flatMapLatest { groupId ->
         val group = NodeGroupKey.parse(groupId) as? NodeGroupKey.Imported
         if (group == null) {
@@ -281,10 +286,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val visibleNodes = combine(
         subscriptionNodes,
         importedNodes,
+        allWarehouseNodes,
         selectedNodeGroupId
-    ) { subscription, imported, groupId ->
-        when (NodeGroupKey.parse(groupId)) {
+    ) { subscription, imported, warehouseNodes, groupId ->
+        when (val group = NodeGroupKey.parse(groupId)) {
             is NodeGroupKey.Imported -> imported
+            is NodeGroupKey.Country -> warehouseNodes.filter {
+                it.getCountryCode() == group.countryCode
+            }
             else -> subscription
         }
     }
@@ -1282,17 +1291,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             when (group) {
                 is NodeGroupKey.Subscription -> {
                     settingsRepository.setSelectedCountryCode(null)
-                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
                     settingsRepository.setSelectedSubscriptionSourceId(group.sourceId)
                     settingsRepository.setSelectedNodeId(null)
                 }
                 is NodeGroupKey.Country -> {
                     settingsRepository.setSelectedCountryCode(group.countryCode)
-                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.COUNTRY)
+                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.REGION)
                 }
                 is NodeGroupKey.Imported -> {
                     settingsRepository.setSelectedCountryCode(null)
-                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
                     settingsRepository.setSelectedSubscriptionSourceId(null)
                     settingsRepository.setSelectedNodeId(null)
                 }
@@ -1304,7 +1313,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
             settingsRepository.setSelectedCountryCode(null)
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
             connectNode(node)
         }
     }
@@ -1339,11 +1348,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         selectNodeGroup(NodeGroupKey.Subscription(sourceId))
     }
 
-    /** 切换到按订阅仓库分组时立即取消地区限定，保证主页智能测速使用当前订阅组。 */
+    /** 切换到仓库组时立即取消地区限定，保证主页智能测速使用当前官方组。 */
     fun selectSubscriptionGrouping() {
         viewModelScope.launch {
             settingsRepository.setSelectedCountryCode(null)
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
             activeSubscriptionSourceId.value?.let { sourceId ->
                 settingsRepository.setSelectedNodeGroupId(
                     NodeGroupKey.Subscription(sourceId).value
@@ -1354,7 +1363,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectCountryGrouping() {
         viewModelScope.launch {
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.COUNTRY)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.REGION)
         }
     }
 
@@ -1449,7 +1458,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val group = NodeGroupEntity(
                 id = groupId,
                 name = normalizedName,
-                type = NodeGroupType.SUBSCRIPTION.name,
+                type = NodeGroupStorageType.SUBSCRIPTION.name,
                 subscriptionUrl = subscriptionUrl,
                 createdAt = createdAt
             )
@@ -1485,7 +1494,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setSelectedCountryCode(null)
             settingsRepository.setSelectedSubscriptionSourceId(null)
             settingsRepository.setSelectedNodeId(null)
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.SUBSCRIPTION)
+            settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
             onResult(SubscriptionGroupCreateResult.CREATED, localNodes.size)
         }
     }
@@ -1508,8 +1517,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 dao.getNodeGroupById(groupId)
             }
             if (group == null || group.type !in setOf(
-                    NodeGroupType.IMPORTED.name,
-                    NodeGroupType.SUBSCRIPTION.name
+                    NodeGroupStorageType.IMPORTED.name,
+                    NodeGroupStorageType.SUBSCRIPTION.name
                 )
             ) {
                 onResult(SubscriptionGroupNodeImportResult.NOT_FOUND, 0)
@@ -1819,7 +1828,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onResult(SubscriptionGroupRefreshResult.NOT_FOUND)
                 return@launch
             }
-            if (group.type !in setOf(NodeGroupType.IMPORTED.name, NodeGroupType.SUBSCRIPTION.name)) {
+            if (group.type !in setOf(
+                    NodeGroupStorageType.IMPORTED.name,
+                    NodeGroupStorageType.SUBSCRIPTION.name
+                )
+            ) {
                 onResult(SubscriptionGroupRefreshResult.NOT_FOUND)
                 return@launch
             }
@@ -2580,7 +2593,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun currentNodeListSnapshot(): List<Node> = withContext(Dispatchers.Default) {
         val selectedGroup = NodeGroupKey.parse(settingsRepository.selectedNodeGroupId.first())
         val snapshot = when (selectedGroup) {
-            is NodeGroupKey.Country -> nodeDao().getSubscriptionNodes().first().filter {
+            is NodeGroupKey.Country -> nodeDao().getAllNodes().first().filter {
                 it.getCountryCode() == selectedGroup.countryCode
             }
             is NodeGroupKey.Subscription -> nodeDao()
@@ -2592,7 +2605,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sortNodesForList(snapshot)
     }
 
-    /** 按稳定组 ID 解析指定组，支持订阅、地区和用户创建的本地组。 */
+    /** 按稳定组 ID 解析指定官方组、个人组或地区组的节点。 */
     private suspend fun resolveSpeedTestGroupNodes(
         allNodes: List<Node>,
         groupIds: Set<String>
@@ -2606,7 +2619,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 is NodeGroupKey.Subscription -> subscriptionNodes.filter {
                     it.subscriptionSourceId == group.sourceId
                 }
-                is NodeGroupKey.Country -> subscriptionNodes.filter {
+                is NodeGroupKey.Country -> allNodes.filter {
                     it.getCountryCode() == group.countryCode
                 }
                 is NodeGroupKey.Imported -> dao.getNodesByGroup(group.groupId).first()

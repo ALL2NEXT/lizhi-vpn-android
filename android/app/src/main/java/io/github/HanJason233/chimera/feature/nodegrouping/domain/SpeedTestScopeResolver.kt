@@ -1,7 +1,6 @@
 package io.github.HanJason233.chimera.feature.nodegrouping.domain
 
 import io.github.HanJason233.chimera.data.model.Node
-import io.github.HanJason233.chimera.data.model.NodeSource
 import io.github.HanJason233.chimera.data.model.SpeedTestScope
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import io.github.HanJason233.chimera.util.CountryCodeResolver
@@ -17,13 +16,12 @@ internal object SpeedTestScopeResolver {
         specifiedGroupIds: Set<String>,
         selectedCountryCode: String?
     ): List<Node> {
-        if (scope == SpeedTestScope.CURRENT_GROUP && groupingMode == NodeGroupingMode.COUNTRY) {
+        if (scope == SpeedTestScope.CURRENT_GROUP && groupingMode == NodeGroupingMode.REGION) {
             val normalizedCountryCode =
                 CountryCodeResolver.normalizeCountryCode(selectedCountryCode)
             if (normalizedCountryCode != null) {
                 return allNodes.filter { node ->
-                    node.source == NodeSource.SUBSCRIPTION &&
-                        node.getCountryCode() == normalizedCountryCode
+                    node.getCountryCode() == normalizedCountryCode
                 }
             }
         }

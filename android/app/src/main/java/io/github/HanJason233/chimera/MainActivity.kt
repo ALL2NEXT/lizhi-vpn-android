@@ -270,9 +270,9 @@ class MainActivity : ComponentActivity() {
                                     HomeDestination.SUBSCRIPTION_GROUPING -> {
                                         val groupingMode =
                                             if (selectedDestination == HomeDestination.NODE_GROUPING) {
-                                                NodeGroupingMode.COUNTRY
+                                                NodeGroupingMode.REGION
                                             } else {
-                                                NodeGroupingMode.SUBSCRIPTION
+                                                NodeGroupingMode.WAREHOUSE
                                             }
                                         HomeNavigationLayout(
                                             selectedDestination = selectedDestination,

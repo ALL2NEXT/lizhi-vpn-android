@@ -437,7 +437,11 @@ class SettingsRepository(private val context: Context) {
     }
 
     val nodeGroupingMode: Flow<NodeGroupingMode> = context.dataStore.data.map { preferences ->
-        enumValueOrDefault(preferences[NODE_GROUPING_MODE], NodeGroupingMode.COUNTRY)
+        when (preferences[NODE_GROUPING_MODE]) {
+            "COUNTRY", "REGION" -> NodeGroupingMode.REGION
+            "SUBSCRIPTION", "WAREHOUSE" -> NodeGroupingMode.WAREHOUSE
+            else -> NodeGroupingMode.REGION
+        }
     }
 
     val subscriptionListJson: Flow<String?> = context.dataStore.data.map { preferences ->

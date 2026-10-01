@@ -72,7 +72,7 @@ private fun CountryGroupingScreen(
     bottomContentPadding: Dp
 ) {
     AppScreenScaffold(
-        title = "按地区分组",
+        title = "地区组",
         onBack = onBack,
         showBackNavigation = false,
         contentPadding = PaddingValues(
@@ -116,7 +116,7 @@ private fun CountryGroupingScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "暂无可选择的地区",
+                    text = "暂无可选择的地区组",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center

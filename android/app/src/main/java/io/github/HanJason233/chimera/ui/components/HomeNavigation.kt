@@ -130,7 +130,7 @@ private fun CapsuleHomeNavigationBar(
                     selected = selectedDestination == HomeDestination.NODE_GROUPING,
                     selectedIcon = Icons.Rounded.Public,
                     unselectedIcon = Icons.Outlined.Public,
-                    label = "分组",
+                    label = "地区组",
                     onClick = { onDestinationSelected(HomeDestination.NODE_GROUPING) },
                     modifier = Modifier.weight(1f)
                 )
@@ -138,7 +138,7 @@ private fun CapsuleHomeNavigationBar(
                     selected = selectedDestination == HomeDestination.SUBSCRIPTION_GROUPING,
                     selectedIcon = Icons.Rounded.Subscriptions,
                     unselectedIcon = Icons.Outlined.Subscriptions,
-                    label = "仓库",
+                    label = "仓库组",
                     onClick = { onDestinationSelected(HomeDestination.SUBSCRIPTION_GROUPING) },
                     modifier = Modifier.weight(1f)
                 )
@@ -172,14 +172,14 @@ private fun NativeHomeNavigationBar(
             selected = selectedDestination == HomeDestination.NODE_GROUPING,
             selectedIcon = Icons.Rounded.Public,
             unselectedIcon = Icons.Outlined.Public,
-            label = "分组",
+            label = "地区组",
             onClick = { onDestinationSelected(HomeDestination.NODE_GROUPING) }
         )
         NativeNavigationItem(
             selected = selectedDestination == HomeDestination.SUBSCRIPTION_GROUPING,
             selectedIcon = Icons.Rounded.Subscriptions,
             unselectedIcon = Icons.Outlined.Subscriptions,
-            label = "仓库",
+            label = "仓库组",
             onClick = { onDestinationSelected(HomeDestination.SUBSCRIPTION_GROUPING) }
         )
         NativeNavigationItem(
@@ -333,14 +333,14 @@ fun HomeNavigationBar(
                     selected = selectedDestination == HomeDestination.NODE_GROUPING,
                     selectedIcon = Icons.Rounded.Public,
                     unselectedIcon = Icons.Outlined.Public,
-                    label = "分组",
+                    label = "地区组",
                     onClick = { onDestinationSelected(HomeDestination.NODE_GROUPING) }
                 )
                 HomeNavigationItem(
                     selected = selectedDestination == HomeDestination.SUBSCRIPTION_GROUPING,
                     selectedIcon = Icons.Rounded.Subscriptions,
                     unselectedIcon = Icons.Outlined.Subscriptions,
-                    label = "仓库",
+                    label = "仓库组",
                     onClick = { onDestinationSelected(HomeDestination.SUBSCRIPTION_GROUPING) }
                 )
                 HomeNavigationItem(

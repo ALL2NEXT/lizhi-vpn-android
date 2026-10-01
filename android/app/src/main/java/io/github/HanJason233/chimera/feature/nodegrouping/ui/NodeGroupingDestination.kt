@@ -31,7 +31,7 @@ private sealed interface NodeGroupingDetail {
 }
 
 /**
- * 节点分组的统一页面入口，根据底部导航当前选项显示地区或订阅仓库分组。
+ * 节点分组的统一页面入口，根据底部导航显示地区组或仓库组。
  * 分组详情的页面状态由本模块维护。
  */
 @Composable
@@ -50,12 +50,13 @@ fun NodeGroupingDestination(
     bottomContentPadding: Dp = 16.dp
 ) {
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
+    val allWarehouseNodes by viewModel.allWarehouseNodes.collectAsStateWithLifecycle()
     var detail by remember(groupingMode) { mutableStateOf<NodeGroupingDetail?>(null) }
 
     // 线路详情标题显示当前分组名称，测速阶段状态不再替换标题栏副标题。
     when (val currentDetail = detail) {
         is NodeGroupingDetail.Country -> {
-            val countryNodes = allSubscriptionNodes.filter {
+            val countryNodes = allWarehouseNodes.filter {
                 it.getCountryCode() == currentDetail.countryCode
             }
             SubscriptionGroupingDestination(
@@ -101,7 +102,7 @@ fun NodeGroupingDestination(
         }
 
         null -> when (groupingMode) {
-            NodeGroupingMode.COUNTRY -> CountryGroupingDestination(
+            NodeGroupingMode.REGION -> CountryGroupingDestination(
                 viewModel = viewModel,
                 onCountrySelected = onCountrySelected,
                 onViewCountryDetails = { country ->
@@ -111,7 +112,7 @@ fun NodeGroupingDestination(
                 bottomContentPadding = bottomContentPadding
             )
 
-            NodeGroupingMode.SUBSCRIPTION -> SubscriptionGroupSelectionDestination(
+            NodeGroupingMode.WAREHOUSE -> SubscriptionGroupSelectionDestination(
                 viewModel = viewModel,
                 // 卡片点击只更新主页筛选范围，右侧箭头才进入该订阅的线路详情。
                 onSubscriptionSelected = { group ->

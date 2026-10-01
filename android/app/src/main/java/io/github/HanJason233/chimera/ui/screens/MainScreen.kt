@@ -111,7 +111,7 @@ fun MainScreen(
     val selectedGroupName = when (val selectedGroup = NodeGroupKey.parse(selectedNodeGroupId)) {
         is NodeGroupKey.Subscription -> subscriptionGroups
             .firstOrNull { it.sourceId == selectedGroup.sourceId }
-            ?.name ?: "未知订阅组"
+            ?.name ?: "未知官方组"
         is NodeGroupKey.Country -> countryOptions
             .firstOrNull { it.code.equals(selectedGroup.countryCode, ignoreCase = true) }
             ?.name ?: selectedGroup.countryCode

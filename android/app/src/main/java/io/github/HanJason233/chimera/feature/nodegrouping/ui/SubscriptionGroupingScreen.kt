@@ -80,7 +80,7 @@ internal fun SubscriptionGroupingScreen(
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp,
-    screenTitle: String = "按订阅仓库分组",
+    screenTitle: String = "仓库组",
     onImportNodeUris: ((String, (String, Boolean) -> Unit) -> Unit)? = null,
     onUpdateNode: ((Node, String, String, (String, Boolean) -> Unit) -> Unit)? = null,
     onDeleteNode: ((Node, (String, Boolean) -> Unit) -> Unit)? = null
@@ -174,7 +174,7 @@ internal fun SubscriptionGroupingScreen(
                     }
                 }
             }
-            // 个人订阅组详情沿用仓库页的顶部操作栏，只保留添加、编辑和删除。
+            // 个人组详情沿用仓库页的顶部操作栏，只保留添加、编辑和删除。
             if (canManageNodes) {
                 IconButton(
                     onClick = {
@@ -400,7 +400,7 @@ internal fun SubscriptionGroupingScreen(
             AppAlertDialog(
                 onDismissRequest = { if (!isManagingNodes) deleteCandidate = null },
                 title = { Text("删除节点？") },
-                text = { Text("确认从当前订阅组中删除“${node.getDisplayName()}”吗？") },
+                text = { Text("确认从当前个人组中删除“${node.getDisplayName()}”吗？") },
                 dismissButton = {
                     TextButton(
                         onClick = { deleteCandidate = null },

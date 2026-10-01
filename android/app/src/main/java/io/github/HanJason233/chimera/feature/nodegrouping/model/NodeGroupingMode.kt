@@ -1,7 +1,7 @@
 package io.github.HanJason233.chimera.feature.nodegrouping.model
 
-/** 底部节点入口当前采用的分组方式。 */
+/** 分组页面当前展示的顶层分组类别。 */
 enum class NodeGroupingMode {
-    COUNTRY,
-    SUBSCRIPTION
+    REGION,
+    WAREHOUSE
 }
