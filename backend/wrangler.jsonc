@@ -1,6 +1,6 @@
 {
   "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
-  "name": "liuying",
+  "name": "chimera",
   "main": "serverless.js",
   "compatibility_date": "2026-08-14",
   "compatibility_flags": ["nodejs_compat"],

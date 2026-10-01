@@ -11,6 +11,7 @@ const MAX_PROXY_APP_LIST_BYTES = 1024 * 1024;
 export function createClientRoutes(deps) {
   const {
     CLIENT_IP_HEADER,
+    LEGACY_CLIENT_IP_HEADER,
     canAccessAccountType,
     resolveAccountAccess,
     beijingTimestamp,
@@ -57,7 +58,7 @@ async function handleProxyAppList() {
     upstream = await fetch(PROXY_APP_LIST_URL, {
       headers: {
         accept: "text/plain",
-        "user-agent": "Firefly-Worker",
+        "user-agent": "Chimera-Worker",
       },
       cf: { cacheTtl: 900, cacheEverything: true },
     });
@@ -154,6 +155,7 @@ async function handleManagedSubscription(path, request, env) {
     "cache-control": "no-store",
   };
   responseHeaders[CLIENT_IP_HEADER] = clientIp;
+  responseHeaders[LEGACY_CLIENT_IP_HEADER] = clientIp;
   return new Response(responseContent, {
     headers: responseHeaders,
   });

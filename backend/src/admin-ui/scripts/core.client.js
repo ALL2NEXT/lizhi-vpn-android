@@ -26,7 +26,8 @@
  let userSearchIndex = -1;
  let userSortKey = '';
  let userSortDirection = 'desc';
- const USER_COLUMN_WIDTHS_KEY = 'firefly:user-sheet-column-widths:v1';
+ const USER_COLUMN_WIDTHS_KEY = 'chimera:user-sheet-column-widths:v1';
+ const LEGACY_USER_COLUMN_WIDTHS_KEY = 'firefly:user-sheet-column-widths:v1';
  const USER_SHEET_COLUMNS = [
    {key: 'select', label: '选择', width: 48, min: 44},
    {key: 'accountId', label: '用户 UID', width: 150, min: 110},

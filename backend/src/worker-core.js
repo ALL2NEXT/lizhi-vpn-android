@@ -1,5 +1,5 @@
 /*
- * Firefly Cloudflare Worker composition root.
+ * Chimera Cloudflare Worker composition root.
  *
  * Domain logic lives in focused modules. This file only wires route
  * dependencies and dispatches incoming requests.
@@ -7,6 +7,7 @@
 
 import {
   CLIENT_IP_HEADER,
+  LEGACY_CLIENT_IP_HEADER,
   MAX_BATCH_USER_COUNT,
   resolveAdminBasePath,
   USER_SCHEMA_VERSION,
@@ -81,6 +82,7 @@ import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.js";
 
 const routeDeps = {
   CLIENT_IP_HEADER,
+  LEGACY_CLIENT_IP_HEADER,
   canAccessAccountType,
   resolveAccountAccess,
   beijingTimestamp,
@@ -166,7 +168,7 @@ const worker = {
           : null;
         return json({
           ok: true,
-          service: "fireflyvpn-worker",
+          service: "chimera-worker",
           bindings: {
             config: Boolean(env.CONFIG),
             usersDb: Boolean(env.USERS_DB),

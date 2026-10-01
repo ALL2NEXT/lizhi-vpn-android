@@ -13,7 +13,11 @@ function csvMegabytes(megabytes) {
 function usageTotal(usage) { return formatMegabytes(usage && usage.totalMb); }
 function loadUserColumnWidths() {
   try {
-    const stored = JSON.parse(localStorage.getItem(USER_COLUMN_WIDTHS_KEY) || '{}');
+    const stored = JSON.parse(
+      localStorage.getItem(USER_COLUMN_WIDTHS_KEY) ||
+      localStorage.getItem(LEGACY_USER_COLUMN_WIDTHS_KEY) ||
+      '{}',
+    );
     return stored && typeof stored === 'object' ? stored : {};
   } catch (_) {
     return {};

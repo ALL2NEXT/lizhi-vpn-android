@@ -267,7 +267,7 @@ function exportUsersCsv() {
   const downloadUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = downloadUrl;
-  link.download = 'firefly-users-' + (currentUsersData.date || 'export') + '.csv';
+  link.download = 'chimera-users-' + (currentUsersData.date || 'export') + '.csv';
   document.body.appendChild(link);
   link.click();
   link.remove();

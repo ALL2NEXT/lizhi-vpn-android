@@ -1,7 +1,20 @@
 import { beijingTimestamp } from "../domain/time.js";
 
-const ADMIN_LOGIN_RECORDS_KEY = "fireflyvpn:admin-login-records:v1";
+const ADMIN_LOGIN_RECORDS_KEY = "chimera:admin-login-records:v1";
+const LEGACY_ADMIN_LOGIN_RECORDS_KEY = "fireflyvpn:admin-login-records:v1";
 const MAX_ADMIN_LOGIN_RECORDS = 200;
+
+function mergeAdminLoginRecords(...recordLists) {
+  const unique = new Map();
+  for (const records of recordLists) {
+    for (const record of Array.isArray(records) ? records : []) {
+      unique.set(JSON.stringify(record), record);
+    }
+  }
+  return Array.from(unique.values())
+    .sort((left, right) => String(right.at || "").localeCompare(String(left.at || "")))
+    .slice(0, MAX_ADMIN_LOGIN_RECORDS);
+}
 
 function requestIp(request) {
   return String(
@@ -25,8 +38,11 @@ function requestPath(request, path) {
 export async function recordAdminLogin(env, request, success, details = {}) {
   if (!env.CONFIG) return;
   try {
-    const stored = await env.CONFIG.get(ADMIN_LOGIN_RECORDS_KEY, "json");
-    const records = Array.isArray(stored) ? stored : [];
+    const [chimeraRecords, legacyRecords] = await Promise.all([
+      env.CONFIG.get(ADMIN_LOGIN_RECORDS_KEY, "json"),
+      env.CONFIG.get(LEGACY_ADMIN_LOGIN_RECORDS_KEY, "json"),
+    ]);
+    const records = mergeAdminLoginRecords(chimeraRecords, legacyRecords);
     records.unshift({
       at: beijingTimestamp(),
       ip: requestIp(request),
@@ -36,10 +52,11 @@ export async function recordAdminLogin(env, request, success, details = {}) {
       method: String(details.method || request.method).slice(0, 16),
       honeypot: Boolean(details.honeypot),
     });
-    await env.CONFIG.put(
-      ADMIN_LOGIN_RECORDS_KEY,
-      JSON.stringify(records.slice(0, MAX_ADMIN_LOGIN_RECORDS)),
-    );
+    const serialized = JSON.stringify(records.slice(0, MAX_ADMIN_LOGIN_RECORDS));
+    await Promise.all([
+      env.CONFIG.put(ADMIN_LOGIN_RECORDS_KEY, serialized),
+      env.CONFIG.put(LEGACY_ADMIN_LOGIN_RECORDS_KEY, serialized),
+    ]);
   } catch (error) {
     console.error(JSON.stringify({
       message: "admin_login_record_failed",
@@ -50,12 +67,18 @@ export async function recordAdminLogin(env, request, success, details = {}) {
 
 export async function readAdminLoginRecords(env) {
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
-  const stored = await env.CONFIG.get(ADMIN_LOGIN_RECORDS_KEY, "json");
-  return Array.isArray(stored) ? stored.slice(0, MAX_ADMIN_LOGIN_RECORDS) : [];
+  const [chimeraRecords, legacyRecords] = await Promise.all([
+    env.CONFIG.get(ADMIN_LOGIN_RECORDS_KEY, "json"),
+    env.CONFIG.get(LEGACY_ADMIN_LOGIN_RECORDS_KEY, "json"),
+  ]);
+  return mergeAdminLoginRecords(chimeraRecords, legacyRecords);
 }
 
 // 仅清理后台登录与蜜罐记录，不触碰用户、设备或流量数据。
 export async function clearAdminLoginRecords(env) {
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
-  await env.CONFIG.delete(ADMIN_LOGIN_RECORDS_KEY);
+  await Promise.all([
+    env.CONFIG.delete(ADMIN_LOGIN_RECORDS_KEY),
+    env.CONFIG.delete(LEGACY_ADMIN_LOGIN_RECORDS_KEY),
+  ]);
 }

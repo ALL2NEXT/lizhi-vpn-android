@@ -1,4 +1,4 @@
-import { DEFAULT_STATE, STATE_KEY } from "../config.js";
+import { DEFAULT_STATE, LEGACY_STATE_KEY, STATE_KEY } from "../config.js";
 import { normalizeAccountType } from "../domain/account.js";
 import { beijingTimestamp } from "../domain/time.js";
 import { cleanText, parseFlag, plainObject } from "../lib/values.js";
@@ -34,15 +34,30 @@ export async function readState(env) {
   if (!env.CONFIG) {
     throw new Error("Missing KV binding CONFIG");
   }
-  const stored = await env.CONFIG.get(STATE_KEY, "json");
-  return normalizeState(stored || DEFAULT_STATE);
+  const [chimeraState, legacyState] = await Promise.all([
+    env.CONFIG.get(STATE_KEY, "json"),
+    env.CONFIG.get(LEGACY_STATE_KEY, "json"),
+  ]);
+  const chimeraUpdatedAt = Date.parse(chimeraState?.updatedAt || "") || 0;
+  const legacyUpdatedAt = Date.parse(legacyState?.updatedAt || "") || 0;
+  const stored = legacyUpdatedAt > chimeraUpdatedAt ? legacyState : chimeraState || legacyState;
+  const normalized = normalizeState(stored || DEFAULT_STATE);
+  if (stored && !chimeraState) {
+    await env.CONFIG.put(STATE_KEY, JSON.stringify(normalized));
+  }
+  return normalized;
 }
 
 export async function writeState(env, state) {
   if (!env.CONFIG) {
     throw new Error("Missing KV binding CONFIG");
   }
-  await env.CONFIG.put(STATE_KEY, JSON.stringify(normalizeState(state)));
+  const serialized = JSON.stringify(normalizeState(state));
+  // 双写旧键，迁移期间让仍在使用旧 Worker 的管理端保持数据一致。
+  await Promise.all([
+    env.CONFIG.put(STATE_KEY, serialized),
+    env.CONFIG.put(LEGACY_STATE_KEY, serialized),
+  ]);
 }
 
 export function normalizeState(input) {

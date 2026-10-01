@@ -44,6 +44,7 @@ class SubscriptionParser {
             val nodes = withContext(Dispatchers.Default) {
                 val content = if (encrypted) {
                     val route = response.headers()[CLIENT_IP_HEADER]
+                        ?: response.headers()[LEGACY_CLIENT_IP_HEADER]
                         ?: throw IllegalStateException("加密订阅缺少 $CLIENT_IP_HEADER 响应头")
                     RuntimeTuner.c1(raw, route)
                 } else {
@@ -75,6 +76,7 @@ class SubscriptionParser {
                     ?: throw IllegalStateException("订阅接口返回空内容")
                 val content = if (encrypted) {
                     val route = response.header(CLIENT_IP_HEADER)
+                        ?: response.header(LEGACY_CLIENT_IP_HEADER)
                         ?: throw IllegalStateException("加密订阅缺少 $CLIENT_IP_HEADER 响应头")
                     RuntimeTuner.c1(raw, route)
                 } else {
@@ -439,6 +441,7 @@ class SubscriptionParser {
     }
 
     private companion object {
-        const val CLIENT_IP_HEADER = "X-Firefly-Client-IP"
+        const val CLIENT_IP_HEADER = "X-Chimera-Client-IP"
+        private const val LEGACY_CLIENT_IP_HEADER = "X-Firefly-Client-IP"
     }
 }

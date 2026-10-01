@@ -1,6 +1,6 @@
-# Firefly Cloudflare Worker 后端
+# Chimera Cloudflare Worker 后端
 
-这是 Firefly 的 Cloudflare Worker 后端。部署入口保持为 `serverless.js`，业务实现已按职责拆分，便于维护和测试。
+这是 Chimera 的 Cloudflare Worker 后端。部署入口保持为 `serverless.js`，业务实现已按职责拆分，便于维护和测试。
 
 ## 目录结构
 
@@ -29,12 +29,12 @@ Worker 固定从上游获取 Android 代理应用包名列表，并以 `text/pla
 
 - KV 命名空间绑定：`CONFIG`
 - D1 数据库绑定：`USERS_DB`
-- Worker Secret：`ADMIN_TOKEN`。
+- Worker Secret：`ADMIN_PATH`、`ADMIN_TOKEN`。
 
 管理后台地址：
 
 ```text
-https://你的域名/3e9a0eed-6a29-4d16-91b1-3adae4bd88e6
+https://chimera.dwads.workers.dev/<ADMIN_PATH>
 ```
 
 管理 API 需要携带：
@@ -74,3 +74,15 @@ npx.cmd wrangler dev --local
 ```
 
 `wrangler.jsonc` 使用 Text 模块规则导入管理页的 HTML、CSS 和 `*.client.js`，新增管理页资源时应沿用对应扩展名。
+
+## Chimera Worker 部署
+
+`wrangler.jsonc` 中的 Worker 名称为 `chimera`，部署会创建独立的 `chimera` Worker，并继续绑定现有的 `CONFIG` KV 与 `USERS_DB` D1 数据库，以沿用后台配置和用户数据。首次部署前需为新 Worker 单独设置 `ADMIN_PATH` 和 `ADMIN_TOKEN`：
+
+```powershell
+npx.cmd wrangler secret put ADMIN_PATH --name chimera
+npx.cmd wrangler secret put ADMIN_TOKEN --name chimera
+npx.cmd wrangler deploy
+```
+
+新版本以 Chimera 的 KV 键保存后台数据，并兼容读取、同步旧 Firefly 键；加密订阅响应同时返回新旧客户端 IP 响应头，便于客户端逐步迁移。

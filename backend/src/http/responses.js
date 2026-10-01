@@ -1,4 +1,4 @@
-import { CLIENT_IP_HEADER } from "../config.js";
+import { CLIENT_IP_HEADER, LEGACY_CLIENT_IP_HEADER } from "../config.js";
 import { cleanText } from "../lib/values.js";
 
 export async function isAdmin(request, env) {
@@ -19,7 +19,7 @@ export function corsHeaders() {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "access-control-allow-headers": "Content-Type, Authorization",
-    "access-control-expose-headers": CLIENT_IP_HEADER,
+    "access-control-expose-headers": `${CLIENT_IP_HEADER}, ${LEGACY_CLIENT_IP_HEADER}`,
   };
 }
 
