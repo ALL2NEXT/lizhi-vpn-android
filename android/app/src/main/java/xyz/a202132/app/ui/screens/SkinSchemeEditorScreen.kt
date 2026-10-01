@@ -566,6 +566,33 @@ fun SkinSchemeEditorScreen(
                             }
                         )
                     }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "连接中图标旋转",
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "连接中或断开中时旋转主页图标",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = scheme.homeIconRotationEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.upsertSkinScheme(
+                                    scheme.copy(homeIconRotationEnabled = enabled)
+                                )
+                            }
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         HomeIconEffect.entries.forEach { effect ->
                             FilterChip(

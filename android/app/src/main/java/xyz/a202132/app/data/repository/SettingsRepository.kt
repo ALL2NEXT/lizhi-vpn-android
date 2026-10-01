@@ -1365,6 +1365,10 @@ class SettingsRepository(private val context: Context) {
                                 homeIconEffectEnabled = item.optBoolean(
                                     "homeIconEffectEnabled",
                                     true
+                                ),
+                                homeIconRotationEnabled = item.optBoolean(
+                                    "homeIconRotationEnabled",
+                                    false
                                 )
                             )
                         )
@@ -1402,6 +1406,7 @@ class SettingsRepository(private val context: Context) {
                         scheme.homeConnectedImagePath?.let { put("homeConnectedImagePath", it) }
                         put("homeIconEffect", scheme.homeIconEffect.storageName)
                         put("homeIconEffectEnabled", scheme.homeIconEffectEnabled)
+                        put("homeIconRotationEnabled", scheme.homeIconRotationEnabled)
                     }
                 )
             }

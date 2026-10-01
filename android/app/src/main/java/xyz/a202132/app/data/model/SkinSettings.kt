@@ -39,7 +39,9 @@ data class SkinScheme(
     /** 主页连接图标周围显示的动画类型。 */
     val homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
     /** 默认开启以保持升级前的主页显示效果。 */
-    val homeIconEffectEnabled: Boolean = true
+    val homeIconEffectEnabled: Boolean = true,
+    /** 连接中或断开中时旋转主页连接图标。 */
+    val homeIconRotationEnabled: Boolean = false
 ) {
     val isDefault: Boolean
         get() = id == DEFAULT_SCHEME_ID

@@ -3,7 +3,11 @@ package xyz.a202132.app.ui.components
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
@@ -22,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.consumePositionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -66,7 +71,8 @@ fun ConnectButton(
     customConnectingImagePath: String? = null,
     customConnectedImagePath: String? = null,
     homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
-    homeIconEffectEnabled: Boolean = true
+    homeIconEffectEnabled: Boolean = true,
+    homeIconRotationEnabled: Boolean = false
 ) {
     // 测速方案执行期间底层状态仍可能是 DISCONNECTED，主页视觉上应展示“连接中”。
     val displayState = if (isTesting && vpnState == VpnState.DISCONNECTED) {
@@ -75,6 +81,22 @@ fun ConnectButton(
         vpnState
     }
     val isConnecting = displayState == VpnState.CONNECTING || displayState == VpnState.DISCONNECTING
+
+    val iconRotation = if (homeIconRotationEnabled && isConnecting) {
+        val rotationTransition = rememberInfiniteTransition(label = "connectionIconRotation")
+        val animatedRotation by rotationTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "connectionIconRotation"
+        )
+        animatedRotation
+    } else {
+        0f
+    }
 
     // 自适应按钮大小：取屏幕宽度的 65%，但不超过 250dp
     val configuration = LocalConfiguration.current
@@ -138,7 +160,9 @@ fun ConnectButton(
                             VpnState.DISCONNECTING -> "VPN 断开中"
                             VpnState.CONNECTED -> "VPN 已连接"
                         },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { rotationZ = iconRotation }
                     )
                     // 手势层裁剪为圆形，图片本身保持完整显示，避免透明图片的角落可触发。
                     Box(

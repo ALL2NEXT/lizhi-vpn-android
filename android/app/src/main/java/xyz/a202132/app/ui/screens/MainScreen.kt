@@ -270,6 +270,7 @@ fun MainScreen(
                     customConnectedImagePath = skinSettings.homeConnectedImagePath,
                     homeIconEffect = skinSettings.activeScheme.homeIconEffect,
                     homeIconEffectEnabled = skinSettings.activeScheme.homeIconEffectEnabled,
+                    homeIconRotationEnabled = skinSettings.activeScheme.homeIconRotationEnabled,
                     onClick = {
                         when (vpnState) {
                             VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
