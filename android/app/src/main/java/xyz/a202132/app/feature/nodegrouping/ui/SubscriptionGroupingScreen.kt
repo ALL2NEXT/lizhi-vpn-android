@@ -25,6 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,7 +55,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import xyz.a202132.app.data.model.Node
 import xyz.a202132.app.data.model.NodeDisplaySettings
+import xyz.a202132.app.data.model.ManualGroupTestStage
 import xyz.a202132.app.data.model.ProtocolCoreSettings
+import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.ui.components.AppScreenScaffold
 
 internal enum class NodeActionMode {
@@ -68,6 +73,8 @@ internal fun SubscriptionGroupingScreen(
     isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
+    groupManualSpeedTestScheme: SpeedTestScheme?,
+    onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
@@ -88,6 +95,7 @@ internal fun SubscriptionGroupingScreen(
     var editingNodeUri by rememberSaveable { mutableStateOf("") }
     var deleteCandidate by remember { mutableStateOf<Node?>(null) }
     var isManagingNodes by rememberSaveable { mutableStateOf(false) }
+    var manualTestMenuExpanded by rememberSaveable { mutableStateOf(false) }
 
     val handleBack = {
         if (!isClosing) {
@@ -114,6 +122,57 @@ internal fun SubscriptionGroupingScreen(
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
         actions = {
+            val testScheme = groupManualSpeedTestScheme
+            if (testScheme != null &&
+                (testScheme.tcpingEnabled || testScheme.urlTestEnabled || testScheme.bandwidthEnabled)
+            ) {
+                Box {
+                    IconButton(
+                        onClick = { manualTestMenuExpanded = true },
+                        enabled = !isTesting && nodes.isNotEmpty()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Speed,
+                            contentDescription = "分组内手动测试"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = manualTestMenuExpanded,
+                        onDismissRequest = { manualTestMenuExpanded = false }
+                    ) {
+                        if (testScheme.tcpingEnabled) {
+                            DropdownMenuItem(
+                                text = { Text("TCPing · ${testScheme.tcpingPercent}%") },
+                                onClick = {
+                                    manualTestMenuExpanded = false
+                                    onRunManualGroupTest(ManualGroupTestStage.TCPING)
+                                },
+                                enabled = !isTesting
+                            )
+                        }
+                        if (testScheme.urlTestEnabled) {
+                            DropdownMenuItem(
+                                text = { Text("URL Test · ${testScheme.urlTestPercent}%") },
+                                onClick = {
+                                    manualTestMenuExpanded = false
+                                    onRunManualGroupTest(ManualGroupTestStage.URL_TEST)
+                                },
+                                enabled = !isTesting
+                            )
+                        }
+                        if (testScheme.bandwidthEnabled) {
+                            DropdownMenuItem(
+                                text = { Text("带宽测速 · ${testScheme.bandwidthPercent}%") },
+                                onClick = {
+                                    manualTestMenuExpanded = false
+                                    onRunManualGroupTest(ManualGroupTestStage.BANDWIDTH)
+                                },
+                                enabled = !isTesting
+                            )
+                        }
+                    }
+                }
+            }
             // 个人订阅组详情沿用仓库页的顶部操作栏，只保留添加、编辑和删除。
             if (canManageNodes) {
                 IconButton(

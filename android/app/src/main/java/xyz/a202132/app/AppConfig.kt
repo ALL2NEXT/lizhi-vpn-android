@@ -78,7 +78,7 @@ object AppConfig {
     const val TCPING_TEST_TIMEOUT = 1000L // TCPing 超时（毫秒）
     
     const val URL_TEST_URL = UrlTestTargets.DEFAULT_URL // URL Test 默认测试 URL
-    const val URL_TEST_WARMUP_TIMEOUT = 9000L // URL Test 首次建连与预热请求超时（毫秒）
+    const val URL_TEST_WARMUP_TIMEOUT = 4000L // URL Test 首次建连与预热请求超时（毫秒）
     const val URL_TEST_MEASUREMENT_TIMEOUT = 1000L // URL Test 暖连接延迟测量超时（毫秒）
     const val URL_TEST_RETRY_COUNT = 1 // URL Test 自动重试次数，仅对503/504或异常生效
     const val URL_TEST_RECHECK_TOP_COUNT = 5 // 首轮最快节点进入稳态复测的数量

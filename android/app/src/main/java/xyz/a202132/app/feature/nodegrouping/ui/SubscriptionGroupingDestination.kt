@@ -7,6 +7,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import xyz.a202132.app.data.model.Node
+import xyz.a202132.app.data.model.ManualGroupTestStage
+import xyz.a202132.app.data.model.SpeedTestScheme
 import xyz.a202132.app.viewmodel.MainViewModel
 
 /** 按订阅仓库分组页面的状态绑定入口。 */
@@ -31,6 +33,12 @@ internal fun SubscriptionGroupingDestination(
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val isRefreshingAllSubscriptions by
         viewModel.isRefreshingAllSubscriptions.collectAsStateWithLifecycle()
+    val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
+    val groupManualSpeedTestSchemeId by
+        viewModel.groupManualSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val groupManualSpeedTestScheme = speedTestSchemes.firstOrNull {
+        it.id == groupManualSpeedTestSchemeId
+    } ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val nodeDisplaySettings by
         viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     val protocolCoreSettings by
@@ -92,6 +100,10 @@ internal fun SubscriptionGroupingDestination(
         isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
+        groupManualSpeedTestScheme = groupManualSpeedTestScheme,
+        onRunManualGroupTest = { stage ->
+            viewModel.runManualGroupTest(nodes, stage)
+        },
         onNodeSelected = onNodeSelected,
         onBack = onBack,
         showBackNavigation = showBackNavigation,

@@ -19,11 +19,11 @@ class SpeedTestSchemeTest {
         assertEquals(16, scheme.tcpingConcurrency)
         assertTrue(scheme.urlTestEnabled)
         assertEquals(50, scheme.urlTestPercent)
-        assertEquals(9_000L, scheme.urlTestWarmupTimeoutMs)
+        assertEquals(4_000L, scheme.urlTestWarmupTimeoutMs)
         assertEquals(1_000L, scheme.urlTestMeasurementTimeoutMs)
         assertEquals(10, scheme.urlTestConcurrency)
         assertEquals(UrlTestTargets.DEFAULT_URL, scheme.urlTestUrl)
-        assertEquals("", scheme.urlTestBackupUrl)
+        assertEquals(UrlTestTargets.DEFAULT_BACKUP_URL, scheme.urlTestBackupUrl)
         assertFalse(scheme.bandwidthEnabled)
     }
 }

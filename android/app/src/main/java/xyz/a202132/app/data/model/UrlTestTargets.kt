@@ -9,6 +9,7 @@ data class UrlTestPreset(
 
 object UrlTestTargets {
     const val DEFAULT_URL = "https://www.google.com/generate_204"
+    const val DEFAULT_BACKUP_URL = "https://www.gstatic.com/generate_204"
 
     /** Empty input disables the optional backup target. */
     fun normalizeOptional(value: String?): String? =
@@ -17,7 +18,7 @@ object UrlTestTargets {
     val PRESETS = listOf(
         UrlTestPreset("Cloudflare", "https://cp.cloudflare.com/generate_204"),
         UrlTestPreset("Google", DEFAULT_URL),
-        UrlTestPreset("Google Static", "https://www.gstatic.com/generate_204")
+        UrlTestPreset("Google Static", DEFAULT_BACKUP_URL)
     )
 
     /** Accepts an HTTP(S) URL, adding HTTPS when the scheme is omitted. */

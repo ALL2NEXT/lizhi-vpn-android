@@ -80,6 +80,8 @@ class SettingsRepository(private val context: Context) {
             stringPreferencesKey("home_swipe_left_speed_test_scheme_id")
         private val HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_swipe_right_speed_test_scheme_id")
+        private val GROUP_MANUAL_SPEED_TEST_SCHEME_ID =
+            stringPreferencesKey("group_manual_speed_test_scheme_id")
         private val HOME_CLICK_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_click_speed_test_enabled")
         private val HOME_LONG_PRESS_SPEED_TEST_ENABLED =
@@ -244,6 +246,16 @@ class SettingsRepository(private val context: Context) {
         )
     }
 
+    /** 分组线路详情中手动测试使用的测速方案。 */
+    val groupManualSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+        val schemes = decodeSpeedTestSchemes(preferences)
+        resolveHomeSchemeId(
+            preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID],
+            SpeedTestScheme.DEFAULT_ID,
+            schemes
+        )
+    }
+
     /** 主页图标单击是否启用测速方案；默认关闭，避免普通点击触发测速。 */
     val homeClickSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[HOME_CLICK_SPEED_TEST_ENABLED] ?: false
@@ -318,6 +330,14 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = schemeId
+            }
+        }
+    }
+
+    suspend fun setGroupManualSpeedTestSchemeId(schemeId: String) {
+        context.dataStore.edit { preferences ->
+            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
+                preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] = schemeId
             }
         }
     }
@@ -752,6 +772,9 @@ class SettingsRepository(private val context: Context) {
             if (preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] == schemeId) {
                 preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
+            if (preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] == schemeId) {
+                preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
+            }
         }
     }
 
@@ -1165,7 +1188,10 @@ class SettingsRepository(private val context: Context) {
                                             xyz.a202132.app.AppConfig.URL_TEST_MEASUREMENT_TIMEOUT
                                         ),
                                         urlTestUrl = item.optString("urlTestUrl", UrlTestTargets.DEFAULT_URL),
-                                        urlTestBackupUrl = item.optString("urlTestBackupUrl", ""),
+                                        urlTestBackupUrl = item.optString(
+                                            "urlTestBackupUrl",
+                                            UrlTestTargets.DEFAULT_BACKUP_URL
+                                        ),
                                         bandwidthTestDurationMs = item.optLong(
                                             "bandwidthTestDurationMs",
                                             3_000L

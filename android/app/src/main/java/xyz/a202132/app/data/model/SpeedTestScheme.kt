@@ -9,6 +9,12 @@ enum class SpeedTestScope {
     ALL_GROUPS
 }
 
+enum class ManualGroupTestStage {
+    TCPING,
+    URL_TEST,
+    BANDWIDTH
+}
+
 /** 测速方案编辑页可选择的节点组，ID 使用 NodeGroupKey 的稳定值。 */
 data class SpeedTestGroupOption(
     val id: String,
@@ -36,10 +42,10 @@ data class SpeedTestScheme(
     val urlTestPercent: Int = 50,
     val bandwidthPercent: Int = 50,
     val tcpingTimeoutMs: Long = 1_000L,
-    val urlTestWarmupTimeoutMs: Long = 9_000L,
+    val urlTestWarmupTimeoutMs: Long = 4_000L,
     val urlTestMeasurementTimeoutMs: Long = 1_000L,
     val urlTestUrl: String = UrlTestTargets.DEFAULT_URL,
-    val urlTestBackupUrl: String = "",
+    val urlTestBackupUrl: String = UrlTestTargets.DEFAULT_BACKUP_URL,
     val bandwidthTestDurationMs: Long = 3_000L,
     val bandwidthTestUrl: String = BandwidthTestTargets.DEFAULT_URL,
     val tcpingConcurrency: Int = 16,
@@ -61,9 +67,10 @@ data class SpeedTestScheme(
             tcpingPercent = 100,
             urlTestPercent = 50,
             tcpingTimeoutMs = 1_000L,
-            urlTestWarmupTimeoutMs = 9_000L,
+            urlTestWarmupTimeoutMs = 4_000L,
             urlTestMeasurementTimeoutMs = 1_000L,
             urlTestUrl = UrlTestTargets.DEFAULT_URL,
+            urlTestBackupUrl = UrlTestTargets.DEFAULT_BACKUP_URL,
             tcpingConcurrency = 16,
             urlTestConcurrency = 10
         )

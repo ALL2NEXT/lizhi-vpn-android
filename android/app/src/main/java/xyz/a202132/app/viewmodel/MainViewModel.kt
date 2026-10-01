@@ -372,6 +372,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SpeedTestScheme.DEFAULT_ID
     )
 
+    val groupManualSpeedTestSchemeId = settingsRepository.groupManualSpeedTestSchemeId.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SpeedTestScheme.DEFAULT_ID
+    )
+
     val homeClickSpeedTestEnabled = settingsRepository.homeClickSpeedTestEnabled.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -717,6 +723,106 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Log.e(tag, "Speed test scheme failed", e)
                 _error.value = "测速失败：${e.message ?: "未知错误"}"
+            } finally {
+                _isTesting.value = false
+                GlobalTestExecution.finish()
+            }
+        }
+    }
+
+    /** 按配置方案的单阶段参数手动测试当前线路详情页中的节点。 */
+    fun runManualGroupTest(groupNodes: List<Node>, stage: ManualGroupTestStage) {
+        viewModelScope.launch {
+            if (GlobalTestExecution.isFetching()) {
+                _error.value = GlobalTestExecution.fetchingHint()
+                return@launch
+            }
+            val scheme = speedTestSchemes.value.firstOrNull {
+                it.id == groupManualSpeedTestSchemeId.value
+            } ?: speedTestSchemes.value.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
+            if (scheme == null) {
+                _error.value = "测速方案不存在"
+                return@launch
+            }
+
+            val stageEnabled = when (stage) {
+                ManualGroupTestStage.TCPING -> scheme.tcpingEnabled
+                ManualGroupTestStage.URL_TEST -> scheme.urlTestEnabled
+                ManualGroupTestStage.BANDWIDTH -> scheme.bandwidthEnabled
+            }
+            if (!stageEnabled) {
+                _error.value = "所选方案未启用该测试阶段"
+                return@launch
+            }
+            if (!GlobalTestExecution.tryStart("分组内手动测试：$stage")) {
+                _error.value = GlobalTestExecution.busyHint()
+                return@launch
+            }
+
+            _isTesting.value = true
+            try {
+                val latestNodesById = nodeDao().getAllNodes().first().associateBy(Node::id)
+                val currentGroupNodes = groupNodes.mapNotNull { latestNodesById[it.id] }
+                if (currentGroupNodes.isEmpty()) {
+                    _error.value = "当前分组没有可测试节点"
+                    return@launch
+                }
+
+                when (stage) {
+                    ManualGroupTestStage.TCPING -> {
+                        val candidates = takeTopPercent(currentGroupNodes, scheme.tcpingPercent)
+                        internalTestNodes(
+                            currentNodes = candidates,
+                            concurrency = scheme.tcpingConcurrency,
+                            timeoutMs = scheme.tcpingTimeoutMs
+                        )
+                    }
+
+                    ManualGroupTestStage.URL_TEST -> {
+                        val candidates = takeTopPercent(currentGroupNodes, scheme.urlTestPercent)
+                        val results = runUrlTestNodes(
+                            nodes = candidates,
+                            concurrency = scheme.urlTestConcurrency,
+                            warmupTimeoutMs = scheme.urlTestWarmupTimeoutMs,
+                            measurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs,
+                            targetUrl = scheme.urlTestUrl,
+                            fallbackUrl = scheme.urlTestBackupUrl
+                        )
+                        if (results.isEmpty()) {
+                            _error.value = "URL Test 未能启动"
+                            return@launch
+                        }
+                        applyUrlTestResults(results)
+                    }
+
+                    ManualGroupTestStage.BANDWIDTH -> {
+                        val candidates = takeTopPercent(currentGroupNodes, scheme.bandwidthPercent)
+                        candidates
+                            .chunked(scheme.bandwidthTestConcurrency)
+                            .flatMap { batch ->
+                                coroutineScope {
+                                    batch.map { node ->
+                                        async {
+                                            val speedMbps = testNodeDownloadBandwidthMbps(
+                                                node = node,
+                                                durationMs = scheme.bandwidthTestDurationMs,
+                                                downloadUrl = scheme.bandwidthTestUrl
+                                            )
+                                            nodeDao().updateDownloadMbps(node.id, speedMbps)
+                                            node to speedMbps
+                                        }
+                                    }.awaitAll()
+                                }
+                            }
+                        _nodeTestResultSortMode.value =
+                            NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e(tag, "Manual group test failed: $stage", error)
+                _error.value = "分组手动测试失败：${error.message ?: "未知错误"}"
             } finally {
                 _isTesting.value = false
                 GlobalTestExecution.finish()
@@ -1911,6 +2017,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setHomeSwipeRightSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
             settingsRepository.setHomeSwipeRightSpeedTestSchemeId(schemeId)
+        }
+    }
+
+    fun setGroupManualSpeedTestScheme(schemeId: String) {
+        viewModelScope.launch {
+            settingsRepository.setGroupManualSpeedTestSchemeId(schemeId)
         }
     }
 
