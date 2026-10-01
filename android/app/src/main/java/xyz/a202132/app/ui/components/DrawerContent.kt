@@ -1,11 +1,12 @@
 package xyz.a202132.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -16,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -25,7 +27,9 @@ import androidx.compose.ui.unit.sp
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.R
 import xyz.a202132.app.data.model.AccountInfo
+import xyz.a202132.app.data.model.AccountTrafficPeriod
 import xyz.a202132.app.ui.dialogs.AboutDialog
+import xyz.a202132.app.util.TrafficUsageFormatter
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -58,7 +62,7 @@ fun DrawerContent(
             .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
             .padding(bottom = 24.dp)
     ) {
-        UserAccountCard(
+        UserAccountSummary(
             accountInfo = accountInfo,
             onClick = onOpenAccountSettings
         )
@@ -154,40 +158,60 @@ fun DrawerContent(
 }
 
 @Composable
-private fun UserAccountCard(
+private fun UserAccountSummary(
     accountInfo: AccountInfo?,
     onClick: () -> Unit
 ) {
     val isBanned = accountInfo?.accountType == "banned" || accountInfo?.deviceBlocked == true
+    val nickname = accountInfo?.nickname?.trim()?.ifBlank { null } ?: "流萤用户"
     val accountTypeText = when {
         accountInfo == null -> "账户同步中"
         isBanned -> "被封禁用户"
         accountInfo.accountType == "formal" -> "正式用户"
         else -> "游客"
     }
-    Surface(
+    val accountTypeColor = if (isBanned) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.primary
+    val todayTraffic = when {
+        accountInfo == null -> "同步中…"
+        accountInfo.traffic == null -> "暂无数据"
+        else -> trafficTotalText(accountInfo.traffic.today)
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-        shape = RoundedCornerShape(12.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (isBanned) Icons.Outlined.Block else Icons.Outlined.AccountCircle,
-                contentDescription = null,
-                tint = if (isBanned) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(34.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                if (accountInfo == null) {
+                    Icon(
+                        imageVector = Icons.Outlined.AccountCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(25.dp)
+                    )
+                } else {
+                    Text(
+                        text = nickname.take(1),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = accountInfo?.nickname ?: "正在同步用户信息…",
+                    text = if (accountInfo == null) "正在同步用户信息…" else nickname,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -196,8 +220,7 @@ private fun UserAccountCard(
                 Text(
                     text = accountTypeText,
                     fontSize = 12.sp,
-                    color = if (isBanned) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary
+                    color = accountTypeColor
                 )
             }
             Icon(
@@ -207,7 +230,35 @@ private fun UserAccountCard(
                 modifier = Modifier.size(18.dp)
             )
         }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 58.dp, top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "今日流量",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = todayTraffic,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
+}
+
+private fun trafficTotalText(period: AccountTrafficPeriod): String {
+    val upload = period.uploadBytes.coerceAtLeast(0L)
+    val download = period.downloadBytes.coerceAtLeast(0L)
+    val calculatedTotal = if (upload > Long.MAX_VALUE - download) Long.MAX_VALUE else upload + download
+    val total = maxOf(period.totalBytes.coerceAtLeast(0L), calculatedTotal)
+    return TrafficUsageFormatter.formatBytes(total)
 }
 
 @Composable

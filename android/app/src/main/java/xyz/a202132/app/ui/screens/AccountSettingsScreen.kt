@@ -243,7 +243,7 @@ fun AccountSettingsScreen(
                         value = trafficPeriodText(traffic.total)
                     )
                     AccountInfoRow(
-                        label = "最近上报",
+                        label = "更新时间",
                         value = TrafficUsageFormatter.formatTimestamp(traffic.lastReportAt)
                     )
                     Text(
