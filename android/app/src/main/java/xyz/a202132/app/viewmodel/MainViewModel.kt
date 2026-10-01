@@ -125,10 +125,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _hysteriaBandwidthAdaptiveStatus = MutableStateFlow<String?>(null)
     val hysteriaBandwidthAdaptiveStatus = _hysteriaBandwidthAdaptiveStatus.asStateFlow()
     
-    // 测试类型标签 (用于 UI 显示)
-    private val _testingLabel = MutableStateFlow<String?>(null)
-    val testingLabel = _testingLabel.asStateFlow()
-    
     private val _notice = MutableStateFlow<NoticeInfo?>(null)
     val notice = _notice.asStateFlow()
     
@@ -620,14 +616,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // 阶段顺序固定为 1 -> 2 -> 3；关闭任一阶段时跳过，但不改变后续顺序。
                 if (scheme.tcpingEnabled) {
                     val tcpingNodes = takeTopPercent(candidates, scheme.tcpingPercent)
-                    _testingLabel.value = "${scheme.name}：TCPing 测试中..."
                     val tcpingResults = internalTestNodes(
                         currentNodes = tcpingNodes,
                         concurrency = scheme.tcpingConcurrency,
                         timeoutMs = scheme.tcpingTimeoutMs
-                    ) { completed, total ->
-                        _testingLabel.value = "${scheme.name}：TCPing ($completed/$total)"
-                    }
+                    )
                     candidates = tcpingResults
                         .filter { it.isAvailable && it.latency > 0 }
                         .sortedBy { it.latency }
@@ -642,7 +635,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val urlTestNodes = takeTopPercent(candidates, scheme.urlTestPercent)
                     val urlTestResults = runUrlTestNodes(
                         nodes = urlTestNodes,
-                        labelPrefix = "${scheme.name}：URL Test 204",
                         concurrency = scheme.urlTestConcurrency,
                         warmupTimeoutMs = scheme.urlTestWarmupTimeoutMs,
                         measurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs,
@@ -664,7 +656,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val speedTestNodes = takeTopPercent(candidates, scheme.bandwidthPercent)
                     val speedResults = speedTestNodes
                         .chunked(scheme.bandwidthTestConcurrency)
-                        .flatMapIndexed { batchIndex, batch ->
+                        .flatMap { batch ->
                             coroutineScope {
                                 batch.map { node ->
                                     async {
@@ -677,11 +669,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                         node to speedMbps
                                     }
                                 }.awaitAll()
-                            }.also {
-                                val completed = ((batchIndex + 1) * scheme.bandwidthTestConcurrency)
-                                    .coerceAtMost(speedTestNodes.size)
-                                _testingLabel.value =
-                                    "${scheme.name}：带宽测速 ($completed/${speedTestNodes.size})"
                             }
                         }
                     _nodeTestResultSortMode.value =
@@ -732,7 +719,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _error.value = "测速失败：${e.message ?: "未知错误"}"
             } finally {
                 _isTesting.value = false
-                _testingLabel.value = null
                 GlobalTestExecution.finish()
             }
         }
@@ -1045,7 +1031,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun runUrlTestNodes(
         nodes: List<Node>,
-        labelPrefix: String,
         concurrency: Int,
         warmupTimeoutMs: Long,
         measurementTimeoutMs: Long,
@@ -1064,9 +1049,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 warmupTimeoutMs = warmupTimeoutMs,
                 measurementTimeoutMs = measurementTimeoutMs,
                 concurrency = concurrency
-            ) { completed, total ->
-                _testingLabel.value = "$labelPrefix ($completed/$total)"
-            }
+            )
             val testedById = testedResults.associateBy(LatencyTester.LatencyResult::nodeId)
             val results = nodes.map { node ->
                 testedById[node.id] ?: LatencyTester.LatencyResult(

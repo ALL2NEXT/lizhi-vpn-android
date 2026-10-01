@@ -68,13 +68,11 @@ internal fun SubscriptionGroupingScreen(
     isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
-    testingLabel: String? = null,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp,
     screenTitle: String = "按订阅仓库分组",
-    screenSubtitle: String? = null,
     onImportNodeUris: ((String, (String, Boolean) -> Unit) -> Unit)? = null,
     onUpdateNode: ((Node, String, String, (String, Boolean) -> Unit) -> Unit)? = null,
     onDeleteNode: ((Node, (String, Boolean) -> Unit) -> Unit)? = null
@@ -110,7 +108,7 @@ internal fun SubscriptionGroupingScreen(
         subtitle = if (isRefreshingAllSubscriptions) {
             "节点刷新中..."
         } else {
-            testingLabel ?: screenSubtitle
+            null
         },
         onBack = handleBack,
         backEnabled = !isClosing,
@@ -427,7 +425,7 @@ private fun NodeListContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (isTesting) "正在获取节点..." else "暂无可用节点",
+                        text = "暂无可用节点",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 16.sp
                     )

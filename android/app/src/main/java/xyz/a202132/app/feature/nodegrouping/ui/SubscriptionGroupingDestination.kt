@@ -19,7 +19,6 @@ internal fun SubscriptionGroupingDestination(
     bottomContentPadding: Dp = 16.dp,
     nodesOverride: List<Node>? = null,
     screenTitle: String = "按订阅仓库分组",
-    screenSubtitle: String? = null,
     importTargetGroupId: String? = null
 ) {
     val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
@@ -36,7 +35,6 @@ internal fun SubscriptionGroupingDestination(
         viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     val protocolCoreSettings by
         viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
-    val testingLabel by viewModel.testingLabel.collectAsStateWithLifecycle()
     val onImportNodeUris: ((String, (String, Boolean) -> Unit) -> Unit)? =
         importTargetGroupId?.let { groupId ->
             { input, onComplete ->
@@ -94,13 +92,11 @@ internal fun SubscriptionGroupingDestination(
         isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
-        testingLabel = testingLabel,
         onNodeSelected = onNodeSelected,
         onBack = onBack,
         showBackNavigation = showBackNavigation,
         bottomContentPadding = bottomContentPadding,
         screenTitle = screenTitle,
-        screenSubtitle = screenSubtitle,
         onImportNodeUris = onImportNodeUris,
         onUpdateNode = onUpdateLocalNode,
         onDeleteNode = onDeleteLocalNode

@@ -52,6 +52,7 @@ fun NodeGroupingDestination(
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
     var detail by remember(groupingMode) { mutableStateOf<NodeGroupingDetail?>(null) }
 
+    // 线路详情标题显示当前分组名称，测速阶段状态不再替换标题栏副标题。
     when (val currentDetail = detail) {
         is NodeGroupingDetail.Country -> {
             val countryNodes = allSubscriptionNodes.filter {
@@ -60,8 +61,7 @@ fun NodeGroupingDestination(
             SubscriptionGroupingDestination(
                 viewModel = viewModel,
                 nodesOverride = countryNodes,
-                screenTitle = "线路信息",
-                screenSubtitle = currentDetail.countryName,
+                screenTitle = currentDetail.countryName,
                 onNodeSelected = onNodeSelected,
                 onBack = { detail = null },
                 showBackNavigation = true,
@@ -76,8 +76,7 @@ fun NodeGroupingDestination(
             SubscriptionGroupingDestination(
                 viewModel = viewModel,
                 nodesOverride = subscriptionNodes,
-                screenTitle = "线路信息",
-                screenSubtitle = currentDetail.sourceName,
+                screenTitle = currentDetail.sourceName,
                 onNodeSelected = onNodeSelected,
                 onBack = { detail = null },
                 showBackNavigation = true,
@@ -92,8 +91,7 @@ fun NodeGroupingDestination(
             SubscriptionGroupingDestination(
                 viewModel = viewModel,
                 nodesOverride = groupNodes,
-                screenTitle = "线路信息",
-                screenSubtitle = currentDetail.groupName,
+                screenTitle = currentDetail.groupName,
                 importTargetGroupId = currentDetail.groupId,
                 onNodeSelected = onNodeSelected,
                 onBack = { detail = null },
