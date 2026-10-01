@@ -156,7 +156,7 @@ cd Firefly
 
 ### 2. 配置 API 地址
 
-编辑 `android/app/src/main/java/xyz/a202132/app/AppConfig.kt`，修改为你的后端地址：
+编辑 `android/app/src/main/java/io/github/HanJason233/chimera/AppConfig.kt`，修改为你的后端地址：
 
 ```kotlin
 object AppConfig {
@@ -195,7 +195,7 @@ object AppConfig {
 }
 ```
 
-同时修改 `android/app/src/main/java/xyz/a202132/app/network/NetworkClient.kt` 中的 baseUrl：
+同时修改 `android/app/src/main/java/io/github/HanJason233/chimera/network/NetworkClient.kt` 中的 baseUrl：
 
 ```kotlin
 private val retrofit = Retrofit.Builder()
@@ -226,7 +226,7 @@ cd android
 ### 项目结构
 
 ```
-android/app/src/main/java/xyz/a202132/app/
+android/app/src/main/java/io/github/HanJason233/chimera/
 ├── AppConfig.kt                  # 全局配置常量（API地址、测试参数等）
 ├── MainActivity.kt               # 主 Activity
 ├── VpnApplication.kt             # Application 类
@@ -702,7 +702,7 @@ ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@server:8388#SS节点
 
 ### 修改应用主题颜色
 
-**文件**: `android/app/src/main/java/xyz/a202132/app/ui/theme/Color.kt`
+**文件**: `android/app/src/main/java/io/github/HanJason233/chimera/ui/theme/Color.kt`
 
 默认皮肤在 Android 12 及以上启用莫奈动态取色；系统不支持或皮肤关闭莫奈取色时，使用 `Color.kt` 中的蓝灰色备用方案：
 
@@ -780,7 +780,7 @@ android {
 
 2. **`AndroidManifest.xml`**: 确保 package 声明正确
 
-3. **源代码目录**: 重构 `android/app/src/main/java/xyz/a202132/app/` 为新包名路径
+3. **源代码目录**: Kotlin 源代码包路径已迁移至 `io.github.HanJason233.chimera`
 
 4. **所有 Kotlin 文件**: 更新 `package` 声明
 

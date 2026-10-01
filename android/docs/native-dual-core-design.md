@@ -8,14 +8,14 @@
 
 | 部件 | 职责 | 入口 |
 | --- | --- | --- |
-| Android 服务 | 前台通知、设置、节点选择、断线恢复、流量持久化 | [BoxVpnService](../app/src/main/java/xyz/a202132/app/service/BoxVpnService.kt) |
-| 会话控制器 | 串行替换、取消请求、回收迟到的启动结果、停止失败时保留所有权 | [CoreSessionController](../app/src/main/java/xyz/a202132/app/core/CoreSessionController.kt) |
-| 后端契约与注册表 | `prepare/start/CoreSession`、协议与 TUN 能力、已安装后端发现 | [CoreBackend](../app/src/main/java/xyz/a202132/app/core/CoreBackend.kt)、[CoreBackends](../app/src/main/java/xyz/a202132/app/core/CoreBackends.kt) |
-| Android 平台层 | VpnService.Builder、TUN FD、protect、本应用回环排除、物理网络监测 | [AndroidVpnHost](../app/src/main/java/xyz/a202132/app/platform/AndroidVpnHost.kt) |
-| sing-box 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [SingBoxBackend](../app/src/main/java/xyz/a202132/app/core/singbox/SingBoxBackend.kt)、[运行器](../native/singbox-runner/main.go) |
-| Xray 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [XrayBackend](../app/src/main/java/xyz/a202132/app/core/xray/XrayBackend.kt)、[运行器](../native/xray-runner/main.go) |
-| 规则缓存 | 从共同的 SRS 源生成域名/IP 快照 | [CoreRuleRepository](../app/src/main/java/xyz/a202132/app/core/route/CoreRuleRepository.kt) |
-| 测速 | 同一后端契约上的无 TUN 会话 | [NodeTestProxyManager](../app/src/main/java/xyz/a202132/app/network/NodeTestProxyManager.kt)、[UrlTestManager](../app/src/main/java/xyz/a202132/app/network/UrlTestManager.kt) |
+| Android 服务 | 前台通知、设置、节点选择、断线恢复、流量持久化 | [BoxVpnService](../app/src/main/java/io/github/HanJason233/chimera/service/BoxVpnService.kt) |
+| 会话控制器 | 串行替换、取消请求、回收迟到的启动结果、停止失败时保留所有权 | [CoreSessionController](../app/src/main/java/io/github/HanJason233/chimera/core/CoreSessionController.kt) |
+| 后端契约与注册表 | `prepare/start/CoreSession`、协议与 TUN 能力、已安装后端发现 | [CoreBackend](../app/src/main/java/io/github/HanJason233/chimera/core/CoreBackend.kt)、[CoreBackends](../app/src/main/java/io/github/HanJason233/chimera/core/CoreBackends.kt) |
+| Android 平台层 | VpnService.Builder、TUN FD、protect、本应用回环排除、物理网络监测 | [AndroidVpnHost](../app/src/main/java/io/github/HanJason233/chimera/platform/AndroidVpnHost.kt) |
+| sing-box 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [SingBoxBackend](../app/src/main/java/io/github/HanJason233/chimera/core/singbox/SingBoxBackend.kt)、[运行器](../native/singbox-runner/main.go) |
+| Xray 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [XrayBackend](../app/src/main/java/io/github/HanJason233/chimera/core/xray/XrayBackend.kt)、[运行器](../native/xray-runner/main.go) |
+| 规则缓存 | 从共同的 SRS 源生成域名/IP 快照 | [CoreRuleRepository](../app/src/main/java/io/github/HanJason233/chimera/core/route/CoreRuleRepository.kt) |
+| 测速 | 同一后端契约上的无 TUN 会话 | [NodeTestProxyManager](../app/src/main/java/io/github/HanJason233/chimera/network/NodeTestProxyManager.kt)、[UrlTestManager](../app/src/main/java/io/github/HanJason233/chimera/network/UrlTestManager.kt) |
 
 实际数据路径：
 
@@ -42,9 +42,9 @@
 `ProcessBuilder` 运行；它们不是供 Kotlin 加载的 JNI 动态库。两个核心只提供 loopback
 SOCKS5，Android TUN 由 HEV 独占。
 
-公共进程生命周期位于 [NativeCoreSession](../app/src/main/java/xyz/a202132/app/core/NativeCoreSession.kt)，
-sing-box 和 Xray 分别由 [SingBoxNativeSession](../app/src/main/java/xyz/a202132/app/core/singbox/SingBoxNativeSession.kt)、
-[XrayNativeSession](../app/src/main/java/xyz/a202132/app/core/xray/XrayNativeSession.kt) 接入。
+公共进程生命周期位于 [NativeCoreSession](../app/src/main/java/io/github/HanJason233/chimera/core/NativeCoreSession.kt)，
+sing-box 和 Xray 分别由 [SingBoxNativeSession](../app/src/main/java/io/github/HanJason233/chimera/core/singbox/SingBoxNativeSession.kt)、
+[XrayNativeSession](../app/src/main/java/io/github/HanJason233/chimera/core/xray/XrayNativeSession.kt) 接入。
 
 控制协议由两个运行器各自实现，当前统一使用 `WATCH` 存活通道：
 
@@ -57,7 +57,7 @@ sing-box 和 Xray 分别由 [SingBoxNativeSession](../app/src/main/java/xyz/a202
 
 ## DNS、IPv6、规则与统计
 
-[XrayVpnConfig](../app/src/main/java/xyz/a202132/app/core/xray/XrayVpnConfig.kt) 只为 Xray 生成 SOCKS5、DNS、出站和路由。DNS 53 端口拦截排在私网直连前；节点域名使用独立直连 DNS bootstrap，远程 DoH 经代理出站，防止解析代理服务器时递归进入自身代理。Android TUN 地址与路由统一由 HEV 配置。
+[XrayVpnConfig](../app/src/main/java/io/github/HanJason233/chimera/core/xray/XrayVpnConfig.kt) 只为 Xray 生成 SOCKS5、DNS、出站和路由。DNS 53 端口拦截排在私网直连前；节点域名使用独立直连 DNS bootstrap，远程 DoH 经代理出站，防止解析代理服务器时递归进入自身代理。Android TUN 地址与路由统一由 HEV 配置。
 
 智能分流使用当前下载的 `geoip-cn.srs` 和 `geosite-cn.srs`，与 sing-box 共用数据源。规则转换仅在源内容 SHA-256 改变时运行，快照写入应用私有目录。下载替换使用同目录原子 rename，避免旧文件删除与新文件落地之间的空窗。
 
@@ -91,7 +91,7 @@ URL 测速不再依赖正在运行的 VPN 或 Clash API，每个节点通过自�
 
 Android 构建需要 JDK 17、Go 1.26、Android SDK 35 和 NDK `28.0.13004108`。sing-box 官方构建器检查 JDK 主版本，JDK 21 不能代替此处的 JDK 17。构建前初始化固定子模块。
 
-进程管理经 [NativeProcess](../app/src/main/java/xyz/a202132/app/platform/NativeProcess.kt) 兼容 Android 7；`Process.isAlive`、超时 `waitFor` 和 `destroyForcibly` 从 API 26 才提供，不能无条件调用。参见 [Android Process API](https://developer.android.com/reference/java/lang/Process)。
+进程管理经 [NativeProcess](../app/src/main/java/io/github/HanJason233/chimera/platform/NativeProcess.kt) 兼容 Android 7；`Process.isAlive`、超时 `waitFor` 和 `destroyForcibly` 从 API 26 才提供，不能无条件调用。参见 [Android Process API](https://developer.android.com/reference/java/lang/Process)。
 
 ```powershell
 # 在 android/ 下，JAVA_HOME 指向 JDK 17

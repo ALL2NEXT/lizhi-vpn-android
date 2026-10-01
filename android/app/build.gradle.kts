@@ -306,15 +306,15 @@ tasks.configureEach {
 }
 
 android {
-    namespace = "xyz.a202132.app"
+    namespace = "io.github.HanJason233.chimera"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "xyz.a202132.app"
+        applicationId = "io.github.HanJason233.chimera"
         minSdk = 24
         targetSdk = 35
         versionCode = 23
-        versionName = "3.0.2"
+        versionName = "1.0.0"
         buildConfigField("String", "XRAY_CORE_VERSION", "\"$xrayCoreVersion\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

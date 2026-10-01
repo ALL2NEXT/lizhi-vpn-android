@@ -1,16 +1,16 @@
 # Add project specific ProGuard rules here.
 
 # JNI_OnLoad resolves these classes by their original names in Release builds.
--keep class xyz.a202132.app.util.SignatureVerifier { *; }
--keep class xyz.a202132.app.util.RuntimeTuner { *; }
+-keep class io.github.HanJason233.chimera.util.SignatureVerifier { *; }
+-keep class io.github.HanJason233.chimera.util.RuntimeTuner { *; }
 
 # HEV is the runtime-selected Android TUN adapter used by all proxy cores.
--keep class xyz.a202132.app.core.hev.** { *; }
+-keep class io.github.HanJason233.chimera.core.hev.** { *; }
 
 # Keep data models for Gson
--keep class xyz.a202132.app.data.model.** { *; }
--keep interface xyz.a202132.app.data.model.** { *; }
--keep class xyz.a202132.app.data.local.PendingDailyTrafficRecord { *; }
+-keep class io.github.HanJason233.chimera.data.model.** { *; }
+-keep interface io.github.HanJason233.chimera.data.model.** { *; }
+-keep class io.github.HanJason233.chimera.data.local.PendingDailyTrafficRecord { *; }
 -keepattributes Signature
 -keepattributes *Annotation*
 
@@ -25,7 +25,7 @@
 -keepclasseswithmembers class * {
     @retrofit2.http.* <methods>;
 }
--keep interface xyz.a202132.app.network.ApiService { *; }
+-keep interface io.github.HanJason233.chimera.network.ApiService { *; }
 -keep class kotlin.coroutines.Continuation
 
 # OkHttp

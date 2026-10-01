@@ -302,7 +302,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
         return JNI_ERR;
     }
 
-    jclass signatureCls = env->FindClass("xyz/a202132/app/util/SignatureVerifier");
+    jclass signatureCls = env->FindClass("io/github/HanJason233/chimera/util/SignatureVerifier");
     if (signatureCls == nullptr) {
         return JNI_ERR;
     }
@@ -314,7 +314,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
         return JNI_ERR;
     }
 
-    jclass tunerCls = env->FindClass("xyz/a202132/app/util/RuntimeTuner");
+    jclass tunerCls = env->FindClass("io/github/HanJason233/chimera/util/RuntimeTuner");
     if (tunerCls == nullptr) {
         return JNI_ERR;
     }
