@@ -50,13 +50,13 @@ fun NodeGroupingDestination(
     bottomContentPadding: Dp = 16.dp
 ) {
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
-    val allWarehouseNodes by viewModel.allWarehouseNodes.collectAsStateWithLifecycle()
+    val countryGroupingNodes by viewModel.countryGroupingNodes.collectAsStateWithLifecycle()
     var detail by remember(groupingMode) { mutableStateOf<NodeGroupingDetail?>(null) }
 
     // 线路详情标题显示当前分组名称，测速阶段状态不再替换标题栏副标题。
     when (val currentDetail = detail) {
         is NodeGroupingDetail.Country -> {
-            val countryNodes = allWarehouseNodes.filter {
+            val countryNodes = countryGroupingNodes.filter {
                 it.getCountryCode() == currentDetail.countryCode
             }
             SubscriptionGroupingDestination(

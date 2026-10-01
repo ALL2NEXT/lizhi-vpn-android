@@ -27,6 +27,7 @@ import io.github.HanJason233.chimera.data.local.NodeDao
 import io.github.HanJason233.chimera.data.model.*
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingStrategy
+import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingSourceResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.NodeTestResultOrdering
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.NodeTestResultSortMode
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.SpeedTestScopeResolver
@@ -201,26 +202,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         dao.getSubscriptionNodes()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 官方与个人仓库组中的全部节点；地区组从该流动态生成。 */
+    /** 数据库中的全部节点；地区组会再按已选仓库组筛选。 */
     val allWarehouseNodes = nodeDaoFlow.flatMapLatest { dao ->
         dao.getAllNodes()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /** 地区组按地区规则聚合官方与个人仓库组，不受仓库页筛选状态影响。 */
-    val countryOptions = allWarehouseNodes
-        .map(CountryGroupingStrategy::groups)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    private val subscriptionNodes = nodeDaoFlow
-        .flatMapLatest { dao ->
-            activeSubscriptionSourceId.flatMapLatest { sourceId ->
-                if (sourceId.isNullOrBlank()) {
-                    dao.getSubscriptionNodes()
-                } else {
-                    dao.getSubscriptionNodesBySource(sourceId)
-                }
-            }
-        }
 
     /** 个人仓库组摘要。 */
     val userSubscriptionGroups = nodeDaoFlow
@@ -238,6 +223,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val countryGroupingSourceIds = settingsRepository.countryGroupingSourceIds
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val countryGroupingSources = countryGroupingSourceIds
+        .map(CountryGroupingSourceResolver::resolve)
+
+    /** 地区组只汇总所选仓库组中的节点；首次使用时包含全部官方组和个人组。 */
+    val countryGroupingNodes = nodeDaoFlow.flatMapLatest { dao ->
+        combine(allWarehouseNodes, countryGroupingSources) { allNodes, sources ->
+            allNodes to sources
+        }.flatMapLatest { (allNodes, sources) ->
+            if (sources.personalGroupIds.isEmpty()) {
+                flowOf(
+                    CountryGroupingSourceResolver.nodes(
+                        allNodes = allNodes,
+                        personalGroupNodes = emptyList(),
+                        sources = sources
+                    )
+                )
+            } else {
+                dao.getNodesByGroups(sources.personalGroupIds.toList()).map { personalNodes ->
+                    CountryGroupingSourceResolver.nodes(
+                        allNodes = allNodes,
+                        personalGroupNodes = personalNodes,
+                        sources = sources
+                    )
+                }
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val countryOptions = countryGroupingNodes
+        .map(CountryGroupingStrategy::groups)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val subscriptionNodes = nodeDaoFlow
+        .flatMapLatest { dao ->
+            activeSubscriptionSourceId.flatMapLatest { sourceId ->
+                if (sourceId.isNullOrBlank()) {
+                    dao.getSubscriptionNodes()
+                } else {
+                    dao.getSubscriptionNodesBySource(sourceId)
+                }
+            }
+        }
 
     /** 测速方案可选择官方组、地区组和个人组。 */
     val speedTestGroupOptions = combine(
@@ -286,7 +317,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val visibleNodes = combine(
         subscriptionNodes,
         importedNodes,
-        allWarehouseNodes,
+        countryGroupingNodes,
         selectedNodeGroupId
     ) { subscription, imported, warehouseNodes, groupId ->
         when (val group = NodeGroupKey.parse(groupId)) {
@@ -620,6 +651,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             allNodes = allNodeSnapshot,
                             groupIds = scheme.specifiedGroupIds
                         ),
+                        regionNodes = countryGroupingNodes.first(),
                         groupingMode = nodeGroupingMode.value,
                         scope = scheme.scope,
                         specifiedGroupIds = scheme.specifiedGroupIds,
@@ -1364,6 +1396,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun selectCountryGrouping() {
         viewModelScope.launch {
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.REGION)
+        }
+    }
+
+    fun setCountryGroupingSourceIds(sourceIds: Set<String>) {
+        viewModelScope.launch {
+            val allSourceIds = buildSet {
+                subscriptionGroups.value.forEach {
+                    add(NodeGroupKey.Subscription(it.sourceId).value)
+                }
+                userSubscriptionGroups.value.forEach { add(it.id) }
+            }
+            settingsRepository.setCountryGroupingSourceIds(
+                sourceIds.takeUnless { it.containsAll(allSourceIds) }
+            )
         }
     }
 
@@ -2593,7 +2639,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun currentNodeListSnapshot(): List<Node> = withContext(Dispatchers.Default) {
         val selectedGroup = NodeGroupKey.parse(settingsRepository.selectedNodeGroupId.first())
         val snapshot = when (selectedGroup) {
-            is NodeGroupKey.Country -> nodeDao().getAllNodes().first().filter {
+            is NodeGroupKey.Country -> countryGroupingNodes.first().filter {
                 it.getCountryCode() == selectedGroup.countryCode
             }
             is NodeGroupKey.Subscription -> nodeDao()
@@ -2614,12 +2660,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val subscriptionNodes = allNodes.filter { it.source == NodeSource.SUBSCRIPTION }
         val dao = nodeDao()
+        val countryNodes = countryGroupingNodes.first()
         return groupIds.associateWith { groupId ->
             when (val group = NodeGroupKey.parse(groupId)) {
                 is NodeGroupKey.Subscription -> subscriptionNodes.filter {
                     it.subscriptionSourceId == group.sourceId
                 }
-                is NodeGroupKey.Country -> allNodes.filter {
+                is NodeGroupKey.Country -> countryNodes.filter {
                     it.getCountryCode() == group.countryCode
                 }
                 is NodeGroupKey.Imported -> dao.getNodesByGroup(group.groupId).first()

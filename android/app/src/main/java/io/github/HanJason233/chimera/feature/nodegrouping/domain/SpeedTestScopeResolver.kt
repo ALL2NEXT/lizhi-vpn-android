@@ -14,13 +14,14 @@ internal object SpeedTestScopeResolver {
         groupingMode: NodeGroupingMode,
         scope: SpeedTestScope,
         specifiedGroupIds: Set<String>,
-        selectedCountryCode: String?
+        selectedCountryCode: String?,
+        regionNodes: List<Node> = allNodes
     ): List<Node> {
         if (scope == SpeedTestScope.CURRENT_GROUP && groupingMode == NodeGroupingMode.REGION) {
             val normalizedCountryCode =
                 CountryCodeResolver.normalizeCountryCode(selectedCountryCode)
             if (normalizedCountryCode != null) {
-                return allNodes.filter { node ->
+                return regionNodes.filter { node ->
                     node.getCountryCode() == normalizedCountryCode
                 }
             }

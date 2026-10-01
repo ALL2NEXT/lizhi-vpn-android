@@ -121,6 +121,8 @@ class SettingsRepository(private val context: Context) {
         // 自动化测试设置
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
         private val SELECTED_COUNTRY_CODE = stringPreferencesKey("selected_country_code")
+        private val COUNTRY_GROUPING_SOURCE_IDS =
+            stringSetPreferencesKey("country_grouping_source_ids")
         private val NODE_GROUPING_MODE = stringPreferencesKey("node_grouping_mode")
         private val SELECTED_NODE_GROUP_ID = stringPreferencesKey("selected_node_group_id")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
@@ -434,6 +436,22 @@ class SettingsRepository(private val context: Context) {
     /** 地区页选中的国家代码；存在时主页智能测试跨订阅组限定到该地区。 */
     val selectedCountryCode: Flow<String?> = context.dataStore.data.map { preferences ->
         CountryCodeResolver.normalizeCountryCode(preferences[SELECTED_COUNTRY_CODE])
+    }
+
+    /** 仓库组地区筛选；null 表示默认包含全部仓库组。 */
+    val countryGroupingSourceIds: Flow<Set<String>?> =
+        context.dataStore.data.map { preferences ->
+            preferences[COUNTRY_GROUPING_SOURCE_IDS]?.toSet()
+        }
+
+    suspend fun setCountryGroupingSourceIds(sourceIds: Set<String>?) {
+        context.dataStore.edit { preferences ->
+            if (sourceIds == null) {
+                preferences.remove(COUNTRY_GROUPING_SOURCE_IDS)
+            } else {
+                preferences[COUNTRY_GROUPING_SOURCE_IDS] = sourceIds.toSet()
+            }
+        }
     }
 
     val nodeGroupingMode: Flow<NodeGroupingMode> = context.dataStore.data.map { preferences ->

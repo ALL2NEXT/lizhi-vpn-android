@@ -63,6 +63,16 @@ interface NodeDao {
         """
     )
     fun getNodesByGroup(groupId: String): Flow<List<Node>>
+
+    @Query(
+        """
+        SELECT DISTINCT n.* FROM nodes AS n
+        INNER JOIN node_group_members AS m ON n.id = m.nodeId
+        WHERE m.groupId IN (:groupIds)
+        ORDER BY n.sortOrder ASC, n.latency ASC
+        """
+    )
+    fun getNodesByGroups(groupIds: List<String>): Flow<List<Node>>
     
     @Query("SELECT * FROM nodes WHERE id = :id")
     suspend fun getNodeById(id: String): Node?

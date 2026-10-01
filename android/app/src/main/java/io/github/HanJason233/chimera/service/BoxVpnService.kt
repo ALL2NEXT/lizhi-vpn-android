@@ -11,8 +11,10 @@ import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.core.*
 import io.github.HanJason233.chimera.data.local.AppDatabase
 import io.github.HanJason233.chimera.data.local.LocalTrafficUsageStore
+import io.github.HanJason233.chimera.data.local.NodeDao
 import io.github.HanJason233.chimera.data.model.*
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
+import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingSourceResolver
 import io.github.HanJason233.chimera.platform.AndroidVpnHost
 
 /** Android foreground host; native details live behind CoreBackend. */
@@ -197,12 +199,25 @@ class BoxVpnService : VpnService() {
             return all.firstOrNull { it.getRawLinkPlain() == raw } ?: error("所选节点已不存在")
         }
         val selectedId = settings.selectedNodeId.first()
-        all.firstOrNull { it.id == selectedId && it.type != NodeType.UNKNOWN }?.let { return it }
         val selectedGroup = NodeGroupKey.parse(settings.selectedNodeGroupId.first())
-        val candidates = when (selectedGroup) {
-            is NodeGroupKey.Country -> dao.getAllNodes().first().filter {
+        if (selectedGroup is NodeGroupKey.Country) {
+            val regionNodes = countryGroupingNodes(
+                dao = dao,
+                allNodes = all,
+                selectedSourceIds = settings.countryGroupingSourceIds.first()
+            )
+            val candidates = regionNodes.filter {
                 it.getCountryCode() == selectedGroup.countryCode
             }
+            candidates.firstOrNull { it.id == selectedId && it.type != NodeType.UNKNOWN }
+                ?.let { return it }
+            return candidates.firstOrNull {
+                it.type != NodeType.UNKNOWN && it.server.isNotBlank() && it.port in 1..65535
+            } ?: error("没有可用节点")
+        }
+        all.firstOrNull { it.id == selectedId && it.type != NodeType.UNKNOWN }?.let { return it }
+        val candidates = when (selectedGroup) {
+            is NodeGroupKey.Country -> emptyList()
             is NodeGroupKey.Subscription -> {
                 val nodes = dao.getSubscriptionNodes().first()
                 nodes.filter { it.subscriptionSourceId == selectedGroup.sourceId }.ifEmpty { nodes }
@@ -212,6 +227,21 @@ class BoxVpnService : VpnService() {
         }
         return candidates.firstOrNull { it.type != NodeType.UNKNOWN && it.server.isNotBlank() && it.port in 1..65535 }
             ?: error("没有可用节点")
+    }
+
+    private suspend fun countryGroupingNodes(
+        dao: NodeDao,
+        allNodes: List<Node>,
+        selectedSourceIds: Set<String>?
+    ): List<Node> {
+        if (selectedSourceIds == null) return allNodes
+        val sources = CountryGroupingSourceResolver.resolve(selectedSourceIds)
+        val personalNodes = if (sources.personalGroupIds.isEmpty()) {
+            emptyList()
+        } else {
+            dao.getNodesByGroups(sources.personalGroupIds.toList()).first()
+        }
+        return CountryGroupingSourceResolver.nodes(allNodes, personalNodes, sources)
     }
 
     private fun stopVpn() {
