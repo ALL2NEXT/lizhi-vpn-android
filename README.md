@@ -734,11 +734,9 @@ text = "流萤加速器"; 替换成你的应用名称
 
 ### 修改 VPN 连接按钮
 
-主页连接按钮的默认状态图已替换为内置 GIF 测试素材 `android/app/src/main/res/raw/home_button_test.gif`。同一动图用于未连接、连接中和已连接三种状态；状态切换仍使用淡入效果，图标本身不再做缩放动画。
+主页连接按钮默认使用 Material 矢量图标：未连接显示钥匙，连接中显示同步图标，已连接显示安全认证图标。状态切换使用淡入效果，图标本身不做缩放动画。
 
-在主题编辑器中可以为三种状态分别选择图片。支持循环播放 GIF，也支持 PNG、JPEG 等静态图片；自定义图片不设置时显示内置测试动图。
-
-内置测试动图来自 OpenGameArt 的 [Powerup (Animated Orb)](https://opengameart.org/content/powerup-animated-orb)，作者 Joseph Crown（jcrown41），采用 CC0 许可。
+在主题编辑器中可以为三种状态分别选择自定义图片。支持循环播放 GIF，也支持 PNG、JPEG 等静态图片；未设置自定义图片时显示对应的 Material 矢量图标。
 
 ---
 

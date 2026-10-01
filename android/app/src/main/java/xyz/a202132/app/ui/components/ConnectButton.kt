@@ -24,7 +24,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.consumePositionChange
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.contentDescription
@@ -35,7 +34,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.withFrameNanos
-import xyz.a202132.app.R
 import xyz.a202132.app.data.model.HomeIconEffect
 import xyz.a202132.app.data.model.VpnState
 
@@ -131,10 +129,15 @@ fun ConnectButton(
                     modifier = Modifier.size(buttonSize.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    AnimatedImage(
+                    HomeConnectStateIcon(
                         imagePath = currentImagePath,
-                        defaultResource = R.raw.home_button_test,
-                        contentScale = ContentScale.Fit,
+                        state = currentState,
+                        contentDescription = when (currentState) {
+                            VpnState.DISCONNECTED -> "点击连接 VPN"
+                            VpnState.CONNECTING -> "VPN 连接中"
+                            VpnState.DISCONNECTING -> "VPN 断开中"
+                            VpnState.CONNECTED -> "VPN 已连接"
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                     // 手势层裁剪为圆形，图片本身保持完整显示，避免透明图片的角落可触发。

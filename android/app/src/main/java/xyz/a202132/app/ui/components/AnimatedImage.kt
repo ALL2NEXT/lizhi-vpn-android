@@ -1,11 +1,17 @@
 package xyz.a202132.app.ui.components
 
-import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Movie
-import androidx.annotation.RawRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,61 +26,102 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import xyz.a202132.app.data.model.VpnState
 
 private sealed interface DecodedImage {
     data class Animated(val movie: Movie) : DecodedImage
     data class Static(val bitmap: ImageBitmap) : DecodedImage
 }
 
-/** Displays a GIF when the selected image is animated and static images otherwise. */
+/** Displays a selected GIF or static image and falls back to the matching VPN state icon. */
 @Composable
 fun AnimatedImage(
-    imagePath: String?,
-    @RawRes defaultResource: Int,
+    imagePath: String,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Fit,
-    contentDescription: String? = null
+    contentDescription: String? = null,
+    fallbackContent: @Composable () -> Unit
 ) {
-    val context = LocalContext.current
     val decoded by produceState<DecodedImage?>(
         initialValue = null,
-        key1 = imagePath,
-        key2 = defaultResource
+        key1 = imagePath
     ) {
-        value = withContext(Dispatchers.IO) {
-            imagePath
-                ?.takeIf(String::isNotBlank)
-                ?.let(::decodeFile)
-                ?: decodeResource(context, defaultResource)
-        }
-    }
-
-    val semanticsModifier = if (contentDescription == null) {
-        modifier
-    } else {
-        modifier.semantics { this.contentDescription = contentDescription }
+        value = withContext(Dispatchers.IO) { decodeFile(imagePath) }
     }
 
     when (val image = decoded) {
         is DecodedImage.Animated -> AnimatedMovie(
             movie = image.movie,
-            modifier = semanticsModifier,
-            contentScale = contentScale
+            modifier = modifier,
+            contentScale = contentScale,
+            contentDescription = contentDescription
         )
         is DecodedImage.Static -> Image(
             bitmap = image.bitmap,
             contentDescription = contentDescription,
             contentScale = contentScale,
-            modifier = semanticsModifier
+            modifier = modifier
         )
-        null -> Canvas(modifier = semanticsModifier) { }
+        null -> fallbackContent()
+    }
+}
+
+@Composable
+fun HomeConnectStateIcon(
+    imagePath: String?,
+    state: VpnState,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null
+) {
+    val icon = when (state) {
+        VpnState.DISCONNECTED -> Icons.Outlined.VpnKey
+        VpnState.CONNECTING, VpnState.DISCONNECTING -> Icons.Outlined.Sync
+        VpnState.CONNECTED -> Icons.Outlined.VerifiedUser
+    }
+    val tint = when (state) {
+        VpnState.DISCONNECTED -> MaterialTheme.colorScheme.primary
+        VpnState.CONNECTING, VpnState.DISCONNECTING -> MaterialTheme.colorScheme.tertiary
+        VpnState.CONNECTED -> MaterialTheme.colorScheme.primary
+    }
+    val description = contentDescription ?: when (state) {
+        VpnState.DISCONNECTED -> "点击连接 VPN"
+        VpnState.CONNECTING -> "VPN 连接中"
+        VpnState.DISCONNECTING -> "VPN 断开中"
+        VpnState.CONNECTED -> "VPN 已连接"
+    }
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        val selectedImagePath = imagePath?.takeIf(String::isNotBlank)
+        if (selectedImagePath == null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = tint,
+                modifier = Modifier.fillMaxSize(0.56f)
+            )
+        } else {
+            AnimatedImage(
+                imagePath = selectedImagePath,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+                contentDescription = description,
+                fallbackContent = {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = description,
+                        tint = tint,
+                        modifier = Modifier.fillMaxSize(0.56f)
+                    )
+                }
+            )
+        }
     }
 }
 
@@ -82,7 +129,8 @@ fun AnimatedImage(
 private fun AnimatedMovie(
     movie: Movie,
     modifier: Modifier,
-    contentScale: ContentScale
+    contentScale: ContentScale,
+    contentDescription: String?
 ) {
     var elapsedNanos by remember(movie) { mutableLongStateOf(0L) }
     LaunchedEffect(movie) {
@@ -92,7 +140,12 @@ private fun AnimatedMovie(
         }
     }
 
-    Canvas(modifier = modifier.clipToBounds()) {
+    val accessibleModifier = if (contentDescription == null) {
+        modifier
+    } else {
+        modifier.semantics { this.contentDescription = contentDescription }
+    }
+    Canvas(modifier = accessibleModifier.clipToBounds()) {
         val sourceWidth = movie.width().toFloat().coerceAtLeast(1f)
         val sourceHeight = movie.height().toFloat().coerceAtLeast(1f)
         val scaleX = size.width / sourceWidth
@@ -133,16 +186,6 @@ private fun decodeFile(path: String): DecodedImage? {
         return DecodedImage.Animated(movie)
     }
     return BitmapFactory.decodeFile(path)
-        ?.asImageBitmap()
-        ?.let(DecodedImage::Static)
-}
-
-private fun decodeResource(context: Context, @RawRes resourceId: Int): DecodedImage? {
-    val movie = context.resources.openRawResource(resourceId).use { Movie.decodeStream(it) }
-    if (movie != null && movie.duration() > 0) {
-        return DecodedImage.Animated(movie)
-    }
-    return BitmapFactory.decodeResource(context.resources, resourceId)
         ?.asImageBitmap()
         ?.let(DecodedImage::Static)
 }

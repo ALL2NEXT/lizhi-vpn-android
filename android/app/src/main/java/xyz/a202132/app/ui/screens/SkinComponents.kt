@@ -4,23 +4,22 @@ import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import xyz.a202132.app.R
-import xyz.a202132.app.ui.components.AnimatedImage
+import xyz.a202132.app.data.model.VpnState
+import xyz.a202132.app.ui.components.HomeConnectStateIcon
 import java.io.File
 import java.util.Locale
 
 @Composable
 internal fun SkinImagePreview(
     imagePath: String?,
+    state: VpnState,
     modifier: Modifier = Modifier,
     contentDescription: String = "样式图片"
 ) {
-    AnimatedImage(
+    HomeConnectStateIcon(
         imagePath = imagePath,
-        defaultResource = R.raw.home_button_test,
+        state = state,
         modifier = modifier,
-        contentScale = ContentScale.Crop,
         contentDescription = contentDescription
     )
 }

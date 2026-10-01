@@ -57,6 +57,7 @@ import kotlinx.coroutines.withContext
 import xyz.a202132.app.data.model.SkinScheme
 import xyz.a202132.app.data.model.HomeNavigationStyle
 import xyz.a202132.app.data.model.HomeIconEffect
+import xyz.a202132.app.data.model.VpnState
 import xyz.a202132.app.ui.components.AppScreenScaffold
 import xyz.a202132.app.platform.LauncherIdentityPreset
 import xyz.a202132.app.platform.LauncherIdentityPresets
@@ -78,6 +79,7 @@ private val EDITOR_PRESET_COLORS = listOf(
 private fun HomeStateImageRow(
     title: String,
     imagePath: String?,
+    state: VpnState,
     onChoose: () -> Unit,
     onReset: () -> Unit
 ) {
@@ -88,6 +90,7 @@ private fun HomeStateImageRow(
     ) {
         SkinImagePreview(
             imagePath = imagePath,
+            state = state,
             contentDescription = title,
             modifier = Modifier
                 .size(68.dp)
@@ -458,6 +461,7 @@ fun SkinSchemeEditorScreen(
                     HomeStateImageRow(
                         title = "未连接",
                         imagePath = scheme.homeDisconnectedImagePath,
+                        state = VpnState.DISCONNECTED,
                         onChoose = { disconnectedImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeDisconnectedImagePath
@@ -469,6 +473,7 @@ fun SkinSchemeEditorScreen(
                     HomeStateImageRow(
                         title = "连接中",
                         imagePath = scheme.homeConnectingImagePath,
+                        state = VpnState.CONNECTING,
                         onChoose = { connectingImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeConnectingImagePath
@@ -480,6 +485,7 @@ fun SkinSchemeEditorScreen(
                     HomeStateImageRow(
                         title = "已连接",
                         imagePath = scheme.homeConnectedImagePath,
+                        state = VpnState.CONNECTED,
                         onChoose = { connectedImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeConnectedImagePath
