@@ -26,6 +26,8 @@ data class SkinScheme(
     val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,
     /** 主题方案的底部导航栏样式。 */
     val navigationStyle: HomeNavigationStyle = HomeNavigationStyle.CLASSIC,
+    /** 主题方案的弹窗 Material 实现。 */
+    val dialogMaterialVersion: DialogMaterialVersion = DialogMaterialVersion.MATERIAL_3,
     /** Android 12 及以上使用系统壁纸生成的动态配色，低版本回退到基础颜色。 */
     val monetEnabled: Boolean = false,
     /** 旧版自定义启动器图标路径，保留用于读取旧配置。 */

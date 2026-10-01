@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import android.widget.Toast
 import xyz.a202132.app.R
+import xyz.a202132.app.ui.components.AppDialogSurface
 
 @Composable
 fun AboutDialog(
@@ -113,7 +114,7 @@ fun AboutDialog(
                     )
             )
 
-            Surface(
+            AppDialogSurface(
                 modifier = Modifier
                     .fillMaxWidth(dialogWidthFraction)
                     .widthIn(max = 540.dp)
@@ -124,9 +125,9 @@ fun AboutDialog(
                         indication = null,
                         onClick = {}
                     ),
-                shape = RoundedCornerShape(28.dp),
+                m3Shape = RoundedCornerShape(28.dp),
                 color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp
+                m3TonalElevation = 6.dp
             ) {
                 Column(
                     modifier = Modifier

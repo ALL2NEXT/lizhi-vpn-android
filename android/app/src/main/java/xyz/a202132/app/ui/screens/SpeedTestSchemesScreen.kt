@@ -23,7 +23,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material3.AlertDialog
+import xyz.a202132.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -184,7 +184,7 @@ fun SpeedTestSchemesScreen(
     }
 
     if (showAddDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showAddDialog = false },
             title = { Text("新增测速方案") },
             text = {
@@ -215,7 +215,7 @@ fun SpeedTestSchemesScreen(
     }
 
     schemeToDelete?.let { scheme ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { schemeToDelete = null },
             title = { Text("删除测速方案") },
             text = {
@@ -311,7 +311,7 @@ private fun SpeedTestSchemeBinding(
     }
 
     if (showSelectionDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showSelectionDialog = false },
             title = { Text(title) },
             text = {

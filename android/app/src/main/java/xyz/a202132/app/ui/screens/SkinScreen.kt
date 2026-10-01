@@ -21,7 +21,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material3.AlertDialog
+import xyz.a202132.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -115,7 +115,7 @@ fun SkinScreen(
     }
 
     if (showAddDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showAddDialog = false },
             title = { Text("新增主题") },
             text = {
@@ -150,7 +150,7 @@ fun SkinScreen(
     }
 
     schemeToDelete?.let { scheme ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { schemeToDelete = null },
             title = { Text("删除主题") },
             text = { Text("确定删除“${scheme.name}”吗？自定义图标和颜色设置也会一并删除。") },

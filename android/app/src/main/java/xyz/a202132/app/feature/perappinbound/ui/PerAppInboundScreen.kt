@@ -27,7 +27,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.AlertDialog
+import xyz.a202132.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
@@ -291,7 +291,7 @@ fun PerAppInboundScreen(
     }
 
     if (showInformation) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showInformation = false },
             title = { Text(stringResource(R.string.per_app_inbound_information)) },
             text = { Text(stringResource(R.string.per_app_inbound_summary)) },

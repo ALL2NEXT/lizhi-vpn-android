@@ -27,7 +27,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Subscriptions
-import androidx.compose.material3.AlertDialog
+import xyz.a202132.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -387,7 +387,7 @@ private fun SubscriptionGroupSelectionScreen(
     }
 
     if (addDialogVisible) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if (!isSubmitting) addDialogVisible = false },
             title = { Text("添加订阅组") },
             text = {
@@ -481,7 +481,7 @@ private fun SubscriptionGroupSelectionScreen(
     }
 
     if (editDialogVisible && !deleteDialogVisible) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if (!isSubmitting) editDialogVisible = false },
             title = { Text("编辑订阅组") },
             text = {
@@ -542,7 +542,7 @@ private fun SubscriptionGroupSelectionScreen(
     }
 
     if (deleteDialogVisible) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if (!isSubmitting) deleteDialogVisible = false },
             title = { Text("删除订阅组？") },
             text = {

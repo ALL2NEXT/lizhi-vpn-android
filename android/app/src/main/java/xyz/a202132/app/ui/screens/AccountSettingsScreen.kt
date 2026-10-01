@@ -15,7 +15,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.AlertDialog
+import xyz.a202132.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -343,7 +343,7 @@ fun AccountSettingsScreen(
     }
 
     if (showNicknameDialog && account != null) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if (!isUpdatingNickname) showNicknameDialog = false },
             title = { Text("修改昵称") },
             text = {
@@ -379,7 +379,7 @@ fun AccountSettingsScreen(
     }
 
     if (showBindDialog && account != null) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if (!isBindingAccount) showBindDialog = false },
             title = { Text("注册正式用户") },
             text = {
@@ -457,7 +457,7 @@ fun AccountSettingsScreen(
     }
 
     if (showSwitchDialog && account != null) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if (!isSwitchingAccount) showSwitchDialog = false },
             title = { Text("切换账户") },
             text = {
@@ -507,7 +507,7 @@ fun AccountSettingsScreen(
     }
 
     if (showDeleteConfirmation && account != null) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if (!isDeletingAccount) showDeleteConfirmation = false },
             title = { Text("注销账户并清除数据后退出") },
             text = {

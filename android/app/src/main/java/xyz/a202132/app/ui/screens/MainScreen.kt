@@ -433,7 +433,7 @@ fun MainScreen(
     
     // 节点列表弹窗
     if (showBackendDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showBackendDialog = false },
             title = { Text("切换后台") },
             text = {
@@ -476,7 +476,7 @@ fun MainScreen(
     }
 
     infoDialogMessage?.let { message ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { viewModel.clearInfoDialogMessage() },
             title = { Text("提示") },
             text = { Text(message) },
@@ -548,8 +548,8 @@ fun MainScreen(
     
     if (showWebsiteFallback) {
         Dialog(onDismissRequest = { showWebsiteFallback = false }) {
-            Surface(
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            AppDialogSurface(
+                m3Shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surface
             ) {
                 Column(

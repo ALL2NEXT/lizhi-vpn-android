@@ -38,6 +38,7 @@ import okhttp3.Request
 import xyz.a202132.app.AppConfig
 import xyz.a202132.app.data.model.NoticeInfo
 import xyz.a202132.app.network.NetworkClient
+import xyz.a202132.app.ui.components.AppDialogSurface
 import xyz.a202132.app.ui.theme.*
 import xyz.a202132.app.R
 import java.util.concurrent.Executors
@@ -52,8 +53,8 @@ fun NoticeDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
+        AppDialogSurface(
+            m3Shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(
@@ -126,8 +127,8 @@ fun UpdateDialog(
             dismissOnClickOutside = !isForce
         )
     ) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
+        AppDialogSurface(
+            m3Shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(
@@ -390,8 +391,8 @@ fun DownloadDialog(
             dismissOnClickOutside = false
         )
     ) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
+        AppDialogSurface(
+            m3Shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(

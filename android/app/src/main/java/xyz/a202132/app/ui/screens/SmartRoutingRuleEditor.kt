@@ -2,7 +2,7 @@ package xyz.a202132.app.ui.screens
 
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
+import xyz.a202132.app.ui.components.AppAlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -53,7 +53,7 @@ internal fun SmartRoutingDomainSettingsDialog(
     }
     val domains = remember(domainsText) { parseSmartRuleValues(domainsText) }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("设置${action.displayName()}域") },
         text = {

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 import xyz.a202132.app.data.model.BandwidthTestTargets
+import xyz.a202132.app.data.model.DialogMaterialVersion
 import xyz.a202132.app.data.model.DnsDomainStrategy
 import xyz.a202132.app.data.model.DnsSettings
 import xyz.a202132.app.data.model.IPv6RoutingMode
@@ -1346,6 +1347,9 @@ class SettingsRepository(private val context: Context) {
                                 navigationStyle = HomeNavigationStyle.fromStorage(
                                     item.optString("navigationStyle").takeIf { it.isNotBlank() }
                                 ),
+                                dialogMaterialVersion = DialogMaterialVersion.fromStorage(
+                                    item.optString("dialogMaterialVersion").takeIf { it.isNotBlank() }
+                                ),
                                 monetEnabled = item.optBoolean("monetEnabled", false),
                                 customImagePath = item.optString("customImagePath")
                                     .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
@@ -1390,6 +1394,7 @@ class SettingsRepository(private val context: Context) {
                         put("baseColorArgb", normalizeSkinColor(scheme.baseColorArgb))
                         put("themeMode", scheme.themeMode.storageName)
                         put("navigationStyle", scheme.navigationStyle.storageName)
+                        put("dialogMaterialVersion", scheme.dialogMaterialVersion.storageName)
                         put("monetEnabled", scheme.monetEnabled)
                         scheme.customImagePath?.let { put("customImagePath", it) }
                         scheme.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }

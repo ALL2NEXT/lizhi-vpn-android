@@ -29,7 +29,7 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Button
-import androidx.compose.material3.AlertDialog
+import xyz.a202132.app.ui.components.AppAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -268,7 +268,7 @@ internal fun SubscriptionGroupingScreen(
     }
 
     if (addNodeDialogVisible && onImportNodeUris != null) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if (!isManagingNodes) addNodeDialogVisible = false },
             title = { Text("添加节点") },
             text = {
@@ -340,7 +340,7 @@ internal fun SubscriptionGroupingScreen(
 
     editingNode?.let { node ->
         if (onUpdateNode != null) {
-            AlertDialog(
+            AppAlertDialog(
                 onDismissRequest = { if (!isManagingNodes) editingNode = null },
                 title = { Text("编辑节点") },
                 text = {
@@ -397,7 +397,7 @@ internal fun SubscriptionGroupingScreen(
 
     deleteCandidate?.let { node ->
         if (onDeleteNode != null) {
-            AlertDialog(
+            AppAlertDialog(
                 onDismissRequest = { if (!isManagingNodes) deleteCandidate = null },
                 title = { Text("删除节点？") },
                 text = { Text("确认从当前订阅组中删除“${node.getDisplayName()}”吗？") },
