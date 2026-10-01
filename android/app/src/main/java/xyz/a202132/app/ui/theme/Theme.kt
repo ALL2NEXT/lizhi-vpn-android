@@ -16,91 +16,115 @@ import androidx.core.view.WindowCompat
 import xyz.a202132.app.data.model.SkinThemeMode
 import xyz.a202132.app.data.model.SkinSettings
 
-private val DefaultLightColorScheme = lightColorScheme(
-    primary = Primary,
-    onPrimary = Color.White,
-    primaryContainer = PrimaryVariant,
-    onPrimaryContainer = Color.White,
-    secondary = Secondary,
-    onSecondary = Color.White,
-    secondaryContainer = SecondaryVariant,
-    onSecondaryContainer = Color.White,
-    background = BackgroundLight,
-    onBackground = TextPrimaryLight,
-    surface = SurfaceLight,
-    onSurface = TextPrimaryLight,
-    surfaceVariant = CardLight,
-    onSurfaceVariant = TextSecondaryLight,
-    error = ErrorRed,
-    onError = Color.White,
-    outline = DividerLight
-)
-
+// 将普通自定义颜色作为种子，扩展为覆盖背景、表面、文字和描边的浅色配色。
 private fun skinColorScheme(baseColor: Color): ColorScheme {
-    if (baseColor.toArgb() == SkinSettings.DEFAULT_BASE_COLOR_ARGB.toInt()) {
-        return DefaultLightColorScheme
-    }
-
     val primary = baseColor.copy(alpha = 1f)
-    val secondary = scaleColor(primary, 1.12f)
-    val secondaryVariant = scaleColor(primary, 0.82f)
+    val secondary = mixColors(primary, Secondary, 0.18f)
+    val tertiary = mixColors(primary, Color(0xFF7D5260), 0.22f)
+    val primaryContainer = tintColor(primary)
+    val secondaryContainer = tintColor(secondary)
+    val tertiaryContainer = tintColor(tertiary)
     val onPrimary = contentColorFor(primary)
     val onSecondary = contentColorFor(secondary)
+    val onTertiary = contentColorFor(tertiary)
+    val background = mixColors(BackgroundLight, primary, 0.035f)
+    val surface = mixColors(SurfaceLight, primary, 0.055f)
+    val surfaceVariant = mixColors(CardLight, primary, 0.12f)
+    val onBackground = mixColors(TextPrimaryLight, primary, 0.025f)
+    val onSurface = mixColors(TextPrimaryLight, primary, 0.025f)
+    val onSurfaceVariant = mixColors(TextSecondaryLight, primary, 0.06f)
+    val outline = mixColors(DividerLight, primary, 0.2f)
+    val outlineVariant = mixColors(DividerLight, primary, 0.12f)
 
     return lightColorScheme(
         primary = primary,
         onPrimary = onPrimary,
-        primaryContainer = tintColor(primary),
-        onPrimaryContainer = scaleColor(primary, 0.52f),
+        primaryContainer = primaryContainer,
+        onPrimaryContainer = contentColorFor(primaryContainer),
+        inversePrimary = primary,
         secondary = secondary,
         onSecondary = onSecondary,
-        secondaryContainer = tintColor(secondary),
-        onSecondaryContainer = scaleColor(secondaryVariant, 0.52f),
-        background = BackgroundLight,
-        onBackground = TextPrimaryLight,
-        surface = SurfaceLight,
-        onSurface = TextPrimaryLight,
-        surfaceVariant = CardLight,
-        onSurfaceVariant = TextSecondaryLight,
+        secondaryContainer = secondaryContainer,
+        onSecondaryContainer = contentColorFor(secondaryContainer),
+        tertiary = tertiary,
+        onTertiary = onTertiary,
+        tertiaryContainer = tertiaryContainer,
+        onTertiaryContainer = contentColorFor(tertiaryContainer),
+        background = background,
+        onBackground = onBackground,
+        surface = surface,
+        onSurface = onSurface,
+        surfaceVariant = surfaceVariant,
+        onSurfaceVariant = onSurfaceVariant,
+        inverseSurface = mixColors(SurfaceDark, primary, 0.08f),
+        inverseOnSurface = mixColors(TextPrimaryDark, primary, 0.04f),
         error = ErrorRed,
         onError = Color.White,
-        outline = DividerLight
+        outline = outline,
+        outlineVariant = outlineVariant,
+        surfaceTint = primary
     )
 }
 
+// 深色模式沿用同一颜色种子，并混入深色基底以保持整体层级和文字对比。
 private fun skinDarkColorScheme(baseColor: Color): ColorScheme {
-    val primary = scaleColor(baseColor, 1.35f)
-    val secondary = scaleColor(primary, 1.08f)
+    val seed = baseColor.copy(alpha = 1f)
+    val primary = mixColors(seed, Color.White, 0.26f)
+    val secondary = mixColors(primary, Secondary, 0.18f)
+    val tertiary = mixColors(primary, Color(0xFF7D5260), 0.22f)
+    val primaryContainer = mixColors(seed, Color.White, 0.38f)
+    val secondaryContainer = mixColors(secondary, Color.White, 0.38f)
+    val tertiaryContainer = mixColors(tertiary, Color.White, 0.38f)
     val onPrimary = contentColorFor(primary)
     val onSecondary = contentColorFor(secondary)
+    val onTertiary = contentColorFor(tertiary)
+    val background = mixColors(BackgroundDark, seed, 0.12f)
+    val surface = mixColors(SurfaceDark, seed, 0.15f)
+    val surfaceVariant = mixColors(CardDark, seed, 0.2f)
+    val onBackground = mixColors(TextPrimaryDark, seed, 0.035f)
+    val onSurface = mixColors(TextPrimaryDark, seed, 0.035f)
+    val onSurfaceVariant = mixColors(TextSecondaryDark, seed, 0.07f)
+    val outline = mixColors(DividerDark, seed, 0.3f)
+    val outlineVariant = mixColors(DividerDark, seed, 0.2f)
 
     return darkColorScheme(
         primary = primary,
         onPrimary = onPrimary,
-        primaryContainer = scaleColor(primary, 0.72f),
-        onPrimaryContainer = Color.White,
+        primaryContainer = primaryContainer,
+        onPrimaryContainer = contentColorFor(primaryContainer),
+        inversePrimary = primary,
         secondary = secondary,
         onSecondary = onSecondary,
-        secondaryContainer = scaleColor(secondary, 0.62f),
-        onSecondaryContainer = Color.White,
-        background = BackgroundDark,
-        onBackground = TextPrimaryDark,
-        surface = SurfaceDark,
-        onSurface = TextPrimaryDark,
-        surfaceVariant = CardDark,
-        onSurfaceVariant = TextSecondaryDark,
+        secondaryContainer = secondaryContainer,
+        onSecondaryContainer = contentColorFor(secondaryContainer),
+        tertiary = tertiary,
+        onTertiary = onTertiary,
+        tertiaryContainer = tertiaryContainer,
+        onTertiaryContainer = contentColorFor(tertiaryContainer),
+        background = background,
+        onBackground = onBackground,
+        surface = surface,
+        onSurface = onSurface,
+        surfaceVariant = surfaceVariant,
+        onSurfaceVariant = onSurfaceVariant,
+        inverseSurface = mixColors(SurfaceLight, seed, 0.055f),
+        inverseOnSurface = mixColors(TextPrimaryLight, seed, 0.025f),
         error = ErrorRed,
         onError = Color.White,
-        outline = DividerDark
+        outline = outline,
+        outlineVariant = outlineVariant,
+        surfaceTint = primary
     )
 }
 
-private fun scaleColor(color: Color, factor: Float): Color {
+// 按权重混合基准色与主题种子，用于生成同一主题中的各个颜色角色。
+private fun mixColors(color: Color, seed: Color, seedWeight: Float): Color {
+    val colorWeight = 1f - seedWeight
     return Color(
-        red = (color.red * factor).coerceIn(0f, 1f),
-        green = (color.green * factor).coerceIn(0f, 1f),
-        blue = (color.blue * factor).coerceIn(0f, 1f),
-        alpha = color.alpha
+        red = color.red * colorWeight + seed.red * seedWeight,
+        green = color.green * colorWeight + seed.green * seedWeight,
+        blue = color.blue * colorWeight + seed.blue * seedWeight,
+        alpha = color.alpha * colorWeight + seed.alpha * seedWeight
     )
 }
 
