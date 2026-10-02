@@ -1520,12 +1520,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val parsed = parsedSubscription.getOrThrow()
 
-            val compatibleNodes = withContext(Dispatchers.IO) {
-                parsed.nodes.filter { node ->
-                    isNodeCoreConfigCompatible(node)
-                }
-            }
-            if (normalizedInput.isNotBlank() && compatibleNodes.isEmpty()) {
+            // 订阅导入不应依赖当前选中的核心。
+            // 保留原始 URI，等实际准备核心会话时再校验兼容性。
+            val importedNodes = parsed.nodes
+            if (normalizedInput.isNotBlank() && importedNodes.isEmpty()) {
                 onResult(SubscriptionGroupCreateResult.INVALID, 0)
                 return@launch
             }
@@ -1543,7 +1541,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
                 createdAt = createdAt
             )
-            val localNodes = compatibleNodes
+            val localNodes = importedNodes
                 .distinctBy(Node::getRawLinkPlain)
                 .mapIndexed { index, node ->
                     node.copy(
@@ -1622,17 +1620,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            // 手动 URI 导入按开源客户端的流程只做链接解析；避免本机内核预校验失败时误报“未找到”。
-            // 订阅链接仍过滤当前内核无法生成配置的节点，保持订阅导入行为。
-            val nodesToImport = if (subscriptionUrl == null) {
-                parsedNodes.getOrThrow()
-            } else {
-                withContext(Dispatchers.IO) {
-                    parsedNodes.getOrThrow().filter { node ->
-                        isNodeCoreConfigCompatible(node)
-                    }
-                }
-            }
+            // 即使当前核心无法处理包含 ECH 或证书字段的 URI，也要保留订阅节点。
+            val nodesToImport = parsedNodes.getOrThrow()
             if (nodesToImport.isEmpty()) {
                 onResult(SubscriptionGroupNodeImportResult.INVALID, 0)
                 return@launch
@@ -1836,17 +1825,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val parsed = parsedSubscription.getOrThrow()
 
-            val compatibleNodes = withContext(Dispatchers.IO) {
-                parsed.nodes.filter { node ->
-                    isNodeCoreConfigCompatible(node)
-                }
-            }
-            if (compatibleNodes.isEmpty()) {
+            val importedNodes = parsed.nodes
+            if (importedNodes.isEmpty()) {
                 onResult(SubscriptionGroupEditResult.INVALID, 0)
                 return@launch
             }
 
-            val localNodes = compatibleNodes
+            val localNodes = importedNodes
                 .distinctBy(Node::getRawLinkPlain)
                 .mapIndexed { index, node ->
                     node.copy(
@@ -1938,17 +1923,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val parsed = parsedSubscription.getOrThrow()
 
-            val compatibleNodes = withContext(Dispatchers.IO) {
-                parsed.nodes.filter { node ->
-                    isNodeCoreConfigCompatible(node)
-                }
-            }.distinctBy(Node::getRawLinkPlain)
-            if (compatibleNodes.isEmpty()) {
+            val importedNodes = parsed.nodes.distinctBy(Node::getRawLinkPlain)
+            if (importedNodes.isEmpty()) {
                 onResult(SubscriptionGroupRefreshResult.INVALID)
                 return@launch
             }
 
-            val localNodes = compatibleNodes.mapIndexed { index, node ->
+            val localNodes = importedNodes.mapIndexed { index, node ->
                 node.copy(
                     id = "${groupId}_$index",
                     source = NodeSource.LOCAL_GROUP,
