@@ -193,7 +193,7 @@ data class AccountInfo(
     val uid: String,
 
     @SerializedName("nickname")
-    val nickname: String = "流萤用户",
+    val nickname: String = "用户",
 
     @SerializedName("accountType")
     val accountType: String = "guest",

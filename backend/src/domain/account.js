@@ -61,7 +61,7 @@ export function normalizeAndroidSdk(value, fallback = 0) {
 }
 
 export function defaultNickname(accountId) {
-  return `流萤用户${cleanText(accountId).slice(-6).toUpperCase()}`;
+  return `用户${cleanText(accountId).slice(-6).toUpperCase()}`;
 }
 
 export function normalizeAccountId(value) {

@@ -241,7 +241,7 @@ class AccountManager(private val context: Context) {
         return AccountInfo(
             uid = uid,
             nickname = preferences.getString(ACCOUNT_NICKNAME_KEY, null)
-                ?.takeIf { it.isNotBlank() } ?: "流萤用户",
+                ?.takeIf { it.isNotBlank() } ?: "用户",
             accountType = accountType,
             email = email,
             brand = preferences.getString(ACCOUNT_BRAND_KEY, "").orEmpty(),

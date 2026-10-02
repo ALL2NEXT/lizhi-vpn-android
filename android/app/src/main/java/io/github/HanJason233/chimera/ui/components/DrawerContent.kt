@@ -163,7 +163,7 @@ private fun UserAccountSummary(
     onClick: () -> Unit
 ) {
     val isBanned = accountInfo?.accountType == "banned" || accountInfo?.deviceBlocked == true
-    val nickname = accountInfo?.nickname?.trim()?.ifBlank { null } ?: "流萤用户"
+    val nickname = accountInfo?.nickname?.trim()?.ifBlank { null } ?: "用户"
     val accountTypeText = when {
         accountInfo == null -> "账户同步中"
         isBanned -> "被封禁用户"
