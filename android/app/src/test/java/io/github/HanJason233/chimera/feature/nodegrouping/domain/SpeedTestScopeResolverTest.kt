@@ -17,7 +17,7 @@ class SpeedTestScopeResolverTest {
             currentNodes = currentNodes,
             allNodes = allNodes,
             specifiedGroupNodes = emptyMap(),
-            groupingMode = NodeGroupingMode.SUBSCRIPTION,
+            groupingMode = NodeGroupingMode.WAREHOUSE,
             scope = SpeedTestScope.CURRENT_GROUP,
             specifiedGroupIds = emptySet(),
             selectedCountryCode = null
@@ -38,7 +38,7 @@ class SpeedTestScopeResolverTest {
             currentNodes = listOf(allNodes.first()),
             allNodes = allNodes,
             specifiedGroupNodes = emptyMap(),
-            groupingMode = NodeGroupingMode.SUBSCRIPTION,
+            groupingMode = NodeGroupingMode.WAREHOUSE,
             scope = SpeedTestScope.ALL_GROUPS,
             specifiedGroupIds = emptySet(),
             selectedCountryCode = null
@@ -59,7 +59,7 @@ class SpeedTestScopeResolverTest {
             currentNodes = listOf(allNodes[1]),
             allNodes = allNodes,
             specifiedGroupNodes = emptyMap(),
-            groupingMode = NodeGroupingMode.COUNTRY,
+            groupingMode = NodeGroupingMode.REGION,
             scope = SpeedTestScope.CURRENT_GROUP,
             specifiedGroupIds = emptySet(),
             selectedCountryCode = "jp"
@@ -77,7 +77,7 @@ class SpeedTestScopeResolverTest {
             currentNodes = currentNodes,
             allNodes = allNodes,
             specifiedGroupNodes = emptyMap(),
-            groupingMode = NodeGroupingMode.SUBSCRIPTION,
+            groupingMode = NodeGroupingMode.WAREHOUSE,
             scope = SpeedTestScope.CURRENT_GROUP,
             specifiedGroupIds = emptySet(),
             selectedCountryCode = "JP"
@@ -101,7 +101,7 @@ class SpeedTestScopeResolverTest {
                 "subscription:group-a" to listOf(allNodes[0]),
                 "subscription:group-c" to listOf(allNodes[2])
             ),
-            groupingMode = NodeGroupingMode.SUBSCRIPTION,
+            groupingMode = NodeGroupingMode.WAREHOUSE,
             scope = SpeedTestScope.SPECIFIED_GROUPS,
             specifiedGroupIds = setOf("subscription:group-a", "subscription:group-c"),
             selectedCountryCode = null

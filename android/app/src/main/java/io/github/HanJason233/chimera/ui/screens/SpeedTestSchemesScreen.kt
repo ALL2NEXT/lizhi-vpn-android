@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.SpeedTestScope
+import io.github.HanJason233.chimera.data.model.formatSpeedTestSelection
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
@@ -432,9 +433,15 @@ private fun SpeedTestSchemeCard(
                                     SpeedTestScope.ALL_GROUPS -> "所有组"
                                 }
                             )
-                            if (scheme.tcpingEnabled) append(" · 1 TCPing ${scheme.tcpingPercent}%")
-                            if (scheme.urlTestEnabled) append(" · 2 204 URL ${scheme.urlTestPercent}%")
-                            if (scheme.bandwidthEnabled) append(" · 3 带宽 ${scheme.bandwidthPercent}%")
+                            if (scheme.tcpingEnabled) append(
+                                " · 1 TCPing 前${formatSpeedTestSelection(scheme.tcpingSelectionMode, scheme.tcpingSelectionValue)}"
+                            )
+                            if (scheme.urlTestEnabled) append(
+                                " · 2 204 URL 前${formatSpeedTestSelection(scheme.urlTestSelectionMode, scheme.urlTestSelectionValue)}"
+                            )
+                            if (scheme.bandwidthEnabled) append(
+                                " · 3 带宽 前${formatSpeedTestSelection(scheme.bandwidthSelectionMode, scheme.bandwidthSelectionValue)}"
+                            )
                         }
                     },
                     fontSize = 12.sp,

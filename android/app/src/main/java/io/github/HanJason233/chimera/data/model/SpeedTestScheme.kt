@@ -15,6 +15,17 @@ enum class ManualGroupTestStage {
     BANDWIDTH
 }
 
+/** How many nodes a speed-test stage should take from its upstream result. */
+enum class SpeedTestSelectionMode {
+    PERCENT,
+    COUNT
+}
+
+fun formatSpeedTestSelection(mode: SpeedTestSelectionMode, value: Int): String = when (mode) {
+    SpeedTestSelectionMode.PERCENT -> "$value%"
+    SpeedTestSelectionMode.COUNT -> "$value 个"
+}
+
 /** 测速方案编辑页可选择的节点组，ID 使用 NodeGroupKey 的稳定值。 */
 data class SpeedTestGroupOption(
     val id: String,
@@ -38,9 +49,12 @@ data class SpeedTestScheme(
     val unlockTestsEnabled: Boolean = false,
     /** 第四步要在 VPN 连接后执行的流媒体与 AI 解锁检测项目。 */
     val unlockTestIds: Set<String> = emptySet(),
-    val tcpingPercent: Int = 100,
-    val urlTestPercent: Int = 50,
-    val bandwidthPercent: Int = 50,
+    val tcpingSelectionMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
+    val tcpingSelectionValue: Int = 100,
+    val urlTestSelectionMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
+    val urlTestSelectionValue: Int = 50,
+    val bandwidthSelectionMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
+    val bandwidthSelectionValue: Int = 50,
     val tcpingTimeoutMs: Long = 1_000L,
     val urlTestWarmupTimeoutMs: Long = 4_000L,
     val urlTestMeasurementTimeoutMs: Long = 1_000L,
@@ -64,8 +78,10 @@ data class SpeedTestScheme(
             tcpingEnabled = true,
             urlTestEnabled = true,
             bandwidthEnabled = false,
-            tcpingPercent = 100,
-            urlTestPercent = 50,
+            tcpingSelectionMode = SpeedTestSelectionMode.PERCENT,
+            tcpingSelectionValue = 100,
+            urlTestSelectionMode = SpeedTestSelectionMode.PERCENT,
+            urlTestSelectionValue = 50,
             tcpingTimeoutMs = 1_000L,
             urlTestWarmupTimeoutMs = 4_000L,
             urlTestMeasurementTimeoutMs = 1_000L,

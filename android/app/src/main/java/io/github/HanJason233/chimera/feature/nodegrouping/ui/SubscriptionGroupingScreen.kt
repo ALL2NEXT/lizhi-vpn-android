@@ -58,6 +58,7 @@ import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
+import io.github.HanJason233.chimera.data.model.formatSpeedTestSelection
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 
 internal enum class NodeActionMode {
@@ -143,7 +144,11 @@ internal fun SubscriptionGroupingScreen(
                     ) {
                         if (testScheme.tcpingEnabled) {
                             DropdownMenuItem(
-                                text = { Text("TCPing · ${testScheme.tcpingPercent}%") },
+                                text = {
+                                    Text(
+                                        "TCPing · 前${formatSpeedTestSelection(testScheme.tcpingSelectionMode, testScheme.tcpingSelectionValue)}"
+                                    )
+                                },
                                 onClick = {
                                     manualTestMenuExpanded = false
                                     onRunManualGroupTest(ManualGroupTestStage.TCPING)
@@ -153,7 +158,11 @@ internal fun SubscriptionGroupingScreen(
                         }
                         if (testScheme.urlTestEnabled) {
                             DropdownMenuItem(
-                                text = { Text("URL Test · ${testScheme.urlTestPercent}%") },
+                                text = {
+                                    Text(
+                                        "URL Test · 前${formatSpeedTestSelection(testScheme.urlTestSelectionMode, testScheme.urlTestSelectionValue)}"
+                                    )
+                                },
                                 onClick = {
                                     manualTestMenuExpanded = false
                                     onRunManualGroupTest(ManualGroupTestStage.URL_TEST)
@@ -163,7 +172,11 @@ internal fun SubscriptionGroupingScreen(
                         }
                         if (testScheme.bandwidthEnabled) {
                             DropdownMenuItem(
-                                text = { Text("带宽测速 · ${testScheme.bandwidthPercent}%") },
+                                text = {
+                                    Text(
+                                        "带宽测速 · 前${formatSpeedTestSelection(testScheme.bandwidthSelectionMode, testScheme.bandwidthSelectionValue)}"
+                                    )
+                                },
                                 onClick = {
                                     manualTestMenuExpanded = false
                                     onRunManualGroupTest(ManualGroupTestStage.BANDWIDTH)

@@ -30,6 +30,7 @@ import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGrouping
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingSourceResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.NodeTestResultOrdering
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.NodeTestResultSortMode
+import io.github.HanJason233.chimera.feature.nodegrouping.domain.SpeedTestCandidateSelector
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.SpeedTestScopeResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.SubscriptionGroupingStrategy
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
@@ -668,7 +669,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // 阶段顺序固定为 1 -> 2 -> 3；关闭任一阶段时跳过，但不改变后续顺序。
                 if (scheme.tcpingEnabled) {
-                    val tcpingNodes = takeTopPercent(candidates, scheme.tcpingPercent)
+                    val tcpingNodes = SpeedTestCandidateSelector.takeTop(
+                        candidates,
+                        scheme.tcpingSelectionMode,
+                        scheme.tcpingSelectionValue
+                    )
                     val tcpingResults = internalTestNodes(
                         currentNodes = tcpingNodes,
                         concurrency = scheme.tcpingConcurrency,
@@ -685,7 +690,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 if (scheme.urlTestEnabled) {
-                    val urlTestNodes = takeTopPercent(candidates, scheme.urlTestPercent)
+                    val urlTestNodes = SpeedTestCandidateSelector.takeTop(
+                        candidates,
+                        scheme.urlTestSelectionMode,
+                        scheme.urlTestSelectionValue
+                    )
                     val urlTestResults = runUrlTestNodes(
                         nodes = urlTestNodes,
                         concurrency = scheme.urlTestConcurrency,
@@ -706,7 +715,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val bestNode = if (scheme.bandwidthEnabled) {
-                    val speedTestNodes = takeTopPercent(candidates, scheme.bandwidthPercent)
+                    val speedTestNodes = SpeedTestCandidateSelector.takeTop(
+                        candidates,
+                        scheme.bandwidthSelectionMode,
+                        scheme.bandwidthSelectionValue
+                    )
                     val speedResults = speedTestNodes
                         .chunked(scheme.bandwidthTestConcurrency)
                         .flatMap { batch ->
@@ -821,7 +834,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 when (stage) {
                     ManualGroupTestStage.TCPING -> {
-                        val candidates = takeTopPercent(currentGroupNodes, scheme.tcpingPercent)
+                        val candidates = SpeedTestCandidateSelector.takeTop(
+                            currentGroupNodes,
+                            scheme.tcpingSelectionMode,
+                            scheme.tcpingSelectionValue
+                        )
                         internalTestNodes(
                             currentNodes = candidates,
                             concurrency = scheme.tcpingConcurrency,
@@ -830,7 +847,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     ManualGroupTestStage.URL_TEST -> {
-                        val candidates = takeTopPercent(currentGroupNodes, scheme.urlTestPercent)
+                        val candidates = SpeedTestCandidateSelector.takeTop(
+                            currentGroupNodes,
+                            scheme.urlTestSelectionMode,
+                            scheme.urlTestSelectionValue
+                        )
                         val results = runUrlTestNodes(
                             nodes = candidates,
                             concurrency = scheme.urlTestConcurrency,
@@ -847,7 +868,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     ManualGroupTestStage.BANDWIDTH -> {
-                        val candidates = takeTopPercent(currentGroupNodes, scheme.bandwidthPercent)
+                        val candidates = SpeedTestCandidateSelector.takeTop(
+                            currentGroupNodes,
+                            scheme.bandwidthSelectionMode,
+                            scheme.bandwidthSelectionValue
+                        )
                         candidates
                             .chunked(scheme.bandwidthTestConcurrency)
                             .flatMap { batch ->
@@ -2729,15 +2754,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setSmartRoutingDomains(action, domains)
             restartVpnIfNeeded()
         }
-    }
-
-    private fun takeTopPercent(nodes: List<Node>, percent: Int): List<Node> {
-        if (nodes.isEmpty()) return emptyList()
-        val normalizedPercent = percent.coerceIn(1, 100)
-        val count = ((nodes.size.toLong() * normalizedPercent + 99L) / 100L)
-            .toInt()
-            .coerceIn(1, nodes.size)
-        return nodes.take(count)
     }
 
     /** Refresh all subscriptions when no source is specified, otherwise only the selected source. */

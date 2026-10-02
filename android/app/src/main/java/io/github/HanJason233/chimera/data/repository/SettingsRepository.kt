@@ -27,6 +27,7 @@ import io.github.HanJason233.chimera.data.model.SkinScheme
 import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.SkinThemeMode
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
+import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SpeedTestScope
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
@@ -1212,9 +1213,39 @@ class SettingsRepository(private val context: Context) {
                                                 }
                                             }
                                         },
-                                        tcpingPercent = item.optInt("tcpingPercent", 100),
-                                        urlTestPercent = item.optInt("urlTestPercent", 50),
-                                        bandwidthPercent = item.optInt("bandwidthPercent", 50),
+                                        tcpingSelectionMode = readSelectionMode(
+                                            item,
+                                            "tcping",
+                                            SpeedTestSelectionMode.PERCENT
+                                        ),
+                                        tcpingSelectionValue = readSelectionValue(
+                                            item,
+                                            "tcping",
+                                            legacyKey = "tcpingPercent",
+                                            legacyDefault = 100
+                                        ),
+                                        urlTestSelectionMode = readSelectionMode(
+                                            item,
+                                            "urlTest",
+                                            SpeedTestSelectionMode.PERCENT
+                                        ),
+                                        urlTestSelectionValue = readSelectionValue(
+                                            item,
+                                            "urlTest",
+                                            legacyKey = "urlTestPercent",
+                                            legacyDefault = 50
+                                        ),
+                                        bandwidthSelectionMode = readSelectionMode(
+                                            item,
+                                            "bandwidth",
+                                            SpeedTestSelectionMode.PERCENT
+                                        ),
+                                        bandwidthSelectionValue = readSelectionValue(
+                                            item,
+                                            "bandwidth",
+                                            legacyKey = "bandwidthPercent",
+                                            legacyDefault = 50
+                                        ),
                                         tcpingTimeoutMs = item.optLong("tcpingTimeoutMs", 1_000L),
                                         urlTestWarmupTimeoutMs = item.optLong(
                                             "urlTestWarmupTimeoutMs",
@@ -1260,6 +1291,32 @@ class SettingsRepository(private val context: Context) {
         return listOf(defaultScheme.copy(builtIn = true)) + custom
     }
 
+    private fun readSelectionMode(
+        item: JSONObject,
+        prefix: String,
+        default: SpeedTestSelectionMode
+    ): SpeedTestSelectionMode = runCatching {
+        SpeedTestSelectionMode.valueOf(item.optString("${prefix}SelectionMode"))
+    }.getOrDefault(default)
+
+    private fun readSelectionValue(
+        item: JSONObject,
+        prefix: String,
+        legacyKey: String,
+        legacyDefault: Int
+    ): Int = item.optInt(
+        "${prefix}SelectionValue",
+        item.optInt(legacyKey, legacyDefault)
+    )
+
+    private fun normalizeSelectionValue(
+        mode: SpeedTestSelectionMode,
+        value: Int
+    ): Int = when (mode) {
+        SpeedTestSelectionMode.PERCENT -> value.coerceIn(1, 100)
+        SpeedTestSelectionMode.COUNT -> value.coerceAtLeast(1)
+    }
+
     private fun normalizeSpeedTestScheme(scheme: SpeedTestScheme): SpeedTestScheme {
         // 规范空名称，同时保留用户对方案名称的自定义修改。
         val trimmedName = scheme.name.trim()
@@ -1276,9 +1333,18 @@ class SettingsRepository(private val context: Context) {
             unlockTestIds = scheme.unlockTestIds.intersect(
                 UnlockTestCatalog.schemeDefinitions.mapTo(mutableSetOf()) { it.id }
             ),
-            tcpingPercent = scheme.tcpingPercent.coerceIn(1, 100),
-            urlTestPercent = scheme.urlTestPercent.coerceIn(1, 100),
-            bandwidthPercent = scheme.bandwidthPercent.coerceIn(1, 100),
+            tcpingSelectionValue = normalizeSelectionValue(
+                scheme.tcpingSelectionMode,
+                scheme.tcpingSelectionValue
+            ),
+            urlTestSelectionValue = normalizeSelectionValue(
+                scheme.urlTestSelectionMode,
+                scheme.urlTestSelectionValue
+            ),
+            bandwidthSelectionValue = normalizeSelectionValue(
+                scheme.bandwidthSelectionMode,
+                scheme.bandwidthSelectionValue
+            ),
             tcpingTimeoutMs = scheme.tcpingTimeoutMs.coerceAtLeast(500L),
             urlTestWarmupTimeoutMs = scheme.urlTestWarmupTimeoutMs.coerceIn(500L, 60_000L),
             urlTestMeasurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs.coerceIn(500L, 60_000L),
@@ -1313,9 +1379,31 @@ class SettingsRepository(private val context: Context) {
                     put("unlockTestIds", JSONArray().apply {
                         normalized.unlockTestIds.forEach(::put)
                     })
-                    put("tcpingPercent", normalized.tcpingPercent)
-                    put("urlTestPercent", normalized.urlTestPercent)
-                    put("bandwidthPercent", normalized.bandwidthPercent)
+                    put("tcpingSelectionMode", normalized.tcpingSelectionMode.name)
+                    put("tcpingSelectionValue", normalized.tcpingSelectionValue)
+                    put("urlTestSelectionMode", normalized.urlTestSelectionMode.name)
+                    put("urlTestSelectionValue", normalized.urlTestSelectionValue)
+                    put("bandwidthSelectionMode", normalized.bandwidthSelectionMode.name)
+                    put("bandwidthSelectionValue", normalized.bandwidthSelectionValue)
+                    // Keep the legacy percentage keys so older builds fall back to a safe full test.
+                    put(
+                        "tcpingPercent",
+                        normalized.tcpingSelectionValue.takeIf {
+                            normalized.tcpingSelectionMode == SpeedTestSelectionMode.PERCENT
+                        } ?: 100
+                    )
+                    put(
+                        "urlTestPercent",
+                        normalized.urlTestSelectionValue.takeIf {
+                            normalized.urlTestSelectionMode == SpeedTestSelectionMode.PERCENT
+                        } ?: 100
+                    )
+                    put(
+                        "bandwidthPercent",
+                        normalized.bandwidthSelectionValue.takeIf {
+                            normalized.bandwidthSelectionMode == SpeedTestSelectionMode.PERCENT
+                        } ?: 100
+                    )
                     put("tcpingTimeoutMs", normalized.tcpingTimeoutMs)
                     // Keep the old key for downgrade compatibility.
                     put("urlTestTimeoutMs", normalized.urlTestWarmupTimeoutMs)

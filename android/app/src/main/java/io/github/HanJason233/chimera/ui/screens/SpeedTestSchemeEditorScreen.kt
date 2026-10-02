@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -35,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.SpeedTestGroupOption
+import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SpeedTestScope
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.network.UnlockTestCatalog
@@ -72,9 +76,24 @@ fun SpeedTestSchemeEditorScreen(
     var unlockTestIds by remember(scheme.id, scheme.unlockTestIds) {
         mutableStateOf(scheme.unlockTestIds)
     }
-    var tcpingPercent by remember(scheme.id, scheme.tcpingPercent) { mutableStateOf(scheme.tcpingPercent.toString()) }
-    var urlPercent by remember(scheme.id, scheme.urlTestPercent) { mutableStateOf(scheme.urlTestPercent.toString()) }
-    var bandwidthPercent by remember(scheme.id, scheme.bandwidthPercent) { mutableStateOf(scheme.bandwidthPercent.toString()) }
+    var tcpingSelectionMode by remember(scheme.id, scheme.tcpingSelectionMode) {
+        mutableStateOf(scheme.tcpingSelectionMode)
+    }
+    var tcpingSelectionValue by remember(scheme.id, scheme.tcpingSelectionValue) {
+        mutableStateOf(scheme.tcpingSelectionValue.toString())
+    }
+    var urlSelectionMode by remember(scheme.id, scheme.urlTestSelectionMode) {
+        mutableStateOf(scheme.urlTestSelectionMode)
+    }
+    var urlSelectionValue by remember(scheme.id, scheme.urlTestSelectionValue) {
+        mutableStateOf(scheme.urlTestSelectionValue.toString())
+    }
+    var bandwidthSelectionMode by remember(scheme.id, scheme.bandwidthSelectionMode) {
+        mutableStateOf(scheme.bandwidthSelectionMode)
+    }
+    var bandwidthSelectionValue by remember(scheme.id, scheme.bandwidthSelectionValue) {
+        mutableStateOf(scheme.bandwidthSelectionValue.toString())
+    }
     var tcpingTimeout by remember(scheme.id, scheme.tcpingTimeoutMs) { mutableStateOf(scheme.tcpingTimeoutMs.toString()) }
     var urlWarmupTimeout by remember(scheme.id, scheme.urlTestWarmupTimeoutMs) {
         mutableStateOf(scheme.urlTestWarmupTimeoutMs.toString())
@@ -193,7 +212,13 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = tcpingEnabled,
                 onEnabledChange = { tcpingEnabled = it }
             ) {
-                NumberInput("候选比例 (%)", tcpingPercent, enabled = tcpingEnabled) { tcpingPercent = it }
+                SelectionInput(
+                    mode = tcpingSelectionMode,
+                    value = tcpingSelectionValue,
+                    enabled = tcpingEnabled,
+                    onModeChange = { tcpingSelectionMode = it },
+                    onValueChange = { tcpingSelectionValue = it }
+                )
                 NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) { tcpingTimeout = it }
                 NumberInput("并发", tcpingConcurrency, enabled = tcpingEnabled) { tcpingConcurrency = it }
             }
@@ -203,7 +228,13 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = urlTestEnabled,
                 onEnabledChange = { urlTestEnabled = it }
             ) {
-                NumberInput("候选比例 (%)", urlPercent, enabled = urlTestEnabled) { urlPercent = it }
+                SelectionInput(
+                    mode = urlSelectionMode,
+                    value = urlSelectionValue,
+                    enabled = urlTestEnabled,
+                    onModeChange = { urlSelectionMode = it },
+                    onValueChange = { urlSelectionValue = it }
+                )
                 NumberInput("预热建连超时 (ms)", urlWarmupTimeout, enabled = urlTestEnabled) {
                     urlWarmupTimeout = it
                 }
@@ -249,7 +280,13 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = bandwidthEnabled,
                 onEnabledChange = { bandwidthEnabled = it }
             ) {
-                NumberInput("候选比例 (%)", bandwidthPercent, enabled = bandwidthEnabled) { bandwidthPercent = it }
+                SelectionInput(
+                    mode = bandwidthSelectionMode,
+                    value = bandwidthSelectionValue,
+                    enabled = bandwidthEnabled,
+                    onModeChange = { bandwidthSelectionMode = it },
+                    onValueChange = { bandwidthSelectionValue = it }
+                )
                 NumberInput("测速时长 (ms)", bandwidthDuration, enabled = bandwidthEnabled) { bandwidthDuration = it }
                 NumberInput("并发", bandwidthConcurrency, enabled = bandwidthEnabled) { bandwidthConcurrency = it }
                 OutlinedTextField(
@@ -345,9 +382,15 @@ fun SpeedTestSchemeEditorScreen(
                                 bandwidthEnabled = bandwidthEnabled,
                                 unlockTestsEnabled = unlockTestsEnabled,
                                 unlockTestIds = unlockTestIds,
-                                tcpingPercent = tcpingPercent.toIntOrNull() ?: scheme.tcpingPercent,
-                                urlTestPercent = urlPercent.toIntOrNull() ?: scheme.urlTestPercent,
-                                bandwidthPercent = bandwidthPercent.toIntOrNull() ?: scheme.bandwidthPercent,
+                                tcpingSelectionMode = tcpingSelectionMode,
+                                tcpingSelectionValue = tcpingSelectionValue.toIntOrNull()
+                                    ?: scheme.tcpingSelectionValue,
+                                urlTestSelectionMode = urlSelectionMode,
+                                urlTestSelectionValue = urlSelectionValue.toIntOrNull()
+                                    ?: scheme.urlTestSelectionValue,
+                                bandwidthSelectionMode = bandwidthSelectionMode,
+                                bandwidthSelectionValue = bandwidthSelectionValue.toIntOrNull()
+                                    ?: scheme.bandwidthSelectionValue,
                                 tcpingTimeoutMs = tcpingTimeout.toLongOrNull() ?: scheme.tcpingTimeoutMs,
                                 urlTestWarmupTimeoutMs = urlWarmupTimeout.toLongOrNull()
                                     ?: scheme.urlTestWarmupTimeoutMs,
@@ -481,6 +524,58 @@ private fun SchemeCard(
             content()
         }
     }
+}
+
+@Composable
+private fun SelectionInput(
+    mode: SpeedTestSelectionMode,
+    value: String,
+    enabled: Boolean,
+    onModeChange: (SpeedTestSelectionMode) -> Unit,
+    onValueChange: (String) -> Unit
+) {
+    var unitMenuExpanded by remember { mutableStateOf(false) }
+    val unit = if (mode == SpeedTestSelectionMode.PERCENT) "%" else "个"
+
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onValueChange(it.filter(Char::isDigit)) },
+        label = { Text("筛选上级测试前 X 进入测试") },
+        singleLine = true,
+        enabled = enabled,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        trailingIcon = {
+            Box {
+                Text(
+                    text = unit,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickable(enabled = enabled) { unitMenuExpanded = true }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+                DropdownMenu(
+                    expanded = unitMenuExpanded,
+                    onDismissRequest = { unitMenuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("%") },
+                        onClick = {
+                            unitMenuExpanded = false
+                            onModeChange(SpeedTestSelectionMode.PERCENT)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("个") },
+                        onClick = {
+                            unitMenuExpanded = false
+                            onModeChange(SpeedTestSelectionMode.COUNT)
+                        }
+                    )
+                }
+            }
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable
