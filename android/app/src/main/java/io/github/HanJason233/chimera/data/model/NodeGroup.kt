@@ -70,5 +70,9 @@ data class NodeGroupSummary(
     val warehouseType: WarehouseGroupType = WarehouseGroupType.PERSONAL,
     val nodeCount: Int,
     val isVirtual: Boolean = false,
-    val subscriptionUrl: String? = null
+    val subscriptionUrl: String? = null,
+    val subscriptionUploadBytes: Long? = null,
+    val subscriptionDownloadBytes: Long? = null,
+    val subscriptionTotalBytes: Long? = null,
+    val subscriptionExpireAt: Long? = null
 )

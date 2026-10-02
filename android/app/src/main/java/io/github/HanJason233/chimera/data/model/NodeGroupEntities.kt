@@ -15,6 +15,10 @@ data class NodeGroupEntity(
     val name: String,
     val type: String = NodeGroupStorageType.IMPORTED.name,
     val subscriptionUrl: String? = null,
+    val subscriptionUploadBytes: Long? = null,
+    val subscriptionDownloadBytes: Long? = null,
+    val subscriptionTotalBytes: Long? = null,
+    val subscriptionExpireAt: Long? = null,
     val sortOrder: Int = 0,
     val createdAt: Long = 0L
 )

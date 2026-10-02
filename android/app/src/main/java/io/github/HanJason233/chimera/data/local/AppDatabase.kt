@@ -18,7 +18,7 @@ import java.io.File
 
 @Database(
     entities = [Node::class, NodeGroupEntity::class, NodeGroupMemberEntity::class],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -38,6 +38,14 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("DELETE FROM nodes WHERE source = 'FAVORITE'")
                 db.execSQL("ALTER TABLE nodes DROP COLUMN favoriteSourceNodeId")
                 db.execSQL("ALTER TABLE nodes DROP COLUMN favoriteCreatedAt")
+            }
+        }
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionUploadBytes INTEGER")
+                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionDownloadBytes INTEGER")
+                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionTotalBytes INTEGER")
+                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionExpireAt INTEGER")
             }
         }
 
@@ -86,7 +94,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_8_9)
+                .addMigrations(MIGRATION_8_9, MIGRATION_9_10)
                 .build()
         }
 

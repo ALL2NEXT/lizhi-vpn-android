@@ -11,7 +11,6 @@ import okhttp3.Request
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeType
 import android.net.Uri
-import java.net.URLDecoder
 import java.security.MessageDigest
 import kotlinx.coroutines.withTimeout
 import io.github.HanJason233.chimera.util.RuntimeTuner
@@ -29,7 +28,14 @@ class SubscriptionParser {
         url: String,
         timeoutMs: Long = 25000L,
         encrypted: Boolean = false
-    ): Result<List<Node>> {
+    ): Result<List<Node>> = fetchAndParseWithMetadata(url, timeoutMs, encrypted)
+        .map(ParsedSubscription::nodes)
+
+    internal suspend fun fetchAndParseWithMetadata(
+        url: String,
+        timeoutMs: Long = 25000L,
+        encrypted: Boolean = false
+    ): Result<ParsedSubscription> {
         return try {
             val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
                 NetworkClient.apiService.getSubscription(url)
@@ -52,7 +58,8 @@ class SubscriptionParser {
                 }
                 parseSubscription(content)
             }
-            Result.success(nodes)
+            val userInfo = SubscriptionUserInfo.parse(response.headers()[SUBSCRIPTION_USERINFO_HEADER])
+            Result.success(ParsedSubscription(nodes, userInfo))
         } catch (e: Exception) {
             // 订阅地址经常含有访问令牌，日志中不得输出完整 URL。
             Log.e(tag, "Failed to fetch subscription", e)
@@ -96,7 +103,16 @@ class SubscriptionParser {
     fun parseSubscription(content: String): List<Node> {
         Log.d(tag, "Original content length: ${content.length}")
 
-        val finalContent = decodeSubscriptionContent(content)
+        val normalizedContent = content.trim().removePrefix("\uFEFF")
+        ClashYamlParser.parseToUris(normalizedContent)?.let { links ->
+            Log.d(tag, "Parsed ${links.size} Clash YAML proxies")
+            return links.mapNotNull(::parseNodeLink)
+        }
+        val finalContent = decodeSubscriptionContent(normalizedContent)
+        ClashYamlParser.parseToUris(finalContent)?.let { links ->
+            Log.d(tag, "Parsed ${links.size} Clash YAML proxies")
+            return links.mapNotNull(::parseNodeLink)
+        }
         
         val lines = finalContent.split("\n", "\r\n")
             .map { it.trim() }
@@ -198,7 +214,7 @@ class SubscriptionParser {
      */
     private fun parseTrojanLink(link: String): Node {
         val uri = Uri.parse(link)
-        val name = URLDecoder.decode(uri.fragment ?: "Trojan Node", "UTF-8")
+        val name = nodeName(uri, "Trojan Node")
         val server = uri.host ?: ""
         val port = if (uri.port == -1) 443 else uri.port
         
@@ -219,7 +235,7 @@ class SubscriptionParser {
     private fun parseHysteria2Link(link: String): Node {
         val normalizedLink = link.replace("hy2://", "hysteria2://")
         val uri = Uri.parse(normalizedLink)
-        val name = URLDecoder.decode(uri.fragment ?: "Hysteria2 Node", "UTF-8")
+        val name = nodeName(uri, "Hysteria2 Node")
         val endpoint = parseHysteria2Endpoint(normalizedLink)
         val server = endpoint.first ?: (uri.host ?: "")
         val port = endpoint.second ?: if (uri.port == -1) 443 else uri.port
@@ -240,7 +256,7 @@ class SubscriptionParser {
      */
     private fun parseAnyTlsLink(link: String): Node {
         val uri = Uri.parse(link)
-        val name = URLDecoder.decode(uri.fragment ?: "AnyTLS Node", "UTF-8")
+        val name = nodeName(uri, "AnyTLS Node")
         val server = uri.host ?: ""
         val port = if (uri.port == -1) 443 else uri.port
 
@@ -260,7 +276,7 @@ class SubscriptionParser {
      */
     private fun parseTuicLink(link: String): Node {
         val uri = Uri.parse(link)
-        val name = URLDecoder.decode(uri.fragment ?: "TUIC Node", "UTF-8")
+        val name = nodeName(uri, "TUIC Node")
         val server = uri.host ?: ""
         val port = if (uri.port == -1) 443 else uri.port
 
@@ -280,7 +296,7 @@ class SubscriptionParser {
      */
     private fun parseNaiveLink(link: String): Node {
         val uri = Uri.parse(link)
-        val name = URLDecoder.decode(uri.fragment ?: "Naive Node", "UTF-8")
+        val name = nodeName(uri, "Naive Node")
         val server = uri.host ?: ""
         val port = if (uri.port == -1) 443 else uri.port
 
@@ -300,7 +316,7 @@ class SubscriptionParser {
      */
     private fun parseWireGuardLink(link: String): Node {
         val uri = Uri.parse(link)
-        val name = URLDecoder.decode(uri.fragment ?: "WireGuard Node", "UTF-8")
+        val name = nodeName(uri, "WireGuard Node")
         val server = uri.host ?: ""
         val port = if (uri.port == -1) 51820 else uri.port
 
@@ -321,7 +337,7 @@ class SubscriptionParser {
      */
     private fun parseShadowsocksLink(link: String): Node {
         val uri = Uri.parse(link)
-        val name = URLDecoder.decode(uri.fragment ?: "Shadowsocks Node", "UTF-8")
+        val name = nodeName(uri, "Shadowsocks Node")
         
         var server = uri.host
         var port = uri.port
@@ -353,7 +369,7 @@ class SubscriptionParser {
      */
     private fun parseSocksLink(link: String): Node {
         val uri = Uri.parse(link)
-        val name = URLDecoder.decode(uri.fragment ?: "Socks Node", "UTF-8")
+        val name = nodeName(uri, "Socks Node")
         val server = uri.host ?: ""
         val port = if (uri.port == -1) 1080 else uri.port
         
@@ -374,7 +390,7 @@ class SubscriptionParser {
      */
     private fun parseHttpLink(link: String): Node {
         val uri = Uri.parse(link)
-        val name = URLDecoder.decode(uri.fragment ?: "HTTP Proxy", "UTF-8")
+        val name = nodeName(uri, "HTTP Proxy")
         val server = uri.host ?: ""
         val defaultPort = if (link.startsWith("https://")) 443 else 80
         val port = if (uri.port == -1) defaultPort else uri.port
@@ -443,5 +459,9 @@ class SubscriptionParser {
     private companion object {
         const val CLIENT_IP_HEADER = "X-Chimera-Client-IP"
         private const val LEGACY_CLIENT_IP_HEADER = "X-Firefly-Client-IP"
+        private const val SUBSCRIPTION_USERINFO_HEADER = "Subscription-Userinfo"
     }
+
+    private fun nodeName(uri: Uri, fallback: String): String =
+        uri.fragment?.trim()?.takeIf(String::isNotEmpty) ?: fallback
 }

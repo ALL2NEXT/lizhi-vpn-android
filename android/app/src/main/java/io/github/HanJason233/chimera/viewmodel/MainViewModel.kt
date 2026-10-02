@@ -39,6 +39,7 @@ import io.github.HanJason233.chimera.network.NodeDownloadBandwidthTester
 import io.github.HanJason233.chimera.network.SpeedTestService
 import io.github.HanJason233.chimera.network.SubscriptionParser
 import io.github.HanJason233.chimera.network.SubscriptionImportUrl
+import io.github.HanJason233.chimera.network.ParsedSubscription
 import io.github.HanJason233.chimera.network.DownloadManager
 import io.github.HanJason233.chimera.network.DownloadArtifact
 import io.github.HanJason233.chimera.network.UnlockTestCatalog
@@ -219,7 +220,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     type = NodeGroupType.WAREHOUSE,
                     warehouseType = WarehouseGroupType.PERSONAL,
                     nodeCount = item.nodeCount,
-                    subscriptionUrl = item.group.subscriptionUrl
+                    subscriptionUrl = item.group.subscriptionUrl,
+                    subscriptionUploadBytes = item.group.subscriptionUploadBytes,
+                    subscriptionDownloadBytes = item.group.subscriptionDownloadBytes,
+                    subscriptionTotalBytes = item.group.subscriptionTotalBytes,
+                    subscriptionExpireAt = item.group.subscriptionExpireAt
                 )
             }
         }
@@ -1496,26 +1501,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val normalizedInput = input?.trim().orEmpty()
             val subscriptionUrl = SubscriptionImportUrl.detect(normalizedInput)
-            val parsedNodes = if (normalizedInput.isBlank()) {
-                Result.success(emptyList())
+            val parsedSubscription = if (normalizedInput.isBlank()) {
+                Result.success(ParsedSubscription(emptyList()))
             } else if (subscriptionUrl != null) {
                 withContext(Dispatchers.IO) {
-                    subscriptionParser.fetchAndParse(subscriptionUrl)
+                    subscriptionParser.fetchAndParseWithMetadata(subscriptionUrl)
                 }
             } else {
                 withContext(Dispatchers.Default) {
-                    Result.success(subscriptionParser.parseSubscription(normalizedInput))
+                    Result.success(ParsedSubscription(subscriptionParser.parseSubscription(normalizedInput)))
                 }
             }
 
-            if (parsedNodes.isFailure) {
-                Log.e(tag, "Unable to fetch user subscription group", parsedNodes.exceptionOrNull())
+            if (parsedSubscription.isFailure) {
+                Log.e(tag, "Unable to fetch user subscription group", parsedSubscription.exceptionOrNull())
                 onResult(SubscriptionGroupCreateResult.FETCH_FAILED, 0)
                 return@launch
             }
+            val parsed = parsedSubscription.getOrThrow()
 
             val compatibleNodes = withContext(Dispatchers.IO) {
-                parsedNodes.getOrThrow().filter { node ->
+                parsed.nodes.filter { node ->
                     isNodeCoreConfigCompatible(node)
                 }
             }
@@ -1531,6 +1537,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 name = normalizedName,
                 type = NodeGroupStorageType.SUBSCRIPTION.name,
                 subscriptionUrl = subscriptionUrl,
+                subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
+                subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
+                subscriptionTotalBytes = parsed.userInfo?.totalBytes,
+                subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
                 createdAt = createdAt
             )
             val localNodes = compatibleNodes
@@ -1810,23 +1820,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val subscriptionUrl = SubscriptionImportUrl.detect(normalizedInput)
-            val parsedNodes = if (subscriptionUrl != null) {
+            val parsedSubscription = if (subscriptionUrl != null) {
                 withContext(Dispatchers.IO) {
-                    subscriptionParser.fetchAndParse(subscriptionUrl)
+                    subscriptionParser.fetchAndParseWithMetadata(subscriptionUrl)
                 }
             } else {
                 withContext(Dispatchers.Default) {
-                    Result.success(subscriptionParser.parseSubscription(normalizedInput))
+                    Result.success(ParsedSubscription(subscriptionParser.parseSubscription(normalizedInput)))
                 }
             }
-            if (parsedNodes.isFailure) {
-                Log.e(tag, "Unable to fetch updated user subscription group", parsedNodes.exceptionOrNull())
+            if (parsedSubscription.isFailure) {
+                Log.e(tag, "Unable to fetch updated user subscription group", parsedSubscription.exceptionOrNull())
                 onResult(SubscriptionGroupEditResult.FETCH_FAILED, 0)
                 return@launch
             }
+            val parsed = parsedSubscription.getOrThrow()
 
             val compatibleNodes = withContext(Dispatchers.IO) {
-                parsedNodes.getOrThrow().filter { node ->
+                parsed.nodes.filter { node ->
                     isNodeCoreConfigCompatible(node)
                 }
             }
@@ -1864,6 +1875,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     groupId = groupId,
                     name = normalizedName,
                     subscriptionUrl = subscriptionUrl,
+                    subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
+                    subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
+                    subscriptionTotalBytes = parsed.userInfo?.totalBytes,
+                    subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
                     nodes = localNodes,
                     members = members
                 )
@@ -1913,17 +1928,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     onResult(SubscriptionGroupRefreshResult.INVALID)
                     return@launch
                 }
-            val parsedNodes = withContext(Dispatchers.IO) {
-                subscriptionParser.fetchAndParse(subscriptionUrl)
+            val parsedSubscription = withContext(Dispatchers.IO) {
+                subscriptionParser.fetchAndParseWithMetadata(subscriptionUrl)
             }
-            if (parsedNodes.isFailure) {
-                Log.e(tag, "Unable to refresh user subscription group", parsedNodes.exceptionOrNull())
+            if (parsedSubscription.isFailure) {
+                Log.e(tag, "Unable to refresh user subscription group", parsedSubscription.exceptionOrNull())
                 onResult(SubscriptionGroupRefreshResult.FETCH_FAILED)
                 return@launch
             }
+            val parsed = parsedSubscription.getOrThrow()
 
             val compatibleNodes = withContext(Dispatchers.IO) {
-                parsedNodes.getOrThrow().filter { node ->
+                parsed.nodes.filter { node ->
                     isNodeCoreConfigCompatible(node)
                 }
             }.distinctBy(Node::getRawLinkPlain)
@@ -1960,6 +1976,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     groupId = groupId,
                     name = group.name,
                     subscriptionUrl = subscriptionUrl,
+                    subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
+                    subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
+                    subscriptionTotalBytes = parsed.userInfo?.totalBytes,
+                    subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
                     nodes = localNodes,
                     members = members
                 )

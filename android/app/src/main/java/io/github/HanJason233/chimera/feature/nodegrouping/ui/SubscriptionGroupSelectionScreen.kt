@@ -58,7 +58,11 @@ import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.NodeGroupSummary
 import io.github.HanJason233.chimera.data.model.SubscriptionGroup
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
+import io.github.HanJason233.chimera.util.TrafficUsageFormatter
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 private enum class GroupActionMode {
     UPDATE,
@@ -640,6 +644,7 @@ private fun UserSubscriptionGroupCard(
     GroupCard(
         name = group.name,
         nodeCount = group.nodeCount,
+        details = personalSubscriptionInfo(group),
         selected = selected,
         onClick = onClick,
         onViewDetails = onViewDetails,
@@ -671,6 +676,7 @@ private fun GroupTypeHeader(title: String) {
 private fun GroupCard(
     name: String,
     nodeCount: Int,
+    details: List<String> = emptyList(),
     selected: Boolean,
     onClick: () -> Unit,
     onViewDetails: () -> Unit,
@@ -727,19 +733,36 @@ private fun GroupCard(
                 },
                 modifier = Modifier.size(34.dp)
             )
-            Text(
-                text = name,
+            Column(
                 modifier = Modifier.weight(1f),
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = name,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                details.forEach { detail ->
+                    Text(
+                        text = detail,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             Text(
                 text = "$nodeCount 个节点",
                 color = if (selected) {
@@ -757,6 +780,38 @@ private fun GroupCard(
                     tint = trailingTint
                 )
             }
+        }
+    }
+}
+
+private val subscriptionExpireFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
+private fun personalSubscriptionInfo(group: NodeGroupSummary): List<String> = buildList {
+    val hasTraffic = group.subscriptionUploadBytes != null ||
+        group.subscriptionDownloadBytes != null ||
+        group.subscriptionTotalBytes != null
+    if (hasTraffic) {
+        val upload = group.subscriptionUploadBytes?.coerceAtLeast(0L) ?: 0L
+        val download = group.subscriptionDownloadBytes?.coerceAtLeast(0L) ?: 0L
+        val used = if (upload > Long.MAX_VALUE - download) Long.MAX_VALUE else upload + download
+        val total = group.subscriptionTotalBytes?.coerceAtLeast(0L)
+        add(
+            if (total != null && total > 0L) {
+                "流量：已用 ${TrafficUsageFormatter.formatBytes(used)} / 总量 ${TrafficUsageFormatter.formatBytes(total)}"
+            } else {
+                "流量：已用 ${TrafficUsageFormatter.formatBytes(used)}"
+            }
+        )
+    }
+
+    group.subscriptionExpireAt?.takeIf { it > 0L }?.let { expireAt ->
+        runCatching {
+            Instant.ofEpochMilli(expireAt)
+                .atZone(ZoneId.systemDefault())
+                .format(subscriptionExpireFormatter)
+        }.getOrNull()?.let { formatted ->
+            add(if (expireAt <= System.currentTimeMillis()) "已过期：$formatted" else "到期：$formatted")
         }
     }
 }

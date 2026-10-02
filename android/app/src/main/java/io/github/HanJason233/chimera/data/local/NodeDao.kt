@@ -130,6 +130,28 @@ interface NodeDao {
     @Query("UPDATE node_groups SET name = :name, subscriptionUrl = :subscriptionUrl WHERE id = :groupId")
     suspend fun updateNodeGroup(groupId: String, name: String, subscriptionUrl: String?): Int
 
+    @Query(
+        """
+        UPDATE node_groups SET
+            name = :name,
+            subscriptionUrl = :subscriptionUrl,
+            subscriptionUploadBytes = :subscriptionUploadBytes,
+            subscriptionDownloadBytes = :subscriptionDownloadBytes,
+            subscriptionTotalBytes = :subscriptionTotalBytes,
+            subscriptionExpireAt = :subscriptionExpireAt
+        WHERE id = :groupId
+        """
+    )
+    suspend fun updateNodeGroupWithSubscriptionInfo(
+        groupId: String,
+        name: String,
+        subscriptionUrl: String?,
+        subscriptionUploadBytes: Long?,
+        subscriptionDownloadBytes: Long?,
+        subscriptionTotalBytes: Long?,
+        subscriptionExpireAt: Long?
+    ): Int
+
     @Query("UPDATE nodes SET subscriptionSourceName = :name WHERE source = 'LOCAL_GROUP' AND subscriptionSourceId = :groupId")
     suspend fun updateLocalGroupNodeNames(groupId: String, name: String): Int
 
@@ -149,10 +171,25 @@ interface NodeDao {
         groupId: String,
         name: String,
         subscriptionUrl: String?,
+        subscriptionUploadBytes: Long?,
+        subscriptionDownloadBytes: Long?,
+        subscriptionTotalBytes: Long?,
+        subscriptionExpireAt: Long?,
         nodes: List<Node>,
         members: List<NodeGroupMemberEntity>
     ): Boolean {
-        if (!updateNodeGroupMetadata(groupId, name, subscriptionUrl)) return false
+        if (
+            updateNodeGroupWithSubscriptionInfo(
+                groupId = groupId,
+                name = name,
+                subscriptionUrl = subscriptionUrl,
+                subscriptionUploadBytes = subscriptionUploadBytes,
+                subscriptionDownloadBytes = subscriptionDownloadBytes,
+                subscriptionTotalBytes = subscriptionTotalBytes,
+                subscriptionExpireAt = subscriptionExpireAt
+            ) == 0
+        ) return false
+        updateLocalGroupNodeNames(groupId, name)
         deleteNodeGroupMembers(groupId)
         deleteLocalGroupNodes(groupId)
         if (nodes.isNotEmpty()) insertNodes(nodes)

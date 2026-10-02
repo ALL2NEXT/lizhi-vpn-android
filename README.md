@@ -330,7 +330,8 @@ android/app/src/main/
 
 - 📌 APP 会记录当前选择的订阅线路、地区或本地组
 - ➕ 按订阅仓库分组右上角加号打开添加订阅组弹窗，支持填写组名和可选订阅连接
-- 📋 弹窗内可通过剪切板或二维码图标填充订阅链接、节点链接或节点列表
+- 📋 弹窗内可通过剪切板或二维码图标填充订阅链接、节点链接、节点列表或 Clash/Clash.Meta YAML
+- 📊 私人源订阅响应包含 `Subscription-Userinfo` 时，卡片会展示流量使用情况和到期时间
 - 🛡️ 添加订阅组前会生成单节点 sing-box 测试配置并执行 `sing-box --check`，不兼容核心的节点不会写入该组
 - 🚦 VPN 启动时只会使用当前节点来源生成配置，并在启动前跳过核心不支持的非选中节点；如果所选节点本身不被核心支持，会直接提示错误
 
@@ -605,7 +606,7 @@ APP 会先过滤当前账户等级不足的线路，再并发获取其余启用�
 
 ### 2. 节点订阅内容接口
 
-每个 `subscriptions[].url` 返回节点链接列表，每行一个。响应可以是明文或 Base64 编码内容。
+每个 `subscriptions[].url` 可以返回每行一个的节点链接列表或含 `proxies` 的 Clash/Clash.Meta YAML；节点链接列表和 YAML 均可直接返回，也可整体使用标准 Base64 编码。私人源还会读取标准 `Subscription-Userinfo` 响应头中的 `upload`、`download`、`total`、`expire` 字段。
 
 当线路的 `encrypted` 为 `true` 时，订阅接口须遵循以下约定：
 
@@ -629,6 +630,8 @@ APP 会先过滤当前账户等级不足的线路，再并发获取其余启用�
 - `socks4://` - SOCKS4
 - `http://` - HTTP 代理
 - `https://` - HTTPS 代理 (自动启用 TLS)
+
+Clash YAML 中的 `vless`、`vmess`、`trojan`、`hysteria2`、`anytls`、`tuic`、`naive`、`wireguard`、`ss`、`socks/socks5/socks4/socks4a`、`http` 会转换为上述 URI 后继续执行相同的核心兼容校验；当前核心不支持的 Clash 类型会被忽略。
 
 **示例响应** (Base64 解码后):
 ```

@@ -33,6 +33,10 @@
 -dontwarn okio.**
 -keep class okhttp3.** { *; }
 
+# Clash subscription YAML parsing
+-keep class org.yaml.snakeyaml.** { *; }
+-dontwarn org.yaml.snakeyaml.**
+
 # SQLCipher (JNI depends on internal field/method names; do not obfuscate)
 -keep class net.sqlcipher.** { *; }
 -dontwarn net.sqlcipher.**
