@@ -111,13 +111,13 @@ fun MainScreen(
     val selectedGroupName = when (val selectedGroup = NodeGroupKey.parse(selectedNodeGroupId)) {
         is NodeGroupKey.Subscription -> subscriptionGroups
             .firstOrNull { it.sourceId == selectedGroup.sourceId }
-            ?.name ?: "未知官方组"
+            ?.name ?: "未知官方源"
         is NodeGroupKey.Country -> countryOptions
             .firstOrNull { it.code.equals(selectedGroup.countryCode, ignoreCase = true) }
             ?.name ?: selectedGroup.countryCode
         is NodeGroupKey.Imported -> userSubscriptionGroups
             .firstOrNull { it.id == NodeGroupKey.Imported(selectedGroup.groupId).value }
-            ?.name ?: "未知仓库组"
+            ?.name ?: "未知仓库源"
         null -> "未选择"
     }
     
@@ -378,7 +378,7 @@ fun MainScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "仓库组：${node.getConnectionGroupName()}",
+                                text = "仓库源：${node.getConnectionGroupName()}",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp,
                                 maxLines = 1,

@@ -438,7 +438,7 @@ class SettingsRepository(private val context: Context) {
         CountryCodeResolver.normalizeCountryCode(preferences[SELECTED_COUNTRY_CODE])
     }
 
-    /** 仓库组地区筛选；null 表示默认包含全部仓库组。 */
+    /** 仓库源地区筛选；null 表示默认包含全部仓库源。 */
     val countryGroupingSourceIds: Flow<Set<String>?> =
         context.dataStore.data.map { preferences ->
             preferences[COUNTRY_GROUPING_SOURCE_IDS]?.toSet()

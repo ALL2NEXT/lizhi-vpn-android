@@ -1,12 +1,12 @@
 package io.github.HanJason233.chimera.data.model
 
-/** 顶层分组只有仓库组和由仓库组按地区规则动态汇总的地区组。 */
+/** 顶层分组只有仓库源和由仓库源按地区规则动态汇总的地区组。 */
 enum class NodeGroupType {
     WAREHOUSE,
     REGION
 }
 
-/** 仓库组下的两种来源分类。 */
+/** 仓库源下的两种来源分类。 */
 enum class WarehouseGroupType {
     OFFICIAL,
     PERSONAL
@@ -32,7 +32,7 @@ sealed interface NodeGroupKey {
         override val value: String = "country:$countryCode"
     }
 
-    /** 个人组继续使用既有 imported: 标识，保留本地选中状态兼容性。 */
+    /** 私人源继续使用既有 imported: 标识，保留本地选中状态兼容性。 */
     data class Imported(val groupId: String) : NodeGroupKey {
         override val value: String = "imported:$groupId"
     }

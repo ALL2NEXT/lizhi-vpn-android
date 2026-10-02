@@ -202,7 +202,7 @@ private fun SubscriptionGroupSelectionScreen(
     }
 
     AppScreenScaffold(
-        title = "仓库组",
+        title = "仓库源",
         onBack = onBack,
         showBackNavigation = false,
         actions = {
@@ -218,9 +218,9 @@ private fun SubscriptionGroupSelectionScreen(
                 Icon(
                     imageVector = Icons.Rounded.Refresh,
                     contentDescription = if (groupActionMode == GroupActionMode.UPDATE) {
-                        "退出更新仓库组模式"
+                        "退出更新仓库源模式"
                     } else {
-                        "进入更新仓库组模式"
+                        "进入更新仓库源模式"
                     },
                     tint = if (groupActionMode == GroupActionMode.UPDATE) {
                         MaterialTheme.colorScheme.primary
@@ -239,7 +239,7 @@ private fun SubscriptionGroupSelectionScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "添加个人组"
+                    contentDescription = "添加私人源"
                 )
             }
             IconButton(
@@ -306,7 +306,7 @@ private fun SubscriptionGroupSelectionScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (subscriptionGroups.isNotEmpty()) {
-                            item(key = "official-groups-header") { GroupTypeHeader("官方组") }
+                            item(key = "official-groups-header") { GroupTypeHeader("官方源") }
                             items(
                                 items = subscriptionGroups,
                                 key = { "subscription:${it.sourceId}" }
@@ -323,7 +323,7 @@ private fun SubscriptionGroupSelectionScreen(
                                         onRefreshOfficialSubscription(group.sourceId) { success ->
                                             Toast.makeText(
                                                 context,
-                                                if (success) "官方组已更新" else "官方组更新失败或当前操作繁忙",
+                                                if (success) "官方源已更新" else "官方源更新失败或当前操作繁忙",
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
@@ -333,7 +333,7 @@ private fun SubscriptionGroupSelectionScreen(
                             }
                         }
                         if (userGroups.isNotEmpty()) {
-                            item(key = "personal-groups-header") { GroupTypeHeader("个人组") }
+                            item(key = "personal-groups-header") { GroupTypeHeader("私人源") }
                             items(
                                 items = userGroups,
                                 key = NodeGroupSummary::id
@@ -350,13 +350,13 @@ private fun SubscriptionGroupSelectionScreen(
                                         onRefreshUserGroup(group.id.removePrefix("imported:")) { result ->
                                             val message = when (result) {
                                                 MainViewModel.SubscriptionGroupRefreshResult.REFRESHED ->
-                                                    "个人组已更新"
+                                                    "私人源已更新"
                                                 MainViewModel.SubscriptionGroupRefreshResult.INVALID ->
                                                     "订阅内容中未找到可用节点"
                                                 MainViewModel.SubscriptionGroupRefreshResult.FETCH_FAILED ->
                                                     "订阅链接获取失败"
                                                 MainViewModel.SubscriptionGroupRefreshResult.NOT_FOUND ->
-                                                    "个人组不存在"
+                                                    "私人源不存在"
                                                 MainViewModel.SubscriptionGroupRefreshResult.BUSY ->
                                                     "当前操作繁忙，请稍后重试"
                                             }
@@ -382,7 +382,7 @@ private fun SubscriptionGroupSelectionScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "暂无仓库组",
+                        text = "暂无仓库源",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center
@@ -395,7 +395,7 @@ private fun SubscriptionGroupSelectionScreen(
     if (addDialogVisible) {
         AppAlertDialog(
             onDismissRequest = { if (!isSubmitting) addDialogVisible = false },
-            title = { Text("添加个人组") },
+            title = { Text("添加私人源") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
@@ -489,7 +489,7 @@ private fun SubscriptionGroupSelectionScreen(
     if (editDialogVisible && !deleteDialogVisible) {
         AppAlertDialog(
             onDismissRequest = { if (!isSubmitting) editDialogVisible = false },
-            title = { Text("编辑个人组") },
+            title = { Text("编辑私人源") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
@@ -550,7 +550,7 @@ private fun SubscriptionGroupSelectionScreen(
     if (deleteDialogVisible) {
         AppAlertDialog(
             onDismissRequest = { if (!isSubmitting) deleteDialogVisible = false },
-            title = { Text(if (deletingOfficialSubscription) "移除官方组？" else "删除个人组？") },
+            title = { Text(if (deletingOfficialSubscription) "移除官方源？" else "删除私人源？") },
             text = {
                 Text(
                     if (deletingOfficialSubscription) {
@@ -685,9 +685,9 @@ private fun GroupCard(
         null -> Icons.Rounded.ChevronRight
     }
     val trailingDescription = when (actionMode) {
-        GroupActionMode.UPDATE -> "更新仓库组"
-        GroupActionMode.EDIT -> "编辑个人组"
-        GroupActionMode.DELETE -> "删除仓库组"
+        GroupActionMode.UPDATE -> "更新仓库源"
+        GroupActionMode.EDIT -> "编辑私人源"
+        GroupActionMode.DELETE -> "删除仓库源"
         null -> "查看线路信息"
     }
     val trailingTint = when {

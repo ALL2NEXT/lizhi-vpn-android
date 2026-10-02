@@ -78,7 +78,7 @@ internal fun CountryGroupingDestination(
                 CountryGroupingSourceOption(
                     id = NodeGroupKey.Subscription(group.sourceId).value,
                     name = group.name,
-                    kind = "官方仓库组",
+                    kind = "官方源",
                     nodeCount = subscriptionNodeCounts[group.sourceId] ?: 0
                 )
             )
@@ -88,7 +88,7 @@ internal fun CountryGroupingDestination(
                 CountryGroupingSourceOption(
                     id = group.id,
                     name = group.name,
-                    kind = "个人仓库组",
+                    kind = "私人源",
                     nodeCount = group.nodeCount
                 )
             )
@@ -143,7 +143,7 @@ private fun CountryGroupingScreen(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.FilterList,
-                    contentDescription = "选择参与地区组的仓库组",
+                    contentDescription = "选择参与地区组的仓库源",
                     tint = if (isAllSourcesSelected) {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
@@ -194,7 +194,7 @@ private fun CountryGroupingScreen(
             ) {
                 Text(
                     text = if (sourceOptions.isNotEmpty() && selectedSourceIds?.isEmpty() == true) {
-                        "尚未选择仓库组，请点击右上角选择"
+                        "尚未选择仓库源，请点击右上角选择"
                     } else {
                         "暂无可选择的地区组"
                     },
@@ -209,11 +209,11 @@ private fun CountryGroupingScreen(
     if (sourceDialogVisible) {
         AppAlertDialog(
             onDismissRequest = { sourceDialogVisible = false },
-            title = { Text("选择仓库组") },
+            title = { Text("选择仓库源") },
             text = {
                 Column {
                     Text(
-                        text = "所选仓库组中的节点会按地区重新汇总。",
+                        text = "所选仓库源中的节点会按地区重新汇总。",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -230,7 +230,7 @@ private fun CountryGroupingScreen(
                     }
                     if (sourceOptions.isEmpty()) {
                         Text(
-                            text = "暂无仓库组",
+                            text = "暂无仓库源",
                             modifier = Modifier.padding(vertical = 12.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

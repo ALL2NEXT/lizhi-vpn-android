@@ -150,7 +150,7 @@ fun SpeedTestSchemeEditorScreen(
                         )
                     }
                     CollapsibleGroupSection(
-                        title = "仓库组",
+                        title = "仓库源",
                         count = repositoryGroups.size,
                         expanded = repositoryGroupsExpanded,
                         onToggle = { repositoryGroupsExpanded = !repositoryGroupsExpanded }

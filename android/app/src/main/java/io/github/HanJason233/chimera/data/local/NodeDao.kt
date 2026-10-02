@@ -38,7 +38,7 @@ interface NodeDao {
     @Query("SELECT DISTINCT subscriptionSourceId AS sourceId, subscriptionSourceName AS name FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId IS NOT NULL ORDER BY CAST(subscriptionSourceId AS INTEGER) ASC, subscriptionSourceName ASC")
     fun getSubscriptionGroups(): Flow<List<SubscriptionGroup>>
 
-    /** 个人仓库组摘要；地区组由应用按地区规则动态汇总。 */
+    /** 私人源摘要；地区组由应用按地区规则动态汇总。 */
     @Query("SELECT * FROM node_groups WHERE type IN ('IMPORTED', 'SUBSCRIPTION') ORDER BY sortOrder ASC, createdAt ASC")
     fun getUserSubscriptionGroups(): Flow<List<NodeGroupEntity>>
 

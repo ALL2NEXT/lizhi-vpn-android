@@ -31,7 +31,7 @@ private sealed interface NodeGroupingDetail {
 }
 
 /**
- * 节点分组的统一页面入口，根据底部导航显示地区组或仓库组。
+ * 节点分组的统一页面入口，根据底部导航显示地区组或仓库源。
  * 分组详情的页面状态由本模块维护。
  */
 @Composable

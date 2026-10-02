@@ -202,12 +202,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         dao.getSubscriptionNodes()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 数据库中的全部节点；地区组会再按已选仓库组筛选。 */
+    /** 数据库中的全部节点；地区组会再按已选仓库源筛选。 */
     val allWarehouseNodes = nodeDaoFlow.flatMapLatest { dao ->
         dao.getAllNodes()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 个人仓库组摘要。 */
+    /** 私人源摘要。 */
     val userSubscriptionGroups = nodeDaoFlow
         .flatMapLatest { it.getUserSubscriptionGroupsWithCount() }
         .map { groups ->
@@ -230,7 +230,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val countryGroupingSources = countryGroupingSourceIds
         .map(CountryGroupingSourceResolver::resolve)
 
-    /** 地区组只汇总所选仓库组中的节点；首次使用时包含全部官方组和个人组。 */
+    /** 地区组只汇总所选仓库源中的节点；首次使用时包含全部官方源和私人源。 */
     val countryGroupingNodes = nodeDaoFlow.flatMapLatest { dao ->
         combine(allWarehouseNodes, countryGroupingSources) { allNodes, sources ->
             allNodes to sources
@@ -270,7 +270,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-    /** 测速方案可选择官方组、地区组和个人组。 */
+    /** 测速方案可选择官方源、地区组和私人源。 */
     val speedTestGroupOptions = combine(
         subscriptionGroups,
         countryOptions,
@@ -281,7 +281,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 add(
                     SpeedTestGroupOption(
                         id = NodeGroupKey.Subscription(group.sourceId).value,
-                        name = "官方组：${group.name}"
+                        name = "官方源：${group.name}"
                     )
                 )
             }
@@ -294,16 +294,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             userGroups.forEach { group ->
-                add(SpeedTestGroupOption(id = group.id, name = "个人组：${group.name}"))
+                add(SpeedTestGroupOption(id = group.id, name = "私人源：${group.name}"))
             }
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 仓库组详情页使用的个人组节点流。 */
+    /** 仓库源详情页使用的私人源节点流。 */
     fun observeNodeGroupNodes(groupId: String): Flow<List<Node>> =
         nodeDaoFlow.flatMapLatest { it.getNodesByGroup(groupId) }
 
-    /** 当前选中个人组的节点；没有选中个人组时不参与主页列表。 */
+    /** 当前选中私人源的节点；没有选中私人源时不参与主页列表。 */
     private val importedNodes = selectedNodeGroupId.flatMapLatest { groupId ->
         val group = NodeGroupKey.parse(groupId) as? NodeGroupKey.Imported
         if (group == null) {
@@ -1380,7 +1380,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         selectNodeGroup(NodeGroupKey.Subscription(sourceId))
     }
 
-    /** 切换到仓库组时立即取消地区限定，保证主页智能测速使用当前官方组。 */
+    /** 切换到仓库源时立即取消地区限定，保证主页智能测速使用当前官方源。 */
     fun selectSubscriptionGrouping() {
         viewModelScope.launch {
             settingsRepository.setSelectedCountryCode(null)
@@ -2651,7 +2651,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sortNodesForList(snapshot)
     }
 
-    /** 按稳定组 ID 解析指定官方组、个人组或地区组的节点。 */
+    /** 按稳定组 ID 解析指定官方源、私人源或地区组的节点。 */
     private suspend fun resolveSpeedTestGroupNodes(
         allNodes: List<Node>,
         groupIds: Set<String>

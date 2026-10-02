@@ -5,7 +5,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-/** 个人仓库组的持久化记录；官方仓库组来自订阅源，地区组由应用动态汇总。 */
+/** 私人源的持久化记录；官方源来自订阅源，地区组由应用动态汇总。 */
 @Entity(
     tableName = "node_groups",
     indices = [Index(value = ["type"])]

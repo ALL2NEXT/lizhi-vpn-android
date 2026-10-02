@@ -11,7 +11,7 @@ import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
-/** 仓库组详情页面的状态绑定入口。 */
+/** 仓库源详情页面的状态绑定入口。 */
 @Composable
 internal fun SubscriptionGroupingDestination(
     viewModel: MainViewModel,
@@ -20,7 +20,7 @@ internal fun SubscriptionGroupingDestination(
     showBackNavigation: Boolean = true,
     bottomContentPadding: Dp = 16.dp,
     nodesOverride: List<Node>? = null,
-    screenTitle: String = "仓库组",
+    screenTitle: String = "仓库源",
     importTargetGroupId: String? = null
 ) {
     val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
