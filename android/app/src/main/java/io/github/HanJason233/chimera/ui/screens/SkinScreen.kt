@@ -166,6 +166,7 @@ fun SkinScreen(
                             scheme.customImagePath,
                             scheme.homeDisconnectedImagePath,
                             scheme.homeConnectingImagePath,
+                            scheme.homeDisconnectingImagePath,
                             scheme.homeConnectedImagePath
                         )
                         viewModel.deleteSkinScheme(scheme.id)

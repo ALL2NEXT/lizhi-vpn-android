@@ -66,9 +66,10 @@ fun ConnectButton(
     longClickActionLabel: String = "测速方案",
     enabled: Boolean = true,
     isTesting: Boolean = false,
-    /** 三种连接状态的图片均可按当前皮肤方案单独覆盖，未设置时使用内置图片。 */
+    /** 四种连接状态的图片均可按当前皮肤方案单独覆盖，未设置时使用内置图片。 */
     customDisconnectedImagePath: String? = null,
     customConnectingImagePath: String? = null,
+    customDisconnectingImagePath: String? = null,
     customConnectedImagePath: String? = null,
     homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
     homeIconEffectEnabled: Boolean = true,
@@ -134,7 +135,8 @@ fun ConnectButton(
         ) { currentState ->
             val currentImagePath = when (currentState) {
                 VpnState.DISCONNECTED -> customDisconnectedImagePath
-                VpnState.CONNECTING, VpnState.DISCONNECTING -> customConnectingImagePath
+                VpnState.CONNECTING -> customConnectingImagePath
+                VpnState.DISCONNECTING -> customDisconnectingImagePath
                 VpnState.CONNECTED -> customConnectedImagePath
             }
             Box(

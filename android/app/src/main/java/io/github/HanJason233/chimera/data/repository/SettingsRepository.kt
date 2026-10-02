@@ -410,6 +410,7 @@ class SettingsRepository(private val context: Context) {
             customImagePath = activeScheme.customImagePath,
             homeDisconnectedImagePath = activeScheme.homeDisconnectedImagePath,
             homeConnectingImagePath = activeScheme.homeConnectingImagePath,
+            homeDisconnectingImagePath = activeScheme.homeDisconnectingImagePath,
             homeConnectedImagePath = activeScheme.homeConnectedImagePath,
             activeSchemeId = activeScheme.id,
             schemes = schemes
@@ -1380,6 +1381,8 @@ class SettingsRepository(private val context: Context) {
                                     .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
                                 homeConnectingImagePath = item.optString("homeConnectingImagePath")
                                     .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
+                                homeDisconnectingImagePath = item.optString("homeDisconnectingImagePath")
+                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
                                 homeConnectedImagePath = item.optString("homeConnectedImagePath")
                                     .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
                                 homeIconEffect = HomeIconEffect.fromStorage(
@@ -1426,6 +1429,7 @@ class SettingsRepository(private val context: Context) {
                         scheme.customImagePath?.let { put("customImagePath", it) }
                         scheme.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }
                         scheme.homeConnectingImagePath?.let { put("homeConnectingImagePath", it) }
+                        scheme.homeDisconnectingImagePath?.let { put("homeDisconnectingImagePath", it) }
                         scheme.homeConnectedImagePath?.let { put("homeConnectedImagePath", it) }
                         put("homeIconEffect", scheme.homeIconEffect.storageName)
                         put("homeIconEffectEnabled", scheme.homeIconEffectEnabled)

@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.SyncDisabled
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.Icon
@@ -82,7 +83,8 @@ fun HomeConnectStateIcon(
 ) {
     val icon = when (state) {
         VpnState.DISCONNECTED -> Icons.Outlined.VpnKey
-        VpnState.CONNECTING, VpnState.DISCONNECTING -> Icons.Outlined.Sync
+        VpnState.CONNECTING -> Icons.Outlined.Sync
+        VpnState.DISCONNECTING -> Icons.Outlined.SyncDisabled
         VpnState.CONNECTED -> Icons.Outlined.VerifiedUser
     }
     val tint = when (state) {

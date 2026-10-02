@@ -32,9 +32,10 @@ data class SkinScheme(
     val monetEnabled: Boolean = false,
     /** 旧版自定义启动器图标路径，保留用于读取旧配置。 */
     val customImagePath: String? = null,
-    /** 主页连接按钮在未连接、连接中、已连接状态下的自定义图片。 */
+    /** 主页连接按钮在未连接、连接中、断开中、已连接状态下的自定义图片。 */
     val homeDisconnectedImagePath: String? = null,
     val homeConnectingImagePath: String? = null,
+    val homeDisconnectingImagePath: String? = null,
     val homeConnectedImagePath: String? = null,
     /** 主页连接图标周围显示的动画类型。 */
     val homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
@@ -73,6 +74,7 @@ data class SkinSettings(
     val customImagePath: String? = null,
     val homeDisconnectedImagePath: String? = null,
     val homeConnectingImagePath: String? = null,
+    val homeDisconnectingImagePath: String? = null,
     val homeConnectedImagePath: String? = null,
     val activeSchemeId: String = SkinScheme.DEFAULT_SCHEME_ID,
     val schemes: List<SkinScheme> = listOf(SkinScheme.default())

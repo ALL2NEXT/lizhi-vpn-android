@@ -194,7 +194,7 @@ fun SkinSchemeEditorScreen(
         }
     }
 
-    // 主页三种连接状态图分别保存，未设置的状态回退到内置默认图片。
+    // 主页四种连接状态图分别保存，未设置的状态回退到内置默认图片。
     fun saveHomeStateImage(
         uri: Uri?,
         assetName: String,
@@ -245,6 +245,16 @@ fun SkinSchemeEditorScreen(
             assetName = "home_connected",
             previousPath = scheme.homeConnectedImagePath,
             updateScheme = { path -> scheme.copy(homeConnectedImagePath = path) }
+        )
+    }
+    val disconnectingImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        saveHomeStateImage(
+            uri = uri,
+            assetName = "home_disconnecting",
+            previousPath = scheme.homeDisconnectingImagePath,
+            updateScheme = { path -> scheme.copy(homeDisconnectingImagePath = path) }
         )
     }
 
@@ -522,6 +532,18 @@ fun SkinSchemeEditorScreen(
                         onReset = {
                             val oldPath = scheme.homeConnectingImagePath
                             viewModel.upsertSkinScheme(scheme.copy(homeConnectingImagePath = null))
+                            scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HomeStateImageRow(
+                        title = "断开中",
+                        imagePath = scheme.homeDisconnectingImagePath,
+                        state = VpnState.DISCONNECTING,
+                        onChoose = { disconnectingImagePicker.launch(arrayOf("image/*")) },
+                        onReset = {
+                            val oldPath = scheme.homeDisconnectingImagePath
+                            viewModel.upsertSkinScheme(scheme.copy(homeDisconnectingImagePath = null))
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
                         }
                     )

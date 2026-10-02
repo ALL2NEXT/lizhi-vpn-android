@@ -267,6 +267,7 @@ fun MainScreen(
                     isTesting = isTesting,
                     customDisconnectedImagePath = skinSettings.homeDisconnectedImagePath,
                     customConnectingImagePath = skinSettings.homeConnectingImagePath,
+                    customDisconnectingImagePath = skinSettings.homeDisconnectingImagePath,
                     customConnectedImagePath = skinSettings.homeConnectedImagePath,
                     homeIconEffect = skinSettings.activeScheme.homeIconEffect,
                     homeIconEffectEnabled = skinSettings.activeScheme.homeIconEffectEnabled,
