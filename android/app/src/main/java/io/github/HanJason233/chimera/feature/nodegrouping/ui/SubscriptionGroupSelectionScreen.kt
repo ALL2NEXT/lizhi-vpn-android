@@ -62,6 +62,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -1008,9 +1009,10 @@ private fun ModernGroupCard(
     }
     val progress = traffic?.progress?.coerceIn(0f, 1f)
     val progressColor = when (traffic?.status) {
-        SubscriptionTrafficStatus.WARNING -> MaterialTheme.colorScheme.tertiary
-        SubscriptionTrafficStatus.CRITICAL,
-        SubscriptionTrafficStatus.EXHAUSTED -> MaterialTheme.colorScheme.error
+        SubscriptionTrafficStatus.SAFE -> Color(0xFF2E7D32)
+        SubscriptionTrafficStatus.WARNING -> Color(0xFFF9A825)
+        SubscriptionTrafficStatus.CRITICAL -> MaterialTheme.colorScheme.error
+        SubscriptionTrafficStatus.EXHAUSTED -> MaterialTheme.colorScheme.outline
         else -> MaterialTheme.colorScheme.primary
     }
     val progressTrackColor = if (selected) {
@@ -1082,7 +1084,11 @@ private fun ModernGroupCard(
                 )
                 status?.let { label ->
                     Text(
-                        text = "· $label",
+                        text = if (label == "长期有效") {
+                            label
+                        } else {
+                            "到期时间: $label"
+                        },
                         modifier = Modifier.padding(start = 8.dp),
                         color = statusColor,
                         fontSize = 13.sp,
@@ -1277,25 +1283,25 @@ private fun personalSubscriptionTrafficV2(group: NodeGroupSummary): Subscription
 
     if (total <= 0L) {
         return SubscriptionTrafficInfo(
-            text = "${TrafficUsageFormatter.formatBytes(used)} / ${TrafficUsageFormatter.formatBytes(total)}",
+            text = "总量 ${TrafficUsageFormatter.formatBytes(total)} / 已用 ${TrafficUsageFormatter.formatBytes(used)}",
             status = SubscriptionTrafficStatus.UNKNOWN,
             progress = 0f
         )
     }
 
-    val usedRatio = (used.toDouble() / total.toDouble()).coerceIn(0.0, 1.0)
-    val remainingRatio = (1.0 - usedRatio).coerceIn(0.0, 1.0)
+    val usedRatio = used.toDouble() / total.toDouble()
+    val remainingRatio = 1.0 - usedRatio
     val status = when {
-        used >= total -> SubscriptionTrafficStatus.EXHAUSTED
+        remainingRatio < 0.0 -> SubscriptionTrafficStatus.EXHAUSTED
         remainingRatio >= 0.5 -> SubscriptionTrafficStatus.SAFE
         remainingRatio >= 0.1 -> SubscriptionTrafficStatus.WARNING
         else -> SubscriptionTrafficStatus.CRITICAL
     }
 
     return SubscriptionTrafficInfo(
-        text = "${TrafficUsageFormatter.formatBytes(used)} / ${TrafficUsageFormatter.formatBytes(total)}",
+        text = "总量 ${TrafficUsageFormatter.formatBytes(total)} / 已用 ${TrafficUsageFormatter.formatBytes(used)}",
         status = status,
-        progress = usedRatio.toFloat()
+        progress = remainingRatio.coerceIn(0.0, 1.0).toFloat()
     )
 }
 
