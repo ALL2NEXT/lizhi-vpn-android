@@ -7,12 +7,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,12 +37,15 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Subscriptions
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,12 +61,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -335,30 +344,6 @@ private fun SubscriptionGroupSelectionScreen(
             }
             IconButton(
                 onClick = {
-                    groupActionMode = if (groupActionMode == GroupActionMode.UPDATE) {
-                        null
-                    } else {
-                        GroupActionMode.UPDATE
-                    }
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Refresh,
-                    contentDescription = if (groupActionMode == GroupActionMode.UPDATE) {
-                        "退出更新仓库源模式"
-                    } else {
-                        "进入更新仓库源模式"
-                    },
-                    tint = if (groupActionMode == GroupActionMode.UPDATE) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-            }
-            IconButton(
-                onClick = {
-                    groupActionMode = null
                     groupName = ""
                     subscriptionInput = ""
                     importSource = SubscriptionImportSource.REMOTE
@@ -369,52 +354,6 @@ private fun SubscriptionGroupSelectionScreen(
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "添加私人源"
-                )
-            }
-            IconButton(
-                onClick = {
-                    groupActionMode = if (groupActionMode == GroupActionMode.EDIT) {
-                        null
-                    } else {
-                        GroupActionMode.EDIT
-                    }
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Edit,
-                    contentDescription = if (groupActionMode == GroupActionMode.EDIT) {
-                        "退出编辑分组模式"
-                    } else {
-                        "进入编辑分组模式"
-                    },
-                    tint = if (groupActionMode == GroupActionMode.EDIT) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-            }
-            IconButton(
-                onClick = {
-                    groupActionMode = if (groupActionMode == GroupActionMode.DELETE) {
-                        null
-                    } else {
-                        GroupActionMode.DELETE
-                    }
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Delete,
-                    contentDescription = if (groupActionMode == GroupActionMode.DELETE) {
-                        "退出删除分组模式"
-                    } else {
-                        "进入删除分组模式"
-                    },
-                    tint = if (groupActionMode == GroupActionMode.DELETE) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
                 )
             }
         },
@@ -882,6 +821,7 @@ private fun SubscriptionGroupCard(
     GroupCard(
         name = group.name,
         nodeCount = nodeCount,
+        status = "长期有效",
         selected = selected,
         onClick = onClick,
         onViewDetails = onViewDetails,
@@ -890,7 +830,9 @@ private fun SubscriptionGroupCard(
             GroupActionMode.UPDATE -> onRefresh
             GroupActionMode.DELETE -> onDelete
             else -> onViewDetails
-        }
+        },
+        onRefresh = onRefresh,
+        onDelete = onDelete
     )
 }
 
@@ -910,8 +852,8 @@ private fun UserSubscriptionGroupCard(
     GroupCard(
         name = group.name,
         nodeCount = nodeCount,
-        traffic = personalSubscriptionTraffic(group),
-        details = personalSubscriptionDetails(group),
+        traffic = personalSubscriptionTrafficV2(group),
+        status = personalSubscriptionStatus(group),
         selected = selected,
         onClick = onClick,
         onViewDetails = onViewDetails,
@@ -922,7 +864,10 @@ private fun UserSubscriptionGroupCard(
             GroupActionMode.DELETE -> onDelete
             null -> onViewDetails
         },
-        actionEnabled = actionMode != GroupActionMode.UPDATE || supportsRefresh
+        actionEnabled = actionMode != GroupActionMode.UPDATE || supportsRefresh,
+        onRefresh = onRefresh,
+        onEdit = onEdit,
+        onDelete = onDelete
     )
 }
 
@@ -995,157 +940,296 @@ private fun GroupCard(
     name: String,
     nodeCount: Int,
     traffic: SubscriptionTrafficInfo? = null,
-    details: List<String> = emptyList(),
+    status: String? = null,
     selected: Boolean,
     onClick: () -> Unit,
     onViewDetails: () -> Unit,
     actionMode: GroupActionMode? = null,
     onGroupAction: () -> Unit = onViewDetails,
-    actionEnabled: Boolean = true
+    actionEnabled: Boolean = true,
+    onRefresh: (() -> Unit)? = null,
+    onEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
 ) {
-    val trailingIcon = when (actionMode) {
-        GroupActionMode.UPDATE -> Icons.Rounded.Refresh
-        GroupActionMode.EDIT -> Icons.Rounded.Edit
-        GroupActionMode.DELETE -> Icons.Rounded.Delete
-        null -> Icons.Rounded.ChevronRight
+    ModernGroupCard(
+        name = name,
+        nodeCount = nodeCount,
+        traffic = traffic,
+        status = status,
+        selected = selected,
+        onClick = onClick,
+        onViewDetails = onViewDetails,
+        onRefresh = onRefresh,
+        onEdit = onEdit,
+        onDelete = onDelete,
+        actionMode = actionMode,
+        onGroupAction = onGroupAction,
+        actionEnabled = actionEnabled
+    )
+}
+
+@Composable
+private fun ModernGroupCard(
+    name: String,
+    nodeCount: Int,
+    traffic: SubscriptionTrafficInfo?,
+    status: String?,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onViewDetails: () -> Unit,
+    onRefresh: (() -> Unit)?,
+    onEdit: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+    actionMode: GroupActionMode?,
+    onGroupAction: () -> Unit,
+    actionEnabled: Boolean
+) {
+    var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    val cardShape = RoundedCornerShape(18.dp)
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
     }
-    val trailingDescription = when (actionMode) {
-        GroupActionMode.UPDATE -> "更新仓库源"
-        GroupActionMode.EDIT -> "编辑私人源"
-        GroupActionMode.DELETE -> "删除仓库源"
-        null -> "查看线路信息"
+    val mutedColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val trailingTint = when {
-        selected -> MaterialTheme.colorScheme.onPrimaryContainer
-        actionMode == GroupActionMode.DELETE -> MaterialTheme.colorScheme.error
-        actionMode == GroupActionMode.EDIT || actionMode == GroupActionMode.UPDATE ->
-            MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    val statusColor = if (status?.startsWith("已过期") == true) {
+        MaterialTheme.colorScheme.error
+    } else {
+        mutedColor
     }
+    val progress = traffic?.progress?.coerceIn(0f, 1f)
+    val progressColor = when (traffic?.status) {
+        SubscriptionTrafficStatus.WARNING -> MaterialTheme.colorScheme.tertiary
+        SubscriptionTrafficStatus.CRITICAL,
+        SubscriptionTrafficStatus.EXHAUSTED -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val progressTrackColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.18f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+    }
+    val progressModifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 7.dp, max = 7.dp)
+        .clip(RoundedCornerShape(50))
+        .background(progressTrackColor)
+        .then(
+            if (progress != null) {
+                Modifier.semantics {
+                    progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f, 0)
+                }
+            } else {
+                Modifier
+            }
+        )
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
+        shape = cardShape,
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
             MaterialTheme.colorScheme.surfaceVariant
-        }
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            // 按剩余流量比例填充卡片背景，模拟手机电量的显示效果。
-            traffic?.progress?.let { progress ->
-                Box(
-                    modifier = Modifier.matchParentSize()
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(progress)
-                            .fillMaxHeight()
-                            .align(Alignment.CenterStart)
-                            .background(
-                                subscriptionTrafficColor(traffic.status).copy(
-                                    alpha = if (traffic.status == SubscriptionTrafficStatus.EXHAUSTED) {
-                                        0.22f
-                                    } else {
-                                        0.26f
-                                    }
-                                )
-                            )
-                    )
-                }
+        },
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f)
             }
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 72.dp)
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-            Icon(
-                imageVector = Icons.Rounded.Subscriptions,
-                contentDescription = null,
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-                modifier = Modifier.size(34.dp)
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = name,
-                    color = if (selected) {
+                Icon(
+                    imageVector = Icons.Rounded.Subscriptions,
+                    contentDescription = null,
+                    tint = if (selected) {
                         MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
-                        MaterialTheme.colorScheme.onSurface
+                        MaterialTheme.colorScheme.primary
                     },
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.size(30.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = name,
+                    modifier = Modifier.weight(1f),
+                    color = contentColor,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                traffic?.let { trafficInfo ->
+                status?.let { label ->
                     Text(
-                        text = trafficInfo.text,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        fontSize = 13.sp,
+                        text = "· $label",
+                        modifier = Modifier.padding(start = 8.dp),
+                        color = statusColor,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                details.forEach { detail ->
-                    Text(
-                        text = detail,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                Box {
+                    if (actionMode == null) {
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = "更多操作",
+                            tint = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            }
+                        )
+                        }
+                        DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                        ) {
+                        DropdownMenuItem(
+                            text = { Text("查看详情") },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.ChevronRight, contentDescription = null)
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onViewDetails()
+                            }
+                        )
+                        onRefresh?.let { refresh ->
+                            DropdownMenuItem(
+                                text = { Text("刷新") },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.Refresh, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    refresh()
+                                }
+                            )
+                        }
+                        onEdit?.let { edit ->
+                            DropdownMenuItem(
+                                text = { Text("编辑") },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.Edit, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    edit()
+                                }
+                            )
+                        }
+                        onDelete?.let { delete ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "删除",
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    delete()
+                                }
+                            )
+                        }
+                        }
+                    } else {
+                        val actionIcon = when (actionMode) {
+                            GroupActionMode.UPDATE -> Icons.Rounded.Refresh
+                            GroupActionMode.EDIT -> Icons.Rounded.Edit
+                            GroupActionMode.DELETE -> Icons.Rounded.Delete
+                            null -> Icons.Rounded.MoreVert
+                        }
+                        IconButton(
+                            onClick = onGroupAction,
+                            enabled = actionEnabled,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = actionIcon,
+                                contentDescription = "仓库源操作",
+                                tint = if (actionMode == GroupActionMode.DELETE) {
+                                    MaterialTheme.colorScheme.error
+                                } else if (selected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                }
+                            )
+                        }
+                    }
                 }
             }
-            Text(
-                text = "$nodeCount 个节点",
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                fontSize = 13.sp,
-                maxLines = 1
-            )
-                IconButton(onClick = onGroupAction, enabled = actionEnabled) {
-                Icon(
-                    imageVector = trailingIcon,
-                    contentDescription = trailingDescription,
-                    tint = trailingTint
-                    )
-                }
-            }
-    }
-}
 
+            Box(modifier = progressModifier) {
+                progress?.let { value ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(value)
+                            .fillMaxHeight()
+                            .background(progressColor)
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = traffic?.text ?: "流量数据不可用",
+                    modifier = Modifier.weight(1f),
+                    color = mutedColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "$nodeCount 个节点",
+                    color = mutedColor,
+                    fontSize = 13.sp,
+                    maxLines = 1
+                )
+            }
+        }
+    }
 }
 
 private val subscriptionExpireFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
-private fun personalSubscriptionTraffic(group: NodeGroupSummary): SubscriptionTrafficInfo? {
+private fun personalSubscriptionTrafficV2(group: NodeGroupSummary): SubscriptionTrafficInfo? {
     val hasTraffic = group.subscriptionUploadBytes != null ||
         group.subscriptionDownloadBytes != null ||
         group.subscriptionTotalBytes != null
@@ -1156,57 +1240,46 @@ private fun personalSubscriptionTraffic(group: NodeGroupSummary): SubscriptionTr
     val used = if (upload > Long.MAX_VALUE - download) Long.MAX_VALUE else upload + download
     val total = group.subscriptionTotalBytes?.coerceAtLeast(0L)
         ?: return SubscriptionTrafficInfo(
-            text = "流量：已用 ${TrafficUsageFormatter.formatBytes(used)}",
+            text = "已用 ${TrafficUsageFormatter.formatBytes(used)}",
             status = SubscriptionTrafficStatus.UNKNOWN,
             progress = null
         )
 
-    val remaining = total - used
-    // 余额小于等于 0 时视为已用完，卡片整张使用黑色填充。
-    if (remaining <= 0L) {
+    if (total <= 0L) {
         return SubscriptionTrafficInfo(
-            text = "流量已用完",
-            status = SubscriptionTrafficStatus.EXHAUSTED,
-            progress = 1f
+            text = "${TrafficUsageFormatter.formatBytes(used)} / ${TrafficUsageFormatter.formatBytes(total)}",
+            status = SubscriptionTrafficStatus.UNKNOWN,
+            progress = 0f
         )
     }
 
-    val remainingRatio = (remaining.toDouble() / total.toDouble()).coerceIn(0.0, 1.0)
-    val percentage = (remainingRatio * 100.0)
-        .roundToInt()
-        .coerceIn(1, 100)
-    // 剩余流量分级：50% 以上绿色，10%～50% 黄色，10% 以下红色。
+    val usedRatio = (used.toDouble() / total.toDouble()).coerceIn(0.0, 1.0)
+    val remainingRatio = (1.0 - usedRatio).coerceIn(0.0, 1.0)
     val status = when {
+        used >= total -> SubscriptionTrafficStatus.EXHAUSTED
         remainingRatio >= 0.5 -> SubscriptionTrafficStatus.SAFE
         remainingRatio >= 0.1 -> SubscriptionTrafficStatus.WARNING
         else -> SubscriptionTrafficStatus.CRITICAL
     }
 
     return SubscriptionTrafficInfo(
-        text = "剩余流量：${TrafficUsageFormatter.formatBytes(remaining)}（$percentage%）",
+        text = "${TrafficUsageFormatter.formatBytes(used)} / ${TrafficUsageFormatter.formatBytes(total)}",
         status = status,
-        progress = remainingRatio.toFloat()
+        progress = usedRatio.toFloat()
     )
 }
 
-private fun personalSubscriptionDetails(group: NodeGroupSummary): List<String> = buildList {
-    group.subscriptionExpireAt?.takeIf { it > 0L }?.let { expireAt ->
-        runCatching {
-            Instant.ofEpochMilli(expireAt)
-                .atZone(ZoneId.systemDefault())
-                .format(subscriptionExpireFormatter)
-        }.getOrNull()?.let { formatted ->
-            add(if (expireAt <= System.currentTimeMillis()) "已过期：$formatted" else "到期：$formatted")
-        }
+private fun personalSubscriptionStatus(group: NodeGroupSummary): String {
+    val expireAt = group.subscriptionExpireAt?.takeIf { it > 0L }
+        ?: return "长期有效"
+    val formatted = runCatching {
+        Instant.ofEpochMilli(expireAt)
+            .atZone(ZoneId.systemDefault())
+            .format(subscriptionExpireFormatter)
+    }.getOrNull() ?: return "有效期未知"
+    return if (expireAt <= System.currentTimeMillis()) {
+        "已过期 $formatted"
+    } else {
+        formatted
     }
-}
-
-private fun subscriptionTrafficColor(
-    status: SubscriptionTrafficStatus
-): Color = when (status) {
-    SubscriptionTrafficStatus.SAFE -> Color(0xFF2E7D32)
-    SubscriptionTrafficStatus.WARNING -> Color(0xFFF9A825)
-    SubscriptionTrafficStatus.CRITICAL -> Color(0xFFC62828)
-    SubscriptionTrafficStatus.EXHAUSTED -> Color.Black
-    SubscriptionTrafficStatus.UNKNOWN -> Color.Transparent
 }
