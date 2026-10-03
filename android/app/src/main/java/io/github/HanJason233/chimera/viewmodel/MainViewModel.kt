@@ -581,6 +581,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         SettingsRepository.DEFAULT_SERVICE_REQUEST_TIMEOUT_MS
     )
+    val autoRefreshOfficialSubscriptions = settingsRepository.autoRefreshOfficialSubscriptions.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SettingsRepository.DEFAULT_AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS
+    )
+    val autoRefreshPersonalSubscriptions = settingsRepository.autoRefreshPersonalSubscriptions.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SettingsRepository.DEFAULT_AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS
+    )
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
     val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
     val speedTestDurationMs = settingsRepository.speedTestDurationMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
@@ -654,13 +664,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // data should not blank and rewrite DataStore on every launch.
                 _isInitialized.value = true
 
-                // Preload cached and remote data during startup.
+                // 先加载缓存，再按设置决定是否在冷启动时更新两类订阅源。
 
                 subscriptionDataLoader.loadCachedSubscriptionList()
-                if (!initializeSubscriptionsWithRefreshState(forceRefresh = true)) {
-                    // A successful refresh schedules enrichment for the fresh
-                    // nodes. Only fall back to cached nodes when refresh failed.
-                    scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
+                if (settingsRepository.autoRefreshOfficialSubscriptions.first()) {
+                    if (!initializeSubscriptionsWithRefreshState(forceRefresh = true)) {
+                        // A successful refresh schedules enrichment for the fresh
+                        // nodes. Only fall back to cached nodes when refresh failed.
+                        scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
+                    }
+                }
+                if (settingsRepository.autoRefreshPersonalSubscriptions.first()) {
+                    refreshUserSubscriptionGroupsOnStartup()
                 }
                 checkNotice()
                 checkUpdateInternal(isAuto = true)
@@ -1267,6 +1282,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setServiceRequestTimeoutMs(value: Long) {
         viewModelScope.launch {
             settingsRepository.setServiceRequestTimeoutMs(value)
+        }
+    }
+
+    fun setAutoRefreshOfficialSubscriptions(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoRefreshOfficialSubscriptions(enabled)
+        }
+    }
+
+    fun setAutoRefreshPersonalSubscriptions(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoRefreshPersonalSubscriptions(enabled)
         }
     }
 
@@ -2170,93 +2197,112 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            val dao = nodeDao()
-            val group = withContext(Dispatchers.IO) {
-                dao.getNodeGroupById(groupId)
-            } ?: run {
-                onResult(SubscriptionGroupRefreshResult.NOT_FOUND)
-                return@launch
-            }
-            if (group.type !in setOf(
-                    NodeGroupStorageType.IMPORTED.name,
-                    NodeGroupStorageType.SUBSCRIPTION.name
-                )
-            ) {
-                onResult(SubscriptionGroupRefreshResult.NOT_FOUND)
-                return@launch
-            }
+            onResult(refreshUserSubscriptionGroupInternal(groupId))
+        }
+    }
 
+    /** 冷启动时顺序更新所有带远程订阅链接的个人源。 */
+    private suspend fun refreshUserSubscriptionGroupsOnStartup() {
+        val groups = withContext(Dispatchers.IO) {
+            nodeDao().getUserSubscriptionGroups().first()
+        }
+        groups.forEach { group ->
             val importInput = SubscriptionInputDetector.detect(group.subscriptionUrl.orEmpty())
             if (
-                importInput !is SubscriptionImportInput.RemoteSubscription &&
-                importInput !is SubscriptionImportInput.MultipleRemoteSubscriptions
+                importInput is SubscriptionImportInput.RemoteSubscription ||
+                importInput is SubscriptionImportInput.MultipleRemoteSubscriptions
             ) {
-                onResult(SubscriptionGroupRefreshResult.INVALID)
-                return@launch
+                when (refreshUserSubscriptionGroupInternal(group.id)) {
+                    SubscriptionGroupRefreshResult.REFRESHED -> Unit
+                    else -> Log.w(tag, "Unable to refresh personal subscription group on startup: ${group.id}")
+                }
             }
-            val parsedSubscriptions = parseSubscriptionInput(importInput)
-            if (parsedSubscriptions.isFailure) {
-                Log.e(
-                    tag,
-                    "Unable to refresh user subscription group",
-                    parsedSubscriptions.exceptionOrNull()
-                )
-                onResult(SubscriptionGroupRefreshResult.FETCH_FAILED)
-                return@launch
-            }
-            val parsedParts = parsedSubscriptions.getOrThrow()
-            val parsed = ParsedSubscription(
-                nodes = parsedParts.flatMap { it.subscription.nodes },
-                userInfo = parsedParts.singleOrNull()?.subscription?.userInfo
-            )
-            val subscriptionUrl = parsedParts.mapNotNull { it.url }.joinToString("\n")
+        }
+    }
 
-            val importedNodes = parsed.nodes.distinctBy(Node::getRawLinkPlain)
-            if (importedNodes.isEmpty()) {
-                onResult(SubscriptionGroupRefreshResult.INVALID)
-                return@launch
-            }
-
-            val localNodes = importedNodes.mapIndexed { index, node ->
-                node.copy(
-                    id = "${groupId}_$index",
-                    source = NodeSource.LOCAL_GROUP,
-                    subscriptionSourceId = groupId,
-                    subscriptionSourceName = group.name,
-                    latency = -1,
-                    tcpingLatency = -1,
-                    urlTestLatency = -1,
-                    isAvailable = true,
-                    lastTestedAt = 0L,
-                    sortOrder = index,
-                    downloadMbps = 0f,
-                    uploadMbps = 0f
-                )
-            }
-            val members = localNodes.mapIndexed { index, node ->
-                NodeGroupMemberEntity(
-                    groupId = groupId,
-                    nodeId = node.id,
-                    sortOrder = index
-                )
-            }
-            val refreshed = withContext(Dispatchers.IO) {
-                dao.replaceLocalGroupNodes(
-                    groupId = groupId,
-                    name = group.name,
-                    subscriptionUrl = subscriptionUrl,
-                    subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
-                    subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
-                    subscriptionTotalBytes = parsed.userInfo?.totalBytes,
-                    subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
-                    nodes = localNodes,
-                    members = members
-                )
-            }
-            onResult(
-                if (refreshed) SubscriptionGroupRefreshResult.REFRESHED
-                else SubscriptionGroupRefreshResult.NOT_FOUND
+    private suspend fun refreshUserSubscriptionGroupInternal(
+        groupId: String
+    ): SubscriptionGroupRefreshResult {
+        val dao = nodeDao()
+        val group = withContext(Dispatchers.IO) {
+            dao.getNodeGroupById(groupId)
+        } ?: return SubscriptionGroupRefreshResult.NOT_FOUND
+        if (group.type !in setOf(
+                NodeGroupStorageType.IMPORTED.name,
+                NodeGroupStorageType.SUBSCRIPTION.name
             )
+        ) {
+            return SubscriptionGroupRefreshResult.NOT_FOUND
+        }
+
+        val importInput = SubscriptionInputDetector.detect(group.subscriptionUrl.orEmpty())
+        if (
+            importInput !is SubscriptionImportInput.RemoteSubscription &&
+            importInput !is SubscriptionImportInput.MultipleRemoteSubscriptions
+        ) {
+            return SubscriptionGroupRefreshResult.INVALID
+        }
+        val parsedSubscriptions = parseSubscriptionInput(importInput)
+        if (parsedSubscriptions.isFailure) {
+            Log.e(
+                tag,
+                "Unable to refresh user subscription group",
+                parsedSubscriptions.exceptionOrNull()
+            )
+            return SubscriptionGroupRefreshResult.FETCH_FAILED
+        }
+        val parsedParts = parsedSubscriptions.getOrThrow()
+        val parsed = ParsedSubscription(
+            nodes = parsedParts.flatMap { it.subscription.nodes },
+            userInfo = parsedParts.singleOrNull()?.subscription?.userInfo
+        )
+        val subscriptionUrl = parsedParts.mapNotNull { it.url }.joinToString("\n")
+
+        val importedNodes = parsed.nodes.distinctBy(Node::getRawLinkPlain)
+        if (importedNodes.isEmpty()) {
+            return SubscriptionGroupRefreshResult.INVALID
+        }
+
+        val localNodes = importedNodes.mapIndexed { index, node ->
+            node.copy(
+                id = "${groupId}_$index",
+                source = NodeSource.LOCAL_GROUP,
+                subscriptionSourceId = groupId,
+                subscriptionSourceName = group.name,
+                latency = -1,
+                tcpingLatency = -1,
+                urlTestLatency = -1,
+                isAvailable = true,
+                lastTestedAt = 0L,
+                sortOrder = index,
+                downloadMbps = 0f,
+                uploadMbps = 0f
+            )
+        }
+        val members = localNodes.mapIndexed { index, node ->
+            NodeGroupMemberEntity(
+                groupId = groupId,
+                nodeId = node.id,
+                sortOrder = index
+            )
+        }
+        val refreshed = withContext(Dispatchers.IO) {
+            dao.replaceLocalGroupNodes(
+                groupId = groupId,
+                name = group.name,
+                subscriptionUrl = subscriptionUrl,
+                subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
+                subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
+                subscriptionTotalBytes = parsed.userInfo?.totalBytes,
+                subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
+                nodes = localNodes,
+                members = members
+            )
+        }
+        return if (refreshed) {
+            SubscriptionGroupRefreshResult.REFRESHED
+        } else {
+            SubscriptionGroupRefreshResult.NOT_FOUND
         }
     }
 

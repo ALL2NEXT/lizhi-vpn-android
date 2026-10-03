@@ -73,6 +73,8 @@ fun OtherConfigScreen(
     val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val serviceRequestTimeoutMs by viewModel.serviceRequestTimeoutMs.collectAsStateWithLifecycle()
+    val autoRefreshOfficialSubscriptions by viewModel.autoRefreshOfficialSubscriptions.collectAsStateWithLifecycle()
+    val autoRefreshPersonalSubscriptions by viewModel.autoRefreshPersonalSubscriptions.collectAsStateWithLifecycle()
     var serviceRequestTimeoutSecondsInput by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(serviceRequestTimeoutMs) {
         serviceRequestTimeoutSecondsInput = (serviceRequestTimeoutMs / 1000L).toString()
@@ -232,6 +234,20 @@ fun OtherConfigScreen(
                     ) {
                         Text("保存")
                     }
+                }
+            }
+
+            OtherConfigSection(title = "订阅源启动更新") {
+                Text(
+                    text = "应用冷启动或进程被系统杀死后重新打开时，按以下开关更新订阅源；页面中的手动刷新不受影响。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                ConfigSwitchRow("官方源立即更新", autoRefreshOfficialSubscriptions) {
+                    viewModel.setAutoRefreshOfficialSubscriptions(it)
+                }
+                ConfigSwitchRow("个人源立即更新", autoRefreshPersonalSubscriptions) {
+                    viewModel.setAutoRefreshPersonalSubscriptions(it)
                 }
             }
 
