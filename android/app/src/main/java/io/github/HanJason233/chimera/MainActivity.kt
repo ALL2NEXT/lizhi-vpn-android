@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
                         }
                         val createSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit =
                             { name, input, onComplete ->
-                                viewModel.createSubscriptionGroup(name, input) { result, importedCount ->
+                                viewModel.createSubscriptionGroup(name, input) { result, importedCount, createdGroupCount, failedGroupCount ->
                                     val message = when (result) {
                                         MainViewModel.SubscriptionGroupCreateResult.CREATED ->
                                             if (importedCount > 0) {
@@ -114,6 +114,10 @@ class MainActivity : ComponentActivity() {
                                             } else {
                                                 "订阅组已创建"
                                             }
+                                        MainViewModel.SubscriptionGroupCreateResult.MULTIPLE_CREATED ->
+                                            "识别到多个远程订阅，已分别创建${createdGroupCount}个私人源，共导入${importedCount}个节点"
+                                        MainViewModel.SubscriptionGroupCreateResult.PARTIAL_CREATED ->
+                                            "识别到多个远程订阅，成功创建${createdGroupCount}个私人源，${failedGroupCount}个失败，共导入${importedCount}个节点"
                                         MainViewModel.SubscriptionGroupCreateResult.INVALID ->
                                             "未找到可导入节点或链接无效"
                                         MainViewModel.SubscriptionGroupCreateResult.FETCH_FAILED ->
@@ -121,7 +125,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                     Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
                                     onComplete(
-                                        result == MainViewModel.SubscriptionGroupCreateResult.CREATED
+                                        result == MainViewModel.SubscriptionGroupCreateResult.CREATED ||
+                                            result == MainViewModel.SubscriptionGroupCreateResult.MULTIPLE_CREATED ||
+                                            result == MainViewModel.SubscriptionGroupCreateResult.PARTIAL_CREATED
                                     )
                                 }
                             }

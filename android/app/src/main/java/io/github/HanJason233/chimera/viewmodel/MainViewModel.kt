@@ -38,7 +38,8 @@ import io.github.HanJason233.chimera.network.LatencyTester
 import io.github.HanJason233.chimera.network.NodeDownloadBandwidthTester
 import io.github.HanJason233.chimera.network.SpeedTestService
 import io.github.HanJason233.chimera.network.SubscriptionParser
-import io.github.HanJason233.chimera.network.SubscriptionImportUrl
+import io.github.HanJason233.chimera.network.SubscriptionImportInput
+import io.github.HanJason233.chimera.network.SubscriptionInputDetector
 import io.github.HanJason233.chimera.network.ParsedSubscription
 import io.github.HanJason233.chimera.network.DownloadManager
 import io.github.HanJason233.chimera.network.DownloadArtifact
@@ -89,6 +90,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val accountManager = AccountManager(application)
     private val latencyTester = LatencyTester()
     private val bandwidthTester = NodeDownloadBandwidthTester(application)
+
+    private data class ParsedSubscriptionPart(
+        val url: String?,
+        val subscription: ParsedSubscription
+    )
+
+    private suspend fun fetchRemoteSubscriptionResults(
+        urls: List<String>
+    ): List<Result<ParsedSubscription>> = coroutineScope {
+        urls.map { url ->
+            async(Dispatchers.IO) {
+                subscriptionParser.fetchAndParseWithMetadata(url)
+            }
+        }.awaitAll()
+    }
+
+    private suspend fun fetchRemoteSubscriptions(
+        urls: List<String>
+    ): Result<List<ParsedSubscription>> {
+        val results = fetchRemoteSubscriptionResults(urls)
+        val failure = results.firstOrNull { it.isFailure }
+        return if (failure != null) {
+            Result.failure(
+                failure.exceptionOrNull()
+                    ?: IllegalStateException("Failed to fetch remote subscription")
+            )
+        } else {
+            Result.success(results.map { it.getOrThrow() })
+        }
+    }
+
+    private suspend fun parseSubscriptionInput(
+        input: SubscriptionImportInput
+    ): Result<List<ParsedSubscriptionPart>> {
+        return when (input) {
+            is SubscriptionImportInput.RemoteSubscription -> {
+                fetchRemoteSubscriptions(listOf(input.url)).map { parsed ->
+                    listOf(ParsedSubscriptionPart(input.url, parsed.single()))
+                }
+            }
+
+            is SubscriptionImportInput.MultipleRemoteSubscriptions -> {
+                fetchRemoteSubscriptions(input.urls).map { parsed ->
+                    input.urls.mapIndexed { index, url ->
+                        ParsedSubscriptionPart(url, parsed[index])
+                    }
+                }
+            }
+
+            is SubscriptionImportInput.FullContent -> if (input.content.isBlank()) {
+                Result.success(emptyList())
+            } else {
+                withContext(Dispatchers.Default) {
+                    Result.success(
+                        listOf(
+                            ParsedSubscriptionPart(
+                                url = null,
+                                subscription = ParsedSubscription(
+                                    subscriptionParser.parseSubscription(input.content)
+                                )
+                            )
+                        )
+                    )
+                }
+            }
+        }
+    }
     // 节流控制
     private val THROTTLE_INTERVAL = 5000L // 5秒节流间隔
     private var lastCheckUpdateTime = 0L
@@ -1445,6 +1513,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     enum class SubscriptionGroupCreateResult {
         CREATED,
+        MULTIPLE_CREATED,
+        PARTIAL_CREATED,
         INVALID,
         FETCH_FAILED
     }
@@ -1490,91 +1560,152 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun createSubscriptionGroup(
         name: String,
         input: String?,
-        onResult: (SubscriptionGroupCreateResult, Int) -> Unit = { _, _ -> }
+        onResult: (SubscriptionGroupCreateResult, Int, Int, Int) -> Unit = { _, _, _, _ -> }
     ) {
         viewModelScope.launch {
             val normalizedName = name.trim()
             if (normalizedName.isBlank()) {
-                onResult(SubscriptionGroupCreateResult.INVALID, 0)
+                onResult(SubscriptionGroupCreateResult.INVALID, 0, 0, 0)
                 return@launch
             }
 
             val normalizedInput = input?.trim().orEmpty()
-            val subscriptionUrl = SubscriptionImportUrl.detect(normalizedInput)
-            val parsedSubscription = if (normalizedInput.isBlank()) {
-                Result.success(ParsedSubscription(emptyList()))
-            } else if (subscriptionUrl != null) {
-                withContext(Dispatchers.IO) {
-                    subscriptionParser.fetchAndParseWithMetadata(subscriptionUrl)
+            val importInput = SubscriptionInputDetector.detect(normalizedInput)
+            var failedRemoteCount = 0
+            // 多个远程订阅逐条处理，单个链接失败不阻断其他链接创建。
+            val parsedParts = if (importInput is SubscriptionImportInput.MultipleRemoteSubscriptions) {
+                val results = fetchRemoteSubscriptionResults(importInput.urls)
+                results.mapIndexedNotNull { index, result ->
+                    val parsed = result.getOrNull()
+                    if (parsed == null || parsed.nodes.isEmpty()) {
+                        failedRemoteCount++
+                        Log.e(
+                            tag,
+                            "Unable to import remote subscription #${index + 1}",
+                            result.exceptionOrNull()
+                        )
+                        null
+                    } else {
+                        ParsedSubscriptionPart(importInput.urls[index], parsed)
+                    }
                 }
             } else {
-                withContext(Dispatchers.Default) {
-                    Result.success(ParsedSubscription(subscriptionParser.parseSubscription(normalizedInput)))
+                val parsedSubscriptions = parseSubscriptionInput(importInput)
+                if (parsedSubscriptions.isFailure) {
+                    Log.e(
+                        tag,
+                        "Unable to fetch user subscription group",
+                        parsedSubscriptions.exceptionOrNull()
+                    )
+                    onResult(SubscriptionGroupCreateResult.FETCH_FAILED, 0, 0, 1)
+                    return@launch
                 }
+                parsedSubscriptions.getOrThrow()
+            }.ifEmpty {
+                listOf(ParsedSubscriptionPart(null, ParsedSubscription(emptyList())))
             }
 
-            if (parsedSubscription.isFailure) {
-                Log.e(tag, "Unable to fetch user subscription group", parsedSubscription.exceptionOrNull())
-                onResult(SubscriptionGroupCreateResult.FETCH_FAILED, 0)
+            if (
+                importInput is SubscriptionImportInput.MultipleRemoteSubscriptions &&
+                parsedParts.all { it.subscription.nodes.isEmpty() }
+            ) {
+                onResult(
+                    SubscriptionGroupCreateResult.FETCH_FAILED,
+                    0,
+                    0,
+                    failedRemoteCount
+                )
                 return@launch
             }
-            val parsed = parsedSubscription.getOrThrow()
 
             // 订阅导入不应依赖当前选中的核心。
             // 保留原始 URI，等实际准备核心会话时再校验兼容性。
-            val importedNodes = parsed.nodes
-            if (normalizedInput.isNotBlank() && importedNodes.isEmpty()) {
-                onResult(SubscriptionGroupCreateResult.INVALID, 0)
+            if (normalizedInput.isNotBlank() && parsedParts.any { it.subscription.nodes.isEmpty() }) {
+                onResult(SubscriptionGroupCreateResult.INVALID, 0, 0, failedRemoteCount)
                 return@launch
             }
 
-            val groupId = "group_${UUID.randomUUID()}"
-            val createdAt = System.currentTimeMillis()
-            val group = NodeGroupEntity(
-                id = groupId,
-                name = normalizedName,
-                type = NodeGroupStorageType.SUBSCRIPTION.name,
-                subscriptionUrl = subscriptionUrl,
-                subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
-                subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
-                subscriptionTotalBytes = parsed.userInfo?.totalBytes,
-                subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
-                createdAt = createdAt
+            data class PreparedGroup(
+                val group: NodeGroupEntity,
+                val nodes: List<Node>,
+                val members: List<NodeGroupMemberEntity>
             )
-            val localNodes = importedNodes
-                .distinctBy(Node::getRawLinkPlain)
-                .mapIndexed { index, node ->
-                    node.copy(
-                        id = "${groupId}_$index",
-                        source = NodeSource.LOCAL_GROUP,
-                        subscriptionSourceId = groupId,
-                        subscriptionSourceName = normalizedName,
-                        latency = -1,
-                        tcpingLatency = -1,
-                        urlTestLatency = -1,
-                        isAvailable = true,
-                        lastTestedAt = 0L,
-                        downloadMbps = 0f,
-                        uploadMbps = 0f
+
+            val preparedGroups = parsedParts.mapIndexed { groupIndex, part ->
+                val groupId = "group_${UUID.randomUUID()}"
+                val groupName = if (
+                    parsedParts.size > 1 ||
+                    importInput is SubscriptionImportInput.MultipleRemoteSubscriptions
+                ) {
+                    "$normalizedName ${groupIndex + 1}"
+                } else {
+                    normalizedName
+                }
+                val parsed = part.subscription
+                val group = NodeGroupEntity(
+                    id = groupId,
+                    name = groupName,
+                    type = NodeGroupStorageType.SUBSCRIPTION.name,
+                    subscriptionUrl = part.url,
+                    subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
+                    subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
+                    subscriptionTotalBytes = parsed.userInfo?.totalBytes,
+                    subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
+                    createdAt = System.currentTimeMillis()
+                )
+                val localNodes = parsed.nodes
+                    .distinctBy(Node::getRawLinkPlain)
+                    .mapIndexed { index, node ->
+                        node.copy(
+                            id = "${groupId}_$index",
+                            source = NodeSource.LOCAL_GROUP,
+                            subscriptionSourceId = groupId,
+                            subscriptionSourceName = groupName,
+                            latency = -1,
+                            tcpingLatency = -1,
+                            urlTestLatency = -1,
+                            isAvailable = true,
+                            lastTestedAt = 0L,
+                            downloadMbps = 0f,
+                            uploadMbps = 0f
+                        )
+                    }
+                val members = localNodes.mapIndexed { index, node ->
+                    NodeGroupMemberEntity(
+                        groupId = groupId,
+                        nodeId = node.id,
+                        sortOrder = index
                     )
                 }
-            val members = localNodes.mapIndexed { index, node ->
-                NodeGroupMemberEntity(
-                    groupId = groupId,
-                    nodeId = node.id,
-                    sortOrder = index
-                )
+                PreparedGroup(group, localNodes, members)
             }
 
             withContext(Dispatchers.IO) {
-                nodeDao().insertNodeGroupWithNodes(group, localNodes, members)
+                val dao = nodeDao()
+                preparedGroups.forEach { prepared ->
+                    dao.insertNodeGroupWithNodes(
+                        prepared.group,
+                        prepared.nodes,
+                        prepared.members
+                    )
+                }
             }
-            settingsRepository.setSelectedNodeGroupId(NodeGroupKey.Imported(groupId).value)
+            settingsRepository.setSelectedNodeGroupId(
+                NodeGroupKey.Imported(preparedGroups.first().group.id).value
+            )
             settingsRepository.setSelectedCountryCode(null)
             settingsRepository.setSelectedSubscriptionSourceId(null)
             settingsRepository.setSelectedNodeId(null)
             settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
-            onResult(SubscriptionGroupCreateResult.CREATED, localNodes.size)
+            val totalImportedNodes = preparedGroups.sumOf { it.nodes.size }
+            val result = if (failedRemoteCount > 0) {
+                SubscriptionGroupCreateResult.PARTIAL_CREATED
+            } else if (preparedGroups.size > 1) {
+                SubscriptionGroupCreateResult.MULTIPLE_CREATED
+            } else {
+                SubscriptionGroupCreateResult.CREATED
+            }
+            onResult(result, totalImportedNodes, preparedGroups.size, failedRemoteCount)
         }
     }
 
@@ -1604,24 +1735,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            val subscriptionUrl = SubscriptionImportUrl.detect(normalizedInput)
-            val parsedNodes = if (subscriptionUrl != null) {
-                withContext(Dispatchers.IO) {
-                    subscriptionParser.fetchAndParse(subscriptionUrl)
-                }
-            } else {
-                withContext(Dispatchers.Default) {
-                    Result.success(subscriptionParser.parseSubscription(normalizedInput))
-                }
-            }
-            if (parsedNodes.isFailure) {
-                Log.e(tag, "Unable to import nodes into local subscription group", parsedNodes.exceptionOrNull())
+            val importInput = SubscriptionInputDetector.detect(normalizedInput)
+            val parsedSubscriptions = parseSubscriptionInput(importInput)
+            if (parsedSubscriptions.isFailure) {
+                Log.e(
+                    tag,
+                    "Unable to import nodes into local subscription group",
+                    parsedSubscriptions.exceptionOrNull()
+                )
                 onResult(SubscriptionGroupNodeImportResult.FETCH_FAILED, 0)
                 return@launch
             }
 
             // 即使当前核心无法处理包含 ECH 或证书字段的 URI，也要保留订阅节点。
-            val nodesToImport = parsedNodes.getOrThrow()
+            val nodesToImport = parsedSubscriptions.getOrThrow().flatMap { it.subscription.nodes }
             if (nodesToImport.isEmpty()) {
                 onResult(SubscriptionGroupNodeImportResult.INVALID, 0)
                 return@launch
@@ -1808,22 +1935,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            val subscriptionUrl = SubscriptionImportUrl.detect(normalizedInput)
-            val parsedSubscription = if (subscriptionUrl != null) {
-                withContext(Dispatchers.IO) {
-                    subscriptionParser.fetchAndParseWithMetadata(subscriptionUrl)
-                }
-            } else {
-                withContext(Dispatchers.Default) {
-                    Result.success(ParsedSubscription(subscriptionParser.parseSubscription(normalizedInput)))
-                }
-            }
-            if (parsedSubscription.isFailure) {
-                Log.e(tag, "Unable to fetch updated user subscription group", parsedSubscription.exceptionOrNull())
+            val importInput = SubscriptionInputDetector.detect(normalizedInput)
+            val parsedSubscriptions = parseSubscriptionInput(importInput)
+            if (parsedSubscriptions.isFailure) {
+                Log.e(
+                    tag,
+                    "Unable to fetch updated user subscription group",
+                    parsedSubscriptions.exceptionOrNull()
+                )
                 onResult(SubscriptionGroupEditResult.FETCH_FAILED, 0)
                 return@launch
             }
-            val parsed = parsedSubscription.getOrThrow()
+            val parsedParts = parsedSubscriptions.getOrThrow()
+            val parsed = ParsedSubscription(
+                nodes = parsedParts.flatMap { it.subscription.nodes },
+                userInfo = parsedParts.singleOrNull()?.subscription?.userInfo
+            )
+            val subscriptionUrl = parsedParts.mapNotNull { it.url }.joinToString("\n").ifBlank { null }
 
             val importedNodes = parsed.nodes
             if (importedNodes.isEmpty()) {
@@ -1908,20 +2036,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            val subscriptionUrl = SubscriptionImportUrl.detect(group.subscriptionUrl.orEmpty())
-                ?: run {
-                    onResult(SubscriptionGroupRefreshResult.INVALID)
-                    return@launch
-                }
-            val parsedSubscription = withContext(Dispatchers.IO) {
-                subscriptionParser.fetchAndParseWithMetadata(subscriptionUrl)
+            val importInput = SubscriptionInputDetector.detect(group.subscriptionUrl.orEmpty())
+            if (
+                importInput !is SubscriptionImportInput.RemoteSubscription &&
+                importInput !is SubscriptionImportInput.MultipleRemoteSubscriptions
+            ) {
+                onResult(SubscriptionGroupRefreshResult.INVALID)
+                return@launch
             }
-            if (parsedSubscription.isFailure) {
-                Log.e(tag, "Unable to refresh user subscription group", parsedSubscription.exceptionOrNull())
+            val parsedSubscriptions = parseSubscriptionInput(importInput)
+            if (parsedSubscriptions.isFailure) {
+                Log.e(
+                    tag,
+                    "Unable to refresh user subscription group",
+                    parsedSubscriptions.exceptionOrNull()
+                )
                 onResult(SubscriptionGroupRefreshResult.FETCH_FAILED)
                 return@launch
             }
-            val parsed = parsedSubscription.getOrThrow()
+            val parsedParts = parsedSubscriptions.getOrThrow()
+            val parsed = ParsedSubscription(
+                nodes = parsedParts.flatMap { it.subscription.nodes },
+                userInfo = parsedParts.singleOrNull()?.subscription?.userInfo
+            )
+            val subscriptionUrl = parsedParts.mapNotNull { it.url }.joinToString("\n")
 
             val importedNodes = parsed.nodes.distinctBy(Node::getRawLinkPlain)
             if (importedNodes.isEmpty()) {
