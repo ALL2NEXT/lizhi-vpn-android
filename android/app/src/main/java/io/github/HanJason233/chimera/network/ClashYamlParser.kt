@@ -74,6 +74,7 @@ internal object ClashYamlParser {
         name: String
     ): String {
         val query = linkedMapOf<String, String>()
+        applyTlsQuery(query, proxy)
         proxy.text("sni", "servername")?.let { query["sni"] = it }
         if (proxy.bool("skip-cert-verify") == true) query["allowInsecure"] = "1"
         return buildUri(
@@ -163,9 +164,11 @@ internal object ClashYamlParser {
             proxy.stringList("alpn").takeIf { it.isNotEmpty() }?.let { values ->
                 add("alpn", JsonArray().apply { values.forEach(::add) })
             }
-            proxy.text("client-fingerprint", "fingerprint")?.let { addProperty("fp", it) }
+            proxy.text("client-fingerprint")?.let { addProperty("fp", it) }
             if (proxy.bool("skip-cert-verify") == true) addProperty("allowInsecure", true)
             proxy.text("packet-encoding", "packet_encoding")?.let { addProperty("packetEncoding", it) }
+            linkedMapOf<String, String>().also { applyTlsQuery(it, proxy) }
+                .forEach { (key, value) -> addProperty(key, value) }
         }
         return "vmess://${json.toString().encodeUtf8().base64()}"
     }
@@ -183,6 +186,7 @@ internal object ClashYamlParser {
         val transport = transport(proxy)
         if (transport.type !in SUPPORTED_TRANSPORTS) return null
         val query = linkedMapOf<String, String>()
+        applyTlsQuery(query, proxy)
         val reality = proxy.map("reality-opts", "reality_opts")
         val security = when {
             reality != null -> "reality"
@@ -193,7 +197,7 @@ internal object ClashYamlParser {
         proxy.text("flow")?.let { query["flow"] = it }
         proxy.text("sni", "servername")?.let { query["sni"] = it }
         proxy.stringList("alpn").takeIf { it.isNotEmpty() }?.let { query["alpn"] = it.joinToString(",") }
-        (proxy.text("client-fingerprint", "fingerprint")
+        (proxy.text("client-fingerprint")
             ?: globalFingerprint?.takeIf { reality != null })
             ?.let { query["fp"] = it }
         if (proxy.bool("skip-cert-verify") == true) query["allowInsecure"] = "1"
@@ -222,9 +226,10 @@ internal object ClashYamlParser {
     ): String? {
         val password = proxy.text("password", "auth", "auth-str") ?: return null
         val query = linkedMapOf<String, String>()
+        applyTlsQuery(query, proxy)
         proxy.text("sni", "servername")?.let { query["sni"] = it }
         proxy.stringList("alpn").takeIf { it.isNotEmpty() }?.let { query["alpn"] = it.joinToString(",") }
-        proxy.text("client-fingerprint", "fingerprint")?.let { query["fp"] = it }
+        proxy.text("client-fingerprint")?.let { query["fp"] = it }
         if (proxy.bool("skip-cert-verify") == true) query["allowInsecure"] = "1"
         proxy.text("obfs")?.let { query["obfs"] = it }
         proxy.text("obfs-password", "obfs_password")
@@ -250,9 +255,10 @@ internal object ClashYamlParser {
     ): String? {
         val password = proxy.text("password") ?: return null
         val query = linkedMapOf<String, String>()
+        applyTlsQuery(query, proxy)
         proxy.text("sni", "servername")?.let { query["sni"] = it }
         proxy.stringList("alpn").takeIf { it.isNotEmpty() }?.let { query["alpn"] = it.joinToString(",") }
-        proxy.text("client-fingerprint", "fingerprint")?.let { query["fp"] = it }
+        proxy.text("client-fingerprint")?.let { query["fp"] = it }
         if (proxy.bool("skip-cert-verify") == true) query["allowInsecure"] = "1"
         listOf(
             "idle-session-check-interval" to "idle_session_check_interval",
@@ -274,9 +280,10 @@ internal object ClashYamlParser {
         val uuid = proxy.text("uuid") ?: return null
         val password = proxy.text("password", "token")
         val query = linkedMapOf<String, String>()
+        applyTlsQuery(query, proxy)
         proxy.text("sni", "servername")?.let { query["sni"] = it }
         proxy.stringList("alpn").takeIf { it.isNotEmpty() }?.let { query["alpn"] = it.joinToString(",") }
-        proxy.text("client-fingerprint", "fingerprint")?.let { query["fp"] = it }
+        proxy.text("client-fingerprint")?.let { query["fp"] = it }
         if (proxy.bool("skip-cert-verify") == true) query["allowInsecure"] = "1"
         proxy.text("congestion-controller", "congestion_control")?.let { query["congestion_control"] = it }
         proxy.text("udp-relay-mode", "udp_relay_mode")?.let { query["udp_relay_mode"] = it }
@@ -301,6 +308,7 @@ internal object ClashYamlParser {
         val username = proxy.text("username") ?: return null
         val password = proxy.text("password") ?: return null
         val query = linkedMapOf<String, String>()
+        applyTlsQuery(query, proxy)
         proxy.text("sni", "servername")?.let { query["sni"] = it }
         if (proxy.bool("skip-cert-verify") == true) query["allowInsecure"] = "1"
         return buildUri("naive+https", "$username:$password", server, port.toString(), query, name)
@@ -396,6 +404,20 @@ internal object ClashYamlParser {
         transport.serviceName?.let { query["serviceName"] = it }
         transport.maxEarlyData?.let { query["ed"] = it.toString() }
         transport.earlyDataHeaderName?.let { query["eh"] = it }
+    }
+
+    private fun applyTlsQuery(query: MutableMap<String, String>, proxy: Map<String, Any?>) {
+        proxy.map("ech-opts", "ech_opts")?.let { ech ->
+            ech.bool("enable", "enabled")?.let { query["echEnabled"] = it.toString() }
+            ech.text("config")?.let { query["echConfigList"] = it }
+            ech.text("query-server-name", "query_server_name")?.let { query["echQueryServerName"] = it }
+        }
+        proxy.text("certificate", "cert")?.let { query["certificate"] = it }
+        proxy.text("fingerprint")?.let { query["pinSHA256"] = it }
+        proxy.stringList("certificate-public-key-sha256", "certificate_public_key_sha256")
+            .takeIf { it.isNotEmpty() }?.let { query["certificate_public_key_sha256"] = it.joinToString(",") }
+        proxy.text("tls-min-version", "min-version", "min_version")?.let { query["minVersion"] = it }
+        proxy.text("tls-max-version", "max-version", "max_version")?.let { query["maxVersion"] = it }
     }
 
     private fun headerValues(headers: Map<String, Any?>?, name: String): List<String> {

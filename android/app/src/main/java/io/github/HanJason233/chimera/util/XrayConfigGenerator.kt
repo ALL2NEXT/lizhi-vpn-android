@@ -457,6 +457,7 @@ class XrayConfigGenerator {
                 ?.let { addProperty("fingerprint", it) }
             pinnedCertificate?.let { addProperty("pinnedPeerCertSha256", it) }
             verifyByName?.let { addProperty("verifyPeerCertByName", it) }
+            applyXrayEch(this, uriTlsParameters(uri))
         }
     }
 
@@ -530,6 +531,10 @@ class XrayConfigGenerator {
             ),
             verifyByName = queryParamFirst(uri, "verifyPeerCertByName", "vcn")
         )
+        settings.getAsJsonObject("tlsSettings")?.let { applyXrayEch(it, uriTlsParameters(uri)) }
+        if (security == "reality") {
+            require(parseSubscriptionEch(uriTlsParameters(uri)) == null) { "Reality 与 ECH 不能同时启用" }
+        }
         return settings
     }
 
@@ -560,6 +565,7 @@ class XrayConfigGenerator {
             verifyByName = parseJsonString(vmess.get("verifyPeerCertByName"))
                 ?: parseJsonString(vmess.get("vcn"))
         )
+        settings.getAsJsonObject("tlsSettings")?.let { applyXrayEch(it, vmess) }
         return settings
     }
 

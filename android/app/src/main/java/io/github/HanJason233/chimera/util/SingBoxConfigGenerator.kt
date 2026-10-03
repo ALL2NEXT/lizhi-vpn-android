@@ -99,7 +99,7 @@ class SingBoxConfigGenerator {
             )
             add("experimental", createExperimental())
         }
-        return gson.toJson(config)
+        return gson.toJson(completeConfig(config, nodes))
     }
     
     private fun generateEmptyConfig(): String {
@@ -177,6 +177,7 @@ class SingBoxConfigGenerator {
                 })
             })
             add("route", JsonObject().apply {
+                addProperty("default_domain_resolver", "dns-local")
                 add("rules", JsonArray().apply {
                 add(JsonObject().apply {
                     addProperty("protocol", "dns")
@@ -192,7 +193,7 @@ class SingBoxConfigGenerator {
                 addProperty("final", "proxy")
             })
         }
-        return gson.toJson(config)
+        return gson.toJson(completeConfig(config, listOf(node)))
     }
     
     /**
@@ -282,7 +283,7 @@ class SingBoxConfigGenerator {
                 })
             })
         }
-        return gson.toJson(config)
+        return gson.toJson(completeConfig(config, nodes))
     }
 
     /**
@@ -671,6 +672,52 @@ class SingBoxConfigGenerator {
         outbound.addProperty("tag", tag)
         return outbound
     }
+
+    private fun completeConfig(config: JsonObject, nodes: List<Node>): JsonObject {
+        val outbounds = config.getAsJsonArray("outbounds") ?: return config
+        // WireGuard became an endpoint in sing-box 1.13; selectors and route
+        // rules still address it using the same node tag.
+        val endpoints = JsonArray()
+        outbounds.filter { it.asJsonObject.get("type")?.asString == "wireguard" }
+            .forEach { endpoints.add(it) }
+        if (endpoints.size() > 0) {
+            endpoints.forEach { outbounds.remove(it) }
+            config.add("endpoints", endpoints)
+        }
+
+        val dns = config.getAsJsonObject("dns") ?: return config
+        val rules = dns.getAsJsonArray("rules") ?: JsonArray()
+        val bootstrapRules = JsonArray()
+        outbounds.forEachIndexed { index, element ->
+            val outbound = element.asJsonObject
+            val tls = outbound.getAsJsonObject("tls") ?: return@forEachIndexed
+            val ech = tls.getAsJsonObject("ech") ?: return@forEachIndexed
+            if (ech.has("config")) return@forEachIndexed
+            val node = nodes.firstOrNull { it.id == outbound.get("tag")?.asString }
+                ?: nodes.singleOrNull() ?: return@forEachIndexed
+            val parameters = if (node.type == NodeType.VMESS) {
+                JsonParser.parseString(decodeBase64Compat(node.getRawLinkPlain().removePrefix("vmess://"))).asJsonObject
+            } else uriTlsParameters(Uri.parse(node.getRawLinkPlain()))
+            val options = parseSubscriptionEch(parameters) ?: return@forEachIndexed
+            val domain = options.queryServerName ?: tls.get("server_name").asString
+            val serverTag = options.dnsServer?.let { address ->
+                val tag = "dns-ech-$index"
+                dns.getAsJsonArray("servers").addDnsServer(
+                    address, tag, null, "dns-local", "prefer_ipv4"
+                )
+                tag
+            } ?: "dns-direct"
+            // ECH has to be obtained before the proxy TLS handshake. Routing
+            // this HTTPS query through dns-remote (detour=proxy) deadlocks it.
+            bootstrapRules.add(JsonObject().apply {
+                add("domain", JsonArray().apply { add(domain) })
+                addProperty("server", serverTag)
+            })
+        }
+        rules.forEach { bootstrapRules.add(it) }
+        dns.add("rules", bootstrapRules)
+        return config
+    }
     
     private fun createVlessOutbound(node: Node): JsonObject {
         val rawLink = node.getRawLinkPlain()
@@ -684,35 +731,12 @@ class SingBoxConfigGenerator {
             addProperty("flow", uri.getQueryParameter("flow") ?: "")
             queryParamFirst(uri, "packetEncoding", "packet_encoding")?.let { addProperty("packet_encoding", it) }
             
-            val security = uri.getQueryParameter("security")
+            val security = queryParamFirst(uri, "security")?.lowercase()
             if (security == "tls" || security == "reality") {
-                add("tls", JsonObject().apply {
-                    addProperty("enabled", true)
-                    val sni = uri.getQueryParameter("sni") ?: uri.getQueryParameter("host")
-                    addProperty("server_name", sni ?: node.server)
-                    val alpnValues = parseCsvParams(queryParamFirst(uri, "alpn"))
-                    if (alpnValues.isNotEmpty()) {
-                        add("alpn", JsonArray().apply { alpnValues.forEach { add(it) } })
-                    }
-                    if (security == "reality") {
-                        add("reality", JsonObject().apply {
-                            addProperty("enabled", true)
-                            addProperty("public_key", uri.getQueryParameter("pbk") ?: "")
-                            addProperty("short_id", uri.getQueryParameter("sid") ?: "")
-                        })
-                    }
-                    val fingerprint = queryParamFirst(uri, "fp", "fingerprint", "client-fingerprint")
-                    if (!fingerprint.isNullOrBlank()) {
-                        add("utls", JsonObject().apply {
-                            addProperty("enabled", true)
-                            addProperty("fingerprint", fingerprint)
-                        })
-                    }
-                    addProperty("insecure", queryParamEnabled(uri, "allowInsecure", "allow_insecure", "insecure", "skip-cert-verify"))
-                })
+                add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, reality = security == "reality"))
             }
             
-            val transport = resolveUriTransportType(uri)
+            val transport = checkedSingBoxTransport(resolveUriTransportType(uri))
             if (isSupportedTransport(transport)) {
                 add("transport", createTransport(transport, uri))
             }
@@ -737,41 +761,12 @@ class SingBoxConfigGenerator {
             (parseJsonString(vmessConfig.get("packetEncoding")) ?: parseJsonString(vmessConfig.get("packet_encoding")))
                 ?.let { addProperty("packet_encoding", it) }
             
-            val tls = parseJsonString(vmessConfig.get("tls"))
+            val tls = parseJsonString(vmessConfig.get("tls"))?.lowercase()
             if (tls == "tls") {
-                add("tls", JsonObject().apply {
-                    addProperty("enabled", true)
-                    addProperty(
-                        "server_name",
-                        parseJsonString(vmessConfig.get("sni"))
-                            ?: parseJsonStringList(vmessConfig.get("host")).firstOrNull()
-                            ?: node.server
-                    )
-                    val alpnValues = parseJsonStringList(vmessConfig.get("alpn"))
-                    if (alpnValues.isNotEmpty()) {
-                        add("alpn", JsonArray().apply { alpnValues.forEach { add(it) } })
-                    }
-                    val insecureField = vmessConfig.get("allowInsecure") ?: vmessConfig.get("allow_insecure")
-                    val isInsecure = when {
-                        insecureField == null -> false
-                        insecureField.isJsonPrimitive && insecureField.asJsonPrimitive.isBoolean -> insecureField.asBoolean
-                        insecureField.isJsonPrimitive -> insecureField.asString.let { it == "1" || it.equals("true", ignoreCase = true) }
-                        else -> false
-                    }
-                    addProperty("insecure", isInsecure)
-                    val fingerprint = parseJsonString(vmessConfig.get("fp"))
-                        ?: parseJsonString(vmessConfig.get("fingerprint"))
-                        ?: parseJsonString(vmessConfig.get("client-fingerprint"))
-                    if (!fingerprint.isNullOrBlank()) {
-                        add("utls", JsonObject().apply {
-                            addProperty("enabled", true)
-                            addProperty("fingerprint", fingerprint)
-                        })
-                    }
-                })
+                add("tls", createSingBoxTls(vmessConfig, node.server))
             }
             
-            val network = resolveVmessTransportType(vmessConfig)
+            val network = checkedSingBoxTransport(resolveVmessTransportType(vmessConfig))
             if (isSupportedTransport(network)) {
                 add("transport", createVmessTransport(network, vmessConfig))
             }
@@ -789,25 +784,9 @@ class SingBoxConfigGenerator {
             addProperty("server_port", node.port)
             addProperty("password", uri.userInfo ?: "")
             
-            add("tls", JsonObject().apply {
-                addProperty("enabled", true)
-                val sni = uri.getQueryParameter("sni") ?: uri.getQueryParameter("host")
-                addProperty("server_name", sni ?: node.server)
-                val alpnValues = parseCsvParams(queryParamFirst(uri, "alpn"))
-                if (alpnValues.isNotEmpty()) {
-                    add("alpn", JsonArray().apply { alpnValues.forEach { add(it) } })
-                }
-                val fingerprint = queryParamFirst(uri, "fp", "fingerprint", "client-fingerprint")
-                if (!fingerprint.isNullOrBlank()) {
-                    add("utls", JsonObject().apply {
-                        addProperty("enabled", true)
-                        addProperty("fingerprint", fingerprint)
-                    })
-                }
-                addProperty("insecure", queryParamEnabled(uri, "allowInsecure", "allow_insecure", "insecure", "skip-cert-verify"))
-            })
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server))
             
-            val transport = resolveUriTransportType(uri)
+            val transport = checkedSingBoxTransport(resolveUriTransportType(uri))
             if (isSupportedTransport(transport)) {
                 add("transport", createTransport(transport, uri))
             }
@@ -822,7 +801,6 @@ class SingBoxConfigGenerator {
         val rawLink = node.getRawLinkPlain()
         val normalizedLink = rawLink.replace("hy2://", "hysteria2://")
         val uri = Uri.parse(normalizedLink)
-        val alpnValues = parseCsvParams(queryParamFirst(uri, "alpn"))
         val serverPorts = parseHysteria2ServerPorts(normalizedLink)
         
         return JsonObject().apply {
@@ -834,7 +812,9 @@ class SingBoxConfigGenerator {
                 addProperty("server_port", serverPorts.firstOrNull()?.toIntOrNull() ?: node.port)
             }
             addProperty("password", uri.userInfo ?: "")
-            queryParamFirst(uri, "hopInterval", "hop_interval")?.let { addProperty("hop_interval", it) }
+            queryParamFirst(uri, "hopInterval", "hop_interval", "interval")?.let {
+                addProperty("hop_interval", if (it.toLongOrNull() != null) "${it}s" else it)
+            }
             if (hysteriaUpMbps > 0) {
                 addProperty("up_mbps", hysteriaUpMbps)
             }
@@ -843,21 +823,7 @@ class SingBoxConfigGenerator {
             }
             queryParamFirst(uri, "network")?.let { addProperty("network", it) }
             
-            add("tls", JsonObject().apply {
-                addProperty("enabled", true)
-                addProperty("server_name", queryParamFirst(uri, "sni", "host") ?: node.server)
-                addProperty("insecure", queryParamEnabled(uri, "allowInsecure", "allow_insecure", "insecure", "skip-cert-verify"))
-                if (alpnValues.isNotEmpty()) {
-                    add("alpn", JsonArray().apply { alpnValues.forEach { add(it) } })
-                }
-                val fingerprint = queryParamFirst(uri, "fp", "fingerprint", "client-fingerprint")
-                if (!fingerprint.isNullOrBlank()) {
-                    add("utls", JsonObject().apply {
-                        addProperty("enabled", true)
-                        addProperty("fingerprint", fingerprint)
-                    })
-                }
-            })
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowUtls = false))
             
             val obfsType = queryParamFirst(uri, "obfs")
             val obfsPassword = queryParamFirst(uri, "obfs-password", "obfs_password", "obfsPassword")
@@ -875,14 +841,12 @@ class SingBoxConfigGenerator {
         val rawLink = node.getRawLinkPlain()
         val uri = Uri.parse(rawLink)
         val password = uri.userInfo ?: queryParamFirst(uri, "password", "pass", "token") ?: ""
-        val sni = queryParamFirst(uri, "sni", "host") ?: node.server
-        val insecure = queryParamEnabled(uri, "allowInsecure", "allow_insecure", "insecure", "skip-cert-verify")
-        val alpnValues = parseCsvParams(queryParamFirst(uri, "alpn"))
-        val fingerprint = queryParamFirst(uri, "fp", "fingerprint", "client-fingerprint")
         val idleSessionCheckInterval = queryParamFirst(uri, "idle_session_check_interval")
         val idleSessionTimeout = queryParamFirst(uri, "idle_session_timeout")
         val minIdleSession = queryParamFirst(uri, "min_idle_session")?.toIntOrNull()
-        val maxIdleSession = queryParamFirst(uri, "max_idle_session")?.toIntOrNull()
+        require(queryParamFirst(uri, "max_idle_session") == null) {
+            "当前 sing-box 不支持 AnyTLS max_idle_session，请移除此参数"
+        }
 
         return JsonObject().apply {
             addProperty("type", "anytls")
@@ -892,21 +856,7 @@ class SingBoxConfigGenerator {
             idleSessionCheckInterval?.let { addProperty("idle_session_check_interval", it) }
             idleSessionTimeout?.let { addProperty("idle_session_timeout", it) }
             minIdleSession?.let { addProperty("min_idle_session", it) }
-            maxIdleSession?.let { addProperty("max_idle_session", it) }
-            add("tls", JsonObject().apply {
-                addProperty("enabled", true)
-                addProperty("server_name", sni)
-                addProperty("insecure", insecure)
-                if (alpnValues.isNotEmpty()) {
-                    add("alpn", JsonArray().apply { alpnValues.forEach { add(it) } })
-                }
-                if (!fingerprint.isNullOrBlank()) {
-                    add("utls", JsonObject().apply {
-                        addProperty("enabled", true)
-                        addProperty("fingerprint", fingerprint)
-                    })
-                }
-            })
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server))
         }
     }
 
@@ -920,8 +870,6 @@ class SingBoxConfigGenerator {
             ?: uri.getQueryParameter("token")
             ?: userInfoParts.getOrNull(1)
             ?: ""
-        val alpnValues = parseCsvParams(queryParamFirst(uri, "alpn"))
-        val fingerprint = queryParamFirst(uri, "fp", "fingerprint", "client-fingerprint")
 
         return JsonObject().apply {
             addProperty("type", "tuic")
@@ -931,20 +879,7 @@ class SingBoxConfigGenerator {
             if (password.isNotEmpty()) {
                 addProperty("password", password)
             }
-            add("tls", JsonObject().apply {
-                addProperty("enabled", true)
-                addProperty("server_name", uri.getQueryParameter("sni") ?: uri.getQueryParameter("host") ?: node.server)
-                addProperty("insecure", queryParamEnabled(uri, "allowInsecure", "allow_insecure", "insecure", "skip-cert-verify"))
-                if (alpnValues.isNotEmpty()) {
-                    add("alpn", JsonArray().apply { alpnValues.forEach { add(it) } })
-                }
-                if (!fingerprint.isNullOrBlank()) {
-                    add("utls", JsonObject().apply {
-                        addProperty("enabled", true)
-                        addProperty("fingerprint", fingerprint)
-                    })
-                }
-            })
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowUtls = false))
 
             queryParamFirst(uri, "congestion_control", "cc")?.let { addProperty("congestion_control", it) }
             uri.getQueryParameter("udp_relay_mode")?.let { addProperty("udp_relay_mode", it) }
@@ -986,45 +921,36 @@ class SingBoxConfigGenerator {
             if (queryParamEnabled(uri, "udp_over_tcp", "udp-over-tcp", "uot")) {
                 addProperty("udp_over_tcp", true)
             }
-            add("tls", JsonObject().apply {
-                addProperty("enabled", true)
-                addProperty("server_name", uri.getQueryParameter("sni") ?: uri.getQueryParameter("host") ?: node.server)
-                addProperty("insecure", queryParamEnabled(uri, "allowInsecure", "allow_insecure", "insecure", "skip-cert-verify"))
-            })
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowUtls = false))
         }
     }
 
     private fun createWireGuardOutbound(node: Node): JsonObject {
-        val rawLink = node.getRawLinkPlain()
-        val uri = Uri.parse(rawLink)
+        val uri = Uri.parse(node.getRawLinkPlain())
         val privateKey = uri.userInfo ?: queryParamFirst(uri, "private_key", "privateKey") ?: ""
-        val peerPublicKey = queryParamFirst(uri, "publickey", "peer_public_key", "peerPublicKey") ?: ""
-        val preSharedKey = queryParamFirst(uri, "presharedkey", "pre_shared_key", "preSharedKey")
-        val localAddresses = (queryParamFirst(uri, "address", "local_address", "localAddress") ?: "")
-            .split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
+        val publicKey = queryParamFirst(uri, "publickey", "peer_public_key", "peerPublicKey") ?: ""
+        val addresses = parseCsvParams(queryParamFirst(uri, "address", "local_address", "localAddress"))
             .ifEmpty { listOf("10.0.0.2/32") }
-
         return JsonObject().apply {
             addProperty("type", "wireguard")
-            addProperty("server", node.server)
-            addProperty("server_port", node.port)
             addProperty("private_key", privateKey)
-            addProperty("peer_public_key", peerPublicKey)
-            add("local_address", JsonArray().apply { localAddresses.forEach { add(it) } })
-
-            if (!preSharedKey.isNullOrEmpty()) {
-                addProperty("pre_shared_key", preSharedKey)
-            }
-
-            uri.getQueryParameter("mtu")?.toIntOrNull()?.let { addProperty("mtu", it) }
+            add("address", JsonArray().apply { addresses.forEach(::add) })
+            queryParamFirst(uri, "mtu")?.toIntOrNull()?.let { addProperty("mtu", it) }
             queryParamFirst(uri, "workers")?.toIntOrNull()?.let { addProperty("workers", it) }
-            queryParamFirst(uri, "network")?.let { addProperty("network", it) }
-
-            parseWireGuardReserved(uri.getQueryParameter("reserved"))?.let { reserved ->
-                add("reserved", JsonArray().apply { reserved.forEach { add(it) } })
-            }
+            add("peers", JsonArray().apply {
+                add(JsonObject().apply {
+                    addProperty("address", node.server)
+                    addProperty("port", node.port)
+                    addProperty("public_key", publicKey)
+                    queryParamFirst(uri, "presharedkey", "pre_shared_key", "preSharedKey")
+                        ?.let { addProperty("pre_shared_key", it) }
+                    add("allowed_ips", JsonArray().apply { add("0.0.0.0/0"); add("::/0") })
+                    parseWireGuardReserved(queryParamFirst(uri, "reserved"))?.let { reserved ->
+                        require(reserved.all { it in 0..255 }) { "WireGuard reserved ???????" }
+                        add("reserved", JsonArray().apply { reserved.forEach(::add) })
+                    }
+                })
+            })
         }
     }
     
@@ -1066,7 +992,7 @@ class SingBoxConfigGenerator {
         val rawLink = node.getRawLinkPlain()
         val uri = Uri.parse(rawLink)
         val userInfo = uri.userInfo ?: ""
-        val parts = userInfo.split(":")
+        val parts = userInfo.split(":", limit = 2)
         val username = parts.getOrNull(0) ?: ""
         val password = parts.getOrNull(1) ?: ""
         
@@ -1096,7 +1022,7 @@ class SingBoxConfigGenerator {
         val rawLink = node.getRawLinkPlain()
         val uri = Uri.parse(rawLink)
         val userInfo = uri.userInfo ?: ""
-        val parts = userInfo.split(":")
+        val parts = userInfo.split(":", limit = 2)
         val username = parts.getOrNull(0) ?: ""
         val password = parts.getOrNull(1) ?: ""
         val useTls = rawLink.startsWith("https://")
@@ -1114,11 +1040,7 @@ class SingBoxConfigGenerator {
                 add("headers", JsonObject().apply { addProperty("Host", host) })
             }
             if (useTls) {
-                add("tls", JsonObject().apply {
-                    addProperty("enabled", true)
-                    addProperty("server_name", queryParamFirst(uri, "sni", "host") ?: node.server)
-                    addProperty("insecure", queryParamEnabled(uri, "allowInsecure", "allow_insecure", "insecure", "skip-cert-verify"))
-                })
+                add("tls", createSingBoxTls(uriTlsParameters(uri), node.server))
             }
         }
     }

@@ -14,7 +14,12 @@ internal fun queryParamEnabled(uri: Uri, vararg names: String): Boolean = names.
 }
 
 internal fun queryParamFirst(uri: Uri, vararg names: String): String? = names.asSequence()
-    .mapNotNull { name -> uri.getQueryParameter(name)?.trim() }
+    .mapNotNull { name ->
+        // URI query values may contain literal '+' (notably base64 ECH configs).
+        // Android getQueryParameter treats it as a form-encoded space.
+        uri.encodedQuery?.split('&')?.firstOrNull { Uri.decode(it.substringBefore('=')) == name }
+            ?.substringAfter('=', "")?.let(Uri::decode)?.trim()
+    }
     .firstOrNull { it.isNotEmpty() }
 
 internal fun parseCsvParams(raw: String?): List<String> {
@@ -105,16 +110,18 @@ internal fun decodeBase64Compat(rawValue: String): String {
 }
 
 internal fun parseShadowsocksMethodPassword(linkContent: String): String {
-    val credentials = linkContent.substringBefore("@")
+    val authority = linkContent.substringBefore("?")
+    val hasAuthority = authority.contains("@")
+    val credentials = Uri.decode(authority.substringBeforeLast("@", authority))
     val decoded = when {
         credentials.contains(":") -> credentials
         credentials.isNotBlank() -> runCatching {
             decodeBase64Compat(credentials)
-        }.getOrDefault("aes-256-gcm:password")
-        else -> "aes-256-gcm:password"
+        }.getOrElse { throw IllegalArgumentException("Shadowsocks 凭据不是有效的 Base64", it) }
+        else -> throw IllegalArgumentException("Shadowsocks 链接缺少凭据")
     }
     // 旧版 SS 链接会将 method:password@server:port 整体编码为 Base64。
-    return decoded.substringBeforeLast("@", decoded)
+    return if (hasAuthority) decoded else decoded.substringBeforeLast("@", decoded)
 }
 
 /** Normalizes subscription transport aliases to values supported by sing-box. */
@@ -152,6 +159,13 @@ internal fun resolveVmessTransportType(config: JsonObject): String {
 internal fun isSupportedTransport(type: String): Boolean =
     type == "ws" || type == "grpc" || type == "http" ||
         type == "httpupgrade" || type == "quic"
+
+internal fun checkedSingBoxTransport(type: String): String {
+    require(type == "tcp" || type == "none" || isSupportedTransport(type)) {
+        "sing-box 不支持此节点的传输类型，请为该协议选择 Xray"
+    }
+    return type
+}
 
 internal fun createTransport(type: String, uri: Uri): JsonObject {
     val hostValues = parseCsvParams(queryParamFirst(uri, "host"))
