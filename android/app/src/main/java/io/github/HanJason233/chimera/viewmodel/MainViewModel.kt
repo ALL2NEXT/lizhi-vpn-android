@@ -73,6 +73,14 @@ internal data class UnlockTestUiState(
         get() = items.count { it.state !in setOf(UnlockTestState.IDLE, UnlockTestState.TESTING) }
 }
 
+internal data class SpeedTestProgress(
+    val title: String,
+    val stage: String,
+    val completed: Int = 0,
+    val total: Int = 0,
+    val isManualGroupTest: Boolean = false
+)
+
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
@@ -181,6 +189,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
+
+    private val _speedTestProgress = MutableStateFlow<SpeedTestProgress?>(null)
+    internal val speedTestProgress = _speedTestProgress.asStateFlow()
 
     private val _unlockTestState = MutableStateFlow(UnlockTestUiState())
     internal val unlockTestState = _unlockTestState.asStateFlow()
@@ -698,6 +709,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (updates.isNotEmpty()) nodeDao().updateNodeLocations(updates)
     }
 
+    private fun updateSpeedTestProgress(
+        title: String,
+        stage: String,
+        completed: Int = 0,
+        total: Int = 0,
+        isManualGroupTest: Boolean = false
+    ) {
+        _speedTestProgress.value = SpeedTestProgress(
+            title = title,
+            stage = stage,
+            completed = completed.coerceAtLeast(0),
+            total = total.coerceAtLeast(0),
+            isManualGroupTest = isManualGroupTest
+        )
+    }
+
     /** 按用户选择的测速方案筛选节点并连接测速结果最好的节点。 */
     fun startSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
@@ -727,6 +754,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             _isTesting.value = true
+            val progressTitle = "测速方案：${scheme.name}"
+            updateSpeedTestProgress(progressTitle, "准备测试")
             try {
                 val allNodeSnapshot = nodeDao().getAllNodes().first()
                 val allNodes = sortNodesForList(
@@ -759,10 +788,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         scheme.tcpingSelectionMode,
                         scheme.tcpingSelectionValue
                     )
+                    updateSpeedTestProgress(
+                        title = progressTitle,
+                        stage = "TCPing",
+                        total = tcpingNodes.size
+                    )
                     val tcpingResults = internalTestNodes(
                         currentNodes = tcpingNodes,
                         concurrency = scheme.tcpingConcurrency,
-                        timeoutMs = scheme.tcpingTimeoutMs
+                        timeoutMs = scheme.tcpingTimeoutMs,
+                        onProgress = { completed, total ->
+                            updateSpeedTestProgress(
+                                title = progressTitle,
+                                stage = "TCPing",
+                                completed = completed,
+                                total = total
+                            )
+                        }
                     )
                     candidates = tcpingResults
                         .filter { it.isAvailable && it.latency > 0 }
@@ -780,13 +822,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         scheme.urlTestSelectionMode,
                         scheme.urlTestSelectionValue
                     )
+                    updateSpeedTestProgress(
+                        title = progressTitle,
+                        stage = "URL Test",
+                        total = urlTestNodes.size
+                    )
                     val urlTestResults = runUrlTestNodes(
                         nodes = urlTestNodes,
                         concurrency = scheme.urlTestConcurrency,
                         warmupTimeoutMs = scheme.urlTestWarmupTimeoutMs,
                         measurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs,
                         targetUrl = scheme.urlTestUrl,
-                        fallbackUrl = scheme.urlTestBackupUrl
+                        fallbackUrl = scheme.urlTestBackupUrl,
+                        onProgress = { completed, total ->
+                            updateSpeedTestProgress(
+                                title = progressTitle,
+                                stage = "URL Test",
+                                completed = completed,
+                                total = total
+                            )
+                        }
                     )
                     applyUrlTestResults(urlTestResults)
                     candidates = urlTestResults
@@ -805,10 +860,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         scheme.bandwidthSelectionMode,
                         scheme.bandwidthSelectionValue
                     )
+                    updateSpeedTestProgress(
+                        title = progressTitle,
+                        stage = "带宽测速",
+                        total = speedTestNodes.size
+                    )
+                    var completedBandwidthNodes = 0
                     val speedResults = speedTestNodes
                         .chunked(scheme.bandwidthTestConcurrency)
                         .flatMap { batch ->
-                            coroutineScope {
+                            val results = coroutineScope {
                                 batch.map { node ->
                                     async {
                                         val speedMbps = testNodeDownloadBandwidthMbps(
@@ -821,6 +882,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                     }
                                 }.awaitAll()
                             }
+                            completedBandwidthNodes += batch.size
+                            updateSpeedTestProgress(
+                                title = progressTitle,
+                                stage = "带宽测速",
+                                completed = completedBandwidthNodes,
+                                total = speedTestNodes.size
+                            )
+                            results
                         }
                     _nodeTestResultSortMode.value =
                         NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
@@ -870,6 +939,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _error.value = "测速失败：${e.message ?: "未知错误"}"
             } finally {
                 _isTesting.value = false
+                _speedTestProgress.value = null
                 GlobalTestExecution.finish()
             }
         }
@@ -909,6 +979,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             _isTesting.value = true
+            val progressTitle = "分组手动测速"
+            val progressStage = when (stage) {
+                ManualGroupTestStage.TCPING -> "TCPing"
+                ManualGroupTestStage.URL_TEST -> "URL Test"
+                ManualGroupTestStage.BANDWIDTH -> "带宽测速"
+            }
+            updateSpeedTestProgress(
+                title = progressTitle,
+                stage = progressStage,
+                isManualGroupTest = true
+            )
             try {
                 val latestNodesById = nodeDao().getAllNodes().first().associateBy(Node::id)
                 val currentGroupNodes = groupNodes.mapNotNull { latestNodesById[it.id] }
@@ -924,10 +1005,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             scheme.tcpingSelectionMode,
                             scheme.tcpingSelectionValue
                         )
+                        updateSpeedTestProgress(
+                            title = progressTitle,
+                            stage = progressStage,
+                            total = candidates.size,
+                            isManualGroupTest = true
+                        )
                         internalTestNodes(
                             currentNodes = candidates,
                             concurrency = scheme.tcpingConcurrency,
-                            timeoutMs = scheme.tcpingTimeoutMs
+                            timeoutMs = scheme.tcpingTimeoutMs,
+                            onProgress = { completed, total ->
+                                updateSpeedTestProgress(
+                                    title = progressTitle,
+                                    stage = progressStage,
+                                    completed = completed,
+                                    total = total,
+                                    isManualGroupTest = true
+                                )
+                            }
                         )
                     }
 
@@ -937,13 +1033,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             scheme.urlTestSelectionMode,
                             scheme.urlTestSelectionValue
                         )
+                        updateSpeedTestProgress(
+                            title = progressTitle,
+                            stage = progressStage,
+                            total = candidates.size,
+                            isManualGroupTest = true
+                        )
                         val results = runUrlTestNodes(
                             nodes = candidates,
                             concurrency = scheme.urlTestConcurrency,
                             warmupTimeoutMs = scheme.urlTestWarmupTimeoutMs,
                             measurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs,
                             targetUrl = scheme.urlTestUrl,
-                            fallbackUrl = scheme.urlTestBackupUrl
+                            fallbackUrl = scheme.urlTestBackupUrl,
+                            onProgress = { completed, total ->
+                                updateSpeedTestProgress(
+                                    title = progressTitle,
+                                    stage = progressStage,
+                                    completed = completed,
+                                    total = total,
+                                    isManualGroupTest = true
+                                )
+                            }
                         )
                         if (results.isEmpty()) {
                             _error.value = "URL Test 未能启动"
@@ -958,10 +1069,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             scheme.bandwidthSelectionMode,
                             scheme.bandwidthSelectionValue
                         )
+                        updateSpeedTestProgress(
+                            title = progressTitle,
+                            stage = progressStage,
+                            total = candidates.size,
+                            isManualGroupTest = true
+                        )
+                        var completedBandwidthNodes = 0
                         candidates
                             .chunked(scheme.bandwidthTestConcurrency)
                             .flatMap { batch ->
-                                coroutineScope {
+                                val results = coroutineScope {
                                     batch.map { node ->
                                         async {
                                             val speedMbps = testNodeDownloadBandwidthMbps(
@@ -974,6 +1092,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                         }
                                     }.awaitAll()
                                 }
+                                completedBandwidthNodes += batch.size
+                                updateSpeedTestProgress(
+                                    title = progressTitle,
+                                    stage = progressStage,
+                                    completed = completedBandwidthNodes,
+                                    total = candidates.size,
+                                    isManualGroupTest = true
+                                )
+                                results
                             }
                         _nodeTestResultSortMode.value =
                             NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
@@ -986,6 +1113,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _error.value = "分组手动测试失败：${error.message ?: "未知错误"}"
             } finally {
                 _isTesting.value = false
+                _speedTestProgress.value = null
                 GlobalTestExecution.finish()
             }
         }
@@ -1304,7 +1432,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         warmupTimeoutMs: Long,
         measurementTimeoutMs: Long,
         targetUrl: String,
-        fallbackUrl: String
+        fallbackUrl: String,
+        onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
         val batch = io.github.HanJason233.chimera.network.UrlTestManager.start(
             getApplication(), nodes, hysteriaUpMbps.value, hysteriaDownMbps.value,
@@ -1317,7 +1446,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 fallbackUrl = fallbackUrl,
                 warmupTimeoutMs = warmupTimeoutMs,
                 measurementTimeoutMs = measurementTimeoutMs,
-                concurrency = concurrency
+                concurrency = concurrency,
+                onProgress = onProgress
             )
             val testedById = testedResults.associateBy(LatencyTester.LatencyResult::nodeId)
             val results = nodes.map { node ->

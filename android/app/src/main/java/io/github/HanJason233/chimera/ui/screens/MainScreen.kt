@@ -100,6 +100,7 @@ fun MainScreen(
     val countryOptions by viewModel.countryOptions.collectAsStateWithLifecycle()
     val userSubscriptionGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
+    val testProgress by viewModel.speedTestProgress.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
@@ -344,6 +345,22 @@ fun MainScreen(
                             .padding(start = 24.dp, end = 24.dp, top = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
+                        val homeTestProgress = testProgress?.takeIf {
+                            isTesting && !it.isManualGroupTest
+                        }
+                        if (homeTestProgress != null) {
+                            Text(
+                                text = if (homeTestProgress.total > 0) {
+                                    "测速：${homeTestProgress.stage} ${homeTestProgress.completed}/${homeTestProgress.total}"
+                                } else {
+                                    "测速：${homeTestProgress.stage}"
+                                },
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         Text(
                             text = "选中组：$selectedGroupName",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

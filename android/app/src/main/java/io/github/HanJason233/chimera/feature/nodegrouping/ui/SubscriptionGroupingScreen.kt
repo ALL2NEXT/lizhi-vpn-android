@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
@@ -60,6 +61,7 @@ import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.formatSpeedTestSelection
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
+import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
 
 internal enum class NodeActionMode {
     EDIT,
@@ -71,6 +73,7 @@ internal fun SubscriptionGroupingScreen(
     nodes: List<Node>,
     selectedNodeId: String?,
     isTesting: Boolean,
+    testProgress: SpeedTestProgress?,
     isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
@@ -98,6 +101,13 @@ internal fun SubscriptionGroupingScreen(
     var deleteCandidate by remember { mutableStateOf<Node?>(null) }
     var isManagingNodes by rememberSaveable { mutableStateOf(false) }
     var manualTestMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var manualTestDialogHidden by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(testProgress?.isManualGroupTest) {
+        if (testProgress?.isManualGroupTest == true) {
+            manualTestDialogHidden = false
+        }
+    }
 
     val handleBack = {
         if (!isClosing) {
@@ -278,6 +288,56 @@ internal fun SubscriptionGroupingScreen(
             )
 
         }
+    }
+
+    val manualProgress = testProgress?.takeIf {
+        it.isManualGroupTest && !manualTestDialogHidden
+    }
+    if (manualProgress != null) {
+        val progressValue = if (manualProgress.total > 0) {
+            (manualProgress.completed.toFloat() / manualProgress.total).coerceIn(0f, 1f)
+        } else {
+            null
+        }
+        AppAlertDialog(
+            onDismissRequest = { manualTestDialogHidden = true },
+            title = { Text(manualProgress.title) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (progressValue == null) {
+                        CircularProgressIndicator()
+                    } else {
+                        CircularProgressIndicator(progress = progressValue)
+                    }
+                    Text(
+                        text = manualProgress.stage,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = if (manualProgress.total > 0) {
+                            "${manualProgress.completed} / ${manualProgress.total}"
+                        } else {
+                            "准备测试..."
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            ),
+            dismissButton = {
+                TextButton(onClick = { manualTestDialogHidden = true }) {
+                    Text("隐藏")
+                }
+            },
+            confirmButton = {}
+        )
     }
 
     if (addNodeDialogVisible && onImportNodeUris != null) {
