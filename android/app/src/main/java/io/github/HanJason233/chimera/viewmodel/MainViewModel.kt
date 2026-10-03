@@ -33,6 +33,7 @@ import io.github.HanJason233.chimera.feature.nodegrouping.domain.NodeTestResultS
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.SpeedTestCandidateSelector
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.SpeedTestScopeResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.SubscriptionGroupingStrategy
+import io.github.HanJason233.chimera.feature.nodegrouping.domain.WarehouseGroupingCountryResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import io.github.HanJason233.chimera.network.LatencyTester
 import io.github.HanJason233.chimera.network.NodeDownloadBandwidthTester
@@ -301,6 +302,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val countryGroupingSourceIds = settingsRepository.countryGroupingSourceIds
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** 仓库源页面的地区筛选；首次使用时包含全部地区。 */
+    val warehouseGroupingCountryCodes = settingsRepository.warehouseGroupingCountryCodes
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private val countryGroupingSources = countryGroupingSourceIds
         .map(CountryGroupingSourceResolver::resolve)
 
@@ -343,6 +348,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+        .combine(warehouseGroupingCountryCodes) { nodes, countryCodes ->
+            WarehouseGroupingCountryResolver.filter(nodes, countryCodes)
+        }
 
     /** 测速方案可选择官方源、地区组和私人源。 */
     val speedTestGroupOptions = combine(
@@ -375,7 +383,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 仓库源详情页使用的私人源节点流。 */
     fun observeNodeGroupNodes(groupId: String): Flow<List<Node>> =
-        nodeDaoFlow.flatMapLatest { it.getNodesByGroup(groupId) }
+        nodeDaoFlow
+            .flatMapLatest { it.getNodesByGroup(groupId) }
+            .combine(warehouseGroupingCountryCodes) { nodes, countryCodes ->
+                WarehouseGroupingCountryResolver.filter(nodes, countryCodes)
+            }
 
     /** 当前选中私人源的节点；没有选中私人源时不参与主页列表。 */
     private val importedNodes = selectedNodeGroupId.flatMapLatest { groupId ->
@@ -1095,8 +1107,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _unlockTestState.value = UnlockTestUiState()
             val selectedId = settingsRepository.selectedNodeId.first()
-            val selectedNode = selectedId?.let { nodeDao().getNodeById(it) }
             val subscriptionNodes = currentNodeListSnapshot()
+            val selectedNode = selectedId
+                ?.let { nodeDao().getNodeById(it) }
+                ?.takeIf { candidate -> subscriptionNodes.any { it.id == candidate.id } }
             val node = selectedNode ?: subscriptionNodes.firstOrNull()
             if (node == null) {
                 _error.value = "没有可用节点"
@@ -1476,6 +1490,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSubscriptionSource(sourceId: String) {
         selectNodeGroup(NodeGroupKey.Subscription(sourceId))
+    }
+
+    fun setWarehouseGroupingCountryCodes(countryCodes: Set<String>?) {
+        viewModelScope.launch {
+            settingsRepository.setWarehouseGroupingCountryCodes(countryCodes)
+        }
     }
 
     /** 切换到仓库源时立即取消地区限定，保证主页智能测速使用当前官方源。 */
@@ -2812,7 +2832,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             is NodeGroupKey.Imported -> nodeDao().getNodesByGroup(selectedGroup.groupId).first()
             null -> nodeDao().getSubscriptionNodes().first()
         }
-        sortNodesForList(snapshot)
+        sortNodesForList(
+            WarehouseGroupingCountryResolver.filter(
+                snapshot,
+                warehouseGroupingCountryCodes.value.takeIf {
+                    selectedGroup !is NodeGroupKey.Country
+                }
+            )
+        )
     }
 
     /** 按稳定组 ID 解析指定官方源、私人源或地区组的节点。 */
@@ -2825,15 +2852,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val subscriptionNodes = allNodes.filter { it.source == NodeSource.SUBSCRIPTION }
         val dao = nodeDao()
         val countryNodes = countryGroupingNodes.first()
+        val warehouseCountryCodes = warehouseGroupingCountryCodes.value
         return groupIds.associateWith { groupId ->
             when (val group = NodeGroupKey.parse(groupId)) {
                 is NodeGroupKey.Subscription -> subscriptionNodes.filter {
-                    it.subscriptionSourceId == group.sourceId
+                    it.subscriptionSourceId == group.sourceId &&
+                        WarehouseGroupingCountryResolver.filter(
+                            listOf(it),
+                            warehouseCountryCodes
+                        ).isNotEmpty()
                 }
                 is NodeGroupKey.Country -> countryNodes.filter {
                     it.getCountryCode() == group.countryCode
                 }
-                is NodeGroupKey.Imported -> dao.getNodesByGroup(group.groupId).first()
+                is NodeGroupKey.Imported -> WarehouseGroupingCountryResolver.filter(
+                    dao.getNodesByGroup(group.groupId).first(),
+                    warehouseCountryCodes
+                )
                 null -> emptyList()
             }
         }

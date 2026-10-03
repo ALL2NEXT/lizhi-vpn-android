@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -29,12 +30,14 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Subscriptions
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -66,7 +70,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.NodeGroupSummary
+import io.github.HanJason233.chimera.data.model.NodeSource
 import io.github.HanJason233.chimera.data.model.SubscriptionGroup
+import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingStrategy
+import io.github.HanJason233.chimera.feature.nodegrouping.model.CountryOption
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.util.TrafficUsageFormatter
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
@@ -123,11 +130,27 @@ internal fun SubscriptionGroupSelectionDestination(
 ) {
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
     val userGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
-    val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
+    val allWarehouseNodes by viewModel.allWarehouseNodes.collectAsStateWithLifecycle()
+    val selectedCountryCodes by viewModel.warehouseGroupingCountryCodes
+        .collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val nodeCounts = allSubscriptionNodes
+    val countryOptions = remember(allWarehouseNodes) {
+        CountryGroupingStrategy.groups(allWarehouseNodes)
+    }
+    val filteredWarehouseNodes = allWarehouseNodes.filter { node ->
+        selectedCountryCodes == null ||
+            selectedCountryCodes?.contains(node.getCountryCode()) == true
+    }
+    val nodeCounts = filteredWarehouseNodes
         .asSequence()
+        .filter { it.source == NodeSource.SUBSCRIPTION }
+        .mapNotNull(Node::subscriptionSourceId)
+        .groupingBy { it }
+        .eachCount()
+    val personalNodeCounts = filteredWarehouseNodes
+        .asSequence()
+        .filter { it.source == NodeSource.LOCAL_GROUP }
         .mapNotNull(Node::subscriptionSourceId)
         .groupingBy { it }
         .eachCount()
@@ -137,6 +160,9 @@ internal fun SubscriptionGroupSelectionDestination(
         userGroups = userGroups,
         selectedNodeGroupId = selectedNodeGroupId,
         nodeCounts = nodeCounts,
+        personalNodeCounts = personalNodeCounts,
+        countryOptions = countryOptions,
+        selectedCountryCodes = selectedCountryCodes,
         isLoading = isLoading,
         onSubscriptionSelected = onSubscriptionSelected,
         onViewSubscriptionDetails = onViewSubscriptionDetails,
@@ -154,6 +180,7 @@ internal fun SubscriptionGroupSelectionDestination(
         onDeleteOfficialSubscription = { sourceId, onResult ->
             viewModel.deleteOfficialSubscription(sourceId, onResult)
         },
+        onSaveCountryCodes = viewModel::setWarehouseGroupingCountryCodes,
         onScanQrCode = onScanQrCode,
         scannedSubscriptionText = scannedSubscriptionText,
         onScannedSubscriptionTextConsumed = onScannedSubscriptionTextConsumed,
@@ -168,6 +195,9 @@ private fun SubscriptionGroupSelectionScreen(
     userGroups: List<NodeGroupSummary>,
     selectedNodeGroupId: String?,
     nodeCounts: Map<String, Int>,
+    personalNodeCounts: Map<String, Int>,
+    countryOptions: List<CountryOption>,
+    selectedCountryCodes: Set<String>?,
     isLoading: Boolean,
     onSubscriptionSelected: (SubscriptionGroup) -> Unit,
     onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
@@ -179,6 +209,7 @@ private fun SubscriptionGroupSelectionScreen(
     onRefreshOfficialSubscription: (String, (Boolean) -> Unit) -> Unit,
     onRefreshUserGroup: (String, (MainViewModel.SubscriptionGroupRefreshResult) -> Unit) -> Unit,
     onDeleteOfficialSubscription: (String, (Boolean) -> Unit) -> Unit,
+    onSaveCountryCodes: (Set<String>?) -> Unit,
     onScanQrCode: () -> Unit,
     scannedSubscriptionText: String?,
     onScannedSubscriptionTextConsumed: () -> Unit,
@@ -197,7 +228,16 @@ private fun SubscriptionGroupSelectionScreen(
     var groupActionMode by rememberSaveable { mutableStateOf<GroupActionMode?>(null) }
     var importSource by remember { mutableStateOf(SubscriptionImportSource.REMOTE) }
     var importStatus by rememberSaveable { mutableStateOf<String?>(null) }
+    var countryDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var draftCountryCodes by remember { mutableStateOf(emptySet<String>()) }
     val importScope = rememberCoroutineScope()
+    val availableCountryCodes = remember(countryOptions) {
+        countryOptions.mapTo(mutableSetOf()) { it.code }
+    }
+    val selectedCodes = selectedCountryCodes
+    val isAllCountriesSelected = selectedCodes == null ||
+        (availableCountryCodes.isNotEmpty() &&
+            selectedCodes.containsAll(availableCountryCodes))
 
     val subscriptionFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -275,6 +315,24 @@ private fun SubscriptionGroupSelectionScreen(
         onBack = onBack,
         showBackNavigation = false,
         actions = {
+            IconButton(
+                onClick = {
+                    draftCountryCodes = selectedCountryCodes
+                        ?.intersect(availableCountryCodes)
+                        ?: availableCountryCodes
+                    countryDialogVisible = true
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.FilterList,
+                    contentDescription = "选择仓库源显示的地区",
+                    tint = if (isAllCountriesSelected) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
+                )
+            }
             IconButton(
                 onClick = {
                     groupActionMode = if (groupActionMode == GroupActionMode.UPDATE) {
@@ -411,6 +469,9 @@ private fun SubscriptionGroupSelectionScreen(
                             ) { group ->
                                 UserSubscriptionGroupCard(
                                     group = group,
+                                    nodeCount = personalNodeCounts[
+                                        group.id.removePrefix("imported:")
+                                    ] ?: 0,
                                     selected = selectedNodeGroupId == group.id,
                                     actionMode = groupActionMode,
                                     onClick = { onUserGroupSelected(group) },
@@ -461,6 +522,100 @@ private fun SubscriptionGroupSelectionScreen(
                 }
             }
         }
+    }
+
+    if (countryDialogVisible) {
+        AppAlertDialog(
+            onDismissRequest = { countryDialogVisible = false },
+            title = { Text("选择仓库源地区") },
+            text = {
+                Column {
+                    Text(
+                        text = "仓库源中的节点只显示所选地区。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { draftCountryCodes = availableCountryCodes }) {
+                            Text("全选")
+                        }
+                        TextButton(onClick = { draftCountryCodes = emptySet() }) {
+                            Text("清空")
+                        }
+                    }
+                    if (countryOptions.isEmpty()) {
+                        Text(
+                            text = "暂无可识别的地区",
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.heightIn(max = 360.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            items(countryOptions, key = CountryOption::code) { option ->
+                                val checked = option.code in draftCountryCodes
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .toggleable(value = checked, role = Role.Checkbox) {
+                                            draftCountryCodes = if (checked) {
+                                                draftCountryCodes - option.code
+                                            } else {
+                                                draftCountryCodes + option.code
+                                            }
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${option.flag} ${option.name}",
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "${option.nodeCount} 个节点",
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Checkbox(checked = checked, onCheckedChange = null)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { countryDialogVisible = false }) {
+                    Text("取消")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val savedCodes = if (
+                            availableCountryCodes.isNotEmpty() &&
+                            draftCountryCodes.containsAll(availableCountryCodes)
+                        ) {
+                            null
+                        } else {
+                            draftCountryCodes
+                        }
+                        onSaveCountryCodes(savedCodes)
+                        countryDialogVisible = false
+                    }
+                ) {
+                    Text("应用")
+                }
+            }
+        )
     }
 
     if (addDialogVisible) {
@@ -742,6 +897,7 @@ private fun SubscriptionGroupCard(
 @Composable
 private fun UserSubscriptionGroupCard(
     group: NodeGroupSummary,
+    nodeCount: Int,
     selected: Boolean,
     actionMode: GroupActionMode?,
     onClick: () -> Unit,
@@ -753,7 +909,7 @@ private fun UserSubscriptionGroupCard(
     val supportsRefresh = !group.subscriptionUrl.isNullOrBlank()
     GroupCard(
         name = group.name,
-        nodeCount = group.nodeCount,
+        nodeCount = nodeCount,
         traffic = personalSubscriptionTraffic(group),
         details = personalSubscriptionDetails(group),
         selected = selected,

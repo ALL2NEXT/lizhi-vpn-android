@@ -15,6 +15,7 @@ import io.github.HanJason233.chimera.data.local.NodeDao
 import io.github.HanJason233.chimera.data.model.*
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingSourceResolver
+import io.github.HanJason233.chimera.feature.nodegrouping.domain.WarehouseGroupingCountryResolver
 import io.github.HanJason233.chimera.platform.AndroidVpnHost
 
 /** Android foreground host; native details live behind CoreBackend. */
@@ -200,6 +201,7 @@ class BoxVpnService : VpnService() {
         }
         val selectedId = settings.selectedNodeId.first()
         val selectedGroup = NodeGroupKey.parse(settings.selectedNodeGroupId.first())
+        val warehouseCountryCodes = settings.warehouseGroupingCountryCodes.first()
         if (selectedGroup is NodeGroupKey.Country) {
             val regionNodes = countryGroupingNodes(
                 dao = dao,
@@ -215,7 +217,9 @@ class BoxVpnService : VpnService() {
                 it.type != NodeType.UNKNOWN && it.server.isNotBlank() && it.port in 1..65535
             } ?: error("没有可用节点")
         }
-        all.firstOrNull { it.id == selectedId && it.type != NodeType.UNKNOWN }?.let { return it }
+        WarehouseGroupingCountryResolver.filter(all, warehouseCountryCodes)
+            .firstOrNull { it.id == selectedId && it.type != NodeType.UNKNOWN }
+            ?.let { return it }
         val candidates = when (selectedGroup) {
             is NodeGroupKey.Country -> emptyList()
             is NodeGroupKey.Subscription -> {
@@ -225,7 +229,9 @@ class BoxVpnService : VpnService() {
             is NodeGroupKey.Imported -> dao.getNodesByGroup(selectedGroup.groupId).first()
             null -> dao.getSubscriptionNodes().first()
         }
-        return candidates.firstOrNull { it.type != NodeType.UNKNOWN && it.server.isNotBlank() && it.port in 1..65535 }
+        return WarehouseGroupingCountryResolver
+            .filter(candidates, warehouseCountryCodes)
+            .firstOrNull { it.type != NodeType.UNKNOWN && it.server.isNotBlank() && it.port in 1..65535 }
             ?: error("没有可用节点")
     }
 

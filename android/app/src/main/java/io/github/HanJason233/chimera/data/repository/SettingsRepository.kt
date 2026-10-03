@@ -124,6 +124,8 @@ class SettingsRepository(private val context: Context) {
         private val SELECTED_COUNTRY_CODE = stringPreferencesKey("selected_country_code")
         private val COUNTRY_GROUPING_SOURCE_IDS =
             stringSetPreferencesKey("country_grouping_source_ids")
+        private val WAREHOUSE_GROUPING_COUNTRY_CODES =
+            stringSetPreferencesKey("warehouse_grouping_country_codes")
         private val NODE_GROUPING_MODE = stringPreferencesKey("node_grouping_mode")
         private val SELECTED_NODE_GROUP_ID = stringPreferencesKey("selected_node_group_id")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
@@ -452,6 +454,27 @@ class SettingsRepository(private val context: Context) {
                 preferences.remove(COUNTRY_GROUPING_SOURCE_IDS)
             } else {
                 preferences[COUNTRY_GROUPING_SOURCE_IDS] = sourceIds.toSet()
+            }
+        }
+    }
+
+    /** 仓库源地区筛选；null 表示默认包含全部地区。 */
+    val warehouseGroupingCountryCodes: Flow<Set<String>?> =
+        context.dataStore.data.map { preferences ->
+            preferences[WAREHOUSE_GROUPING_COUNTRY_CODES]
+                ?.mapNotNull(CountryCodeResolver::normalizeCountryCode)
+                ?.toSet()
+        }
+
+    suspend fun setWarehouseGroupingCountryCodes(countryCodes: Set<String>?) {
+        val normalizedCodes = countryCodes
+            ?.mapNotNull(CountryCodeResolver::normalizeCountryCode)
+            ?.toSet()
+        context.dataStore.edit { preferences ->
+            if (normalizedCodes == null) {
+                preferences.remove(WAREHOUSE_GROUPING_COUNTRY_CODES)
+            } else {
+                preferences[WAREHOUSE_GROUPING_COUNTRY_CODES] = normalizedCodes
             }
         }
     }
