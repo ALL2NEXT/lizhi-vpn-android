@@ -3,6 +3,8 @@ package io.github.HanJason233.chimera.feature.nodegrouping.ui
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +29,8 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.InsertDriveFile
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Subscriptions
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
@@ -43,6 +47,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -67,11 +74,21 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class GroupActionMode {
     UPDATE,
     EDIT,
     DELETE
+}
+
+private enum class SubscriptionImportSource {
+    REMOTE,
+    CLIPBOARD,
+    QR_CODE,
+    FILE
 }
 
 private enum class SubscriptionTrafficStatus {
@@ -178,10 +195,38 @@ private fun SubscriptionGroupSelectionScreen(
     var editingGroupId by rememberSaveable { mutableStateOf("") }
     var deletingOfficialSubscription by rememberSaveable { mutableStateOf(false) }
     var groupActionMode by rememberSaveable { mutableStateOf<GroupActionMode?>(null) }
+    var importSource by remember { mutableStateOf(SubscriptionImportSource.REMOTE) }
+    var importStatus by rememberSaveable { mutableStateOf<String?>(null) }
+    val importScope = rememberCoroutineScope()
+
+    val subscriptionFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        importSource = SubscriptionImportSource.FILE
+        importScope.launch {
+            val content = runCatching {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)
+                        ?.bufferedReader(Charsets.UTF_8)
+                        ?.use { it.readText() }
+                }
+            }.getOrNull()
+            if (content.isNullOrBlank()) {
+                Toast.makeText(context, "无法读取订阅文件", Toast.LENGTH_SHORT).show()
+            } else {
+                subscriptionInput = content
+                importStatus = "已读取文件内容（${content.length} 字符）"
+                addDialogVisible = true
+            }
+        }
+    }
 
     LaunchedEffect(scannedSubscriptionText) {
         scannedSubscriptionText?.let { text ->
+            importSource = SubscriptionImportSource.QR_CODE
             subscriptionInput = text.trim()
+            importStatus = "已读取二维码内容（${text.trim().length} 字符）"
             addDialogVisible = true
             onScannedSubscriptionTextConsumed()
         }
@@ -198,7 +243,9 @@ private fun SubscriptionGroupSelectionScreen(
         if (text.isNullOrBlank()) {
             Toast.makeText(context, "剪贴板为空", Toast.LENGTH_SHORT).show()
         } else {
+            importSource = SubscriptionImportSource.CLIPBOARD
             subscriptionInput = text
+            importStatus = "已读取剪贴板内容（${text.length} 字符）"
             addDialogVisible = true
         }
     }
@@ -256,6 +303,8 @@ private fun SubscriptionGroupSelectionScreen(
                     groupActionMode = null
                     groupName = ""
                     subscriptionInput = ""
+                    importSource = SubscriptionImportSource.REMOTE
+                    importStatus = null
                     addDialogVisible = true
                 }
             ) {
@@ -429,49 +478,92 @@ private fun SubscriptionGroupSelectionScreen(
                         placeholder = { Text("例如：我的机场") },
                         enabled = !isSubmitting
                     )
-                    OutlinedTextField(
-                        value = subscriptionInput,
-                        onValueChange = { subscriptionInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                        maxLines = 4,
-                        label = { Text("订阅连接（可选）") },
-                        placeholder = { Text("输入订阅链接或节点内容") },
-                        enabled = !isSubmitting
-                    )
                     Text(
-                        text = "也可以使用下面的图标从剪贴板或二维码填充",
+                        text = "导入方式",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            IconButton(
-                                onClick = ::importClipboard,
-                                enabled = !isSubmitting
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ContentPaste,
-                                    contentDescription = "剪贴板导入"
-                                )
-                            }
-                            Text("剪贴板", fontSize = 12.sp)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SubscriptionImportOption(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Rounded.Link,
+                                label = "网络订阅",
+                                selected = importSource == SubscriptionImportSource.REMOTE,
+                                enabled = !isSubmitting,
+                                onClick = {
+                                    importSource = SubscriptionImportSource.REMOTE
+                                    subscriptionInput = ""
+                                    importStatus = null
+                                }
+                            )
+                            SubscriptionImportOption(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Default.ContentPaste,
+                                label = "剪贴板",
+                                selected = importSource == SubscriptionImportSource.CLIPBOARD,
+                                enabled = !isSubmitting,
+                                onClick = ::importClipboard
+                            )
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            IconButton(
-                                onClick = onScanQrCode,
-                                enabled = !isSubmitting
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.QrCodeScanner,
-                                    contentDescription = "二维码导入"
-                                )
-                            }
-                            Text("二维码", fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SubscriptionImportOption(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Default.QrCodeScanner,
+                                label = "二维码",
+                                selected = importSource == SubscriptionImportSource.QR_CODE,
+                                enabled = !isSubmitting,
+                                onClick = {
+                                    importSource = SubscriptionImportSource.QR_CODE
+                                    subscriptionInput = ""
+                                    importStatus = null
+                                    onScanQrCode()
+                                }
+                            )
+                            SubscriptionImportOption(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Rounded.InsertDriveFile,
+                                label = "文件",
+                                selected = importSource == SubscriptionImportSource.FILE,
+                                enabled = !isSubmitting,
+                                onClick = {
+                                    importSource = SubscriptionImportSource.FILE
+                                    subscriptionInput = ""
+                                    importStatus = null
+                                    subscriptionFilePicker.launch(arrayOf("*/*"))
+                                }
+                            )
+                        }
+                    }
+                    if (importSource == SubscriptionImportSource.REMOTE) {
+                        OutlinedTextField(
+                            value = subscriptionInput,
+                            onValueChange = { subscriptionInput = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("订阅链接") },
+                            placeholder = { Text("输入远程订阅链接") },
+                            enabled = !isSubmitting
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = importStatus ?: "请点击上方入口读取订阅内容",
+                                modifier = Modifier.padding(12.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp
+                            )
                         }
                     }
                 }
@@ -689,6 +781,57 @@ private fun GroupTypeHeader(title: String) {
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold
     )
+}
+
+@Composable
+private fun SubscriptionImportOption(
+    modifier: Modifier,
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = label,
+                modifier = Modifier.padding(start = 6.dp),
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }
 
 @Composable
