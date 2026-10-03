@@ -102,7 +102,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private data class ParsedSubscriptionPart(
         val url: String?,
-        val subscription: ParsedSubscription
+        val subscription: ParsedSubscription,
+        val groupLabel: String? = null
     )
 
     private suspend fun fetchRemoteSubscriptionResults(
@@ -130,6 +131,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private suspend fun parseFullSubscriptionContent(content: String): ParsedSubscription =
+        withContext(Dispatchers.Default) {
+            ParsedSubscription(subscriptionParser.parseSubscription(content))
+        }
+
     private suspend fun parseSubscriptionInput(
         input: SubscriptionImportInput
     ): Result<List<ParsedSubscriptionPart>> {
@@ -148,21 +154,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            is SubscriptionImportInput.MixedSubscription -> {
+                fetchRemoteSubscriptions(input.urls).map { parsed ->
+                    buildList {
+                        add(
+                            ParsedSubscriptionPart(
+                                url = null,
+                                subscription = parseFullSubscriptionContent(input.content),
+                                groupLabel = "内容"
+                            )
+                        )
+                        input.urls.forEachIndexed { index, url ->
+                            add(
+                                ParsedSubscriptionPart(
+                                    url = url,
+                                    subscription = parsed[index],
+                                    groupLabel = "远程 ${index + 1}"
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
             is SubscriptionImportInput.FullContent -> if (input.content.isBlank()) {
                 Result.success(emptyList())
             } else {
-                withContext(Dispatchers.Default) {
-                    Result.success(
-                        listOf(
-                            ParsedSubscriptionPart(
-                                url = null,
-                                subscription = ParsedSubscription(
-                                    subscriptionParser.parseSubscription(input.content)
-                                )
-                            )
+                Result.success(
+                    listOf(
+                        ParsedSubscriptionPart(
+                            url = null,
+                            subscription = parseFullSubscriptionContent(input.content)
                         )
                     )
-                }
+                )
             }
         }
     }
@@ -1749,23 +1774,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val normalizedInput = input?.trim().orEmpty()
             val importInput = SubscriptionInputDetector.detect(normalizedInput)
             var failedRemoteCount = 0
+            val hasMultipleRemoteInput = importInput is SubscriptionImportInput.MultipleRemoteSubscriptions ||
+                importInput is SubscriptionImportInput.MixedSubscription
             // 多个远程订阅逐条处理，单个链接失败不阻断其他链接创建。
-            val parsedParts = if (importInput is SubscriptionImportInput.MultipleRemoteSubscriptions) {
-                val results = fetchRemoteSubscriptionResults(importInput.urls)
-                results.mapIndexedNotNull { index, result ->
-                    val parsed = result.getOrNull()
-                    if (parsed == null || parsed.nodes.isEmpty()) {
-                        failedRemoteCount++
-                        Log.e(
-                            tag,
-                            "Unable to import remote subscription #${index + 1}",
-                            result.exceptionOrNull()
-                        )
-                        null
-                    } else {
-                        ParsedSubscriptionPart(importInput.urls[index], parsed)
-                    }
+            val parsedParts = if (hasMultipleRemoteInput) {
+                val remoteUrls = when (importInput) {
+                    is SubscriptionImportInput.MultipleRemoteSubscriptions -> importInput.urls
+                    is SubscriptionImportInput.MixedSubscription -> importInput.urls
+                    else -> emptyList()
                 }
+                val contentParts = if (importInput is SubscriptionImportInput.MixedSubscription) {
+                    val contentPart = parseFullSubscriptionContent(importInput.content)
+                    if (contentPart.nodes.isEmpty()) {
+                        failedRemoteCount++
+                        emptyList()
+                    } else {
+                        listOf(ParsedSubscriptionPart(null, contentPart, "内容"))
+                    }
+                } else {
+                    emptyList()
+                }
+                val remoteParts = fetchRemoteSubscriptionResults(remoteUrls)
+                    .mapIndexedNotNull { index, result ->
+                        val parsed = result.getOrNull()
+                        if (parsed == null || parsed.nodes.isEmpty()) {
+                            failedRemoteCount++
+                            Log.e(
+                                tag,
+                                "Unable to import remote subscription #${index + 1}",
+                                result.exceptionOrNull()
+                            )
+                            null
+                        } else {
+                            val groupLabel = if (importInput is SubscriptionImportInput.MixedSubscription) {
+                                "远程 ${index + 1}"
+                            } else {
+                                null
+                            }
+                            ParsedSubscriptionPart(remoteUrls[index], parsed, groupLabel)
+                        }
+                    }
+                contentParts + remoteParts
             } else {
                 val parsedSubscriptions = parseSubscriptionInput(importInput)
                 if (parsedSubscriptions.isFailure) {
@@ -1783,7 +1832,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             if (
-                importInput is SubscriptionImportInput.MultipleRemoteSubscriptions &&
+                hasMultipleRemoteInput &&
                 parsedParts.all { it.subscription.nodes.isEmpty() }
             ) {
                 onResult(
@@ -1811,8 +1860,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val preparedGroups = parsedParts.mapIndexed { groupIndex, part ->
                 val groupId = "group_${UUID.randomUUID()}"
                 val groupName = if (
+                    part.groupLabel != null
+                ) {
+                    "$normalizedName ${part.groupLabel}"
+                } else if (
                     parsedParts.size > 1 ||
-                    importInput is SubscriptionImportInput.MultipleRemoteSubscriptions
+                    hasMultipleRemoteInput
                 ) {
                     "$normalizedName ${groupIndex + 1}"
                 } else {

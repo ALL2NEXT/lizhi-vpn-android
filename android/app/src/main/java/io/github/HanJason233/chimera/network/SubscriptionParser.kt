@@ -103,32 +103,9 @@ class SubscriptionParser {
     fun parseSubscription(content: String): List<Node> {
         Log.d(tag, "Original content length: ${content.length}")
 
-        val normalizedContent = content.trim().removePrefix("\uFEFF")
-        ClashYamlParser.parseToUris(normalizedContent)?.let { links ->
-            Log.d(tag, "Parsed ${links.size} Clash YAML proxies")
-            return links.mapNotNull(::parseNodeLink)
-        }
-        val finalContent = decodeSubscriptionContent(normalizedContent)
-        ClashYamlParser.parseToUris(finalContent)?.let { links ->
-            Log.d(tag, "Parsed ${links.size} Clash YAML proxies")
-            return links.mapNotNull(::parseNodeLink)
-        }
-        
-        val lines = finalContent.split("\n", "\r\n")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            
-        Log.d(tag, "Parsed ${lines.size} lines")
-        
-        return lines.mapNotNull { parseNodeLink(it) }
-    }
-
-    private fun decodeSubscriptionContent(content: String): String {
-        val raw = content.trim()
-        if (raw.contains("://")) return raw
-
-        return runCatching { decodeBase64Compat(raw) }
-            .getOrDefault(raw)
+        val uris = SubscriptionConverter.toStandardUris(content)
+        Log.d(tag, "Converted ${uris.size} standard subscription URIs")
+        return uris.mapNotNull(::parseNodeLink)
     }
     
     /**

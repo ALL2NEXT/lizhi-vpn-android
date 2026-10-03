@@ -69,13 +69,48 @@ class SubscriptionImportUrlTest {
     }
 
     @Test
-    fun mixedRemoteUrlsAndNodeUrisRemainFullContent() {
+    fun mixedRemoteUrlsAndNodeUrisAreSplitIntoContentAndRemoteUrls() {
         assertEquals(
-            SubscriptionImportInput.FullContent(
-                "https://one.example.com/sub\nvless://node@example.com:443"
+            SubscriptionImportInput.MixedSubscription(
+                content = "vless://node@example.com:443",
+                urls = listOf("https://one.example.com/sub")
             ),
             SubscriptionInputDetector.detect(
                 "https://one.example.com/sub\nvless://node@example.com:443"
+            )
+        )
+    }
+
+    @Test
+    fun mixedYamlContentKeepsItsIndentation() {
+        val yaml = """
+            proxies:
+              - name: node
+                type: vmess
+                server: example.com
+        """.trimIndent()
+
+        assertEquals(
+            SubscriptionImportInput.MixedSubscription(
+                content = yaml,
+                urls = listOf("https://example.com/sub")
+            ),
+            SubscriptionInputDetector.detect("$yaml\nhttps://example.com/sub")
+        )
+    }
+
+    @Test
+    fun detectsMarkdownRemoteLinks() {
+        assertEquals(
+            SubscriptionImportInput.MultipleRemoteSubscriptions(
+                listOf(
+                    "https://one.example.com/sub",
+                    "http://two.example.com:8080/sub"
+                )
+            ),
+            SubscriptionInputDetector.detect(
+                "[one](https://one.example.com/sub)\n" +
+                    "- [two](http://two.example.com:8080/sub)"
             )
         )
     }

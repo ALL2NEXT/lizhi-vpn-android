@@ -6,6 +6,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 internal sealed interface SubscriptionImportInput {
     data class RemoteSubscription(val url: String) : SubscriptionImportInput
     data class MultipleRemoteSubscriptions(val urls: List<String>) : SubscriptionImportInput
+    data class MixedSubscription(
+        val content: String,
+        val urls: List<String>
+    ) : SubscriptionImportInput
     data class FullContent(val content: String) : SubscriptionImportInput
 }
 
@@ -16,23 +20,51 @@ internal sealed interface SubscriptionImportInput {
 internal object SubscriptionInputDetector {
     fun detect(value: String): SubscriptionImportInput {
         val content = value.trim()
-        val lines = content.lineSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .toList()
-        val remoteUrls = lines.mapNotNull(SubscriptionImportUrl::detect).distinct()
+        val contentLines = mutableListOf<String>()
+        val remoteUrls = mutableListOf<String>()
+
+        // 只把整行的 HTTP/HTTPS 地址识别为远程订阅，避免误伤 YAML 内部字段。
+        content.lineSequence().forEach { rawLine ->
+            val line = rawLine.trim()
+            if (line.isBlank()) return@forEach
+
+            val remoteUrl = SubscriptionImportUrl.detect(line)
+                ?: detectMarkdownRemoteUrl(line)
+            if (remoteUrl != null) {
+                remoteUrls += remoteUrl
+            } else {
+                // 保留原始行的缩进，避免破坏 YAML 结构。
+                contentLines += rawLine
+            }
+        }
+
+        val distinctRemoteUrls = remoteUrls.distinct()
+        val contentPart = contentLines.joinToString("\n").trim()
 
         return when {
-            lines.size > 1 && remoteUrls.size == lines.size -> {
-                SubscriptionImportInput.MultipleRemoteSubscriptions(remoteUrls)
+            contentPart.isNotBlank() && distinctRemoteUrls.isNotEmpty() -> {
+                SubscriptionImportInput.MixedSubscription(contentPart, distinctRemoteUrls)
             }
 
-            remoteUrls.size == 1 && lines.size == 1 -> {
-                SubscriptionImportInput.RemoteSubscription(remoteUrls.single())
+            distinctRemoteUrls.size > 1 -> {
+                SubscriptionImportInput.MultipleRemoteSubscriptions(distinctRemoteUrls)
+            }
+
+            distinctRemoteUrls.size == 1 -> {
+                SubscriptionImportInput.RemoteSubscription(distinctRemoteUrls.single())
             }
 
             else -> SubscriptionImportInput.FullContent(content)
         }
+    }
+
+    private fun detectMarkdownRemoteUrl(line: String): String? {
+        val normalizedLine = line.removePrefix("&#x20;").trim()
+        val match = Regex(
+            "^(?:[-*]\\s+)?\\[[^]]*]\\((https?://[^)\\s]+)\\)$",
+            RegexOption.IGNORE_CASE
+        ).matchEntire(normalizedLine) ?: return null
+        return SubscriptionImportUrl.detect(match.groupValues[1])
     }
 }
 
