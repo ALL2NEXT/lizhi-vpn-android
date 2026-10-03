@@ -18,6 +18,19 @@ enum class NodeGroupStorageType {
     IMPORTED
 }
 
+/** 私人源卡片图标来源。 */
+enum class PersonalSourceIconMode {
+    DEFAULT,
+    AUTO_REMOTE,
+    CUSTOM_REMOTE,
+    LOCAL;
+
+    companion object {
+        fun fromStorage(value: String?): PersonalSourceIconMode =
+            entries.firstOrNull { it.name == value } ?: AUTO_REMOTE
+    }
+}
+
 /**
  * 节点组的稳定标识，避免使用显示名称作为选中状态或数据库关联键。
  */
@@ -75,5 +88,8 @@ data class NodeGroupSummary(
     val subscriptionDownloadBytes: Long? = null,
     val subscriptionTotalBytes: Long? = null,
     val subscriptionExpireAt: Long? = null,
-    val subscriptionUpdatedAt: Long? = null
+    val subscriptionUpdatedAt: Long? = null,
+    val iconMode: String = PersonalSourceIconMode.AUTO_REMOTE.name,
+    val customIconUrl: String? = null,
+    val localIconFile: String? = null
 )

@@ -18,7 +18,7 @@ import java.io.File
 
 @Database(
     entities = [Node::class, NodeGroupEntity::class, NodeGroupMemberEntity::class],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -52,6 +52,15 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE nodes ADD COLUMN subscriptionUpdatedAt INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionUpdatedAt INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE node_groups ADD COLUMN iconMode TEXT NOT NULL DEFAULT 'AUTO_REMOTE'"
+                )
+                db.execSQL("ALTER TABLE node_groups ADD COLUMN customIconUrl TEXT")
+                db.execSQL("ALTER TABLE node_groups ADD COLUMN localIconFile TEXT")
             }
         }
 
@@ -100,7 +109,12 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                .addMigrations(
+                    MIGRATION_8_9,
+                    MIGRATION_9_10,
+                    MIGRATION_10_11,
+                    MIGRATION_11_12
+                )
                 .build()
         }
 

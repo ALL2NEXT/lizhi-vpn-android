@@ -39,6 +39,7 @@ import io.github.HanJason233.chimera.network.LatencyTester
 import io.github.HanJason233.chimera.network.NodeDownloadBandwidthTester
 import io.github.HanJason233.chimera.network.SpeedTestService
 import io.github.HanJason233.chimera.network.SubscriptionParser
+import io.github.HanJason233.chimera.network.PersonalSourceIconStore
 import io.github.HanJason233.chimera.network.SubscriptionImportInput
 import io.github.HanJason233.chimera.network.SubscriptionInputDetector
 import io.github.HanJason233.chimera.network.ParsedSubscription
@@ -330,6 +331,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     subscriptionDownloadBytes = item.group.subscriptionDownloadBytes,
                     subscriptionTotalBytes = item.group.subscriptionTotalBytes,
                     subscriptionExpireAt = item.group.subscriptionExpireAt,
+                    iconMode = item.group.iconMode,
+                    customIconUrl = item.group.customIconUrl,
+                    localIconFile = item.group.localIconFile,
                     subscriptionUpdatedAt = item.group.subscriptionUpdatedAt
                         .takeIf { it > 0L }
                         ?: item.group.createdAt.takeIf { it > 0L }
@@ -2329,10 +2333,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val deleted = withContext(Dispatchers.IO) {
                 val selectedGroupId = settingsRepository.selectedNodeGroupId.first()
                 val dao = nodeDao()
-                if (dao.getNodeGroupById(groupId) == null) {
+                val group = dao.getNodeGroupById(groupId)
+                if (group == null) {
                     false
                 } else {
                     dao.deleteNodeGroupWithNodes(groupId)
+                    PersonalSourceIconStore.delete(getApplication<Application>(), group.localIconFile)
                     if (selectedGroupId == NodeGroupKey.Imported(groupId).value) {
                         val fallbackSourceId = activeSubscriptionSourceId.value
                         settingsRepository.setSelectedCountryCode(null)
@@ -2348,6 +2354,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             onResult(deleted)
+        }
+    }
+
+    /** 保存私人源卡片图标来源及可选远程链接/本地图片。 */
+    fun updatePersonalSourceIcon(
+        groupId: String,
+        iconMode: String,
+        customIconUrl: String?,
+        localIconFile: String?,
+        onResult: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val updated = withContext(Dispatchers.IO) {
+                nodeDao().updateNodeGroupIcon(
+                    groupId = groupId,
+                    iconMode = iconMode,
+                    customIconUrl = customIconUrl,
+                    localIconFile = localIconFile
+                ) > 0
+            }
+            onResult(updated)
         }
     }
 

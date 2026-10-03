@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.BorderStroke
@@ -50,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,13 +59,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -81,9 +87,12 @@ import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.NodeGroupSummary
 import io.github.HanJason233.chimera.data.model.NodeSource
+import io.github.HanJason233.chimera.data.model.PersonalSourceIconMode
 import io.github.HanJason233.chimera.data.model.SubscriptionGroup
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingStrategy
 import io.github.HanJason233.chimera.feature.nodegrouping.model.CountryOption
+import io.github.HanJason233.chimera.network.SubscriptionFaviconLoader
+import io.github.HanJason233.chimera.network.PersonalSourceIconStore
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.util.TrafficUsageFormatter
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
@@ -180,6 +189,7 @@ internal fun SubscriptionGroupSelectionDestination(
         onViewUserGroupDetails = onViewUserGroupDetails,
         onCreateSubscriptionGroup = onCreateSubscriptionGroup,
         onUpdateSubscriptionGroup = onUpdateSubscriptionGroup,
+        onUpdateUserGroupIcon = viewModel::updatePersonalSourceIcon,
         onDeleteSubscriptionGroup = onDeleteSubscriptionGroup,
         onRefreshOfficialSubscription = { sourceId, onResult ->
             viewModel.refreshOfficialSubscription(sourceId, onResult)
@@ -215,6 +225,7 @@ private fun SubscriptionGroupSelectionScreen(
     onViewUserGroupDetails: (NodeGroupSummary) -> Unit,
     onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
     onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
+    onUpdateUserGroupIcon: (String, String, String?, String?, (Boolean) -> Unit) -> Unit,
     onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
     onRefreshOfficialSubscription: (String, (Boolean) -> Unit) -> Unit,
     onRefreshUserGroup: (String, (MainViewModel.SubscriptionGroupRefreshResult) -> Unit) -> Unit,
@@ -240,6 +251,13 @@ private fun SubscriptionGroupSelectionScreen(
     var importStatus by rememberSaveable { mutableStateOf<String?>(null) }
     var countryDialogVisible by rememberSaveable { mutableStateOf(false) }
     var draftCountryCodes by remember { mutableStateOf(emptySet<String>()) }
+    var iconDialogGroup by remember { mutableStateOf<NodeGroupSummary?>(null) }
+    var editingIconMode by rememberSaveable { mutableStateOf(PersonalSourceIconMode.AUTO_REMOTE.name) }
+    var editingCustomIconUrl by rememberSaveable { mutableStateOf("") }
+    var stagedLocalIconFile by remember { mutableStateOf<String?>(null) }
+    var iconUrlError by remember { mutableStateOf<String?>(null) }
+    var isSavingIconSettings by remember { mutableStateOf(false) }
+    var isImportingLocalIcon by remember { mutableStateOf(false) }
     val importScope = rememberCoroutineScope()
     val availableCountryCodes = remember(countryOptions) {
         countryOptions.mapTo(mutableSetOf()) { it.code }
@@ -248,6 +266,101 @@ private fun SubscriptionGroupSelectionScreen(
     val isAllCountriesSelected = selectedCodes == null ||
         (availableCountryCodes.isNotEmpty() &&
             selectedCodes.containsAll(availableCountryCodes))
+
+    fun discardStagedLocalIcon() {
+        val group = iconDialogGroup
+        stagedLocalIconFile
+            ?.takeIf { it != group?.localIconFile }
+            ?.let { PersonalSourceIconStore.delete(context, it) }
+        stagedLocalIconFile = null
+    }
+
+    fun closeIconSettings() {
+        if (isSavingIconSettings || isImportingLocalIcon) return
+        discardStagedLocalIcon()
+        iconDialogGroup = null
+        iconUrlError = null
+    }
+
+    fun openIconSettings(group: NodeGroupSummary) {
+        discardStagedLocalIcon()
+        iconDialogGroup = group
+        editingIconMode = PersonalSourceIconMode.fromStorage(group.iconMode).name
+        editingCustomIconUrl = group.customIconUrl.orEmpty()
+        stagedLocalIconFile = null
+        iconUrlError = null
+    }
+
+    fun saveIconSettings() {
+        val group = iconDialogGroup ?: return
+        val mode = PersonalSourceIconMode.fromStorage(editingIconMode)
+        val remoteUrl = if (mode == PersonalSourceIconMode.CUSTOM_REMOTE) {
+            SubscriptionFaviconLoader.customImageUrl(editingCustomIconUrl)
+        } else {
+            null
+        }
+        if (mode == PersonalSourceIconMode.CUSTOM_REMOTE && remoteUrl == null) {
+            iconUrlError = "请输入有效的 HTTP 或 HTTPS 图片链接"
+            return
+        }
+        val localFile = if (mode == PersonalSourceIconMode.LOCAL) {
+            stagedLocalIconFile ?: group.localIconFile
+        } else {
+            null
+        }
+        if (mode == PersonalSourceIconMode.LOCAL && localFile == null) return
+
+        isSavingIconSettings = true
+        onUpdateUserGroupIcon(
+            group.id.removePrefix("imported:"),
+            mode.name,
+            remoteUrl,
+            localFile
+        ) { success ->
+            isSavingIconSettings = false
+            if (success) {
+                if (group.localIconFile != localFile) {
+                    PersonalSourceIconStore.delete(context, group.localIconFile)
+                }
+                stagedLocalIconFile
+                    ?.takeIf { it != localFile }
+                    ?.let { PersonalSourceIconStore.delete(context, it) }
+                stagedLocalIconFile = null
+                iconDialogGroup = null
+                iconUrlError = null
+            } else {
+                Toast.makeText(context, "图标设置保存失败", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val localIconPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val group = iconDialogGroup ?: return@rememberLauncherForActivityResult
+        isImportingLocalIcon = true
+        importScope.launch {
+            val fileName = withContext(Dispatchers.IO) {
+                PersonalSourceIconStore.importImage(
+                    context.applicationContext,
+                    group.id.removePrefix("imported:"),
+                    uri
+                )
+            }
+            isImportingLocalIcon = false
+            if (fileName == null) {
+                Toast.makeText(context, "无法读取图片，请选择有效的图片文件", Toast.LENGTH_SHORT).show()
+            } else {
+                stagedLocalIconFile
+                    ?.takeIf { it != group.localIconFile }
+                    ?.let { PersonalSourceIconStore.delete(context, it) }
+                stagedLocalIconFile = fileName
+                editingIconMode = PersonalSourceIconMode.LOCAL.name
+                iconUrlError = null
+            }
+        }
+    }
 
     val subscriptionFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -417,6 +530,7 @@ private fun SubscriptionGroupSelectionScreen(
                                     onClick = { onUserGroupSelected(group) },
                                     onViewDetails = { onViewUserGroupDetails(group) },
                                     onEdit = { editGroup(group) },
+                                    onConfigureIcon = { openIconSettings(group) },
                                     onDelete = { confirmDeleteGroup(group) },
                                     onRefresh = {
                                         onRefreshUserGroup(group.id.removePrefix("imported:")) { result ->
@@ -803,6 +917,158 @@ private fun SubscriptionGroupSelectionScreen(
             }
         )
     }
+
+    iconDialogGroup?.let { group ->
+        val selectedMode = PersonalSourceIconMode.fromStorage(editingIconMode)
+        val selectedLocalIcon = stagedLocalIconFile ?: group.localIconFile
+        val canSaveIconSettings = when (selectedMode) {
+            PersonalSourceIconMode.DEFAULT,
+            PersonalSourceIconMode.AUTO_REMOTE -> true
+            PersonalSourceIconMode.CUSTOM_REMOTE -> editingCustomIconUrl.isNotBlank()
+            PersonalSourceIconMode.LOCAL -> selectedLocalIcon != null
+        }
+        AppAlertDialog(
+            onDismissRequest = { closeIconSettings() },
+            title = { Text("${group.name}的图标") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PersonalIconModeOption(
+                        title = "默认图标",
+                        mode = PersonalSourceIconMode.DEFAULT,
+                        selectedMode = selectedMode,
+                        enabled = !isSavingIconSettings && !isImportingLocalIcon,
+                        onSelect = { editingIconMode = it.name }
+                    )
+                    PersonalIconModeOption(
+                        title = "远程自动获取（根据订阅地址）",
+                        mode = PersonalSourceIconMode.AUTO_REMOTE,
+                        selectedMode = selectedMode,
+                        enabled = !isSavingIconSettings && !isImportingLocalIcon,
+                        onSelect = { editingIconMode = it.name }
+                    )
+                    PersonalIconModeOption(
+                        title = "远程指定图标链接",
+                        mode = PersonalSourceIconMode.CUSTOM_REMOTE,
+                        selectedMode = selectedMode,
+                        enabled = !isSavingIconSettings && !isImportingLocalIcon,
+                        onSelect = {
+                            editingIconMode = it.name
+                            iconUrlError = null
+                        }
+                    )
+                    if (selectedMode == PersonalSourceIconMode.CUSTOM_REMOTE) {
+                        OutlinedTextField(
+                            value = editingCustomIconUrl,
+                            onValueChange = {
+                                editingCustomIconUrl = it
+                                iconUrlError = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("图标图片链接") },
+                            placeholder = { Text("https://example.com/icon.png") },
+                            isError = iconUrlError != null,
+                            supportingText = iconUrlError?.let { message ->
+                                { Text(message) }
+                            },
+                            enabled = !isSavingIconSettings && !isImportingLocalIcon
+                        )
+                    }
+                    PersonalIconModeOption(
+                        title = "本地选择图标",
+                        mode = PersonalSourceIconMode.LOCAL,
+                        selectedMode = selectedMode,
+                        enabled = !isSavingIconSettings && !isImportingLocalIcon,
+                        onSelect = { editingIconMode = it.name }
+                    )
+                    if (selectedMode == PersonalSourceIconMode.LOCAL) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = if (selectedLocalIcon == null) {
+                                    "尚未选择图片"
+                                } else {
+                                    "已选择本地图片"
+                                },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            TextButton(
+                                onClick = { localIconPicker.launch(arrayOf("image/*")) },
+                                enabled = !isSavingIconSettings && !isImportingLocalIcon
+                            ) {
+                                if (isImportingLocalIcon) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                } else {
+                                    Text(if (selectedLocalIcon == null) "选择图片" else "更换图片")
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        text = "远程图标不可用时会继续显示默认图标。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { closeIconSettings() },
+                    enabled = !isSavingIconSettings && !isImportingLocalIcon
+                ) {
+                    Text("取消")
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { saveIconSettings() },
+                    enabled = canSaveIconSettings &&
+                        !isSavingIconSettings && !isImportingLocalIcon
+                ) {
+                    if (isSavingIconSettings) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    } else {
+                        Text("保存")
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun PersonalIconModeOption(
+    title: String,
+    mode: PersonalSourceIconMode,
+    selectedMode: PersonalSourceIconMode,
+    enabled: Boolean,
+    onSelect: (PersonalSourceIconMode) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onSelect(mode) },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selectedMode == mode,
+            onClick = { onSelect(mode) },
+            enabled = enabled
+        )
+        Text(
+            text = title,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            },
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
 }
 
 @Composable
@@ -847,12 +1113,17 @@ private fun UserSubscriptionGroupCard(
     onClick: () -> Unit,
     onViewDetails: () -> Unit,
     onEdit: () -> Unit,
+    onConfigureIcon: () -> Unit,
     onDelete: () -> Unit,
     onRefresh: () -> Unit
 ) {
     val supportsRefresh = !group.subscriptionUrl.isNullOrBlank()
     GroupCard(
         name = group.name,
+        subscriptionUrl = group.subscriptionUrl,
+        iconMode = group.iconMode,
+        customIconUrl = group.customIconUrl,
+        localIconFile = group.localIconFile,
         nodeCount = nodeCount,
         traffic = personalSubscriptionTrafficV2(group),
         updatedAt = group.subscriptionUpdatedAt,
@@ -860,6 +1131,7 @@ private fun UserSubscriptionGroupCard(
         selected = selected,
         onClick = onClick,
         onViewDetails = onViewDetails,
+        onConfigureIcon = onConfigureIcon,
         actionMode = actionMode,
         onGroupAction = when (actionMode) {
             GroupActionMode.UPDATE -> onRefresh
@@ -941,6 +1213,10 @@ private fun SubscriptionImportOption(
 @Composable
 private fun GroupCard(
     name: String,
+    subscriptionUrl: String? = null,
+    iconMode: String = PersonalSourceIconMode.AUTO_REMOTE.name,
+    customIconUrl: String? = null,
+    localIconFile: String? = null,
     nodeCount: Int,
     traffic: SubscriptionTrafficInfo? = null,
     updatedAt: Long? = null,
@@ -948,6 +1224,7 @@ private fun GroupCard(
     selected: Boolean,
     onClick: () -> Unit,
     onViewDetails: () -> Unit,
+    onConfigureIcon: (() -> Unit)? = null,
     actionMode: GroupActionMode? = null,
     onGroupAction: () -> Unit = onViewDetails,
     actionEnabled: Boolean = true,
@@ -957,6 +1234,10 @@ private fun GroupCard(
 ) {
     ModernGroupCard(
         name = name,
+        subscriptionUrl = subscriptionUrl,
+        iconMode = iconMode,
+        customIconUrl = customIconUrl,
+        localIconFile = localIconFile,
         nodeCount = nodeCount,
         traffic = traffic,
         updatedAt = updatedAt,
@@ -964,6 +1245,7 @@ private fun GroupCard(
         selected = selected,
         onClick = onClick,
         onViewDetails = onViewDetails,
+        onConfigureIcon = onConfigureIcon,
         onRefresh = onRefresh,
         onEdit = onEdit,
         onDelete = onDelete,
@@ -976,6 +1258,10 @@ private fun GroupCard(
 @Composable
 private fun ModernGroupCard(
     name: String,
+    subscriptionUrl: String?,
+    iconMode: String,
+    customIconUrl: String?,
+    localIconFile: String?,
     nodeCount: Int,
     traffic: SubscriptionTrafficInfo?,
     updatedAt: Long?,
@@ -983,6 +1269,7 @@ private fun ModernGroupCard(
     selected: Boolean,
     onClick: () -> Unit,
     onViewDetails: () -> Unit,
+    onConfigureIcon: (() -> Unit)?,
     onRefresh: (() -> Unit)?,
     onEdit: (() -> Unit)?,
     onDelete: (() -> Unit)?,
@@ -991,6 +1278,38 @@ private fun ModernGroupCard(
     actionEnabled: Boolean
 ) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    val parsedIconMode = remember(iconMode) {
+        PersonalSourceIconMode.fromStorage(iconMode)
+    }
+    val remoteIconUrl = when (parsedIconMode) {
+        PersonalSourceIconMode.AUTO_REMOTE ->
+            SubscriptionFaviconLoader.faviconUrl(subscriptionUrl)
+        PersonalSourceIconMode.CUSTOM_REMOTE ->
+            SubscriptionFaviconLoader.customImageUrl(customIconUrl)
+        PersonalSourceIconMode.DEFAULT,
+        PersonalSourceIconMode.LOCAL -> null
+    }
+    val iconLoadKey = when (parsedIconMode) {
+        PersonalSourceIconMode.DEFAULT -> "default"
+        PersonalSourceIconMode.AUTO_REMOTE -> "auto:$remoteIconUrl"
+        PersonalSourceIconMode.CUSTOM_REMOTE -> "remote:$remoteIconUrl"
+        PersonalSourceIconMode.LOCAL -> "local:$localIconFile"
+    }
+    val appContext = LocalContext.current.applicationContext
+    val groupIcon by produceState<ImageBitmap?>(initialValue = null, key1 = iconLoadKey) {
+        value = when (parsedIconMode) {
+            PersonalSourceIconMode.DEFAULT -> null
+            PersonalSourceIconMode.AUTO_REMOTE,
+            PersonalSourceIconMode.CUSTOM_REMOTE -> remoteIconUrl?.let { url ->
+                withContext(Dispatchers.IO) {
+                    SubscriptionFaviconLoader.load(appContext, url)?.asImageBitmap()
+                }
+            }
+            PersonalSourceIconMode.LOCAL -> withContext(Dispatchers.IO) {
+                PersonalSourceIconStore.load(appContext, localIconFile)?.asImageBitmap()
+            }
+        }
+    }
     val cardShape = RoundedCornerShape(16.dp)
     val contentColor = if (selected) {
         MaterialTheme.colorScheme.onPrimaryContainer
@@ -1062,16 +1381,28 @@ private fun ModernGroupCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Subscriptions,
-                    contentDescription = null,
-                    tint = if (selected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                    modifier = Modifier.size(28.dp)
-                )
+                val loadedIcon = groupIcon
+                if (loadedIcon != null) {
+                    Image(
+                        bitmap = loadedIcon,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.Subscriptions,
+                        contentDescription = null,
+                        tint = if (selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = name,
@@ -1127,6 +1458,18 @@ private fun ModernGroupCard(
                                 onViewDetails()
                             }
                         )
+                        onConfigureIcon?.let { configureIcon ->
+                            DropdownMenuItem(
+                                text = { Text("设置图标") },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.InsertDriveFile, contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    configureIcon()
+                                }
+                            )
+                        }
                         onRefresh?.let { refresh ->
                             DropdownMenuItem(
                                 text = { Text("刷新") },

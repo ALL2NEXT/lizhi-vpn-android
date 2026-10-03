@@ -3,6 +3,7 @@ package io.github.HanJason233.chimera.data.model
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
+import androidx.room.ColumnInfo
 import androidx.room.PrimaryKey
 
 /** 私人源的持久化记录；官方源来自订阅源，地区组由应用动态汇总。 */
@@ -21,7 +22,11 @@ data class NodeGroupEntity(
     val subscriptionExpireAt: Long? = null,
     val subscriptionUpdatedAt: Long = 0L,
     val sortOrder: Int = 0,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    @ColumnInfo(defaultValue = "'AUTO_REMOTE'")
+    val iconMode: String = PersonalSourceIconMode.AUTO_REMOTE.name,
+    val customIconUrl: String? = null,
+    val localIconFile: String? = null
 )
 
 /** 节点与用户组的多对多关系。 */

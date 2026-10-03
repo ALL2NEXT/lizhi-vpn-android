@@ -133,6 +133,22 @@ interface NodeDao {
     @Query(
         """
         UPDATE node_groups SET
+            iconMode = :iconMode,
+            customIconUrl = :customIconUrl,
+            localIconFile = :localIconFile
+        WHERE id = :groupId
+        """
+    )
+    suspend fun updateNodeGroupIcon(
+        groupId: String,
+        iconMode: String,
+        customIconUrl: String?,
+        localIconFile: String?
+    ): Int
+
+    @Query(
+        """
+        UPDATE node_groups SET
             name = :name,
             subscriptionUrl = :subscriptionUrl,
             subscriptionUploadBytes = :subscriptionUploadBytes,
