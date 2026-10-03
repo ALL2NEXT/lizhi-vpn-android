@@ -133,7 +133,8 @@ internal class DisconnectRecoveryManager(
                     id = "${source.id}:${node.id}",
                     source = NodeSource.SUBSCRIPTION,
                     subscriptionSourceId = source.id,
-                    subscriptionSourceName = source.name
+                    subscriptionSourceName = source.name,
+                    subscriptionUpdatedAt = System.currentTimeMillis()
                 )
             }
             ?.distinctBy(Node::id)

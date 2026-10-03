@@ -253,13 +253,15 @@ internal class SubscriptionDataLoader(
                     return@forEach
                 }
                 successfulSourceIds += subscription.id
+                val refreshedAt = System.currentTimeMillis()
                 result.getOrThrow().forEach { node ->
                     val scopedNodeId = "${subscription.id}:${node.id}"
                     val taggedNode = node.copy(
                         id = scopedNodeId,
                         source = NodeSource.SUBSCRIPTION,
                         subscriptionSourceId = subscription.id,
-                        subscriptionSourceName = subscription.name
+                        subscriptionSourceName = subscription.name,
+                        subscriptionUpdatedAt = refreshedAt
                     )
                     val existing = mergedNodes[scopedNodeId]
                     mergedNodes[scopedNodeId] = existing?.copy(

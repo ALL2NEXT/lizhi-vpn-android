@@ -329,7 +329,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     subscriptionUploadBytes = item.group.subscriptionUploadBytes,
                     subscriptionDownloadBytes = item.group.subscriptionDownloadBytes,
                     subscriptionTotalBytes = item.group.subscriptionTotalBytes,
-                    subscriptionExpireAt = item.group.subscriptionExpireAt
+                    subscriptionExpireAt = item.group.subscriptionExpireAt,
+                    subscriptionUpdatedAt = item.group.subscriptionUpdatedAt
+                        .takeIf { it > 0L }
+                        ?: item.group.createdAt.takeIf { it > 0L }
                 )
             }
         }
@@ -1872,6 +1875,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     normalizedName
                 }
                 val parsed = part.subscription
+                val createdAt = System.currentTimeMillis()
                 val group = NodeGroupEntity(
                     id = groupId,
                     name = groupName,
@@ -1881,7 +1885,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
                     subscriptionTotalBytes = parsed.userInfo?.totalBytes,
                     subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
-                    createdAt = System.currentTimeMillis()
+                    subscriptionUpdatedAt = createdAt,
+                    createdAt = createdAt
                 )
                 val localNodes = parsed.nodes
                     .distinctBy(Node::getRawLinkPlain)
@@ -2222,6 +2227,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
                     subscriptionTotalBytes = parsed.userInfo?.totalBytes,
                     subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
+                    subscriptionUpdatedAt = System.currentTimeMillis(),
                     nodes = localNodes,
                     members = members
                 )
@@ -2348,6 +2354,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
                 subscriptionTotalBytes = parsed.userInfo?.totalBytes,
                 subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
+                subscriptionUpdatedAt = System.currentTimeMillis(),
                 nodes = localNodes,
                 members = members
             )

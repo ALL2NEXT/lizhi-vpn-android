@@ -35,7 +35,7 @@ interface NodeDao {
     @Query("SELECT * FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId = :sourceId ORDER BY sortOrder ASC, latency ASC")
     fun getSubscriptionNodesBySource(sourceId: String): Flow<List<Node>>
 
-    @Query("SELECT DISTINCT subscriptionSourceId AS sourceId, subscriptionSourceName AS name FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId IS NOT NULL ORDER BY CAST(subscriptionSourceId AS INTEGER) ASC, subscriptionSourceName ASC")
+    @Query("SELECT subscriptionSourceId AS sourceId, COALESCE(MAX(subscriptionSourceName), subscriptionSourceId) AS name, COALESCE(MAX(subscriptionUpdatedAt), 0) AS updatedAt FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId IS NOT NULL GROUP BY subscriptionSourceId ORDER BY CAST(subscriptionSourceId AS INTEGER) ASC, name ASC")
     fun getSubscriptionGroups(): Flow<List<SubscriptionGroup>>
 
     /** 私人源摘要；地区组由应用按地区规则动态汇总。 */
@@ -138,7 +138,8 @@ interface NodeDao {
             subscriptionUploadBytes = :subscriptionUploadBytes,
             subscriptionDownloadBytes = :subscriptionDownloadBytes,
             subscriptionTotalBytes = :subscriptionTotalBytes,
-            subscriptionExpireAt = :subscriptionExpireAt
+            subscriptionExpireAt = :subscriptionExpireAt,
+            subscriptionUpdatedAt = :subscriptionUpdatedAt
         WHERE id = :groupId
         """
     )
@@ -149,7 +150,8 @@ interface NodeDao {
         subscriptionUploadBytes: Long?,
         subscriptionDownloadBytes: Long?,
         subscriptionTotalBytes: Long?,
-        subscriptionExpireAt: Long?
+        subscriptionExpireAt: Long?,
+        subscriptionUpdatedAt: Long
     ): Int
 
     @Query("UPDATE nodes SET subscriptionSourceName = :name WHERE source = 'LOCAL_GROUP' AND subscriptionSourceId = :groupId")
@@ -175,6 +177,7 @@ interface NodeDao {
         subscriptionDownloadBytes: Long?,
         subscriptionTotalBytes: Long?,
         subscriptionExpireAt: Long?,
+        subscriptionUpdatedAt: Long,
         nodes: List<Node>,
         members: List<NodeGroupMemberEntity>
     ): Boolean {
@@ -186,7 +189,8 @@ interface NodeDao {
                 subscriptionUploadBytes = subscriptionUploadBytes,
                 subscriptionDownloadBytes = subscriptionDownloadBytes,
                 subscriptionTotalBytes = subscriptionTotalBytes,
-                subscriptionExpireAt = subscriptionExpireAt
+                subscriptionExpireAt = subscriptionExpireAt,
+                subscriptionUpdatedAt = subscriptionUpdatedAt
             ) == 0
         ) return false
         updateLocalGroupNodeNames(groupId, name)

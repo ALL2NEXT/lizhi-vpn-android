@@ -19,6 +19,7 @@ data class NodeGroupEntity(
     val subscriptionDownloadBytes: Long? = null,
     val subscriptionTotalBytes: Long? = null,
     val subscriptionExpireAt: Long? = null,
+    val subscriptionUpdatedAt: Long = 0L,
     val sortOrder: Int = 0,
     val createdAt: Long = 0L
 )

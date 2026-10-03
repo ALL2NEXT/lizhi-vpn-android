@@ -821,6 +821,7 @@ private fun SubscriptionGroupCard(
     GroupCard(
         name = group.name,
         nodeCount = nodeCount,
+        updatedAt = group.updatedAt,
         status = "长期有效",
         selected = selected,
         onClick = onClick,
@@ -853,6 +854,7 @@ private fun UserSubscriptionGroupCard(
         name = group.name,
         nodeCount = nodeCount,
         traffic = personalSubscriptionTrafficV2(group),
+        updatedAt = group.subscriptionUpdatedAt,
         status = personalSubscriptionStatus(group),
         selected = selected,
         onClick = onClick,
@@ -940,6 +942,7 @@ private fun GroupCard(
     name: String,
     nodeCount: Int,
     traffic: SubscriptionTrafficInfo? = null,
+    updatedAt: Long? = null,
     status: String? = null,
     selected: Boolean,
     onClick: () -> Unit,
@@ -955,6 +958,7 @@ private fun GroupCard(
         name = name,
         nodeCount = nodeCount,
         traffic = traffic,
+        updatedAt = updatedAt,
         status = status,
         selected = selected,
         onClick = onClick,
@@ -973,6 +977,7 @@ private fun ModernGroupCard(
     name: String,
     nodeCount: Int,
     traffic: SubscriptionTrafficInfo?,
+    updatedAt: Long?,
     status: String?,
     selected: Boolean,
     onClick: () -> Unit,
@@ -985,7 +990,7 @@ private fun ModernGroupCard(
     actionEnabled: Boolean
 ) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
-    val cardShape = RoundedCornerShape(18.dp)
+    val cardShape = RoundedCornerShape(16.dp)
     val contentColor = if (selected) {
         MaterialTheme.colorScheme.onPrimaryContainer
     } else {
@@ -1015,7 +1020,7 @@ private fun ModernGroupCard(
     }
     val progressModifier = Modifier
         .fillMaxWidth()
-        .heightIn(min = 7.dp, max = 7.dp)
+        .heightIn(min = 6.dp, max = 6.dp)
         .clip(RoundedCornerShape(50))
         .background(progressTrackColor)
         .then(
@@ -1048,8 +1053,8 @@ private fun ModernGroupCard(
         )
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1063,14 +1068,14 @@ private fun ModernGroupCard(
                     } else {
                         MaterialTheme.colorScheme.primary
                     },
-                    modifier = Modifier.size(30.dp)
+                    modifier = Modifier.size(28.dp)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = name,
                     modifier = Modifier.weight(1f),
                     color = contentColor,
-                    fontSize = 18.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -1080,7 +1085,7 @@ private fun ModernGroupCard(
                         text = "· $label",
                         modifier = Modifier.padding(start = 8.dp),
                         color = statusColor,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -1209,16 +1214,25 @@ private fun ModernGroupCard(
                     text = traffic?.text ?: "流量数据不可用",
                     modifier = Modifier.weight(1f),
                     color = mutedColor,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                formatRelativeUpdate(updatedAt)?.let { updatedText ->
+                    Text(
+                        text = "· $updatedText",
+                        modifier = Modifier.padding(start = 6.dp),
+                        color = mutedColor,
+                        fontSize = 12.sp,
+                        maxLines = 1
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "$nodeCount 个节点",
                     color = mutedColor,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     maxLines = 1
                 )
             }
@@ -1228,6 +1242,22 @@ private fun ModernGroupCard(
 
 private val subscriptionExpireFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
+private fun formatRelativeUpdate(updatedAt: Long?): String? {
+    val timestamp = updatedAt?.takeIf { it > 0L } ?: return null
+    val elapsed = (System.currentTimeMillis() - timestamp).coerceAtLeast(0L)
+    return when {
+        elapsed < 60_000L -> "刚刚"
+        elapsed < 3_600_000L -> "${elapsed / 60_000L}分钟前"
+        elapsed < 86_400_000L -> "${elapsed / 3_600_000L}小时前"
+        elapsed < 604_800_000L -> "${elapsed / 86_400_000L}天前"
+        else -> runCatching {
+            Instant.ofEpochMilli(timestamp)
+                .atZone(ZoneId.systemDefault())
+                .format(subscriptionExpireFormatter)
+        }.getOrNull() ?: "更新时间未知"
+    }
+}
 
 private fun personalSubscriptionTrafficV2(group: NodeGroupSummary): SubscriptionTrafficInfo? {
     val hasTraffic = group.subscriptionUploadBytes != null ||

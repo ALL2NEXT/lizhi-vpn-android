@@ -26,6 +26,7 @@ data class Node(
     val urlTestLatency: Int = -1,         // 204 URLTest延迟(ms), -1表示未测试
     val subscriptionSourceId: String? = null,
     val subscriptionSourceName: String? = null,
+    val subscriptionUpdatedAt: Long = 0L, // 仓库源最近更新时间戳
     val isAvailable: Boolean = true,      // 是否可用
     val lastTestedAt: Long = 0,           // 上次测试时间戳
     val sortOrder: Int = 0,               // 排序顺序
@@ -128,7 +129,8 @@ enum class NodeSource {
 /** A distinct subscription source currently available in the local node database. */
 data class SubscriptionGroup(
     val sourceId: String,
-    val name: String
+    val name: String,
+    val updatedAt: Long = 0L
 )
 
 /**

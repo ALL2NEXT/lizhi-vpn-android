@@ -18,7 +18,7 @@ import java.io.File
 
 @Database(
     entities = [Node::class, NodeGroupEntity::class, NodeGroupMemberEntity::class],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -46,6 +46,12 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionDownloadBytes INTEGER")
                 db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionTotalBytes INTEGER")
                 db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionExpireAt INTEGER")
+            }
+        }
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE nodes ADD COLUMN subscriptionUpdatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionUpdatedAt INTEGER NOT NULL DEFAULT 0")
             }
         }
 
@@ -94,7 +100,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .build()
         }
 

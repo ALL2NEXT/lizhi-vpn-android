@@ -74,5 +74,6 @@ data class NodeGroupSummary(
     val subscriptionUploadBytes: Long? = null,
     val subscriptionDownloadBytes: Long? = null,
     val subscriptionTotalBytes: Long? = null,
-    val subscriptionExpireAt: Long? = null
+    val subscriptionExpireAt: Long? = null,
+    val subscriptionUpdatedAt: Long? = null
 )
