@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.withFrameNanos
 import io.github.HanJason233.chimera.data.model.HomeIconEffect
@@ -73,7 +74,8 @@ fun ConnectButton(
     customConnectedImagePath: String? = null,
     homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
     homeIconEffectEnabled: Boolean = true,
-    homeIconRotationEnabled: Boolean = false
+    homeIconRotationEnabled: Boolean = false,
+    maxButtonSize: Dp = 250.dp
 ) {
     // 测速方案执行期间底层状态仍可能是 DISCONNECTED，主页视觉上应展示“连接中”。
     val displayState = if (isTesting && vpnState == VpnState.DISCONNECTED) {
@@ -101,7 +103,7 @@ fun ConnectButton(
 
     // 自适应按钮大小：取屏幕宽度的 65%，但不超过 250dp
     val configuration = LocalConfiguration.current
-    val buttonSize = minOf(250, (configuration.screenWidthDp * 0.65).toInt())
+    val buttonSize = minOf(maxButtonSize.value.toInt(), (configuration.screenWidthDp * 0.65).toInt())
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()

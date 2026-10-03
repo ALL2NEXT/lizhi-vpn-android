@@ -18,6 +18,7 @@ import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconEffect
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
+import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
@@ -53,7 +54,10 @@ data class VpnRuntimeSettings(
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-class SettingsRepository(private val context: Context) {
+class SettingsRepository(
+    context: Context,
+    private val store: DataStore<Preferences> = context.dataStore
+) {
     
     companion object {
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
@@ -164,16 +168,16 @@ class SettingsRepository(private val context: Context) {
 
     }
     
-    val selectedNodeId: Flow<String?> = context.dataStore.data.map { preferences ->
+    val selectedNodeId: Flow<String?> = store.data.map { preferences ->
         preferences[SELECTED_NODE_ID]
     }
 
     /** 统一的当前节点组标识。 */
-    val selectedNodeGroupId: Flow<String?> = context.dataStore.data.map { preferences ->
+    val selectedNodeGroupId: Flow<String?> = store.data.map { preferences ->
         preferences[SELECTED_NODE_GROUP_ID]?.takeIf(String::isNotBlank)
     }
     
-    val proxyMode: Flow<ProxyMode> = context.dataStore.data.map { preferences ->
+    val proxyMode: Flow<ProxyMode> = store.data.map { preferences ->
         val mode = preferences[PROXY_MODE] ?: ProxyMode.SMART.name
         try {
             ProxyMode.valueOf(mode)
@@ -182,7 +186,7 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val perAppInboundSettings: Flow<PerAppInboundSettings> = context.dataStore.data.map { preferences ->
+    val perAppInboundSettings: Flow<PerAppInboundSettings> = store.data.map { preferences ->
         PerAppInboundSettings(
             enabled = preferences[PER_APP_INBOUND_ENABLED] ?: false,
             bypassMode = preferences[PER_APP_INBOUND_BYPASS_MODE] ?: false,
@@ -191,17 +195,17 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** 用户保存的测速方案；首次使用时提供一套当前组内置方案。 */
-    val speedTestSchemes: Flow<List<SpeedTestScheme>> = context.dataStore.data.map { preferences ->
+    val speedTestSchemes: Flow<List<SpeedTestScheme>> = store.data.map { preferences ->
         decodeSpeedTestSchemes(preferences)
     }
 
     /** 局域网入站设置默认关闭，避免意外暴露代理端口。 */
-    val lanInboundSettings: Flow<LanInboundSettings> = context.dataStore.data.map { preferences ->
+    val lanInboundSettings: Flow<LanInboundSettings> = store.data.map { preferences ->
         decodeLanInboundSettings(preferences)
     }
 
     /** 主页图标单击使用的测速方案。 */
-    val homeClickSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+    val homeClickSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID],
@@ -211,7 +215,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** 主页图标长按使用的测速方案。 */
-    val homeLongPressSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+    val homeLongPressSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID],
@@ -221,7 +225,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** 主页图标上滑使用的测速方案。 */
-    val homeSwipeUpSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+    val homeSwipeUpSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID],
@@ -231,7 +235,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** 主页图标下滑使用的测速方案。 */
-    val homeSwipeDownSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+    val homeSwipeDownSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID],
@@ -241,7 +245,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** 主页图标左滑使用的测速方案。 */
-    val homeSwipeLeftSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+    val homeSwipeLeftSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID],
@@ -251,7 +255,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** 主页图标右滑使用的测速方案。 */
-    val homeSwipeRightSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+    val homeSwipeRightSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID],
@@ -261,7 +265,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** 分组线路详情中手动测试使用的测速方案。 */
-    val groupManualSpeedTestSchemeId: Flow<String> = context.dataStore.data.map { preferences ->
+    val groupManualSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID],
@@ -271,42 +275,42 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** 分组线路详情中的手动测速是否启用；默认启用以保留现有入口。 */
-    val groupManualSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val groupManualSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[GROUP_MANUAL_SPEED_TEST_ENABLED] ?: true
     }
 
     /** 主页图标单击是否启用测速方案；默认关闭，避免普通点击触发测速。 */
-    val homeClickSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val homeClickSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[HOME_CLICK_SPEED_TEST_ENABLED] ?: false
     }
 
     /** 主页图标长按是否启用测速方案；默认开启以保持原有行为。 */
-    val homeLongPressSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val homeLongPressSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[HOME_LONG_PRESS_SPEED_TEST_ENABLED] ?: true
     }
 
     /** 主页图标上滑是否启用测速方案；默认关闭避免误触。 */
-    val homeSwipeUpSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val homeSwipeUpSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[HOME_SWIPE_UP_SPEED_TEST_ENABLED] ?: false
     }
 
     /** 主页图标下滑是否启用测速方案；默认关闭避免误触。 */
-    val homeSwipeDownSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val homeSwipeDownSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[HOME_SWIPE_DOWN_SPEED_TEST_ENABLED] ?: false
     }
 
     /** 主页图标左滑是否启用测速方案；默认关闭避免误触。 */
-    val homeSwipeLeftSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val homeSwipeLeftSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[HOME_SWIPE_LEFT_SPEED_TEST_ENABLED] ?: false
     }
 
     /** 主页图标右滑是否启用测速方案；默认关闭避免误触。 */
-    val homeSwipeRightSpeedTestEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val homeSwipeRightSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[HOME_SWIPE_RIGHT_SPEED_TEST_ENABLED] ?: false
     }
 
     suspend fun setHomeClickSpeedTestSchemeId(schemeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = schemeId
             }
@@ -314,7 +318,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setHomeLongPressSpeedTestSchemeId(schemeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = schemeId
             }
@@ -322,7 +326,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setHomeSwipeUpSpeedTestSchemeId(schemeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] = schemeId
             }
@@ -330,7 +334,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setHomeSwipeDownSpeedTestSchemeId(schemeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] = schemeId
             }
@@ -338,7 +342,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setHomeSwipeLeftSpeedTestSchemeId(schemeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] = schemeId
             }
@@ -346,7 +350,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setHomeSwipeRightSpeedTestSchemeId(schemeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = schemeId
             }
@@ -354,7 +358,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setGroupManualSpeedTestSchemeId(schemeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] = schemeId
             }
@@ -362,49 +366,49 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setGroupManualSpeedTestEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[GROUP_MANUAL_SPEED_TEST_ENABLED] = enabled
         }
     }
 
     suspend fun setHomeClickSpeedTestEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[HOME_CLICK_SPEED_TEST_ENABLED] = enabled
         }
     }
 
     suspend fun setHomeLongPressSpeedTestEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[HOME_LONG_PRESS_SPEED_TEST_ENABLED] = enabled
         }
     }
 
     suspend fun setHomeSwipeUpSpeedTestEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[HOME_SWIPE_UP_SPEED_TEST_ENABLED] = enabled
         }
     }
 
     suspend fun setHomeSwipeDownSpeedTestEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[HOME_SWIPE_DOWN_SPEED_TEST_ENABLED] = enabled
         }
     }
 
     suspend fun setHomeSwipeLeftSpeedTestEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[HOME_SWIPE_LEFT_SPEED_TEST_ENABLED] = enabled
         }
     }
 
     suspend fun setHomeSwipeRightSpeedTestEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[HOME_SWIPE_RIGHT_SPEED_TEST_ENABLED] = enabled
         }
     }
 
     /** 皮肤配置，未设置时保持当前内置默认皮肤。 */
-    val skinSettings: Flow<SkinSettings> = context.dataStore.data.map { preferences ->
+    val skinSettings: Flow<SkinSettings> = store.data.map { preferences ->
         val schemes = decodeSkinSchemes(preferences)
         val activeId = preferences[ACTIVE_SKIN_SCHEME_ID]
             ?.takeIf { id -> schemes.any { it.id == id } }
@@ -426,36 +430,36 @@ class SettingsRepository(private val context: Context) {
         )
     }
     
-    val lastNoticeId: Flow<String?> = context.dataStore.data.map { preferences ->
+    val lastNoticeId: Flow<String?> = store.data.map { preferences ->
         preferences[LAST_NOTICE_ID]
     }
 
-    val ignoredUpdateVersionCode: Flow<Int?> = context.dataStore.data.map { preferences ->
+    val ignoredUpdateVersionCode: Flow<Int?> = store.data.map { preferences ->
         preferences[IGNORED_UPDATE_VERSION_CODE]
     }
 
     /** 用户选择的更新安装包目录；为空时使用应用缓存目录。 */
-    val updateDownloadDirectoryUri: Flow<String?> = context.dataStore.data.map { preferences ->
+    val updateDownloadDirectoryUri: Flow<String?> = store.data.map { preferences ->
         preferences[UPDATE_DOWNLOAD_DIRECTORY_URI]
     }
     
-    val selectedSubscriptionSourceId: Flow<String?> = context.dataStore.data.map { preferences ->
+    val selectedSubscriptionSourceId: Flow<String?> = store.data.map { preferences ->
         preferences[SELECTED_SUBSCRIPTION_SOURCE_ID]
     }
 
     /** 地区页选中的国家代码；存在时主页智能测试跨订阅组限定到该地区。 */
-    val selectedCountryCode: Flow<String?> = context.dataStore.data.map { preferences ->
+    val selectedCountryCode: Flow<String?> = store.data.map { preferences ->
         CountryCodeResolver.normalizeCountryCode(preferences[SELECTED_COUNTRY_CODE])
     }
 
     /** 仓库源地区筛选；null 表示默认包含全部仓库源。 */
     val countryGroupingSourceIds: Flow<Set<String>?> =
-        context.dataStore.data.map { preferences ->
+        store.data.map { preferences ->
             preferences[COUNTRY_GROUPING_SOURCE_IDS]?.toSet()
         }
 
     suspend fun setCountryGroupingSourceIds(sourceIds: Set<String>?) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (sourceIds == null) {
                 preferences.remove(COUNTRY_GROUPING_SOURCE_IDS)
             } else {
@@ -466,7 +470,7 @@ class SettingsRepository(private val context: Context) {
 
     /** 仓库源地区筛选；null 表示默认包含全部地区。 */
     val warehouseGroupingCountryCodes: Flow<Set<String>?> =
-        context.dataStore.data.map { preferences ->
+        store.data.map { preferences ->
             preferences[WAREHOUSE_GROUPING_COUNTRY_CODES]
                 ?.mapNotNull(CountryCodeResolver::normalizeCountryCode)
                 ?.toSet()
@@ -476,7 +480,7 @@ class SettingsRepository(private val context: Context) {
         val normalizedCodes = countryCodes
             ?.mapNotNull(CountryCodeResolver::normalizeCountryCode)
             ?.toSet()
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (normalizedCodes == null) {
                 preferences.remove(WAREHOUSE_GROUPING_COUNTRY_CODES)
             } else {
@@ -485,7 +489,7 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val nodeGroupingMode: Flow<NodeGroupingMode> = context.dataStore.data.map { preferences ->
+    val nodeGroupingMode: Flow<NodeGroupingMode> = store.data.map { preferences ->
         when (preferences[NODE_GROUPING_MODE]) {
             "COUNTRY", "REGION" -> NodeGroupingMode.REGION
             "SUBSCRIPTION", "WAREHOUSE" -> NodeGroupingMode.WAREHOUSE
@@ -493,43 +497,43 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val subscriptionListJson: Flow<String?> = context.dataStore.data.map { preferences ->
+    val subscriptionListJson: Flow<String?> = store.data.map { preferences ->
         preferences[SUBSCRIPTION_LIST_JSON]
     }
 
     suspend fun setSubscriptionList(json: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[SUBSCRIPTION_LIST_JSON] = json
         }
     }
 
     /** 冷启动时是否立即更新官方源；默认保持现有的启动更新行为。 */
-    val autoRefreshOfficialSubscriptions: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val autoRefreshOfficialSubscriptions: Flow<Boolean> = store.data.map { preferences ->
         preferences[AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS]
             ?: DEFAULT_AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS
     }
 
     suspend fun setAutoRefreshOfficialSubscriptions(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS] = enabled
         }
     }
 
     /** 冷启动时是否立即更新个人源；默认关闭，避免新增启动网络请求。 */
-    val autoRefreshPersonalSubscriptions: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val autoRefreshPersonalSubscriptions: Flow<Boolean> = store.data.map { preferences ->
         preferences[AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS]
             ?: DEFAULT_AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS
     }
 
     suspend fun setAutoRefreshPersonalSubscriptions(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS] = enabled
         }
     }
 
     /** Reads all settings needed for one VPN start from a single DataStore snapshot. */
     suspend fun getVpnRuntimeSettings(): VpnRuntimeSettings {
-        val preferences = context.dataStore.data.first()
+        val preferences = store.data.first()
         val hysteriaBandwidthEnabled = preferences[HYSTERIA_BANDWIDTH_ENABLED]
             ?: io.github.HanJason233.chimera.AppConfig.HYSTERIA_BANDWIDTH_ENABLED
         return VpnRuntimeSettings(
@@ -564,7 +568,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setPerAppInboundSettings(settings: PerAppInboundSettings) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[PER_APP_INBOUND_ENABLED] = settings.enabled
             preferences[PER_APP_INBOUND_BYPASS_MODE] = settings.bypassMode
             val cleanPackages = settings.selectedPackages.asSequence()
@@ -579,11 +583,11 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val protocolCoreSettings: Flow<ProtocolCoreSettings> = context.dataStore.data.map { preferences ->
+    val protocolCoreSettings: Flow<ProtocolCoreSettings> = store.data.map { preferences ->
         decodeProtocolCoreSettings(preferences[CORE_ASSIGNMENTS])
     }
 
-    val nodeDisplaySettings: Flow<NodeDisplaySettings> = context.dataStore.data.map { preferences ->
+    val nodeDisplaySettings: Flow<NodeDisplaySettings> = store.data.map { preferences ->
         NodeDisplaySettings(
             showProtocol = preferences[NODE_LABEL_SHOW_PROTOCOL] ?: false,
             showSecurity = preferences[NODE_LABEL_SHOW_SECURITY] ?: false,
@@ -593,32 +597,32 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setNodeLabelShowProtocol(show: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[NODE_LABEL_SHOW_PROTOCOL] = show
         }
     }
 
     suspend fun setNodeLabelShowSecurity(show: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[NODE_LABEL_SHOW_SECURITY] = show
         }
     }
 
     suspend fun setNodeLabelShowTransport(show: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[NODE_LABEL_SHOW_TRANSPORT] = show
         }
     }
 
     suspend fun setNodeLabelShowCore(show: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[NODE_LABEL_SHOW_CORE] = show
         }
     }
 
     suspend fun setProtocolCore(nodeType: NodeType, core: ProxyCore) {
         require(core in io.github.HanJason233.chimera.core.CoreBackends.registry.availableFor(nodeType))
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             val current = decodeProtocolCoreSettings(preferences[CORE_ASSIGNMENTS])
                 .assignments.toMutableMap()
             current[nodeType] = core
@@ -774,7 +778,7 @@ class SettingsRepository(private val context: Context) {
     ): T = runCatching { enumValueOf<T>(value ?: default.name) }.getOrDefault(default)
     
     suspend fun setSelectedNodeId(nodeId: String?) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (nodeId == null) {
                 preferences.remove(SELECTED_NODE_ID)
             } else {
@@ -784,7 +788,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setSelectedNodeGroupId(groupId: String?) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (groupId.isNullOrBlank()) {
                 preferences.remove(SELECTED_NODE_GROUP_ID)
             } else {
@@ -792,15 +796,41 @@ class SettingsRepository(private val context: Context) {
             }
         }
     }
+
+    /** 分组和旧筛选字段一次保存，避免观察者读到混合状态。 */
+    suspend fun setSelectedNodeGroup(group: NodeGroupKey) {
+        store.edit { preferences ->
+            if (preferences[SELECTED_NODE_GROUP_ID] != group.value) {
+                preferences.remove(SELECTED_NODE_ID)
+            }
+            preferences[SELECTED_NODE_GROUP_ID] = group.value
+            when (group) {
+                is NodeGroupKey.Subscription -> {
+                    preferences[SELECTED_SUBSCRIPTION_SOURCE_ID] = group.sourceId
+                    preferences.remove(SELECTED_COUNTRY_CODE)
+                    preferences[NODE_GROUPING_MODE] = NodeGroupingMode.WAREHOUSE.name
+                }
+                is NodeGroupKey.Imported -> {
+                    preferences.remove(SELECTED_SUBSCRIPTION_SOURCE_ID)
+                    preferences.remove(SELECTED_COUNTRY_CODE)
+                    preferences[NODE_GROUPING_MODE] = NodeGroupingMode.WAREHOUSE.name
+                }
+                is NodeGroupKey.Country -> {
+                    preferences[SELECTED_COUNTRY_CODE] = group.countryCode
+                    preferences[NODE_GROUPING_MODE] = NodeGroupingMode.REGION.name
+                }
+            }
+        }
+    }
     
     suspend fun setProxyMode(mode: ProxyMode) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[PROXY_MODE] = mode.name
         }
     }
 
     suspend fun setLanInboundEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[LAN_INBOUND_ENABLED] = enabled
             if (enabled && preferences[LAN_INBOUND_PASSWORD].isNullOrBlank()) {
                 // 首次开启时生成随机密码，并持久化到设置中供局域网设备使用。
@@ -817,7 +847,7 @@ class SettingsRepository(private val context: Context) {
         username: String,
         password: String
     ) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[LAN_INBOUND_PORT] = port.coerceIn(1, 65_535)
             preferences[LAN_INBOUND_USERNAME] = username.trim().ifBlank {
                 LanInboundSettings.DEFAULT_USERNAME
@@ -829,7 +859,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun upsertSpeedTestScheme(scheme: SpeedTestScheme) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             val normalized = normalizeSpeedTestScheme(scheme)
             val schemes = decodeSpeedTestSchemes(preferences)
                 .filterNot { it.id == scheme.id } + normalized
@@ -838,7 +868,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun deleteSpeedTestScheme(schemeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             val schemes = decodeSpeedTestSchemes(preferences)
             val target = schemes.firstOrNull { it.id == schemeId } ?: return@edit
             if (target.builtIn) return@edit
@@ -870,7 +900,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             val normalizedScheme = scheme.copy(
                 name = scheme.name.trim().ifBlank {
                     if (scheme.isDefault) "默认方案" else "我的方案"
@@ -887,7 +917,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setActiveSkinScheme(schemeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (decodeSkinSchemes(preferences).any { it.id == schemeId }) {
                 preferences[ACTIVE_SKIN_SCHEME_ID] = schemeId
             }
@@ -896,7 +926,7 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun deleteSkinScheme(schemeId: String) {
         if (schemeId == SkinScheme.DEFAULT_SCHEME_ID) return
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             val schemes = decodeSkinSchemes(preferences)
             if (schemes.none { it.id == schemeId }) return@edit
             preferences[SKIN_SCHEMES_JSON] = encodeSkinSchemes(
@@ -909,19 +939,19 @@ class SettingsRepository(private val context: Context) {
     }
     
     suspend fun setLastNoticeId(noticeId: String) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[LAST_NOTICE_ID] = noticeId
         }
     }
 
     suspend fun setIgnoredUpdateVersionCode(versionCode: Int) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[IGNORED_UPDATE_VERSION_CODE] = versionCode
         }
     }
 
     suspend fun setUpdateDownloadDirectoryUri(uri: String?) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (uri.isNullOrBlank()) {
                 preferences.remove(UPDATE_DOWNLOAD_DIRECTORY_URI)
             } else {
@@ -932,13 +962,13 @@ class SettingsRepository(private val context: Context) {
     
     /** 注销账户时清除全部本地设置。 */
     suspend fun clearAll() {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences.clear()
         }
     }
     
     // IPv6 路由模式
-    val ipv6RoutingMode: Flow<IPv6RoutingMode> = context.dataStore.data.map { preferences ->
+    val ipv6RoutingMode: Flow<IPv6RoutingMode> = store.data.map { preferences ->
         val mode = preferences[IPV6_ROUTING_MODE] ?: IPv6RoutingMode.DISABLED.name
         try {
             IPv6RoutingMode.valueOf(mode)
@@ -948,48 +978,48 @@ class SettingsRepository(private val context: Context) {
     }
     
     suspend fun setIPv6RoutingMode(mode: IPv6RoutingMode) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[IPV6_ROUTING_MODE] = mode.name
         }
     }
 
-    val dnsSettings: Flow<DnsSettings> = context.dataStore.data.map { preferences ->
+    val dnsSettings: Flow<DnsSettings> = store.data.map { preferences ->
         decodeDnsSettings(preferences)
     }
 
     suspend fun setRemoteDns(value: String) {
         DnsSettings.normalizeServerList(value)?.let { normalized ->
-            context.dataStore.edit { preferences -> preferences[DNS_REMOTE] = normalized }
+            store.edit { preferences -> preferences[DNS_REMOTE] = normalized }
         }
     }
 
     suspend fun setRemoteDnsStrategy(strategy: DnsDomainStrategy) {
-        context.dataStore.edit { preferences -> preferences[DNS_REMOTE_STRATEGY] = strategy.name }
+        store.edit { preferences -> preferences[DNS_REMOTE_STRATEGY] = strategy.name }
     }
 
     suspend fun setDirectDns(value: String) {
         DnsSettings.normalizeServerList(value)?.let { normalized ->
-            context.dataStore.edit { preferences -> preferences[DNS_DIRECT] = normalized }
+            store.edit { preferences -> preferences[DNS_DIRECT] = normalized }
         }
     }
 
     suspend fun setDirectDnsStrategy(strategy: DnsDomainStrategy) {
-        context.dataStore.edit { preferences -> preferences[DNS_DIRECT_STRATEGY] = strategy.name }
+        store.edit { preferences -> preferences[DNS_DIRECT_STRATEGY] = strategy.name }
     }
 
     suspend fun setServerDnsStrategy(strategy: DnsDomainStrategy) {
-        context.dataStore.edit { preferences -> preferences[DNS_SERVER_STRATEGY] = strategy.name }
+        store.edit { preferences -> preferences[DNS_SERVER_STRATEGY] = strategy.name }
     }
 
     suspend fun setDnsRoutingEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences -> preferences[DNS_ROUTING_ENABLED] = enabled }
+        store.edit { preferences -> preferences[DNS_ROUTING_ENABLED] = enabled }
     }
 
     suspend fun setFakeDnsEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences -> preferences[DNS_FAKE_ENABLED] = enabled }
+        store.edit { preferences -> preferences[DNS_FAKE_ENABLED] = enabled }
     }
 
-    val smartRoutingSettings: Flow<SmartRoutingSettings> = context.dataStore.data.map { preferences ->
+    val smartRoutingSettings: Flow<SmartRoutingSettings> = store.data.map { preferences ->
         decodeSmartRoutingSettings(preferences)
     }
 
@@ -997,7 +1027,7 @@ class SettingsRepository(private val context: Context) {
         action: SmartRoutingRuleAction,
         values: List<String>
     ) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             val current = decodeSmartRoutingSettings(preferences).rules
             val normalizedValues = values
                 .flatMap { it.split(',', '\n') }
@@ -1024,17 +1054,17 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val tcpingTestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
+    val tcpingTestTimeoutMs: Flow<Long> = store.data.map { preferences ->
         (preferences[TCPING_TEST_TIMEOUT_MS] ?: io.github.HanJason233.chimera.AppConfig.TCPING_TEST_TIMEOUT).coerceAtLeast(500L)
     }
 
-    val serviceRequestTimeoutMs: Flow<Long> = context.dataStore.data.map { preferences ->
+    val serviceRequestTimeoutMs: Flow<Long> = store.data.map { preferences ->
         (preferences[SERVICE_REQUEST_TIMEOUT_MS] ?: DEFAULT_SERVICE_REQUEST_TIMEOUT_MS)
             .coerceIn(MIN_SERVICE_REQUEST_TIMEOUT_MS, MAX_SERVICE_REQUEST_TIMEOUT_MS)
     }
 
     suspend fun setServiceRequestTimeoutMs(value: Long) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[SERVICE_REQUEST_TIMEOUT_MS] = value.coerceIn(
                 MIN_SERVICE_REQUEST_TIMEOUT_MS,
                 MAX_SERVICE_REQUEST_TIMEOUT_MS
@@ -1043,58 +1073,58 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setTcpingTestTimeoutMs(value: Long) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[TCPING_TEST_TIMEOUT_MS] = value.coerceAtLeast(500L)
         }
     }
 
-    val speedTestDownloadUrl: Flow<String> = context.dataStore.data.map { preferences ->
+    val speedTestDownloadUrl: Flow<String> = store.data.map { preferences ->
         BandwidthTestTargets.normalize(preferences[SPEED_TEST_DOWNLOAD_URL])
             ?: io.github.HanJason233.chimera.AppConfig.SPEED_TEST_DOWNLOAD_URL
     }
 
     suspend fun setSpeedTestDownloadUrl(value: String) {
         val normalized = BandwidthTestTargets.normalize(value) ?: return
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[SPEED_TEST_DOWNLOAD_URL] = normalized
         }
     }
 
-    val speedTestDurationMs: Flow<Long> = context.dataStore.data.map { preferences ->
+    val speedTestDurationMs: Flow<Long> = store.data.map { preferences ->
         (preferences[SPEED_TEST_DURATION_MS]
             ?: io.github.HanJason233.chimera.AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
             .coerceAtLeast(1_000L)
     }
 
     suspend fun setSpeedTestDurationMs(value: Long) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[SPEED_TEST_DURATION_MS] = value.coerceAtLeast(1_000L)
         }
     }
 
-    val tcpingConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
+    val tcpingConcurrency: Flow<Int> = store.data.map { preferences ->
         (preferences[TCPING_CONCURRENCY] ?: io.github.HanJason233.chimera.AppConfig.TCPING_CONCURRENCY).coerceIn(1, 128)
     }
 
     suspend fun setTcpingConcurrency(value: Int) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[TCPING_CONCURRENCY] = value.coerceIn(1, 128)
         }
     }
 
-    val bandwidthTestConcurrency: Flow<Int> = context.dataStore.data.map { preferences ->
+    val bandwidthTestConcurrency: Flow<Int> = store.data.map { preferences ->
         (preferences[BANDWIDTH_TEST_CONCURRENCY]
             ?: io.github.HanJason233.chimera.AppConfig.BANDWIDTH_TEST_CONCURRENCY).coerceIn(1, 3)
     }
 
     suspend fun setBandwidthTestConcurrency(value: Int) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[BANDWIDTH_TEST_CONCURRENCY] = value.coerceIn(1, 3)
         }
     }
 
     suspend fun setSelectedSubscriptionSourceId(sourceId: String?) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (sourceId.isNullOrBlank()) {
                 preferences.remove(SELECTED_SUBSCRIPTION_SOURCE_ID)
             } else {
@@ -1105,7 +1135,7 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setSelectedCountryCode(countryCode: String?) {
         val normalizedCode = CountryCodeResolver.normalizeCountryCode(countryCode)
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             if (normalizedCode == null) {
                 preferences.remove(SELECTED_COUNTRY_CODE)
             } else {
@@ -1115,26 +1145,26 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setNodeGroupingMode(mode: NodeGroupingMode) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[NODE_GROUPING_MODE] = mode.name
         }
     }
 
-    val disconnectRecoveryEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val disconnectRecoveryEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[DISCONNECT_RECOVERY_ENABLED] ?: io.github.HanJason233.chimera.AppConfig.DISCONNECT_RECOVERY_ENABLED
     }
 
     suspend fun setDisconnectRecoveryEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[DISCONNECT_RECOVERY_ENABLED] = enabled
         }
     }
 
-    val hysteriaBandwidthEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val hysteriaBandwidthEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[HYSTERIA_BANDWIDTH_ENABLED] ?: io.github.HanJason233.chimera.AppConfig.HYSTERIA_BANDWIDTH_ENABLED
     }
 
-    val hysteriaUpMbps: Flow<Int> = context.dataStore.data.map { preferences ->
+    val hysteriaUpMbps: Flow<Int> = store.data.map { preferences ->
         if (preferences[HYSTERIA_BANDWIDTH_ENABLED] == false) {
             0
         } else {
@@ -1144,18 +1174,18 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setHysteriaBandwidthEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[HYSTERIA_BANDWIDTH_ENABLED] = enabled
         }
     }
 
     suspend fun setHysteriaUpMbps(value: Int) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[HYSTERIA_UP_MBPS] = value.coerceIn(0, 100_000)
         }
     }
 
-    val hysteriaDownMbps: Flow<Int> = context.dataStore.data.map { preferences ->
+    val hysteriaDownMbps: Flow<Int> = store.data.map { preferences ->
         if (preferences[HYSTERIA_BANDWIDTH_ENABLED] == false) {
             0
         } else {
@@ -1165,45 +1195,45 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setHysteriaDownMbps(value: Int) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[HYSTERIA_DOWN_MBPS] = value.coerceIn(0, 100_000)
         }
     }
 
-    val autoDeleteTcpingTimeoutNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val autoDeleteTcpingTimeoutNodes: Flow<Boolean> = store.data.map { preferences ->
         preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES]
             ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES
     }
 
     suspend fun setAutoDeleteTcpingTimeoutNodes(enabled: Boolean) {
-        context.dataStore.edit { preferences -> preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES] = enabled }
+        store.edit { preferences -> preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES] = enabled }
     }
 
-    val autoDeleteUrlTestTimeoutNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val autoDeleteUrlTestTimeoutNodes: Flow<Boolean> = store.data.map { preferences ->
         preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES]
             ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES
     }
 
     suspend fun setAutoDeleteUrlTestTimeoutNodes(enabled: Boolean) {
-        context.dataStore.edit { preferences -> preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES] = enabled }
+        store.edit { preferences -> preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES] = enabled }
     }
 
-    val autoDeleteLowBandwidthNodes: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val autoDeleteLowBandwidthNodes: Flow<Boolean> = store.data.map { preferences ->
         preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES]
             ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_LOW_BANDWIDTH_NODES
     }
 
     suspend fun setAutoDeleteLowBandwidthNodes(enabled: Boolean) {
-        context.dataStore.edit { preferences -> preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES] = enabled }
+        store.edit { preferences -> preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES] = enabled }
     }
 
-    val autoDeleteBandwidthThresholdMbps: Flow<Int> = context.dataStore.data.map { preferences ->
+    val autoDeleteBandwidthThresholdMbps: Flow<Int> = store.data.map { preferences ->
         (preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS]
             ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS).coerceIn(0, 100_000)
     }
 
     suspend fun setAutoDeleteBandwidthThresholdMbps(value: Int) {
-        context.dataStore.edit { preferences ->
+        store.edit { preferences ->
             preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS] = value.coerceIn(0, 100_000)
         }
     }

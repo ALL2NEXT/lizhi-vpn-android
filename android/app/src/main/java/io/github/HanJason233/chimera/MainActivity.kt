@@ -228,13 +228,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 val onBottomNavigationDestinationSelected:
                                     (HomeDestination) -> Unit = { destination ->
-                                        when (destination) {
-                                            HomeDestination.NODE_GROUPING ->
-                                                viewModel.selectCountryGrouping()
-                                            HomeDestination.SUBSCRIPTION_GROUPING ->
-                                                viewModel.selectSubscriptionGrouping()
-                                            else -> Unit
-                                        }
+                                        // 浏览分组页面不改写用户实际选中的节点组。
                                         selectedDestination = destination
                                     }
                                 when (selectedDestination) {

@@ -1616,33 +1616,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** 统一选择节点组，并同步当前连接流程需要的筛选字段。 */
     fun selectNodeGroup(group: NodeGroupKey) {
         viewModelScope.launch {
-            settingsRepository.setSelectedNodeGroupId(group.value)
-            when (group) {
-                is NodeGroupKey.Subscription -> {
-                    settingsRepository.setSelectedCountryCode(null)
-                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
-                    settingsRepository.setSelectedSubscriptionSourceId(group.sourceId)
-                    settingsRepository.setSelectedNodeId(null)
-                }
-                is NodeGroupKey.Country -> {
-                    settingsRepository.setSelectedCountryCode(group.countryCode)
-                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.REGION)
-                }
-                is NodeGroupKey.Imported -> {
-                    settingsRepository.setSelectedCountryCode(null)
-                    settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
-                    settingsRepository.setSelectedSubscriptionSourceId(null)
-                    settingsRepository.setSelectedNodeId(null)
-                }
-            }
+            settingsRepository.setSelectedNodeGroup(group)
         }
     }
 
     /** Select a node from the node list and connect to it immediately. */
     fun selectAndConnectNode(node: Node) {
         viewModelScope.launch {
-            settingsRepository.setSelectedCountryCode(null)
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
             connectNode(node)
         }
     }
@@ -1680,25 +1660,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setWarehouseGroupingCountryCodes(countryCodes: Set<String>?) {
         viewModelScope.launch {
             settingsRepository.setWarehouseGroupingCountryCodes(countryCodes)
-        }
-    }
-
-    /** 切换到仓库源时立即取消地区限定，保证主页智能测速使用当前官方源。 */
-    fun selectSubscriptionGrouping() {
-        viewModelScope.launch {
-            settingsRepository.setSelectedCountryCode(null)
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
-            activeSubscriptionSourceId.value?.let { sourceId ->
-                settingsRepository.setSelectedNodeGroupId(
-                    NodeGroupKey.Subscription(sourceId).value
-                )
-            }
-        }
-    }
-
-    fun selectCountryGrouping() {
-        viewModelScope.launch {
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.REGION)
         }
     }
 
@@ -1925,13 +1886,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
             }
-            settingsRepository.setSelectedNodeGroupId(
-                NodeGroupKey.Imported(preparedGroups.first().group.id).value
+            settingsRepository.setSelectedNodeGroup(
+                NodeGroupKey.Imported(preparedGroups.first().group.id)
             )
-            settingsRepository.setSelectedCountryCode(null)
-            settingsRepository.setSelectedSubscriptionSourceId(null)
-            settingsRepository.setSelectedNodeId(null)
-            settingsRepository.setNodeGroupingMode(NodeGroupingMode.WAREHOUSE)
             val totalImportedNodes = preparedGroups.sumOf { it.nodes.size }
             val result = if (failedRemoteCount > 0) {
                 SubscriptionGroupCreateResult.PARTIAL_CREATED

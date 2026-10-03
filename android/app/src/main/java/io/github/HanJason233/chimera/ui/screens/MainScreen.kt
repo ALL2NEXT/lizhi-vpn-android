@@ -3,8 +3,10 @@ package io.github.HanJason233.chimera.ui.screens
 import android.widget.Toast
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
@@ -34,17 +36,6 @@ import io.github.HanJason233.chimera.ui.dialogs.*
 import io.github.HanJason233.chimera.ui.theme.*
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import io.github.HanJason233.chimera.platform.LauncherIdentityPresets
-import java.util.Locale
-
-private fun Int.toHomeLatency(): String = when {
-    this >= 0 -> "${this}ms"
-    this == -2 -> "超时"
-    else -> "未测速"
-}
-
-private fun Float.toHomeSpeed(): String =
-    if (isFinite() && this > 0f) "${"%.2f".format(Locale.ROOT, this)} Mbps" else "未测速"
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MainScreen(
@@ -109,7 +100,8 @@ fun MainScreen(
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
 
-    val selectedGroupName = when (val selectedGroup = NodeGroupKey.parse(selectedNodeGroupId)) {
+    val selectedGroup = NodeGroupKey.parse(selectedNodeGroupId)
+    val selectedGroupName = when (selectedGroup) {
         is NodeGroupKey.Subscription -> subscriptionGroups
             .firstOrNull { it.sourceId == selectedGroup.sourceId }
             ?.name ?: "未知官方源"
@@ -121,6 +113,17 @@ fun MainScreen(
             ?.name ?: "未知仓库源"
         null -> "未选择"
     }
+    val selectedGroupType = when (selectedGroup) {
+        is NodeGroupKey.Subscription -> "官方源"
+        is NodeGroupKey.Imported -> "私人源"
+        is NodeGroupKey.Country -> "地区组"
+        null -> "选择分组"
+    }
+    val nodeCountryCode = currentNode?.getCountryCode()
+    val nodeRegionName = countryOptions.firstOrNull {
+        it.code.equals(nodeCountryCode, ignoreCase = true)
+    }?.name ?: currentNode?.countryName?.takeIf(String::isNotBlank)
+        ?: nodeCountryCode ?: "未知地区"
     
     val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
@@ -248,208 +251,119 @@ fun MainScreen(
                 },
                 containerColor = MaterialTheme.colorScheme.background
             ) { paddingValues ->
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                Spacer(modifier = Modifier.weight(1f))
-                
-                // 连接按钮
-                ConnectButton(
-                    vpnState = vpnState,
-                    enabled = !isTesting,
-                    isTesting = isTesting,
-                    customDisconnectedImagePath = skinSettings.homeDisconnectedImagePath,
-                    customConnectingImagePath = skinSettings.homeConnectingImagePath,
-                    customDisconnectingImagePath = skinSettings.homeDisconnectingImagePath,
-                    customConnectedImagePath = skinSettings.homeConnectedImagePath,
-                    homeIconEffect = skinSettings.activeScheme.homeIconEffect,
-                    homeIconEffectEnabled = skinSettings.activeScheme.homeIconEffectEnabled,
-                    homeIconRotationEnabled = skinSettings.activeScheme.homeIconRotationEnabled,
-                    onClick = {
-                        when (vpnState) {
-                            VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
-                            VpnState.DISCONNECTED -> onStartVpn {
-                                if (homeClickSpeedTestEnabled) {
-                                    clickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                    HomeGroupCard(
+                        name = selectedGroupName,
+                        groupType = selectedGroupType,
+                        onClick = {
+                            onBottomNavigationDestinationSelected(
+                                if (selectedGroup is NodeGroupKey.Country) {
+                                    HomeDestination.NODE_GROUPING
                                 } else {
-                                    viewModel.startSelectedOrFirstConnection()
+                                    HomeDestination.SUBSCRIPTION_GROUPING
                                 }
-                            }
-                            else -> Unit
+                            )
                         }
-                    },
-                    onLongClick = if (
-                        vpnState == VpnState.DISCONNECTED && homeLongPressSpeedTestEnabled
-                    ) {
-                        {
-                            onStartVpn {
-                                longPressScheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                    )
+                    HomeNodeCard(currentNode, nodeRegionName, vpnState)
+                    if (isTesting) {
+                        HomeTestProgressCard(testProgress)
+                    }
+
+                    ConnectButton(
+                        vpnState = vpnState,
+                        maxButtonSize = 180.dp,
+                        enabled = !isTesting,
+                        isTesting = isTesting,
+                        customDisconnectedImagePath = skinSettings.homeDisconnectedImagePath,
+                        customConnectingImagePath = skinSettings.homeConnectingImagePath,
+                        customDisconnectingImagePath = skinSettings.homeDisconnectingImagePath,
+                        customConnectedImagePath = skinSettings.homeConnectedImagePath,
+                        homeIconEffect = skinSettings.activeScheme.homeIconEffect,
+                        homeIconEffectEnabled = skinSettings.activeScheme.homeIconEffectEnabled,
+                        homeIconRotationEnabled = skinSettings.activeScheme.homeIconRotationEnabled,
+                        onClick = {
+                            when (vpnState) {
+                                VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
+                                VpnState.DISCONNECTED -> onStartVpn {
+                                    if (homeClickSpeedTestEnabled) {
+                                        clickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                                    } else {
+                                        viewModel.startSelectedOrFirstConnection()
+                                    }
+                                }
+                                else -> Unit
                             }
-                        }
-                    } else {
-                        null
-                    },
-                    onSwipe = if (vpnState == VpnState.DISCONNECTED) {
-                        { direction ->
-                            val scheme = when (direction) {
-                                ConnectButtonSwipeDirection.UP -> swipeUpScheme
-                                ConnectButtonSwipeDirection.DOWN -> swipeDownScheme
-                                ConnectButtonSwipeDirection.LEFT -> swipeLeftScheme
-                                ConnectButtonSwipeDirection.RIGHT -> swipeRightScheme
-                            }
-                            val enabled = when (direction) {
-                                ConnectButtonSwipeDirection.UP -> homeSwipeUpSpeedTestEnabled
-                                ConnectButtonSwipeDirection.DOWN -> homeSwipeDownSpeedTestEnabled
-                                ConnectButtonSwipeDirection.LEFT -> homeSwipeLeftSpeedTestEnabled
-                                ConnectButtonSwipeDirection.RIGHT -> homeSwipeRightSpeedTestEnabled
-                            }
-                            if (enabled) {
+                        },
+                        onLongClick = if (
+                            vpnState == VpnState.DISCONNECTED && homeLongPressSpeedTestEnabled
+                        ) {
+                            {
                                 onStartVpn {
-                                    scheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                                    longPressScheme?.let { viewModel.startSpeedTestScheme(it.id) }
                                 }
                             }
-                        }
-                    } else {
-                        null
-                    },
-                    // 主页连接区域只保留图标。
-                    showStatusLabel = false,
-                    clickActionLabel = if (homeClickSpeedTestEnabled) {
-                        clickScheme?.name ?: "测速方案"
-                    } else {
-                        "直接连接"
-                    },
-                    longClickActionLabel = if (homeLongPressSpeedTestEnabled) {
-                        longPressScheme?.name ?: "测速方案"
-                    } else {
-                        "点击连接"
-                    }
-                )
-                
-                Spacer(modifier = Modifier.weight(1f))
-                    }
-
-                    // 主页左上角以纯文本展示当前分组和节点参数。
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .fillMaxWidth()
-                            .padding(start = 24.dp, end = 24.dp, top = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        val homeTestProgress = testProgress?.takeIf {
-                            isTesting && !it.isManualGroupTest
-                        }
-                        if (homeTestProgress != null) {
-                            Text(
-                                text = if (homeTestProgress.total > 0) {
-                                    "测速：${homeTestProgress.stage} ${homeTestProgress.completed}/${homeTestProgress.total}"
-                                } else {
-                                    "测速：${homeTestProgress.stage}"
-                                },
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Text(
-                            text = "选中组：$selectedGroupName",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        val node = currentNode
-                        val isConnected = vpnState == VpnState.CONNECTED
-                        Text(
-                            text = "${if (isConnected) "连接节点" else "选中节点"}：${node?.name ?: "未选择"}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        if (node != null) {
-                            val countryCode = node.getCountryCode()
-                            val regionName = countryCode?.let { code ->
-                                countryOptions.firstOrNull {
-                                    it.code.equals(code, ignoreCase = true)
-                                }?.name
-                            } ?: node.countryName?.takeIf(String::isNotBlank)
-                                ?: countryCode
-                                ?: "未知地区"
-                            Text(
-                                text = "地区组：$regionName",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "仓库源：${node.getConnectionGroupName()}",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "延迟：${node.latency.toHomeLatency()}  TCPing：${node.tcpingLatency.toHomeLatency()}  URLTest：${node.urlTestLatency.toHomeLatency()}",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "下载：${node.downloadMbps.toHomeSpeed()}  上传：${node.uploadMbps.toHomeSpeed()}",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        if (unlockTestState.items.isNotEmpty()) {
-                            Text(
-                                text = "流媒体与 AI：${if (unlockTestState.isRunning) "${unlockTestState.completedCount}/${unlockTestState.items.size}，" else ""}${unlockTestState.message}",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            FlowRow(
-                                maxItemsInEachRow = 3,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                unlockTestState.items.forEach { result ->
-                                    val region = result.region.takeIf(String::isNotBlank)
-                                        ?.let { "（$it）" }.orEmpty()
-                                    Text(
-                                        text = "${result.definition.name}：${result.statusText}$region",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                        } else {
+                            null
+                        },
+                        onSwipe = if (
+                            vpnState == VpnState.DISCONNECTED &&
+                            (homeSwipeUpSpeedTestEnabled || homeSwipeDownSpeedTestEnabled ||
+                                homeSwipeLeftSpeedTestEnabled || homeSwipeRightSpeedTestEnabled)
+                        ) {
+                            { direction ->
+                                val scheme = when (direction) {
+                                    ConnectButtonSwipeDirection.UP -> swipeUpScheme
+                                    ConnectButtonSwipeDirection.DOWN -> swipeDownScheme
+                                    ConnectButtonSwipeDirection.LEFT -> swipeLeftScheme
+                                    ConnectButtonSwipeDirection.RIGHT -> swipeRightScheme
+                                }
+                                val enabled = when (direction) {
+                                    ConnectButtonSwipeDirection.UP -> homeSwipeUpSpeedTestEnabled
+                                    ConnectButtonSwipeDirection.DOWN -> homeSwipeDownSpeedTestEnabled
+                                    ConnectButtonSwipeDirection.LEFT -> homeSwipeLeftSpeedTestEnabled
+                                    ConnectButtonSwipeDirection.RIGHT -> homeSwipeRightSpeedTestEnabled
+                                }
+                                if (enabled) {
+                                    onStartVpn {
+                                        scheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                                    }
                                 }
                             }
+                        } else {
+                            null
+                        },
+                        // 主页连接区域只保留图标。
+                        showStatusLabel = false,
+                        clickActionLabel = if (homeClickSpeedTestEnabled) {
+                            clickScheme?.name ?: "测速方案"
+                        } else {
+                            "直接连接"
+                        },
+                        longClickActionLabel = if (homeLongPressSpeedTestEnabled) {
+                            longPressScheme?.name ?: "测速方案"
+                        } else {
+                            "点击连接"
                         }
+                    )
+
+                    HomeTestResultsCard(currentNode)
+                    if (unlockTestState.items.isNotEmpty()) {
+                        HomeUnlockResultsCard(unlockTestState)
                     }
                 }
             }
         }
     }
-    
+
     // 节点列表弹窗
     if (showBackendDialog) {
         AppAlertDialog(
