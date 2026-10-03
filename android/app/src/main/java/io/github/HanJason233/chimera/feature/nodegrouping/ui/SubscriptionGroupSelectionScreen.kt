@@ -4,12 +4,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -47,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -63,12 +66,27 @@ import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 private enum class GroupActionMode {
     UPDATE,
     EDIT,
     DELETE
 }
+
+private enum class SubscriptionTrafficStatus {
+    UNKNOWN,
+    SAFE,
+    WARNING,
+    CRITICAL,
+    EXHAUSTED
+}
+
+private data class SubscriptionTrafficInfo(
+    val text: String,
+    val status: SubscriptionTrafficStatus,
+    val progress: Float?
+)
 
 @Composable
 internal fun SubscriptionGroupSelectionDestination(
@@ -644,7 +662,8 @@ private fun UserSubscriptionGroupCard(
     GroupCard(
         name = group.name,
         nodeCount = group.nodeCount,
-        details = personalSubscriptionInfo(group),
+        traffic = personalSubscriptionTraffic(group),
+        details = personalSubscriptionDetails(group),
         selected = selected,
         onClick = onClick,
         onViewDetails = onViewDetails,
@@ -676,6 +695,7 @@ private fun GroupTypeHeader(title: String) {
 private fun GroupCard(
     name: String,
     nodeCount: Int,
+    traffic: SubscriptionTrafficInfo? = null,
     details: List<String> = emptyList(),
     selected: Boolean,
     onClick: () -> Unit,
@@ -715,14 +735,37 @@ private fun GroupCard(
             MaterialTheme.colorScheme.surfaceVariant
         }
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 72.dp)
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // 按剩余流量比例填充卡片背景，模拟手机电量的显示效果。
+            traffic?.progress?.let { progress ->
+                Box(
+                    modifier = Modifier.matchParentSize()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress)
+                            .fillMaxHeight()
+                            .align(Alignment.CenterStart)
+                            .background(
+                                subscriptionTrafficColor(traffic.status).copy(
+                                    alpha = if (traffic.status == SubscriptionTrafficStatus.EXHAUSTED) {
+                                        0.22f
+                                    } else {
+                                        0.26f
+                                    }
+                                )
+                            )
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 72.dp)
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             Icon(
                 imageVector = Icons.Rounded.Subscriptions,
                 contentDescription = null,
@@ -749,6 +792,20 @@ private fun GroupCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                traffic?.let { trafficInfo ->
+                    Text(
+                        text = trafficInfo.text,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 details.forEach { detail ->
                     Text(
                         text = detail,
@@ -773,38 +830,67 @@ private fun GroupCard(
                 fontSize = 13.sp,
                 maxLines = 1
             )
-            IconButton(onClick = onGroupAction, enabled = actionEnabled) {
+                IconButton(onClick = onGroupAction, enabled = actionEnabled) {
                 Icon(
                     imageVector = trailingIcon,
                     contentDescription = trailingDescription,
                     tint = trailingTint
-                )
+                    )
+                }
             }
-        }
     }
+}
+
 }
 
 private val subscriptionExpireFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
-private fun personalSubscriptionInfo(group: NodeGroupSummary): List<String> = buildList {
+private fun personalSubscriptionTraffic(group: NodeGroupSummary): SubscriptionTrafficInfo? {
     val hasTraffic = group.subscriptionUploadBytes != null ||
         group.subscriptionDownloadBytes != null ||
         group.subscriptionTotalBytes != null
-    if (hasTraffic) {
-        val upload = group.subscriptionUploadBytes?.coerceAtLeast(0L) ?: 0L
-        val download = group.subscriptionDownloadBytes?.coerceAtLeast(0L) ?: 0L
-        val used = if (upload > Long.MAX_VALUE - download) Long.MAX_VALUE else upload + download
-        val total = group.subscriptionTotalBytes?.coerceAtLeast(0L)
-        add(
-            if (total != null && total > 0L) {
-                "流量：已用 ${TrafficUsageFormatter.formatBytes(used)} / 总量 ${TrafficUsageFormatter.formatBytes(total)}"
-            } else {
-                "流量：已用 ${TrafficUsageFormatter.formatBytes(used)}"
-            }
+    if (!hasTraffic) return null
+
+    val upload = group.subscriptionUploadBytes?.coerceAtLeast(0L) ?: 0L
+    val download = group.subscriptionDownloadBytes?.coerceAtLeast(0L) ?: 0L
+    val used = if (upload > Long.MAX_VALUE - download) Long.MAX_VALUE else upload + download
+    val total = group.subscriptionTotalBytes?.coerceAtLeast(0L)
+        ?: return SubscriptionTrafficInfo(
+            text = "流量：已用 ${TrafficUsageFormatter.formatBytes(used)}",
+            status = SubscriptionTrafficStatus.UNKNOWN,
+            progress = null
+        )
+
+    val remaining = total - used
+    // 余额小于等于 0 时视为已用完，卡片整张使用黑色填充。
+    if (remaining <= 0L) {
+        return SubscriptionTrafficInfo(
+            text = "流量已用完",
+            status = SubscriptionTrafficStatus.EXHAUSTED,
+            progress = 1f
         )
     }
 
+    val remainingRatio = (remaining.toDouble() / total.toDouble()).coerceIn(0.0, 1.0)
+    val percentage = (remainingRatio * 100.0)
+        .roundToInt()
+        .coerceIn(1, 100)
+    // 剩余流量分级：50% 以上绿色，10%～50% 黄色，10% 以下红色。
+    val status = when {
+        remainingRatio >= 0.5 -> SubscriptionTrafficStatus.SAFE
+        remainingRatio >= 0.1 -> SubscriptionTrafficStatus.WARNING
+        else -> SubscriptionTrafficStatus.CRITICAL
+    }
+
+    return SubscriptionTrafficInfo(
+        text = "剩余流量：${TrafficUsageFormatter.formatBytes(remaining)}（$percentage%）",
+        status = status,
+        progress = remainingRatio.toFloat()
+    )
+}
+
+private fun personalSubscriptionDetails(group: NodeGroupSummary): List<String> = buildList {
     group.subscriptionExpireAt?.takeIf { it > 0L }?.let { expireAt ->
         runCatching {
             Instant.ofEpochMilli(expireAt)
@@ -814,4 +900,14 @@ private fun personalSubscriptionInfo(group: NodeGroupSummary): List<String> = bu
             add(if (expireAt <= System.currentTimeMillis()) "已过期：$formatted" else "到期：$formatted")
         }
     }
+}
+
+private fun subscriptionTrafficColor(
+    status: SubscriptionTrafficStatus
+): Color = when (status) {
+    SubscriptionTrafficStatus.SAFE -> Color(0xFF2E7D32)
+    SubscriptionTrafficStatus.WARNING -> Color(0xFFF9A825)
+    SubscriptionTrafficStatus.CRITICAL -> Color(0xFFC62828)
+    SubscriptionTrafficStatus.EXHAUSTED -> Color.Black
+    SubscriptionTrafficStatus.UNKNOWN -> Color.Transparent
 }
