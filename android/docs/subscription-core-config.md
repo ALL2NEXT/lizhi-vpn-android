@@ -10,7 +10,7 @@
 - WireGuard 使用 `endpoints` 和 `peers` 格式；Hysteria2 数字跳跃间隔转换为秒数。
 - 不支持的传输、无效 ECH、Reality 与 ECH 冲突，以及 AnyTLS `max_idle_session` 明确报错。
 
-Clash `fingerprint` 是证书指纹，`client-fingerprint` 才是浏览器指纹。两者分别保存在 URI 中。当前固定的 sing-box 1.14.1 支持证书 PEM 和公钥 SHA-256，整张证书 SHA-256 固定明确提示使用 Xray；不会把它错误映射为公钥指纹。
+Clash `fingerprint` 是证书指纹，`client-fingerprint` 才是浏览器指纹。两者分别保存在 URI 中。当前固定的 sing-box 1.14.2 支持证书 PEM 和公钥 SHA-256，整张证书 SHA-256 固定明确提示使用 Xray；不会把它错误映射为公钥指纹。
 
 更新 APK 后，需要刷新或重新导入带 ECH 的 YAML 订阅，以补回旧版本导入时丢失的字段。
 

@@ -21,7 +21,7 @@ val targetAbis = when (providers.gradleProperty("targetAbi").orNull) {
 val singBoxSourceDir = rootProject.file("../core/sing-box")
 val singBoxRunnerDir = rootProject.file("native/singbox-runner")
 val generatedSingBoxJniDir = layout.buildDirectory.dir("generated/singbox/jniLibs")
-val singBoxCoreVersion = "1.14.1"
+val singBoxCoreVersion = "1.14.2"
 val xraySourceDir = rootProject.file("../core/xray-core")
 val xrayRunnerDir = rootProject.file("native/xray-runner")
 val generatedXrayJniDir = layout.buildDirectory.dir("generated/xray/jniLibs")
@@ -44,6 +44,7 @@ val buildSingBoxCore = tasks.register("buildSingBoxCore") {
         exclude("dist/**")
     })
     inputs.files(fileTree(singBoxRunnerDir) { exclude("*.exe") })
+    inputs.property("version", singBoxCoreVersion)
     inputs.property("ndkVersion", singBoxNdkVersion)
     inputs.property("androidApi", 24)
     outputs.files(targetAbis.map { generatedSingBoxJniDir.map { dir -> dir.file("$it/libsingbox.so") } })
