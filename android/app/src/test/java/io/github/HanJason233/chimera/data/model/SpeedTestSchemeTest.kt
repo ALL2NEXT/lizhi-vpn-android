@@ -12,7 +12,7 @@ class SpeedTestSchemeTest {
 
         assertEquals(SpeedTestScheme.DEFAULT_ID, scheme.id)
         assertTrue(scheme.builtIn)
-        assertEquals(SpeedTestScope.CURRENT_GROUP, scheme.scope)
+        assertEquals(SpeedTestStageScope.CurrentGroup, scheme.inputScopeFor(SpeedTestStage.TCPING))
         assertTrue(scheme.tcpingEnabled)
         assertEquals(SpeedTestSelectionMode.PERCENT, scheme.tcpingSelectionMode)
         assertEquals(100, scheme.tcpingSelectionValue)

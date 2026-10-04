@@ -14,12 +14,12 @@ internal object SpeedTestCandidateSelector {
     fun <T> selectForStage(
         scheme: SpeedTestScheme,
         stage: SpeedTestStage,
-        initialCandidates: List<T>,
+        currentGroupCandidates: List<T>,
         previousResults: Map<SpeedTestStage, List<T>>
     ): List<T> {
         require(scheme.isStageEnabled(stage)) { "测试阶段未开启：$stage" }
         val candidates = when (val scope = scheme.inputScopeFor(stage)) {
-            is SpeedTestStageScope.Initial -> initialCandidates
+            SpeedTestStageScope.CurrentGroup -> currentGroupCandidates
             is SpeedTestStageScope.PreviousResult -> checkNotNull(previousResults[scope.stage]) {
                 "前项测试尚未完成：${scope.stage}"
             }

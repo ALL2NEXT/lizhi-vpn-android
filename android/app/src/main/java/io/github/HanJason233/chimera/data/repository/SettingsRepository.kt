@@ -30,7 +30,6 @@ import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.SkinThemeMode
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
-import io.github.HanJason233.chimera.data.model.SpeedTestScope
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
@@ -81,32 +80,20 @@ class SettingsRepository(
         private val LAN_INBOUND_PASSWORD = stringPreferencesKey("lan_inbound_password")
         private val HOME_CLICK_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_click_speed_test_scheme_id")
+        private val HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID =
+            stringPreferencesKey("home_double_click_speed_test_scheme_id")
         private val HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_long_press_speed_test_scheme_id")
-        private val HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID =
-            stringPreferencesKey("home_swipe_up_speed_test_scheme_id")
-        private val HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID =
-            stringPreferencesKey("home_swipe_down_speed_test_scheme_id")
-        private val HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID =
-            stringPreferencesKey("home_swipe_left_speed_test_scheme_id")
-        private val HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID =
-            stringPreferencesKey("home_swipe_right_speed_test_scheme_id")
         private val GROUP_MANUAL_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("group_manual_speed_test_scheme_id")
         private val GROUP_MANUAL_SPEED_TEST_ENABLED =
             booleanPreferencesKey("group_manual_speed_test_enabled")
         private val HOME_CLICK_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_click_speed_test_enabled")
+        private val HOME_DOUBLE_CLICK_SPEED_TEST_ENABLED =
+            booleanPreferencesKey("home_double_click_speed_test_enabled")
         private val HOME_LONG_PRESS_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_long_press_speed_test_enabled")
-        private val HOME_SWIPE_UP_SPEED_TEST_ENABLED =
-            booleanPreferencesKey("home_swipe_up_speed_test_enabled")
-        private val HOME_SWIPE_DOWN_SPEED_TEST_ENABLED =
-            booleanPreferencesKey("home_swipe_down_speed_test_enabled")
-        private val HOME_SWIPE_LEFT_SPEED_TEST_ENABLED =
-            booleanPreferencesKey("home_swipe_left_speed_test_enabled")
-        private val HOME_SWIPE_RIGHT_SPEED_TEST_ENABLED =
-            booleanPreferencesKey("home_swipe_right_speed_test_enabled")
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
         private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
         private val UPDATE_DOWNLOAD_DIRECTORY_URI =
@@ -217,51 +204,21 @@ class SettingsRepository(
         )
     }
 
+    /** 主页图标双击使用的测速方案。 */
+    val homeDoubleClickSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
+        val schemes = decodeSpeedTestSchemes(preferences)
+        resolveHomeSchemeId(
+            preferences[HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID],
+            SpeedTestScheme.DEFAULT_ID,
+            schemes
+        )
+    }
+
     /** 主页图标长按使用的测速方案。 */
     val homeLongPressSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
         resolveHomeSchemeId(
             preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEFAULT_ID,
-            schemes
-        )
-    }
-
-    /** 主页图标上滑使用的测速方案。 */
-    val homeSwipeUpSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
-        val schemes = decodeSpeedTestSchemes(preferences)
-        resolveHomeSchemeId(
-            preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEFAULT_ID,
-            schemes
-        )
-    }
-
-    /** 主页图标下滑使用的测速方案。 */
-    val homeSwipeDownSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
-        val schemes = decodeSpeedTestSchemes(preferences)
-        resolveHomeSchemeId(
-            preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEFAULT_ID,
-            schemes
-        )
-    }
-
-    /** 主页图标左滑使用的测速方案。 */
-    val homeSwipeLeftSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
-        val schemes = decodeSpeedTestSchemes(preferences)
-        resolveHomeSchemeId(
-            preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEFAULT_ID,
-            schemes
-        )
-    }
-
-    /** 主页图标右滑使用的测速方案。 */
-    val homeSwipeRightSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
-        val schemes = decodeSpeedTestSchemes(preferences)
-        resolveHomeSchemeId(
-            preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID],
             SpeedTestScheme.DEFAULT_ID,
             schemes
         )
@@ -287,29 +244,14 @@ class SettingsRepository(
         preferences[HOME_CLICK_SPEED_TEST_ENABLED] ?: false
     }
 
+    /** 主页图标双击是否启用测速方案；默认关闭。 */
+    val homeDoubleClickSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
+        preferences[HOME_DOUBLE_CLICK_SPEED_TEST_ENABLED] ?: false
+    }
+
     /** 主页图标长按是否启用测速方案；默认开启以保持原有行为。 */
     val homeLongPressSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[HOME_LONG_PRESS_SPEED_TEST_ENABLED] ?: true
-    }
-
-    /** 主页图标上滑是否启用测速方案；默认关闭避免误触。 */
-    val homeSwipeUpSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
-        preferences[HOME_SWIPE_UP_SPEED_TEST_ENABLED] ?: false
-    }
-
-    /** 主页图标下滑是否启用测速方案；默认关闭避免误触。 */
-    val homeSwipeDownSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
-        preferences[HOME_SWIPE_DOWN_SPEED_TEST_ENABLED] ?: false
-    }
-
-    /** 主页图标左滑是否启用测速方案；默认关闭避免误触。 */
-    val homeSwipeLeftSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
-        preferences[HOME_SWIPE_LEFT_SPEED_TEST_ENABLED] ?: false
-    }
-
-    /** 主页图标右滑是否启用测速方案；默认关闭避免误触。 */
-    val homeSwipeRightSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
-        preferences[HOME_SWIPE_RIGHT_SPEED_TEST_ENABLED] ?: false
     }
 
     suspend fun setHomeClickSpeedTestSchemeId(schemeId: String) {
@@ -320,42 +262,18 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setHomeDoubleClickSpeedTestSchemeId(schemeId: String) {
+        store.edit { preferences ->
+            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
+                preferences[HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID] = schemeId
+            }
+        }
+    }
+
     suspend fun setHomeLongPressSpeedTestSchemeId(schemeId: String) {
         store.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = schemeId
-            }
-        }
-    }
-
-    suspend fun setHomeSwipeUpSpeedTestSchemeId(schemeId: String) {
-        store.edit { preferences ->
-            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
-                preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] = schemeId
-            }
-        }
-    }
-
-    suspend fun setHomeSwipeDownSpeedTestSchemeId(schemeId: String) {
-        store.edit { preferences ->
-            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
-                preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] = schemeId
-            }
-        }
-    }
-
-    suspend fun setHomeSwipeLeftSpeedTestSchemeId(schemeId: String) {
-        store.edit { preferences ->
-            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
-                preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] = schemeId
-            }
-        }
-    }
-
-    suspend fun setHomeSwipeRightSpeedTestSchemeId(schemeId: String) {
-        store.edit { preferences ->
-            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
-                preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = schemeId
             }
         }
     }
@@ -380,33 +298,15 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setHomeDoubleClickSpeedTestEnabled(enabled: Boolean) {
+        store.edit { preferences ->
+            preferences[HOME_DOUBLE_CLICK_SPEED_TEST_ENABLED] = enabled
+        }
+    }
+
     suspend fun setHomeLongPressSpeedTestEnabled(enabled: Boolean) {
         store.edit { preferences ->
             preferences[HOME_LONG_PRESS_SPEED_TEST_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setHomeSwipeUpSpeedTestEnabled(enabled: Boolean) {
-        store.edit { preferences ->
-            preferences[HOME_SWIPE_UP_SPEED_TEST_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setHomeSwipeDownSpeedTestEnabled(enabled: Boolean) {
-        store.edit { preferences ->
-            preferences[HOME_SWIPE_DOWN_SPEED_TEST_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setHomeSwipeLeftSpeedTestEnabled(enabled: Boolean) {
-        store.edit { preferences ->
-            preferences[HOME_SWIPE_LEFT_SPEED_TEST_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setHomeSwipeRightSpeedTestEnabled(enabled: Boolean) {
-        store.edit { preferences ->
-            preferences[HOME_SWIPE_RIGHT_SPEED_TEST_ENABLED] = enabled
         }
     }
 
@@ -881,20 +781,11 @@ class SettingsRepository(
             if (preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] == schemeId) {
                 preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
+            if (preferences[HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID] == schemeId) {
+                preferences[HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
+            }
             if (preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] == schemeId) {
                 preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
-            }
-            if (preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_SWIPE_UP_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
-            }
-            if (preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_SWIPE_DOWN_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
-            }
-            if (preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_SWIPE_LEFT_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
-            }
-            if (preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_SWIPE_RIGHT_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
             if (preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] == schemeId) {
                 preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
@@ -1281,20 +1172,6 @@ class SettingsRepository(
                                         id = id,
                                         name = item.optString("name", "我的方案"),
                                         builtIn = item.optBoolean("builtIn", false),
-                                        scope = runCatching {
-                                            SpeedTestScope.valueOf(
-                                                item.optString("scope", SpeedTestScope.CURRENT_GROUP.name)
-                                            )
-                                        }.getOrDefault(SpeedTestScope.CURRENT_GROUP),
-                                        specifiedGroupIds = buildSet {
-                                            item.optJSONArray("specifiedGroupIds")?.let { groups ->
-                                                for (groupIndex in 0 until groups.length()) {
-                                                    groups.optString(groupIndex).trim()
-                                                        .takeIf(String::isNotBlank)
-                                                        ?.let(::add)
-                                                }
-                                            }
-                                        },
                                         tcpingEnabled = item.optBoolean("tcpingEnabled", true),
                                         urlTestEnabled = item.optBoolean("urlTestEnabled", true),
                                         bandwidthEnabled = item.optBoolean("bandwidthEnabled", true),
@@ -1422,10 +1299,6 @@ class SettingsRepository(
         }
         return scheme.copy(
             name = normalizedName,
-            specifiedGroupIds = scheme.specifiedGroupIds
-                .map(String::trim)
-                .filter(String::isNotBlank)
-                .toSet(),
             unlockTestIds = scheme.unlockTestIds.intersect(
                 UnlockTestCatalog.schemeDefinitions.mapTo(mutableSetOf()) { it.id }
             ),
@@ -1467,10 +1340,6 @@ class SettingsRepository(
                     }
                     put("name", normalized.name)
                     put("builtIn", normalized.builtIn)
-                    put("scope", normalized.scope.name)
-                    put("specifiedGroupIds", JSONArray().apply {
-                        normalized.specifiedGroupIds.forEach(::put)
-                    })
                     put("tcpingEnabled", normalized.tcpingEnabled)
                     put("urlTestEnabled", normalized.urlTestEnabled)
                     put("bandwidthEnabled", normalized.bandwidthEnabled)

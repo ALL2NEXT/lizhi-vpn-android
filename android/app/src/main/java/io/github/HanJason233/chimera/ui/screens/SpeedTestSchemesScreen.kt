@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.enabledQualityStages
-import io.github.HanJason233.chimera.data.model.initialScopeLabel
 import io.github.HanJason233.chimera.data.model.selectionFor
 import io.github.HanJason233.chimera.data.model.formatSpeedTestSelection
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
@@ -66,19 +65,13 @@ fun SpeedTestSchemesScreen(
 ) {
     val schemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val clickId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val doubleClickId by viewModel.homeDoubleClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val longPressId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val swipeUpId by viewModel.homeSwipeUpSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val swipeDownId by viewModel.homeSwipeDownSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val swipeLeftId by viewModel.homeSwipeLeftSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val swipeRightId by viewModel.homeSwipeRightSpeedTestSchemeId.collectAsStateWithLifecycle()
     val groupManualId by viewModel.groupManualSpeedTestSchemeId.collectAsStateWithLifecycle()
     val groupManualEnabled by viewModel.groupManualSpeedTestEnabled.collectAsStateWithLifecycle()
     val clickEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
+    val doubleClickEnabled by viewModel.homeDoubleClickSpeedTestEnabled.collectAsStateWithLifecycle()
     val longPressEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
-    val swipeUpEnabled by viewModel.homeSwipeUpSpeedTestEnabled.collectAsStateWithLifecycle()
-    val swipeDownEnabled by viewModel.homeSwipeDownSpeedTestEnabled.collectAsStateWithLifecycle()
-    val swipeLeftEnabled by viewModel.homeSwipeLeftSpeedTestEnabled.collectAsStateWithLifecycle()
-    val swipeRightEnabled by viewModel.homeSwipeRightSpeedTestEnabled.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
     var newSchemeName by remember { mutableStateOf("") }
     var schemeToDelete by remember { mutableStateOf<SpeedTestScheme?>(null) }
@@ -91,7 +84,7 @@ fun SpeedTestSchemesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "方案分为链路质量、链路类型和 IP 质量测试。链路质量从初始作用域逐项筛选；连接后两类只检测当前节点。线路详情手动测试单项时只检测当前分组。",
+                text = "方案分为链路质量、链路类型和 IP 质量测试。链路质量固定从当前组逐项筛选；连接后两类只检测当前节点。线路详情手动测试单项时只检测当前分组。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
@@ -104,44 +97,20 @@ fun SpeedTestSchemesScreen(
                 onEnabledChange = viewModel::setHomeClickSpeedTestEnabled
             )
             SpeedTestSchemeBinding(
+                title = "双击主页图标",
+                selectedId = doubleClickId,
+                schemes = schemes,
+                enabled = doubleClickEnabled,
+                onSelected = viewModel::setHomeDoubleClickSpeedTestScheme,
+                onEnabledChange = viewModel::setHomeDoubleClickSpeedTestEnabled
+            )
+            SpeedTestSchemeBinding(
                 title = "长按主页图标",
                 selectedId = longPressId,
                 schemes = schemes,
                 enabled = longPressEnabled,
                 onSelected = viewModel::setHomeLongPressSpeedTestScheme,
                 onEnabledChange = viewModel::setHomeLongPressSpeedTestEnabled
-            )
-            SpeedTestSchemeBinding(
-                title = "上滑主页图标",
-                selectedId = swipeUpId,
-                schemes = schemes,
-                enabled = swipeUpEnabled,
-                onSelected = viewModel::setHomeSwipeUpSpeedTestScheme,
-                onEnabledChange = viewModel::setHomeSwipeUpSpeedTestEnabled
-            )
-            SpeedTestSchemeBinding(
-                title = "下滑主页图标",
-                selectedId = swipeDownId,
-                schemes = schemes,
-                enabled = swipeDownEnabled,
-                onSelected = viewModel::setHomeSwipeDownSpeedTestScheme,
-                onEnabledChange = viewModel::setHomeSwipeDownSpeedTestEnabled
-            )
-            SpeedTestSchemeBinding(
-                title = "左滑主页图标",
-                selectedId = swipeLeftId,
-                schemes = schemes,
-                enabled = swipeLeftEnabled,
-                onSelected = viewModel::setHomeSwipeLeftSpeedTestScheme,
-                onEnabledChange = viewModel::setHomeSwipeLeftSpeedTestEnabled
-            )
-            SpeedTestSchemeBinding(
-                title = "右滑主页图标",
-                selectedId = swipeRightId,
-                schemes = schemes,
-                enabled = swipeRightEnabled,
-                onSelected = viewModel::setHomeSwipeRightSpeedTestScheme,
-                onEnabledChange = viewModel::setHomeSwipeRightSpeedTestEnabled
             )
             SpeedTestSchemeBinding(
                 title = "分组内手动测试",
@@ -162,11 +131,8 @@ fun SpeedTestSchemesScreen(
                 SpeedTestSchemeCard(
                     scheme = scheme,
                     assignedToClick = clickEnabled && scheme.id == clickId,
+                    assignedToDoubleClick = doubleClickEnabled && scheme.id == doubleClickId,
                     assignedToLongPress = longPressEnabled && scheme.id == longPressId,
-                    assignedToSwipeUp = swipeUpEnabled && scheme.id == swipeUpId,
-                    assignedToSwipeDown = swipeDownEnabled && scheme.id == swipeDownId,
-                    assignedToSwipeLeft = swipeLeftEnabled && scheme.id == swipeLeftId,
-                    assignedToSwipeRight = swipeRightEnabled && scheme.id == swipeRightId,
                     assignedToGroupManual = groupManualEnabled && scheme.id == groupManualId,
                     onEdit = { onOpenEditor(scheme.id) },
                     onDelete = { schemeToDelete = scheme }
@@ -375,11 +341,8 @@ private fun SpeedTestSchemeBinding(
 private fun SpeedTestSchemeCard(
     scheme: SpeedTestScheme,
     assignedToClick: Boolean,
+    assignedToDoubleClick: Boolean,
     assignedToLongPress: Boolean,
-    assignedToSwipeUp: Boolean,
-    assignedToSwipeDown: Boolean,
-    assignedToSwipeLeft: Boolean,
-    assignedToSwipeRight: Boolean,
     assignedToGroupManual: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -392,8 +355,7 @@ private fun SpeedTestSchemeCard(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         border = if (
-            assignedToClick || assignedToLongPress || assignedToSwipeUp || assignedToSwipeDown ||
-            assignedToSwipeLeft || assignedToSwipeRight || assignedToGroupManual
+            assignedToClick || assignedToDoubleClick || assignedToLongPress || assignedToGroupManual
         ) {
             BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
         } else null
@@ -430,7 +392,7 @@ private fun SpeedTestSchemeCard(
                                 "检测当前连接；未连接时连接已选节点或当前组第一个节点"
                             else "不测速，直接连接已选节点或当前组第一个节点")
                         } else {
-                            append("初始作用域：${scheme.initialScopeLabel()}")
+                            append("初始作用域：当前组")
                             append("\n链路质量：")
                             append(scheme.enabledQualityStages.joinToString(" → ") { stage ->
                                 val selection = scheme.selectionFor(stage)
@@ -449,11 +411,8 @@ private fun SpeedTestSchemeCard(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (assignedToClick) BindingBadge("点击")
+                    if (assignedToDoubleClick) BindingBadge("双击")
                     if (assignedToLongPress) BindingBadge("长按")
-                    if (assignedToSwipeUp) BindingBadge("上滑")
-                    if (assignedToSwipeDown) BindingBadge("下滑")
-                    if (assignedToSwipeLeft) BindingBadge("左滑")
-                    if (assignedToSwipeRight) BindingBadge("右滑")
                     if (assignedToGroupManual) BindingBadge("分组手动")
                 }
             }

@@ -73,17 +73,11 @@ fun MainScreen(
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val homeClickSchemeId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
+    val homeDoubleClickSchemeId by viewModel.homeDoubleClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeLongPressSchemeId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val homeSwipeUpSchemeId by viewModel.homeSwipeUpSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val homeSwipeDownSchemeId by viewModel.homeSwipeDownSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val homeSwipeLeftSchemeId by viewModel.homeSwipeLeftSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val homeSwipeRightSchemeId by viewModel.homeSwipeRightSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeClickSpeedTestEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
+    val homeDoubleClickSpeedTestEnabled by viewModel.homeDoubleClickSpeedTestEnabled.collectAsStateWithLifecycle()
     val homeLongPressSpeedTestEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
-    val homeSwipeUpSpeedTestEnabled by viewModel.homeSwipeUpSpeedTestEnabled.collectAsStateWithLifecycle()
-    val homeSwipeDownSpeedTestEnabled by viewModel.homeSwipeDownSpeedTestEnabled.collectAsStateWithLifecycle()
-    val homeSwipeLeftSpeedTestEnabled by viewModel.homeSwipeLeftSpeedTestEnabled.collectAsStateWithLifecycle()
-    val homeSwipeRightSpeedTestEnabled by viewModel.homeSwipeRightSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
     val linkTypeTestResult by viewModel.linkTypeTestResult.collectAsStateWithLifecycle()
@@ -124,15 +118,9 @@ fun MainScreen(
     }
     val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
+    val doubleClickScheme = speedTestSchemes.firstOrNull { it.id == homeDoubleClickSchemeId }
+        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val longPressScheme = speedTestSchemes.firstOrNull { it.id == homeLongPressSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-    val swipeUpScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeUpSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-    val swipeDownScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeDownSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-    val swipeLeftScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeLeftSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-    val swipeRightScheme = speedTestSchemes.firstOrNull { it.id == homeSwipeRightSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
 
     // 显示错误Toast
@@ -307,6 +295,17 @@ fun MainScreen(
                                     else -> Unit
                                 }
                             },
+                            onDoubleClick = if (
+                                vpnState == VpnState.DISCONNECTED && homeDoubleClickSpeedTestEnabled
+                            ) {
+                                {
+                                    onStartVpn {
+                                        doubleClickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                                    }
+                                }
+                            } else {
+                                null
+                            },
                             onLongClick = if (
                                 vpnState == VpnState.DISCONNECTED && homeLongPressSpeedTestEnabled
                             ) {
@@ -318,39 +317,17 @@ fun MainScreen(
                             } else {
                                 null
                             },
-                            onSwipe = if (
-                                vpnState == VpnState.DISCONNECTED &&
-                                (homeSwipeUpSpeedTestEnabled || homeSwipeDownSpeedTestEnabled ||
-                                    homeSwipeLeftSpeedTestEnabled || homeSwipeRightSpeedTestEnabled)
-                            ) {
-                                { direction ->
-                                    val scheme = when (direction) {
-                                        ConnectButtonSwipeDirection.UP -> swipeUpScheme
-                                        ConnectButtonSwipeDirection.DOWN -> swipeDownScheme
-                                        ConnectButtonSwipeDirection.LEFT -> swipeLeftScheme
-                                        ConnectButtonSwipeDirection.RIGHT -> swipeRightScheme
-                                    }
-                                    val enabled = when (direction) {
-                                        ConnectButtonSwipeDirection.UP -> homeSwipeUpSpeedTestEnabled
-                                        ConnectButtonSwipeDirection.DOWN -> homeSwipeDownSpeedTestEnabled
-                                        ConnectButtonSwipeDirection.LEFT -> homeSwipeLeftSpeedTestEnabled
-                                        ConnectButtonSwipeDirection.RIGHT -> homeSwipeRightSpeedTestEnabled
-                                    }
-                                    if (enabled) {
-                                        onStartVpn {
-                                            scheme?.let { viewModel.startSpeedTestScheme(it.id) }
-                                        }
-                                    }
-                                }
-                            } else {
-                                null
-                            },
                             // 主页连接区域只保留图标。
                             showStatusLabel = false,
                             clickActionLabel = if (homeClickSpeedTestEnabled) {
                                 clickScheme?.name ?: "测速方案"
                             } else {
                                 "直接连接"
+                            },
+                            doubleClickActionLabel = if (homeDoubleClickSpeedTestEnabled) {
+                                doubleClickScheme?.name ?: "测速方案"
+                            } else {
+                                "测速方案"
                             },
                             longClickActionLabel = if (homeLongPressSpeedTestEnabled) {
                                 longPressScheme?.name ?: "测速方案"

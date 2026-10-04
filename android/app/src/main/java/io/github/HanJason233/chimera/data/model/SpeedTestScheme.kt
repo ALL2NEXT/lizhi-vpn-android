@@ -2,13 +2,6 @@ package io.github.HanJason233.chimera.data.model
 
 import java.util.UUID
 
-/** 方案初始候选节点作用域；各测试的实际输入范围由 SpeedTestStageScope 推导。 */
-enum class SpeedTestScope {
-    CURRENT_GROUP,
-    SPECIFIED_GROUPS,
-    ALL_GROUPS
-}
-
 enum class ManualGroupTestStage {
     TCPING,
     URL_TEST,
@@ -26,12 +19,6 @@ fun formatSpeedTestSelection(mode: SpeedTestSelectionMode, value: Int): String =
     SpeedTestSelectionMode.COUNT -> "$value 个"
 }
 
-/** 测速方案编辑页可选择的节点组，ID 使用 NodeGroupKey 的稳定值。 */
-data class SpeedTestGroupOption(
-    val id: String,
-    val name: String
-)
-
 /**
  * 可复用的节点选择方案。测速阶段按 TCPing、204 URL、带宽测速的顺序执行，
  * 前三项为链路质量测试；第四项为链路类型测试，第五项为 IP 质量测试。
@@ -40,8 +27,6 @@ data class SpeedTestScheme(
     val id: String,
     val name: String,
     val builtIn: Boolean = false,
-    val scope: SpeedTestScope = SpeedTestScope.CURRENT_GROUP,
-    val specifiedGroupIds: Set<String> = emptySet(),
     val tcpingEnabled: Boolean = true,
     val urlTestEnabled: Boolean = true,
     val bandwidthEnabled: Boolean = false,
@@ -76,7 +61,6 @@ data class SpeedTestScheme(
             id = DEFAULT_ID,
             name = "默认测速",
             builtIn = true,
-            scope = SpeedTestScope.CURRENT_GROUP,
             tcpingEnabled = true,
             urlTestEnabled = true,
             bandwidthEnabled = false,

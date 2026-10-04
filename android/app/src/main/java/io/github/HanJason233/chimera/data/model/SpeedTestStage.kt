@@ -26,7 +26,7 @@ enum class SpeedTestStage(val number: Int, val title: String, val category: Spee
 
 /** 每项测试的输入范围由执行顺序推导，避免保存可互相矛盾的阶段作用域配置。 */
 sealed interface SpeedTestStageScope {
-    data class Initial(val scope: SpeedTestScope) : SpeedTestStageScope
+    data object CurrentGroup : SpeedTestStageScope
     data class PreviousResult(val stage: SpeedTestStage) : SpeedTestStageScope
     data object ConnectedNode : SpeedTestStageScope
 }
@@ -50,7 +50,8 @@ val SpeedTestScheme.enabledQualityStages: List<SpeedTestStage>
 fun SpeedTestScheme.inputScopeFor(stage: SpeedTestStage): SpeedTestStageScope {
     if (stage.category != SpeedTestCategory.LINK_QUALITY) return SpeedTestStageScope.ConnectedNode
     val previousStage = enabledQualityStages.lastOrNull { it.number < stage.number }
-    return previousStage?.let { SpeedTestStageScope.PreviousResult(it) } ?: SpeedTestStageScope.Initial(scope)
+    return previousStage?.let { SpeedTestStageScope.PreviousResult(it) }
+        ?: SpeedTestStageScope.CurrentGroup
 }
 
 fun SpeedTestScheme.selectionFor(stage: SpeedTestStage): SpeedTestStageSelection = when (stage) {
@@ -60,14 +61,8 @@ fun SpeedTestScheme.selectionFor(stage: SpeedTestStage): SpeedTestStageSelection
     else -> error("连接后的测试不筛选节点")
 }
 
-fun SpeedTestScheme.initialScopeLabel(): String = when (scope) {
-    SpeedTestScope.CURRENT_GROUP -> "当前组"
-    SpeedTestScope.SPECIFIED_GROUPS -> "指定组（${specifiedGroupIds.size} 个）"
-    SpeedTestScope.ALL_GROUPS -> "所有组"
-}
-
 fun SpeedTestScheme.inputScopeLabel(stage: SpeedTestStage): String = when (val input = inputScopeFor(stage)) {
-    is SpeedTestStageScope.Initial -> "初始作用域 · ${initialScopeLabel()}"
+    SpeedTestStageScope.CurrentGroup -> "当前组"
     is SpeedTestStageScope.PreviousResult -> "${input.stage.number}. ${input.stage.shortTitle} 的可用结果"
     SpeedTestStageScope.ConnectedNode -> "连接后的当前节点（1 个）"
 }

@@ -31,7 +31,6 @@ import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGrouping
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.NodeTestResultOrdering
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.NodeTestResultSortMode
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.SpeedTestCandidateSelector
-import io.github.HanJason233.chimera.feature.nodegrouping.domain.SpeedTestScopeResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.SubscriptionGroupingStrategy
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.WarehouseGroupingCountryResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
@@ -402,35 +401,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             WarehouseGroupingCountryResolver.filter(nodes, countryCodes)
         }
 
-    /** 测速方案可选择官方源、地区组和私人源。 */
-    val speedTestGroupOptions = combine(
-        subscriptionGroups,
-        countryOptions,
-        userSubscriptionGroups
-    ) { subscriptions, countries, userGroups ->
-        buildList {
-            subscriptions.forEach { group ->
-                add(
-                    SpeedTestGroupOption(
-                        id = NodeGroupKey.Subscription(group.sourceId).value,
-                        name = "官方源：${group.name}"
-                    )
-                )
-            }
-            countries.forEach { country ->
-                add(
-                    SpeedTestGroupOption(
-                        id = NodeGroupKey.Country(country.code).value,
-                        name = "地区组：${country.name}"
-                    )
-                )
-            }
-            userGroups.forEach { group ->
-                add(SpeedTestGroupOption(id = group.id, name = "私人源：${group.name}"))
-            }
-        }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     /** 仓库源详情页使用的私人源节点流。 */
     fun observeNodeGroupNodes(groupId: String): Flow<List<Node>> =
         nodeDaoFlow
@@ -518,31 +488,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SpeedTestScheme.DEFAULT_ID
     )
 
+    val homeDoubleClickSpeedTestSchemeId = settingsRepository.homeDoubleClickSpeedTestSchemeId.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SpeedTestScheme.DEFAULT_ID
+    )
+
     val homeLongPressSpeedTestSchemeId = settingsRepository.homeLongPressSpeedTestSchemeId.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        SpeedTestScheme.DEFAULT_ID
-    )
-
-    val homeSwipeUpSpeedTestSchemeId = settingsRepository.homeSwipeUpSpeedTestSchemeId.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        SpeedTestScheme.DEFAULT_ID
-    )
-
-    val homeSwipeDownSpeedTestSchemeId = settingsRepository.homeSwipeDownSpeedTestSchemeId.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        SpeedTestScheme.DEFAULT_ID
-    )
-
-    val homeSwipeLeftSpeedTestSchemeId = settingsRepository.homeSwipeLeftSpeedTestSchemeId.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        SpeedTestScheme.DEFAULT_ID
-    )
-
-    val homeSwipeRightSpeedTestSchemeId = settingsRepository.homeSwipeRightSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
         SpeedTestScheme.DEFAULT_ID
@@ -566,34 +518,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         false
     )
 
+    val homeDoubleClickSpeedTestEnabled = settingsRepository.homeDoubleClickSpeedTestEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        false
+    )
+
     val homeLongPressSpeedTestEnabled = settingsRepository.homeLongPressSpeedTestEnabled.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
         true
-    )
-
-    val homeSwipeUpSpeedTestEnabled = settingsRepository.homeSwipeUpSpeedTestEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        false
-    )
-
-    val homeSwipeDownSpeedTestEnabled = settingsRepository.homeSwipeDownSpeedTestEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        false
-    )
-
-    val homeSwipeLeftSpeedTestEnabled = settingsRepository.homeSwipeLeftSpeedTestEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        false
-    )
-
-    val homeSwipeRightSpeedTestEnabled = settingsRepository.homeSwipeRightSpeedTestEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        false
     )
 
     val ipv6RoutingMode = settingsRepository.ipv6RoutingMode.stateIn(
@@ -871,22 +805,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     runPostConnectionTests(scheme, node, progressTitle)
                     return@launch
                 }
-                val allNodeSnapshot = nodeDao().getAllNodes().first()
-                val allNodes = sortNodesForList(
-                    SpeedTestScopeResolver.selectCandidates(
-                        currentNodes = currentNodeListSnapshot(),
-                        allNodes = allNodeSnapshot,
-                        specifiedGroupNodes = resolveSpeedTestGroupNodes(
-                            allNodes = allNodeSnapshot,
-                            groupIds = scheme.specifiedGroupIds
-                        ),
-                        regionNodes = countryGroupingNodes.first(),
-                        groupingMode = nodeGroupingMode.value,
-                        scope = scheme.scope,
-                        specifiedGroupIds = scheme.specifiedGroupIds,
-                        selectedCountryCode = selectedCountryCode.value
-                    )
-                )
+                val allNodes = currentNodeListSnapshot()
                 if (allNodes.isEmpty()) {
                     _error.value = "没有可用节点"
                     return@launch
@@ -896,7 +815,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val stageResults = mutableMapOf<SpeedTestStage, List<Node>>()
 
                 fun stageCandidates(stage: SpeedTestStage) = SpeedTestCandidateSelector.selectForStage(
-                    scheme = scheme, stage = stage, initialCandidates = allNodes, previousResults = stageResults
+                    scheme = scheme, stage = stage, currentGroupCandidates = allNodes,
+                    previousResults = stageResults
                 )
 
                 // 阶段顺序固定为 1 -> 2 -> 3；关闭任一阶段时跳过，但不改变后续顺序。
@@ -2586,6 +2506,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setHomeDoubleClickSpeedTestScheme(schemeId: String) {
+        viewModelScope.launch {
+            settingsRepository.setHomeDoubleClickSpeedTestSchemeId(schemeId)
+        }
+    }
+
     fun setLanInboundEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setLanInboundEnabled(enabled)
@@ -2608,30 +2534,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setHomeSwipeUpSpeedTestScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.setHomeSwipeUpSpeedTestSchemeId(schemeId)
-        }
-    }
-
-    fun setHomeSwipeDownSpeedTestScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.setHomeSwipeDownSpeedTestSchemeId(schemeId)
-        }
-    }
-
-    fun setHomeSwipeLeftSpeedTestScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.setHomeSwipeLeftSpeedTestSchemeId(schemeId)
-        }
-    }
-
-    fun setHomeSwipeRightSpeedTestScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.setHomeSwipeRightSpeedTestSchemeId(schemeId)
-        }
-    }
-
     fun setGroupManualSpeedTestScheme(schemeId: String) {
         viewModelScope.launch {
             settingsRepository.setGroupManualSpeedTestSchemeId(schemeId)
@@ -2650,33 +2552,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setHomeDoubleClickSpeedTestEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHomeDoubleClickSpeedTestEnabled(enabled)
+        }
+    }
+
     fun setHomeLongPressSpeedTestEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setHomeLongPressSpeedTestEnabled(enabled)
-        }
-    }
-
-    fun setHomeSwipeUpSpeedTestEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setHomeSwipeUpSpeedTestEnabled(enabled)
-        }
-    }
-
-    fun setHomeSwipeDownSpeedTestEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setHomeSwipeDownSpeedTestEnabled(enabled)
-        }
-    }
-
-    fun setHomeSwipeLeftSpeedTestEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setHomeSwipeLeftSpeedTestEnabled(enabled)
-        }
-    }
-
-    fun setHomeSwipeRightSpeedTestEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setHomeSwipeRightSpeedTestEnabled(enabled)
         }
     }
 
@@ -3198,38 +3082,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             )
         )
-    }
-
-    /** 按稳定组 ID 解析指定官方源、私人源或地区组的节点。 */
-    private suspend fun resolveSpeedTestGroupNodes(
-        allNodes: List<Node>,
-        groupIds: Set<String>
-    ): Map<String, List<Node>> {
-        if (groupIds.isEmpty()) return emptyMap()
-
-        val subscriptionNodes = allNodes.filter { it.source == NodeSource.SUBSCRIPTION }
-        val dao = nodeDao()
-        val countryNodes = countryGroupingNodes.first()
-        val warehouseCountryCodes = warehouseGroupingCountryCodes.value
-        return groupIds.associateWith { groupId ->
-            when (val group = NodeGroupKey.parse(groupId)) {
-                is NodeGroupKey.Subscription -> subscriptionNodes.filter {
-                    it.subscriptionSourceId == group.sourceId &&
-                        WarehouseGroupingCountryResolver.filter(
-                            listOf(it),
-                            warehouseCountryCodes
-                        ).isNotEmpty()
-                }
-                is NodeGroupKey.Country -> countryNodes.filter {
-                    it.getCountryCode() == group.countryCode
-                }
-                is NodeGroupKey.Imported -> WarehouseGroupingCountryResolver.filter(
-                    dao.getNodesByGroup(group.groupId).first(),
-                    warehouseCountryCodes
-                )
-                null -> emptyList()
-            }
-        }
     }
 
     fun setRemoteDns(value: String) {

@@ -12,7 +12,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -27,8 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.consumePositionChange
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.contentDescription
@@ -44,13 +41,6 @@ import io.github.HanJason233.chimera.data.model.HomeIconEffect
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.VpnState
 
-enum class ConnectButtonSwipeDirection {
-    UP,
-    DOWN,
-    LEFT,
-    RIGHT
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConnectButton(
@@ -58,13 +48,13 @@ fun ConnectButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
-    /** 主页连接图标的上下左右滑动回调。 */
-    onSwipe: ((ConnectButtonSwipeDirection) -> Unit)? = null,
+    onDoubleClick: (() -> Unit)? = null,
     customLabel: String? = null,
     /** 是否显示按钮下方的状态文字。 */
     showStatusLabel: Boolean = true,
-    /** 无障碍服务读取的单击和长按动作名称。 */
+    /** 无障碍服务读取的单击、双击和长按动作名称。 */
     clickActionLabel: String = "测速方案",
+    doubleClickActionLabel: String = "测速方案",
     longClickActionLabel: String = "测速方案",
     enabled: Boolean = true,
     isTesting: Boolean = false,
@@ -111,11 +101,6 @@ fun ConnectButton(
         ),
         label = "speedTestSchemeLongPressProgress"
     )
-    val swipeEnabled = onSwipe != null && enabled && !isConnecting
-    val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) {
-        48.dp.toPx()
-    }
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
@@ -220,20 +205,20 @@ fun ConnectButton(
                                 interactionSource = interactionSource,
                                 onClickLabel = if (vpnState == VpnState.DISCONNECTED) clickActionLabel else null,
                                 onLongClickLabel = if (onLongClick != null) longClickActionLabel else null,
+                                onDoubleClick = onDoubleClick,
                                 onLongClick = onLongClick,
                                 onClick = onClick
-                            )
-                            .connectButtonSwipeGesture(
-                                enabled = swipeEnabled,
-                                threshold = swipeThreshold,
-                                onSwipe = onSwipe
                             )
                             .semantics {
                                 this.contentDescription = when (displayState) {
                                     VpnState.CONNECTED -> "已连接"
                                     VpnState.CONNECTING -> "连接中"
                                     VpnState.DISCONNECTING -> "断开中"
-                                    VpnState.DISCONNECTED -> "点击连接"
+                                    VpnState.DISCONNECTED -> if (onDoubleClick != null) {
+                                        "点击连接，双击${doubleClickActionLabel}"
+                                    } else {
+                                        "点击连接"
+                                    }
                                 }
                             }
                     )
@@ -328,44 +313,5 @@ private fun RadialParticleEffect(modifier: Modifier = Modifier) {
                 center = point
             )
         }
-    }
-}
-
-private fun Modifier.connectButtonSwipeGesture(
-    enabled: Boolean,
-    threshold: Float,
-    onSwipe: ((ConnectButtonSwipeDirection) -> Unit)?
-): Modifier {
-    if (!enabled || onSwipe == null) return this
-
-    return pointerInput(enabled, threshold, onSwipe) {
-        var totalDrag = Offset.Zero
-        detectDragGestures(
-            onDragStart = {
-                totalDrag = Offset.Zero
-            },
-            onDrag = { change, dragAmount ->
-                change.consumePositionChange()
-                totalDrag += dragAmount
-            },
-            onDragEnd = {
-                if (totalDrag.getDistance() < threshold) return@detectDragGestures
-                val direction = if (kotlin.math.abs(totalDrag.x) > kotlin.math.abs(totalDrag.y)) {
-                    if (totalDrag.x > 0) {
-                        ConnectButtonSwipeDirection.RIGHT
-                    } else {
-                        ConnectButtonSwipeDirection.LEFT
-                    }
-                } else if (totalDrag.y > 0) {
-                    ConnectButtonSwipeDirection.DOWN
-                } else {
-                    ConnectButtonSwipeDirection.UP
-                }
-                onSwipe(direction)
-            },
-            onDragCancel = {
-                totalDrag = Offset.Zero
-            }
-        )
     }
 }
