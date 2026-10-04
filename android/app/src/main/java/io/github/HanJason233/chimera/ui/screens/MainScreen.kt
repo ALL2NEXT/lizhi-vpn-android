@@ -260,23 +260,12 @@ fun MainScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    HomeGroupCard(
-                        name = selectedGroupName,
-                        groupType = selectedGroupType,
-                        onClick = {
-                            onBottomNavigationDestinationSelected(
-                                if (selectedGroup is NodeGroupKey.Country) {
-                                    HomeDestination.NODE_GROUPING
-                                } else {
-                                    HomeDestination.SUBSCRIPTION_GROUPING
-                                }
-                            )
-                        }
+                    HomeTestsCard(
+                        node = currentNode,
+                        isTesting = isTesting,
+                        progress = testProgress,
+                        ipTestState = unlockTestState
                     )
-                    HomeNodeCard(currentNode, nodeRegionName, vpnState)
-                    if (isTesting) {
-                        HomeTestProgressCard(testProgress)
-                    }
 
                     ConnectButton(
                         vpnState = vpnState,
@@ -355,10 +344,20 @@ fun MainScreen(
                         }
                     )
 
-                    HomeTestResultsCard(currentNode)
-                    if (unlockTestState.items.isNotEmpty()) {
-                        HomeUnlockResultsCard(unlockTestState)
-                    }
+                    HomeGroupCard(
+                        name = selectedGroupName,
+                        groupType = selectedGroupType,
+                        onClick = {
+                            onBottomNavigationDestinationSelected(
+                                if (selectedGroup is NodeGroupKey.Country) {
+                                    HomeDestination.NODE_GROUPING
+                                } else {
+                                    HomeDestination.SUBSCRIPTION_GROUPING
+                                }
+                            )
+                        }
+                    )
+                    HomeNodeCard(currentNode, nodeRegionName, vpnState)
                 }
             }
         }

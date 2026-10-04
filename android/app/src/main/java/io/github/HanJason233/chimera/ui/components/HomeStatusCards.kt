@@ -9,19 +9,17 @@ import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.Public
-import androidx.compose.material.icons.outlined.Speed
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.HanJason233.chimera.data.model.Node
@@ -96,106 +94,141 @@ internal fun HomeNodeCard(node: Node?, regionName: String, vpnState: VpnState) {
     }
 }
 
+/** 链路数据、IP 检测和运行进度统一展示在首页顶部的测试卡片中。 */
 @Composable
-internal fun HomeTestProgressCard(progress: SpeedTestProgress?) {
-    HomeInfoCard("测试进度", Icons.Outlined.Speed,
-        badge = if (progress?.isManualGroupTest == true) "组内测试" else "测速方案") {
-        Text(progress?.title ?: "节点测试", style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(progress?.stage ?: "准备测试", modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (progress != null && progress.total > 0) {
-                Text("${progress.completed}/${progress.total}", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary)
+internal fun HomeTestsCard(
+    node: Node?,
+    isTesting: Boolean,
+    progress: SpeedTestProgress?,
+    ipTestState: UnlockTestUiState
+) {
+    HomeInfoCard(
+        title = "测试结果",
+        icon = Icons.Outlined.Assessment,
+        badge = if (isTesting || ipTestState.isRunning) "测试中" else null
+    ) {
+        if (isTesting && !ipTestState.isRunning) {
+            HomeTestProgress(progress)
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        }
+        Text("链路测试", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            val tcping = node?.tcpingLatency ?: -1
+            val urlTest = node?.urlTestLatency ?: -1
+            HomeLinkMetric("TCPing", tcping.homeLatency(), Modifier.weight(1f), tcping.latencyColor())
+            HomeLinkMetric("URLTest", urlTest.homeLatency(), Modifier.weight(1f), urlTest.latencyColor())
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            HomeLinkMetric("下载", (node?.downloadMbps ?: 0f).homeSpeed(), Modifier.weight(1f))
+            HomeLinkMetric("上传", (node?.uploadMbps ?: 0f).homeSpeed(), Modifier.weight(1f))
+        }
+        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("IP 测试", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold)
+            if (ipTestState.items.isNotEmpty()) {
+                Text("${ipTestState.completedCount}/${ipTestState.items.size}",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        if (ipTestState.items.isEmpty()) {
+            Text("尚未运行 IP 测试", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            if (ipTestState.message.isNotBlank()) {
+                Text(ipTestState.message, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (ipTestState.isRunning) {
+                LinearProgressIndicator(
+                    progress = (ipTestState.completedCount.toFloat() / ipTestState.items.size).coerceIn(0f, 1f),
+                    modifier = Modifier.fillMaxWidth(),
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                )
+            }
+            HomeIpTestGrid(ipTestState.items)
+        }
+    }
+}
+
+@Composable
+private fun HomeTestProgress(progress: SpeedTestProgress?) {
+    Text(progress?.title ?: "节点测试", style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(progress?.stage ?: "准备测试", modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (progress != null && progress.total > 0) {
-            LinearProgressIndicator(
-                progress = (progress.completed.toFloat() / progress.total).coerceIn(0f, 1f),
-                modifier = Modifier.fillMaxWidth(),
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-            )
-        } else {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(),
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+            Text("${progress.completed}/${progress.total}", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary)
         }
+    }
+    if (progress != null && progress.total > 0) {
+        LinearProgressIndicator(
+            progress = (progress.completed.toFloat() / progress.total).coerceIn(0f, 1f),
+            modifier = Modifier.fillMaxWidth(),
+            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+        )
+    } else {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(),
+            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
     }
 }
 
 @Composable
-internal fun HomeTestResultsCard(node: Node?) {
-    HomeInfoCard("测试结果", Icons.Outlined.Assessment) {
-        if (node == null) {
-            Text("节点的延迟和带宽结果会显示在这里。", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeMetric("延迟", node.latency.homeLatency(), Modifier.weight(1f), node.latency.latencyColor())
-                HomeMetric("TCPing", node.tcpingLatency.homeLatency(), Modifier.weight(1f), node.tcpingLatency.latencyColor())
-                HomeMetric("URLTest", node.urlTestLatency.homeLatency(), Modifier.weight(1f), node.urlTestLatency.latencyColor())
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeMetric("下载", node.downloadMbps.homeSpeed(), Modifier.weight(1f))
-                HomeMetric("上传", node.uploadMbps.homeSpeed(), Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-internal fun HomeUnlockResultsCard(state: UnlockTestUiState) {
-    HomeInfoCard("流媒体与 AI", Icons.Outlined.Public,
-        badge = if (state.isRunning) "${state.completedCount}/${state.items.size}" else "检测结果") {
-        if (state.message.isNotBlank()) {
-            Text(state.message, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (state.isRunning && state.items.isNotEmpty()) {
-            LinearProgressIndicator(progress = state.completedCount.toFloat() / state.items.size,
-                modifier = Modifier.fillMaxWidth(),
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-        }
-        state.items.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { result -> HomeUnlockResult(result, Modifier.weight(1f)) }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+private fun HomeIpTestGrid(items: List<UnlockTestResult>) {
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // 宽屏增加列数，大字体减少列数，保证项目名称和状态可读。
+        val columns = (maxWidth / (92.dp * fontScale)).toInt().coerceIn(2, 4)
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            items.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { result -> HomeIpTestItem(result, Modifier.weight(1f)) }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun HomeUnlockResult(result: UnlockTestResult, modifier: Modifier) {
+private fun HomeIpTestItem(result: UnlockTestResult, modifier: Modifier) {
     val color = when (result.state) {
         UnlockTestState.UNLOCKED -> MaterialTheme.colorScheme.primary
         UnlockTestState.BLOCKED, UnlockTestState.ERROR -> MaterialTheme.colorScheme.error
         UnlockTestState.PARTIAL, UnlockTestState.WARNING -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    Surface(modifier, shape = RoundedCornerShape(12.dp), color = color.copy(alpha = 0.07f)) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        modifier = modifier.semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        // 服务图标暂用名称首字占位，后续可在此替换为真实图片。
+        Surface(
+            modifier = Modifier.size(52.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = color.copy(alpha = 0.1f),
+            border = BorderStroke(1.dp, color.copy(alpha = 0.25f))
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(result.definition.name.trim().take(1).uppercase(Locale.ROOT),
+                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = color)
                 if (result.state == UnlockTestState.TESTING) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = color)
-                } else {
-                    Icon(
-                        imageVector = when (result.state) {
-                            UnlockTestState.UNLOCKED -> Icons.Rounded.CheckCircle
-                            UnlockTestState.IDLE, UnlockTestState.NOT_CONNECTED -> Icons.Rounded.Schedule
-                            else -> Icons.Rounded.ErrorOutline
-                        },
-                        contentDescription = null, modifier = Modifier.size(16.dp), tint = color
-                    )
+                    CircularProgressIndicator(Modifier.align(Alignment.BottomEnd).padding(3.dp).size(12.dp),
+                        strokeWidth = 2.dp, color = color)
                 }
-                Text(result.definition.name, style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Text(result.statusText, style = MaterialTheme.typography.bodySmall, color = color)
-            if (result.region.isNotBlank()) {
-                Text(result.region, style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        }
+        Text(result.definition.name, style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(result.statusText, style = MaterialTheme.typography.labelSmall, color = color,
+            textAlign = TextAlign.Center)
+        if (result.region.isNotBlank()) {
+            Text(result.region, style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -209,7 +242,7 @@ private fun HomeInfoCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.widthIn(max = 520.dp).fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
@@ -232,17 +265,15 @@ private fun HomeInfoCard(
 }
 
 @Composable
-private fun HomeMetric(
+private fun HomeLinkMetric(
     label: String,
     value: String,
     modifier: Modifier,
     color: Color = MaterialTheme.colorScheme.onSurface
 ) {
-    Surface(modifier, shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = color)
-        }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = color)
     }
 }
 
