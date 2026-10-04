@@ -2,7 +2,7 @@ package io.github.HanJason233.chimera.data.model
 
 import java.util.UUID
 
-/** 测速方案的候选节点作用域。顺序与编辑页面保持一致。 */
+/** 方案初始候选节点作用域；各测试的实际输入范围由 SpeedTestStageScope 推导。 */
 enum class SpeedTestScope {
     CURRENT_GROUP,
     SPECIFIED_GROUPS,
@@ -34,7 +34,7 @@ data class SpeedTestGroupOption(
 
 /**
  * 可复用的节点选择方案。测速阶段按 TCPing、204 URL、带宽测速的顺序执行，
- * 三个测速阶段可单独开关；第四步检测连接后的链路类型，第五步检测服务解锁。
+ * 前三项为链路质量测试；第四项为链路类型测试，第五项为 IP 质量测试。
  */
 data class SpeedTestScheme(
     val id: String,

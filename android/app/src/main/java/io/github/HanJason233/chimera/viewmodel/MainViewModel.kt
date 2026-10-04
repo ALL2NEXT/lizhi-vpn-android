@@ -803,7 +803,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             val shouldRunUnlockTests =
                 scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()
-            val hasSelectionTests = scheme.tcpingEnabled || scheme.urlTestEnabled || scheme.bandwidthEnabled
+            val hasSelectionTests = scheme.enabledQualityStages.isNotEmpty()
             if (!hasSelectionTests && !scheme.linkTypeTestEnabled && !shouldRunUnlockTests
             ) {
                 // 所有检测均关闭时按普通连接处理。
@@ -863,15 +863,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val nodesById = allNodes.associateBy { it.id }
-                var candidates = allNodes
+                val stageResults = mutableMapOf<SpeedTestStage, List<Node>>()
+
+                fun stageCandidates(stage: SpeedTestStage) = SpeedTestCandidateSelector.selectForStage(
+                    scheme = scheme, stage = stage, initialCandidates = allNodes, previousResults = stageResults
+                )
 
                 // 阶段顺序固定为 1 -> 2 -> 3；关闭任一阶段时跳过，但不改变后续顺序。
                 if (scheme.tcpingEnabled) {
-                    val tcpingNodes = SpeedTestCandidateSelector.takeTop(
-                        candidates,
-                        scheme.tcpingSelectionMode,
-                        scheme.tcpingSelectionValue
-                    )
+                    val tcpingNodes = stageCandidates(SpeedTestStage.TCPING)
                     updateSpeedTestProgress(
                         title = progressTitle,
                         stage = "TCPing",
@@ -890,10 +890,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }
                     )
-                    candidates = tcpingResults
+                    val candidates = tcpingResults
                         .filter { it.isAvailable && it.latency > 0 }
                         .sortedBy { it.latency }
                         .mapNotNull { nodesById[it.nodeId] }
+                    stageResults[SpeedTestStage.TCPING] = candidates
                     if (candidates.isEmpty()) {
                         _error.value = "${scheme.name}：TCPing 未找到可用节点"
                         return@launch
@@ -901,11 +902,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 if (scheme.urlTestEnabled) {
-                    val urlTestNodes = SpeedTestCandidateSelector.takeTop(
-                        candidates,
-                        scheme.urlTestSelectionMode,
-                        scheme.urlTestSelectionValue
-                    )
+                    val urlTestNodes = stageCandidates(SpeedTestStage.URL_TEST)
                     updateSpeedTestProgress(
                         title = progressTitle,
                         stage = "URL Test",
@@ -928,10 +925,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     )
                     applyUrlTestResults(urlTestResults)
-                    candidates = urlTestResults
+                    val candidates = urlTestResults
                         .filter { it.isAvailable && it.latency > 0 }
                         .sortedBy { it.latency }
                         .mapNotNull { nodesById[it.nodeId] }
+                    stageResults[SpeedTestStage.URL_TEST] = candidates
                     if (candidates.isEmpty()) {
                         _error.value = "${scheme.name}：URL Test 未找到可用节点"
                         return@launch
@@ -939,11 +937,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val bestNode = if (scheme.bandwidthEnabled) {
-                    val speedTestNodes = SpeedTestCandidateSelector.takeTop(
-                        candidates,
-                        scheme.bandwidthSelectionMode,
-                        scheme.bandwidthSelectionValue
-                    )
+                    val speedTestNodes = stageCandidates(SpeedTestStage.BANDWIDTH)
                     updateSpeedTestProgress(
                         title = progressTitle,
                         stage = "带宽测速",
@@ -997,7 +991,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         .firstOrNull()?.first
                 } else {
-                    candidates.firstOrNull()
+                    stageResults[scheme.enabledQualityStages.last()]?.firstOrNull()
                 }
                 if (bestNode == null) {
                     _error.value = if (scheme.bandwidthEnabled && autoDeleteLowBandwidthNodes.value) {

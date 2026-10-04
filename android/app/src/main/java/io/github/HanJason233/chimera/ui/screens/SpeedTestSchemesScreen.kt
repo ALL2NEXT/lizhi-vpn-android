@@ -50,7 +50,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
-import io.github.HanJason233.chimera.data.model.SpeedTestScope
+import io.github.HanJason233.chimera.data.model.enabledQualityStages
+import io.github.HanJason233.chimera.data.model.initialScopeLabel
+import io.github.HanJason233.chimera.data.model.selectionFor
 import io.github.HanJason233.chimera.data.model.formatSpeedTestSelection
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
@@ -89,7 +91,7 @@ fun SpeedTestSchemesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "主页图标手势可触发完整方案；线路详情可按配置手动运行 TCPing、URL Test 或带宽阶段，仅测试当前分组。",
+                text = "方案分为链路质量、链路类型和 IP 质量测试。链路质量从初始作用域逐项筛选；连接后两类只检测当前节点。线路详情手动测试单项时只检测当前分组。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
@@ -422,38 +424,27 @@ private fun SpeedTestSchemeCard(
                 }
                 Text(
                     text = buildString {
-                        if (!scheme.tcpingEnabled && !scheme.urlTestEnabled && !scheme.bandwidthEnabled) {
+                        if (scheme.enabledQualityStages.isEmpty()) {
                             append(if (scheme.linkTypeTestEnabled ||
                                 (scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()))
                                 "检测当前连接；未连接时连接已选节点或当前组第一个节点"
                             else "不测速，直接连接已选节点或当前组第一个节点")
                         } else {
-                            append(
-                                when (scheme.scope) {
-                                    SpeedTestScope.CURRENT_GROUP -> "当前组"
-                                    SpeedTestScope.SPECIFIED_GROUPS ->
-                                        "指定组（${scheme.specifiedGroupIds.size} 个）"
-                                    SpeedTestScope.ALL_GROUPS -> "所有组"
-                                }
-                            )
-                            if (scheme.tcpingEnabled) append(
-                                " · 1 TCPing 前${formatSpeedTestSelection(scheme.tcpingSelectionMode, scheme.tcpingSelectionValue)}"
-                            )
-                            if (scheme.urlTestEnabled) append(
-                                " · 2 204 URL 前${formatSpeedTestSelection(scheme.urlTestSelectionMode, scheme.urlTestSelectionValue)}"
-                            )
-                            if (scheme.bandwidthEnabled) append(
-                                " · 3 带宽 前${formatSpeedTestSelection(scheme.bandwidthSelectionMode, scheme.bandwidthSelectionValue)}"
-                            )
+                            append("初始作用域：${scheme.initialScopeLabel()}")
+                            append("\n链路质量：")
+                            append(scheme.enabledQualityStages.joinToString(" → ") { stage ->
+                                val selection = scheme.selectionFor(stage)
+                                "${stage.shortTitle} 前${formatSpeedTestSelection(selection.mode, selection.value)}"
+                            })
                         }
-                        if (scheme.linkTypeTestEnabled) append(" · 4 链路类型")
+                        if (scheme.linkTypeTestEnabled) append("\n链路类型：连接后的当前节点")
                         if (scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()) {
-                            append(" · 5 解锁检测（${scheme.unlockTestIds.size} 项）")
+                            append("\nIP 质量：连接后的当前节点 · ${scheme.unlockTestIds.size} 项")
                         }
                     },
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = 5,
                     overflow = TextOverflow.Ellipsis
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

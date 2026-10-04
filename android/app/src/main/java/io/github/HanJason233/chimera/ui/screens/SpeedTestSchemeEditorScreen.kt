@@ -7,18 +7,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,18 +33,30 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.contentDescription
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.SpeedTestGroupOption
 import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SpeedTestScope
+import io.github.HanJason233.chimera.data.model.SpeedTestCategory
+import io.github.HanJason233.chimera.data.model.SpeedTestStage
+import io.github.HanJason233.chimera.data.model.SpeedTestStageScope
+import io.github.HanJason233.chimera.data.model.enabledQualityStages
+import io.github.HanJason233.chimera.data.model.initialScopeLabel
+import io.github.HanJason233.chimera.data.model.inputScopeFor
+import io.github.HanJason233.chimera.data.model.inputScopeLabel
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.network.UnlockTestCatalog
 import io.github.HanJason233.chimera.network.UnlockTestCategory
@@ -119,6 +133,16 @@ fun SpeedTestSchemeEditorScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var repositoryGroupsExpanded by remember(scheme.id) { mutableStateOf(true) }
     var regionGroupsExpanded by remember(scheme.id) { mutableStateOf(true) }
+    var qualityExpanded by rememberSaveable(scheme.id) { mutableStateOf(false) }
+    var linkTypeExpanded by rememberSaveable(scheme.id) { mutableStateOf(false) }
+    var ipQualityExpanded by rememberSaveable(scheme.id) { mutableStateOf(false) }
+
+    // 用未保存的开关即时推导作用域，关闭前项后无需保存即可看到新的输入范围。
+    val previewScheme = scheme.copy(
+        scope = scope, specifiedGroupIds = specifiedGroupIds,
+        tcpingEnabled = tcpingEnabled, urlTestEnabled = urlTestEnabled, bandwidthEnabled = bandwidthEnabled
+    )
+    val qualityStages = previewScheme.enabledQualityStages
 
     val repositoryGroups = speedTestGroups.filterNot { it.id.startsWith("country:") }
     val regionGroups = speedTestGroups.filter { it.id.startsWith("country:") }
@@ -135,12 +159,14 @@ fun SpeedTestSchemeEditorScreen(
                     val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
                     if (name.trim().isBlank()) {
                         error = "请输入方案名称"
-                    } else if (scope == SpeedTestScope.SPECIFIED_GROUPS && specifiedGroupIds.isEmpty()) {
+                    } else if (qualityStages.isNotEmpty() &&
+                        scope == SpeedTestScope.SPECIFIED_GROUPS && specifiedGroupIds.isEmpty()) {
                         error = "请至少选择一个指定组"
                     } else if ((urlTestEnabled && (normalizedUrl == null || normalizedBackupUrl == null)) ||
                         (bandwidthEnabled && normalizedBandwidthUrl == null)
                     ) {
                         error = "请检查测速地址"
+                        qualityExpanded = true
                     } else {
                         viewModel.upsertSpeedTestScheme(
                             scheme.copy(
@@ -203,10 +229,12 @@ fun SpeedTestSchemeEditorScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(6.dp))
-                Text("启动前测速作用域", fontWeight = FontWeight.SemiBold)
+            }
+
+            SchemeCard(title = "初始作用域") {
                 Text(
-                    "测速节点范围按以下顺序选择，指定组支持多选。",
+                    if (qualityStages.isEmpty()) "链路质量测试均已关闭，初始作用域暂不参与检测。"
+                    else "第一项已开启的链路质量测试从这里选取节点；后续测试承接前项可用结果。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -280,107 +308,134 @@ fun SpeedTestSchemeEditorScreen(
                 }
             }
 
-            SchemeCard(
-                title = "1. TCPing（可达性测试）",
-                enabled = tcpingEnabled,
-                onEnabledChange = { tcpingEnabled = it }
+            TestCategoryCard(
+                title = SpeedTestCategory.LINK_QUALITY.title,
+                summary = if (qualityStages.isEmpty()) "已关闭 · 初始作用域暂不使用"
+                    else "开启 ${qualityStages.size}/3 项 · 初始作用域：${previewScheme.initialScopeLabel()}\n" +
+                        qualityStages.joinToString(" → ") { it.shortTitle } + " → 连接最优节点",
+                expanded = qualityExpanded,
+                onToggle = { qualityExpanded = !qualityExpanded }
             ) {
-                SelectionInput(
-                    mode = tcpingSelectionMode,
-                    value = tcpingSelectionValue,
+                Text(
+                    if (qualityStages.isEmpty()) "当前不筛选节点。开启任一项后，将按顺序筛选并连接最优节点。"
+                    else qualityStages.joinToString(" → ") { "${it.number}. ${it.shortTitle}" } + " → 连接最优节点",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SchemeCard(
+                    title = "${SpeedTestStage.TCPING.number}. ${SpeedTestStage.TCPING.title}",
                     enabled = tcpingEnabled,
-                    onModeChange = { tcpingSelectionMode = it },
-                    onValueChange = { tcpingSelectionValue = it }
-                )
-                NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) { tcpingTimeout = it }
-                NumberInput("并发", tcpingConcurrency, enabled = tcpingEnabled) { tcpingConcurrency = it }
-            }
-
-            SchemeCard(
-                title = "2. 204 URL（连通性测试）",
-                enabled = urlTestEnabled,
-                onEnabledChange = { urlTestEnabled = it }
-            ) {
-                SelectionInput(
-                    mode = urlSelectionMode,
-                    value = urlSelectionValue,
-                    enabled = urlTestEnabled,
-                    onModeChange = { urlSelectionMode = it },
-                    onValueChange = { urlSelectionValue = it }
-                )
-                NumberInput("预热建连超时 (ms)", urlWarmupTimeout, enabled = urlTestEnabled) {
-                    urlWarmupTimeout = it
+                    onEnabledChange = { tcpingEnabled = it }
+                ) {
+                    StageScopeDescription(previewScheme, SpeedTestStage.TCPING)
+                    SelectionInput(
+                        mode = tcpingSelectionMode,
+                        value = tcpingSelectionValue,
+                        enabled = tcpingEnabled,
+                        onModeChange = { tcpingSelectionMode = it },
+                        onValueChange = { tcpingSelectionValue = it }
+                    )
+                    NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) { tcpingTimeout = it }
+                    NumberInput("并发", tcpingConcurrency, enabled = tcpingEnabled) { tcpingConcurrency = it }
                 }
-                NumberInput("延迟测量超时 (ms)", urlMeasurementTimeout, enabled = urlTestEnabled) {
-                    urlMeasurementTimeout = it
+
+                SchemeCard(
+                    title = "${SpeedTestStage.URL_TEST.number}. ${SpeedTestStage.URL_TEST.title}",
+                    enabled = urlTestEnabled,
+                    onEnabledChange = { urlTestEnabled = it }
+                ) {
+                    StageScopeDescription(previewScheme, SpeedTestStage.URL_TEST)
+                    SelectionInput(
+                        mode = urlSelectionMode,
+                        value = urlSelectionValue,
+                        enabled = urlTestEnabled,
+                        onModeChange = { urlSelectionMode = it },
+                        onValueChange = { urlSelectionValue = it }
+                    )
+                    NumberInput("预热建连超时 (ms)", urlWarmupTimeout, enabled = urlTestEnabled) {
+                        urlWarmupTimeout = it
+                    }
+                    NumberInput("延迟测量超时 (ms)", urlMeasurementTimeout, enabled = urlTestEnabled) {
+                        urlMeasurementTimeout = it
+                    }
+                    Text(
+                        "预热超时限制首次请求的建连和响应；测量超时只限制第二次暖连接请求。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    NumberInput("并发", urlConcurrency, enabled = urlTestEnabled) { urlConcurrency = it }
+                    OutlinedTextField(
+                        value = urlTestUrl,
+                        onValueChange = { urlTestUrl = it },
+                        label = { Text("204 URL 地址") },
+                        singleLine = true,
+                        enabled = urlTestEnabled,
+                        isError = urlTestEnabled && UrlTestTargets.normalize(urlTestUrl) == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = urlTestBackupUrl,
+                        onValueChange = { urlTestBackupUrl = it },
+                        label = { Text("备用 204 URL（可留空）") },
+                        singleLine = true,
+                        enabled = urlTestEnabled,
+                        isError = urlTestEnabled &&
+                            UrlTestTargets.normalizeOptional(urlTestBackupUrl) == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "主地址超时或遇到临时连接错误时尝试备用地址；留空则不使用备用地址。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+
+                SchemeCard(
+                    title = "${SpeedTestStage.BANDWIDTH.number}. ${SpeedTestStage.BANDWIDTH.title}",
+                    enabled = bandwidthEnabled,
+                    onEnabledChange = { bandwidthEnabled = it }
+                ) {
+                    StageScopeDescription(previewScheme, SpeedTestStage.BANDWIDTH)
+                    SelectionInput(
+                        mode = bandwidthSelectionMode,
+                        value = bandwidthSelectionValue,
+                        enabled = bandwidthEnabled,
+                        onModeChange = { bandwidthSelectionMode = it },
+                        onValueChange = { bandwidthSelectionValue = it }
+                    )
+                    NumberInput("测速时长 (ms)", bandwidthDuration, enabled = bandwidthEnabled) { bandwidthDuration = it }
+                    NumberInput("并发", bandwidthConcurrency, enabled = bandwidthEnabled) { bandwidthConcurrency = it }
+                    OutlinedTextField(
+                        value = bandwidthUrl,
+                        onValueChange = { bandwidthUrl = it },
+                        label = { Text("带宽下载地址") },
+                        singleLine = true,
+                        enabled = bandwidthEnabled,
+                        isError = bandwidthEnabled && BandwidthTestTargets.normalize(bandwidthUrl) == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "带宽地址应指向可下载内容。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 Text(
-                    "预热超时限制首次请求的建连和响应；测量超时只限制第二次暖连接请求。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                NumberInput("并发", urlConcurrency, enabled = urlTestEnabled) { urlConcurrency = it }
-                OutlinedTextField(
-                    value = urlTestUrl,
-                    onValueChange = { urlTestUrl = it },
-                    label = { Text("204 URL 地址") },
-                    singleLine = true,
-                    enabled = urlTestEnabled,
-                    isError = urlTestEnabled && UrlTestTargets.normalize(urlTestUrl) == null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = urlTestBackupUrl,
-                    onValueChange = { urlTestBackupUrl = it },
-                    label = { Text("备用 204 URL（可留空）") },
-                    singleLine = true,
-                    enabled = urlTestEnabled,
-                    isError = urlTestEnabled &&
-                        UrlTestTargets.normalizeOptional(urlTestBackupUrl) == null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    "主地址超时或遇到临时连接错误时尝试备用地址；留空则不使用备用地址。",
-                    fontSize = 12.sp,
+                    "分组内手动运行单项测试时，作用域固定为当前分组，并按该项的比例或数量选取节点。",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            SchemeCard(
-                title = "3. 带宽测速",
-                enabled = bandwidthEnabled,
-                onEnabledChange = { bandwidthEnabled = it }
-            ) {
-                SelectionInput(
-                    mode = bandwidthSelectionMode,
-                    value = bandwidthSelectionValue,
-                    enabled = bandwidthEnabled,
-                    onModeChange = { bandwidthSelectionMode = it },
-                    onValueChange = { bandwidthSelectionValue = it }
-                )
-                NumberInput("测速时长 (ms)", bandwidthDuration, enabled = bandwidthEnabled) { bandwidthDuration = it }
-                NumberInput("并发", bandwidthConcurrency, enabled = bandwidthEnabled) { bandwidthConcurrency = it }
-                OutlinedTextField(
-                    value = bandwidthUrl,
-                    onValueChange = { bandwidthUrl = it },
-                    label = { Text("带宽下载地址") },
-                    singleLine = true,
-                    enabled = bandwidthEnabled,
-                    isError = bandwidthEnabled && BandwidthTestTargets.normalize(bandwidthUrl) == null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    "带宽地址应指向可下载内容。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            SchemeCard(
-                title = "4. 链路类型检测",
+            TestCategoryCard(
+                title = SpeedTestCategory.LINK_TYPE.title,
+                summary = "第 4 项 · 作用域：${previewScheme.inputScopeLabel(SpeedTestStage.LINK_TYPE)}",
+                expanded = linkTypeExpanded,
+                onToggle = { linkTypeExpanded = !linkTypeExpanded },
                 enabled = linkTypeTestEnabled,
                 onEnabledChange = { linkTypeTestEnabled = it }
             ) {
@@ -391,13 +446,17 @@ fun SpeedTestSchemeEditorScreen(
                 )
             }
 
-            SchemeCard(
-                title = "5. 流媒体与 AI 解锁检测",
+            TestCategoryCard(
+                title = SpeedTestCategory.IP_QUALITY.title,
+                summary = "第 5 项 · 作用域：${previewScheme.inputScopeLabel(SpeedTestStage.IP_QUALITY)}\n" +
+                    (if (unlockTestIds.isEmpty()) "未选择检测项目" else "已选 ${unlockTestIds.size} 项"),
+                expanded = ipQualityExpanded,
+                onToggle = { ipQualityExpanded = !ipQualityExpanded },
                 enabled = unlockTestsEnabled,
                 onEnabledChange = { unlockTestsEnabled = it }
             ) {
                 Text(
-                    "完成前面的节点筛选并连接后，通过当前节点检测所选服务。",
+                    "检测当前节点出口 IP 的流媒体与 AI 解锁能力。只启用连接后检测时复用当前连接；未连接时连接已选节点或当前组首个节点。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -535,22 +594,82 @@ private fun SchemeCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(title, modifier = Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 if (enabled != null && onEnabledChange != null) {
-                    Spacer(Modifier.weight(1f))
-                    Switch(checked = enabled, onCheckedChange = onEnabledChange)
+                    Switch(checked = enabled, onCheckedChange = onEnabledChange,
+                        modifier = Modifier.semantics { contentDescription = "$title 开关" })
                 }
             }
             content()
         }
     }
+}
+
+@Composable
+private fun TestCategoryCard(
+    title: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    enabled: Boolean? = null,
+    onEnabledChange: ((Boolean) -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                        .semantics { stateDescription = if (expanded) "已展开" else "已折叠" }
+                        .clickable(role = Role.Button, onClick = onToggle),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    Text(summary, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (enabled != null && onEnabledChange != null) {
+                    Switch(checked = enabled, onCheckedChange = onEnabledChange,
+                        modifier = Modifier.semantics { contentDescription = "$title 开关" })
+                }
+                IconButton(onClick = onToggle) {
+                    Icon(
+                        if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        contentDescription = "${if (expanded) "收起" else "展开"}$title"
+                    )
+                }
+            }
+            if (expanded) {
+                Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+private fun StageScopeDescription(scheme: SpeedTestScheme, stage: SpeedTestStage) {
+    Text("作用域：${scheme.inputScopeLabel(stage)}", style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary)
+    Text(
+        when (scheme.inputScopeFor(stage)) {
+            is SpeedTestStageScope.Initial -> "按初始节点列表顺序选取，测试后保留可用节点并按结果择优排序。"
+            is SpeedTestStageScope.PreviousResult -> "从前项可用节点中按延迟由低到高择优选取；比例与数量以该作用域为基数。"
+            SpeedTestStageScope.ConnectedNode -> "仅检测连接后的当前节点。"
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 @Composable
@@ -567,7 +686,7 @@ private fun SelectionInput(
     OutlinedTextField(
         value = value,
         onValueChange = { onValueChange(it.filter(Char::isDigit)) },
-        label = { Text("筛选上级测试前 X 进入测试") },
+        label = { Text("从作用域选取前 X 进入测试") },
         singleLine = true,
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
