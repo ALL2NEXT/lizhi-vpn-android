@@ -51,6 +51,10 @@ import io.github.HanJason233.chimera.network.UnlockTestDefinition
 import io.github.HanJason233.chimera.network.UnlockTestResult
 import io.github.HanJason233.chimera.network.UnlockTestRunner
 import io.github.HanJason233.chimera.network.UnlockTestState
+import io.github.HanJason233.chimera.network.LinkIpAddress
+import io.github.HanJason233.chimera.network.LinkTypeTestResult
+import io.github.HanJason233.chimera.network.LinkTypeTestRunner
+import io.github.HanJason233.chimera.network.LinkTypeTestState
 import io.github.HanJason233.chimera.network.NodeLocationResolver
 import io.github.HanJason233.chimera.network.AccountManager
 import io.github.HanJason233.chimera.service.ServiceManager
@@ -221,6 +225,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _unlockTestState = MutableStateFlow(UnlockTestUiState())
     internal val unlockTestState = _unlockTestState.asStateFlow()
+
+    private val _linkTypeTestResult = MutableStateFlow(LinkTypeTestResult())
+    internal val linkTypeTestResult = _linkTypeTestResult.asStateFlow()
 
     /** 线路信息按当前最近完成的测速阶段展示结果。 */
     private val _nodeTestResultSortMode = MutableStateFlow(
@@ -691,6 +698,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     init {
         viewModelScope.launch {
+            ServiceManager.vpnState.collect { state ->
+                if (state != VpnState.CONNECTED && _linkTypeTestResult.value.state in setOf(
+                        LinkTypeTestState.DIRECT, LinkTypeTestState.RELAY, LinkTypeTestState.CDN_RELAY
+                    )) {
+                    _linkTypeTestResult.value = LinkTypeTestResult()
+                }
+            }
+        }
+        viewModelScope.launch {
             try {
                 // Keep the cached selection available immediately; refreshing
                 // data should not blank and rewrite DataStore on every launch.
@@ -787,11 +803,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             val shouldRunUnlockTests =
                 scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()
-            _unlockTestState.value = UnlockTestUiState()
-            if (!scheme.tcpingEnabled && !scheme.urlTestEnabled && !scheme.bandwidthEnabled &&
-                !shouldRunUnlockTests
+            val hasSelectionTests = scheme.tcpingEnabled || scheme.urlTestEnabled || scheme.bandwidthEnabled
+            if (!hasSelectionTests && !scheme.linkTypeTestEnabled && !shouldRunUnlockTests
             ) {
-                // 三个测速阶段都关闭时按普通连接处理，不启动测速流程。
+                // 所有检测均关闭时按普通连接处理。
                 startSelectedOrFirstConnection()
                 return@launch
             }
@@ -800,10 +815,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            _unlockTestState.value = UnlockTestUiState()
+            _linkTypeTestResult.value = LinkTypeTestResult()
             _isTesting.value = true
             val progressTitle = "测速方案：${scheme.name}"
             updateSpeedTestProgress(progressTitle, "准备测试")
             try {
+                // 只启用连接后检测时复用当前连接；不遍历分组，也不切换到组内首个节点。
+                if (!hasSelectionTests) {
+                    val node = ServiceManager.currentNode.value
+                        ?.takeIf { vpnState.value == VpnState.CONNECTED || vpnState.value == VpnState.CONNECTING }
+                        ?: run {
+                            val nodes = currentNodeListSnapshot()
+                            val selectedId = settingsRepository.selectedNodeId.first()
+                            nodes.firstOrNull { it.id == selectedId } ?: nodes.firstOrNull()
+                        }
+                    if (node == null) {
+                        _error.value = "没有可用节点"
+                        return@launch
+                    }
+                    if (vpnState.value != VpnState.CONNECTED && vpnState.value != VpnState.CONNECTING) {
+                        settingsRepository.setSelectedNodeId(node.id)
+                        ServiceManager.startVpn(getApplication(), node, proxyMode.value)
+                    }
+                    runPostConnectionTests(scheme, node, progressTitle)
+                    return@launch
+                }
                 val allNodeSnapshot = nodeDao().getAllNodes().first()
                 val allNodes = sortNodesForList(
                     SpeedTestScopeResolver.selectCandidates(
@@ -974,11 +1011,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 settingsRepository.setSelectedNodeId(bestNode.id)
                 Log.i(tag, "Speed test scheme selected node: ${bestNode.getDisplayName()}")
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
-                if (shouldRunUnlockTests) {
-                    // 连接阶段结束后才能通过当前 VPN 的 SOCKS 入口执行解锁检测。
-                    _isTesting.value = false
-                    runUnlockTests(scheme.unlockTestIds)
-                }
+                runPostConnectionTests(scheme, bestNode, progressTitle)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
@@ -1166,8 +1199,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 第四、第五项按顺序执行，始终绑定方案最终连接的节点。 */
+    private suspend fun runPostConnectionTests(scheme: SpeedTestScheme, node: Node, title: String) {
+        if (scheme.linkTypeTestEnabled) {
+            updateSpeedTestProgress(title, "4. 链路类型检测")
+            runLinkTypeTest(node)
+        }
+        if (scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()) {
+            _isTesting.value = false
+            runUnlockTests(scheme.unlockTestIds, node)
+        }
+    }
+
+    private suspend fun runLinkTypeTest(node: Node) {
+        _linkTypeTestResult.value = LinkTypeTestResult(
+            state = LinkTypeTestState.TESTING,
+            serverAddress = node.server,
+            message = "等待 VPN 节点连接"
+        )
+        val finalState = withTimeoutOrNull(90_000L) {
+            ServiceManager.vpnState.first { it == VpnState.CONNECTED || it == VpnState.DISCONNECTED }
+        }
+        val endpoint = BoxVpnService.activeSocksEndpoint()
+        if (finalState != VpnState.CONNECTED || endpoint == null || !isCurrentTestNode(node)) {
+            _linkTypeTestResult.value = LinkTypeTestResult(
+                state = LinkTypeTestState.NOT_CONNECTED,
+                serverAddress = node.server,
+                message = if (finalState == null) "等待 VPN 连接超时" else "当前节点未连接或连接已切换"
+            )
+            return
+        }
+        _linkTypeTestResult.update { it.copy(message = "正在检测中转点与落地点") }
+        val result = try {
+            LinkTypeTestRunner(endpoint, resolveServer = { server ->
+                val host = server.trim().removePrefix("[").removeSuffix("]")
+                LinkIpAddress.normalize(host)?.let { listOf(it) }
+                    ?: checkNotNull(BoxVpnService.activePhysicalNetwork()) { "当前物理网络不可用" }
+                        .getAllByName(host).mapNotNull { it.hostAddress }
+            }).run(node.server)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            LinkTypeTestResult(LinkTypeTestState.ERROR, node.server, message = "链路检测失败，请稍后重试")
+        }
+        // A result from a replaced session must not be shown as the new node's result.
+        if (!isCurrentTestNode(node) || BoxVpnService.activeSocksEndpoint() != endpoint) {
+            _linkTypeTestResult.value = LinkTypeTestResult()
+            return
+        }
+        _linkTypeTestResult.value = result
+    }
+
+    private fun isCurrentTestNode(node: Node): Boolean =
+        ServiceManager.vpnState.value == VpnState.CONNECTED &&
+            ServiceManager.currentNode.value?.getRawLinkPlain() == node.getRawLinkPlain()
+
     /** 等待方案选出的节点连通，再运行用户勾选的流媒体与 AI 检测。 */
-    private suspend fun runUnlockTests(selectedIds: Set<String>) {
+    private suspend fun runUnlockTests(selectedIds: Set<String>, expectedNode: Node) {
         val definitions = UnlockTestCatalog.schemeDefinitions.filter { it.id in selectedIds }
         if (definitions.isEmpty()) return
 
@@ -1198,8 +1286,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val endpoint = BoxVpnService.activeSocksEndpoint()
-        if (endpoint == null) {
-            finishUnlockTestsAsNotConnected(definitions, "无法获取当前 VPN 检测入口")
+        if (endpoint == null || !isCurrentTestNode(expectedNode)) {
+            finishUnlockTestsAsNotConnected(definitions, "当前节点未连接或连接已切换")
             return
         }
 
@@ -1281,6 +1369,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startSelectedOrFirstConnection() {
         viewModelScope.launch {
             _unlockTestState.value = UnlockTestUiState()
+            _linkTypeTestResult.value = LinkTypeTestResult()
             val selectedId = settingsRepository.selectedNodeId.first()
             val subscriptionNodes = currentNodeListSnapshot()
             val selectedNode = selectedId
@@ -1638,6 +1727,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun connectNode(node: Node) {
         _unlockTestState.value = UnlockTestUiState()
+        _linkTypeTestResult.value = LinkTypeTestResult()
         settingsRepository.setSelectedNodeId(node.id)
         Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
         when (vpnState.value) {
@@ -2563,6 +2653,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 viewModelScope.launch {
                     _unlockTestState.value = UnlockTestUiState()
+                    _linkTypeTestResult.value = LinkTypeTestResult()
                     // 4. 无网络连接节点时给用户发Toast，但不阻止
                     if (!NetworkUtils.isNetworkAvailable(getApplication())) {
                         Log.w(tag, "VPN start requested while network is unavailable")

@@ -18,6 +18,7 @@ import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
 import io.github.HanJason233.chimera.data.model.SmartRoutingSettings
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
+import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import android.net.Uri
 
 /**
@@ -1063,6 +1064,12 @@ class SingBoxConfigGenerator {
         // HEV 仅负责数据面，应用通常连接已解析的 IP；执行智能分流规则前需恢复 HTTP/TLS/QUIC 域名。
         rules.add(JsonObject().apply {
             addProperty("action", "sniff")
+        })
+
+        // Exit-IP checks must not measure the phone's direct IP due to a smart rule.
+        rules.add(JsonObject().apply {
+            add("domain", JsonArray().apply { LinkTypeTestTargets.hosts.forEach(::add) })
+            addProperty("outbound", "proxy")
         })
         
         // 2. 环回/私有 IP 地址 -> 始终直接连接，绕过局域网

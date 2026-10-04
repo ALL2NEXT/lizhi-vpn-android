@@ -64,6 +64,23 @@ class XrayVpnConfigTest {
         assertFalse(result.toString().contains("tun-in"))
     }
 
+    @Test fun exitIpChecksPrecedeSmartDirectRules() {
+        val result = JsonParser.parseString(
+            XrayVpnConfig.compose(base(), request(ProxyMode.SMART, IPv6RoutingMode.DISABLED),
+                JsonParser.parseString(File("src/test/resources/routes-cn.json").readText()).asJsonObject)
+        ).asJsonObject
+        val rules = result.getAsJsonObject("routing").getAsJsonArray("rules").map { it.asJsonObject }
+        val index = rules.indexOfFirst { candidate ->
+            candidate.getAsJsonArray("domain")?.any { it.asString == "full:api.ipify.org" } == true
+        }
+        assertTrue(index >= 0)
+        assertEquals("proxy", rules[index].get("outboundTag").asString)
+        val domesticIndex = rules.indexOfFirst { candidate ->
+            candidate.getAsJsonArray("domain")?.any { it.asString == "domain:baidu.com" } == true
+        }
+        assertTrue(domesticIndex > index)
+    }
+
     @Test fun headlessProbeNeverAcquiresTun() {
         val result = JsonParser.parseString(XrayVpnConfig.compose(base(), CoreRequest(node, 20800))).asJsonObject
         assertEquals(1, result.getAsJsonArray("inbounds").size())

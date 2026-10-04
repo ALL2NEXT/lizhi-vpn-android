@@ -73,6 +73,9 @@ fun SpeedTestSchemeEditorScreen(
     var tcpingEnabled by remember(scheme.id, scheme.tcpingEnabled) { mutableStateOf(scheme.tcpingEnabled) }
     var urlTestEnabled by remember(scheme.id, scheme.urlTestEnabled) { mutableStateOf(scheme.urlTestEnabled) }
     var bandwidthEnabled by remember(scheme.id, scheme.bandwidthEnabled) { mutableStateOf(scheme.bandwidthEnabled) }
+    var linkTypeTestEnabled by remember(scheme.id, scheme.linkTypeTestEnabled) {
+        mutableStateOf(scheme.linkTypeTestEnabled)
+    }
     var unlockTestsEnabled by remember(scheme.id, scheme.unlockTestsEnabled) {
         mutableStateOf(scheme.unlockTestsEnabled)
     }
@@ -147,6 +150,7 @@ fun SpeedTestSchemeEditorScreen(
                                 tcpingEnabled = tcpingEnabled,
                                 urlTestEnabled = urlTestEnabled,
                                 bandwidthEnabled = bandwidthEnabled,
+                                linkTypeTestEnabled = linkTypeTestEnabled,
                                 unlockTestsEnabled = unlockTestsEnabled,
                                 unlockTestIds = unlockTestIds,
                                 tcpingSelectionMode = tcpingSelectionMode,
@@ -376,7 +380,19 @@ fun SpeedTestSchemeEditorScreen(
             }
 
             SchemeCard(
-                title = "4. 流媒体与 AI 解锁检测",
+                title = "4. 链路类型检测",
+                enabled = linkTypeTestEnabled,
+                onEnabledChange = { linkTypeTestEnabled = it }
+            ) {
+                Text(
+                    "仅检测连接后的当前节点。直连显示落地点 IP；中转显示中转点与落地点 IP，并识别中转点的 CDN。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            SchemeCard(
+                title = "5. 流媒体与 AI 解锁检测",
                 enabled = unlockTestsEnabled,
                 onEnabledChange = { unlockTestsEnabled = it }
             ) {

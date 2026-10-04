@@ -1286,6 +1286,7 @@ class SettingsRepository(
                                         tcpingEnabled = item.optBoolean("tcpingEnabled", true),
                                         urlTestEnabled = item.optBoolean("urlTestEnabled", true),
                                         bandwidthEnabled = item.optBoolean("bandwidthEnabled", true),
+                                        linkTypeTestEnabled = item.optBoolean("linkTypeTestEnabled", false),
                                         unlockTestsEnabled = item.optBoolean("unlockTestsEnabled", false),
                                         unlockTestIds = buildSet {
                                             item.optJSONArray("unlockTestIds")?.let { tests ->
@@ -1458,6 +1459,7 @@ class SettingsRepository(
                     put("tcpingEnabled", normalized.tcpingEnabled)
                     put("urlTestEnabled", normalized.urlTestEnabled)
                     put("bandwidthEnabled", normalized.bandwidthEnabled)
+                    put("linkTypeTestEnabled", normalized.linkTypeTestEnabled)
                     put("unlockTestsEnabled", normalized.unlockTestsEnabled)
                     put("unlockTestIds", JSONArray().apply {
                         normalized.unlockTestIds.forEach(::put)

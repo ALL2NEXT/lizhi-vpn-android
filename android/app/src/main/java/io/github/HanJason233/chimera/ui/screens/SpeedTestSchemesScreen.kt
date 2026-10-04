@@ -423,7 +423,10 @@ private fun SpeedTestSchemeCard(
                 Text(
                     text = buildString {
                         if (!scheme.tcpingEnabled && !scheme.urlTestEnabled && !scheme.bandwidthEnabled) {
-                            append("不测速，直接连接已选节点或当前组第一个节点")
+                            append(if (scheme.linkTypeTestEnabled ||
+                                (scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()))
+                                "检测当前连接；未连接时连接已选节点或当前组第一个节点"
+                            else "不测速，直接连接已选节点或当前组第一个节点")
                         } else {
                             append(
                                 when (scheme.scope) {
@@ -442,6 +445,10 @@ private fun SpeedTestSchemeCard(
                             if (scheme.bandwidthEnabled) append(
                                 " · 3 带宽 前${formatSpeedTestSelection(scheme.bandwidthSelectionMode, scheme.bandwidthSelectionValue)}"
                             )
+                        }
+                        if (scheme.linkTypeTestEnabled) append(" · 4 链路类型")
+                        if (scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()) {
+                            append(" · 5 解锁检测（${scheme.unlockTestIds.size} 项）")
                         }
                     },
                     fontSize = 12.sp,

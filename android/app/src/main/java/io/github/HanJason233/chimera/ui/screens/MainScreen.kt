@@ -86,6 +86,7 @@ fun MainScreen(
     val homeSwipeRightSpeedTestEnabled by viewModel.homeSwipeRightSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
+    val linkTypeTestResult by viewModel.linkTypeTestResult.collectAsStateWithLifecycle()
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
@@ -268,6 +269,7 @@ fun MainScreen(
                             isTesting = isTesting,
                             progress = testProgress,
                             ipTestState = unlockTestState,
+                            linkTypeResult = linkTypeTestResult,
                             modifier = Modifier.onSizeChanged { testsCardHeightPx = it.height }
                         )
 

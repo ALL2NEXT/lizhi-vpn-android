@@ -57,6 +57,25 @@ class SingBoxGeneratedConfigTest {
     }
 
     @Test
+    fun exitIpChecksPrecedeSmartDirectRules() {
+        val node = node("socks://proxy.example:1080#sample")
+        val config = JsonParser.parseString(generator.generateConfig(
+            nodes = listOf(node), selectedNodeId = node.id, proxyMode = ProxyMode.SMART,
+            internalSocksEndpoint = LocalSocksEndpoint.unauthenticated(20800)
+        )).asJsonObject
+        val rules = config.getAsJsonObject("route").getAsJsonArray("rules").map { it.asJsonObject }
+        val index = rules.indexOfFirst { candidate ->
+            candidate.getAsJsonArray("domain")?.any { it.asString == "api.ipify.org" } == true
+        }
+        assertTrue(index >= 0)
+        assertEquals("proxy", rules[index].get("outbound").asString)
+        val domesticIndex = rules.indexOfFirst { candidate ->
+            candidate.getAsJsonArray("rule_set")?.any { it.asString == "geosite-cn" } == true
+        }
+        assertTrue(domesticIndex > index)
+    }
+
+    @Test
     fun shadowsocksCredentialsSurviveSubscriptionImportAndConfigurationGeneration() {
         val node = SubscriptionParser().parseSubscription("""
             proxies:

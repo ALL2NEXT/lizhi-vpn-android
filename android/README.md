@@ -2,6 +2,18 @@
 
 Android 客户端的独立 Gradle 工程。
 
+“测试”的测速方案依次包含 TCPing、204 URL、带宽测速、链路类型检测、流媒体与 AI 解锁检测。
+第四项只有开关，连接后通过当前 VPN 会话获取落地点 IP，与节点服务器地址解析出的 IPv4/IPv6
+比较：匹配任一地址显示直连，否则显示中转点和落地点，并查询中转 IP 所属的已知 CDN 地址段。
+只开启第四、第五项时复用当前连接；尚未连接时连接已选节点或当前组第一个节点。
+
+CDN 地址库打包在 `app/src/main/resources/cdn-ip-ranges.json`，包括 Cloudflare、CloudFront、
+Fastly、Gcore、百度云加速等。数据来自 [cdncheck](https://github.com/projectdiscovery/cdncheck)
+与 [Cloudflare 官方 IP API](https://developers.cloudflare.com/api/resources/ips/methods/list/)，
+排除普通云主机地址段与 Google 通用地址段。未命中时显示“普通中转 / 未命中已知 CDN 地址段”；
+这不保证该中转点未使用尚未收录的 CDN。执行 `python scripts/refresh-cdn-ranges.py` 可刷新地址库。
+域名有多个地址时展示所有候选中转 IP；本检测按入口与出口 IP 比较，不测量实际跳数。
+
 ## 常用命令
 
 在本目录执行：

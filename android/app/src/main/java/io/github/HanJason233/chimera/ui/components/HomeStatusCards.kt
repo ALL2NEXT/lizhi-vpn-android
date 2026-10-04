@@ -29,6 +29,9 @@ import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.R
 import io.github.HanJason233.chimera.network.UnlockTestResult
 import io.github.HanJason233.chimera.network.UnlockTestState
+import io.github.HanJason233.chimera.network.LinkTypeTestResult
+import io.github.HanJason233.chimera.network.LinkTypeTestState
+import io.github.HanJason233.chimera.network.LinkIpAddress
 import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
 import io.github.HanJason233.chimera.viewmodel.UnlockTestUiState
 import java.util.Locale
@@ -122,6 +125,7 @@ internal fun HomeTestsCard(
     isTesting: Boolean,
     progress: SpeedTestProgress?,
     ipTestState: UnlockTestUiState,
+    linkTypeResult: LinkTypeTestResult,
     modifier: Modifier = Modifier
 ) {
     HomeInfoCard(
@@ -139,6 +143,10 @@ internal fun HomeTestsCard(
             HomeLinkMetric("URLTest", urlTest.homeLatency(), Modifier.weight(1f), urlTest.latencyColor())
             HomeLinkMetric("下载", (node?.downloadMbps ?: 0f).homeSpeed(), Modifier.weight(1f))
         }
+        if (linkTypeResult.state != LinkTypeTestState.IDLE) {
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            HomeLinkTypeResult(linkTypeResult)
+        }
         if (ipTestState.items.isNotEmpty()) {
             Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             if (ipTestState.isRunning) {
@@ -150,6 +158,41 @@ internal fun HomeTestsCard(
             }
             HomeIpTestGrid(ipTestState.items)
         }
+    }
+}
+
+@Composable
+private fun HomeLinkTypeResult(result: LinkTypeTestResult) {
+    val color = when (result.state) {
+        LinkTypeTestState.ERROR, LinkTypeTestState.NOT_CONNECTED -> MaterialTheme.colorScheme.error
+        LinkTypeTestState.TESTING -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.primary
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("链路类型", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(result.state.title, style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold, color = color)
+    }
+    if (result.state == LinkTypeTestState.RELAY || result.state == LinkTypeTestState.CDN_RELAY) {
+        if (LinkIpAddress.parse(result.serverAddress) == null) {
+            Text("中转地址：${result.serverAddress}", style = MaterialTheme.typography.bodySmall)
+        }
+        result.entryIps.forEach { ip ->
+            val provider = result.entryCdnProviders[ip]
+            Text("中转点：$ip${provider?.let { "（$it）" }.orEmpty()}",
+                style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    if (result.exitIp.isNotBlank()) {
+        Text("落地点 IP：${result.exitIp}", style = MaterialTheme.typography.bodySmall)
+    }
+    if (result.state == LinkTypeTestState.RELAY) {
+        Text("CDN：未命中已知 CDN 地址段", style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (result.message.isNotBlank()) {
+        Text(result.message, style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
 

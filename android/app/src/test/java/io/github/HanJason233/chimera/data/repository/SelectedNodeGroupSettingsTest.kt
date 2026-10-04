@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.ProxyMode
+import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +37,21 @@ class SelectedNodeGroupSettingsTest {
         repository.setSelectedNodeId(null)
         repository.setSelectedCountryCode(null)
         repository.setSelectedSubscriptionSourceId(null)
+    }
+
+    @Test
+    fun linkTypeToggleSurvivesReloadWithoutChangingUnlockTests() = runBlocking {
+        val scheme = SpeedTestScheme.default().copy(
+            linkTypeTestEnabled = true, unlockTestsEnabled = true, unlockTestIds = setOf("netflix")
+        )
+        repository.upsertSpeedTestScheme(scheme)
+        val reloaded = SettingsRepository(RuntimeEnvironment.getApplication(), store)
+        val restored = reloaded.speedTestSchemes.first().first()
+        assertEquals(true, restored.linkTypeTestEnabled)
+        assertEquals(true, restored.unlockTestsEnabled)
+        assertEquals(setOf("netflix"), restored.unlockTestIds)
+        repository.upsertSpeedTestScheme(restored.copy(linkTypeTestEnabled = false))
+        assertEquals(false, reloaded.speedTestSchemes.first().first().linkTypeTestEnabled)
     }
 
     @Test

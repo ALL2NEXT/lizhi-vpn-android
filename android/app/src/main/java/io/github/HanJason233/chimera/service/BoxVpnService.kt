@@ -49,6 +49,10 @@ class BoxVpnService : VpnService() {
         /** 当前 VPN 的应用内探测出口；仅在核心和 TUN 均已就绪时返回。 */
         internal fun activeSocksEndpoint(): LocalSocksEndpoint? =
             internalSocksEndpoint?.takeIf { isRunning }
+
+        /** Resolve node entrances on the underlay, avoiding the VPN's fake-IP DNS. */
+        internal fun activePhysicalNetwork(): android.net.Network? =
+            owner?.host?.currentNetwork?.takeIf { isRunning }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

@@ -57,7 +57,7 @@ internal object UnlockTestCatalog {
         UnlockTestDefinition("wikipedia", "Wikipedia", UnlockTestCategory.OTHER, "检测访问以及匿名编辑限制。")
     )
 
-    /** 测速方案第四步可选的全部服务检测项目。 */
+    /** 测速方案第五步可选的全部服务检测项目。 */
     val schemeDefinitions = definitions
 }
 

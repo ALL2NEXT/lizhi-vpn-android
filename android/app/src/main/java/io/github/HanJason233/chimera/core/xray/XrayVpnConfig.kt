@@ -8,6 +8,7 @@ import io.github.HanJason233.chimera.core.CoreRequest
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
+import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
@@ -151,6 +152,9 @@ internal object XrayVpnConfig {
             })
             rules.add(rule("direct").apply { add("inboundTag", strings("dns-bootstrap")) })
             rules.add(rule("proxy").apply { add("inboundTag", strings("dns-remote")) })
+            rules.add(rule("proxy").apply {
+                add("domain", strings(*LinkTypeTestTargets.hosts.map { "full:$it" }.toTypedArray()))
+            })
             rules.add(rule("direct").apply { add("domain", strings("full:${request.node.server}")) })
             rules.add(rule("direct").apply {
                 add("ip", strings("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
