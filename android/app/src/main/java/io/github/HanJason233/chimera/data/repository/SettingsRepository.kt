@@ -63,6 +63,8 @@ class SettingsRepository(
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
         const val DEFAULT_AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS = true
         const val DEFAULT_AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS = false
+        /** 内置方案默认值的版本；保存后尊重用户后续修改，不在每次启动时覆盖。 */
+        private const val DEFAULT_PRESET_REVISION = 1
         private const val MIN_SERVICE_REQUEST_TIMEOUT_MS = 5_000L
         private const val MAX_SERVICE_REQUEST_TIMEOUT_MS = 60_000L
 
@@ -1263,6 +1265,15 @@ class SettingsRepository(
                             val item = array.optJSONObject(index) ?: continue
                             val id = item.optString("id").trim()
                             if (id.isBlank()) continue
+                            // 覆盖安装时更新旧版内置方案的这三项参数，其他方案和参数照常读取。
+                            if (id == SpeedTestScheme.DEFAULT_ID &&
+                                item.optInt("defaultsVersion", 0) < DEFAULT_PRESET_REVISION
+                            ) {
+                                val defaults = SpeedTestScheme.default()
+                                item.put("urlTestSelectionMode", defaults.urlTestSelectionMode.name)
+                                item.put("urlTestSelectionValue", defaults.urlTestSelectionValue)
+                                item.put("linkTypeTestEnabled", defaults.linkTypeTestEnabled)
+                            }
                             add(
                                 normalizeSpeedTestScheme(
                                     SpeedTestScheme(
@@ -1450,6 +1461,9 @@ class SettingsRepository(
             array.put(
                 JSONObject().apply {
                     put("id", normalized.id)
+                    if (normalized.id == SpeedTestScheme.DEFAULT_ID) {
+                        put("defaultsVersion", DEFAULT_PRESET_REVISION)
+                    }
                     put("name", normalized.name)
                     put("builtIn", normalized.builtIn)
                     put("scope", normalized.scope.name)
@@ -1517,6 +1531,11 @@ class SettingsRepository(
                         val item = array.optJSONObject(index) ?: continue
                         val id = item.optString("id").trim()
                         if (id.isBlank()) continue
+                        if (id == SkinScheme.DEFAULT_SCHEME_ID &&
+                            item.optInt("defaultsVersion", 0) < DEFAULT_PRESET_REVISION
+                        ) {
+                            item.put("homeIconEffectEnabled", SkinScheme.default().homeIconEffectEnabled)
+                        }
                         add(
                             SkinScheme(
                                 id = id,
@@ -1563,7 +1582,7 @@ class SettingsRepository(
                                 ),
                                 homeIconEffectEnabled = item.optBoolean(
                                     "homeIconEffectEnabled",
-                                    true
+                                    id != SkinScheme.DEFAULT_SCHEME_ID
                                 ),
                                 homeIconRotationEnabled = item.optBoolean(
                                     "homeIconRotationEnabled",
@@ -1591,6 +1610,7 @@ class SettingsRepository(
                 array.put(
                     JSONObject().apply {
                         put("id", scheme.id)
+                        if (scheme.isDefault) put("defaultsVersion", DEFAULT_PRESET_REVISION)
                         put("name", scheme.name)
                         put("appDisplayName", scheme.appDisplayName)
                         put("appIconPresetId", scheme.appIconPresetId)

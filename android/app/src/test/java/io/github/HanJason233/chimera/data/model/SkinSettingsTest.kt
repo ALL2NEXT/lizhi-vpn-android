@@ -11,6 +11,7 @@ class SkinSettingsTest {
         val scheme = SkinScheme.default()
 
         assertTrue(scheme.monetEnabled)
+        assertFalse(scheme.homeIconEffectEnabled)
         assertEquals(SkinThemeMode.SYSTEM, scheme.themeMode)
         assertEquals(0xFF37474FL, scheme.baseColorArgb)
         assertEquals(SkinSettings.DEFAULT_BASE_COLOR_ARGB, scheme.baseColorArgb)

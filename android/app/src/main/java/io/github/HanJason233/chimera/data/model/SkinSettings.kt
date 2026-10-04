@@ -39,7 +39,7 @@ data class SkinScheme(
     val homeConnectedImagePath: String? = null,
     /** 主页连接图标周围显示的动画类型。 */
     val homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
-    /** 默认开启以保持升级前的主页显示效果。 */
+    /** 自定义主题默认保留主页特效，内置默认主题在 default() 中关闭。 */
     val homeIconEffectEnabled: Boolean = true,
     /** 连接中或断开中时旋转主页连接图标。 */
     val homeIconRotationEnabled: Boolean = false
@@ -56,7 +56,8 @@ data class SkinScheme(
             id = DEFAULT_SCHEME_ID,
             name = "默认主题",
             themeMode = SkinThemeMode.SYSTEM,
-            monetEnabled = true
+            monetEnabled = true,
+            homeIconEffectEnabled = false
         )
 
         fun create(name: String): SkinScheme = SkinScheme(

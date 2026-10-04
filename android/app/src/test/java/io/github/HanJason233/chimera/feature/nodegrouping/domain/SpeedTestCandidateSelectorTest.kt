@@ -12,7 +12,9 @@ class SpeedTestCandidateSelectorTest {
         val initial = (1..100).toList()
         val tcpingResults = (81..100).toList()
         val result = SpeedTestCandidateSelector.selectForStage(
-            SpeedTestScheme.default(), SpeedTestStage.URL_TEST, initial,
+            SpeedTestScheme.default().copy(
+                urlTestSelectionMode = SpeedTestSelectionMode.PERCENT, urlTestSelectionValue = 50
+            ), SpeedTestStage.URL_TEST, initial,
             mapOf(SpeedTestStage.TCPING to tcpingResults)
         )
         assertEquals((81..90).toList(), result)
@@ -33,7 +35,9 @@ class SpeedTestCandidateSelectorTest {
 
     @Test
     fun `URL as first stage uses the initial candidates`() {
-        val scheme = SpeedTestScheme.default().copy(tcpingEnabled = false)
+        val scheme = SpeedTestScheme.default().copy(
+            tcpingEnabled = false, urlTestSelectionMode = SpeedTestSelectionMode.PERCENT, urlTestSelectionValue = 50
+        )
         assertEquals(listOf(1, 2, 3), SpeedTestCandidateSelector.selectForStage(
             scheme, SpeedTestStage.URL_TEST, listOf(1, 2, 3, 4, 5), emptyMap()
         ))

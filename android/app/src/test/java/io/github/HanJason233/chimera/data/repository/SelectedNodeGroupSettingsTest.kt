@@ -4,9 +4,12 @@ import android.app.Application
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
+import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
+import io.github.HanJason233.chimera.data.model.SkinScheme
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +40,42 @@ class SelectedNodeGroupSettingsTest {
         repository.setSelectedNodeId(null)
         repository.setSelectedCountryCode(null)
         repository.setSelectedSubscriptionSourceId(null)
+    }
+
+    @Test
+    fun legacyBuiltInDefaultsUpdateWithoutChangingCustomPresets() = runBlocking {
+        seedLegacyPresets()
+        val speedSchemes = repository.speedTestSchemes.first()
+        val defaultSpeed = speedSchemes.first()
+        assertEquals(SpeedTestSelectionMode.COUNT, defaultSpeed.urlTestSelectionMode)
+        assertEquals(10, defaultSpeed.urlTestSelectionValue)
+        assertEquals(true, defaultSpeed.linkTypeTestEnabled)
+        assertEquals(2_000L, defaultSpeed.tcpingTimeoutMs)
+        val customSpeed = speedSchemes.first { it.id == "custom-speed" }
+        assertEquals(4, customSpeed.urlTestSelectionValue)
+        assertEquals(false, customSpeed.linkTypeTestEnabled)
+
+        val themes = repository.skinSettings.first().schemes
+        assertEquals(false, themes.first { it.isDefault }.homeIconEffectEnabled)
+        assertEquals(false, themes.first { it.isDefault }.monetEnabled)
+        assertEquals(true, themes.first { it.id == "custom-theme" }.homeIconEffectEnabled)
+    }
+
+    @Test
+    fun manualChangesToUpdatedBuiltInDefaultsSurviveReload() = runBlocking {
+        seedLegacyPresets()
+        repository.upsertSpeedTestScheme(repository.speedTestSchemes.first().first().copy(
+            urlTestSelectionValue = 3, linkTypeTestEnabled = false
+        ))
+        repository.upsertSkinScheme(repository.skinSettings.first().schemes.first { it.isDefault }.copy(
+            homeIconEffectEnabled = true
+        ))
+        val reloaded = SettingsRepository(RuntimeEnvironment.getApplication(), store)
+        val scheme = reloaded.speedTestSchemes.first().first()
+        assertEquals(SpeedTestSelectionMode.COUNT, scheme.urlTestSelectionMode)
+        assertEquals(3, scheme.urlTestSelectionValue)
+        assertEquals(false, scheme.linkTypeTestEnabled)
+        assertEquals(true, reloaded.skinSettings.first().schemes.first { it.isDefault }.homeIconEffectEnabled)
     }
 
     @Test
@@ -110,6 +149,25 @@ class SelectedNodeGroupSettingsTest {
         assertEquals(NodeGroupingMode.WAREHOUSE, repository.nodeGroupingMode.first())
         assertNull(repository.selectedCountryCode.first())
         assertNull(repository.selectedNodeId.first())
+    }
+
+    private suspend fun seedLegacyPresets() {
+        store.updateData { preferences ->
+            preferences.toMutablePreferences().apply {
+                this[stringPreferencesKey("speed_test_schemes_json")] = """
+                    [{"id":"${SpeedTestScheme.DEFAULT_ID}","name":"默认测速","builtIn":true,
+                    "urlTestSelectionMode":"PERCENT","urlTestSelectionValue":50,
+                    "linkTypeTestEnabled":false,"tcpingTimeoutMs":2000},
+                    {"id":"custom-speed","name":"自定义","urlTestSelectionMode":"COUNT",
+                    "urlTestSelectionValue":4,"linkTypeTestEnabled":false}]
+                """.trimIndent()
+                this[stringPreferencesKey("skin_schemes_json")] = """
+                    [{"id":"${SkinScheme.DEFAULT_SCHEME_ID}","name":"默认主题",
+                    "homeIconEffectEnabled":true,"monetEnabled":false},
+                    {"id":"custom-theme","name":"自定义主题","homeIconEffectEnabled":true}]
+                """.trimIndent()
+            }
+        }
     }
 
     private class TestPreferencesStore : DataStore<Preferences> {
