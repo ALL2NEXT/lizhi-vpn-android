@@ -1,6 +1,7 @@
 package io.github.HanJason233.chimera.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,7 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.VpnState
+import io.github.HanJason233.chimera.R
 import io.github.HanJason233.chimera.network.UnlockTestResult
 import io.github.HanJason233.chimera.network.UnlockTestState
 import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
@@ -31,30 +35,15 @@ import io.github.HanJason233.chimera.viewmodel.UnlockTestUiState
 import java.util.Locale
 
 @Composable
-internal fun HomeGroupCard(name: String, groupType: String, onClick: () -> Unit) {
-    HomeInfoCard(
-        title = "选中组",
-        icon = Icons.Outlined.FolderOpen,
-        badge = groupType,
-        modifier = Modifier.clickable(role = Role.Button, onClick = onClick)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = name,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text("切换", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        }
-    }
-}
-
-@Composable
-internal fun HomeNodeCard(node: Node?, regionName: String, vpnState: VpnState) {
+internal fun HomeSelectionCard(
+    name: String,
+    groupType: String,
+    node: Node?,
+    regionName: String,
+    vpnState: VpnState,
+    onGroupClick: () -> Unit,
+    onNodeClick: () -> Unit
+) {
     val status = when (vpnState) {
         VpnState.CONNECTED -> "已连接"
         VpnState.CONNECTING -> "连接中"
@@ -62,34 +51,73 @@ internal fun HomeNodeCard(node: Node?, regionName: String, vpnState: VpnState) {
         VpnState.DISCONNECTED -> "未连接"
     }
     HomeInfoCard(
-        title = if (vpnState == VpnState.CONNECTED) "连接节点" else "选中节点",
-        icon = Icons.Outlined.Dns,
-        badge = status
+        title = "选中组",
+        icon = Icons.Outlined.FolderOpen,
+        badge = groupType,
+        compact = true
     ) {
-        if (node == null) {
-            Text("未选择节点", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text("选择分组后，可选择节点或运行测速方案。", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onGroupClick),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = "${node.getFlagEmoji()} ${node.getDisplayName()}",
-                style = MaterialTheme.typography.titleMedium,
+                text = name,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = "$regionName · ${node.type.protocol.uppercase(Locale.ROOT)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "仓库源：${node.getConnectionGroupName()}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Text("切换", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        }
+        Divider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+            thickness = 0.5.dp
+        )
+        Column(
+            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onNodeClick),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(
+                    imageVector = Icons.Outlined.Dns,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = if (vpnState == VpnState.CONNECTED) "连接节点" else "选中节点",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text("切换", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
+            if (node == null) {
+                Text(
+                    "未选择节点",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            } else {
+                Text(
+                    text = "${node.getFlagEmoji()} ${node.getDisplayName()}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "$regionName · ${node.type.protocol.uppercase(Locale.ROOT)} · ${node.getConnectionGroupName()}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -112,15 +140,12 @@ internal fun HomeTestsCard(
             Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         }
         Text("链路测试", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val tcping = node?.tcpingLatency ?: -1
             val urlTest = node?.urlTestLatency ?: -1
             HomeLinkMetric("TCPing", tcping.homeLatency(), Modifier.weight(1f), tcping.latencyColor())
             HomeLinkMetric("URLTest", urlTest.homeLatency(), Modifier.weight(1f), urlTest.latencyColor())
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             HomeLinkMetric("下载", (node?.downloadMbps ?: 0f).homeSpeed(), Modifier.weight(1f))
-            HomeLinkMetric("上传", (node?.uploadMbps ?: 0f).homeSpeed(), Modifier.weight(1f))
         }
         Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -205,7 +230,7 @@ private fun HomeIpTestItem(result: UnlockTestResult, modifier: Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // 服务图标暂用名称首字占位，后续可在此替换为真实图片。
+        // 品牌图标随 APK 本地打包，检测状态由外围颜色表示。
         Surface(
             modifier = Modifier.size(52.dp),
             shape = RoundedCornerShape(16.dp),
@@ -213,8 +238,23 @@ private fun HomeIpTestItem(result: UnlockTestResult, modifier: Modifier) {
             border = BorderStroke(1.dp, color.copy(alpha = 0.25f))
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text(result.definition.name.trim().take(1).uppercase(Locale.ROOT),
-                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = color)
+                Surface(
+                    modifier = Modifier.size(40.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(3.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(unlockTestIconResource(result.definition.id)),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
                 if (result.state == UnlockTestState.TESTING) {
                     CircularProgressIndicator(Modifier.align(Alignment.BottomEnd).padding(3.dp).size(12.dp),
                         strokeWidth = 2.dp, color = color)
@@ -233,12 +273,29 @@ private fun HomeIpTestItem(result: UnlockTestResult, modifier: Modifier) {
     }
 }
 
+private fun unlockTestIconResource(id: String): Int = when (id) {
+    "google_cn" -> R.drawable.ic_unlock_google
+    "chatgpt" -> R.drawable.ic_unlock_chatgpt
+    "claude" -> R.drawable.ic_unlock_anthropic
+    "gemini" -> R.drawable.ic_unlock_gemini
+    "netflix" -> R.drawable.ic_unlock_netflix
+    "disney" -> R.drawable.ic_unlock_disney_plus
+    "max" -> R.drawable.ic_unlock_max
+    "prime" -> R.drawable.ic_unlock_prime_video
+    "youtube" -> R.drawable.ic_unlock_youtube
+    "tiktok" -> R.drawable.ic_unlock_tiktok
+    "spotify" -> R.drawable.ic_unlock_spotify
+    "wikipedia" -> R.drawable.ic_unlock_wikipedia
+    else -> R.drawable.ic_unlock_google
+}
+
 @Composable
 private fun HomeInfoCard(
     title: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
     badge: String? = null,
+    compact: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
@@ -247,7 +304,10 @@ private fun HomeInfoCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier.padding(if (compact) 12.dp else 14.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(icon, contentDescription = null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(title, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,

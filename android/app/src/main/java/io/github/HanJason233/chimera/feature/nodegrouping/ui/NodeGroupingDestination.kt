@@ -1,6 +1,7 @@
 package io.github.HanJason233.chimera.feature.nodegrouping.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -12,6 +13,11 @@ import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
+
+data class NodeGroupingDetailRequest(
+    val groupKey: NodeGroupKey,
+    val groupName: String
+)
 
 private sealed interface NodeGroupingDetail {
     data class Country(
@@ -47,13 +53,33 @@ fun NodeGroupingDestination(
     scannedSubscriptionText: String?,
     onScannedSubscriptionTextConsumed: () -> Unit,
     onBack: () -> Unit,
-    bottomContentPadding: Dp = 16.dp
+    bottomContentPadding: Dp = 16.dp,
+    detailRequest: NodeGroupingDetailRequest? = null,
+    onDetailRequestConsumed: (NodeGroupingDetailRequest) -> Unit = {}
 ) {
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
     val countryGroupingNodes by viewModel.countryGroupingNodes.collectAsStateWithLifecycle()
     val warehouseGroupingCountryCodes by viewModel.warehouseGroupingCountryCodes
         .collectAsStateWithLifecycle()
     var detail by remember(groupingMode) { mutableStateOf<NodeGroupingDetail?>(null) }
+    LaunchedEffect(detailRequest, groupingMode) {
+        val request = detailRequest ?: return@LaunchedEffect
+        detail = when (val groupKey = request.groupKey) {
+            is NodeGroupKey.Country -> NodeGroupingDetail.Country(
+                countryCode = groupKey.countryCode,
+                countryName = request.groupName
+            )
+            is NodeGroupKey.Subscription -> NodeGroupingDetail.Subscription(
+                sourceId = groupKey.sourceId,
+                sourceName = request.groupName
+            )
+            is NodeGroupKey.Imported -> NodeGroupingDetail.UserGroup(
+                groupId = groupKey.groupId,
+                groupName = request.groupName
+            )
+        }
+        onDetailRequestConsumed(request)
+    }
 
     // 线路详情标题显示当前分组名称，测速阶段状态不再替换标题栏副标题。
     when (val currentDetail = detail) {

@@ -36,7 +36,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.saveable.rememberSaveable
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
+import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.feature.nodegrouping.ui.NodeGroupingDestination
+import io.github.HanJason233.chimera.feature.nodegrouping.ui.NodeGroupingDetailRequest
 import io.github.HanJason233.chimera.feature.perappinbound.ui.PerAppInboundScreen
 import io.github.HanJason233.chimera.feature.perappinbound.ui.PerAppInboundViewModel
 import io.github.HanJason233.chimera.ui.components.HomeNavigationLayout
@@ -226,6 +228,9 @@ class MainActivity : ComponentActivity() {
                                 var selectedDestination by rememberSaveable {
                                     mutableStateOf(HomeDestination.HOME)
                                 }
+                                var selectedGroupDetailRequest by remember {
+                                    mutableStateOf<NodeGroupingDetailRequest?>(null)
+                                }
                                 val onBottomNavigationDestinationSelected:
                                     (HomeDestination) -> Unit = { destination ->
                                         // 浏览分组页面不改写用户实际选中的节点组。
@@ -259,6 +264,22 @@ class MainActivity : ComponentActivity() {
                                             navigateTo(AppRoute.ACCOUNT_SETTINGS)
                                         },
                                         onOpenSkin = { navigateTo(AppRoute.SKIN) },
+                                        onOpenCurrentGroupDetails = { groupKey, groupName ->
+                                            if (groupKey == null) {
+                                                selectedGroupDetailRequest = null
+                                                selectedDestination = HomeDestination.SUBSCRIPTION_GROUPING
+                                            } else {
+                                                selectedGroupDetailRequest = NodeGroupingDetailRequest(
+                                                    groupKey = groupKey,
+                                                    groupName = groupName
+                                                )
+                                                selectedDestination = when (groupKey) {
+                                                    is NodeGroupKey.Country -> HomeDestination.NODE_GROUPING
+                                                    is NodeGroupKey.Subscription,
+                                                    is NodeGroupKey.Imported -> HomeDestination.SUBSCRIPTION_GROUPING
+                                                }
+                                            }
+                                        },
                                         navigationStyle = skinSettings.activeScheme.navigationStyle,
                                         bottomNavigationDestination =
                                             selectedDestination,
@@ -311,7 +332,13 @@ class MainActivity : ComponentActivity() {
                                                 onBack = {
                                                     selectedDestination = HomeDestination.HOME
                                                 },
-                                                bottomContentPadding = 16.dp
+                                                bottomContentPadding = 16.dp,
+                                                detailRequest = selectedGroupDetailRequest,
+                                                onDetailRequestConsumed = { request ->
+                                                    if (selectedGroupDetailRequest == request) {
+                                                        selectedGroupDetailRequest = null
+                                                    }
+                                                }
                                             )
                                         }
                                     }
