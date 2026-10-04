@@ -47,13 +47,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
-import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
-import io.github.HanJason233.chimera.data.model.SpeedTestStageScope
-import io.github.HanJason233.chimera.data.model.enabledQualityStages
-import io.github.HanJason233.chimera.data.model.inputScopeFor
-import io.github.HanJason233.chimera.data.model.inputScopeLabel
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.network.UnlockTestCatalog
 import io.github.HanJason233.chimera.network.UnlockTestCategory
@@ -124,12 +119,6 @@ fun SpeedTestSchemeEditorScreen(
     }
     var bandwidthUrl by remember(scheme.id, scheme.bandwidthTestUrl) { mutableStateOf(scheme.bandwidthTestUrl) }
     var error by remember { mutableStateOf<String?>(null) }
-
-    // 用未保存的开关即时推导作用域，关闭前项后无需保存即可看到新的输入范围。
-    val previewScheme = scheme.copy(
-        tcpingEnabled = tcpingEnabled, urlTestEnabled = urlTestEnabled, bandwidthEnabled = bandwidthEnabled
-    )
-    val qualityStages = previewScheme.enabledQualityStages
 
     AppScreenScaffold(
         title = "编辑测速方案",
@@ -209,21 +198,13 @@ fun SpeedTestSchemeEditorScreen(
                 )
             }
 
-            SchemeCard(title = "初始作用域 · 当前组") {
-                Text(
-                    if (qualityStages.isEmpty()) "链路质量测试均已关闭，当前组暂不参与节点筛选。"
-                    else "第一项已开启的链路质量测试固定从主页当前选中的节点组中选取节点；后续测试承接前项可用结果。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            TestPhaseLabel("连接前测试")
 
             SchemeCard(
                 title = "${SpeedTestStage.TCPING.number}. ${SpeedTestStage.TCPING.title}",
                 enabled = tcpingEnabled,
                 onEnabledChange = { tcpingEnabled = it }
             ) {
-                StageScopeDescription(previewScheme, SpeedTestStage.TCPING)
                 SelectionInput(
                     mode = tcpingSelectionMode,
                     value = tcpingSelectionValue,
@@ -240,7 +221,6 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = urlTestEnabled,
                 onEnabledChange = { urlTestEnabled = it }
             ) {
-                StageScopeDescription(previewScheme, SpeedTestStage.URL_TEST)
                 SelectionInput(
                     mode = urlSelectionMode,
                     value = urlSelectionValue,
@@ -293,7 +273,6 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = bandwidthEnabled,
                 onEnabledChange = { bandwidthEnabled = it }
             ) {
-                StageScopeDescription(previewScheme, SpeedTestStage.BANDWIDTH)
                 SelectionInput(
                     mode = bandwidthSelectionMode,
                     value = bandwidthSelectionValue,
@@ -320,14 +299,15 @@ fun SpeedTestSchemeEditorScreen(
                 )
             }
 
+            TestPhaseLabel("连接后测试")
+
             SchemeCard(
                 title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}",
                 enabled = linkTypeTestEnabled,
                 onEnabledChange = { linkTypeTestEnabled = it }
             ) {
-                StageScopeDescription(previewScheme, SpeedTestStage.LINK_TYPE)
                 Text(
-                    "仅检测连接后的当前节点。直连显示落地点 IP；中转显示中转点与落地点 IP，并识别中转点的 CDN。",
+                    "直连显示落地点 IP；中转显示中转点与落地点 IP，并识别中转点的 CDN。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -338,7 +318,6 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = unlockTestsEnabled,
                 onEnabledChange = { unlockTestsEnabled = it }
             ) {
-                StageScopeDescription(previewScheme, SpeedTestStage.IP_QUALITY)
                 Text(
                     if (unlockTestIds.isEmpty()) "未选择检测项目" else "已选 ${unlockTestIds.size} 项",
                     fontSize = 12.sp,
@@ -400,17 +379,22 @@ fun SpeedTestSchemeEditorScreen(
                 }
             }
 
-            Text(
-                "分组内手动运行单项测试时，作用域固定为当前分组，并按该项的比例或数量选取节点。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
         }
     }
+}
+
+@Composable
+private fun TestPhaseLabel(title: String) {
+    Text(
+        text = title,
+        modifier = Modifier.padding(horizontal = 4.dp),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold
+    )
 }
 
 @Composable
@@ -441,21 +425,6 @@ private fun SchemeCard(
 }
 
 @Composable
-private fun StageScopeDescription(scheme: SpeedTestScheme, stage: SpeedTestStage) {
-    Text("作用域：${scheme.inputScopeLabel(stage)}", style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.primary)
-    Text(
-        when (scheme.inputScopeFor(stage)) {
-            SpeedTestStageScope.CurrentGroup -> "从主页当前选中的节点组按节点列表顺序选取；测试后保留可用节点并按结果择优排序。"
-            is SpeedTestStageScope.PreviousResult -> "从前项可用节点中按延迟由低到高择优选取；比例与数量以该作用域为基数。"
-            SpeedTestStageScope.ConnectedNode -> "仅检测连接后的当前节点。"
-        },
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-}
-
-@Composable
 private fun SelectionInput(
     mode: SpeedTestSelectionMode,
     value: String,
@@ -469,7 +438,7 @@ private fun SelectionInput(
     OutlinedTextField(
         value = value,
         onValueChange = { onValueChange(it.filter(Char::isDigit)) },
-        label = { Text("从作用域选取前 X 进入测试") },
+        label = { Text("测试前选取前 X 个候选节点") },
         singleLine = true,
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
