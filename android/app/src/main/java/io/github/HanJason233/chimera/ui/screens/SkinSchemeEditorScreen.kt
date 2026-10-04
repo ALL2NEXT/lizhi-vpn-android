@@ -9,10 +9,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,8 +29,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -46,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,7 +61,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.data.model.SkinScheme
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
-import io.github.HanJason233.chimera.data.model.HomeIconEffect
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.DialogMaterialVersion
 import io.github.HanJason233.chimera.data.model.VpnState
@@ -77,73 +81,152 @@ private val EDITOR_PRESET_COLORS = listOf(
     "深灰色" to 0xFF37474FL
 )
 
+// 固定图标、动画和粒子列宽，让各状态设置按表格纵向对齐。
 @Composable
-private fun HomeStateImageRow(
-    title: String,
-    imagePath: String?,
-    state: VpnState,
-    onChoose: () -> Unit,
-    onReset: () -> Unit
-) {
+private fun HomeStateSettingsHeader() {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        SkinImagePreview(
-            imagePath = imagePath,
-            state = state,
-            contentDescription = title,
-            modifier = Modifier
-                .size(68.dp)
-                .clip(RoundedCornerShape(12.dp))
+        Text(
+            text = "状态",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onChoose) {
-                    Text("选择")
-                }
-                if (imagePath != null) {
-                    OutlinedButton(onClick = onReset) {
-                        Text("恢复默认")
-                    }
-                }
-            }
-        }
+        Text(
+            text = "图标",
+            modifier = Modifier.width(60.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = "动画",
+            modifier = Modifier.width(68.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = "粒子特效",
+            modifier = Modifier.width(56.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun HomeIconMotionEffectRow(
+private fun HomeStateSettingsRow(
     title: String,
+    imagePath: String?,
+    state: VpnState,
     selectedEffect: HomeIconMotionEffect,
-    onEffectSelected: (HomeIconMotionEffect) -> Unit
+    selectedParticleEnabled: Boolean,
+    onChoose: () -> Unit,
+    onReset: () -> Unit,
+    onEffectSelected: (HomeIconMotionEffect) -> Unit,
+    onParticleEffectChanged: (Boolean) -> Unit
 ) {
+    var imageMenuExpanded by remember { mutableStateOf(false) }
+    var effectMenuExpanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Text(
             text = title,
-            modifier = Modifier.width(68.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             softWrap = false
         )
-        HomeIconMotionEffect.entries.forEach { effect ->
-            FilterChip(
-                selected = selectedEffect == effect,
-                onClick = { onEffectSelected(effect) },
-                modifier = Modifier.weight(1f),
-                label = { Text(effect.displayName, maxLines = 1, softWrap = false) }
+        Box(modifier = Modifier.width(60.dp)) {
+            OutlinedButton(
+                onClick = { imageMenuExpanded = true },
+                modifier = Modifier
+                    .width(60.dp)
+                    .height(52.dp),
+                contentPadding = PaddingValues(2.dp)
+            ) {
+                SkinImagePreview(
+                    imagePath = imagePath,
+                    state = state,
+                    contentDescription = "$title 图标，点击更换",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(8.dp))
+                )
+            }
+            DropdownMenu(
+                expanded = imageMenuExpanded,
+                onDismissRequest = { imageMenuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("选择图片") },
+                    onClick = {
+                        imageMenuExpanded = false
+                        onChoose()
+                    }
+                )
+                if (imagePath != null) {
+                    DropdownMenuItem(
+                        text = { Text("恢复默认图标") },
+                        onClick = {
+                            imageMenuExpanded = false
+                            onReset()
+                        }
+                    )
+                }
+            }
+        }
+        Column(
+            modifier = Modifier.width(68.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box {
+                OutlinedButton(
+                    onClick = { effectMenuExpanded = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "${selectedEffect.displayName} ▾",
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+                DropdownMenu(
+                    expanded = effectMenuExpanded,
+                    onDismissRequest = { effectMenuExpanded = false }
+                ) {
+                    HomeIconMotionEffect.entries.forEach { effect ->
+                        DropdownMenuItem(
+                            text = { Text(effect.displayName) },
+                            onClick = {
+                                effectMenuExpanded = false
+                                onEffectSelected(effect)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        Column(
+            modifier = Modifier.width(56.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Switch(
+                checked = selectedParticleEnabled,
+                onCheckedChange = onParticleEffectChanged
             )
         }
     }
@@ -543,136 +626,110 @@ fun SkinSchemeEditorScreen(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HomeStateImageRow(
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HomeStateSettingsHeader()
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HomeStateSettingsRow(
                         title = "未连接",
                         imagePath = scheme.homeDisconnectedImagePath,
                         state = VpnState.DISCONNECTED,
+                        selectedEffect = scheme.homeDisconnectedIconEffect,
+                        selectedParticleEnabled = scheme.homeDisconnectedParticleEffectEnabled,
                         onChoose = { disconnectedImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeDisconnectedImagePath
                             viewModel.upsertSkinScheme(scheme.copy(homeDisconnectedImagePath = null))
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
-                        }
+                        },
+                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
+                            scheme.copy(homeDisconnectedIconEffect = effect)
+                        ) },
+                        onParticleEffectChanged = { enabled -> viewModel.upsertSkinScheme(
+                            scheme.copy(
+                                homeDisconnectedParticleEffectEnabled = enabled,
+                                homeIconEffectEnabled = enabled ||
+                                    scheme.homeConnectingParticleEffectEnabled ||
+                                    scheme.homeDisconnectingParticleEffectEnabled ||
+                                    scheme.homeConnectedParticleEffectEnabled
+                            )
+                        ) }
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HomeStateImageRow(
+                    Spacer(modifier = Modifier.height(6.dp))
+                    HomeStateSettingsRow(
                         title = "连接中",
                         imagePath = scheme.homeConnectingImagePath,
                         state = VpnState.CONNECTING,
+                        selectedEffect = scheme.homeConnectingIconEffect,
+                        selectedParticleEnabled = scheme.homeConnectingParticleEffectEnabled,
                         onChoose = { connectingImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeConnectingImagePath
                             viewModel.upsertSkinScheme(scheme.copy(homeConnectingImagePath = null))
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
-                        }
+                        },
+                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
+                            scheme.copy(homeConnectingIconEffect = effect)
+                        ) },
+                        onParticleEffectChanged = { enabled -> viewModel.upsertSkinScheme(
+                            scheme.copy(
+                                homeConnectingParticleEffectEnabled = enabled,
+                                homeIconEffectEnabled = enabled ||
+                                    scheme.homeDisconnectedParticleEffectEnabled ||
+                                    scheme.homeDisconnectingParticleEffectEnabled ||
+                                    scheme.homeConnectedParticleEffectEnabled
+                            )
+                        ) }
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HomeStateImageRow(
+                    Spacer(modifier = Modifier.height(6.dp))
+                    HomeStateSettingsRow(
                         title = "断开中",
                         imagePath = scheme.homeDisconnectingImagePath,
                         state = VpnState.DISCONNECTING,
+                        selectedEffect = scheme.homeDisconnectingIconEffect,
+                        selectedParticleEnabled = scheme.homeDisconnectingParticleEffectEnabled,
                         onChoose = { disconnectingImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeDisconnectingImagePath
                             viewModel.upsertSkinScheme(scheme.copy(homeDisconnectingImagePath = null))
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
-                        }
+                        },
+                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
+                            scheme.copy(homeDisconnectingIconEffect = effect)
+                        ) },
+                        onParticleEffectChanged = { enabled -> viewModel.upsertSkinScheme(
+                            scheme.copy(
+                                homeDisconnectingParticleEffectEnabled = enabled,
+                                homeIconEffectEnabled = enabled ||
+                                    scheme.homeDisconnectedParticleEffectEnabled ||
+                                    scheme.homeConnectingParticleEffectEnabled ||
+                                    scheme.homeConnectedParticleEffectEnabled
+                            )
+                        ) }
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HomeStateImageRow(
+                    Spacer(modifier = Modifier.height(6.dp))
+                    HomeStateSettingsRow(
                         title = "已连接",
                         imagePath = scheme.homeConnectedImagePath,
                         state = VpnState.CONNECTED,
+                        selectedEffect = scheme.homeConnectedIconEffect,
+                        selectedParticleEnabled = scheme.homeConnectedParticleEffectEnabled,
                         onChoose = { connectedImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
                             val oldPath = scheme.homeConnectedImagePath
                             viewModel.upsertSkinScheme(scheme.copy(homeConnectedImagePath = null))
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "图标周围粒子特效",
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "控制图标周围的环绕粒子",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = scheme.homeIconEffectEnabled,
-                            onCheckedChange = { enabled ->
-                                viewModel.upsertSkinScheme(
-                                    scheme.copy(homeIconEffectEnabled = enabled)
-                                )
-                            }
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        HomeIconEffect.entries.forEach { effect ->
-                            FilterChip(
-                                selected = scheme.homeIconEffect == effect,
-                                onClick = {
-                                    viewModel.upsertSkinScheme(
-                                        scheme.copy(homeIconEffect = effect)
-                                    )
-                                },
-                                label = { Text(effect.displayName) }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
-                    Text(
-                        text = "各状态图标动画",
-                        modifier = Modifier.padding(top = 12.dp),
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "分别为每种状态选择无效果、旋转或星光闪烁。",
-                        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    HomeIconMotionEffectRow(
-                        title = "未连接",
-                        selectedEffect = scheme.homeDisconnectedIconEffect,
-                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
-                            scheme.copy(homeDisconnectedIconEffect = effect)
-                        ) }
-                    )
-                    HomeIconMotionEffectRow(
-                        title = "连接中",
-                        selectedEffect = scheme.homeConnectingIconEffect,
-                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
-                            scheme.copy(homeConnectingIconEffect = effect)
-                        ) }
-                    )
-                    HomeIconMotionEffectRow(
-                        title = "断开中",
-                        selectedEffect = scheme.homeDisconnectingIconEffect,
-                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
-                            scheme.copy(homeDisconnectingIconEffect = effect)
-                        ) }
-                    )
-                    HomeIconMotionEffectRow(
-                        title = "已连接",
-                        selectedEffect = scheme.homeConnectedIconEffect,
+                        },
                         onEffectSelected = { effect -> viewModel.upsertSkinScheme(
                             scheme.copy(homeConnectedIconEffect = effect)
+                        ) },
+                        onParticleEffectChanged = { enabled -> viewModel.upsertSkinScheme(
+                            scheme.copy(
+                                homeConnectedParticleEffectEnabled = enabled,
+                                homeIconEffectEnabled = enabled ||
+                                    scheme.homeDisconnectedParticleEffectEnabled ||
+                                    scheme.homeConnectingParticleEffectEnabled ||
+                                    scheme.homeDisconnectingParticleEffectEnabled
+                            )
                         ) }
                     )
                 }

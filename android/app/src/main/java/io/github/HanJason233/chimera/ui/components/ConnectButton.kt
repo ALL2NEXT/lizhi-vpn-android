@@ -74,7 +74,10 @@ fun ConnectButton(
     customDisconnectingImagePath: String? = null,
     customConnectedImagePath: String? = null,
     homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
-    homeIconEffectEnabled: Boolean = true,
+    disconnectedParticleEffectEnabled: Boolean = true,
+    connectingParticleEffectEnabled: Boolean = true,
+    disconnectingParticleEffectEnabled: Boolean = true,
+    connectedParticleEffectEnabled: Boolean = true,
     disconnectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
     connectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
     disconnectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
@@ -123,6 +126,12 @@ fun ConnectButton(
             animationSpec = tween(220),
             label = "buttonImage"
         ) { currentState ->
+            val particleEffectEnabled = when (currentState) {
+                VpnState.DISCONNECTED -> disconnectedParticleEffectEnabled
+                VpnState.CONNECTING -> connectingParticleEffectEnabled
+                VpnState.DISCONNECTING -> disconnectingParticleEffectEnabled
+                VpnState.CONNECTED -> connectedParticleEffectEnabled
+            }
             val iconMotionEffect = when (currentState) {
                 VpnState.DISCONNECTED -> disconnectedIconEffect
                 VpnState.CONNECTING -> connectingIconEffect
@@ -174,7 +183,7 @@ fun ConnectButton(
                 modifier = Modifier.size((buttonSize * 1.42f).dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (homeIconEffectEnabled) {
+                if (particleEffectEnabled) {
                     when (homeIconEffect) {
                         HomeIconEffect.RADIAL_PARTICLE ->
                             RadialParticleEffect(modifier = Modifier.matchParentSize())

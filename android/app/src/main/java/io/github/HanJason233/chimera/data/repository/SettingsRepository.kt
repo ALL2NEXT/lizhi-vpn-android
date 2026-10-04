@@ -1542,6 +1542,11 @@ class SettingsRepository(
                         ) {
                             item.put("homeIconEffectEnabled", SkinScheme.default().homeIconEffectEnabled)
                         }
+                        // 旧版只有统一粒子开关，新字段缺失时沿用旧设置作为四种状态的初始值。
+                        val legacyHomeIconEffectEnabled = item.optBoolean(
+                            "homeIconEffectEnabled",
+                            id != SkinScheme.DEFAULT_SCHEME_ID
+                        )
                         add(
                             SkinScheme(
                                 id = id,
@@ -1589,6 +1594,22 @@ class SettingsRepository(
                                 homeIconEffectEnabled = item.optBoolean(
                                     "homeIconEffectEnabled",
                                     id != SkinScheme.DEFAULT_SCHEME_ID
+                                ),
+                                homeDisconnectedParticleEffectEnabled = item.optBoolean(
+                                    "homeDisconnectedParticleEffectEnabled",
+                                    legacyHomeIconEffectEnabled
+                                ),
+                                homeConnectingParticleEffectEnabled = item.optBoolean(
+                                    "homeConnectingParticleEffectEnabled",
+                                    legacyHomeIconEffectEnabled
+                                ),
+                                homeDisconnectingParticleEffectEnabled = item.optBoolean(
+                                    "homeDisconnectingParticleEffectEnabled",
+                                    legacyHomeIconEffectEnabled
+                                ),
+                                homeConnectedParticleEffectEnabled = item.optBoolean(
+                                    "homeConnectedParticleEffectEnabled",
+                                    legacyHomeIconEffectEnabled
                                 ),
                                 homeDisconnectedIconEffect = HomeIconMotionEffect.fromStorage(
                                     item.optString("homeDisconnectedIconEffect")
@@ -1658,6 +1679,10 @@ class SettingsRepository(
                         put("homeConnectingIconEffect", scheme.homeConnectingIconEffect.storageName)
                         put("homeDisconnectingIconEffect", scheme.homeDisconnectingIconEffect.storageName)
                         put("homeConnectedIconEffect", scheme.homeConnectedIconEffect.storageName)
+                        put("homeDisconnectedParticleEffectEnabled", scheme.homeDisconnectedParticleEffectEnabled)
+                        put("homeConnectingParticleEffectEnabled", scheme.homeConnectingParticleEffectEnabled)
+                        put("homeDisconnectingParticleEffectEnabled", scheme.homeDisconnectingParticleEffectEnabled)
+                        put("homeConnectedParticleEffectEnabled", scheme.homeConnectedParticleEffectEnabled)
                     }
                 )
             }

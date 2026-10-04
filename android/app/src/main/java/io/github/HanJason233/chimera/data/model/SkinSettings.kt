@@ -58,7 +58,12 @@ data class SkinScheme(
     val homeDisconnectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
     val homeConnectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
     val homeDisconnectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
-    val homeConnectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE
+    val homeConnectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
+    /** 四种连接状态的粒子特效独立开关；旧版统一开关仅用于迁移和降级兼容。 */
+    val homeDisconnectedParticleEffectEnabled: Boolean = true,
+    val homeConnectingParticleEffectEnabled: Boolean = true,
+    val homeDisconnectingParticleEffectEnabled: Boolean = true,
+    val homeConnectedParticleEffectEnabled: Boolean = true
 ) {
     val isDefault: Boolean
         get() = id == DEFAULT_SCHEME_ID
@@ -73,7 +78,11 @@ data class SkinScheme(
             name = "默认主题",
             themeMode = SkinThemeMode.SYSTEM,
             monetEnabled = true,
-            homeIconEffectEnabled = false
+            homeIconEffectEnabled = false,
+            homeDisconnectedParticleEffectEnabled = false,
+            homeConnectingParticleEffectEnabled = false,
+            homeDisconnectingParticleEffectEnabled = false,
+            homeConnectedParticleEffectEnabled = false
         )
 
         fun create(name: String): SkinScheme = SkinScheme(
