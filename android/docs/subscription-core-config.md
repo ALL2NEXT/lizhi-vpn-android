@@ -16,7 +16,7 @@ Clash `fingerprint` 是证书指纹，`client-fingerprint` 才是浏览器指纹
 
 ## 验证
 
-Android 的 `SingBoxGeneratedConfigTest` 使用 Robolectric 执行实际 Android URI/Base64 解析，并将预检、全局 VPN 和智能分流配置导出到忽略提交的 `app/build/singbox-config-fixtures`。设置 `FIREFLY_TEST_SUBSCRIPTION` 为本机订阅文件路径，可同时验证真实订阅；不要将节点凭据提交为测试资源。
+Android 的 `SingBoxGeneratedConfigTest` 使用 Robolectric 执行实际 Android URI/Base64 解析，并将预检、全局 VPN 和智能分流配置导出到忽略提交的 `app/build/singbox-config-fixtures`。设置 `CHIMERA_TEST_SUBSCRIPTION` 为本机订阅文件路径，可同时验证真实订阅；不要将节点凭据提交为测试资源。
 
 ```powershell
 # 在 android 目录

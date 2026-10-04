@@ -1,4 +1,4 @@
-# Firefly Android
+# Chimera Android
 
 Android 客户端的独立 Gradle 工程。
 

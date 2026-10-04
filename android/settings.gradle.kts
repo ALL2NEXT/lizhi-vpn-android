@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Firefly"
+rootProject.name = "Chimera"
 include(":app")

@@ -20,7 +20,7 @@ internal object HevSocksTunConfig {
 
     fun render(endpoint: LocalSocksEndpoint): String = buildString {
         appendLine("tunnel:")
-        appendLine("  name: firefly-hev")
+        appendLine("  name: chimera-hev")
         appendLine("  mtu: ${AppConfig.VPN_MTU}")
         appendLine("  multi-queue: false")
         appendLine("  icmp: 'off'")

@@ -353,7 +353,8 @@ android {
             storeFile = if (keystoreProperties["storeFile"] != null) {
                 rootProject.file(keystoreProperties["storeFile"] as String)
             } else {
-                rootProject.file("firefly-release.jks")
+                rootProject.file("chimera-release.jks").takeIf { it.exists() }
+                    ?: rootProject.file("firefly-release.jks")
             }
             storePassword = keystoreProperties["storePassword"] as String? ?: ""
             keyAlias = keystoreProperties["keyAlias"] as String? ?: ""

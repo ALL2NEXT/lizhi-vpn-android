@@ -1,6 +1,6 @@
 # Cloudflare R2部署教程
 
-无论是API文件还是APP文件下载都可以使用Cloudflare R2对象存储！这里用 **自定义域名 `firefly.202132.xyz`** 做演示，给出**Cloudflare 配置步骤 + 可直接用的 GitHub Actions** （并把下载链接设计成 **稳定的 latest 永久链接**）。
+无论是API文件还是APP文件下载都可以使用Cloudflare R2对象存储！这里用 **自定义域名 `download.example.com`** 做演示，给出**Cloudflare 配置步骤 + 可直接用的 GitHub Actions** （并把下载链接设计成 **稳定的 latest 永久链接**）。
 
 ------
 
@@ -35,7 +35,7 @@
 
 ### 0) 前提
 
-确保 `202132.xyz` 这个域名已经在 Cloudflare 里（DNS 托管到 Cloudflare）。
+确保 `example.com` 这个域名已经在 Cloudflare 里（DNS 托管到 Cloudflare）。
 
 > R2 的“自定义域名”能力依赖 Cloudflare 的域名/规则体系。
 
@@ -44,7 +44,7 @@
 ### 1) 创建 R2 Bucket
 
 Cloudflare Dashboard → **R2 Object Storage** → Create bucket
- 例如 bucket 名叫：`firefly-download`
+ 例如 bucket 名叫：`chimera-download`
 
 ------
 
@@ -52,14 +52,14 @@ Cloudflare Dashboard → **R2 Object Storage** → Create bucket
 
 进入这个 bucket 的设置页面，找到 **Custom domains**（自定义域名）：
 
-- 添加：`firefly.202132.xyz`
+- 添加：`download.example.com`
 
 Cloudflare 会在你的 DNS 里自动生成一个 **R2 只读记录**（通常不用你手动建 CNAME）。
 
 完成后，你的文件就可以用这种形式访问：
 
-- `https://firefly.202132.xyz/latest/Firefly.apk`
-- `https://firefly.202132.xyz/v1.10.0/Firefly.apk`
+- `https://download.example.com/latest/Chimera.apk`
+- `https://download.example.com/v1.10.0/Chimera.apk`
 
 ------
 
@@ -73,7 +73,7 @@ Cloudflare 文档明确提到：默认只缓存部分文件类型，要缓存桶
 
 - Rules → Cache Rules → Create rule
   - When incoming requests match:
-    - Hostname equals `firefly.202132.xyz`
+    - Hostname equals `download.example.com`
   - Cache eligibility: **Eligible for cache**（或 “Cache everything” 类似选项）
   - Edge TTL：比如 7 天（随你）
   - 也可以加 “Tiered Cache/Smart Tiered Cache”（加速回源）
@@ -81,7 +81,7 @@ Cloudflare 文档明确提到：默认只缓存部分文件类型，要缓存桶
 **做法 B：Page Rules（老方式）**
 
 - Rules → Page Rules
-  - URL pattern：`https://firefly.202132.xyz/*`
+  - URL pattern：`https://download.example.com/*`
   - Setting：**Cache Level: Cache Everything**
 
 > 这样大多数下载会命中 Cloudflare 边缘缓存，R2 的 Class B 请求数会大幅下降（更不容易触免费额度上限）。
@@ -112,8 +112,8 @@ GitHub → Settings → Secrets and variables → Actions → New repository sec
 - `R2_ACCOUNT_ID`：你的 Cloudflare Account ID
 - `R2_ACCESS_KEY_ID`：R2 Access Key ID，即访问密钥 ID
 - `R2_SECRET_ACCESS_KEY`：R2 Secret Access Key，即机密访问密钥
-- `R2_BUCKET`：`firefly-download`（你创建的 bucket 名）
-- `R2_PUBLIC_BASE`：`https://firefly.202132.xyz`  你自定义的域名
+- `R2_BUCKET`：`chimera-download`（你创建的 bucket 名）
+- `R2_PUBLIC_BASE`：`https://download.example.com`  你自定义的域名
 
 ## 四、GitHub Actions：Release 发布后自动同步 APK 到 R2
 
@@ -123,11 +123,11 @@ GitHub → Settings → Secrets and variables → Actions → New repository sec
 .github/workflows/sync-apk-to-r2.yml
 ```
 
-> 作用：你每次发布 GitHub Release（并上传 `Firefly.apk`）后
+> 作用：你每次发布 GitHub Release（并上传 `Chimera.apk`）后
 >  自动把 APK 同步到：
 >
-> - `/<tag>/Firefly.apk`（版本固定链接）
-> - `/latest/Firefly.apk`（永久最新链接）
+> - `/<tag>/Chimera.apk`（版本固定链接）
+> - `/latest/Chimera.apk`（永久最新链接）
 >    同时生成并上传 sha256 校验文件。
 
 ```yml
@@ -159,9 +159,9 @@ jobs:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-      APK_NAME: Firefly.apk
+      APK_NAME: Chimera.apk
 
-      # 你的公开下载域名（你这里应当设置为 https://firefly.202132.xyz）
+      # 你的公开下载域名（你这里应当设置为 https://download.example.com）
       R2_PUBLIC_BASE: ${{ secrets.R2_PUBLIC_BASE }}
 
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -202,7 +202,7 @@ jobs:
             exit 1
           fi
 
-          # 找到名为 Firefly.apk 的 asset 并下载
+          # 找到名为 Chimera.apk 的 asset 并下载
           ASSET_URL=$(gh api repos/${{ github.repository }}/releases/tags/$TAG \
             --jq '.assets[] | select(.name=="'"$APK_NAME"'") | .url')
 
@@ -255,14 +255,14 @@ jobs:
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
           echo "Upload tag: $TAG"
 
-          # 1) 版本目录：/<tag>/Firefly.apk
+          # 1) 版本目录：/<tag>/Chimera.apk
           aws s3 cp "$APK_NAME" "s3://${R2_BUCKET}/${TAG}/${APK_NAME}" \
             --endpoint-url "${R2_ENDPOINT}"
 
           aws s3 cp "${APK_NAME}.sha256" "s3://${R2_BUCKET}/${TAG}/${APK_NAME}.sha256" \
             --endpoint-url "${R2_ENDPOINT}"
 
-          # 2) 最新目录：/latest/Firefly.apk
+          # 2) 最新目录：/latest/Chimera.apk
           aws s3 cp "$APK_NAME" "s3://${R2_BUCKET}/latest/${APK_NAME}" \
             --endpoint-url "${R2_ENDPOINT}"
 
@@ -279,7 +279,7 @@ jobs:
             echo "Latest APK:    ${R2_PUBLIC_BASE}/latest/${APK_NAME}"
             echo "Latest SHA:    ${R2_PUBLIC_BASE}/latest/${APK_NAME}.sha256"
           else
-            echo "R2_PUBLIC_BASE not set. Set it to your custom domain base URL, e.g. https://firefly.202132.xyz"
+            echo "R2_PUBLIC_BASE not set. Set it to your custom domain base URL, e.g. https://download.example.com"
           fi
 
 ```
@@ -300,7 +300,7 @@ sync-apk-to-r2.yml解决了几个问题：
 
 ## 五、开始访问！
 
-访问https://firefly.202132.xyz/latest/Firefly.apk即可在国内外稳定下载APP安装包！！！
+访问https://download.example.com/latest/Chimera.apk即可在国内外稳定下载APP安装包！！！
 
 ## 六、其他文件处理
 

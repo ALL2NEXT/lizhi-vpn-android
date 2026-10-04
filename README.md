@@ -1,7 +1,4 @@
-# 流萤加速器 (Firefly)
-<p align="center">
-  <img src="./images/firefly.jpg" width="100" alt="Logo">
-</p>
+# Chimera VPN
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen" alt="Platform">
   <img src="https://img.shields.io/badge/Min%20SDK-24%20(Android%207.0)-blue" alt="Min SDK">
@@ -11,7 +8,7 @@
   <img src="https://img.shields.io/badge/License-GPLv3-orange" alt="License">
 </p>
 <p align="center">
-  流萤加速器是一款基于 sing-box 核心，支持多种代理协议和智能分流的 Android VPN 客户端。
+  Chimera 是一款基于 sing-box 核心，支持多种代理协议和智能分流的 Android VPN 客户端。
 </p>
 
 <p align="center">
@@ -150,8 +147,8 @@ git submodule update --init --recursive
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/Iskongkongyo/Firefly.git
-cd Firefly
+git clone https://github.com/Iskongkongyo/FireflyVPN.git Chimera
+cd Chimera
 ```
 
 ### 2. 配置 API 地址
@@ -182,7 +179,7 @@ object AppConfig {
     const val VPN_DNS_SECONDARY = "8.8.4.4"
     const val VPN_DNS_CHINA = "223.5.5.5"        // 国内 DNS（智能分流模式使用）
     val HTTP_USER_AGENT: String  // 运行时 getter，自动跟随版本号
-        get() = "Firefly/${BuildConfig.VERSION_NAME}"
+        get() = "Chimera/${BuildConfig.VERSION_NAME}"
 
     // 通知
     const val NOTIFICATION_CHANNEL_ID = "vpn_service"
@@ -416,7 +413,7 @@ android/app/src/main/
 **功能特点**：
 
 - 顶部提供刷新、分享、清空三个图标按钮
-- 分享时生成 `Firefly-runtime-日期-hash.log`，通过 `FileProvider` 分享
+- 分享时生成 `Chimera-runtime-日期-hash.log`，通过 `FileProvider` 分享
 - 日志来源为 APP 内部专用 `RuntimeLog`，不直接导出 Android logcat
 - 默认最多保留最新 1000 条日志；单条消息会截断，旧日志会自动滚动清理
 - 仅记录脱敏后的关键 Info / Warn / Error，例如 APP 启动、VPN 启停、核心兼容校验、自动测试摘要、导入结果、更新/公告请求失败、sing-box warn/error 等
@@ -612,7 +609,7 @@ APP 会先过滤当前账户等级不足的线路，再并发获取其余启用�
 
 1. 将节点正文 UTF-8 字节按客户端 Native 中的私有 Base64 表编码。
 2. 取本次请求者 IP 的最后一个 IPv4 段（IPv6 取最后一个十六进制段），对私有表中的字符向前循环位移 `段值 % 64` 位。例如 `1.2.3.4` 位移 4 位；`=` 填充不位移。
-3. 在同一响应中返回 `X-Firefly-Client-IP: <本次用于位移的请求者 IP>`。客户端不会自行猜测公网 IP，以避免 VPN、代理和 NAT 导致解码不一致。
+3. 在同一响应中返回 `X-Chimera-Client-IP: <本次用于位移的请求者 IP>`。客户端不会自行猜测公网 IP，以避免 VPN、代理和 NAT 导致解码不一致。
 
 客户端的自定义表、字符位移和双向变换均位于 Native 层，Kotlin 只负责读取标记和传递响应正文/IP；Worker 内置与 Native 一致的服务端编码实现。对于外部订阅地址，Worker 只保存及下发 `encrypted` 标记，不会改写外部响应；对于后台直接导入的纯文本节点，Worker 会作为订阅接口自动执行上述编码响应。
 
@@ -730,7 +727,7 @@ val Secondary = Color(0xFF607D8B)        // 蓝灰辅助色
 **文件**: `app/ui/screens/MainScreen.kt`
 
 ```
-text = "流萤加速器"; 替换成你的应用名称
+text = "Chimera"; 替换成你的应用名称
 ```
 
 ---
@@ -809,7 +806,7 @@ versionName — 字符串，格式通常为 主版本.次版本.修订号（如 
 **文件**: `android/app/src/main/res/values/themes.xml`
 
 ```xml
-<style name="Theme.Firefly" parent="android:Theme.Material.Light.NoActionBar">
+<style name="Theme.Chimera" parent="android:Theme.Material.Light.NoActionBar">
     <item name="android:colorPrimary">@color/your_primary</item>
     <item name="android:colorAccent">@color/your_accent</item>
 </style>

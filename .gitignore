@@ -70,6 +70,7 @@ subscription_base64.txt
 
 # Sensitive notes
 firefly签名.txt
+chimera签名.txt
 
 # OS-specific
 .DS_Store

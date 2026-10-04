@@ -143,7 +143,7 @@ private fun contentColorFor(color: Color): Color {
 }
 
 @Composable
-fun FireflyTheme(
+fun ChimeraTheme(
     skinSettings: SkinSettings = SkinSettings(),
     content: @Composable () -> Unit
 ) {

@@ -35,7 +35,7 @@ internal class NativeCoreSession(
     private val extraArguments: List<String> = emptyList()
 ) : CoreSession {
     private val token = UUID.randomUUID().toString()
-    private val socketName = "firefly-$processLabel-$token"
+    private val socketName = "chimera-$processLabel-$token"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val stopped = AtomicBoolean()
     private val ready = CompletableDeferred<Unit>()

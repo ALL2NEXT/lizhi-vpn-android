@@ -5,7 +5,7 @@
 cmake_minimum_required(VERSION 3.10.2)
 
 # Declares and names the project.
-project("firefly-vpn")
+project("chimera-vpn")
 
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)

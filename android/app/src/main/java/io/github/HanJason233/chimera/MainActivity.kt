@@ -56,7 +56,7 @@ import io.github.HanJason233.chimera.ui.screens.SkinSchemeEditorScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemeEditorScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemesScreen
 import io.github.HanJason233.chimera.ui.screens.WebNavigationScreen
-import io.github.HanJason233.chimera.ui.theme.FireflyTheme
+import io.github.HanJason233.chimera.ui.theme.ChimeraTheme
 import io.github.HanJason233.chimera.platform.LauncherIdentityManager
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
@@ -94,7 +94,7 @@ class MainActivity : ComponentActivity() {
                     skinSettings.activeScheme.appIconPresetId
                 )
             }
-            FireflyTheme(skinSettings = skinSettings) {
+            ChimeraTheme(skinSettings = skinSettings) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

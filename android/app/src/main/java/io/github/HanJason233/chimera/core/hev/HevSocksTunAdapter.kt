@@ -47,7 +47,7 @@ private class HevNativeSession(
     private val onFailure: (String) -> Unit
 ) : TunAdapterSession {
     private val token = UUID.randomUUID().toString()
-    private val socketName = "firefly-hev-$token"
+    private val socketName = "chimera-hev-$token"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val stopped = AtomicBoolean()
     private val ready = CompletableDeferred<Unit>()

@@ -9,6 +9,6 @@ data class LanInboundSettings(
 ) {
     companion object {
         const val DEFAULT_PORT = 10808
-        const val DEFAULT_USERNAME = "firefly"
+        const val DEFAULT_USERNAME = "chimera"
     }
 }

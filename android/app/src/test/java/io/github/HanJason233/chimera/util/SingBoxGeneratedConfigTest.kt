@@ -92,7 +92,8 @@ class SingBoxGeneratedConfigTest {
     @Test
     fun exportsLocallySuppliedSubscriptionForNativeValidation() {
         // Private subscription data stays outside tracked test resources.
-        val source = System.getenv("FIREFLY_TEST_SUBSCRIPTION")?.let(::File) ?: return
+        val source = (System.getenv("CHIMERA_TEST_SUBSCRIPTION")
+            ?: System.getenv("FIREFLY_TEST_SUBSCRIPTION"))?.let(::File) ?: return
         val nodes = SubscriptionParser().parseSubscription(source.readText())
         assertTrue("The supplied subscription must contain nodes", nodes.isNotEmpty())
         nodes.forEachIndexed { index, node ->
