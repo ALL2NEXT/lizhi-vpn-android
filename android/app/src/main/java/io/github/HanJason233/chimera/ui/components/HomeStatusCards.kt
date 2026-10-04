@@ -46,12 +46,6 @@ internal fun HomeSelectionCard(
     onNodeClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val status = when (vpnState) {
-        VpnState.CONNECTED -> "已连接"
-        VpnState.CONNECTING -> "连接中"
-        VpnState.DISCONNECTING -> "断开中"
-        VpnState.DISCONNECTED -> "未连接"
-    }
     HomeInfoCard(
         title = "选中组",
         icon = Icons.Outlined.FolderOpen,

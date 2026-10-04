@@ -10,7 +10,7 @@
     <string name="update_skip">跳过</string>
     <string name="ignore_current_update">忽略此次版本更新提示</string>
     <string name="vpn_notification_channel">VPN服务</string>
-    <string name="per_app_inbound_settings">分应用入站</string>
+    <string name="per_app_inbound_settings">VPN作用范围</string>
     <string name="per_app_inbound_back">返回</string>
     <string name="per_app_inbound_search">搜索应用</string>
     <string name="per_app_inbound_close_search">关闭搜索</string>
@@ -27,7 +27,7 @@
     <string name="per_app_inbound_not_selected">未选中</string>
     <string name="per_app_inbound_no_search_results">没有找到匹配的应用</string>
     <string name="per_app_inbound_no_apps">没有可用应用</string>
-    <string name="per_app_inbound_information">分应用入站说明</string>
+    <string name="per_app_inbound_information">VPN作用范围说明</string>
     <string name="per_app_inbound_summary">白名单：选中的应用走代理。\n黑名单：选中的应用走直连。</string>
     <string name="per_app_inbound_ok">确定</string>
     <string name="per_app_inbound_select_all">全选</string>
