@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -39,10 +38,10 @@ internal fun HomeSelectionCard(
     name: String,
     groupType: String,
     node: Node?,
-    regionName: String,
     vpnState: VpnState,
     onGroupClick: () -> Unit,
-    onNodeClick: () -> Unit
+    onNodeClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val status = when (vpnState) {
         VpnState.CONNECTED -> "已连接"
@@ -54,7 +53,8 @@ internal fun HomeSelectionCard(
         title = "选中组",
         icon = Icons.Outlined.FolderOpen,
         badge = groupType,
-        compact = true
+        compact = true,
+        modifier = modifier
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onGroupClick),
@@ -110,13 +110,6 @@ internal fun HomeSelectionCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = "$regionName · ${node.type.protocol.uppercase(Locale.ROOT)} · ${node.getConnectionGroupName()}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
     }
@@ -128,18 +121,17 @@ internal fun HomeTestsCard(
     node: Node?,
     isTesting: Boolean,
     progress: SpeedTestProgress?,
-    ipTestState: UnlockTestUiState
+    ipTestState: UnlockTestUiState,
+    modifier: Modifier = Modifier
 ) {
     HomeInfoCard(
-        title = "测试结果",
-        icon = Icons.Outlined.Assessment,
-        badge = if (isTesting || ipTestState.isRunning) "测试中" else null
+        compact = true,
+        modifier = modifier
     ) {
         if (isTesting && !ipTestState.isRunning) {
             HomeTestProgress(progress)
             Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         }
-        Text("链路测试", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val tcping = node?.tcpingLatency ?: -1
             val urlTest = node?.urlTestLatency ?: -1
@@ -147,23 +139,8 @@ internal fun HomeTestsCard(
             HomeLinkMetric("URLTest", urlTest.homeLatency(), Modifier.weight(1f), urlTest.latencyColor())
             HomeLinkMetric("下载", (node?.downloadMbps ?: 0f).homeSpeed(), Modifier.weight(1f))
         }
-        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("IP 测试", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold)
-            if (ipTestState.items.isNotEmpty()) {
-                Text("${ipTestState.completedCount}/${ipTestState.items.size}",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        if (ipTestState.items.isEmpty()) {
-            Text("尚未运行 IP 测试", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-            if (ipTestState.message.isNotBlank()) {
-                Text(ipTestState.message, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        if (ipTestState.items.isNotEmpty()) {
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             if (ipTestState.isRunning) {
                 LinearProgressIndicator(
                     progress = (ipTestState.completedCount.toFloat() / ipTestState.items.size).coerceIn(0f, 1f),
@@ -291,8 +268,8 @@ private fun unlockTestIconResource(id: String): Int = when (id) {
 
 @Composable
 private fun HomeInfoCard(
-    title: String,
-    icon: ImageVector,
+    title: String? = null,
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier,
     badge: String? = null,
     compact: Boolean = false,
@@ -308,14 +285,16 @@ private fun HomeInfoCard(
             Modifier.padding(if (compact) 12.dp else 14.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(icon, contentDescription = null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(title, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                badge?.let {
-                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)) {
-                        Text(it, Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            if (title != null && icon != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(icon, contentDescription = null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(title, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    badge?.let {
+                        Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)) {
+                            Text(it, Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }

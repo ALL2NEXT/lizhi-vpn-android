@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -118,12 +120,6 @@ fun MainScreen(
         is NodeGroupKey.Country -> "地区组"
         null -> "选择分组"
     }
-    val nodeCountryCode = currentNode?.getCountryCode()
-    val nodeRegionName = countryOptions.firstOrNull {
-        it.code.equals(nodeCountryCode, ignoreCase = true)
-    }?.name ?: currentNode?.countryName?.takeIf(String::isNotBlank)
-        ?: nodeCountryCode ?: "未知地区"
-
     val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val longPressScheme = speedTestSchemes.firstOrNull { it.id == homeLongPressSchemeId }
@@ -253,9 +249,13 @@ fun MainScreen(
                 BoxWithConstraints(
                     modifier = Modifier.fillMaxSize().padding(paddingValues)
                 ) {
-                    val availableContentHeight = maxHeight - 24.dp
-                    val connectButtonSize = ((availableContentHeight - 340.dp) / 1.42f)
-                        .coerceIn(84.dp, 180.dp)
+                    var testsCardHeightPx by remember { mutableIntStateOf(0) }
+                    var selectionCardHeightPx by remember { mutableIntStateOf(0) }
+                    val measuredCardsHeight = with(LocalDensity.current) {
+                        testsCardHeightPx.toDp() + selectionCardHeightPx.toDp()
+                    }
+                    val connectButtonSize = ((maxHeight - 48.dp - measuredCardsHeight) / 1.42f)
+                        .coerceIn(84.dp, 215.dp)
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -267,8 +267,11 @@ fun MainScreen(
                             node = currentNode,
                             isTesting = isTesting,
                             progress = testProgress,
-                            ipTestState = unlockTestState
+                            ipTestState = unlockTestState,
+                            modifier = Modifier.onSizeChanged { testsCardHeightPx = it.height }
                         )
+
+                        Spacer(modifier = Modifier.weight(1f))
 
                         ConnectButton(
                             vpnState = vpnState,
@@ -351,7 +354,6 @@ fun MainScreen(
                             name = selectedGroupName,
                             groupType = selectedGroupType,
                             node = currentNode,
-                            regionName = nodeRegionName,
                             vpnState = vpnState,
                             onGroupClick = {
                                 onBottomNavigationDestinationSelected(
@@ -362,7 +364,10 @@ fun MainScreen(
                                     }
                                 )
                             },
-                            onNodeClick = { onOpenCurrentGroupDetails(selectedGroup, selectedGroupName) }
+                            onNodeClick = { onOpenCurrentGroupDetails(selectedGroup, selectedGroupName) },
+                            modifier = Modifier
+                                .fillMaxWidth(0.5f)
+                                .onSizeChanged { selectionCardHeightPx = it.height }
                         )
                     }
                 }
