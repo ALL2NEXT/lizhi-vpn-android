@@ -695,17 +695,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    private val storedHomeTestResultsForCurrentNode = currentNode.flatMapLatest { node ->
+        if (node == null) {
+            flowOf(null)
+        } else {
+            nodeDaoFlow.flatMapLatest { dao ->
+                dao.observeHomeNodeTestResults(node.id).map { results -> node.id to results }
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val homeTestNodeSelection = storedHomeTestResultsForCurrentNode
+        .distinctUntilChangedBy { it?.first }
+
+    /** 首页卡片优先展示独立持久化的测试数据，订阅刷新替换节点时也能保留原结果。 */
+    internal val homeTestNode = combine(
+        currentNode,
+        storedHomeTestResultsForCurrentNode
+    ) { node, stored ->
+        if (node == null) return@combine null
+        val results = stored?.takeIf { it.first == node.id }?.second
+        node.copy(
+            tcpingLatency = results?.tcpingLatency?.takeIf { it >= 0 } ?: node.tcpingLatency,
+            urlTestLatency = results?.urlTestLatency?.takeIf { it >= 0 } ?: node.urlTestLatency,
+            downloadMbps = results?.downloadMbps?.takeIf { it > 0f } ?: node.downloadMbps
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     
     init {
         viewModelScope.launch {
-            ServiceManager.vpnState.collect { state ->
-                if (state != VpnState.CONNECTED && _linkTypeTestResult.value.state in setOf(
-                        LinkTypeTestState.DIRECT, LinkTypeTestState.RELAY, LinkTypeTestState.CDN_RELAY
-                    )) {
-                    _linkTypeTestResult.value = LinkTypeTestResult()
-                }
+            homeTestNodeSelection.collect { stored ->
+                val results = stored?.second
+                _linkTypeTestResult.value = results?.linkTypeResultJson
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(HomeTestResultCodec::decodeLinkType)
+                    ?: LinkTypeTestResult()
+                _unlockTestState.value = results?.unlockTestResultJson
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(HomeTestResultCodec::decodeUnlockTests)
+                    ?: UnlockTestUiState()
             }
         }
+        // 链路类型结果属于节点的历史检测数据，VPN 断开后仍保留并在首页展示。
         viewModelScope.launch {
             try {
                 // Keep the cached selection available immediately; refreshing
@@ -815,8 +847,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            _unlockTestState.value = UnlockTestUiState()
-            _linkTypeTestResult.value = LinkTypeTestResult()
             _isTesting.value = true
             val progressTitle = "测速方案：${scheme.name}"
             updateSpeedTestProgress(progressTitle, "准备测试")
@@ -1216,11 +1246,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val endpoint = BoxVpnService.activeSocksEndpoint()
         if (finalState != VpnState.CONNECTED || endpoint == null || !isCurrentTestNode(node)) {
-            _linkTypeTestResult.value = LinkTypeTestResult(
+            val result = LinkTypeTestResult(
                 state = LinkTypeTestState.NOT_CONNECTED,
                 serverAddress = node.server,
                 message = if (finalState == null) "等待 VPN 连接超时" else "当前节点未连接或连接已切换"
             )
+            _linkTypeTestResult.value = result
+            persistLinkTypeTestResult(node.id, result)
             return
         }
         _linkTypeTestResult.update { it.copy(message = "正在检测中转点与落地点") }
@@ -1238,10 +1270,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         // A result from a replaced session must not be shown as the new node's result.
         if (!isCurrentTestNode(node) || BoxVpnService.activeSocksEndpoint() != endpoint) {
-            _linkTypeTestResult.value = LinkTypeTestResult()
+            _linkTypeTestResult.value = nodeDao().getHomeNodeTestResults(node.id)
+                ?.linkTypeResultJson
+                ?.takeIf(String::isNotBlank)
+                ?.let(HomeTestResultCodec::decodeLinkType)
+                ?: LinkTypeTestResult()
             return
         }
         _linkTypeTestResult.value = result
+        persistLinkTypeTestResult(node.id, result)
+    }
+
+    private suspend fun persistLinkTypeTestResult(nodeId: String, result: LinkTypeTestResult) {
+        runCatching {
+            nodeDao().saveLinkTypeTestResult(nodeId, HomeTestResultCodec.encodeLinkType(result))
+        }.onFailure { error -> Log.w(tag, "Failed to persist link type result", error) }
     }
 
     private fun isCurrentTestNode(node: Node): Boolean =
@@ -1274,6 +1317,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (finalVpnState != VpnState.CONNECTED) {
             finishUnlockTestsAsNotConnected(
                 definitions,
+                expectedNode.id,
                 if (finalVpnState == null) "等待 VPN 连接超时" else "VPN 连接失败"
             )
             return
@@ -1281,7 +1325,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val endpoint = BoxVpnService.activeSocksEndpoint()
         if (endpoint == null || !isCurrentTestNode(expectedNode)) {
-            finishUnlockTestsAsNotConnected(definitions, "当前节点未连接或连接已切换")
+            finishUnlockTestsAsNotConnected(
+                definitions,
+                expectedNode.id,
+                "当前节点未连接或连接已切换"
+            )
             return
         }
 
@@ -1319,6 +1367,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     message = "检测完成：${state.items.size} 项中 $usable 项可用或部分可用"
                 )
             }
+            persistUnlockTestResult(expectedNode.id, _unlockTestState.value)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (throwable: Throwable) {
@@ -1335,11 +1384,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     message = "检测未能完成，请稍后重试"
                 )
             }
+            persistUnlockTestResult(expectedNode.id, _unlockTestState.value)
         }
     }
 
-    private fun finishUnlockTestsAsNotConnected(
+    private suspend fun persistUnlockTestResult(nodeId: String, state: UnlockTestUiState) {
+        if (state.isRunning || state.items.isEmpty()) return
+        runCatching {
+            nodeDao().saveUnlockTestResult(nodeId, HomeTestResultCodec.encodeUnlockTests(state))
+        }.onFailure { error -> Log.w(tag, "Failed to persist IP test results", error) }
+    }
+
+    private suspend fun finishUnlockTestsAsNotConnected(
         definitions: List<UnlockTestDefinition>,
+        nodeId: String,
         message: String
     ) {
         _unlockTestState.value = UnlockTestUiState(
@@ -1353,6 +1411,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             },
             message = message
         )
+        persistUnlockTestResult(nodeId, _unlockTestState.value)
     }
 
     private companion object {
@@ -1362,8 +1421,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Connect to the selected node, or to the first node in the active subscription. */
     fun startSelectedOrFirstConnection() {
         viewModelScope.launch {
-            _unlockTestState.value = UnlockTestUiState()
-            _linkTypeTestResult.value = LinkTypeTestResult()
             val selectedId = settingsRepository.selectedNodeId.first()
             val subscriptionNodes = currentNodeListSnapshot()
             val selectedNode = selectedId
@@ -1720,8 +1777,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun connectNode(node: Node) {
-        _unlockTestState.value = UnlockTestUiState()
-        _linkTypeTestResult.value = LinkTypeTestResult()
         settingsRepository.setSelectedNodeId(node.id)
         Log.i(tag, "Connecting directly to selected node: ${node.getDisplayName()}")
         when (vpnState.value) {
@@ -2646,8 +2701,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 viewModelScope.launch {
-                    _unlockTestState.value = UnlockTestUiState()
-                    _linkTypeTestResult.value = LinkTypeTestResult()
                     // 4. 无网络连接节点时给用户发Toast，但不阻止
                     if (!NetworkUtils.isNetworkAvailable(getApplication())) {
                         Log.w(tag, "VPN start requested while network is unavailable")

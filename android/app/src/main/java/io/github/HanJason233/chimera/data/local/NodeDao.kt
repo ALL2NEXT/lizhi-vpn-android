@@ -269,7 +269,18 @@ interface NodeDao {
     @Transaction
     suspend fun updateTcpingResults(updates: List<NodeLatencyUpdate>, testedAt: Long): Int {
         return updates.sumOf { update ->
-            updateTcpingResult(update.nodeId, update.latency, update.isAvailable, testedAt)
+            val updatedRows = updateTcpingResult(
+                update.nodeId,
+                update.latency,
+                update.isAvailable,
+                testedAt
+            )
+            val stored = getHomeNodeTestResults(update.nodeId)
+                ?: HomeNodeTestResultsEntity(nodeId = update.nodeId)
+            saveHomeNodeTestResults(
+                stored.copy(tcpingLatency = update.latency, updatedAt = testedAt)
+            )
+            updatedRows
         }
     }
 
@@ -279,7 +290,18 @@ interface NodeDao {
     @Transaction
     suspend fun updateUrlTestResults(updates: List<NodeLatencyUpdate>, testedAt: Long): Int {
         return updates.sumOf { update ->
-            updateUrlTestResult(update.nodeId, update.latency, update.isAvailable, testedAt)
+            val updatedRows = updateUrlTestResult(
+                update.nodeId,
+                update.latency,
+                update.isAvailable,
+                testedAt
+            )
+            val stored = getHomeNodeTestResults(update.nodeId)
+                ?: HomeNodeTestResultsEntity(nodeId = update.nodeId)
+            saveHomeNodeTestResults(
+                stored.copy(urlTestLatency = update.latency, updatedAt = testedAt)
+            )
+            updatedRows
         }
     }
 
@@ -293,7 +315,51 @@ interface NodeDao {
         }
     }
 
+    @Query("SELECT * FROM home_node_test_results WHERE nodeId = :nodeId LIMIT 1")
+    suspend fun getHomeNodeTestResults(nodeId: String): HomeNodeTestResultsEntity?
+
+    @Query("SELECT * FROM home_node_test_results WHERE nodeId = :nodeId LIMIT 1")
+    fun observeHomeNodeTestResults(nodeId: String): Flow<HomeNodeTestResultsEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveHomeNodeTestResults(results: HomeNodeTestResultsEntity)
+
+    @Transaction
+    suspend fun saveLinkTypeTestResult(nodeId: String, resultJson: String) {
+        val stored = getHomeNodeTestResults(nodeId) ?: HomeNodeTestResultsEntity(nodeId = nodeId)
+        saveHomeNodeTestResults(
+            stored.copy(
+                linkTypeResultJson = resultJson,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    @Transaction
+    suspend fun saveUnlockTestResult(nodeId: String, resultJson: String) {
+        val stored = getHomeNodeTestResults(nodeId) ?: HomeNodeTestResultsEntity(nodeId = nodeId)
+        saveHomeNodeTestResults(
+            stored.copy(
+                unlockTestResultJson = resultJson,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
     @Query("UPDATE nodes SET downloadMbps = :downloadMbps WHERE id = :nodeId")
-    suspend fun updateDownloadMbps(nodeId: String, downloadMbps: Float): Int
+    suspend fun updateNodeDownloadMbps(nodeId: String, downloadMbps: Float): Int
+
+    @Transaction
+    suspend fun updateDownloadMbps(nodeId: String, downloadMbps: Float): Int {
+        val updatedRows = updateNodeDownloadMbps(nodeId, downloadMbps)
+        val stored = getHomeNodeTestResults(nodeId) ?: HomeNodeTestResultsEntity(nodeId = nodeId)
+        saveHomeNodeTestResults(
+            stored.copy(
+                downloadMbps = downloadMbps,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        return updatedRows
+    }
 
 }

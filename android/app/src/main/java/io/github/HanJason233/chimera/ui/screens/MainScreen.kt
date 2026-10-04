@@ -88,6 +88,7 @@ fun MainScreen(
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
     val linkTypeTestResult by viewModel.linkTypeTestResult.collectAsStateWithLifecycle()
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
+    val homeTestNode by viewModel.homeTestNode.collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
     val countryOptions by viewModel.countryOptions.collectAsStateWithLifecycle()
@@ -265,7 +266,7 @@ fun MainScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         HomeTestsCard(
-                            node = currentNode,
+                            node = homeTestNode,
                             isTesting = isTesting,
                             progress = testProgress,
                             ipTestState = unlockTestState,

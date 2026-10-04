@@ -17,8 +17,13 @@ import io.github.HanJason233.chimera.util.DatabasePassphraseManager
 import java.io.File
 
 @Database(
-    entities = [Node::class, NodeGroupEntity::class, NodeGroupMemberEntity::class],
-    version = 12,
+    entities = [
+        Node::class,
+        NodeGroupEntity::class,
+        NodeGroupMemberEntity::class,
+        HomeNodeTestResultsEntity::class
+    ],
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -61,6 +66,36 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("ALTER TABLE node_groups ADD COLUMN customIconUrl TEXT")
                 db.execSQL("ALTER TABLE node_groups ADD COLUMN localIconFile TEXT")
+            }
+        }
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `home_node_test_results` (
+                        `nodeId` TEXT NOT NULL,
+                        `tcpingLatency` INTEGER NOT NULL,
+                        `urlTestLatency` INTEGER NOT NULL,
+                        `downloadMbps` REAL NOT NULL,
+                        `linkTypeResultJson` TEXT NOT NULL,
+                        `unlockTestResultJson` TEXT NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`nodeId`)
+                    )
+                    """.trimIndent()
+                )
+                // 升级时迁移已有的前三项质量数据；链路类型和 IP 检测此前只在内存中。
+                db.execSQL(
+                    """
+                    INSERT INTO `home_node_test_results` (
+                        `nodeId`, `tcpingLatency`, `urlTestLatency`, `downloadMbps`,
+                        `linkTypeResultJson`, `unlockTestResultJson`, `updatedAt`
+                    )
+                    SELECT `id`, `tcpingLatency`, `urlTestLatency`, `downloadMbps`, '', '', `lastTestedAt`
+                    FROM `nodes`
+                    WHERE `tcpingLatency` != -1 OR `urlTestLatency` != -1 OR `downloadMbps` != 0
+                    """.trimIndent()
+                )
             }
         }
 
@@ -113,7 +148,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_8_9,
                     MIGRATION_9_10,
                     MIGRATION_10_11,
-                    MIGRATION_11_12
+                    MIGRATION_11_12,
+                    MIGRATION_12_13
                 )
                 .build()
         }
