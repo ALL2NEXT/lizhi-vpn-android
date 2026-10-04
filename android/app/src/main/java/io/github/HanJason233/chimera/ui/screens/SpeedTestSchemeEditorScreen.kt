@@ -12,12 +12,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -117,7 +120,73 @@ fun SpeedTestSchemeEditorScreen(
     val repositoryGroups = speedTestGroups.filterNot { it.id.startsWith("country:") }
     val regionGroups = speedTestGroups.filter { it.id.startsWith("country:") }
 
-    AppScreenScaffold(title = "编辑测速方案", subtitle = scheme.name, onBack = onBack) {
+    AppScreenScaffold(
+        title = "编辑测速方案",
+        subtitle = scheme.name,
+        onBack = onBack,
+        actions = {
+            IconButton(
+                onClick = {
+                    val normalizedUrl = UrlTestTargets.normalize(urlTestUrl)
+                    val normalizedBackupUrl = UrlTestTargets.normalizeOptional(urlTestBackupUrl)
+                    val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
+                    if (name.trim().isBlank()) {
+                        error = "请输入方案名称"
+                    } else if (scope == SpeedTestScope.SPECIFIED_GROUPS && specifiedGroupIds.isEmpty()) {
+                        error = "请至少选择一个指定组"
+                    } else if ((urlTestEnabled && (normalizedUrl == null || normalizedBackupUrl == null)) ||
+                        (bandwidthEnabled && normalizedBandwidthUrl == null)
+                    ) {
+                        error = "请检查测速地址"
+                    } else {
+                        viewModel.upsertSpeedTestScheme(
+                            scheme.copy(
+                                name = name.trim(),
+                                scope = scope,
+                                specifiedGroupIds = specifiedGroupIds,
+                                tcpingEnabled = tcpingEnabled,
+                                urlTestEnabled = urlTestEnabled,
+                                bandwidthEnabled = bandwidthEnabled,
+                                unlockTestsEnabled = unlockTestsEnabled,
+                                unlockTestIds = unlockTestIds,
+                                tcpingSelectionMode = tcpingSelectionMode,
+                                tcpingSelectionValue = tcpingSelectionValue.toIntOrNull()
+                                    ?: scheme.tcpingSelectionValue,
+                                urlTestSelectionMode = urlSelectionMode,
+                                urlTestSelectionValue = urlSelectionValue.toIntOrNull()
+                                    ?: scheme.urlTestSelectionValue,
+                                bandwidthSelectionMode = bandwidthSelectionMode,
+                                bandwidthSelectionValue = bandwidthSelectionValue.toIntOrNull()
+                                    ?: scheme.bandwidthSelectionValue,
+                                tcpingTimeoutMs = tcpingTimeout.toLongOrNull() ?: scheme.tcpingTimeoutMs,
+                                urlTestWarmupTimeoutMs = urlWarmupTimeout.toLongOrNull()
+                                    ?: scheme.urlTestWarmupTimeoutMs,
+                                urlTestMeasurementTimeoutMs = urlMeasurementTimeout.toLongOrNull()
+                                    ?: scheme.urlTestMeasurementTimeoutMs,
+                                bandwidthTestDurationMs = bandwidthDuration.toLongOrNull()
+                                    ?: scheme.bandwidthTestDurationMs,
+                                tcpingConcurrency = tcpingConcurrency.toIntOrNull()
+                                    ?: scheme.tcpingConcurrency,
+                                urlTestConcurrency = urlConcurrency.toIntOrNull()
+                                    ?: scheme.urlTestConcurrency,
+                                bandwidthTestConcurrency = bandwidthConcurrency.toIntOrNull()
+                                    ?: scheme.bandwidthTestConcurrency,
+                                urlTestUrl = normalizedUrl ?: scheme.urlTestUrl,
+                                urlTestBackupUrl = normalizedBackupUrl ?: scheme.urlTestBackupUrl,
+                                bandwidthTestUrl = normalizedBandwidthUrl ?: scheme.bandwidthTestUrl
+                            )
+                        )
+                        error = null
+                    }
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Save,
+                    contentDescription = "保存方案"
+                )
+            }
+        }
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -357,64 +426,6 @@ fun SpeedTestSchemeEditorScreen(
 
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
-            }
-            Button(
-                onClick = {
-                    val normalizedUrl = UrlTestTargets.normalize(urlTestUrl)
-                    val normalizedBackupUrl = UrlTestTargets.normalizeOptional(urlTestBackupUrl)
-                    val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
-                    if (name.trim().isBlank()) {
-                        error = "请输入方案名称"
-                    } else if (scope == SpeedTestScope.SPECIFIED_GROUPS && specifiedGroupIds.isEmpty()) {
-                        error = "请至少选择一个指定组"
-                    } else if ((urlTestEnabled && (normalizedUrl == null || normalizedBackupUrl == null)) ||
-                        (bandwidthEnabled && normalizedBandwidthUrl == null)
-                    ) {
-                        error = "请检查测速地址"
-                    } else {
-                        viewModel.upsertSpeedTestScheme(
-                            scheme.copy(
-                                name = name.trim(),
-                                scope = scope,
-                                specifiedGroupIds = specifiedGroupIds,
-                                tcpingEnabled = tcpingEnabled,
-                                urlTestEnabled = urlTestEnabled,
-                                bandwidthEnabled = bandwidthEnabled,
-                                unlockTestsEnabled = unlockTestsEnabled,
-                                unlockTestIds = unlockTestIds,
-                                tcpingSelectionMode = tcpingSelectionMode,
-                                tcpingSelectionValue = tcpingSelectionValue.toIntOrNull()
-                                    ?: scheme.tcpingSelectionValue,
-                                urlTestSelectionMode = urlSelectionMode,
-                                urlTestSelectionValue = urlSelectionValue.toIntOrNull()
-                                    ?: scheme.urlTestSelectionValue,
-                                bandwidthSelectionMode = bandwidthSelectionMode,
-                                bandwidthSelectionValue = bandwidthSelectionValue.toIntOrNull()
-                                    ?: scheme.bandwidthSelectionValue,
-                                tcpingTimeoutMs = tcpingTimeout.toLongOrNull() ?: scheme.tcpingTimeoutMs,
-                                urlTestWarmupTimeoutMs = urlWarmupTimeout.toLongOrNull()
-                                    ?: scheme.urlTestWarmupTimeoutMs,
-                                urlTestMeasurementTimeoutMs = urlMeasurementTimeout.toLongOrNull()
-                                    ?: scheme.urlTestMeasurementTimeoutMs,
-                                bandwidthTestDurationMs = bandwidthDuration.toLongOrNull()
-                                    ?: scheme.bandwidthTestDurationMs,
-                                tcpingConcurrency = tcpingConcurrency.toIntOrNull()
-                                    ?: scheme.tcpingConcurrency,
-                                urlTestConcurrency = urlConcurrency.toIntOrNull()
-                                    ?: scheme.urlTestConcurrency,
-                                bandwidthTestConcurrency = bandwidthConcurrency.toIntOrNull()
-                                    ?: scheme.bandwidthTestConcurrency,
-                                urlTestUrl = normalizedUrl ?: scheme.urlTestUrl,
-                                urlTestBackupUrl = normalizedBackupUrl ?: scheme.urlTestBackupUrl,
-                                bandwidthTestUrl = normalizedBandwidthUrl ?: scheme.bandwidthTestUrl
-                            )
-                        )
-                        error = null
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("保存方案")
             }
         }
     }
