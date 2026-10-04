@@ -293,7 +293,7 @@ private fun HomeIpTestItem(result: UnlockTestResult, modifier: Modifier) {
     }
 }
 
-private fun unlockTestIconResource(id: String): Int = when (id) {
+internal fun unlockTestIconResource(id: String): Int = when (id) {
     "google_cn" -> R.drawable.ic_unlock_google
     "chatgpt" -> R.drawable.ic_unlock_chatgpt
     "claude" -> R.drawable.ic_unlock_anthropic
