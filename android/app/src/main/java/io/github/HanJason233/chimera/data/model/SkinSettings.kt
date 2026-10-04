@@ -13,6 +13,19 @@ enum class HomeIconEffect(val storageName: String, val displayName: String) {
     }
 }
 
+/** 各连接状态图标可单独选择的动态效果。 */
+enum class HomeIconMotionEffect(val storageName: String, val displayName: String) {
+    NONE("none", "无"),
+    ROTATE("rotate", "旋转"),
+    BLINK("blink", "闪烁");
+
+    companion object {
+        fun fromStorage(value: String?): HomeIconMotionEffect = entries.firstOrNull {
+            it.storageName == value
+        } ?: NONE
+    }
+}
+
 /** 一个可切换、可编辑的主题方案。 */
 data class SkinScheme(
     val id: String,
@@ -41,8 +54,11 @@ data class SkinScheme(
     val homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
     /** 自定义主题默认保留主页特效，内置默认主题在 default() 中关闭。 */
     val homeIconEffectEnabled: Boolean = true,
-    /** 连接中或断开中时旋转主页连接图标。 */
-    val homeIconRotationEnabled: Boolean = false
+    /** 四种连接状态的图标动画独立配置。 */
+    val homeDisconnectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
+    val homeConnectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
+    val homeDisconnectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
+    val homeConnectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE
 ) {
     val isDefault: Boolean
         get() = id == DEFAULT_SCHEME_ID

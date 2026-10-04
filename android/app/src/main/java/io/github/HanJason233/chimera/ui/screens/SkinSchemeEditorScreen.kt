@@ -57,6 +57,7 @@ import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.data.model.SkinScheme
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconEffect
+import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.DialogMaterialVersion
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
@@ -113,6 +114,37 @@ private fun HomeStateImageRow(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun HomeIconMotionEffectRow(
+    title: String,
+    selectedEffect: HomeIconMotionEffect,
+    onEffectSelected: (HomeIconMotionEffect) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.width(68.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            softWrap = false
+        )
+        HomeIconMotionEffect.entries.forEach { effect ->
+            FilterChip(
+                selected = selectedEffect == effect,
+                onClick = { onEffectSelected(effect) },
+                modifier = Modifier.weight(1f),
+                label = { Text(effect.displayName, maxLines = 1, softWrap = false) }
+            )
         }
     }
 }
@@ -569,12 +601,12 @@ fun SkinSchemeEditorScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "主页图标特效",
+                                text = "图标周围粒子特效",
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "控制连接图标周围的动画效果",
+                                text = "控制图标周围的环绕粒子",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -584,33 +616,6 @@ fun SkinSchemeEditorScreen(
                             onCheckedChange = { enabled ->
                                 viewModel.upsertSkinScheme(
                                     scheme.copy(homeIconEffectEnabled = enabled)
-                                )
-                            }
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "连接中图标旋转",
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "连接中或断开中时旋转主页图标",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = scheme.homeIconRotationEnabled,
-                            onCheckedChange = { enabled ->
-                                viewModel.upsertSkinScheme(
-                                    scheme.copy(homeIconRotationEnabled = enabled)
                                 )
                             }
                         )
@@ -628,6 +633,48 @@ fun SkinSchemeEditorScreen(
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
+                    Text(
+                        text = "各状态图标动画",
+                        modifier = Modifier.padding(top = 12.dp),
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "分别为每种状态选择无效果、旋转或星光闪烁。",
+                        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HomeIconMotionEffectRow(
+                        title = "未连接",
+                        selectedEffect = scheme.homeDisconnectedIconEffect,
+                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
+                            scheme.copy(homeDisconnectedIconEffect = effect)
+                        ) }
+                    )
+                    HomeIconMotionEffectRow(
+                        title = "连接中",
+                        selectedEffect = scheme.homeConnectingIconEffect,
+                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
+                            scheme.copy(homeConnectingIconEffect = effect)
+                        ) }
+                    )
+                    HomeIconMotionEffectRow(
+                        title = "断开中",
+                        selectedEffect = scheme.homeDisconnectingIconEffect,
+                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
+                            scheme.copy(homeDisconnectingIconEffect = effect)
+                        ) }
+                    )
+                    HomeIconMotionEffectRow(
+                        title = "已连接",
+                        selectedEffect = scheme.homeConnectedIconEffect,
+                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
+                            scheme.copy(homeConnectedIconEffect = effect)
+                        ) }
+                    )
                 }
             }
 

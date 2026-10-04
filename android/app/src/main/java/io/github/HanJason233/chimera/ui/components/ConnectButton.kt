@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.withFrameNanos
 import io.github.HanJason233.chimera.data.model.HomeIconEffect
+import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.VpnState
 
 enum class ConnectButtonSwipeDirection {
@@ -74,7 +75,10 @@ fun ConnectButton(
     customConnectedImagePath: String? = null,
     homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
     homeIconEffectEnabled: Boolean = true,
-    homeIconRotationEnabled: Boolean = false,
+    disconnectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
+    connectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
+    disconnectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
+    connectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
     maxButtonSize: Dp = 250.dp
 ) {
     // 测速方案执行期间底层状态仍可能是 DISCONNECTED，主页视觉上应展示“连接中”。
@@ -84,22 +88,6 @@ fun ConnectButton(
         vpnState
     }
     val isConnecting = displayState == VpnState.CONNECTING || displayState == VpnState.DISCONNECTING
-
-    val iconRotation = if (homeIconRotationEnabled && isConnecting) {
-        val rotationTransition = rememberInfiniteTransition(label = "connectionIconRotation")
-        val animatedRotation by rotationTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 900, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "connectionIconRotation"
-        )
-        animatedRotation
-    } else {
-        0f
-    }
 
     // 自适应按钮大小：取屏幕宽度的 65%，但不超过 250dp
     val configuration = LocalConfiguration.current
@@ -135,6 +123,47 @@ fun ConnectButton(
             animationSpec = tween(220),
             label = "buttonImage"
         ) { currentState ->
+            val iconMotionEffect = when (currentState) {
+                VpnState.DISCONNECTED -> disconnectedIconEffect
+                VpnState.CONNECTING -> connectingIconEffect
+                VpnState.DISCONNECTING -> disconnectingIconEffect
+                VpnState.CONNECTED -> connectedIconEffect
+            }
+            val iconRotation = if (iconMotionEffect == HomeIconMotionEffect.ROTATE) {
+                val rotationTransition = rememberInfiniteTransition(
+                    label = "homeIconRotation-${currentState.name}"
+                )
+                val animatedRotation by rotationTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 900, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "homeIconRotation-${currentState.name}"
+                )
+                animatedRotation
+            } else {
+                0f
+            }
+            // 闪烁像星光一样渐暗后恢复，使用透明度往返变化而不影响图标颜色。
+            val iconAlpha = if (iconMotionEffect == HomeIconMotionEffect.BLINK) {
+                val blinkTransition = rememberInfiniteTransition(
+                    label = "homeIconBlink-${currentState.name}"
+                )
+                val animatedAlpha by blinkTransition.animateFloat(
+                    initialValue = 1f,
+                    targetValue = 0.35f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "homeIconBlink-${currentState.name}"
+                )
+                animatedAlpha
+            } else {
+                1f
+            }
             val currentImagePath = when (currentState) {
                 VpnState.DISCONNECTED -> customDisconnectedImagePath
                 VpnState.CONNECTING -> customConnectingImagePath
@@ -166,7 +195,10 @@ fun ConnectButton(
                         },
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer { rotationZ = iconRotation }
+                            .graphicsLayer {
+                                rotationZ = iconRotation
+                                alpha = iconAlpha
+                            }
                     )
                     // 手势层裁剪为圆形，图片本身保持完整显示，避免透明图片的角落可触发。
                     Box(

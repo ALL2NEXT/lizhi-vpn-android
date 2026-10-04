@@ -16,6 +16,7 @@ import io.github.HanJason233.chimera.data.model.DnsSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconEffect
+import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
@@ -1531,6 +1532,11 @@ class SettingsRepository(
                         val item = array.optJSONObject(index) ?: continue
                         val id = item.optString("id").trim()
                         if (id.isBlank()) continue
+                        // 旧版统一旋转开关只作用于连接中和断开中，读取时映射到这两个状态。
+                        val legacyHomeIconRotationEnabled = item.optBoolean(
+                            "homeIconRotationEnabled",
+                            false
+                        )
                         if (id == SkinScheme.DEFAULT_SCHEME_ID &&
                             item.optInt("defaultsVersion", 0) < DEFAULT_PRESET_REVISION
                         ) {
@@ -1584,9 +1590,31 @@ class SettingsRepository(
                                     "homeIconEffectEnabled",
                                     id != SkinScheme.DEFAULT_SCHEME_ID
                                 ),
-                                homeIconRotationEnabled = item.optBoolean(
-                                    "homeIconRotationEnabled",
-                                    false
+                                homeDisconnectedIconEffect = HomeIconMotionEffect.fromStorage(
+                                    item.optString("homeDisconnectedIconEffect")
+                                        .takeIf { it.isNotBlank() }
+                                ),
+                                homeConnectingIconEffect = HomeIconMotionEffect.fromStorage(
+                                        item.optString("homeConnectingIconEffect")
+                                            .takeIf { it.isNotBlank() }
+                                        ?: if (legacyHomeIconRotationEnabled) {
+                                            HomeIconMotionEffect.ROTATE.storageName
+                                        } else {
+                                            null
+                                        }
+                                ),
+                                homeDisconnectingIconEffect = HomeIconMotionEffect.fromStorage(
+                                        item.optString("homeDisconnectingIconEffect")
+                                            .takeIf { it.isNotBlank() }
+                                        ?: if (legacyHomeIconRotationEnabled) {
+                                            HomeIconMotionEffect.ROTATE.storageName
+                                        } else {
+                                            null
+                                        }
+                                ),
+                                homeConnectedIconEffect = HomeIconMotionEffect.fromStorage(
+                                    item.optString("homeConnectedIconEffect")
+                                        .takeIf { it.isNotBlank() }
                                 )
                             )
                         )
@@ -1626,7 +1654,10 @@ class SettingsRepository(
                         scheme.homeConnectedImagePath?.let { put("homeConnectedImagePath", it) }
                         put("homeIconEffect", scheme.homeIconEffect.storageName)
                         put("homeIconEffectEnabled", scheme.homeIconEffectEnabled)
-                        put("homeIconRotationEnabled", scheme.homeIconRotationEnabled)
+                        put("homeDisconnectedIconEffect", scheme.homeDisconnectedIconEffect.storageName)
+                        put("homeConnectingIconEffect", scheme.homeConnectingIconEffect.storageName)
+                        put("homeDisconnectingIconEffect", scheme.homeDisconnectingIconEffect.storageName)
+                        put("homeConnectedIconEffect", scheme.homeConnectedIconEffect.storageName)
                     }
                 )
             }
