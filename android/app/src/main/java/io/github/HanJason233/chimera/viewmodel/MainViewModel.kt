@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Semaphore
@@ -218,6 +219,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
+    /** 保存当前持有全局测速锁的任务，供主页手势中断。 */
+    private var activeTestJob: Job? = null
 
     private val _speedTestProgress = MutableStateFlow<SpeedTestProgress?>(null)
     internal val speedTestProgress = _speedTestProgress.asStateFlow()
@@ -491,12 +494,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SpeedTestScheme.DEFAULT_ID
     )
 
-    val homeDoubleClickSpeedTestSchemeId = settingsRepository.homeDoubleClickSpeedTestSchemeId.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        SpeedTestScheme.DEFAULT_ID
-    )
-
     val homeLongPressSpeedTestSchemeId = settingsRepository.homeLongPressSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -521,7 +518,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         false
     )
 
-    val homeDoubleClickSpeedTestEnabled = settingsRepository.homeDoubleClickSpeedTestEnabled.stateIn(
+    val homeDoubleClickCancelTestEnabled = settingsRepository.homeDoubleClickCancelTestEnabled.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
         false
@@ -784,6 +781,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            val testJob = currentCoroutineContext()[Job]
+            activeTestJob = testJob
             _isTesting.value = true
             val progressTitle = "测速方案：${scheme.name}"
             updateSpeedTestProgress(progressTitle, "准备测试")
@@ -975,6 +974,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(tag, "Speed test scheme failed", e)
                 _error.value = "测速失败：${e.message ?: "未知错误"}"
             } finally {
+                if (activeTestJob === testJob) activeTestJob = null
                 _isTesting.value = false
                 _speedTestProgress.value = null
                 GlobalTestExecution.finish()
@@ -1015,6 +1015,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            val testJob = currentCoroutineContext()[Job]
+            activeTestJob = testJob
             _isTesting.value = true
             val progressTitle = "分组手动测速"
             val progressStage = when (stage) {
@@ -1137,6 +1139,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(tag, "Manual group test failed: $stage", error)
                 _error.value = "分组手动测试失败：${error.message ?: "未知错误"}"
             } finally {
+                if (activeTestJob === testJob) activeTestJob = null
                 _isTesting.value = false
                 _speedTestProgress.value = null
                 GlobalTestExecution.finish()
@@ -1151,7 +1154,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runLinkTypeTest(node)
         }
         if (scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()) {
-            _isTesting.value = false
             runUnlockTests(scheme.unlockTestIds, node)
         }
     }
@@ -1290,6 +1292,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             persistUnlockTestResult(expectedNode.id, _unlockTestState.value)
         } catch (cancelled: CancellationException) {
+            _unlockTestState.update { state ->
+                state.copy(
+                    items = state.items.map { item ->
+                        if (item.state == UnlockTestState.TESTING) {
+                            item.copy(
+                                state = UnlockTestState.IDLE,
+                                statusText = "已取消",
+                                description = "用户已取消测试"
+                            )
+                        } else {
+                            item
+                        }
+                    },
+                    isRunning = false,
+                    message = "测试已取消"
+                )
+            }
             throw cancelled
         } catch (throwable: Throwable) {
             _unlockTestState.update { state ->
@@ -2514,12 +2533,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setHomeDoubleClickSpeedTestScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.setHomeDoubleClickSpeedTestSchemeId(schemeId)
-        }
-    }
-
     fun setLanInboundEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setLanInboundEnabled(enabled)
@@ -2560,10 +2573,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setHomeDoubleClickSpeedTestEnabled(enabled: Boolean) {
+    fun setHomeDoubleClickCancelTestEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            settingsRepository.setHomeDoubleClickSpeedTestEnabled(enabled)
+            settingsRepository.setHomeDoubleClickCancelTestEnabled(enabled)
         }
+    }
+
+    fun cancelActiveSpeedTest() {
+        activeTestJob?.takeIf { it.isActive }?.cancel(
+            CancellationException("Speed test cancelled by user")
+        )
     }
 
     fun setHomeLongPressSpeedTestEnabled(enabled: Boolean) {

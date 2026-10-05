@@ -65,12 +65,10 @@ fun SpeedTestSchemesScreen(
 ) {
     val schemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val clickId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val doubleClickId by viewModel.homeDoubleClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val longPressId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
     val groupManualId by viewModel.groupManualSpeedTestSchemeId.collectAsStateWithLifecycle()
     val groupManualEnabled by viewModel.groupManualSpeedTestEnabled.collectAsStateWithLifecycle()
     val clickEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
-    val doubleClickEnabled by viewModel.homeDoubleClickSpeedTestEnabled.collectAsStateWithLifecycle()
     val longPressEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
     var newSchemeName by remember { mutableStateOf("") }
@@ -95,14 +93,6 @@ fun SpeedTestSchemesScreen(
                 enabled = clickEnabled,
                 onSelected = viewModel::setHomeClickSpeedTestScheme,
                 onEnabledChange = viewModel::setHomeClickSpeedTestEnabled
-            )
-            SpeedTestSchemeBinding(
-                title = "双击主页图标",
-                selectedId = doubleClickId,
-                schemes = schemes,
-                enabled = doubleClickEnabled,
-                onSelected = viewModel::setHomeDoubleClickSpeedTestScheme,
-                onEnabledChange = viewModel::setHomeDoubleClickSpeedTestEnabled
             )
             SpeedTestSchemeBinding(
                 title = "长按主页图标",
@@ -131,7 +121,6 @@ fun SpeedTestSchemesScreen(
                 SpeedTestSchemeCard(
                     scheme = scheme,
                     assignedToClick = clickEnabled && scheme.id == clickId,
-                    assignedToDoubleClick = doubleClickEnabled && scheme.id == doubleClickId,
                     assignedToLongPress = longPressEnabled && scheme.id == longPressId,
                     assignedToGroupManual = groupManualEnabled && scheme.id == groupManualId,
                     onEdit = { onOpenEditor(scheme.id) },
@@ -341,7 +330,6 @@ private fun SpeedTestSchemeBinding(
 private fun SpeedTestSchemeCard(
     scheme: SpeedTestScheme,
     assignedToClick: Boolean,
-    assignedToDoubleClick: Boolean,
     assignedToLongPress: Boolean,
     assignedToGroupManual: Boolean,
     onEdit: () -> Unit,
@@ -355,7 +343,7 @@ private fun SpeedTestSchemeCard(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         border = if (
-            assignedToClick || assignedToDoubleClick || assignedToLongPress || assignedToGroupManual
+            assignedToClick || assignedToLongPress || assignedToGroupManual
         ) {
             BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
         } else null
@@ -411,7 +399,6 @@ private fun SpeedTestSchemeCard(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (assignedToClick) BindingBadge("点击")
-                    if (assignedToDoubleClick) BindingBadge("双击")
                     if (assignedToLongPress) BindingBadge("长按")
                     if (assignedToGroupManual) BindingBadge("分组手动")
                 }

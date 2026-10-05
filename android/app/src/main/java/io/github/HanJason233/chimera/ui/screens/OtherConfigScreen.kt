@@ -73,6 +73,7 @@ fun OtherConfigScreen(
     val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val serviceRequestTimeoutMs by viewModel.serviceRequestTimeoutMs.collectAsStateWithLifecycle()
+    val homeDoubleClickCancelTestEnabled by viewModel.homeDoubleClickCancelTestEnabled.collectAsStateWithLifecycle()
     val autoRefreshOfficialSubscriptions by viewModel.autoRefreshOfficialSubscriptions.collectAsStateWithLifecycle()
     val autoRefreshPersonalSubscriptions by viewModel.autoRefreshPersonalSubscriptions.collectAsStateWithLifecycle()
     var serviceRequestTimeoutSecondsInput by rememberSaveable { mutableStateOf("") }
@@ -113,6 +114,18 @@ fun OtherConfigScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            // 主页交互不绑定具体测速方案，作为应用级设置统一管理。
+            OtherConfigSection(title = "主页手势") {
+                Text(
+                    text = "测速进行时双击主页连接图标可中断当前测试；默认关闭。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                ConfigSwitchRow("双击主页图标中断测试", homeDoubleClickCancelTestEnabled) {
+                    viewModel.setHomeDoubleClickCancelTestEnabled(it)
+                }
+            }
+
             OtherConfigSection(
                 title = "节点标签显示",
                 collapsible = true,

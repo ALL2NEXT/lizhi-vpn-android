@@ -82,8 +82,6 @@ class SettingsRepository(
         private val LAN_INBOUND_PASSWORD = stringPreferencesKey("lan_inbound_password")
         private val HOME_CLICK_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_click_speed_test_scheme_id")
-        private val HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID =
-            stringPreferencesKey("home_double_click_speed_test_scheme_id")
         private val HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_long_press_speed_test_scheme_id")
         private val GROUP_MANUAL_SPEED_TEST_SCHEME_ID =
@@ -92,8 +90,8 @@ class SettingsRepository(
             booleanPreferencesKey("group_manual_speed_test_enabled")
         private val HOME_CLICK_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_click_speed_test_enabled")
-        private val HOME_DOUBLE_CLICK_SPEED_TEST_ENABLED =
-            booleanPreferencesKey("home_double_click_speed_test_enabled")
+        private val HOME_DOUBLE_CLICK_CANCEL_TEST_ENABLED =
+            booleanPreferencesKey("home_double_click_cancel_test_enabled")
         private val HOME_LONG_PRESS_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_long_press_speed_test_enabled")
         private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
@@ -206,16 +204,6 @@ class SettingsRepository(
         )
     }
 
-    /** 主页图标双击使用的测速方案。 */
-    val homeDoubleClickSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
-        val schemes = decodeSpeedTestSchemes(preferences)
-        resolveHomeSchemeId(
-            preferences[HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEFAULT_ID,
-            schemes
-        )
-    }
-
     /** 主页图标长按使用的测速方案。 */
     val homeLongPressSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
@@ -246,9 +234,9 @@ class SettingsRepository(
         preferences[HOME_CLICK_SPEED_TEST_ENABLED] ?: false
     }
 
-    /** 主页图标双击是否启用测速方案；默认关闭。 */
-    val homeDoubleClickSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
-        preferences[HOME_DOUBLE_CLICK_SPEED_TEST_ENABLED] ?: false
+    /** 测试期间双击主页图标是否取消当前测试；默认关闭。 */
+    val homeDoubleClickCancelTestEnabled: Flow<Boolean> = store.data.map { preferences ->
+        preferences[HOME_DOUBLE_CLICK_CANCEL_TEST_ENABLED] ?: false
     }
 
     /** 主页图标长按是否启用测速方案；默认开启以保持原有行为。 */
@@ -260,14 +248,6 @@ class SettingsRepository(
         store.edit { preferences ->
             if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
                 preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = schemeId
-            }
-        }
-    }
-
-    suspend fun setHomeDoubleClickSpeedTestSchemeId(schemeId: String) {
-        store.edit { preferences ->
-            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
-                preferences[HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID] = schemeId
             }
         }
     }
@@ -300,9 +280,9 @@ class SettingsRepository(
         }
     }
 
-    suspend fun setHomeDoubleClickSpeedTestEnabled(enabled: Boolean) {
+    suspend fun setHomeDoubleClickCancelTestEnabled(enabled: Boolean) {
         store.edit { preferences ->
-            preferences[HOME_DOUBLE_CLICK_SPEED_TEST_ENABLED] = enabled
+            preferences[HOME_DOUBLE_CLICK_CANCEL_TEST_ENABLED] = enabled
         }
     }
 
@@ -782,9 +762,6 @@ class SettingsRepository(
             )
             if (preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] == schemeId) {
                 preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
-            }
-            if (preferences[HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_DOUBLE_CLICK_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }
             if (preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] == schemeId) {
                 preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID

@@ -81,6 +81,8 @@ fun ConnectButton(
         vpnState
     }
     val isConnecting = displayState == VpnState.CONNECTING || displayState == VpnState.DISCONNECTING
+    val allowDoubleClickWhileTesting = isTesting && onDoubleClick != null
+    val gestureEnabled = enabled && (!isConnecting || allowDoubleClickWhileTesting)
 
     // 自适应按钮大小：取屏幕宽度的 65%，但不超过 250dp
     val configuration = LocalConfiguration.current
@@ -88,7 +90,7 @@ fun ConnectButton(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val longPressEnabled = onLongClick != null && enabled && !isConnecting
+    val longPressEnabled = onLongClick != null && gestureEnabled && !isConnecting
     val longPressProgress by animateFloatAsState(
         targetValue = if (isPressed && longPressEnabled) 1f else 0f,
         animationSpec = tween(
@@ -200,24 +202,28 @@ fun ConnectButton(
                             .fillMaxSize()
                             .clip(CircleShape)
                             .combinedClickable(
-                                enabled = enabled && !isConnecting,
+                                enabled = gestureEnabled,
                                 indication = rememberRipple(bounded = true),
                                 interactionSource = interactionSource,
-                                onClickLabel = if (vpnState == VpnState.DISCONNECTED) clickActionLabel else null,
+                                onClickLabel = if (!isTesting && vpnState == VpnState.DISCONNECTED) clickActionLabel else null,
                                 onLongClickLabel = if (onLongClick != null) longClickActionLabel else null,
                                 onDoubleClick = onDoubleClick,
                                 onLongClick = onLongClick,
                                 onClick = onClick
                             )
                             .semantics {
-                                this.contentDescription = when (displayState) {
-                                    VpnState.CONNECTED -> "已连接"
-                                    VpnState.CONNECTING -> "连接中"
-                                    VpnState.DISCONNECTING -> "断开中"
-                                    VpnState.DISCONNECTED -> if (onDoubleClick != null) {
-                                        "点击连接，双击${doubleClickActionLabel}"
-                                    } else {
-                                        "点击连接"
+                                this.contentDescription = if (allowDoubleClickWhileTesting) {
+                                    "测速进行中，双击${doubleClickActionLabel}"
+                                } else {
+                                    when (displayState) {
+                                        VpnState.CONNECTED -> "已连接"
+                                        VpnState.CONNECTING -> "连接中"
+                                        VpnState.DISCONNECTING -> "断开中"
+                                        VpnState.DISCONNECTED -> if (onDoubleClick != null) {
+                                            "点击连接，双击${doubleClickActionLabel}"
+                                        } else {
+                                            "点击连接"
+                                        }
                                     }
                                 }
                             }

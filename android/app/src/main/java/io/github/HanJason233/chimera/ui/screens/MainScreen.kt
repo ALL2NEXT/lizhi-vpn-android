@@ -73,10 +73,9 @@ fun MainScreen(
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val homeClickSchemeId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val homeDoubleClickSchemeId by viewModel.homeDoubleClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeLongPressSchemeId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeClickSpeedTestEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
-    val homeDoubleClickSpeedTestEnabled by viewModel.homeDoubleClickSpeedTestEnabled.collectAsStateWithLifecycle()
+    val homeDoubleClickCancelTestEnabled by viewModel.homeDoubleClickCancelTestEnabled.collectAsStateWithLifecycle()
     val homeLongPressSpeedTestEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
@@ -117,8 +116,6 @@ fun MainScreen(
         null -> "选择分组"
     }
     val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-    val doubleClickScheme = speedTestSchemes.firstOrNull { it.id == homeDoubleClickSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val longPressScheme = speedTestSchemes.firstOrNull { it.id == homeLongPressSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
@@ -267,7 +264,7 @@ fun MainScreen(
                         ConnectButton(
                             vpnState = vpnState,
                             maxButtonSize = connectButtonSize,
-                            enabled = !isTesting,
+                            enabled = !isTesting || homeDoubleClickCancelTestEnabled,
                             isTesting = isTesting,
                             customDisconnectedImagePath = skinSettings.homeDisconnectedImagePath,
                             customConnectingImagePath = skinSettings.homeConnectingImagePath,
@@ -283,31 +280,30 @@ fun MainScreen(
                             disconnectingIconEffect = skinSettings.activeScheme.homeDisconnectingIconEffect,
                             connectedIconEffect = skinSettings.activeScheme.homeConnectedIconEffect,
                             onClick = {
-                                when (vpnState) {
-                                    VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
-                                    VpnState.DISCONNECTED -> onStartVpn {
-                                        if (homeClickSpeedTestEnabled) {
-                                            clickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
-                                        } else {
-                                            viewModel.startSelectedOrFirstConnection()
+                                if (!isTesting) {
+                                    when (vpnState) {
+                                        VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
+                                        VpnState.DISCONNECTED -> onStartVpn {
+                                            if (homeClickSpeedTestEnabled) {
+                                                clickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                                            } else {
+                                                viewModel.startSelectedOrFirstConnection()
+                                            }
                                         }
+                                        else -> Unit
                                     }
-                                    else -> Unit
                                 }
                             },
                             onDoubleClick = if (
-                                vpnState == VpnState.DISCONNECTED && homeDoubleClickSpeedTestEnabled
+                                isTesting && homeDoubleClickCancelTestEnabled
                             ) {
-                                {
-                                    onStartVpn {
-                                        doubleClickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
-                                    }
-                                }
+                                { viewModel.cancelActiveSpeedTest() }
                             } else {
                                 null
                             },
                             onLongClick = if (
-                                vpnState == VpnState.DISCONNECTED && homeLongPressSpeedTestEnabled
+                                vpnState == VpnState.DISCONNECTED &&
+                                    homeLongPressSpeedTestEnabled && !isTesting
                             ) {
                                 {
                                     onStartVpn {
@@ -324,11 +320,7 @@ fun MainScreen(
                             } else {
                                 "直接连接"
                             },
-                            doubleClickActionLabel = if (homeDoubleClickSpeedTestEnabled) {
-                                doubleClickScheme?.name ?: "测速方案"
-                            } else {
-                                "测速方案"
-                            },
+                            doubleClickActionLabel = "中断当前测试",
                             longClickActionLabel = if (homeLongPressSpeedTestEnabled) {
                                 longPressScheme?.name ?: "测速方案"
                             } else {
