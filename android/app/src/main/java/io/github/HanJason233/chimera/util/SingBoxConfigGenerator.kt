@@ -58,6 +58,11 @@ class SingBoxConfigGenerator {
             return generateEmptyConfig()
         }
 
+        val smartInboundTags = buildList {
+            if (proxyMode == ProxyMode.SMART) add("internal-socks-in")
+            if (lanInbound.enabled && lanInbound.proxyMode == ProxyMode.SMART) add("lan-socks-in")
+        }
+
         val config = JsonObject().apply {
             // 从节点中提取唯一域名（忽略 IP 地址），以防止路由环路/DNS 死锁
             // 提取唯一域名和 IP 地址
@@ -70,12 +75,12 @@ class SingBoxConfigGenerator {
             add(
                 "dns",
                 createDnsConfig(
-                    proxyMode,
                     nodeDomains,
                     ipv6Mode,
                     dnsSettings,
                     lanInbound.enabled,
-                    smartRoutingSettings
+                    smartRoutingSettings,
+                    smartInboundTags
                 )
             )
             add("inbounds", createInbounds(internalSocksEndpoint, lanInbound))
@@ -91,11 +96,11 @@ class SingBoxConfigGenerator {
             add(
                 "route",
                 createRoute(
-                    proxyMode,
                     nodeDomains,
                     nodeIPs,
                     smartRoutingSettings,
-                    dnsSettings.dnsRoutingEnabled
+                    dnsSettings.dnsRoutingEnabled,
+                    smartInboundTags
                 )
             )
             add("experimental", createExperimental())
@@ -363,21 +368,26 @@ class SingBoxConfigGenerator {
         dnsSettings: DnsSettings,
         lanInboundEnabled: Boolean
     ): JsonObject = createDnsConfig(
-        proxyMode,
         nodeDomains,
         ipv6Mode,
         dnsSettings,
         lanInboundEnabled,
-        SmartRoutingSettings()
+        SmartRoutingSettings(),
+        if (proxyMode == ProxyMode.SMART) {
+            buildList {
+                add("internal-socks-in")
+                if (lanInboundEnabled) add("lan-socks-in")
+            }
+        } else emptyList()
     )
 
     private fun createDnsConfig(
-        proxyMode: ProxyMode,
         nodeDomains: List<String>,
         ipv6Mode: IPv6RoutingMode,
         dnsSettings: DnsSettings,
         lanInboundEnabled: Boolean,
-        smartRoutingSettings: SmartRoutingSettings
+        smartRoutingSettings: SmartRoutingSettings,
+        smartInboundTags: List<String>
     ): JsonObject {
         val servers = JsonArray().apply {
             // 使用系统 DNS 解析自定义 DNS 服务器的域名，避免解析链路自引用。
@@ -434,7 +444,7 @@ class SingBoxConfigGenerator {
         }
 
         // 2. DNS 路由开启时，智能模式的国内域名使用直连 DNS。
-        if (dnsSettings.dnsRoutingEnabled && proxyMode == ProxyMode.SMART) {
+        if (dnsSettings.dnsRoutingEnabled && smartInboundTags.isNotEmpty()) {
             val overriddenDomains = smartRoutingSettings.rules
                 .filter {
                     it.enabled &&
@@ -456,6 +466,7 @@ class SingBoxConfigGenerator {
                 .distinct()
             if (customDirectDomains.isNotEmpty()) {
                 rules.add(JsonObject().apply {
+                    add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
                     add("domain", JsonArray().apply { customDirectDomains.forEach(::add) })
                     addProperty("server", "dns-direct")
                     addProperty("strategy", resolveDnsStrategy(
@@ -465,6 +476,7 @@ class SingBoxConfigGenerator {
                 })
             }
             rules.add(JsonObject().apply {
+                add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
                 add("rule_set", JsonArray().apply { add("geosite-cn") })
                 addProperty("server", "dns-direct")
                 addProperty("strategy", resolveDnsStrategy(
@@ -1047,11 +1059,11 @@ class SingBoxConfigGenerator {
     }
 
     private fun createRoute(
-        proxyMode: ProxyMode,
         nodeDomains: List<String>,
         nodeIPs: List<String>,
         smartRoutingSettings: SmartRoutingSettings,
-        dnsRoutingEnabled: Boolean
+        dnsRoutingEnabled: Boolean,
+        smartInboundTags: List<String>
     ): JsonObject {
         val rules = JsonArray()
         
@@ -1086,9 +1098,10 @@ class SingBoxConfigGenerator {
             })
         }
         
-        if (proxyMode == ProxyMode.SMART) {
+        if (smartInboundTags.isNotEmpty()) {
             fun addRuleSetRule(tag: String, action: SmartRoutingRuleAction) {
                 rules.add(JsonObject().apply {
+                    add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
                     add("rule_set", JsonArray().apply { add(tag) })
                     addProperty("outbound", action.configTag)
                 })
@@ -1097,6 +1110,7 @@ class SingBoxConfigGenerator {
             fun addValueRule(key: String, values: List<String>, action: SmartRoutingRuleAction) {
                 if (values.isEmpty()) return
                 rules.add(JsonObject().apply {
+                    add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
                     add(key, JsonArray().apply { values.forEach(::add) })
                     addProperty("outbound", action.configTag)
                 })
@@ -1145,15 +1159,15 @@ class SingBoxConfigGenerator {
             add("rules", rules)
             
             // rule_set 声明（智能分流模式需要）
-            val hasDomesticDomainRule = proxyMode == ProxyMode.SMART &&
+            val hasDomesticDomainRule = smartInboundTags.isNotEmpty() &&
                 smartRoutingSettings.rules.any {
                     it.enabled && it.type == SmartRoutingRuleType.DOMESTIC_DOMAIN
                 }
-            val hasDomesticIpRule = proxyMode == ProxyMode.SMART &&
+            val hasDomesticIpRule = smartInboundTags.isNotEmpty() &&
                 smartRoutingSettings.rules.any {
                     it.enabled && it.type == SmartRoutingRuleType.DOMESTIC_IP
                 }
-            if (proxyMode == ProxyMode.SMART && (
+            if (smartInboundTags.isNotEmpty() && (
                     hasDomesticDomainRule || hasDomesticIpRule || dnsRoutingEnabled
                 )) {
                 add("rule_set", JsonArray().apply {

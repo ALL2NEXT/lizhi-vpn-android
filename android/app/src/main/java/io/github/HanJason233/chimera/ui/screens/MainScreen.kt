@@ -71,6 +71,7 @@ fun MainScreen(
 
     // Collect状态
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
+    val lanInbound by viewModel.lanInboundSettings.collectAsStateWithLifecycle()
     val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val homeClickSchemeId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeLongPressSchemeId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
@@ -217,14 +218,56 @@ fun MainScreen(
                         )
                     },
                     actions = {
-                        ProxyModeToggle(
-                            isGlobalMode = proxyMode == ProxyMode.GLOBAL,
-                            onModeChange = { isGlobal ->
-                                viewModel.setProxyMode(
-                                    if (isGlobal) ProxyMode.GLOBAL else ProxyMode.SMART
+                        Row(
+                            modifier = Modifier.padding(end = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (lanInbound.enabled) {
+                                    Text(
+                                        text = "本机:",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                                ProxyModeToggle(
+                                    isGlobalMode = proxyMode == ProxyMode.GLOBAL,
+                                    onModeChange = { isGlobal ->
+                                        val mode = if (isGlobal) ProxyMode.GLOBAL else ProxyMode.SMART
+                                        if (mode != proxyMode) viewModel.setProxyMode(mode)
+                                    },
+                                    compact = lanInbound.enabled
                                 )
                             }
-                        )
+                            if (lanInbound.enabled) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "局域网:",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                    ProxyModeToggle(
+                                        isGlobalMode = lanInbound.proxyMode == ProxyMode.GLOBAL,
+                                        onModeChange = { isGlobal ->
+                                            val mode = if (isGlobal) ProxyMode.GLOBAL else ProxyMode.SMART
+                                            if (mode != lanInbound.proxyMode) viewModel.setLanInboundProxyMode(mode)
+                                        },
+                                        compact = true
+                                    )
+                                }
+                            }
+                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background

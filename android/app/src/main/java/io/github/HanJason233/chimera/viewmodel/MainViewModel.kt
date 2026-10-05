@@ -2573,6 +2573,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setLanInboundProxyMode(mode: ProxyMode) {
+        viewModelScope.launch {
+            val current = settingsRepository.lanInboundSettings.first()
+            if (current.proxyMode == mode) return@launch
+            settingsRepository.setLanInboundProxyMode(mode)
+            if (current.enabled) restartVpnIfNeeded()
+        }
+    }
+
     fun setHomeDoubleClickCancelTestEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setHomeDoubleClickCancelTestEnabled(enabled)

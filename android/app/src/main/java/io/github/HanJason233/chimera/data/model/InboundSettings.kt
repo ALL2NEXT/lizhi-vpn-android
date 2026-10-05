@@ -5,7 +5,8 @@ data class LanInboundSettings(
     val enabled: Boolean = false,
     val port: Int = DEFAULT_PORT,
     val username: String = DEFAULT_USERNAME,
-    val password: String = ""
+    val password: String = "",
+    val proxyMode: ProxyMode = ProxyMode.SMART
 ) {
     companion object {
         const val DEFAULT_PORT = 10808

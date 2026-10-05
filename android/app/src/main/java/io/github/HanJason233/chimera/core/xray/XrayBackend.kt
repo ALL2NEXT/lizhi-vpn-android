@@ -25,7 +25,8 @@ internal class XrayBackend : CoreBackend {
 
     override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = withContext(Dispatchers.IO) {
         val smartRulesEnabled = request.settings?.let {
-            it.proxyMode == ProxyMode.SMART && (
+            (it.proxyMode == ProxyMode.SMART ||
+                (it.lanInbound.enabled && it.lanInbound.proxyMode == ProxyMode.SMART)) && (
                 it.smartRoutingSettings.rules.any { rule ->
                     rule.enabled && (
                         rule.type == SmartRoutingRuleType.DOMESTIC_DOMAIN ||

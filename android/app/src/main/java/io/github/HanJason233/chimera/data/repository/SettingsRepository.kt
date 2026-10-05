@@ -80,6 +80,7 @@ class SettingsRepository(
         private val LAN_INBOUND_PORT = intPreferencesKey("lan_inbound_port")
         private val LAN_INBOUND_USERNAME = stringPreferencesKey("lan_inbound_username")
         private val LAN_INBOUND_PASSWORD = stringPreferencesKey("lan_inbound_password")
+        private val LAN_INBOUND_PROXY_MODE = stringPreferencesKey("lan_inbound_proxy_mode")
         private val HOME_CLICK_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_click_speed_test_scheme_id")
         private val HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID =
@@ -537,7 +538,12 @@ class SettingsRepository(
                 ?.trim()
                 ?.ifBlank { LanInboundSettings.DEFAULT_USERNAME }
                 ?: LanInboundSettings.DEFAULT_USERNAME,
-            password = preferences[LAN_INBOUND_PASSWORD].orEmpty()
+            password = preferences[LAN_INBOUND_PASSWORD].orEmpty(),
+            // 旧版本两个入口共用模式，首次独立设置前保留原有行为。
+            proxyMode = enumValueOrDefault(
+                preferences[LAN_INBOUND_PROXY_MODE],
+                enumValueOrDefault(preferences[PROXY_MODE], ProxyMode.SMART)
+            )
         )
 
     private fun decodeDnsSettings(preferences: Preferences): DnsSettings = DnsSettings(
@@ -710,7 +716,18 @@ class SettingsRepository(
     
     suspend fun setProxyMode(mode: ProxyMode) {
         store.edit { preferences ->
+            if (preferences[LAN_INBOUND_PROXY_MODE] == null) {
+                // 修改本机模式前固定旧的共享模式，之后两个入口互不联动。
+                preferences[LAN_INBOUND_PROXY_MODE] =
+                    enumValueOrDefault(preferences[PROXY_MODE], ProxyMode.SMART).name
+            }
             preferences[PROXY_MODE] = mode.name
+        }
+    }
+
+    suspend fun setLanInboundProxyMode(mode: ProxyMode) {
+        store.edit { preferences ->
+            preferences[LAN_INBOUND_PROXY_MODE] = mode.name
         }
     }
 

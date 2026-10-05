@@ -19,7 +19,8 @@ import androidx.compose.ui.unit.sp
 fun ProxyModeToggle(
     isGlobalMode: Boolean,
     onModeChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
     Surface(
         modifier = modifier,
@@ -37,12 +38,14 @@ fun ProxyModeToggle(
             ProxyModeToggleOption(
                 label = "全局",
                 selected = isGlobalMode,
-                onClick = { onModeChange(true) }
+                onClick = { onModeChange(true) },
+                compact = compact
             )
             ProxyModeToggleOption(
                 label = "智能",
                 selected = !isGlobalMode,
-                onClick = { onModeChange(false) }
+                onClick = { onModeChange(false) },
+                compact = compact
             )
         }
     }
@@ -52,7 +55,8 @@ fun ProxyModeToggle(
 private fun ProxyModeToggleOption(
     label: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    compact: Boolean
 ) {
     Surface(
         modifier = Modifier
@@ -63,7 +67,7 @@ private fun ProxyModeToggleOption(
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = if (compact) 5.dp else 9.dp, vertical = 5.dp),
             color = if (selected) {
                 MaterialTheme.colorScheme.onPrimary
             } else {

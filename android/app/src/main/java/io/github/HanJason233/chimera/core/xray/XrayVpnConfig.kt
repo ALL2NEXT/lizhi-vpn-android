@@ -79,6 +79,12 @@ internal object XrayVpnConfig {
         if (request.isVpn) {
             val settings = request.settings!!
             val dnsSettings = settings.dnsSettings
+            val smartInboundTags = buildList {
+                if (settings.proxyMode == ProxyMode.SMART) add("internal-socks-in")
+                if (settings.lanInbound.enabled && settings.lanInbound.proxyMode == ProxyMode.SMART) {
+                    add("lan-socks-in")
+                }
+            }
             val strategy = when (settings.ipv6RoutingMode) {
                 IPv6RoutingMode.DISABLED -> "UseIPv4"
                 IPv6RoutingMode.PREFER -> "UseIPv6v4"
@@ -161,7 +167,10 @@ internal object XrayVpnConfig {
                     "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10"))
             })
             val localDomains = strings("full:${request.node.server}")
-            if (settings.proxyMode == ProxyMode.SMART) {
+            if (smartInboundTags.isNotEmpty()) {
+                fun scopedSmartRule(outbound: String) = rule(outbound).apply {
+                    add("inboundTag", strings(*smartInboundTags.toTypedArray()))
+                }
                 val enabledSmartRules = settings.smartRoutingSettings.rules.filter { it.enabled }
                 val needsDomesticRules = enabledSmartRules.any {
                     it.type == SmartRoutingRuleType.DOMESTIC_DOMAIN ||
@@ -183,7 +192,7 @@ internal object XrayVpnConfig {
                     when (smartRule.type) {
                         SmartRoutingRuleType.DOMESTIC_DOMAIN -> {
                             val domains = requireNotNull(domesticDomains)
-                            rules.add(rule(smartRule.action.configTag).apply {
+                            rules.add(scopedSmartRule(smartRule.action.configTag).apply {
                                 add("domain", domains.deepCopy())
                             })
                             if (smartRule.action == SmartRoutingRuleAction.DIRECT) {
@@ -191,13 +200,13 @@ internal object XrayVpnConfig {
                             }
                         }
                         SmartRoutingRuleType.DOMESTIC_IP -> {
-                            rules.add(rule(smartRule.action.configTag).apply {
+                            rules.add(scopedSmartRule(smartRule.action.configTag).apply {
                                 add("ip", requireNotNull(domesticIps).deepCopy())
                             })
                         }
                         SmartRoutingRuleType.CUSTOM_DOMAIN -> {
                             if (smartRule.values.isNotEmpty()) {
-                                rules.add(rule(smartRule.action.configTag).apply {
+                                rules.add(scopedSmartRule(smartRule.action.configTag).apply {
                                     add(
                                         "domain",
                                         strings(*smartRule.values.map(::normalizeXrayDomain).toTypedArray())
@@ -212,7 +221,7 @@ internal object XrayVpnConfig {
                         }
                         SmartRoutingRuleType.CUSTOM_IP -> {
                             if (smartRule.values.isNotEmpty()) {
-                                rules.add(rule(smartRule.action.configTag).apply {
+                                rules.add(scopedSmartRule(smartRule.action.configTag).apply {
                                     add("ip", strings(*smartRule.values.toTypedArray()))
                                 })
                             }
