@@ -8,51 +8,58 @@ import org.junit.Test
 
 class SpeedTestCandidateSelectorTest {
     @Test
-    fun `percentage uses the previous available results as its denominator`() {
+    fun `percentage retains top previous test results for the next stage`() {
         val initial = (1..100).toList()
         val tcpingResults = (81..100).toList()
-        val result = SpeedTestCandidateSelector.selectForStage(
-            SpeedTestScheme.default().copy(
-                urlTestSelectionMode = SpeedTestSelectionMode.PERCENT, urlTestSelectionValue = 50
-            ), SpeedTestStage.URL_TEST, initial,
+        val scheme = SpeedTestScheme.default().copy(
+            urlTestSelectionMode = SpeedTestSelectionMode.PERCENT, urlTestSelectionValue = 50
+        )
+        val candidates = SpeedTestCandidateSelector.candidatesForStage(
+            scheme, SpeedTestStage.URL_TEST, initial,
             mapOf(SpeedTestStage.TCPING to tcpingResults)
         )
-        assertEquals((81..90).toList(), result)
+        assertEquals(tcpingResults, candidates)
+        assertEquals((81..90).toList(), SpeedTestCandidateSelector.retainResultsForStage(
+            scheme, SpeedTestStage.URL_TEST, candidates
+        ))
     }
 
     @Test
-    fun `skipped URL stage lets bandwidth consume TCPing results`() {
+    fun `skipped URL stage lets bandwidth retain from TCPing results`() {
         val scheme = SpeedTestScheme.default().copy(
             urlTestEnabled = false, bandwidthEnabled = true,
             bandwidthSelectionMode = SpeedTestSelectionMode.COUNT, bandwidthSelectionValue = 2
         )
-        val result = SpeedTestCandidateSelector.selectForStage(
+        val candidates = SpeedTestCandidateSelector.candidatesForStage(
             scheme, SpeedTestStage.BANDWIDTH, (1..100).toList(),
             mapOf(SpeedTestStage.TCPING to listOf(90, 30, 10))
         )
-        assertEquals(listOf(90, 30), result)
+        assertEquals(listOf(90, 30, 10), candidates)
+        assertEquals(listOf(90, 30), SpeedTestCandidateSelector.retainResultsForStage(
+            scheme, SpeedTestStage.BANDWIDTH, candidates
+        ))
     }
 
     @Test
-    fun `URL as first stage uses the initial candidates`() {
+    fun `URL as first stage tests all initial candidates before retention`() {
         val scheme = SpeedTestScheme.default().copy(
             tcpingEnabled = false, urlTestSelectionMode = SpeedTestSelectionMode.PERCENT, urlTestSelectionValue = 50
         )
-        assertEquals(listOf(1, 2, 3), SpeedTestCandidateSelector.selectForStage(
+        assertEquals(listOf(1, 2, 3, 4, 5), SpeedTestCandidateSelector.candidatesForStage(
             scheme, SpeedTestStage.URL_TEST, listOf(1, 2, 3, 4, 5), emptyMap()
         ))
     }
 
     @Test(expected = IllegalStateException::class)
-    fun `missing predecessor results never silently expand to the initial scope`() {
-        SpeedTestCandidateSelector.selectForStage(
+    fun `missing predecessor results never silently expand to the initial group`() {
+        SpeedTestCandidateSelector.candidatesForStage(
             SpeedTestScheme.default(), SpeedTestStage.URL_TEST, listOf(1, 2, 3), emptyMap()
         )
     }
 
     @Test(expected = IllegalStateException::class)
     fun `connected node tests cannot be treated as candidate group tests`() {
-        SpeedTestCandidateSelector.selectForStage(
+        SpeedTestCandidateSelector.candidatesForStage(
             SpeedTestScheme.default().copy(linkTypeTestEnabled = true),
             SpeedTestStage.LINK_TYPE, listOf(1, 2, 3), emptyMap()
         )

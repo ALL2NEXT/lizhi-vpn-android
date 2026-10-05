@@ -84,7 +84,7 @@ fun SpeedTestSchemesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "方案分为链路质量、链路类型和 IP 质量测试。链路质量固定从当前组逐项筛选；连接后两类只检测当前节点。线路详情手动测试单项时只检测当前分组。",
+                text = "前三项为连接前测试，每项按结果保留前 X 个或百分比供后续阶段使用；后两项在连接后检测当前节点。线路详情手动测试单项会测试当前分组全部节点。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
@@ -392,11 +392,11 @@ private fun SpeedTestSchemeCard(
                                 "检测当前连接；未连接时连接已选节点或当前组第一个节点"
                             else "不测速，直接连接已选节点或当前组第一个节点")
                         } else {
-                            append("初始作用域：当前组")
-                            append("\n链路质量：")
+                            append("起始节点组：当前组")
+                            append("\n连接前测试保留结果：")
                             append(scheme.enabledQualityStages.joinToString(" → ") { stage ->
                                 val selection = scheme.selectionFor(stage)
-                                "${stage.shortTitle} 前${formatSpeedTestSelection(selection.mode, selection.value)}"
+                                "${stage.shortTitle} 保留前${formatSpeedTestSelection(selection.mode, selection.value)}"
                             })
                         }
                         if (scheme.linkTypeTestEnabled) append("\n链路类型：连接后的当前节点")

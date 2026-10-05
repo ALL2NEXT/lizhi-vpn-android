@@ -59,7 +59,6 @@ import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
-import io.github.HanJason233.chimera.data.model.formatSpeedTestSelection
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
 
@@ -156,7 +155,7 @@ internal fun SubscriptionGroupingScreen(
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        "TCPing · 前${formatSpeedTestSelection(testScheme.tcpingSelectionMode, testScheme.tcpingSelectionValue)}"
+                                        "TCPing · 测试当前分组全部节点"
                                     )
                                 },
                                 onClick = {
@@ -170,7 +169,7 @@ internal fun SubscriptionGroupingScreen(
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        "URL Test · 前${formatSpeedTestSelection(testScheme.urlTestSelectionMode, testScheme.urlTestSelectionValue)}"
+                                        "URL Test · 测试当前分组全部节点"
                                     )
                                 },
                                 onClick = {
@@ -184,7 +183,7 @@ internal fun SubscriptionGroupingScreen(
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        "带宽测速 · 前${formatSpeedTestSelection(testScheme.bandwidthSelectionMode, testScheme.bandwidthSelectionValue)}"
+                                        "带宽测速 · 测试当前分组全部节点"
                                     )
                                 },
                                 onClick = {

@@ -8,10 +8,10 @@ import io.github.HanJason233.chimera.data.model.inputScopeFor
 import io.github.HanJason233.chimera.data.model.isStageEnabled
 import io.github.HanJason233.chimera.data.model.selectionFor
 
-/** Selects the first part of an ordered list for one speed-test stage. */
+/** Resolves stage inputs and retains the best ordered results for later stages. */
 internal object SpeedTestCandidateSelector {
-    /** 与编辑页使用相同的阶段作用域；前项结果必须已过滤并按质量排序。 */
-    fun <T> selectForStage(
+    /** 前项结果已经按本项测试结果筛选并排序；当前阶段不在测试前截断候选节点。 */
+    fun <T> candidatesForStage(
         scheme: SpeedTestScheme,
         stage: SpeedTestStage,
         currentGroupCandidates: List<T>,
@@ -25,8 +25,17 @@ internal object SpeedTestCandidateSelector {
             }
             SpeedTestStageScope.ConnectedNode -> error("连接后的测试不参与节点筛选")
         }
+        return candidates
+    }
+
+    fun <T> retainResultsForStage(
+        scheme: SpeedTestScheme,
+        stage: SpeedTestStage,
+        orderedResults: List<T>
+    ): List<T> {
+        require(scheme.isStageEnabled(stage)) { "测试阶段未开启：$stage" }
         val selection = scheme.selectionFor(stage)
-        return takeTop(candidates, selection.mode, selection.value)
+        return takeTop(orderedResults, selection.mode, selection.value)
     }
 
     fun <T> takeTop(

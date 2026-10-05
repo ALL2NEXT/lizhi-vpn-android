@@ -205,7 +205,7 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = tcpingEnabled,
                 onEnabledChange = { tcpingEnabled = it }
             ) {
-                SelectionInput(
+                ResultRetentionInput(
                     mode = tcpingSelectionMode,
                     value = tcpingSelectionValue,
                     enabled = tcpingEnabled,
@@ -221,7 +221,7 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = urlTestEnabled,
                 onEnabledChange = { urlTestEnabled = it }
             ) {
-                SelectionInput(
+                ResultRetentionInput(
                     mode = urlSelectionMode,
                     value = urlSelectionValue,
                     enabled = urlTestEnabled,
@@ -273,7 +273,7 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = bandwidthEnabled,
                 onEnabledChange = { bandwidthEnabled = it }
             ) {
-                SelectionInput(
+                ResultRetentionInput(
                     mode = bandwidthSelectionMode,
                     value = bandwidthSelectionValue,
                     enabled = bandwidthEnabled,
@@ -425,7 +425,7 @@ private fun SchemeCard(
 }
 
 @Composable
-private fun SelectionInput(
+private fun ResultRetentionInput(
     mode: SpeedTestSelectionMode,
     value: String,
     enabled: Boolean,
@@ -438,7 +438,7 @@ private fun SelectionInput(
     OutlinedTextField(
         value = value,
         onValueChange = { onValueChange(it.filter(Char::isDigit)) },
-        label = { Text("测试前选取前 X 个候选节点") },
+        label = { Text("输出结果") },
         singleLine = true,
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

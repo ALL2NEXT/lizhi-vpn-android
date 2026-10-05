@@ -814,7 +814,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val nodesById = allNodes.associateBy { it.id }
                 val stageResults = mutableMapOf<SpeedTestStage, List<Node>>()
 
-                fun stageCandidates(stage: SpeedTestStage) = SpeedTestCandidateSelector.selectForStage(
+                fun stageCandidates(stage: SpeedTestStage) = SpeedTestCandidateSelector.candidatesForStage(
                     scheme = scheme, stage = stage, currentGroupCandidates = allNodes,
                     previousResults = stageResults
                 )
@@ -844,8 +844,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .filter { it.isAvailable && it.latency > 0 }
                         .sortedBy { it.latency }
                         .mapNotNull { nodesById[it.nodeId] }
-                    stageResults[SpeedTestStage.TCPING] = candidates
-                    if (candidates.isEmpty()) {
+                    val retainedResults = SpeedTestCandidateSelector.retainResultsForStage(
+                        scheme, SpeedTestStage.TCPING, candidates
+                    )
+                    stageResults[SpeedTestStage.TCPING] = retainedResults
+                    if (retainedResults.isEmpty()) {
                         _error.value = "${scheme.name}：TCPing 未找到可用节点"
                         return@launch
                     }
@@ -879,8 +882,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .filter { it.isAvailable && it.latency > 0 }
                         .sortedBy { it.latency }
                         .mapNotNull { nodesById[it.nodeId] }
-                    stageResults[SpeedTestStage.URL_TEST] = candidates
-                    if (candidates.isEmpty()) {
+                    val retainedResults = SpeedTestCandidateSelector.retainResultsForStage(
+                        scheme, SpeedTestStage.URL_TEST, candidates
+                    )
+                    stageResults[SpeedTestStage.URL_TEST] = retainedResults
+                    if (retainedResults.isEmpty()) {
                         _error.value = "${scheme.name}：URL Test 未找到可用节点"
                         return@launch
                     }
@@ -931,7 +937,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             reason = "带宽低于 ${bandwidthThreshold} Mbps"
                         )
                     }
-                    speedResults
+                    val orderedSpeedResults = speedResults
                         .filter { (_, speedMbps) ->
                             !deleteLowBandwidth || speedMbps >= bandwidthThreshold.toFloat()
                         }
@@ -939,7 +945,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             compareByDescending<Pair<Node, Float>> { it.second }
                                 .thenBy { it.first.latency }
                         )
-                        .firstOrNull()?.first
+                    SpeedTestCandidateSelector.retainResultsForStage(
+                        scheme,
+                        SpeedTestStage.BANDWIDTH,
+                        orderedSpeedResults
+                    ).firstOrNull()?.first
                 } else {
                     stageResults[scheme.enabledQualityStages.last()]?.firstOrNull()
                 }
@@ -1024,11 +1034,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 when (stage) {
                     ManualGroupTestStage.TCPING -> {
-                        val candidates = SpeedTestCandidateSelector.takeTop(
-                            currentGroupNodes,
-                            scheme.tcpingSelectionMode,
-                            scheme.tcpingSelectionValue
-                        )
+                        val candidates = currentGroupNodes
                         updateSpeedTestProgress(
                             title = progressTitle,
                             stage = progressStage,
@@ -1052,11 +1058,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     ManualGroupTestStage.URL_TEST -> {
-                        val candidates = SpeedTestCandidateSelector.takeTop(
-                            currentGroupNodes,
-                            scheme.urlTestSelectionMode,
-                            scheme.urlTestSelectionValue
-                        )
+                        val candidates = currentGroupNodes
                         updateSpeedTestProgress(
                             title = progressTitle,
                             stage = progressStage,
@@ -1088,11 +1090,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     ManualGroupTestStage.BANDWIDTH -> {
-                        val candidates = SpeedTestCandidateSelector.takeTop(
-                            currentGroupNodes,
-                            scheme.bandwidthSelectionMode,
-                            scheme.bandwidthSelectionValue
-                        )
+                        val candidates = currentGroupNodes
                         updateSpeedTestProgress(
                             title = progressTitle,
                             stage = progressStage,
