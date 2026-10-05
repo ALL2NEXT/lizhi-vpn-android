@@ -344,7 +344,7 @@ fun MainScreen(
                             },
                             onNodeClick = { onOpenCurrentGroupDetails(selectedGroup, selectedGroupName) },
                             modifier = Modifier
-                                .fillMaxWidth(0.5f)
+                                .fillMaxWidth()
                                 .onSizeChanged { selectionCardHeightPx = it.height }
                         )
                     }

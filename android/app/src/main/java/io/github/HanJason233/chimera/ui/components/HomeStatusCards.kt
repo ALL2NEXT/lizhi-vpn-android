@@ -46,37 +46,60 @@ internal fun HomeSelectionCard(
     onNodeClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    HomeInfoCard(
-        title = "选中组",
-        icon = Icons.Outlined.FolderOpen,
-        badge = groupType,
-        compact = true,
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onGroupClick),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = name,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text("切换", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        }
-        Divider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
-            thickness = 0.5.dp
-        )
+    HomeInfoCard(compact = true, modifier = modifier) {
         Column(
-            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onNodeClick),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onGroupClick),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.FolderOpen,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "选中组：",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+                Text(
+                    text = name,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
+                ) {
+                    Text(
+                        text = groupType,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
+                    )
+                }
+                Text("切换", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
+            Divider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+                thickness = 0.5.dp
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onNodeClick),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Outlined.Dns,
                     contentDescription = null,
@@ -85,28 +108,20 @@ internal fun HomeSelectionCard(
                 )
                 Text(
                     text = if (vpnState == VpnState.CONNECTED) "连接节点" else "选中节点",
-                    modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text("切换", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            }
-            if (node == null) {
-                Text(
-                    "未选择节点",
-                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
                 )
-            } else {
                 Text(
-                    text = "${node.getFlagEmoji()} ${node.getDisplayName()}",
+                    text = node?.let { "${it.getFlagEmoji()} ${it.getDisplayName()}" } ?: "未选择节点",
+                    modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Text("切换", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
         }
     }
