@@ -84,7 +84,7 @@ internal fun NodeListItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = node.getFlagEmoji(),
+                    text = node.getRegionMarker(),
                     fontSize = 24.sp,
                     modifier = Modifier.padding(end = 12.dp)
                 )

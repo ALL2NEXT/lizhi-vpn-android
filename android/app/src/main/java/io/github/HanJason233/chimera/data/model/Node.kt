@@ -42,18 +42,21 @@ data class Node(
     fun getRawLinkPlain(): String = rawLink
 
     /**
-     * 获取节点地区代码，优先沿用节点名中的显式旗帜，并兼容后端识别结果和地区名称。
+     * 获取节点地区代码；名称中的具体地区优先于旗帜，兼容“🇨🇳 中国台湾”等节点命名。
      */
     fun getCountryCode(): String? =
-        CountryCodeResolver.fromFlagEmoji(name)
-            ?: CountryCodeResolver.normalizeCountryCode(country)
-            ?: CountryCodeResolver.fromNodeName(name)
-            ?: CountryCodeResolver.fromFlagEmoji(countryName)
+        CountryCodeResolver.fromNodeName(name)
             ?: CountryCodeResolver.fromNodeName(countryName)
+            ?: CountryCodeResolver.normalizeCountryCode(country)
+            ?: CountryCodeResolver.fromNodeName(country)
+            ?: CountryCodeResolver.fromFlagEmoji(name)
+            ?: CountryCodeResolver.fromFlagEmoji(countryName)
 
-    /** 获取国旗 Emoji，无法识别地区时显示全球图标。 */
-    fun getFlagEmoji(): String =
-        CountryCodeResolver.flagEmoji(getCountryCode()) ?: "🌐"
+    /** 获取地区标记；台湾使用字母代码，无法识别时显示全球图标。 */
+    fun getRegionMarker(): String {
+        val code = getCountryCode() ?: return "🌐"
+        return if (code == "TW") "TW" else CountryCodeResolver.flagEmoji(code) ?: "🌐"
+    }
     
     /**
      * 获取显示名称（去除国旗emoji）

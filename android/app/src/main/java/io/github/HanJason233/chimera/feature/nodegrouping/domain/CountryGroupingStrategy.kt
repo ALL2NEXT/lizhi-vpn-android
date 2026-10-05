@@ -8,7 +8,7 @@ import io.github.HanJason233.chimera.util.CountryCodeResolver
 internal object CountryGroupingStrategy {
     // 按从中国周边向外扩展的顺序展示常见地区，避免地区名排序导致位置变化。
     private val proximityOrder = listOf(
-        "CN", "HK", "MO", "TW", "KR", "JP", "MN", "RU",
+        "CN", "TW", "HK", "MO", "KR", "JP", "MN", "RU",
         "VN", "LA", "MM", "TH", "KH", "SG", "MY", "BN", "PH", "ID",
         "BT", "NP", "BD", "IN", "PK", "AF", "KZ", "KG", "TJ", "UZ", "TM",
         "AU", "NZ",
@@ -24,11 +24,19 @@ internal object CountryGroupingStrategy {
             .groupingBy { it }
             .eachCount()
             .mapNotNull { (code, nodeCount) ->
-                val name = CountryCodeResolver.displayName(code) ?: return@mapNotNull null
+                val name = when (code) {
+                    "CN" -> "中国大陆"
+                    "TW" -> "中国台湾"
+                    "HK" -> "中国香港"
+                    "MO" -> "中国澳门"
+                    else -> CountryCodeResolver.displayName(code) ?: return@mapNotNull null
+                }
                 CountryOption(
                     code = code,
                     name = name,
-                    flag = CountryCodeResolver.flagEmoji(code) ?: return@mapNotNull null,
+                    marker = if (code == "TW") "TW" else {
+                        CountryCodeResolver.flagEmoji(code) ?: return@mapNotNull null
+                    },
                     nodeCount = nodeCount
                 )
             }

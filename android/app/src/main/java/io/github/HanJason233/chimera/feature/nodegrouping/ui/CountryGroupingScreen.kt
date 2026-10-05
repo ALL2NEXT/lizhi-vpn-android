@@ -320,9 +320,10 @@ private fun CountryCard(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = country.flag,
-                fontSize = 34.sp,
-                lineHeight = 38.sp
+                text = country.marker,
+                fontSize = if (country.code == "TW") 18.sp else 34.sp,
+                lineHeight = if (country.code == "TW") 22.sp else 38.sp,
+                fontWeight = if (country.code == "TW") FontWeight.Bold else FontWeight.Normal
             )
             Text(
                 text = country.name,

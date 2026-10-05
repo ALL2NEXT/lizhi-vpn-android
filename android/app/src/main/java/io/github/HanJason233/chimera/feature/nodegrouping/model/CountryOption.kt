@@ -6,7 +6,7 @@ import io.github.HanJason233.chimera.data.model.NodeGroupType
 data class CountryOption(
     val code: String,
     val name: String,
-    val flag: String,
+    val marker: String,
     val nodeCount: Int,
     val type: NodeGroupType = NodeGroupType.REGION
 )

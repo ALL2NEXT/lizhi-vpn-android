@@ -627,7 +627,7 @@ private fun SubscriptionGroupSelectionScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "${option.flag} ${option.name}",
+                                        text = "${option.marker} ${option.name}",
                                         modifier = Modifier.weight(1f),
                                         style = MaterialTheme.typography.bodyLarge,
                                         maxLines = 1,

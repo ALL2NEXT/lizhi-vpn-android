@@ -113,7 +113,7 @@ internal fun HomeSelectionCard(
                     maxLines = 1
                 )
                 Text(
-                    text = node?.let { "${it.getFlagEmoji()} ${it.getDisplayName()}" } ?: "未选择节点",
+                    text = node?.let { "${it.getRegionMarker()} ${it.getDisplayName()}" } ?: "未选择节点",
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
