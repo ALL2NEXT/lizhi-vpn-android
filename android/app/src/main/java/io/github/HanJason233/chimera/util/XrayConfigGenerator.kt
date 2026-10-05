@@ -102,7 +102,7 @@ class XrayConfigGenerator {
                 })
             }
             addProperty("udp", true)
-            addProperty("ip", "127.0.0.1")
+            // 省略 ip，让 UDP 回复使用客户端实际连接的本机地址（Wi-Fi/热点）。
         })
         add("sniffing", JsonObject().apply {
             addProperty("enabled", true)
