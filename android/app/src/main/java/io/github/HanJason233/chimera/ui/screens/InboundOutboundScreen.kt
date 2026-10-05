@@ -2,8 +2,10 @@ package io.github.HanJason233.chimera.ui.screens
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,9 +13,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -28,6 +37,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
@@ -35,9 +48,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.VpnState
+import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.util.NetworkUtils
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
@@ -347,9 +367,11 @@ private fun LanShareUriPanel(
     addresses: List<String>,
     onCopy: (String) -> Unit
 ) {
+    var qrAddress by remember(settings, addresses) { mutableStateOf<String?>(null) }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "导入配置",
+            text = "分享配置",
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
@@ -377,33 +399,109 @@ private fun LanShareUriPanel(
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
                             text = "SOCKS5 · $address:${settings.port}",
+                            modifier = Modifier.weight(1f),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        OutlinedTextField(
-                            value = uri,
-                            onValueChange = {},
-                            modifier = Modifier.fillMaxWidth(),
-                            readOnly = true,
-                            singleLine = false,
-                            textStyle = MaterialTheme.typography.bodySmall
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End
-                        ) {
-                            TextButton(onClick = { onCopy(uri) }) {
-                                Text("复制 URI")
-                            }
+                        IconButton(onClick = { onCopy(uri) }) {
+                            Icon(
+                                imageVector = Icons.Outlined.ContentPaste,
+                                contentDescription = "复制 URI"
+                            )
+                        }
+                        IconButton(onClick = { qrAddress = address }) {
+                            Icon(
+                                imageVector = Icons.Outlined.QrCode2,
+                                contentDescription = "显示分享二维码"
+                            )
                         }
                     }
                 }
             }
         }
     }
+
+    qrAddress?.let { address ->
+        LanShareQrDialog(
+            address = "$address:${settings.port}",
+            uri = buildSocksImportUri(address, settings),
+            onDismiss = { qrAddress = null }
+        )
+    }
+}
+
+@Composable
+private fun LanShareQrDialog(address: String, uri: String, onDismiss: () -> Unit) {
+    val qrCode by produceState<Result<ImageBitmap>?>(initialValue = null, key1 = uri) {
+        value = withContext(Dispatchers.Default) {
+            runCatching { createShareQrCode(uri) }
+        }
+    }
+    val image = qrCode?.getOrNull()
+
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("扫码导入") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(text = "SOCKS5 · $address", style = MaterialTheme.typography.bodySmall)
+                when {
+                    image != null -> Image(
+                        bitmap = image,
+                        contentDescription = "SOCKS5 配置分享二维码",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .background(Color.White),
+                        filterQuality = FilterQuality.None
+                    )
+                    qrCode == null -> CircularProgressIndicator()
+                    else -> Text(
+                        text = "二维码生成失败，请使用剪贴板图标复制配置。",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
+}
+
+private fun createShareQrCode(uri: String): ImageBitmap {
+    val matrix = QRCodeWriter().encode(
+        uri,
+        BarcodeFormat.QR_CODE,
+        512,
+        512,
+        mapOf(
+            EncodeHintType.CHARACTER_SET to "UTF-8",
+            EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+            EncodeHintType.MARGIN to 4
+        )
+    )
+    val pixels = IntArray(matrix.width * matrix.height) { index ->
+        if (matrix[index % matrix.width, index / matrix.width]) {
+            android.graphics.Color.BLACK
+        } else {
+            android.graphics.Color.WHITE
+        }
+    }
+    return Bitmap.createBitmap(pixels, matrix.width, matrix.height, Bitmap.Config.ARGB_8888)
+        .asImageBitmap()
 }
 
 private fun buildSocksImportUri(address: String, settings: LanInboundSettings): String {
