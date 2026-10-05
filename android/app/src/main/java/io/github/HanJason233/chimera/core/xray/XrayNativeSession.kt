@@ -23,6 +23,8 @@ internal class XrayNativeSession(
 
     override val core = ProxyCore.XRAY
 
+    override fun lanTraffic() = delegate.lanTraffic()
+
     suspend fun start(config: String): XrayNativeSession {
         delegate.start(config)
         return this

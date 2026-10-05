@@ -48,11 +48,14 @@ func run(config *core.Config, path, token string) error {
 	if err != nil {
 		return err
 	}
-	defer server.Close()
 	if err := server.Start(); err != nil {
+		server.Close()
 		return err
 	}
 	emit(map[string]any{"event": "ready"})
+	stopReporting := startLanTrafficReporter(lanTrafficReader(server))
 	<-ctx.Done()
-	return nil
+	err = server.Close()
+	stopReporting()
+	return err
 }

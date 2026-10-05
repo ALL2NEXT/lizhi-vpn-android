@@ -40,6 +40,7 @@ internal class NativeCoreSession(
     private val stopped = AtomicBoolean()
     private val ready = CompletableDeferred<Unit>()
     private val output = NativeProcessOutput()
+    private val lanCounter = LanTrafficCounter()
     private val connections = Collections.synchronizedSet(mutableSetOf<LocalSocket>())
     private var server: LocalServerSocket? = null
     private var process: Process? = null
@@ -81,6 +82,7 @@ internal class NativeCoreSession(
                     val event = runCatching { JsonParser.parseString(line).asJsonObject }.getOrNull()
                     when (event?.get("event")?.asString) {
                         "ready" -> ready.complete(Unit)
+                        "lan-traffic" -> lanCounter.record(event)
                         "error" -> {
                             val message = event.get("message")?.asString.orEmpty()
                             Log.e(TAG, "$processLabel runner startup failed: $message")
@@ -139,6 +141,8 @@ internal class NativeCoreSession(
             Log.w("NativeCoreSession", "Failure callback failed: ${error.javaClass.simpleName}")
         }
     }
+
+    override fun lanTraffic(): CoreTraffic? = lanCounter.total
 
     override fun close() {
         if (!stopped.compareAndSet(false, true)) {

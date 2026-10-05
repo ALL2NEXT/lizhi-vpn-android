@@ -86,6 +86,8 @@ internal interface CoreSession : AutoCloseable {
     val endpoint: LocalSocksEndpoint
     val socksPort: Int get() = endpoint.port
     fun traffic(): CoreTraffic? = null
+    /** Only LAN ingress; excludes the local SOCKS traffic already counted by HEV. */
+    fun lanTraffic(): CoreTraffic? = null
     /** Idempotent; must release native resources before returning. */
     override fun close()
 }

@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/sagernet/sing/service"
 )
 
 func controlConnection(path string, token string) (*net.UnixConn, error) {
@@ -42,6 +44,8 @@ func run(configPath string, controlPath string, token string, directory string) 
 		cancel()
 	}()
 
+	traffic := new(lanTrafficCounters)
+	ctx = service.ContextWith(ctx, traffic)
 	instance, err := create(ctx, configPath, directory)
 	if err != nil {
 		return err
@@ -51,7 +55,10 @@ func run(configPath string, controlPath string, token string, directory string) 
 		return err
 	}
 	emit(map[string]any{"event": "ready"})
+	stopReporting := startLanTrafficReporter(traffic.snapshot)
 
 	<-ctx.Done()
-	return instance.Close()
+	err = instance.Close()
+	stopReporting()
+	return err
 }

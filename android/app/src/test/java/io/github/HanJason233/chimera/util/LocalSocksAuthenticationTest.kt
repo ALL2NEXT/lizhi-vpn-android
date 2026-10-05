@@ -1,12 +1,24 @@
 package io.github.HanJason233.chimera.util
 
+import android.app.Application
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import io.github.HanJason233.chimera.data.model.LanInboundSettings
+import io.github.HanJason233.chimera.data.model.Node
+import io.github.HanJason233.chimera.data.model.NodeType
+import com.google.gson.JsonParser
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
 import io.github.HanJason233.chimera.core.SocksCredentials
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28], manifest = Config.NONE, application = Application::class)
 class LocalSocksAuthenticationTest {
     private val endpoint = LocalSocksEndpoint(
         LocalSocksEndpoint.LOOPBACK,
@@ -34,5 +46,20 @@ class LocalSocksAuthenticationTest {
         assertEquals("password", settings.get("auth").asString)
         assertEquals("vpn", account.get("user").asString)
         assertEquals("secret", account.get("pass").asString)
+    }
+
+    @Test fun xrayEnablesInboundStatisticsOnlyForLanSharing() {
+        val node = Node(id = "test", name = "test", type = NodeType.SOCKS,
+            server = "127.0.0.1", port = 1080, rawLink = "socks://127.0.0.1:1080")
+        val generator = XrayConfigGenerator()
+        val disabled = JsonParser.parseString(generator.generateCoreConfig(node, endpoint)).asJsonObject
+        assertFalse(disabled.has("stats"))
+        val enabled = JsonParser.parseString(generator.generateCoreConfig(
+            node, endpoint, lanInbound = LanInboundSettings(enabled = true, password = "secret")
+        )).asJsonObject
+        assertTrue(enabled.has("stats"))
+        val system = enabled.getAsJsonObject("policy").getAsJsonObject("system")
+        assertTrue(system.get("statsInboundUplink").asBoolean)
+        assertTrue(system.get("statsInboundDownlink").asBoolean)
     }
 }

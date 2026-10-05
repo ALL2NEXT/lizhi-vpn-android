@@ -24,6 +24,8 @@ internal class SingBoxNativeSession(
 
     override val core = ProxyCore.SING_BOX
 
+    override fun lanTraffic() = delegate.lanTraffic()
+
     suspend fun start(config: String): SingBoxNativeSession {
         delegate.start(config)
         return this

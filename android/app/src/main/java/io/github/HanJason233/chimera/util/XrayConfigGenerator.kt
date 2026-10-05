@@ -41,6 +41,15 @@ class XrayConfigGenerator {
                 add(createSocksInbound(endpoint))
                 if (lanInbound.enabled) add(createLanSocksInbound(lanInbound))
             })
+            if (lanInbound.enabled) {
+                add("stats", JsonObject())
+                add("policy", JsonObject().apply {
+                    add("system", JsonObject().apply {
+                        addProperty("statsInboundUplink", true)
+                        addProperty("statsInboundDownlink", true)
+                    })
+                })
+            }
             add("outbounds", JsonArray().apply {
                 add(createNodeOutbound(node, "proxy", hysteriaUpMbps, hysteriaDownMbps))
                 add(JsonObject().apply {

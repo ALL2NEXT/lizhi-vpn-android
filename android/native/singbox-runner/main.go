@@ -45,7 +45,14 @@ func runnerContext(ctx context.Context, directory string, checkOnly ...bool) con
 		// validate auto-detect related options without starting a monitor.
 		ctx = service.ContextWith[adapter.PlatformInterface](ctx, (*platformInterfaceStub)(nil))
 	}
-	return include.Context(ctx)
+	ctx = include.Context(ctx)
+	if traffic := service.FromContext[*lanTrafficCounters](ctx); traffic != nil {
+		ctx = service.ContextWith[adapter.InboundRegistry](ctx, &lanInboundRegistry{
+			InboundRegistry: service.FromContext[adapter.InboundRegistry](ctx),
+			traffic:         traffic,
+		})
+	}
+	return ctx
 }
 
 func create(ctx context.Context, configPath string, directory string, checkOnly ...bool) (*box.Box, error) {

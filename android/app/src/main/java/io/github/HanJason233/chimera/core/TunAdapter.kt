@@ -37,9 +37,17 @@ private class VpnSession(
     override val core = delegate.core
     override val endpoint = delegate.endpoint
 
-    // HEV is the sole VPN traffic authority. Mixing counters from different
-    // layers makes final accounting depend on sampling timing.
-    override fun traffic(): CoreTraffic? = adapter.traffic()
+    // These inputs are disjoint: HEV counts phone traffic, and the core counts
+    // only LAN ingress. Whole-core counters would count the phone twice.
+    override fun traffic(): CoreTraffic? {
+        val phone = adapter.traffic()
+        val lan = delegate.lanTraffic()
+        if (phone == null && lan == null) return null
+        return CoreTraffic(
+            (phone?.upload ?: 0) + (lan?.upload ?: 0),
+            (phone?.download ?: 0) + (lan?.download ?: 0)
+        )
+    }
 
     override fun close() {
         var failure: Throwable? = null
