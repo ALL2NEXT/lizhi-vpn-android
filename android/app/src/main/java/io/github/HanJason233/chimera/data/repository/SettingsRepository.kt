@@ -63,8 +63,10 @@ class SettingsRepository(
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
         const val DEFAULT_AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS = true
         const val DEFAULT_AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS = false
-        /** 内置方案默认值的版本；保存后尊重用户后续修改，不在每次启动时覆盖。 */
-        private const val DEFAULT_PRESET_REVISION = 1
+        /** 默认测速与默认主题方案分别维护版本；升级后保存新版本并尊重后续修改。 */
+        private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 1
+        private const val DEFAULT_SKIN_PARTICLE_PRESET_REVISION = 1
+        private const val DEFAULT_SKIN_PRESET_REVISION = 3
         private const val MIN_SERVICE_REQUEST_TIMEOUT_MS = 5_000L
         private const val MAX_SERVICE_REQUEST_TIMEOUT_MS = 60_000L
 
@@ -1159,7 +1161,7 @@ class SettingsRepository(
                             if (id.isBlank()) continue
                             // 覆盖安装时更新旧版内置方案的这三项参数，其他方案和参数照常读取。
                             if (id == SpeedTestScheme.DEFAULT_ID &&
-                                item.optInt("defaultsVersion", 0) < DEFAULT_PRESET_REVISION
+                                item.optInt("defaultsVersion", 0) < DEFAULT_SPEED_TEST_PRESET_REVISION
                             ) {
                                 val defaults = SpeedTestScheme.default()
                                 item.put("urlTestSelectionMode", defaults.urlTestSelectionMode.name)
@@ -1336,7 +1338,7 @@ class SettingsRepository(
                 JSONObject().apply {
                     put("id", normalized.id)
                     if (normalized.id == SpeedTestScheme.DEFAULT_ID) {
-                        put("defaultsVersion", DEFAULT_PRESET_REVISION)
+                        put("defaultsVersion", DEFAULT_SPEED_TEST_PRESET_REVISION)
                     }
                     put("name", normalized.name)
                     put("builtIn", normalized.builtIn)
@@ -1406,10 +1408,49 @@ class SettingsRepository(
                             "homeIconRotationEnabled",
                             false
                         )
+                        val defaultsVersion = item.optInt("defaultsVersion", 0)
                         if (id == SkinScheme.DEFAULT_SCHEME_ID &&
-                            item.optInt("defaultsVersion", 0) < DEFAULT_PRESET_REVISION
+                            defaultsVersion < DEFAULT_SKIN_PARTICLE_PRESET_REVISION
                         ) {
                             item.put("homeIconEffectEnabled", SkinScheme.default().homeIconEffectEnabled)
+                        }
+                        if (id == SkinScheme.DEFAULT_SCHEME_ID &&
+                            defaultsVersion < DEFAULT_SKIN_PRESET_REVISION
+                        ) {
+                            val defaultScheme = SkinScheme.default()
+                            // Revert the just introduced defaults when upgrading from revision 2.
+                            if (defaultsVersion >= 2 &&
+                                item.optString("homeDisconnectedIconEffect") ==
+                                HomeIconMotionEffect.BREATHE.storageName
+                            ) {
+                                item.put(
+                                    "homeDisconnectedIconEffect",
+                                    HomeIconMotionEffect.NONE.storageName
+                                )
+                            }
+                            if (defaultsVersion >= 2 &&
+                                item.optString("homeConnectedIconEffect") ==
+                                HomeIconMotionEffect.ROTATE.storageName
+                            ) {
+                                item.put(
+                                    "homeConnectedIconEffect",
+                                    HomeIconMotionEffect.NONE.storageName
+                                )
+                            }
+                            if (item.optString("homeConnectingIconEffect") in setOf("", "none")) {
+                                item.put(
+                                    "homeConnectingIconEffect",
+                                    defaultScheme.homeConnectingIconEffect.storageName
+                                )
+                            }
+                            if (item.optString("homeDisconnectingIconEffect") in setOf("", "none") &&
+                                !legacyHomeIconRotationEnabled
+                            ) {
+                                item.put(
+                                    "homeDisconnectingIconEffect",
+                                    defaultScheme.homeDisconnectingIconEffect.storageName
+                                )
+                            }
                         }
                         // 旧版只有统一粒子开关，新字段缺失时沿用旧设置作为四种状态的初始值。
                         val legacyHomeIconEffectEnabled = item.optBoolean(
@@ -1528,7 +1569,7 @@ class SettingsRepository(
                 array.put(
                     JSONObject().apply {
                         put("id", scheme.id)
-                        if (scheme.isDefault) put("defaultsVersion", DEFAULT_PRESET_REVISION)
+                        if (scheme.isDefault) put("defaultsVersion", DEFAULT_SKIN_PRESET_REVISION)
                         put("name", scheme.name)
                         put("appDisplayName", scheme.appDisplayName)
                         put("appIconPresetId", scheme.appIconPresetId)

@@ -140,19 +140,19 @@ fun ConnectButton(
             } else {
                 0f
             }
-            // 闪烁像星光一样渐暗后恢复，使用透明度往返变化而不影响图标颜色。
-            val iconAlpha = if (iconMotionEffect == HomeIconMotionEffect.BLINK) {
-                val blinkTransition = rememberInfiniteTransition(
-                    label = "homeIconBlink-${currentState.name}"
+            // 呼吸效果通过透明度往返变化，不影响图标颜色。
+            val iconAlpha = if (iconMotionEffect == HomeIconMotionEffect.BREATHE) {
+                val breatheTransition = rememberInfiniteTransition(
+                    label = "homeIconBreathe-${currentState.name}"
                 )
-                val animatedAlpha by blinkTransition.animateFloat(
+                val animatedAlpha by breatheTransition.animateFloat(
                     initialValue = 1f,
                     targetValue = 0.35f,
                     animationSpec = infiniteRepeatable(
                         animation = tween(durationMillis = 700, easing = FastOutSlowInEasing),
                         repeatMode = RepeatMode.Reverse
                     ),
-                    label = "homeIconBlink-${currentState.name}"
+                    label = "homeIconBreathe-${currentState.name}"
                 )
                 animatedAlpha
             } else {

@@ -17,12 +17,13 @@ enum class HomeIconEffect(val storageName: String, val displayName: String) {
 enum class HomeIconMotionEffect(val storageName: String, val displayName: String) {
     NONE("none", "无"),
     ROTATE("rotate", "旋转"),
-    BLINK("blink", "闪烁");
+    BREATHE("breathe", "呼吸");
 
     companion object {
-        fun fromStorage(value: String?): HomeIconMotionEffect = entries.firstOrNull {
-            it.storageName == value
-        } ?: NONE
+        fun fromStorage(value: String?): HomeIconMotionEffect = when (value) {
+            "blink" -> BREATHE
+            else -> entries.firstOrNull { it.storageName == value } ?: NONE
+        }
     }
 }
 
@@ -79,6 +80,8 @@ data class SkinScheme(
             themeMode = SkinThemeMode.SYSTEM,
             monetEnabled = true,
             homeIconEffectEnabled = false,
+            homeConnectingIconEffect = HomeIconMotionEffect.ROTATE,
+            homeDisconnectingIconEffect = HomeIconMotionEffect.BREATHE,
             homeDisconnectedParticleEffectEnabled = false,
             homeConnectingParticleEffectEnabled = false,
             homeDisconnectingParticleEffectEnabled = false,
