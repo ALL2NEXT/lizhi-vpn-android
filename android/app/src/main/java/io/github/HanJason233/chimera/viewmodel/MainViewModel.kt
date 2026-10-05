@@ -312,6 +312,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ?: sourceId?.let { NodeGroupKey.Subscription(it).value }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** DataStore 持久化完成前，暂存刚选中的节点组供连接和测速流程使用。 */
+    private val pendingSelectedNodeGroup = MutableStateFlow<NodeGroupKey?>(null)
+
     val allSubscriptionNodes = nodeDaoFlow.flatMapLatest { dao ->
         dao.getSubscriptionNodes()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -1677,8 +1680,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 统一选择节点组，并同步当前连接流程需要的筛选字段。 */
     fun selectNodeGroup(group: NodeGroupKey) {
+        pendingSelectedNodeGroup.value = group
         viewModelScope.launch {
-            settingsRepository.setSelectedNodeGroup(group)
+            try {
+                settingsRepository.setSelectedNodeGroup(group)
+            } finally {
+                if (pendingSelectedNodeGroup.value == group) {
+                    pendingSelectedNodeGroup.value = null
+                }
+            }
         }
     }
 
@@ -3061,7 +3071,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
 
     private suspend fun currentNodeListSnapshot(): List<Node> = withContext(Dispatchers.Default) {
-        val selectedGroup = NodeGroupKey.parse(settingsRepository.selectedNodeGroupId.first())
+        val selectedGroup = pendingSelectedNodeGroup.value
+            ?: NodeGroupKey.parse(settingsRepository.selectedNodeGroupId.first())
+            ?: run {
+                val dao = nodeDao()
+                val groups = dao.getSubscriptionGroups().first()
+                val sourceId = SubscriptionGroupingStrategy.resolveActiveSourceId(
+                    groups,
+                    settingsRepository.selectedSubscriptionSourceId.first()
+                )
+                sourceId?.let { NodeGroupKey.Subscription(it) }
+            }
         val snapshot = when (selectedGroup) {
             is NodeGroupKey.Country -> countryGroupingNodes.first().filter {
                 it.getCountryCode() == selectedGroup.countryCode
