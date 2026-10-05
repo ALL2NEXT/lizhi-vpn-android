@@ -6,8 +6,6 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeGroupEntity
@@ -33,71 +31,6 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         private const val TAG = "AppDatabase"
         private const val DB_NAME = "firefly_vpn.db"
-        // 清理旧版收藏节点及其专属字段，升级后只保留订阅组和本地用户组数据。
-        private val MIGRATION_8_9 = object : Migration(8, 9) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "DELETE FROM node_group_members WHERE nodeId IN " +
-                        "(SELECT id FROM nodes WHERE source = 'FAVORITE')"
-                )
-                db.execSQL("DELETE FROM nodes WHERE source = 'FAVORITE'")
-                db.execSQL("ALTER TABLE nodes DROP COLUMN favoriteSourceNodeId")
-                db.execSQL("ALTER TABLE nodes DROP COLUMN favoriteCreatedAt")
-            }
-        }
-        private val MIGRATION_9_10 = object : Migration(9, 10) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionUploadBytes INTEGER")
-                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionDownloadBytes INTEGER")
-                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionTotalBytes INTEGER")
-                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionExpireAt INTEGER")
-            }
-        }
-        private val MIGRATION_10_11 = object : Migration(10, 11) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE nodes ADD COLUMN subscriptionUpdatedAt INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE node_groups ADD COLUMN subscriptionUpdatedAt INTEGER NOT NULL DEFAULT 0")
-            }
-        }
-        private val MIGRATION_11_12 = object : Migration(11, 12) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE node_groups ADD COLUMN iconMode TEXT NOT NULL DEFAULT 'AUTO_REMOTE'"
-                )
-                db.execSQL("ALTER TABLE node_groups ADD COLUMN customIconUrl TEXT")
-                db.execSQL("ALTER TABLE node_groups ADD COLUMN localIconFile TEXT")
-            }
-        }
-        private val MIGRATION_12_13 = object : Migration(12, 13) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS `home_node_test_results` (
-                        `nodeId` TEXT NOT NULL,
-                        `tcpingLatency` INTEGER NOT NULL,
-                        `urlTestLatency` INTEGER NOT NULL,
-                        `downloadMbps` REAL NOT NULL,
-                        `linkTypeResultJson` TEXT NOT NULL,
-                        `unlockTestResultJson` TEXT NOT NULL,
-                        `updatedAt` INTEGER NOT NULL,
-                        PRIMARY KEY(`nodeId`)
-                    )
-                    """.trimIndent()
-                )
-                // 升级时迁移已有的前三项质量数据；链路类型和 IP 检测此前只在内存中。
-                db.execSQL(
-                    """
-                    INSERT INTO `home_node_test_results` (
-                        `nodeId`, `tcpingLatency`, `urlTestLatency`, `downloadMbps`,
-                        `linkTypeResultJson`, `unlockTestResultJson`, `updatedAt`
-                    )
-                    SELECT `id`, `tcpingLatency`, `urlTestLatency`, `downloadMbps`, '', '', `lastTestedAt`
-                    FROM `nodes`
-                    WHERE `tcpingLatency` != -1 OR `urlTestLatency` != -1 OR `downloadMbps` != 0
-                    """.trimIndent()
-                )
-            }
-        }
 
         @Volatile
         private var sqlCipherLibLoaded = false
@@ -144,13 +77,8 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(
-                    MIGRATION_8_9,
-                    MIGRATION_9_10,
-                    MIGRATION_10_11,
-                    MIGRATION_11_12,
-                    MIGRATION_12_13
-                )
+                // 发布前开发版允许在表结构变化时重建本地数据库。
+                .fallbackToDestructiveMigration()
                 .build()
         }
 

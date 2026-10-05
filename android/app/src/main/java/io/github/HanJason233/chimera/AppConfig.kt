@@ -11,10 +11,8 @@ import io.github.HanJason233.chimera.data.model.UrlTestTargets
 object AppConfig {
     // Cloudflare Worker 默认地址；主页连续点击标题五次可以切换到其他后端。
     const val DEFAULT_BACKEND_URL = "https://chimera.11145149.xyz"
-    private const val LEGACY_DEFAULT_BACKEND_URL = "https://liuying.11145149.xyz"
 
     private const val PREFERENCES_NAME = "chimera_app_config"
-    private const val LEGACY_PREFERENCES_NAME = "firefly_app_config"
     private const val BACKEND_URL_KEY = "backend_url"
 
     @Volatile
@@ -24,19 +22,9 @@ object AppConfig {
     fun initialize(context: Context) {
         val appContext = context.applicationContext
         val currentPreferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-        val legacyPreferences = appContext.getSharedPreferences(LEGACY_PREFERENCES_NAME, Context.MODE_PRIVATE)
-        val savedUrl = currentPreferences.getString(BACKEND_URL_KEY, null)
-            ?: legacyPreferences.getString(BACKEND_URL_KEY, null)
-        val migratedUrl = if (normalizeBackendUrl(savedUrl) == LEGACY_DEFAULT_BACKEND_URL) {
-            DEFAULT_BACKEND_URL
-        } else {
-            savedUrl
-        }
-        configuredBackendUrl = normalizeBackendUrl(migratedUrl) ?: DEFAULT_BACKEND_URL
-        if (savedUrl != null && currentPreferences.getString(BACKEND_URL_KEY, null) == null) {
-            currentPreferences.edit().putString(BACKEND_URL_KEY, configuredBackendUrl).apply()
-        }
-        legacyPreferences.edit().remove(BACKEND_URL_KEY).apply()
+        configuredBackendUrl = normalizeBackendUrl(
+            currentPreferences.getString(BACKEND_URL_KEY, null)
+        ) ?: DEFAULT_BACKEND_URL
     }
 
     val BACKEND_URL: String
@@ -50,11 +38,6 @@ object AppConfig {
             .edit()
             .putString(BACKEND_URL_KEY, normalized)
             .apply()
-        context.applicationContext
-            .getSharedPreferences(LEGACY_PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .remove(BACKEND_URL_KEY)
-            .apply()
         configuredBackendUrl = normalized
         return true
     }
@@ -63,11 +46,6 @@ object AppConfig {
     fun resetBackendUrl(context: Context) {
         context.applicationContext
             .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .remove(BACKEND_URL_KEY)
-            .apply()
-        context.applicationContext
-            .getSharedPreferences(LEGACY_PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit()
             .remove(BACKEND_URL_KEY)
             .apply()
