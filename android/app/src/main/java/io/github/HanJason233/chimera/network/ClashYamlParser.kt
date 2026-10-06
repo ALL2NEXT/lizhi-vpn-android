@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.network
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.Gson
 import java.net.IDN
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -13,26 +14,48 @@ import org.yaml.snakeyaml.constructor.SafeConstructor
 /** Converts Clash/Clash.Meta `proxies` entries into the URI formats used by the app. */
 internal object ClashYamlParser {
     private val proxiesMarker = Regex("(?m)^\\s*proxies\\s*:")
+    private val yamlMarker = Regex("""(?m)^(?:-\s+)?[A-Za-z_][A-Za-z0-9_-]*\s*:(?:\s|$)|^-\s+\{""")
+    fun isYamlContent(content: String): Boolean =
+        yamlMarker.containsMatchIn(content)
 
-    /** Returns null when the content is not a Clash YAML document. */
+    /** Returns null for non-YAML input; extracts nodes and discards other settings. */
     fun parseToUris(content: String): List<String>? {
-        if (!proxiesMarker.containsMatchIn(content)) return null
+        if (!proxiesMarker.containsMatchIn(content) && !isYamlContent(content)) return null
 
         return runCatching {
             val loaderOptions = LoaderOptions().apply {
                 maxAliasesForCollections = 100
                 codePointLimit = 4 * 1024 * 1024
             }
-            val root = Yaml(SafeConstructor(loaderOptions)).load<Any?>(content).asStringMap()
+            val loaded = Yaml(SafeConstructor(loaderOptions)).load<Any?>(content)
+            if (loaded is List<*>) {
+                return@runCatching loaded.mapNotNull { entry ->
+                    entry.asStringMap()?.let { proxyToUri(it, allowNativeTransport = true) }
+                }
+            }
+            val root = loaded.asStringMap()
                 ?: return@runCatching emptyList()
+            if (!root.containsKey("proxies")) {
+                if (root.containsKey("server") && root.containsKey("port") && root.containsKey("type")) {
+                    return@runCatching listOfNotNull(proxyToUri(root, allowNativeTransport = true))
+                }
+                if (root.containsKey("outbounds") || root.containsKey("type") || root.containsKey("protocol")) {
+                    return@runCatching JsonSubscriptionParser.parseToUris(Gson().toJson(root)).orEmpty()
+                }
+                return@runCatching emptyList()
+            }
             val globalFingerprint = root.text("global-client-fingerprint")
             root.value("proxies").asList()
                 .mapNotNull { it.asStringMap() }
-                .mapNotNull { proxy -> proxyToUri(proxy, globalFingerprint) }
+                .mapNotNull { proxy -> proxyToUri(proxy, globalFingerprint, allowNativeTransport = true) }
         }.getOrDefault(emptyList())
     }
 
-    private fun proxyToUri(proxy: Map<String, Any?>, globalFingerprint: String?): String? {
+    internal fun proxyToUri(
+        proxy: Map<String, Any?>,
+        globalFingerprint: String? = null,
+        allowNativeTransport: Boolean = false
+    ): String? {
         val type = proxy.text("type")?.lowercase() ?: return null
         val server = proxy.text("server") ?: return null
         val port = proxy.int("port")?.takeIf { it in 1..65535 } ?: return null
@@ -55,9 +78,9 @@ internal object ClashYamlParser {
             )
             "http" -> httpUri(proxy, server, port, name)
             "ss" -> shadowsocksUri(proxy, server, port, name)
-            "vmess" -> vmessUri(proxy, server, port, name)
-            "vless" -> vlessLikeUri("vless", proxy, server, port, name, globalFingerprint)
-            "trojan" -> vlessLikeUri("trojan", proxy, server, port, name, globalFingerprint)
+            "vmess" -> vmessUri(proxy, server, port, name, allowNativeTransport)
+            "vless" -> vlessLikeUri("vless", proxy, server, port, name, globalFingerprint, allowNativeTransport)
+            "trojan" -> vlessLikeUri("trojan", proxy, server, port, name, globalFingerprint, allowNativeTransport)
             "hysteria2", "hy2" -> hysteria2Uri(proxy, server, port, name)
             "anytls" -> anyTlsUri(proxy, server, port, name)
             "tuic" -> tuicUri(proxy, server, port, name)
@@ -136,11 +159,12 @@ internal object ClashYamlParser {
         proxy: Map<String, Any?>,
         server: String,
         port: Int,
-        name: String
+        name: String,
+        allowNativeTransport: Boolean
     ): String? {
         val uuid = proxy.text("uuid") ?: return null
         val transport = transport(proxy)
-        if (transport.type !in SUPPORTED_TRANSPORTS) return null
+        if (!allowNativeTransport && transport.type !in SUPPORTED_TRANSPORTS) return null
         val json = JsonObject().apply {
             addProperty("v", "2")
             addProperty("ps", name)
@@ -179,12 +203,13 @@ internal object ClashYamlParser {
         server: String,
         port: Int,
         name: String,
-        globalFingerprint: String?
+        globalFingerprint: String?,
+        allowNativeTransport: Boolean
     ): String? {
         val credential = if (scheme == "vless") proxy.text("uuid") else proxy.text("password")
         if (credential.isNullOrBlank()) return null
         val transport = transport(proxy)
-        if (transport.type !in SUPPORTED_TRANSPORTS) return null
+        if (!allowNativeTransport && transport.type !in SUPPORTED_TRANSPORTS) return null
         val query = linkedMapOf<String, String>()
         applyTlsQuery(query, proxy)
         val reality = proxy.map("reality-opts", "reality_opts")
@@ -392,6 +417,11 @@ internal object ClashYamlParser {
                     path = options?.text("path") ?: "/",
                     hosts = listOfNotNull(options?.text("host"))
                 )
+            }
+            "xhttp" -> {
+                val options = proxy.map("xhttp-opts")
+                Transport(type = type, path = options?.text("path"),
+                    hosts = options?.stringList("host").orEmpty())
             }
             else -> Transport(type = type)
         }

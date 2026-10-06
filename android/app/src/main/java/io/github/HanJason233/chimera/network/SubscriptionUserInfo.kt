@@ -44,5 +44,6 @@ internal data class SubscriptionUserInfo(
 
 internal data class ParsedSubscription(
     val nodes: List<Node>,
-    val userInfo: SubscriptionUserInfo? = null
+    val userInfo: SubscriptionUserInfo? = null,
+    val name: String? = null
 )

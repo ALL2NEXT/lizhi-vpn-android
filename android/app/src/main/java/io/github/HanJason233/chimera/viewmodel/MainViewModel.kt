@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.viewmodel
 import android.app.Application
 import android.content.ClipData
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -169,15 +170,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             ParsedSubscriptionPart(
                                 url = null,
                                 subscription = parseFullSubscriptionContent(input.content),
-                                groupLabel = "内容"
+                                groupLabel = "导入内容"
                             )
                         )
                         input.urls.forEachIndexed { index, url ->
                             add(
                                 ParsedSubscriptionPart(
                                     url = url,
-                                    subscription = parsed[index],
-                                    groupLabel = "远程 ${index + 1}"
+                                    subscription = parsed[index]
                                 )
                             )
                         }
@@ -1840,20 +1840,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * 创建用户本地订阅组。输入可以是订阅链接、节点链接列表，也可以为空以先创建空组。
      */
     fun createSubscriptionGroup(
-        name: String,
         input: String?,
         onResult: (SubscriptionGroupCreateResult, Int, Int, Int) -> Unit = { _, _, _, _ -> }
     ) {
         viewModelScope.launch {
-            val normalizedName = name.trim()
-            if (normalizedName.isBlank()) {
-                onResult(SubscriptionGroupCreateResult.INVALID, 0, 0, 0)
-                return@launch
-            }
-
             val normalizedInput = input?.trim().orEmpty()
             val importInput = SubscriptionInputDetector.detect(normalizedInput)
-            var failedRemoteCount = 0
+            var failedSourceCount = 0
             val hasMultipleRemoteInput = importInput is SubscriptionImportInput.MultipleRemoteSubscriptions ||
                 importInput is SubscriptionImportInput.MixedSubscription
             // 多个远程订阅逐条处理，单个链接失败不阻断其他链接创建。
@@ -1866,10 +1859,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val contentParts = if (importInput is SubscriptionImportInput.MixedSubscription) {
                     val contentPart = parseFullSubscriptionContent(importInput.content)
                     if (contentPart.nodes.isEmpty()) {
-                        failedRemoteCount++
+                        // 本地配置只提取可用节点，其余内容丢弃，不创建空的本地来源。
                         emptyList()
                     } else {
-                        listOf(ParsedSubscriptionPart(null, contentPart, "内容"))
+                        listOf(ParsedSubscriptionPart(null, contentPart, "导入内容"))
                     }
                 } else {
                     emptyList()
@@ -1878,7 +1871,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .mapIndexedNotNull { index, result ->
                         val parsed = result.getOrNull()
                         if (parsed == null || parsed.nodes.isEmpty()) {
-                            failedRemoteCount++
+                            failedSourceCount++
                             Log.e(
                                 tag,
                                 "Unable to import remote subscription #${index + 1}",
@@ -1919,7 +1912,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     SubscriptionGroupCreateResult.FETCH_FAILED,
                     0,
                     0,
-                    failedRemoteCount
+                    failedSourceCount
                 )
                 return@launch
             }
@@ -1927,7 +1920,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // 订阅导入不应依赖当前选中的核心。
             // 保留原始 URI，等实际准备核心会话时再校验兼容性。
             if (normalizedInput.isNotBlank() && parsedParts.any { it.subscription.nodes.isEmpty() }) {
-                onResult(SubscriptionGroupCreateResult.INVALID, 0, 0, failedRemoteCount)
+                onResult(SubscriptionGroupCreateResult.INVALID, 0, 0, failedSourceCount)
                 return@launch
             }
 
@@ -1937,20 +1930,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val members: List<NodeGroupMemberEntity>
             )
 
-            val preparedGroups = parsedParts.mapIndexed { groupIndex, part ->
+            val preparedGroups = parsedParts.map { part ->
                 val groupId = "group_${UUID.randomUUID()}"
-                val groupName = if (
-                    part.groupLabel != null
-                ) {
-                    "$normalizedName ${part.groupLabel}"
-                } else if (
-                    parsedParts.size > 1 ||
-                    hasMultipleRemoteInput
-                ) {
-                    "$normalizedName ${groupIndex + 1}"
-                } else {
-                    normalizedName
-                }
+                val groupName = subscriptionGroupName(part)
                 val parsed = part.subscription
                 val createdAt = System.currentTimeMillis()
                 val group = NodeGroupEntity(
@@ -2006,16 +1988,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 NodeGroupKey.Imported(preparedGroups.first().group.id)
             )
             val totalImportedNodes = preparedGroups.sumOf { it.nodes.size }
-            val result = if (failedRemoteCount > 0) {
+            val result = if (failedSourceCount > 0) {
                 SubscriptionGroupCreateResult.PARTIAL_CREATED
             } else if (preparedGroups.size > 1) {
                 SubscriptionGroupCreateResult.MULTIPLE_CREATED
             } else {
                 SubscriptionGroupCreateResult.CREATED
             }
-            onResult(result, totalImportedNodes, preparedGroups.size, failedRemoteCount)
+            onResult(result, totalImportedNodes, preparedGroups.size, failedSourceCount)
         }
     }
+
+    private fun subscriptionGroupName(part: ParsedSubscriptionPart): String =
+        part.subscription.name?.trim()?.takeIf(String::isNotEmpty)
+            ?: part.url?.let { url ->
+                Uri.parse(url).host
+                    ?.removePrefix("www.")
+                    ?.takeIf(String::isNotEmpty)
+            }
+            ?: part.groupLabel?.trim()?.takeIf(String::isNotEmpty)
+            ?: if (part.subscription.nodes.isEmpty()) "新建私人源" else "导入内容"
 
     /** 将节点 URI 追加到本地订阅组，保留组内已有节点。 */
     fun importNodeUrisIntoSubscriptionGroup(

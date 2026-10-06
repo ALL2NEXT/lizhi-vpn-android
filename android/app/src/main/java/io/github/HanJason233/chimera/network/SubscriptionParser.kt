@@ -11,13 +11,14 @@ import okhttp3.Request
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeType
 import android.net.Uri
+import java.net.URLDecoder
 import java.security.MessageDigest
 import kotlinx.coroutines.withTimeout
 import io.github.HanJason233.chimera.util.RuntimeTuner
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
- * 订阅解析器 - 解析Base64编码的节点列表
+ * 订阅解析器：所有本地配置和远程响应先统一转换为 URI，再构造节点。
  */
 class SubscriptionParser {
     
@@ -59,7 +60,12 @@ class SubscriptionParser {
                 parseSubscription(content)
             }
             val userInfo = SubscriptionUserInfo.parse(response.headers()[SUBSCRIPTION_USERINFO_HEADER])
-            Result.success(ParsedSubscription(nodes, userInfo))
+            val name = parseSubscriptionName(
+                response.headers()["Profile-Title"],
+                response.headers()["Subscription-Name"],
+                response.headers()["Content-Disposition"]
+            )
+            Result.success(ParsedSubscription(nodes, userInfo, name))
         } catch (e: Exception) {
             // 订阅地址经常含有访问令牌，日志中不得输出完整 URL。
             Log.e(tag, "Failed to fetch subscription", e)
@@ -106,6 +112,7 @@ class SubscriptionParser {
         val uris = SubscriptionConverter.toStandardUris(content)
         Log.d(tag, "Converted ${uris.size} standard subscription URIs")
         return uris.mapNotNull(::parseNodeLink)
+            .filter { it.server.isNotBlank() && it.port in 1..65535 }
     }
     
     /**
@@ -433,10 +440,54 @@ class SubscriptionParser {
             .toIntOrNull()
     }
 
+    private fun parseSubscriptionName(
+        profileTitle: String?,
+        subscriptionName: String?,
+        contentDisposition: String?
+    ): String? {
+        decodeSubscriptionTitle(profileTitle)
+            ?.let { return it }
+        decodeSubscriptionTitle(subscriptionName)
+            ?.let { return it }
+
+        val extendedFilename = CONTENT_DISPOSITION_EXTENDED_FILENAME.find(contentDisposition.orEmpty())
+        val filename = extendedFilename?.groupValues?.getOrNull(1)
+            ?: CONTENT_DISPOSITION_FILENAME.find(contentDisposition.orEmpty())?.groupValues?.getOrNull(1)
+            ?: return null
+        val unquotedFilename = filename.trim().removeSurrounding("\"")
+        val decodedFilename = if (extendedFilename != null) {
+            runCatching { URLDecoder.decode(unquotedFilename.replace("+", "%2B"), "UTF-8") }
+                .getOrNull()
+                ?: return null
+        } else {
+            unquotedFilename
+        }
+        return decodedFilename.substringAfterLast('/').substringAfterLast('\\')
+            .replace(FILENAME_EXTENSION, "")
+            .trim()
+            .takeIf(String::isNotEmpty)
+    }
+
+    private fun decodeSubscriptionTitle(value: String?): String? {
+        val title = value?.trim()?.removeSurrounding("\"")?.takeIf(String::isNotEmpty)
+            ?: return null
+        if (!title.startsWith("base64:", ignoreCase = true)) return title
+
+        val decoded = runCatching {
+            String(Base64.decode(title.substringAfter(':').trim(), Base64.DEFAULT), Charsets.UTF_8)
+        }.getOrNull()?.trim()
+        return decoded?.takeIf(String::isNotEmpty)
+    }
+
     private companion object {
         const val CLIENT_IP_HEADER = "X-Chimera-Client-IP"
         private const val LEGACY_CLIENT_IP_HEADER = "X-Firefly-Client-IP"
         private const val SUBSCRIPTION_USERINFO_HEADER = "Subscription-Userinfo"
+        val CONTENT_DISPOSITION_EXTENDED_FILENAME =
+            Regex("""(?i)(?:^|;)\s*filename\*\s*=\s*UTF-8''([^;]+)""")
+        val CONTENT_DISPOSITION_FILENAME =
+            Regex("""(?i)(?:^|;)\s*filename\s*=\s*"?([^";]+)"?""")
+        val FILENAME_EXTENSION = Regex("""\.(?:yaml|yml|txt|conf)$""", RegexOption.IGNORE_CASE)
     }
 
     private fun nodeName(uri: Uri, fallback: String): String =

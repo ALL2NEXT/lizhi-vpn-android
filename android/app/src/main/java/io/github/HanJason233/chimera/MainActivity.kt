@@ -106,9 +106,9 @@ class MainActivity : ComponentActivity() {
                                 launchSingleTop = true
                             }
                         }
-                        val createSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit =
-                            { name, input, onComplete ->
-                                viewModel.createSubscriptionGroup(name, input) { result, importedCount, createdGroupCount, failedGroupCount ->
+                        val createSubscriptionGroup: (String?, (Boolean) -> Unit) -> Unit =
+                            { input, onComplete ->
+                                viewModel.createSubscriptionGroup(input) { result, importedCount, createdGroupCount, failedGroupCount ->
                                     val message = when (result) {
                                         MainViewModel.SubscriptionGroupCreateResult.CREATED ->
                                             if (importedCount > 0) {
@@ -117,9 +117,9 @@ class MainActivity : ComponentActivity() {
                                                 "订阅组已创建"
                                             }
                                         MainViewModel.SubscriptionGroupCreateResult.MULTIPLE_CREATED ->
-                                            "识别到多个远程订阅，已分别创建${createdGroupCount}个私人源，共导入${importedCount}个节点"
+                                            "已分别创建${createdGroupCount}个私人源，共导入${importedCount}个节点"
                                         MainViewModel.SubscriptionGroupCreateResult.PARTIAL_CREATED ->
-                                            "识别到多个远程订阅，成功创建${createdGroupCount}个私人源，${failedGroupCount}个失败，共导入${importedCount}个节点"
+                                            "成功创建${createdGroupCount}个私人源，${failedGroupCount}个来源未能导入，共导入${importedCount}个节点"
                                         MainViewModel.SubscriptionGroupCreateResult.INVALID ->
                                             "未找到可导入节点或链接无效"
                                         MainViewModel.SubscriptionGroupCreateResult.FETCH_FAILED ->
@@ -313,8 +313,8 @@ class MainActivity : ComponentActivity() {
                                                         viewModel.selectAndConnectNode(node)
                                                     }
                                                 },
-                                                onCreateSubscriptionGroup = { name, input, onComplete ->
-                                                    createSubscriptionGroup(name, input, onComplete)
+                                                onCreateSubscriptionGroup = { input, onComplete ->
+                                                    createSubscriptionGroup(input, onComplete)
                                                 },
                                                 onUpdateSubscriptionGroup = { groupId, name, input, onComplete ->
                                                     updateSubscriptionGroup(groupId, name, input, onComplete)

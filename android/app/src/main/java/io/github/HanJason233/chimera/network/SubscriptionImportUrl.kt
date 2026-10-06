@@ -15,31 +15,31 @@ internal sealed interface SubscriptionImportInput {
 
 /**
  * 统一判断剪贴板、二维码、文件和文本输入的内容类型。
- * 剪贴板和二维码可能得到两种结果，文件直接作为完整订阅内容处理。
+ * 先展开混合的明文与 Base64，再按配置边界提取远程地址。
  */
 internal object SubscriptionInputDetector {
     fun detect(value: String): SubscriptionImportInput {
-        val content = value.trim()
         val contentLines = mutableListOf<String>()
         val remoteUrls = mutableListOf<String>()
 
-        // 只把整行的 HTTP/HTTPS 地址识别为远程订阅，避免误伤 YAML 内部字段。
-        content.lineSequence().forEach { rawLine ->
-            val line = rawLine.trim()
-            if (line.isBlank()) return@forEach
-
-            val remoteUrl = SubscriptionImportUrl.detect(line)
-                ?: detectMarkdownRemoteUrl(line)
-            if (remoteUrl != null) {
-                remoteUrls += remoteUrl
+        SubscriptionTextNormalizer.fragments(value).forEach { fragment ->
+            val line = fragment.trim()
+            // 结构化配置中的 URL 是字段值，不能拆成新的远程来源。
+            if (SubscriptionTextNormalizer.isJsonContent(line) ||
+                ClashYamlParser.isYamlContent(line)
+            ) {
+                contentLines += fragment
             } else {
-                // 保留原始行的缩进，避免破坏 YAML 结构。
-                contentLines += rawLine
+                val uris = SubscriptionTextNormalizer.uris(fragment)
+                uris.forEach { uri ->
+                    val remoteUrl = SubscriptionImportUrl.detect(uri)
+                    if (remoteUrl != null) remoteUrls += remoteUrl else contentLines += uri
+                }
             }
         }
 
         val distinctRemoteUrls = remoteUrls.distinct()
-        val contentPart = contentLines.joinToString("\n").trim()
+        val contentPart = SubscriptionTextNormalizer.joinLocal(contentLines)
 
         return when {
             contentPart.isNotBlank() && distinctRemoteUrls.isNotEmpty() -> {
@@ -54,17 +54,8 @@ internal object SubscriptionInputDetector {
                 SubscriptionImportInput.RemoteSubscription(distinctRemoteUrls.single())
             }
 
-            else -> SubscriptionImportInput.FullContent(content)
+            else -> SubscriptionImportInput.FullContent(contentPart)
         }
-    }
-
-    private fun detectMarkdownRemoteUrl(line: String): String? {
-        val normalizedLine = line.removePrefix("&#x20;").trim()
-        val match = Regex(
-            "^(?:[-*]\\s+)?\\[[^]]*]\\((https?://[^)\\s]+)\\)$",
-            RegexOption.IGNORE_CASE
-        ).matchEntire(normalizedLine) ?: return null
-        return SubscriptionImportUrl.detect(match.groupValues[1])
     }
 }
 

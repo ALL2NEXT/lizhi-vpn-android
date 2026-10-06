@@ -46,7 +46,7 @@ fun NodeGroupingDestination(
     viewModel: MainViewModel,
     onCountrySelected: (String) -> Unit,
     onNodeSelected: (Node) -> Unit,
-    onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
+    onCreateSubscriptionGroup: (String?, (Boolean) -> Unit) -> Unit,
     onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
     onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,

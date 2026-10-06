@@ -130,7 +130,7 @@ internal fun SubscriptionGroupSelectionDestination(
     onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
     onUserGroupSelected: (NodeGroupSummary) -> Unit,
     onViewUserGroupDetails: (NodeGroupSummary) -> Unit,
-    onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
+    onCreateSubscriptionGroup: (String?, (Boolean) -> Unit) -> Unit,
     onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
     onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,
@@ -215,7 +215,7 @@ private fun SubscriptionGroupSelectionScreen(
     onViewSubscriptionDetails: (SubscriptionGroup) -> Unit,
     onUserGroupSelected: (NodeGroupSummary) -> Unit,
     onViewUserGroupDetails: (NodeGroupSummary) -> Unit,
-    onCreateSubscriptionGroup: (String, String?, (Boolean) -> Unit) -> Unit,
+    onCreateSubscriptionGroup: (String?, (Boolean) -> Unit) -> Unit,
     onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
     onUpdateUserGroupIcon: (String, String, String?, String?, (Boolean) -> Unit) -> Unit,
     onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
@@ -446,7 +446,6 @@ private fun SubscriptionGroupSelectionScreen(
             }
             IconButton(
                 onClick = {
-                    groupName = ""
                     subscriptionInput = ""
                     importStatus = null
                     addDialogVisible = true
@@ -666,29 +665,21 @@ private fun SubscriptionGroupSelectionScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
-                        value = groupName,
-                        onValueChange = { groupName = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("组名") },
-                        placeholder = { Text("例如：我的机场") },
-                        enabled = !isSubmitting
-                    )
-                    OutlinedTextField(
                         value = subscriptionInput,
                         onValueChange = {
                             subscriptionInput = it
                             importStatus = null
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
+                        minLines = 4,
                         maxLines = 5,
                         label = { Text("智能识别") },
-                        placeholder = { Text("输入订阅链接、节点链接或订阅内容") },
-                        supportingText = {
+                        placeholder = {
                             Text(
-                                importStatus
-                                    ?: "支持远程订阅链接、节点链接、Base64 和 Clash / Clash.Meta YAML"
+                                "1. 支持 Clash 系订阅\n" +
+                                    "2. 支持 URI，以及 URI 订阅链接\n" +
+                                    "3. 支持混合类型，支持多个订阅链接\n" +
+                                    "4. 支持智能命名"
                             )
                         },
                         enabled = !isSubmitting
@@ -746,14 +737,13 @@ private fun SubscriptionGroupSelectionScreen(
                     onClick = {
                         isSubmitting = true
                         onCreateSubscriptionGroup(
-                            groupName,
                             subscriptionInput.takeIf(String::isNotBlank)
                         ) { success ->
                             isSubmitting = false
                             if (success) addDialogVisible = false
                         }
                     },
-                    enabled = groupName.isNotBlank() && !isSubmitting
+                    enabled = !isSubmitting
                 ) {
                     if (isSubmitting) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp))
