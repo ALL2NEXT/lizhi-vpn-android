@@ -62,7 +62,6 @@ fun OtherConfigScreen(
     val context = LocalContext.current
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
-    val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val serviceRequestTimeoutMs by viewModel.serviceRequestTimeoutMs.collectAsStateWithLifecycle()
     val autoRefreshOfficialSubscriptions by viewModel.autoRefreshOfficialSubscriptions.collectAsStateWithLifecycle()
@@ -105,30 +104,6 @@ fun OtherConfigScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            OtherConfigSection(
-                title = "节点标签显示",
-                collapsible = true,
-                initiallyExpanded = false
-            ) {
-                Text(
-                    text = "协议、安全层、传输方式和核心可独立显示，默认全部关闭；全部关闭后隐藏节点标签。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-                ConfigSwitchRow("显示协议", nodeDisplaySettings.showProtocol) {
-                    viewModel.setNodeLabelShowProtocol(it)
-                }
-                ConfigSwitchRow("显示安全层", nodeDisplaySettings.showSecurity) {
-                    viewModel.setNodeLabelShowSecurity(it)
-                }
-                ConfigSwitchRow("显示传输方式", nodeDisplaySettings.showTransport) {
-                    viewModel.setNodeLabelShowTransport(it)
-                }
-                ConfigSwitchRow("显示核心", nodeDisplaySettings.showCore) {
-                    viewModel.setNodeLabelShowCore(it)
-                }
-            }
-
             OtherConfigSection(
                 title = "协议核心",
                 collapsible = true,

@@ -18,7 +18,6 @@ import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconEffect
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
-import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
@@ -139,6 +138,7 @@ class SettingsRepository(
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
         private val CORE_ASSIGNMENTS = stringSetPreferencesKey("protocol_core_assignments")
+        // 迁移旧版全局节点标签设置；新值按主题方案保存。
         private val NODE_LABEL_SHOW_PROTOCOL = booleanPreferencesKey("node_label_show_protocol")
         private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
         private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
@@ -459,39 +459,6 @@ class SettingsRepository(
 
     val protocolCoreSettings: Flow<ProtocolCoreSettings> = store.data.map { preferences ->
         decodeProtocolCoreSettings(preferences[CORE_ASSIGNMENTS])
-    }
-
-    val nodeDisplaySettings: Flow<NodeDisplaySettings> = store.data.map { preferences ->
-        NodeDisplaySettings(
-            showProtocol = preferences[NODE_LABEL_SHOW_PROTOCOL] ?: false,
-            showSecurity = preferences[NODE_LABEL_SHOW_SECURITY] ?: false,
-            showTransport = preferences[NODE_LABEL_SHOW_TRANSPORT] ?: false,
-            showCore = preferences[NODE_LABEL_SHOW_CORE] ?: false
-        )
-    }
-
-    suspend fun setNodeLabelShowProtocol(show: Boolean) {
-        store.edit { preferences ->
-            preferences[NODE_LABEL_SHOW_PROTOCOL] = show
-        }
-    }
-
-    suspend fun setNodeLabelShowSecurity(show: Boolean) {
-        store.edit { preferences ->
-            preferences[NODE_LABEL_SHOW_SECURITY] = show
-        }
-    }
-
-    suspend fun setNodeLabelShowTransport(show: Boolean) {
-        store.edit { preferences ->
-            preferences[NODE_LABEL_SHOW_TRANSPORT] = show
-        }
-    }
-
-    suspend fun setNodeLabelShowCore(show: Boolean) {
-        store.edit { preferences ->
-            preferences[NODE_LABEL_SHOW_CORE] = show
-        }
     }
 
     suspend fun setProtocolCore(nodeType: NodeType, core: ProxyCore) {
@@ -1374,6 +1341,13 @@ class SettingsRepository(
     }
 
     private fun decodeSkinSchemes(preferences: Preferences): List<SkinScheme> {
+        fun defaultSchemeWithLegacyNodeDisplaySettings(): SkinScheme = SkinScheme.default().copy(
+            showNodeProtocol = preferences[NODE_LABEL_SHOW_PROTOCOL] ?: false,
+            showNodeSecurity = preferences[NODE_LABEL_SHOW_SECURITY] ?: false,
+            showNodeTransport = preferences[NODE_LABEL_SHOW_TRANSPORT] ?: false,
+            showNodeCore = preferences[NODE_LABEL_SHOW_CORE] ?: false
+        )
+
         val storedJson = preferences[SKIN_SCHEMES_JSON]
         if (!storedJson.isNullOrBlank()) {
             val storedSchemes = runCatching {
@@ -1458,6 +1432,22 @@ class SettingsRepository(
                                         SkinSettings.DEFAULT_BASE_COLOR_ARGB
                                     )
                                 ),
+                                showNodeProtocol = item.optBoolean(
+                                    "showNodeProtocol",
+                                    preferences[NODE_LABEL_SHOW_PROTOCOL] ?: false
+                                ),
+                                showNodeSecurity = item.optBoolean(
+                                    "showNodeSecurity",
+                                    preferences[NODE_LABEL_SHOW_SECURITY] ?: false
+                                ),
+                                showNodeTransport = item.optBoolean(
+                                    "showNodeTransport",
+                                    preferences[NODE_LABEL_SHOW_TRANSPORT] ?: false
+                                ),
+                                showNodeCore = item.optBoolean(
+                                    "showNodeCore",
+                                    preferences[NODE_LABEL_SHOW_CORE] ?: false
+                                ),
                                 themeMode = SkinThemeMode.fromStorage(
                                     item.optString("themeMode").takeIf { it.isNotBlank() }
                                 ),
@@ -1532,13 +1522,14 @@ class SettingsRepository(
                     }
                 }
             }.getOrDefault(emptyList())
-            val defaultScheme = storedSchemes.firstOrNull { it.isDefault } ?: SkinScheme.default()
+            val defaultScheme = storedSchemes.firstOrNull { it.isDefault }
+                ?: defaultSchemeWithLegacyNodeDisplaySettings()
             return listOf(defaultScheme) + storedSchemes
                 .filterNot { it.isDefault }
                 .distinctBy { it.id }
         }
 
-        return listOf(SkinScheme.default())
+        return listOf(defaultSchemeWithLegacyNodeDisplaySettings())
     }
 
     private fun encodeSkinSchemes(schemes: List<SkinScheme>): String {
@@ -1554,6 +1545,10 @@ class SettingsRepository(
                         put("appDisplayName", scheme.appDisplayName)
                         put("appIconPresetId", scheme.appIconPresetId)
                         put("baseColorArgb", normalizeSkinColor(scheme.baseColorArgb))
+                        put("showNodeProtocol", scheme.showNodeProtocol)
+                        put("showNodeSecurity", scheme.showNodeSecurity)
+                        put("showNodeTransport", scheme.showNodeTransport)
+                        put("showNodeCore", scheme.showNodeCore)
                         put("themeMode", scheme.themeMode.storageName)
                         put("navigationStyle", scheme.navigationStyle.storageName)
                         put("dialogMaterialVersion", scheme.dialogMaterialVersion.storageName)

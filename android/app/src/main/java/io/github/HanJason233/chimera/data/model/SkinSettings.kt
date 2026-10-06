@@ -64,8 +64,21 @@ data class SkinScheme(
     val homeDisconnectedParticleEffectEnabled: Boolean = true,
     val homeConnectingParticleEffectEnabled: Boolean = true,
     val homeDisconnectingParticleEffectEnabled: Boolean = true,
-    val homeConnectedParticleEffectEnabled: Boolean = true
+    val homeConnectedParticleEffectEnabled: Boolean = true,
+    /** 此主题下节点标签显示的协议、安全层、传输方式和核心。 */
+    val showNodeProtocol: Boolean = false,
+    val showNodeSecurity: Boolean = false,
+    val showNodeTransport: Boolean = false,
+    val showNodeCore: Boolean = false
 ) {
+    val nodeDisplaySettings: NodeDisplaySettings
+        get() = NodeDisplaySettings(
+            showProtocol = showNodeProtocol,
+            showSecurity = showNodeSecurity,
+            showTransport = showNodeTransport,
+            showCore = showNodeCore
+        )
+
     val isDefault: Boolean
         get() = id == DEFAULT_SCHEME_ID
 

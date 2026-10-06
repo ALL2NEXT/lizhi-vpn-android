@@ -34,6 +34,7 @@ internal fun SubscriptionGroupingDestination(
     val speedTestProgress by viewModel.speedTestProgress.collectAsStateWithLifecycle()
     val isRefreshingAllSubscriptions by
         viewModel.isRefreshingAllSubscriptions.collectAsStateWithLifecycle()
+    val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
     val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
     val groupManualSpeedTestSchemeId by
         viewModel.groupManualSpeedTestSchemeId.collectAsStateWithLifecycle()
@@ -42,8 +43,7 @@ internal fun SubscriptionGroupingDestination(
     val groupManualSpeedTestScheme = speedTestSchemes.firstOrNull {
         it.id == groupManualSpeedTestSchemeId
     } ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-    val nodeDisplaySettings by
-        viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
+    val nodeDisplaySettings = skinSettings.activeScheme.nodeDisplaySettings
     val protocolCoreSettings by
         viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val onImportNodeUris: ((String, (String, Boolean) -> Unit) -> Unit)? =

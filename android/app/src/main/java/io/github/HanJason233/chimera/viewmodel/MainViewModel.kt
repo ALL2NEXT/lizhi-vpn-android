@@ -588,11 +588,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         ProtocolCoreSettings()
     )
-    val nodeDisplaySettings = settingsRepository.nodeDisplaySettings.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        NodeDisplaySettings()
-    )
     val skinSettings = settingsRepository.skinSettings.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -1542,22 +1537,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.setProtocolCore(nodeType, core)
             restartVpnIfNeeded()
         }
-    }
-
-    fun setNodeLabelShowProtocol(show: Boolean) {
-        viewModelScope.launch { settingsRepository.setNodeLabelShowProtocol(show) }
-    }
-
-    fun setNodeLabelShowSecurity(show: Boolean) {
-        viewModelScope.launch { settingsRepository.setNodeLabelShowSecurity(show) }
-    }
-
-    fun setNodeLabelShowTransport(show: Boolean) {
-        viewModelScope.launch { settingsRepository.setNodeLabelShowTransport(show) }
-    }
-
-    fun setNodeLabelShowCore(show: Boolean) {
-        viewModelScope.launch { settingsRepository.setNodeLabelShowCore(show) }
     }
 
     fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {

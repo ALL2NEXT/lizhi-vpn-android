@@ -619,6 +619,42 @@ fun SkinSchemeEditorScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "节点标签显示",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "这些选项仅应用于当前主题方案。全部关闭后隐藏节点标签。",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    NodeDisplaySchemeSwitchRow("显示协议", scheme.showNodeProtocol) {
+                        viewModel.upsertSkinScheme(scheme.copy(showNodeProtocol = it))
+                    }
+                    NodeDisplaySchemeSwitchRow("显示安全层", scheme.showNodeSecurity) {
+                        viewModel.upsertSkinScheme(scheme.copy(showNodeSecurity = it))
+                    }
+                    NodeDisplaySchemeSwitchRow("显示传输方式", scheme.showNodeTransport) {
+                        viewModel.upsertSkinScheme(scheme.copy(showNodeTransport = it))
+                    }
+                    NodeDisplaySchemeSwitchRow("显示核心", scheme.showNodeCore) {
+                        viewModel.upsertSkinScheme(scheme.copy(showNodeCore = it))
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "主页状态",
@@ -838,6 +874,25 @@ fun SkinSchemeEditorScreen(
                 Text(if (isActive) "当前方案正在使用" else "应用此方案")
             }
         }
+    }
+}
+
+@Composable
+private fun NodeDisplaySchemeSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
