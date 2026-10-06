@@ -20,6 +20,12 @@ import java.security.MessageDigest
 import kotlinx.coroutines.withTimeout
 import io.github.HanJason233.chimera.util.RuntimeTuner
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import io.github.HanJason233.chimera.AppConfig
+import io.github.HanJason233.chimera.data.model.PersonalSourceUserAgentMode
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 
 /**
  * 订阅解析器：所有本地配置和远程响应先统一转换为 URI，再构造节点。
@@ -39,42 +45,76 @@ class SubscriptionParser {
     internal suspend fun fetchAndParseWithMetadata(
         url: String,
         timeoutMs: Long = 25000L,
-        encrypted: Boolean = false
+        encrypted: Boolean = false,
+        userAgentMode: PersonalSourceUserAgentMode? = null,
+        customUserAgent: String? = null
     ): Result<ParsedSubscription> {
-        return try {
-            val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
-                NetworkClient.apiService.getSubscription(url)
-            }
-            if (!response.isSuccessful) {
-                throw IllegalStateException("订阅接口返回 HTTP ${response.code()}")
-            }
-            val raw = withContext(Dispatchers.IO) {
-                response.body()?.use { it.string() }
-                    ?: throw IllegalStateException("订阅接口返回空内容")
-            }
-            val nodes = withContext(Dispatchers.Default) {
-                val content = if (encrypted) {
-                    val route = response.headers()[CLIENT_IP_HEADER]
-                        ?: response.headers()[LEGACY_CLIENT_IP_HEADER]
-                        ?: throw IllegalStateException("加密订阅缺少 $CLIENT_IP_HEADER 响应头")
-                    RuntimeTuner.c1(raw, route)
-                } else {
-                    raw
-                }
-                parseSubscription(content)
-            }
-            val userInfo = SubscriptionUserInfo.parse(response.headers()[SUBSCRIPTION_USERINFO_HEADER])
-            val name = parseSubscriptionName(
-                response.headers()["Profile-Title"],
-                response.headers()["Subscription-Name"],
-                response.headers()["Content-Disposition"]
+        val userAgents = when (userAgentMode) {
+            null -> listOf(AppConfig.HTTP_USER_AGENT)
+            PersonalSourceUserAgentMode.AUTO -> AUTOMATIC_USER_AGENTS
+            PersonalSourceUserAgentMode.CUSTOM -> listOfNotNull(
+                customUserAgent?.trim()?.takeIf(String::isNotBlank)
             )
-            Result.success(ParsedSubscription(nodes, userInfo, name))
-        } catch (e: Exception) {
-            // 订阅地址经常含有访问令牌，日志中不得输出完整 URL。
-            Log.e(tag, "Failed to fetch subscription", e)
-            Result.failure(e)
         }
+        if (userAgents.isEmpty()) {
+            return Result.failure(IllegalArgumentException("固定 User-Agent 不能为空"))
+        }
+
+        var lastFailure: Throwable? = null
+        for (userAgent in userAgents) {
+            try {
+                val response = withTimeout(timeoutMs.coerceIn(5000L, 60000L)) {
+                    NetworkClient.apiService.getSubscription(url, userAgent)
+                }
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("订阅请求返回 HTTP ${response.code()}")
+                }
+                val raw = withContext(Dispatchers.IO) {
+                    response.body()?.use { it.string() }
+                        ?: throw IllegalStateException("订阅接口返回空内容")
+                }
+                val nodes = withContext(Dispatchers.Default) {
+                    val content = if (encrypted) {
+                        val route = response.headers()[CLIENT_IP_HEADER]
+                            ?: response.headers()[LEGACY_CLIENT_IP_HEADER]
+                            ?: throw IllegalStateException(
+                                "加密订阅缺少 $CLIENT_IP_HEADER 响应头"
+                            )
+                        RuntimeTuner.c1(raw, route)
+                    } else {
+                        raw
+                    }
+                    parseSubscription(content)
+                }
+                if (nodes.isEmpty()) {
+                    throw IllegalStateException("订阅内容未解析到可用节点")
+                }
+                val userInfo = SubscriptionUserInfo.parse(
+                    response.headers()[SUBSCRIPTION_USERINFO_HEADER]
+                )
+                val name = parseSubscriptionName(
+                    response.headers()["Profile-Title"],
+                    response.headers()["Subscription-Name"],
+                    response.headers()["Content-Disposition"]
+                )
+                return Result.success(ParsedSubscription(nodes, userInfo, name))
+            } catch (error: CancellationException) {
+                if (error !is TimeoutCancellationException || !currentCoroutineContext().isActive) {
+                    throw error
+                }
+                lastFailure = error
+            } catch (error: Exception) {
+                lastFailure = error
+            }
+
+            if (userAgentMode == null || userAgentMode == PersonalSourceUserAgentMode.CUSTOM) {
+                break
+            }
+        }
+
+        val error = lastFailure ?: IllegalStateException("订阅请求失败")
+        Log.e(tag, "Failed to fetch subscription with configured User-Agent options", error)
+        return Result.failure(error)
     }
 
     /** 使用指定网络客户端拉取订阅，供 VPN 断线后通过物理网络刷新当前订阅。 */
@@ -490,6 +530,16 @@ class SubscriptionParser {
     }
 
     private companion object {
+        // 自动模式按列表顺序逐个尝试，成功解析后立即停止。
+        val AUTOMATIC_USER_AGENTS = listOf(
+            "NekoBox/Android/1.4.2 (Prefer ClashMeta Format)",
+            "sing-box/1.15.0",
+            "Singbox/1.14",
+            "clash-meta",
+            "v2rayN/7.8.2",
+            "Throne/1.0.0",
+            "sing-box/1.14.0"
+        )
         const val CLIENT_IP_HEADER = "X-Chimera-Client-IP"
         private const val LEGACY_CLIENT_IP_HEADER = "X-Firefly-Client-IP"
         private const val SUBSCRIPTION_USERINFO_HEADER = "Subscription-Userinfo"

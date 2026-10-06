@@ -4,6 +4,7 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Url
@@ -23,7 +24,10 @@ interface ApiService {
     suspend fun getBackendConfig(@Url url: String): String
 
     @GET
-    suspend fun getSubscription(@Url url: String): Response<ResponseBody>
+    suspend fun getSubscription(
+        @Url url: String,
+        @Header("User-Agent") userAgent: String?
+    ): Response<ResponseBody>
 
     @POST
     suspend fun registerAccount(

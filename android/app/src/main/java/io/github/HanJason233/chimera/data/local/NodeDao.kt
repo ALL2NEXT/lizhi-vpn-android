@@ -127,9 +127,6 @@ interface NodeDao {
     @Query("DELETE FROM nodes WHERE source = 'LOCAL_GROUP' AND subscriptionSourceId = :groupId")
     suspend fun deleteLocalGroupNodes(groupId: String)
 
-    @Query("UPDATE node_groups SET name = :name, subscriptionUrl = :subscriptionUrl WHERE id = :groupId")
-    suspend fun updateNodeGroup(groupId: String, name: String, subscriptionUrl: String?): Int
-
     @Query(
         """
         UPDATE node_groups SET
@@ -151,6 +148,8 @@ interface NodeDao {
         UPDATE node_groups SET
             name = :name,
             subscriptionUrl = :subscriptionUrl,
+            userAgentMode = :userAgentMode,
+            customUserAgent = :customUserAgent,
             subscriptionUploadBytes = :subscriptionUploadBytes,
             subscriptionDownloadBytes = :subscriptionDownloadBytes,
             subscriptionTotalBytes = :subscriptionTotalBytes,
@@ -163,6 +162,8 @@ interface NodeDao {
         groupId: String,
         name: String,
         subscriptionUrl: String?,
+        userAgentMode: String,
+        customUserAgent: String?,
         subscriptionUploadBytes: Long?,
         subscriptionDownloadBytes: Long?,
         subscriptionTotalBytes: Long?,
@@ -177,18 +178,48 @@ interface NodeDao {
     suspend fun updateNodeGroupMetadata(
         groupId: String,
         name: String,
-        subscriptionUrl: String?
+        subscriptionUrl: String?,
+        userAgentMode: String,
+        customUserAgent: String?
     ): Boolean {
-        if (updateNodeGroup(groupId, name, subscriptionUrl) == 0) return false
+        if (
+            updateNodeGroupMetadataFields(
+                groupId,
+                name,
+                subscriptionUrl,
+                userAgentMode,
+                customUserAgent
+            ) == 0
+        ) return false
         updateLocalGroupNodeNames(groupId, name)
         return true
     }
+
+    @Query(
+        """
+        UPDATE node_groups SET
+            name = :name,
+            subscriptionUrl = :subscriptionUrl,
+            userAgentMode = :userAgentMode,
+            customUserAgent = :customUserAgent
+        WHERE id = :groupId
+        """
+    )
+    suspend fun updateNodeGroupMetadataFields(
+        groupId: String,
+        name: String,
+        subscriptionUrl: String?,
+        userAgentMode: String,
+        customUserAgent: String?
+    ): Int
 
     @Transaction
     suspend fun replaceLocalGroupNodes(
         groupId: String,
         name: String,
         subscriptionUrl: String?,
+        userAgentMode: String,
+        customUserAgent: String?,
         subscriptionUploadBytes: Long?,
         subscriptionDownloadBytes: Long?,
         subscriptionTotalBytes: Long?,
@@ -202,6 +233,8 @@ interface NodeDao {
                 groupId = groupId,
                 name = name,
                 subscriptionUrl = subscriptionUrl,
+                userAgentMode = userAgentMode,
+                customUserAgent = customUserAgent,
                 subscriptionUploadBytes = subscriptionUploadBytes,
                 subscriptionDownloadBytes = subscriptionDownloadBytes,
                 subscriptionTotalBytes = subscriptionTotalBytes,

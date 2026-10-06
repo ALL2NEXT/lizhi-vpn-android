@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
+import io.github.HanJason233.chimera.data.model.PersonalSourceUserAgentMode
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
@@ -47,7 +48,14 @@ fun NodeGroupingDestination(
     onCountrySelected: (String) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onCreateSubscriptionGroup: (String?, (Boolean) -> Unit) -> Unit,
-    onUpdateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit,
+    onUpdateSubscriptionGroup: (
+        String,
+        String,
+        String?,
+        PersonalSourceUserAgentMode,
+        String?,
+        (Boolean) -> Unit
+    ) -> Unit,
     onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
     onScanQrCode: () -> Unit,
     scannedSubscriptionText: String?,

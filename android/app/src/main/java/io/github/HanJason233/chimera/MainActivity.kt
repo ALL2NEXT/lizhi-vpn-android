@@ -37,6 +37,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.saveable.rememberSaveable
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
+import io.github.HanJason233.chimera.data.model.PersonalSourceUserAgentMode
 import io.github.HanJason233.chimera.feature.nodegrouping.ui.NodeGroupingDestination
 import io.github.HanJason233.chimera.feature.nodegrouping.ui.NodeGroupingDetailRequest
 import io.github.HanJason233.chimera.feature.perappinbound.ui.PerAppInboundScreen
@@ -133,9 +134,22 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
-                        val updateSubscriptionGroup: (String, String, String?, (Boolean) -> Unit) -> Unit =
-                            { groupId, name, input, onComplete ->
-                                viewModel.updateSubscriptionGroup(groupId, name, input) { result, importedCount ->
+                        val updateSubscriptionGroup: (
+                            String,
+                            String,
+                            String?,
+                            PersonalSourceUserAgentMode,
+                            String?,
+                            (Boolean) -> Unit
+                        ) -> Unit =
+                            { groupId, name, input, userAgentMode, customUserAgent, onComplete ->
+                                viewModel.updateSubscriptionGroup(
+                                    groupId,
+                                    name,
+                                    input,
+                                    userAgentMode,
+                                    customUserAgent
+                                ) { result, importedCount ->
                                     val message = when (result) {
                                         MainViewModel.SubscriptionGroupEditResult.UPDATED ->
                                             if (importedCount > 0) {
@@ -316,8 +330,21 @@ class MainActivity : ComponentActivity() {
                                                 onCreateSubscriptionGroup = { input, onComplete ->
                                                     createSubscriptionGroup(input, onComplete)
                                                 },
-                                                onUpdateSubscriptionGroup = { groupId, name, input, onComplete ->
-                                                    updateSubscriptionGroup(groupId, name, input, onComplete)
+                                                onUpdateSubscriptionGroup = {
+                                                        groupId,
+                                                        name,
+                                                        input,
+                                                        userAgentMode,
+                                                        customUserAgent,
+                                                        onComplete ->
+                                                    updateSubscriptionGroup(
+                                                        groupId,
+                                                        name,
+                                                        input,
+                                                        userAgentMode,
+                                                        customUserAgent,
+                                                        onComplete
+                                                    )
                                                 },
                                                 onDeleteSubscriptionGroup = { groupId, onComplete ->
                                                     deleteSubscriptionGroup(groupId, onComplete)

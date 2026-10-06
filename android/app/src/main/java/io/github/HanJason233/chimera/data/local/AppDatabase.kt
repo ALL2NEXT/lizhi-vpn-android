@@ -21,7 +21,7 @@ import java.io.File
         NodeGroupMemberEntity::class,
         HomeNodeTestResultsEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)

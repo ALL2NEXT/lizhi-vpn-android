@@ -117,19 +117,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     private suspend fun fetchRemoteSubscriptionResults(
-        urls: List<String>
+        urls: List<String>,
+        userAgentMode: PersonalSourceUserAgentMode = PersonalSourceUserAgentMode.AUTO,
+        customUserAgent: String? = null
     ): List<Result<ParsedSubscription>> = coroutineScope {
         urls.map { url ->
             async(Dispatchers.IO) {
-                subscriptionParser.fetchAndParseWithMetadata(url)
+                subscriptionParser.fetchAndParseWithMetadata(
+                    url = url,
+                    userAgentMode = userAgentMode,
+                    customUserAgent = customUserAgent
+                )
             }
         }.awaitAll()
     }
 
     private suspend fun fetchRemoteSubscriptions(
-        urls: List<String>
+        urls: List<String>,
+        userAgentMode: PersonalSourceUserAgentMode = PersonalSourceUserAgentMode.AUTO,
+        customUserAgent: String? = null
     ): Result<List<ParsedSubscription>> {
-        val results = fetchRemoteSubscriptionResults(urls)
+        val results = fetchRemoteSubscriptionResults(urls, userAgentMode, customUserAgent)
         val failure = results.firstOrNull { it.isFailure }
         return if (failure != null) {
             Result.failure(
@@ -147,17 +155,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
     private suspend fun parseSubscriptionInput(
-        input: SubscriptionImportInput
+        input: SubscriptionImportInput,
+        userAgentMode: PersonalSourceUserAgentMode = PersonalSourceUserAgentMode.AUTO,
+        customUserAgent: String? = null
     ): Result<List<ParsedSubscriptionPart>> {
         return when (input) {
             is SubscriptionImportInput.RemoteSubscription -> {
-                fetchRemoteSubscriptions(listOf(input.url)).map { parsed ->
+                fetchRemoteSubscriptions(listOf(input.url), userAgentMode, customUserAgent).map { parsed ->
                     listOf(ParsedSubscriptionPart(input.url, parsed.single()))
                 }
             }
 
             is SubscriptionImportInput.MultipleRemoteSubscriptions -> {
-                fetchRemoteSubscriptions(input.urls).map { parsed ->
+                fetchRemoteSubscriptions(input.urls, userAgentMode, customUserAgent).map { parsed ->
                     input.urls.mapIndexed { index, url ->
                         ParsedSubscriptionPart(url, parsed[index])
                     }
@@ -165,7 +175,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             is SubscriptionImportInput.MixedSubscription -> {
-                fetchRemoteSubscriptions(input.urls).map { parsed ->
+                fetchRemoteSubscriptions(input.urls, userAgentMode, customUserAgent).map { parsed ->
                     buildList {
                         add(
                             ParsedSubscriptionPart(
@@ -353,6 +363,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     iconMode = item.group.iconMode,
                     customIconUrl = item.group.customIconUrl,
                     localIconFile = item.group.localIconFile,
+                    userAgentMode = item.group.userAgentMode,
+                    customUserAgent = item.group.customUserAgent,
                     subscriptionUpdatedAt = item.group.subscriptionUpdatedAt
                         .takeIf { it > 0L }
                         ?: item.group.createdAt.takeIf { it > 0L }
@@ -2166,11 +2178,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         groupId: String,
         name: String,
         input: String?,
+        userAgentMode: PersonalSourceUserAgentMode,
+        customUserAgent: String?,
         onResult: (SubscriptionGroupEditResult, Int) -> Unit = { _, _ -> }
     ) {
         viewModelScope.launch {
             val normalizedName = name.trim()
             if (normalizedName.isBlank()) {
+                onResult(SubscriptionGroupEditResult.INVALID, 0)
+                return@launch
+            }
+            val normalizedCustomUserAgent = customUserAgent?.trim()
+                ?.takeIf(String::isNotBlank)
+                ?.takeIf { userAgentMode == PersonalSourceUserAgentMode.CUSTOM }
+            if (userAgentMode == PersonalSourceUserAgentMode.CUSTOM &&
+                normalizedCustomUserAgent == null
+            ) {
                 onResult(SubscriptionGroupEditResult.INVALID, 0)
                 return@launch
             }
@@ -2191,7 +2214,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     dao.updateNodeGroupMetadata(
                         groupId = groupId,
                         name = normalizedName,
-                        subscriptionUrl = existingGroup.subscriptionUrl
+                        subscriptionUrl = existingGroup.subscriptionUrl,
+                        userAgentMode = userAgentMode.name,
+                        customUserAgent = normalizedCustomUserAgent
                     )
                 }
                 onResult(
@@ -2203,7 +2228,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val importInput = SubscriptionInputDetector.detect(normalizedInput)
-            val parsedSubscriptions = parseSubscriptionInput(importInput)
+            val parsedSubscriptions = parseSubscriptionInput(
+                importInput,
+                userAgentMode,
+                normalizedCustomUserAgent
+            )
             if (parsedSubscriptions.isFailure) {
                 Log.e(
                     tag,
@@ -2255,6 +2284,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     groupId = groupId,
                     name = normalizedName,
                     subscriptionUrl = subscriptionUrl,
+                    userAgentMode = userAgentMode.name,
+                    customUserAgent = normalizedCustomUserAgent,
                     subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
                     subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
                     subscriptionTotalBytes = parsed.userInfo?.totalBytes,
@@ -2333,7 +2364,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ) {
             return SubscriptionGroupRefreshResult.INVALID
         }
-        val parsedSubscriptions = parseSubscriptionInput(importInput)
+        val parsedSubscriptions = parseSubscriptionInput(
+            importInput,
+            PersonalSourceUserAgentMode.fromStorage(group.userAgentMode),
+            group.customUserAgent
+        )
         if (parsedSubscriptions.isFailure) {
             Log.e(
                 tag,
@@ -2382,6 +2417,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 groupId = groupId,
                 name = group.name,
                 subscriptionUrl = subscriptionUrl,
+                userAgentMode = group.userAgentMode,
+                customUserAgent = group.customUserAgent,
                 subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
                 subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
                 subscriptionTotalBytes = parsed.userInfo?.totalBytes,

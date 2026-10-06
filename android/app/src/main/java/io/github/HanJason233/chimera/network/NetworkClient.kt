@@ -14,9 +14,14 @@ object NetworkClient {
 
     fun withUserAgent(builder: OkHttpClient.Builder): OkHttpClient.Builder {
         return builder.addInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .header("User-Agent", AppConfig.HTTP_USER_AGENT)
-                .build()
+            val originalRequest = chain.request()
+            val request = if (originalRequest.header("User-Agent").isNullOrBlank()) {
+                originalRequest.newBuilder()
+                    .header("User-Agent", AppConfig.HTTP_USER_AGENT)
+                    .build()
+            } else {
+                originalRequest
+            }
             chain.proceed(request)
         }
     }

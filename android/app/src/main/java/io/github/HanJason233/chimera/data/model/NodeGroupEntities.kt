@@ -26,7 +26,10 @@ data class NodeGroupEntity(
     @ColumnInfo(defaultValue = "'AUTO_REMOTE'")
     val iconMode: String = PersonalSourceIconMode.AUTO_REMOTE.name,
     val customIconUrl: String? = null,
-    val localIconFile: String? = null
+    val localIconFile: String? = null,
+    @ColumnInfo(defaultValue = "'AUTO'")
+    val userAgentMode: String = PersonalSourceUserAgentMode.AUTO.name,
+    val customUserAgent: String? = null
 )
 
 /** 节点与用户组的多对多关系。 */

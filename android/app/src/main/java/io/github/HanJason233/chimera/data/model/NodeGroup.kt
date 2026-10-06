@@ -31,6 +31,17 @@ enum class PersonalSourceIconMode {
     }
 }
 
+/** 绉佷汉婧愯闃呰姹傜殑 User-Agent 閫夋嫨鏂瑰紡銆?*/
+enum class PersonalSourceUserAgentMode {
+    AUTO,
+    CUSTOM;
+
+    companion object {
+        fun fromStorage(value: String?): PersonalSourceUserAgentMode =
+            entries.firstOrNull { it.name == value } ?: AUTO
+    }
+}
+
 /**
  * 节点组的稳定标识，避免使用显示名称作为选中状态或数据库关联键。
  */
@@ -91,5 +102,7 @@ data class NodeGroupSummary(
     val subscriptionUpdatedAt: Long? = null,
     val iconMode: String = PersonalSourceIconMode.AUTO_REMOTE.name,
     val customIconUrl: String? = null,
-    val localIconFile: String? = null
+    val localIconFile: String? = null,
+    val userAgentMode: String = PersonalSourceUserAgentMode.AUTO.name,
+    val customUserAgent: String? = null
 )
