@@ -296,12 +296,13 @@ class BoxVpnService : VpnService() {
     }
 
     private fun updateTraffic(stats: CoreTraffic?) {
-        if (stats == null) return
+        if (!isOfficialSourceNode(activeNode) || stats == null) return
         uploadTotal = maxOf(uploadTotal, stats.upload)
         downloadTotal = maxOf(downloadTotal, stats.download)
     }
 
     @Synchronized private fun persistTraffic(force: Boolean) {
+        if (!isOfficialSourceNode(activeNode)) return
         val now = System.currentTimeMillis()
         if (!force && now - lastPersistAt < 60_000) return
         val upload = (uploadTotal - persistedUpload).coerceAtLeast(0)
@@ -312,6 +313,10 @@ class BoxVpnService : VpnService() {
             lastPersistAt = now
         }
     }
+
+    // 仅统计官方订阅节点；私人源节点属于本地分组，不纳入流量汇总和服务器上报。
+    private fun isOfficialSourceNode(node: Node?): Boolean =
+        node?.source == NodeSource.SUBSCRIPTION && !node.subscriptionSourceId.isNullOrBlank()
 
     private fun parseMode(value: String?): ProxyMode? = value?.let { runCatching { ProxyMode.valueOf(it) }.getOrNull() }
     override fun onRevoke() { stopVpn() }
