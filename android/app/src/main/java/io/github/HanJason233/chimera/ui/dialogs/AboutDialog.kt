@@ -189,7 +189,7 @@ fun AboutDialog(
 
                     // 描述
                     Text(
-                        text = "基于xray和sing-box的现代化双核智能代理程序",
+                        text = "Chimera 是一款基于 Xray-core 与 sing-box 构建的代理客户端，功能全面，兼具高性能与高兼容性。",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
