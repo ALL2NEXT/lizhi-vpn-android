@@ -42,6 +42,13 @@ data class SpeedTestScheme(
     val urlTestSelectionValue: Int = 50,
     val bandwidthSelectionMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
     val bandwidthSelectionValue: Int = 50,
+    /** TCPing 本项结束后，是否删除本轮超时节点。 */
+    val tcpingAutoDeleteTimeoutNodes: Boolean = false,
+    /** URL Test 本项结束后，是否删除本轮超时节点。 */
+    val urlTestAutoDeleteTimeoutNodes: Boolean = false,
+    /** 带宽测试后是否删除低于阈值的节点。 */
+    val bandwidthAutoDeleteLowSpeedNodes: Boolean = false,
+    val bandwidthAutoDeleteThresholdMbps: Int = 10,
     val tcpingTimeoutMs: Long = 1_000L,
     val urlTestWarmupTimeoutMs: Long = 4_000L,
     val urlTestMeasurementTimeoutMs: Long = 1_000L,
@@ -65,8 +72,9 @@ data class SpeedTestScheme(
             urlTestEnabled = true,
             bandwidthEnabled = false,
             linkTypeTestEnabled = true,
-            tcpingSelectionMode = SpeedTestSelectionMode.PERCENT,
-            tcpingSelectionValue = 100,
+            // 默认将 TCPing 延迟最优的 10 个节点交给下一项测试。
+            tcpingSelectionMode = SpeedTestSelectionMode.COUNT,
+            tcpingSelectionValue = 10,
             urlTestSelectionMode = SpeedTestSelectionMode.COUNT,
             urlTestSelectionValue = 10,
             tcpingTimeoutMs = 1_000L,

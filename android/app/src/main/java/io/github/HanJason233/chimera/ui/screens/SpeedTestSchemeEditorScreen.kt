@@ -102,6 +102,18 @@ fun SpeedTestSchemeEditorScreen(
     var bandwidthSelectionValue by remember(scheme.id, scheme.bandwidthSelectionValue) {
         mutableStateOf(scheme.bandwidthSelectionValue.toString())
     }
+    var tcpingAutoDeleteTimeoutNodes by remember(scheme.id, scheme.tcpingAutoDeleteTimeoutNodes) {
+        mutableStateOf(scheme.tcpingAutoDeleteTimeoutNodes)
+    }
+    var urlTestAutoDeleteTimeoutNodes by remember(scheme.id, scheme.urlTestAutoDeleteTimeoutNodes) {
+        mutableStateOf(scheme.urlTestAutoDeleteTimeoutNodes)
+    }
+    var bandwidthAutoDeleteLowSpeedNodes by remember(scheme.id, scheme.bandwidthAutoDeleteLowSpeedNodes) {
+        mutableStateOf(scheme.bandwidthAutoDeleteLowSpeedNodes)
+    }
+    var bandwidthAutoDeleteThreshold by remember(scheme.id, scheme.bandwidthAutoDeleteThresholdMbps) {
+        mutableStateOf(scheme.bandwidthAutoDeleteThresholdMbps.toString())
+    }
     var tcpingTimeout by remember(scheme.id, scheme.tcpingTimeoutMs) { mutableStateOf(scheme.tcpingTimeoutMs.toString()) }
     var urlWarmupTimeout by remember(scheme.id, scheme.urlTestWarmupTimeoutMs) {
         mutableStateOf(scheme.urlTestWarmupTimeoutMs.toString())
@@ -155,6 +167,12 @@ fun SpeedTestSchemeEditorScreen(
                                 bandwidthSelectionMode = bandwidthSelectionMode,
                                 bandwidthSelectionValue = bandwidthSelectionValue.toIntOrNull()
                                     ?: scheme.bandwidthSelectionValue,
+                                tcpingAutoDeleteTimeoutNodes = tcpingAutoDeleteTimeoutNodes,
+                                urlTestAutoDeleteTimeoutNodes = urlTestAutoDeleteTimeoutNodes,
+                                bandwidthAutoDeleteLowSpeedNodes = bandwidthAutoDeleteLowSpeedNodes,
+                                bandwidthAutoDeleteThresholdMbps = bandwidthAutoDeleteThreshold.toIntOrNull()
+                                    ?.coerceIn(0, 100_000)
+                                    ?: scheme.bandwidthAutoDeleteThresholdMbps,
                                 tcpingTimeoutMs = tcpingTimeout.toLongOrNull() ?: scheme.tcpingTimeoutMs,
                                 urlTestWarmupTimeoutMs = urlWarmupTimeout.toLongOrNull()
                                     ?: scheme.urlTestWarmupTimeoutMs,
@@ -205,6 +223,19 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = tcpingEnabled,
                 onEnabledChange = { tcpingEnabled = it }
             ) {
+                NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) { tcpingTimeout = it }
+                NumberInput("并发", tcpingConcurrency, enabled = tcpingEnabled) { tcpingConcurrency = it }
+                AutoDeleteSwitchRow(
+                    label = "自动删除 TCPing 超时节点",
+                    checked = tcpingAutoDeleteTimeoutNodes,
+                    enabled = tcpingEnabled,
+                    onCheckedChange = { tcpingAutoDeleteTimeoutNodes = it }
+                )
+                Text(
+                    "仅删除本项测试中超时的节点；当前正在连接的节点会保留。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 ResultRetentionInput(
                     mode = tcpingSelectionMode,
                     value = tcpingSelectionValue,
@@ -212,8 +243,6 @@ fun SpeedTestSchemeEditorScreen(
                     onModeChange = { tcpingSelectionMode = it },
                     onValueChange = { tcpingSelectionValue = it }
                 )
-                NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) { tcpingTimeout = it }
-                NumberInput("并发", tcpingConcurrency, enabled = tcpingEnabled) { tcpingConcurrency = it }
             }
 
             SchemeCard(
@@ -221,13 +250,6 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = urlTestEnabled,
                 onEnabledChange = { urlTestEnabled = it }
             ) {
-                ResultRetentionInput(
-                    mode = urlSelectionMode,
-                    value = urlSelectionValue,
-                    enabled = urlTestEnabled,
-                    onModeChange = { urlSelectionMode = it },
-                    onValueChange = { urlSelectionValue = it }
-                )
                 NumberInput("预热建连超时 (ms)", urlWarmupTimeout, enabled = urlTestEnabled) {
                     urlWarmupTimeout = it
                 }
@@ -266,6 +288,24 @@ fun SpeedTestSchemeEditorScreen(
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                AutoDeleteSwitchRow(
+                    label = "自动删除 URL Test 超时节点",
+                    checked = urlTestAutoDeleteTimeoutNodes,
+                    enabled = urlTestEnabled,
+                    onCheckedChange = { urlTestAutoDeleteTimeoutNodes = it }
+                )
+                Text(
+                    "仅删除本项测试中超时的节点；当前正在连接的节点会保留。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                ResultRetentionInput(
+                    mode = urlSelectionMode,
+                    value = urlSelectionValue,
+                    enabled = urlTestEnabled,
+                    onModeChange = { urlSelectionMode = it },
+                    onValueChange = { urlSelectionValue = it }
+                )
             }
 
             SchemeCard(
@@ -273,13 +313,6 @@ fun SpeedTestSchemeEditorScreen(
                 enabled = bandwidthEnabled,
                 onEnabledChange = { bandwidthEnabled = it }
             ) {
-                ResultRetentionInput(
-                    mode = bandwidthSelectionMode,
-                    value = bandwidthSelectionValue,
-                    enabled = bandwidthEnabled,
-                    onModeChange = { bandwidthSelectionMode = it },
-                    onValueChange = { bandwidthSelectionValue = it }
-                )
                 NumberInput("测速时长 (ms)", bandwidthDuration, enabled = bandwidthEnabled) { bandwidthDuration = it }
                 NumberInput("并发", bandwidthConcurrency, enabled = bandwidthEnabled) { bandwidthConcurrency = it }
                 OutlinedTextField(
@@ -296,6 +329,33 @@ fun SpeedTestSchemeEditorScreen(
                     "带宽地址应指向可下载内容。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                AutoDeleteSwitchRow(
+                    label = "自动删除低带宽节点",
+                    checked = bandwidthAutoDeleteLowSpeedNodes,
+                    enabled = bandwidthEnabled,
+                    onCheckedChange = { bandwidthAutoDeleteLowSpeedNodes = it }
+                )
+                OutlinedTextField(
+                    value = bandwidthAutoDeleteThreshold,
+                    onValueChange = { bandwidthAutoDeleteThreshold = it.filter(Char::isDigit) },
+                    label = { Text("自动删除阈值 (Mbps)") },
+                    singleLine = true,
+                    enabled = bandwidthEnabled && bandwidthAutoDeleteLowSpeedNodes,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "低于阈值的节点会在本项测试后删除；当前正在连接的节点会保留。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                ResultRetentionInput(
+                    mode = bandwidthSelectionMode,
+                    value = bandwidthSelectionValue,
+                    enabled = bandwidthEnabled,
+                    onModeChange = { bandwidthSelectionMode = it },
+                    onValueChange = { bandwidthSelectionValue = it }
                 )
             }
 
@@ -398,6 +458,26 @@ private fun TestPhaseLabel(title: String) {
 }
 
 @Composable
+private fun AutoDeleteSwitchRow(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, modifier = Modifier.weight(1f), fontSize = 14.sp)
+        Switch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+@Composable
 private fun SchemeCard(
     title: String,
     enabled: Boolean? = null,
@@ -438,7 +518,7 @@ private fun ResultRetentionInput(
     OutlinedTextField(
         value = value,
         onValueChange = { onValueChange(it.filter(Char::isDigit)) },
-        label = { Text("输出结果") },
+        label = { Text("输出给下一项") },
         singleLine = true,
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

@@ -575,18 +575,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         AppConfig.BANDWIDTH_TEST_CONCURRENCY
     )
     val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
-    val autoDeleteTcpingTimeoutNodes = settingsRepository.autoDeleteTcpingTimeoutNodes.stateIn(
-        viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES
-    )
-    val autoDeleteUrlTestTimeoutNodes = settingsRepository.autoDeleteUrlTestTimeoutNodes.stateIn(
-        viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES
-    )
-    val autoDeleteLowBandwidthNodes = settingsRepository.autoDeleteLowBandwidthNodes.stateIn(
-        viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_LOW_BANDWIDTH_NODES
-    )
-    val autoDeleteBandwidthThresholdMbps = settingsRepository.autoDeleteBandwidthThresholdMbps.stateIn(
-        viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS
-    )
     val updateDownloadDirectoryUri = settingsRepository.updateDownloadDirectoryUri.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -834,6 +822,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         currentNodes = tcpingNodes,
                         concurrency = scheme.tcpingConcurrency,
                         timeoutMs = scheme.tcpingTimeoutMs,
+                        autoDeleteTimeoutNodes = scheme.tcpingAutoDeleteTimeoutNodes,
                         onProgress = { completed, total ->
                             updateSpeedTestProgress(
                                 title = progressTitle,
@@ -880,7 +869,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }
                     )
-                    applyUrlTestResults(urlTestResults)
+                    applyUrlTestResults(
+                        urlTestResults,
+                        autoDeleteTimeoutNodes = scheme.urlTestAutoDeleteTimeoutNodes
+                    )
                     val candidates = urlTestResults
                         .filter { it.isAvailable && it.latency > 0 }
                         .sortedBy { it.latency }
@@ -930,8 +922,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     _nodeTestResultSortMode.value =
                         NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
-                    val deleteLowBandwidth = autoDeleteLowBandwidthNodes.value
-                    val bandwidthThreshold = autoDeleteBandwidthThresholdMbps.value
+                    val deleteLowBandwidth = scheme.bandwidthAutoDeleteLowSpeedNodes
+                    val bandwidthThreshold = scheme.bandwidthAutoDeleteThresholdMbps
                     if (deleteLowBandwidth) {
                         deleteNodes(
                             nodeIds = speedResults
@@ -957,8 +949,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     stageResults[scheme.enabledQualityStages.last()]?.firstOrNull()
                 }
                 if (bestNode == null) {
-                    _error.value = if (scheme.bandwidthEnabled && autoDeleteLowBandwidthNodes.value) {
-                        "没有节点达到带宽阈值（${autoDeleteBandwidthThresholdMbps.value} Mbps）"
+                    _error.value = if (scheme.bandwidthEnabled && scheme.bandwidthAutoDeleteLowSpeedNodes) {
+                        "没有节点达到带宽阈值（${scheme.bandwidthAutoDeleteThresholdMbps} Mbps）"
                     } else {
                         "测速未找到可连接节点"
                     }
@@ -1051,6 +1043,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             currentNodes = candidates,
                             concurrency = scheme.tcpingConcurrency,
                             timeoutMs = scheme.tcpingTimeoutMs,
+                            autoDeleteTimeoutNodes = scheme.tcpingAutoDeleteTimeoutNodes,
                             onProgress = { completed, total ->
                                 updateSpeedTestProgress(
                                     title = progressTitle,
@@ -1092,7 +1085,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             _error.value = "URL Test 未能启动"
                             return@launch
                         }
-                        applyUrlTestResults(results)
+                        applyUrlTestResults(
+                            results,
+                            autoDeleteTimeoutNodes = scheme.urlTestAutoDeleteTimeoutNodes
+                        )
                     }
 
                     ManualGroupTestStage.BANDWIDTH -> {
@@ -1104,7 +1100,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             isManualGroupTest = true
                         )
                         var completedBandwidthNodes = 0
-                        candidates
+                        val speedResults = candidates
                             .chunked(scheme.bandwidthTestConcurrency)
                             .flatMap { batch ->
                                 val results = coroutineScope {
@@ -1130,6 +1126,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 )
                                 results
                             }
+                        if (scheme.bandwidthAutoDeleteLowSpeedNodes) {
+                            val threshold = scheme.bandwidthAutoDeleteThresholdMbps
+                            deleteNodes(
+                                nodeIds = speedResults
+                                    .filter { (_, speedMbps) -> speedMbps < threshold.toFloat() }
+                                    .map { (node, _) -> node.id },
+                                reason = "带宽低于 ${threshold} Mbps"
+                            )
+                        }
                         _nodeTestResultSortMode.value =
                             NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
                     }
@@ -1466,24 +1471,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setAutoDeleteTcpingTimeoutNodes(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoDeleteTcpingTimeoutNodes(enabled)
-        }
-    }
-
-    fun setAutoDeleteUrlTestTimeoutNodes(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setAutoDeleteUrlTestTimeoutNodes(enabled) }
-    }
-
-    fun setAutoDeleteLowBandwidthNodes(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setAutoDeleteLowBandwidthNodes(enabled) }
-    }
-
-    fun setAutoDeleteBandwidthThresholdMbps(value: Int) {
-        viewModelScope.launch { settingsRepository.setAutoDeleteBandwidthThresholdMbps(value) }
-    }
-
     /**
      * 使用直连网络分别测试下行和上行带宽，并按 10 Mbps 档位向上取整后写入 Hy2 设置。
      */
@@ -1630,7 +1617,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun applyUrlTestResults(results: List<LatencyTester.LatencyResult>) {
+    private suspend fun applyUrlTestResults(
+        results: List<LatencyTester.LatencyResult>,
+        autoDeleteTimeoutNodes: Boolean
+    ) {
 
         val updates = results.map { result ->
             NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
@@ -1640,18 +1630,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             Log.w(tag, "Only $updatedRows/${updates.size} URL test results were applied")
         }
         _nodeTestResultSortMode.value = NodeTestResultSortMode.URL_TEST_LATENCY
-        deleteTimedOutNodes(results, isTcping = false)
+        deleteTimedOutNodes(results, isTcping = false, enabled = autoDeleteTimeoutNodes)
     }
 
     private suspend fun deleteTimedOutNodes(
         results: List<LatencyTester.LatencyResult>,
-        isTcping: Boolean
+        isTcping: Boolean,
+        enabled: Boolean
     ) {
-        val enabled = if (isTcping) {
-            autoDeleteTcpingTimeoutNodes.value
-        } else {
-            autoDeleteUrlTestTimeoutNodes.value
-        }
         if (!enabled) return
 
         deleteNodes(
@@ -1699,6 +1685,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         currentNodes: List<Node>,
         concurrency: Int = tcpingConcurrency.value,
         timeoutMs: Long = tcpingTestTimeoutMs.value,
+        autoDeleteTimeoutNodes: Boolean,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
         if (currentNodes.isEmpty()) return emptyList()
@@ -1720,7 +1707,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         nodeDao().updateTcpingResults(updates, System.currentTimeMillis())
         _nodeTestResultSortMode.value = NodeTestResultSortMode.TCPING_LATENCY
-        deleteTimedOutNodes(results, isTcping = true)
+        deleteTimedOutNodes(results, isTcping = true, enabled = autoDeleteTimeoutNodes)
         return results
     }
 

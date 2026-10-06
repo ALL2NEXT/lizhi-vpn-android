@@ -60,14 +60,6 @@ fun OtherConfigScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val autoDeleteTcpingTimeoutNodes by viewModel.autoDeleteTcpingTimeoutNodes.collectAsStateWithLifecycle()
-    val autoDeleteUrlTestTimeoutNodes by viewModel.autoDeleteUrlTestTimeoutNodes.collectAsStateWithLifecycle()
-    val autoDeleteLowBandwidthNodes by viewModel.autoDeleteLowBandwidthNodes.collectAsStateWithLifecycle()
-    val autoDeleteBandwidthThresholdMbps by viewModel.autoDeleteBandwidthThresholdMbps.collectAsStateWithLifecycle()
-    var bandwidthThresholdInput by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(autoDeleteBandwidthThresholdMbps) {
-        bandwidthThresholdInput = autoDeleteBandwidthThresholdMbps.toString()
-    }
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
     val nodeDisplaySettings by viewModel.nodeDisplaySettings.collectAsStateWithLifecycle()
@@ -249,55 +241,6 @@ fun OtherConfigScreen(
                 ConfigSwitchRow("个人源立即更新", autoRefreshPersonalSubscriptions) {
                     viewModel.setAutoRefreshPersonalSubscriptions(it)
                 }
-            }
-
-            OtherConfigSection(title = "测速后自动删除节点") {
-                Text(
-                    text = "仅删除对应测速结果中的节点；当前正在连接的节点会保留。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-                ConfigSwitchRow("自动删除 TCPing 超时节点", autoDeleteTcpingTimeoutNodes) {
-                    viewModel.setAutoDeleteTcpingTimeoutNodes(it)
-                }
-                ConfigSwitchRow("自动删除 URL Test 超时节点", autoDeleteUrlTestTimeoutNodes) {
-                    viewModel.setAutoDeleteUrlTestTimeoutNodes(it)
-                }
-                ConfigSwitchRow("自动删除低带宽节点", autoDeleteLowBandwidthNodes) {
-                    viewModel.setAutoDeleteLowBandwidthNodes(it)
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = bandwidthThresholdInput,
-                        onValueChange = { input ->
-                            bandwidthThresholdInput = input.filter(Char::isDigit)
-                        },
-                        label = { Text("带宽阈值 (Mbps)") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(
-                        enabled = bandwidthThresholdInput.toIntOrNull()
-                            ?.let { it in 0..100_000 && it != autoDeleteBandwidthThresholdMbps } == true,
-                        onClick = {
-                            bandwidthThresholdInput.toIntOrNull()?.let(
-                                viewModel::setAutoDeleteBandwidthThresholdMbps
-                            )
-                        }
-                    ) {
-                        Text("保存")
-                    }
-                }
-                Text(
-                    text = "低于该值的节点会在测速方案完成带宽测试后删除。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
             }
 
             OtherConfigSection(

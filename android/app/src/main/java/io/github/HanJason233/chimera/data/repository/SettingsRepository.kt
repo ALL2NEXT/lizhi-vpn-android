@@ -64,7 +64,7 @@ class SettingsRepository(
         const val DEFAULT_AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS = true
         const val DEFAULT_AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS = false
         /** 默认测速与默认主题方案分别维护版本；升级后保存新版本并尊重后续修改。 */
-        private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 1
+        private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 2
         private const val DEFAULT_SKIN_PARTICLE_PRESET_REVISION = 1
         private const val DEFAULT_SKIN_PRESET_REVISION = 3
         private const val MIN_SERVICE_REQUEST_TIMEOUT_MS = 5_000L
@@ -143,6 +143,7 @@ class SettingsRepository(
         private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
         private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
         private val NODE_LABEL_SHOW_CORE = booleanPreferencesKey("node_label_show_core")
+        // 迁移旧版全局自动删除设置；新设置保存在测速方案各阶段中。
         private val AUTO_DELETE_TCPING_TIMEOUT_NODES =
             booleanPreferencesKey("auto_delete_tcping_timeout_nodes")
         private val AUTO_DELETE_URL_TEST_TIMEOUT_NODES =
@@ -1077,44 +1078,6 @@ class SettingsRepository(
         }
     }
 
-    val autoDeleteTcpingTimeoutNodes: Flow<Boolean> = store.data.map { preferences ->
-        preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES]
-            ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES
-    }
-
-    suspend fun setAutoDeleteTcpingTimeoutNodes(enabled: Boolean) {
-        store.edit { preferences -> preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES] = enabled }
-    }
-
-    val autoDeleteUrlTestTimeoutNodes: Flow<Boolean> = store.data.map { preferences ->
-        preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES]
-            ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES
-    }
-
-    suspend fun setAutoDeleteUrlTestTimeoutNodes(enabled: Boolean) {
-        store.edit { preferences -> preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES] = enabled }
-    }
-
-    val autoDeleteLowBandwidthNodes: Flow<Boolean> = store.data.map { preferences ->
-        preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES]
-            ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_LOW_BANDWIDTH_NODES
-    }
-
-    suspend fun setAutoDeleteLowBandwidthNodes(enabled: Boolean) {
-        store.edit { preferences -> preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES] = enabled }
-    }
-
-    val autoDeleteBandwidthThresholdMbps: Flow<Int> = store.data.map { preferences ->
-        (preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS]
-            ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS).coerceIn(0, 100_000)
-    }
-
-    suspend fun setAutoDeleteBandwidthThresholdMbps(value: Int) {
-        store.edit { preferences ->
-            preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS] = value.coerceIn(0, 100_000)
-        }
-    }
-
     private fun normalizeSkinColor(argb: Long): Long {
         return 0xFF000000L or (argb and 0x00FFFFFFL)
     }
@@ -1140,11 +1103,13 @@ class SettingsRepository(
                             val item = array.optJSONObject(index) ?: continue
                             val id = item.optString("id").trim()
                             if (id.isBlank()) continue
-                            // 覆盖安装时更新旧版内置方案的这三项参数，其他方案和参数照常读取。
+                            // 仅在内置预置版本升级时刷新默认字段；自定义方案保持原样。
                             if (id == SpeedTestScheme.DEFAULT_ID &&
                                 item.optInt("defaultsVersion", 0) < DEFAULT_SPEED_TEST_PRESET_REVISION
                             ) {
                                 val defaults = SpeedTestScheme.default()
+                                item.put("tcpingSelectionMode", defaults.tcpingSelectionMode.name)
+                                item.put("tcpingSelectionValue", defaults.tcpingSelectionValue)
                                 item.put("urlTestSelectionMode", defaults.urlTestSelectionMode.name)
                                 item.put("urlTestSelectionValue", defaults.urlTestSelectionValue)
                                 item.put("linkTypeTestEnabled", defaults.linkTypeTestEnabled)
@@ -1202,6 +1167,26 @@ class SettingsRepository(
                                             legacyKey = "bandwidthPercent",
                                             legacyDefault = 50
                                         ),
+                                        tcpingAutoDeleteTimeoutNodes = item.optBoolean(
+                                            "tcpingAutoDeleteTimeoutNodes",
+                                            preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES]
+                                                ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES
+                                        ),
+                                        urlTestAutoDeleteTimeoutNodes = item.optBoolean(
+                                            "urlTestAutoDeleteTimeoutNodes",
+                                            preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES]
+                                                ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES
+                                        ),
+                                        bandwidthAutoDeleteLowSpeedNodes = item.optBoolean(
+                                            "bandwidthAutoDeleteLowSpeedNodes",
+                                            preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES]
+                                                ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_LOW_BANDWIDTH_NODES
+                                        ),
+                                        bandwidthAutoDeleteThresholdMbps = item.optInt(
+                                            "bandwidthAutoDeleteThresholdMbps",
+                                            preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS]
+                                                ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS
+                                        ),
                                         tcpingTimeoutMs = item.optLong("tcpingTimeoutMs", 1_000L),
                                         urlTestWarmupTimeoutMs = item.optLong(
                                             "urlTestWarmupTimeoutMs",
@@ -1239,7 +1224,16 @@ class SettingsRepository(
             }
 
         val defaultScheme = stored?.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-            ?: SpeedTestScheme.default()
+            ?: SpeedTestScheme.default().copy(
+                tcpingAutoDeleteTimeoutNodes = preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES]
+                    ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES,
+                urlTestAutoDeleteTimeoutNodes = preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES]
+                    ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES,
+                bandwidthAutoDeleteLowSpeedNodes = preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES]
+                    ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_LOW_BANDWIDTH_NODES,
+                bandwidthAutoDeleteThresholdMbps = preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS]
+                    ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS
+            )
         val custom = stored.orEmpty()
             .filterNot { it.id == SpeedTestScheme.DEFAULT_ID }
             .filterNot { it.builtIn }
@@ -1297,6 +1291,7 @@ class SettingsRepository(
                 scheme.bandwidthSelectionMode,
                 scheme.bandwidthSelectionValue
             ),
+            bandwidthAutoDeleteThresholdMbps = scheme.bandwidthAutoDeleteThresholdMbps.coerceIn(0, 100_000),
             tcpingTimeoutMs = scheme.tcpingTimeoutMs.coerceAtLeast(500L),
             urlTestWarmupTimeoutMs = scheme.urlTestWarmupTimeoutMs.coerceIn(500L, 60_000L),
             urlTestMeasurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs.coerceIn(500L, 60_000L),
@@ -1337,6 +1332,10 @@ class SettingsRepository(
                     put("urlTestSelectionValue", normalized.urlTestSelectionValue)
                     put("bandwidthSelectionMode", normalized.bandwidthSelectionMode.name)
                     put("bandwidthSelectionValue", normalized.bandwidthSelectionValue)
+                    put("tcpingAutoDeleteTimeoutNodes", normalized.tcpingAutoDeleteTimeoutNodes)
+                    put("urlTestAutoDeleteTimeoutNodes", normalized.urlTestAutoDeleteTimeoutNodes)
+                    put("bandwidthAutoDeleteLowSpeedNodes", normalized.bandwidthAutoDeleteLowSpeedNodes)
+                    put("bandwidthAutoDeleteThresholdMbps", normalized.bandwidthAutoDeleteThresholdMbps)
                     // Keep the legacy percentage keys so older builds fall back to a safe full test.
                     put(
                         "tcpingPercent",
@@ -1581,4 +1580,3 @@ class SettingsRepository(
     }
 
 }
-
