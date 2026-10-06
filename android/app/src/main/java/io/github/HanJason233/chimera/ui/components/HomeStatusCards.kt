@@ -132,17 +132,54 @@ internal fun HomeSelectionCard(
 internal fun HomeTestsCard(
     node: Node?,
     isTesting: Boolean,
+    isHysteriaBandwidthAdapting: Boolean,
     progress: SpeedTestProgress?,
     ipTestState: UnlockTestUiState,
     linkTypeResult: LinkTypeTestResult,
+    onInterruptTests: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val activeTestLabel = when {
+        ipTestState.isRunning -> ipTestState.message.ifBlank { "IP 与服务测试进行中" }
+        linkTypeResult.state == LinkTypeTestState.TESTING ->
+            linkTypeResult.message.ifBlank { "链路类型检测中" }
+        isHysteriaBandwidthAdapting -> "Hy2 带宽自适应测试中"
+        isTesting -> progress?.title ?: "节点测试中"
+        else -> null
+    }
     HomeInfoCard(
         compact = true,
         modifier = modifier
     ) {
-        if (isTesting && !ipTestState.isRunning) {
-            HomeTestProgress(progress)
+        if (activeTestLabel != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = activeTestLabel,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                TextButton(
+                    onClick = onInterruptTests,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text("强制中断", maxLines = 1)
+                }
+            }
+            if (isTesting && !ipTestState.isRunning &&
+                linkTypeResult.state != LinkTypeTestState.TESTING
+            ) {
+                HomeTestProgress(progress)
+            }
             Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -207,8 +244,6 @@ private fun HomeLinkTypeResult(result: LinkTypeTestResult) {
 
 @Composable
 private fun HomeTestProgress(progress: SpeedTestProgress?) {
-    Text(progress?.title ?: "节点测试", style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(progress?.stage ?: "准备测试", modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -11,14 +11,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Call
+import java.util.concurrent.ConcurrentHashMap
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.ProxyCore
 
 /** 通过临时节点代理，以多条独立连接在固定计时窗口内统计下载流量。 */
 internal class NodeDownloadBandwidthTester(private val context: Context) {
+    private val activeCalls = ConcurrentHashMap.newKeySet<Call>()
+
+    /** 取消带宽测试的所有活动下载请求。 */
+    fun cancelActiveTests() {
+        activeCalls.toList().forEach { call -> call.cancel() }
+    }
+
     suspend fun test(
         node: Node,
         downloadUrl: String,
@@ -87,7 +98,7 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         }
     }
 
-    private fun downloadStream(
+    private suspend fun downloadStream(
         client: OkHttpClient,
         request: Request,
         measuredAt: Long,
@@ -96,9 +107,12 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
         var totalBytes = 0L
         // 文件提前下载完后继续请求；同一连接先预热传输，但预热流量不计入结果。
         while (System.nanoTime() < deadline) {
+            currentCoroutineContext().ensureActive()
             val call = client.newCall(request)
+            activeCalls.add(call)
             call.timeout().timeout(remainingMs(deadline), TimeUnit.MILLISECONDS)
             try {
+                currentCoroutineContext().ensureActive()
                 call.execute().use { response ->
                     if (!response.isSuccessful) return DownloadSample(totalBytes, false)
                     val source = response.body?.source()
@@ -111,10 +125,18 @@ internal class NodeDownloadBandwidthTester(private val context: Context) {
                     }
                 }
             } catch (error: IOException) {
+                currentCoroutineContext().ensureActive()
                 if (System.nanoTime() < deadline) {
                     Log.d(TAG, "Download stream ended early: ${error.javaClass.simpleName}")
                     return DownloadSample(totalBytes, false)
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw error
+            } finally {
+                activeCalls.remove(call)
             }
         }
         return DownloadSample(totalBytes, true)

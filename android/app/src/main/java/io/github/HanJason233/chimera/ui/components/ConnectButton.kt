@@ -48,13 +48,11 @@ fun ConnectButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
-    onDoubleClick: (() -> Unit)? = null,
     customLabel: String? = null,
     /** 是否显示按钮下方的状态文字。 */
     showStatusLabel: Boolean = true,
-    /** 无障碍服务读取的单击、双击和长按动作名称。 */
+    /** 无障碍服务读取的单击和长按动作名称。 */
     clickActionLabel: String = "测速方案",
-    doubleClickActionLabel: String = "测速方案",
     longClickActionLabel: String = "测速方案",
     enabled: Boolean = true,
     isTesting: Boolean = false,
@@ -81,8 +79,7 @@ fun ConnectButton(
         vpnState
     }
     val isConnecting = displayState == VpnState.CONNECTING || displayState == VpnState.DISCONNECTING
-    val allowDoubleClickWhileTesting = isTesting && onDoubleClick != null
-    val gestureEnabled = enabled && (!isConnecting || allowDoubleClickWhileTesting)
+    val gestureEnabled = enabled && !isConnecting
 
     // 自适应按钮大小：取屏幕宽度的 65%，但不超过 250dp
     val configuration = LocalConfiguration.current
@@ -207,24 +204,15 @@ fun ConnectButton(
                                 interactionSource = interactionSource,
                                 onClickLabel = if (!isTesting && vpnState == VpnState.DISCONNECTED) clickActionLabel else null,
                                 onLongClickLabel = if (onLongClick != null) longClickActionLabel else null,
-                                onDoubleClick = onDoubleClick,
                                 onLongClick = onLongClick,
                                 onClick = onClick
                             )
                             .semantics {
-                                this.contentDescription = if (allowDoubleClickWhileTesting) {
-                                    "测速进行中，双击${doubleClickActionLabel}"
-                                } else {
-                                    when (displayState) {
-                                        VpnState.CONNECTED -> "已连接"
-                                        VpnState.CONNECTING -> "连接中"
-                                        VpnState.DISCONNECTING -> "断开中"
-                                        VpnState.DISCONNECTED -> if (onDoubleClick != null) {
-                                            "点击连接，双击${doubleClickActionLabel}"
-                                        } else {
-                                            "点击连接"
-                                        }
-                                    }
+                                this.contentDescription = when (displayState) {
+                                    VpnState.CONNECTED -> "已连接"
+                                    VpnState.CONNECTING -> "连接中"
+                                    VpnState.DISCONNECTING -> "断开中"
+                                    VpnState.DISCONNECTED -> "点击连接"
                                 }
                             }
                     )

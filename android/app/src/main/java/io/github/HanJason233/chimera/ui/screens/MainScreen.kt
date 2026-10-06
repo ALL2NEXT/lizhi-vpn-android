@@ -76,7 +76,6 @@ fun MainScreen(
     val homeClickSchemeId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeLongPressSchemeId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeClickSpeedTestEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
-    val homeDoubleClickCancelTestEnabled by viewModel.homeDoubleClickCancelTestEnabled.collectAsStateWithLifecycle()
     val homeLongPressSpeedTestEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
@@ -88,6 +87,7 @@ fun MainScreen(
     val countryOptions by viewModel.countryOptions.collectAsStateWithLifecycle()
     val userSubscriptionGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
+    val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
     val testProgress by viewModel.speedTestProgress.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
@@ -296,9 +296,11 @@ fun MainScreen(
                         HomeTestsCard(
                             node = homeTestNode,
                             isTesting = isTesting,
+                            isHysteriaBandwidthAdapting = isHysteriaBandwidthAdapting,
                             progress = testProgress,
                             ipTestState = unlockTestState,
                             linkTypeResult = linkTypeTestResult,
+                            onInterruptTests = viewModel::forceCancelAllTests,
                             modifier = Modifier.onSizeChanged { testsCardHeightPx = it.height }
                         )
 
@@ -307,7 +309,7 @@ fun MainScreen(
                         ConnectButton(
                             vpnState = vpnState,
                             maxButtonSize = connectButtonSize,
-                            enabled = !isTesting || homeDoubleClickCancelTestEnabled,
+                            enabled = !isTesting,
                             isTesting = isTesting,
                             customDisconnectedImagePath = skinSettings.homeDisconnectedImagePath,
                             customConnectingImagePath = skinSettings.homeConnectingImagePath,
@@ -337,13 +339,6 @@ fun MainScreen(
                                     }
                                 }
                             },
-                            onDoubleClick = if (
-                                isTesting && homeDoubleClickCancelTestEnabled
-                            ) {
-                                { viewModel.cancelActiveSpeedTest() }
-                            } else {
-                                null
-                            },
                             onLongClick = if (
                                 vpnState == VpnState.DISCONNECTED &&
                                     homeLongPressSpeedTestEnabled && !isTesting
@@ -363,7 +358,6 @@ fun MainScreen(
                             } else {
                                 "直接连接"
                             },
-                            doubleClickActionLabel = "中断当前测试",
                             longClickActionLabel = if (homeLongPressSpeedTestEnabled) {
                                 longPressScheme?.name ?: "测速方案"
                             } else {

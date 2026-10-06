@@ -49,9 +49,8 @@ Xray `v26.3.27` 已移除 `allowInsecure`。带自签名证书的 Hysteria2/HTTP
 
 ## 构建
 
-Xray-core 以 Git submodule 固定在官方稳定版 `v26.3.27`。Android Gradle 构建会
-自动为 `armeabi-v7a` 和 `arm64-v8a` 生成 `libxray.so` 可执行 PIE，并随对应的
-split APK 打包。
+Xray-core 以 Git submodule 固定在官方稳定版 `v26.3.27`。Android Gradle 构建只为
+`arm64-v8a`（64 位 ARM / V8）生成 `libxray.so` 可执行 PIE，并随对应的 split APK 打包。
 
 首次拉取仓库后执行：
 

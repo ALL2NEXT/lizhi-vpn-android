@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.network
 
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Call
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
@@ -14,6 +15,7 @@ import java.net.Proxy
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
 import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
@@ -23,6 +25,9 @@ import javax.net.ssl.SSLSocketFactory
 
 /** 用于健康检查和延迟测试的轻量 SOCKS5 客户端，支持用户名密码认证。 */
 internal object Socks5HttpProbe {
+    private val activeSockets = ConcurrentHashMap.newKeySet<Socket>()
+    private val activeCalls = ConcurrentHashMap.newKeySet<Call>()
+
     data class Result(val statusCode: Int, val delayMs: Int)
 
     data class HttpResponse(
@@ -31,6 +36,12 @@ internal object Socks5HttpProbe {
         val location: String?,
         val delayMs: Int
     )
+
+    /** 关闭进行中的 IP/服务探测和 URL Test 请求。 */
+    fun cancelActiveRequests() {
+        activeCalls.toList().forEach { call -> call.cancel() }
+        activeSockets.toList().forEach { socket -> runCatching { socket.close() } }
+    }
 
     /**
      * 通过支持用户名/密码认证的 SOCKS5 隧道读取受限大小的 HTTP 响应。
@@ -91,24 +102,34 @@ internal object Socks5HttpProbe {
             .build()
         try {
             val warmupCall = client.newCall(request)
+            activeCalls.add(warmupCall)
             warmupCall.timeout().timeout(effectiveWarmupTimeoutMs, TimeUnit.MILLISECONDS)
-            warmupCall.execute().use { response ->
-                // 读取完预热响应，确保 OkHttp 能复用 TCP/TLS 连接。
-                val input = response.body?.byteStream()
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (input != null && input.read(buffer) != -1) Unit
+            try {
+                warmupCall.execute().use { response ->
+                    // 读取完预热响应，确保 OkHttp 能复用 TCP/TLS 连接。
+                    val input = response.body?.byteStream()
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (input != null && input.read(buffer) != -1) Unit
+                }
+            } finally {
+                activeCalls.remove(warmupCall)
             }
 
             val measurementCall = client.newCall(request)
+            activeCalls.add(measurementCall)
             measurementCall.timeout().timeout(effectiveMeasurementTimeoutMs, TimeUnit.MILLISECONDS)
             val startedAt = System.nanoTime()
-            return measurementCall.execute().use { response ->
-                val headersAt = System.nanoTime()
-                Result(
-                    response.code,
-                    ((headersAt - startedAt) / NANOS_PER_MILLISECOND)
-                        .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
-                )
+            try {
+                return measurementCall.execute().use { response ->
+                    val headersAt = System.nanoTime()
+                    Result(
+                        response.code,
+                        ((headersAt - startedAt) / NANOS_PER_MILLISECOND)
+                            .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+                    )
+                }
+            } finally {
+                activeCalls.remove(measurementCall)
             }
         } finally {
             client.connectionPool.evictAll()
@@ -185,6 +206,7 @@ internal object Socks5HttpProbe {
         val deadline = startedAt + timeoutNanos
 
         val socket = Socket()
+        activeSockets.add(socket)
         try {
             socket.soTimeout = remainingMillis(deadline)
             socket.connect(InetSocketAddress(endpoint.address, endpoint.port), remainingMillis(deadline))
@@ -219,6 +241,7 @@ internal object Socks5HttpProbe {
                 )
             }
         } finally {
+            activeSockets.remove(socket)
             runCatching { socket.close() }
         }
     }

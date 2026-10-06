@@ -6,14 +6,24 @@ import io.github.HanJason233.chimera.BuildConfig
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.util.parallelMapOrdered
+import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 节点延迟测试器
  * 支持 TCPing (Socket) 和 URL Test (native SOCKS HTTP)
  */
 class LatencyTester {
-    
+    private val activeTcpingSockets = ConcurrentHashMap.newKeySet<Socket>()
+
     private val tag = "LatencyTester"
+
+    /** 关闭进行中的 TCPing 连接，让批量测试能够立即响应取消。 */
+    fun cancelActiveTests() {
+        activeTcpingSockets.toList().forEach { socket ->
+            runCatching { socket.close() }
+        }
+    }
 
     private inline fun debugNode(message: () -> String) {
         if (BuildConfig.DEBUG) Log.d(tag, message())
@@ -59,11 +69,13 @@ class LatencyTester {
      * 如果连接成功或被拒绝(RST)，都视为网络连通
      */
     private suspend fun testNodeSimple(node: Node, timeoutMs: Long): LatencyResult {
+        currentCoroutineContext().ensureActive()
         return try {
             debugNode { ">>> TCPing: ${node.name} (${node.server}:${node.port})" }
             
             val start = System.currentTimeMillis()
-            val socket = java.net.Socket()
+            val socket = Socket()
+            activeTcpingSockets.add(socket)
             
             try {
                 socket.connect(java.net.InetSocketAddress(node.server, node.port), timeoutMs.toInt())
@@ -85,13 +97,18 @@ class LatencyTester {
                     throw e
                 }
             } finally {
+                activeTcpingSockets.remove(socket)
                 runCatching { socket.close() }
             }
             
         } catch (e: java.net.SocketTimeoutException) {
+            currentCoroutineContext().ensureActive()
             debugNode { "<<< TCPing TIMEOUT: ${node.name}" }
             LatencyResult(node.id, -2, false)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
             debugNode { "<<< TCPing FAILED: ${node.name}, error=${e.message}" }
             LatencyResult(node.id, -2, false)
         }

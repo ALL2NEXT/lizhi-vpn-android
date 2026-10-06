@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.NonCancellable
@@ -16,6 +17,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Semaphore
@@ -37,6 +39,7 @@ import io.github.HanJason233.chimera.feature.nodegrouping.domain.WarehouseGroupi
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import io.github.HanJason233.chimera.network.LatencyTester
 import io.github.HanJason233.chimera.network.NodeDownloadBandwidthTester
+import io.github.HanJason233.chimera.network.Socks5HttpProbe
 import io.github.HanJason233.chimera.network.SpeedTestService
 import io.github.HanJason233.chimera.network.SubscriptionParser
 import io.github.HanJason233.chimera.network.PersonalSourceIconStore
@@ -219,8 +222,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
-    /** 保存当前持有全局测速锁的任务，供主页手势中断。 */
+    /** 保存当前持有全局测速锁的任务，供首页测试卡片中断。 */
     private var activeTestJob: Job? = null
+    private var hysteriaBandwidthAdaptiveJob: Job? = null
+    @Volatile
+    private var activeAdaptiveSpeedTestService: SpeedTestService? = null
 
     private val _speedTestProgress = MutableStateFlow<SpeedTestProgress?>(null)
     internal val speedTestProgress = _speedTestProgress.asStateFlow()
@@ -513,12 +519,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     val homeClickSpeedTestEnabled = settingsRepository.homeClickSpeedTestEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        false
-    )
-
-    val homeDoubleClickCancelTestEnabled = settingsRepository.homeDoubleClickCancelTestEnabled.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
         false
@@ -1187,6 +1187,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .getAllByName(host).mapNotNull { it.hostAddress }
             }).run(node.server)
         } catch (cancelled: CancellationException) {
+            _linkTypeTestResult.update { current ->
+                if (current.state == LinkTypeTestState.TESTING) {
+                    current.copy(state = LinkTypeTestState.IDLE, message = "检测已中断")
+                } else {
+                    current
+                }
+            }
             throw cancelled
         } catch (_: Exception) {
             LinkTypeTestResult(LinkTypeTestState.ERROR, node.server, message = "链路检测失败，请稍后重试")
@@ -1481,17 +1488,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun adaptHysteriaBandwidth() {
         if (_isHysteriaBandwidthAdapting.value) return
-        viewModelScope.launch(Dispatchers.IO) {
-            _isHysteriaBandwidthAdapting.value = true
+        _isHysteriaBandwidthAdapting.value = true
+        val adaptiveJob = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            val testJob = currentCoroutineContext()[Job]
+            var service: SpeedTestService? = null
             _hysteriaBandwidthAdaptiveStatus.value = "正在测试直连网络上下行..."
 
             try {
-                val service = SpeedTestService(
+                currentCoroutineContext().ensureActive()
+                val testService = SpeedTestService(
                     durationMs = speedTestDurationMs.value,
                     downloadUrl = speedTestDownloadUrl.value
                 )
-                val downloadResult = service.startDownloadTest { _, _ -> }
-                val uploadResult = service.startUploadTest { _, _ -> }
+                service = testService
+                activeAdaptiveSpeedTestService = testService
+                currentCoroutineContext().ensureActive()
+                val downloadResult = testService.startDownloadTest { _, _ -> }
+                currentCoroutineContext().ensureActive()
+                val uploadResult = testService.startUploadTest { _, _ -> }
+                currentCoroutineContext().ensureActive()
                 val downMbps = roundUpHysteriaBandwidth(downloadResult.avgSpeedMbps)
                 val upMbps = roundUpHysteriaBandwidth(uploadResult.avgSpeedMbps)
 
@@ -1504,13 +1519,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _hysteriaBandwidthAdaptiveStatus.value =
                     "下行 ${formatMbps(downloadResult.avgSpeedMbps)} → ${downMbps} Mbps；" +
                         "上行 ${formatMbps(uploadResult.avgSpeedMbps)} → ${upMbps} Mbps"
+            } catch (cancelled: CancellationException) {
+                _hysteriaBandwidthAdaptiveStatus.value = "自适应测试已中断"
+                throw cancelled
             } catch (e: Exception) {
                 Log.e(tag, "Hy2 bandwidth adaptation failed", e)
                 _hysteriaBandwidthAdaptiveStatus.value = "自适应失败：${e.message ?: "测速不可用"}"
             } finally {
+                if (activeAdaptiveSpeedTestService === service) {
+                    activeAdaptiveSpeedTestService = null
+                }
+                if (hysteriaBandwidthAdaptiveJob === testJob) {
+                    hysteriaBandwidthAdaptiveJob = null
+                }
                 _isHysteriaBandwidthAdapting.value = false
             }
         }
+        hysteriaBandwidthAdaptiveJob = adaptiveJob
+        adaptiveJob.start()
     }
 
     private fun roundUpHysteriaBandwidth(speedMbps: Float): Int {
@@ -2582,16 +2608,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setHomeDoubleClickCancelTestEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setHomeDoubleClickCancelTestEnabled(enabled)
-        }
-    }
-
-    fun cancelActiveSpeedTest() {
+    /** 中断测速方案、分组手动测速和 Hy2 带宽自适应测试。 */
+    fun forceCancelAllTests() {
         activeTestJob?.takeIf { it.isActive }?.cancel(
-            CancellationException("Speed test cancelled by user")
+            CancellationException("Tests forcibly interrupted by user")
         )
+        hysteriaBandwidthAdaptiveJob?.takeIf { it.isActive }?.cancel(
+            CancellationException("Tests forcibly interrupted by user")
+        )
+        activeAdaptiveSpeedTestService?.cancel()
+        latencyTester.cancelActiveTests()
+        bandwidthTester.cancelActiveTests()
+        Socks5HttpProbe.cancelActiveRequests()
+        viewModelScope.launch(Dispatchers.IO) {
+            io.github.HanJason233.chimera.network.UrlTestManager.stop()
+        }
     }
 
     fun setHomeLongPressSpeedTestEnabled(enabled: Boolean) {

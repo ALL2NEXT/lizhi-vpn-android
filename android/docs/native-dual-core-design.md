@@ -106,11 +106,11 @@ go test ./...
 
 JVM 测试覆盖双核心注册、会话取消/替换/停止失败、DNS 顺序及 HEV 配置；Go 测试验证 Xray runner 不提前启动、统计缓冲所有权、socket protect 和规则内容。规则测试的 JSON 基准由 sing-box CLI decompile 生成，仅存在于测试资源，不随 APK 打包。
 
-最终本地验证：Android JVM 测试、sing-box/Xray 两个 Go 运行器测试和两个 ABI 的原生构建通过。另用真实 Xray Router 验证了“域名未命中 geosite、解析结果命中国内 IP”仍选择直连；配置依靠首个代理出站兜底，避免显式全匹配规则阻断 `IPIfNonMatch` 的二次匹配。
+此前本机验证：Android JVM 测试、sing-box/Xray 两个 Go 运行器测试和双 ABI 原生构建通过。另用真实 Xray Router 验证了“域名未命中 geosite、解析结果命中国内 IP”仍选择直连；配置依靠首个代理出站兜底，避免显式全匹配规则阻断 `IPIfNonMatch` 的二次匹配。
 
-构建输出为 `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` 和 `app-armeabi-v7a-debug.apk`。本机已完成源码构建和本地测试；TUN FD、UDP/QUIC 连通、IPv6、网络切换、always-on 恢复及吞吐/功耗仍需在 Android 设备上验证。
+当前构建只输出 `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`。本机已完成源码构建和本地测试；TUN FD、UDP/QUIC 连通、IPv6、网络切换、always-on 恢复及吞吐/功耗仍需在 Android 设备上验证。
 
-测速异常修复已通过 `:app:testDebugUnitTest :app:assembleDebug`。两个 ABI 的 APK 均包含 `libsingbox.so`、`libxray.so` 和 `libhev.so`，并与本次构建的 stripped native 输出一致。
+测速异常修复曾通过 `:app:testDebugUnitTest :app:assembleDebug` 验证。当前 APK 仅包含 `arm64-v8a` 下的 `libsingbox.so`、`libxray.so` 和 `libhev.so`。
 
 消除串联转发和无用内核实例是可由代码确认的结构改善，不能据此宣称实测“性能最强”。性能比较应固定节点、服务器与网络，分别记录两种内核的连接耗时、TCP/UDP 吞吐、P95 延迟、CPU/RSS 及耗电，并与旧版本对照。
 
@@ -124,7 +124,7 @@ AndroidVpnHost TUN -> hev-runner (HEV 2.16.0) -> core loopback SOCKS5 -> selecte
 
 `TunAdapter` and `TunAdapterSession` keep this path independent from the core control contract. `CombinedCoreSession` owns both objects, reports the HEV TUN counters once, and closes HEV before the proxy core. Both sing-box and Xray provide a local SOCKS5 inbound and use the same HEV data plane.
 
-The HEV runner is a standalone Android PIE executable. It exchanges the TUN descriptor, liveness, and statistics through a private abstract Unix socket; packet data does not cross Kotlin or JNI. The build pins HEV 2.16.0, stages the source to resolve Git symlink headers on Windows, and packages only `libhev.so` for `armeabi-v7a` and `arm64-v8a`. URL Test never starts HEV.
+The HEV runner is a standalone Android PIE executable. It exchanges the TUN descriptor, liveness, and statistics through a private abstract Unix socket; packet data does not cross Kotlin or JNI. The build pins HEV 2.16.0, stages the source to resolve Git symlink headers on Windows, and currently packages `libhev.so` for `arm64-v8a` only. URL Test never starts HEV.
 
 Mapped DNS is enabled for domain preservation (`198.18.0.2` with the `198.18.0.0/16` fake-IP map). The HEV adapter is mandatory for VPN sessions; device-level TUN, socket protection, IPv6, UDP/QUIC, and teardown validation still require an Android device.
 

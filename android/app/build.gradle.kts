@@ -8,12 +8,8 @@ plugins {
 }
 
 val singBoxNdkVersion = "28.0.13004108"
-val targetAbis = when (providers.gradleProperty("targetAbi").orNull) {
-    null, "", "all" -> listOf("armeabi-v7a", "arm64-v8a")
-    "arm64-v8a" -> listOf("arm64-v8a")
-    "armeabi-v7a" -> listOf("armeabi-v7a")
-    else -> error("Unsupported targetAbi. Use arm64-v8a, armeabi-v7a, or all.")
-}
+// Android 构建固定只生成 arm64-v8a（64 位 ARM / V8）版本。
+val targetAbis = listOf("arm64-v8a")
 
 // The repository root pins the sing-box source revision in this submodule.
 // Android builds the CLI runner directly instead of embedding libbox in the
@@ -332,7 +328,7 @@ android {
         }
     }
 
-    // 分别输出 armeabi-v7a 与 arm64-v8a APK，不再合并成单个多 ABI APK。
+    // 仅输出 arm64-v8a APK。
     splits {
         abi {
             isEnable = true

@@ -399,7 +399,7 @@ android/app/src/main/
 | TCPing 并发数 | 16 | 范围 1~128 |
 | URL Test 并发数 | 10 | 范围 1~128 |
 | 带宽测试并发数 | 1 | 范围 1~3，默认保持串行；提高并发可加快粗筛但会增加测速竞争 |
-| 主页图标绑定 | 点击直接连接 / 双击可选测速 / 长按默认测速（当前组） | 点击、双击和长按可在“测速方案”中分别绑定到任意方案，点击和双击测速默认关闭 |
+| 主页图标绑定 | 点击直接连接或运行指定测速 / 长按运行指定测速 | 点击和长按可在“测速方案”中分别绑定；点击测速默认关闭 |
 | VPN MTU | 9000 | 范围 576~9000，修改后需断开重连 |
 
 **设置位置**：侧边栏 → 测速方案
@@ -856,13 +856,15 @@ cd android
 .\gradlew.bat assembleRelease
 ```
 
+Android 构建固定只编译 `arm64-v8a`（64 位 ARM / V8），不再生成 `armeabi-v7a` 包。
+
 **备选方法 (IDE 界面操作)**:
 1. 菜单栏点击 **Build** -> **Generate Signed Bundle / APK**
 2. 选择 **APK** -> **Next**
 3. 选择密钥库并输入密码
 4. 选择 **release** -> **Create**
 
-输出: `android/app/build/outputs/apk/release/app-release.apk`
+输出: `android/app/build/outputs/apk/release/app-arm64-v8a-release.apk`
 
 ### 16 KB 页面对齐
 
