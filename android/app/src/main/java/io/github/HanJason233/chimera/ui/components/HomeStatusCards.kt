@@ -27,11 +27,11 @@ import androidx.compose.ui.unit.dp
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.R
-import io.github.HanJason233.chimera.network.UnlockTestResult
-import io.github.HanJason233.chimera.network.UnlockTestState
-import io.github.HanJason233.chimera.network.LinkTypeTestResult
-import io.github.HanJason233.chimera.network.LinkTypeTestState
-import io.github.HanJason233.chimera.network.LinkIpAddress
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestResult
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
+import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestResult
+import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
+import io.github.HanJason233.chimera.network.nodetest.linktype.LinkIpAddress
 import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
 import io.github.HanJason233.chimera.viewmodel.UnlockTestUiState
 import java.util.Locale

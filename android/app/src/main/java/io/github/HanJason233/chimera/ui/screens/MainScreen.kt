@@ -474,15 +474,15 @@ fun MainScreen(
 
     // 下载完成后自动安装
     LaunchedEffect(downloadState.status) {
-        if (downloadState.status == io.github.HanJason233.chimera.network.DownloadStatus.COMPLETED) {
+        if (downloadState.status == io.github.HanJason233.chimera.network.download.DownloadStatus.COMPLETED) {
             viewModel.installApk()
         }
     }
 
     // 下载弹窗
-    if (downloadState.status == io.github.HanJason233.chimera.network.DownloadStatus.DOWNLOADING || 
-        downloadState.status == io.github.HanJason233.chimera.network.DownloadStatus.PAUSED ||
-        downloadState.status == io.github.HanJason233.chimera.network.DownloadStatus.ERROR) {
+    if (downloadState.status == io.github.HanJason233.chimera.network.download.DownloadStatus.DOWNLOADING ||
+        downloadState.status == io.github.HanJason233.chimera.network.download.DownloadStatus.PAUSED ||
+        downloadState.status == io.github.HanJason233.chimera.network.download.DownloadStatus.ERROR) {
         DownloadDialog(
             progress = downloadState.progress,
             speed = downloadState.speed,

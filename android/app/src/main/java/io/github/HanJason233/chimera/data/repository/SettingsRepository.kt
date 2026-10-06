@@ -36,7 +36,7 @@ import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
 import io.github.HanJason233.chimera.data.model.SmartRoutingSettings
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
-import io.github.HanJason233.chimera.network.UnlockTestCatalog
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
 import io.github.HanJason233.chimera.util.CountryCodeResolver
 import java.util.UUID
 

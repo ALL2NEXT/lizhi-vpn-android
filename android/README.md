@@ -26,6 +26,10 @@ Xray JSON 中的代理节点聚合为一个本地私人源。配置字段内的 
 丢弃入站、路由、日志和策略组等其他配置；连接或测速时再生成对应内核的配置。
 JSON 可使用完整配置、单独的出站对象或对象数组，Xray 同时支持传统列表和简化出站写法。
 
+网络代码按账号、下载、订阅、节点测试和位置查询拆包；智能导入集中于
+`network/subscription/importer`，私人源图标位于 `feature/nodegrouping/data/icon`。
+目录职责与导入依赖关系见[网络架构说明](docs/network-architecture.md)。
+
 ## 常用命令
 
 在本目录执行：

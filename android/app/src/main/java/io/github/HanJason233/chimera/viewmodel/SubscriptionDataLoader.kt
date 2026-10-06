@@ -25,10 +25,10 @@ import io.github.HanJason233.chimera.data.model.SubscriptionSource
 import io.github.HanJason233.chimera.data.model.UpdateInfo
 import io.github.HanJason233.chimera.data.model.canBeRequestedBy
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
-import io.github.HanJason233.chimera.network.AccountManager
+import io.github.HanJason233.chimera.network.account.AccountManager
 import io.github.HanJason233.chimera.network.NetworkClient
-import io.github.HanJason233.chimera.network.SubscriptionListParser
-import io.github.HanJason233.chimera.network.SubscriptionParser
+import io.github.HanJason233.chimera.network.subscription.SubscriptionListParser
+import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
 import io.github.HanJason233.chimera.util.NetworkUtils
 
 /** Owns backend metadata, account registration and subscription persistence. */

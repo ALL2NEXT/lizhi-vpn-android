@@ -10,7 +10,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import io.github.HanJason233.chimera.data.local.LocalTrafficUsageStore
 import io.github.HanJason233.chimera.data.local.PendingDailyTrafficRecord
-import io.github.HanJason233.chimera.network.AccountManager
+import io.github.HanJason233.chimera.network.account.AccountManager
 
 /** Uploads persisted traffic without tying the request lifecycle to the VPN service. */
 object TrafficReporter {

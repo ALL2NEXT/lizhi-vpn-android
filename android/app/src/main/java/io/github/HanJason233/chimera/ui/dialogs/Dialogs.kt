@@ -377,7 +377,7 @@ private class UrlDrawable : Drawable() {
 fun DownloadDialog(
     progress: Int,
     speed: String,
-    status: io.github.HanJason233.chimera.network.DownloadStatus,
+    status: io.github.HanJason233.chimera.network.download.DownloadStatus,
     errorMessage: String?,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -402,7 +402,7 @@ fun DownloadDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (status == io.github.HanJason233.chimera.network.DownloadStatus.ERROR) "下载失败" else "正在下载更新",
+                    text = if (status == io.github.HanJason233.chimera.network.download.DownloadStatus.ERROR) "下载失败" else "正在下载更新",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -410,7 +410,7 @@ fun DownloadDialog(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                if (status == io.github.HanJason233.chimera.network.DownloadStatus.ERROR) {
+                if (status == io.github.HanJason233.chimera.network.download.DownloadStatus.ERROR) {
                      Text(
                         text = errorMessage ?: "发生未知错误",
                         fontSize = 15.sp,
@@ -462,7 +462,7 @@ fun DownloadDialog(
                         Text("取消")
                     }
                     
-                    if (status == io.github.HanJason233.chimera.network.DownloadStatus.ERROR) {
+                    if (status == io.github.HanJason233.chimera.network.download.DownloadStatus.ERROR) {
                          Button(
                             onClick = onRetry,
                             modifier = Modifier.weight(1f),
@@ -474,7 +474,7 @@ fun DownloadDialog(
                             Text("重试")
                         }
                     } else {
-                        val isPaused = status == io.github.HanJason233.chimera.network.DownloadStatus.PAUSED
+                        val isPaused = status == io.github.HanJason233.chimera.network.download.DownloadStatus.PAUSED
                         Button(
                             onClick = if (isPaused) onResume else onPause,
                             modifier = Modifier.weight(1f),

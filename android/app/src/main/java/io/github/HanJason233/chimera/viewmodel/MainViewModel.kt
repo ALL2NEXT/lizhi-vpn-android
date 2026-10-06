@@ -38,29 +38,30 @@ import io.github.HanJason233.chimera.feature.nodegrouping.domain.SpeedTestCandid
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.SubscriptionGroupingStrategy
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.WarehouseGroupingCountryResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
-import io.github.HanJason233.chimera.network.LatencyTester
-import io.github.HanJason233.chimera.network.NodeDownloadBandwidthTester
-import io.github.HanJason233.chimera.network.Socks5HttpProbe
-import io.github.HanJason233.chimera.network.SpeedTestService
-import io.github.HanJason233.chimera.network.SubscriptionParser
-import io.github.HanJason233.chimera.network.PersonalSourceIconStore
-import io.github.HanJason233.chimera.network.SubscriptionImportInput
-import io.github.HanJason233.chimera.network.SubscriptionInputDetector
-import io.github.HanJason233.chimera.network.ParsedSubscription
-import io.github.HanJason233.chimera.network.DownloadManager
-import io.github.HanJason233.chimera.network.DownloadArtifact
-import io.github.HanJason233.chimera.network.UnlockTestCatalog
-import io.github.HanJason233.chimera.network.UnlockTestClassifier
-import io.github.HanJason233.chimera.network.UnlockTestDefinition
-import io.github.HanJason233.chimera.network.UnlockTestResult
-import io.github.HanJason233.chimera.network.UnlockTestRunner
-import io.github.HanJason233.chimera.network.UnlockTestState
-import io.github.HanJason233.chimera.network.LinkIpAddress
-import io.github.HanJason233.chimera.network.LinkTypeTestResult
-import io.github.HanJason233.chimera.network.LinkTypeTestRunner
-import io.github.HanJason233.chimera.network.LinkTypeTestState
-import io.github.HanJason233.chimera.network.NodeLocationResolver
-import io.github.HanJason233.chimera.network.AccountManager
+import io.github.HanJason233.chimera.network.nodetest.latency.LatencyTester
+import io.github.HanJason233.chimera.network.nodetest.bandwidth.NodeDownloadBandwidthTester
+import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
+import io.github.HanJason233.chimera.network.nodetest.bandwidth.SpeedTestService
+import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
+import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.PersonalSourceIconStore
+import io.github.HanJason233.chimera.network.subscription.importer.LocalSubscriptionContent
+import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionImportInput
+import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionInputDetector
+import io.github.HanJason233.chimera.network.subscription.ParsedSubscription
+import io.github.HanJason233.chimera.network.download.DownloadManager
+import io.github.HanJason233.chimera.network.download.DownloadArtifact
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestClassifier
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestDefinition
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestResult
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestRunner
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
+import io.github.HanJason233.chimera.network.nodetest.linktype.LinkIpAddress
+import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestResult
+import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestRunner
+import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
+import io.github.HanJason233.chimera.network.location.NodeLocationResolver
+import io.github.HanJason233.chimera.network.account.AccountManager
 import io.github.HanJason233.chimera.service.ServiceManager
 import io.github.HanJason233.chimera.service.BoxVpnService
 import io.github.HanJason233.chimera.util.NetworkUtils
@@ -140,7 +141,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun parseFullSubscriptionContent(content: String): ParsedSubscription =
+    private suspend fun parseFullSubscriptionContent(content: LocalSubscriptionContent): ParsedSubscription =
         withContext(Dispatchers.Default) {
             ParsedSubscription(subscriptionParser.parseSubscription(content))
         }
@@ -1600,7 +1601,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         fallbackUrl: String,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
-        val batch = io.github.HanJason233.chimera.network.UrlTestManager.start(
+        val batch = io.github.HanJason233.chimera.network.nodetest.latency.UrlTestManager.start(
             getApplication(), nodes, hysteriaUpMbps.value, hysteriaDownMbps.value,
             protocolCoreSettings.value
         ) ?: return emptyList()
@@ -1625,7 +1626,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             Log.d(tag, "Got ${results.size} URL test results")
             return results
         } finally {
-            withContext(NonCancellable) { io.github.HanJason233.chimera.network.UrlTestManager.stop() }
+            withContext(NonCancellable) { io.github.HanJason233.chimera.network.nodetest.latency.UrlTestManager.stop() }
         }
     }
 
@@ -2613,7 +2614,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         bandwidthTester.cancelActiveTests()
         Socks5HttpProbe.cancelActiveRequests()
         viewModelScope.launch(Dispatchers.IO) {
-            io.github.HanJason233.chimera.network.UrlTestManager.stop()
+            io.github.HanJason233.chimera.network.nodetest.latency.UrlTestManager.stop()
         }
     }
 

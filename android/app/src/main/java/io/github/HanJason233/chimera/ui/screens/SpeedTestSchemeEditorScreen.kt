@@ -50,8 +50,8 @@ import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
 import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
-import io.github.HanJason233.chimera.network.UnlockTestCatalog
-import io.github.HanJason233.chimera.network.UnlockTestCategory
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCategory
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.ui.components.unlockTestIconResource
 import io.github.HanJason233.chimera.viewmodel.MainViewModel

@@ -7,7 +7,7 @@ import io.github.HanJason233.chimera.core.LocalSocksEndpoint
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.ProxyMode
-import io.github.HanJason233.chimera.network.SubscriptionParser
+import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -164,7 +164,7 @@ class SingBoxGeneratedConfigTest {
 
     @Test
     fun certificateFingerprintsAreNotConfusedWithBrowserFingerprints() {
-        val link = io.github.HanJason233.chimera.network.SubscriptionConverter.toStandardUris("""
+        val link = io.github.HanJason233.chimera.network.subscription.importer.SubscriptionConverter.toStandardUris("""
             proxies:
               - { name: Certificate, type: trojan, server: edge.example.com, port: 443,
                   password: secret, fingerprint: "${"ab".repeat(32)}", client-fingerprint: chrome }

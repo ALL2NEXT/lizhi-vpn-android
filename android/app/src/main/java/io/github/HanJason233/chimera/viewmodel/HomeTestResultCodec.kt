@@ -1,10 +1,10 @@
 package io.github.HanJason233.chimera.viewmodel
 
-import io.github.HanJason233.chimera.network.LinkTypeTestResult
-import io.github.HanJason233.chimera.network.LinkTypeTestState
-import io.github.HanJason233.chimera.network.UnlockTestCatalog
-import io.github.HanJason233.chimera.network.UnlockTestResult
-import io.github.HanJason233.chimera.network.UnlockTestState
+import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestResult
+import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestResult
+import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
 import org.json.JSONArray
 import org.json.JSONObject
 

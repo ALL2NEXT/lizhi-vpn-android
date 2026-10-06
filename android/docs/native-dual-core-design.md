@@ -15,7 +15,7 @@
 | sing-box 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [SingBoxBackend](../app/src/main/java/io/github/HanJason233/chimera/core/singbox/SingBoxBackend.kt)、[运行器](../native/singbox-runner/main.go) |
 | Xray 适配器 | SOCKS5 配置、配置预检、独立子进程生命周期 | [XrayBackend](../app/src/main/java/io/github/HanJason233/chimera/core/xray/XrayBackend.kt)、[运行器](../native/xray-runner/main.go) |
 | 规则缓存 | 从共同的 SRS 源生成域名/IP 快照 | [CoreRuleRepository](../app/src/main/java/io/github/HanJason233/chimera/core/route/CoreRuleRepository.kt) |
-| 测速 | 同一后端契约上的无 TUN 会话 | [NodeTestProxyManager](../app/src/main/java/io/github/HanJason233/chimera/network/NodeTestProxyManager.kt)、[UrlTestManager](../app/src/main/java/io/github/HanJason233/chimera/network/UrlTestManager.kt) |
+| 测速 | 同一后端契约上的无 TUN 会话 | [NodeTestProxyManager](../app/src/main/java/io/github/HanJason233/chimera/network/nodetest/common/NodeTestProxyManager.kt)、[UrlTestManager](../app/src/main/java/io/github/HanJason233/chimera/network/nodetest/latency/UrlTestManager.kt) |
 
 实际数据路径：
 

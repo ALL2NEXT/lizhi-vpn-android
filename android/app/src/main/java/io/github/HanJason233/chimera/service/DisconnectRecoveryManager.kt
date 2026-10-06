@@ -23,11 +23,11 @@ import io.github.HanJason233.chimera.data.model.SubscriptionSource
 import io.github.HanJason233.chimera.data.model.ACCOUNT_TYPE_BANNED
 import io.github.HanJason233.chimera.data.model.canBeRequestedBy
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
-import io.github.HanJason233.chimera.network.AccountManager
+import io.github.HanJason233.chimera.network.account.AccountManager
 import io.github.HanJason233.chimera.network.NetworkClient
-import io.github.HanJason233.chimera.network.Socks5HttpProbe
-import io.github.HanJason233.chimera.network.SubscriptionListParser
-import io.github.HanJason233.chimera.network.SubscriptionParser
+import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
+import io.github.HanJason233.chimera.network.subscription.SubscriptionListParser
+import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 

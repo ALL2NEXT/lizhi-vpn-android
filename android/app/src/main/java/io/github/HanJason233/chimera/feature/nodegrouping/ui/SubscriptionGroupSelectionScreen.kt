@@ -90,8 +90,8 @@ import io.github.HanJason233.chimera.data.model.PersonalSourceIconMode
 import io.github.HanJason233.chimera.data.model.SubscriptionGroup
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingStrategy
 import io.github.HanJason233.chimera.feature.nodegrouping.model.CountryOption
-import io.github.HanJason233.chimera.network.SubscriptionFaviconLoader
-import io.github.HanJason233.chimera.network.PersonalSourceIconStore
+import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.SubscriptionFaviconLoader
+import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.PersonalSourceIconStore
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.util.TrafficUsageFormatter
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
