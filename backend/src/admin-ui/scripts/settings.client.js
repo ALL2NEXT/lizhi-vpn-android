@@ -1,21 +1,78 @@
-function addSource(source) {
+const SOURCE_ACCOUNT_TIERS = [
+  { id: 'banned', title: '被封禁账户' },
+  { id: 'guest', title: '游客' },
+  { id: 'formal', title: '正式用户' }
+];
+
+function ensureSourceTierGroups() {
+  const container = el('subscriptionRows');
+  if (container.querySelectorAll('.source-tier-group').length === SOURCE_ACCOUNT_TIERS.length) return;
+  container.innerHTML = '';
+  SOURCE_ACCOUNT_TIERS.forEach(function(tier) {
+    const group = document.createElement('section');
+    group.className = 'source-tier-group';
+    group.dataset.accountTier = tier.id;
+    group.innerHTML = '<div class="source-tier-heading"><div>' +
+      '<h3>' + esc(tier.title) + '</h3>' +
+      '</div>' +
+      '<span data-tier-count>0 条线路</span></div>' +
+      '<div class="source-tier-rows" data-tier-rows></div>' +
+      '<button class="secondary source-tier-add" type="button" data-add-source>添加线路</button>';
+    group.querySelector('[data-add-source]').addEventListener('click', function() {
+      addSource({}, undefined, tier.id);
+    });
+    container.appendChild(group);
+  });
+}
+
+function sourceTierRows(tier) {
+  return el('subscriptionRows')
+    .querySelector('.source-tier-group[data-account-tier="' + tier + '"] [data-tier-rows]');
+}
+
+function sourceOrder(row) {
+  const order = Number(row.dataset.sourceOrder);
+  return Number.isFinite(order) ? order : 0;
+}
+
+function insertSourceByOrder(row, tier) {
+  const container = sourceTierRows(tier);
+  if (!container) return;
+  const nextRow = Array.from(container.children).find(function(candidate) {
+    return candidate.classList.contains('source-row') && sourceOrder(candidate) > sourceOrder(row);
+  });
+  container.insertBefore(row, nextRow || null);
+}
+
+// 管理界面按最低账户等级展示线路；保存时仍按原始线路顺序输出，避免无意更换线路 ID。
+function renderSubscriptionSources(sources) {
+  el('subscriptionRows').innerHTML = '';
+  ensureSourceTierGroups();
+  (Array.isArray(sources) ? sources : []).forEach(function(source, index) {
+    addSource(source, index);
+  });
+  updateSourceRowsMeta();
+}
+
+function addSource(source, sourceOrderValue, tierOverride) {
   source = source || {};
+  ensureSourceTierGroups();
   const row = document.createElement('div');
   row.className = 'source-row collapsed';
+  const existingOrders = getSourceRows().map(sourceOrder);
+  row.dataset.sourceOrder = Number.isFinite(Number(sourceOrderValue))
+    ? String(Number(sourceOrderValue))
+    : String(existingOrders.length ? Math.max.apply(null, existingOrders) + 1 : 0);
   const sourceType = source.content ? 'content' : 'url';
-  const minAccountType = ['banned', 'guest', 'formal'].includes(source.minAccountType)
+  const minAccountType = tierOverride || (['banned', 'guest', 'formal'].includes(source.minAccountType)
     ? source.minAccountType
-    : 'guest';
+    : 'guest');
+  row.dataset.accountTier = minAccountType;
   row.innerHTML = '<div class="source-row-header">' +
     '<div class="source-row-heading">' +
       '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
       '<div class="field"><label>备注<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="仅后台保存"></label></div>' +
       '<div class="field"><label>最低应用版本<input data-field="minAppVersion" type="text" value="' + esc(source.minAppVersion) + '" placeholder="留空不限制"></label></div>' +
-      '<div class="field"><label>最低账户等级<select data-field="minAccountType">' +
-        '<option value="banned" ' + (minAccountType === 'banned' ? 'selected' : '') + '>被封禁账户</option>' +
-        '<option value="guest" ' + (minAccountType === 'guest' ? 'selected' : '') + '>游客</option>' +
-        '<option value="formal" ' + (minAccountType === 'formal' ? 'selected' : '') + '>正式用户</option>' +
-      '</select></label></div>' +
     '</div>' +
     '<div class="source-row-controls" role="group" aria-label="线路启用、排序和折叠操作">' +
       '<label class="check source-enabled-check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用</label>' +
@@ -56,33 +113,45 @@ function addSource(source) {
     moveSourceRow(row, 1);
   };
   updateSourceMode(row);
-  el('subscriptionRows').appendChild(row);
+  insertSourceByOrder(row, minAccountType);
   updateSourceRowsMeta();
 }
 function getSourceRows() {
-  return Array.from(el('subscriptionRows').children).filter(function(row) {
-    return row.classList.contains('source-row');
-  });
+  return Array.from(el('subscriptionRows').querySelectorAll('.source-row'));
 }
 function updateSourceRowsMeta() {
-  const rows = getSourceRows();
-  rows.forEach(function(row, index) {
-    const nameInput = row.querySelector('[data-field="name"]');
-    const moveUp = row.querySelector('[data-action="move-up"]');
-    const moveDown = row.querySelector('[data-action="move-down"]');
-    if (nameInput) nameInput.placeholder = '线路' + (index + 1);
-    if (moveUp) moveUp.disabled = index === 0;
-    if (moveDown) moveDown.disabled = index === rows.length - 1;
+  SOURCE_ACCOUNT_TIERS.forEach(function(tier) {
+    const container = sourceTierRows(tier.id);
+    if (!container) return;
+    const rows = Array.from(container.children).filter(function(row) {
+      return row.classList.contains('source-row');
+    });
+    const count = container.parentElement.querySelector('[data-tier-count]');
+    if (count) count.textContent = rows.length + ' 条线路';
+    rows.forEach(function(row, index) {
+      const nameInput = row.querySelector('[data-field="name"]');
+      const moveUp = row.querySelector('[data-action="move-up"]');
+      const moveDown = row.querySelector('[data-action="move-down"]');
+      if (nameInput) nameInput.placeholder = '线路' + (sourceOrder(row) + 1);
+      if (moveUp) moveUp.disabled = index === 0;
+      if (moveDown) moveDown.disabled = index === rows.length - 1;
+    });
   });
 }
 function moveSourceRow(row, direction) {
-  const rows = getSourceRows();
+  const rows = Array.from(row.parentElement.children).filter(function(candidate) {
+    return candidate.classList.contains('source-row');
+  });
   const index = rows.indexOf(row);
   const targetIndex = index + direction;
   if (index < 0 || targetIndex < 0 || targetIndex >= rows.length) return;
-  const container = el('subscriptionRows');
-  if (direction < 0) container.insertBefore(row, rows[targetIndex]);
-  else container.insertBefore(rows[targetIndex], row);
+  const target = rows[targetIndex];
+  const rowOrder = row.dataset.sourceOrder;
+  row.dataset.sourceOrder = target.dataset.sourceOrder;
+  target.dataset.sourceOrder = rowOrder;
+  const container = row.parentElement;
+  if (direction < 0) container.insertBefore(row, target);
+  else container.insertBefore(target, row);
   updateSourceRowsMeta();
 }
 function toggleSourceRow(row) {
@@ -350,9 +419,8 @@ function validateWebNavigationGroups(groups) {
 
 function fillState(state) {
   currentState = state || {};
-  el('subscriptionRows').innerHTML = '';
-  (currentState.subscriptions || []).forEach(addSource);
-  if (!currentState.subscriptions || currentState.subscriptions.length === 0) addSource();
+  const subscriptions = Array.isArray(currentState.subscriptions) ? currentState.subscriptions : [];
+  renderSubscriptionSources(subscriptions);
   const settings = currentState.settings || {};
   el('webNavigationGroups').innerHTML = '';
   (Array.isArray(settings.webNavigationGroups) ? settings.webNavigationGroups : []).forEach(addWebNavigationGroup);
@@ -459,7 +527,9 @@ async function copyDebugInterfaceUrl() {
   }
 }
 function formState() {
-  const subscriptions = Array.from(document.querySelectorAll('.source-row')).map(function(row, index) {
+  const subscriptions = Array.from(document.querySelectorAll('.source-row'))
+    .sort(function(left, right) { return sourceOrder(left) - sourceOrder(right); })
+    .map(function(row, index) {
     const sourceType = row.querySelector('[data-field="sourceType"]').value;
     const url = row.querySelector('[data-field="url"]').value.trim();
     const content = row.querySelector('[data-field="content"]').value.trim();
@@ -467,7 +537,7 @@ function formState() {
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: sourceType === 'url' ? url : '',
       enabled: row.querySelector('[data-field="enabled"]').checked,
-      minAccountType: row.querySelector('[data-field="minAccountType"]').value,
+      minAccountType: row.dataset.accountTier,
       minAppVersion: row.querySelector('[data-field="minAppVersion"]').value.trim(),
       cacheMinutes: sourceType === 'url'
         ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 0)
@@ -616,4 +686,3 @@ async function pushSection(section) {
 initializeGrowthRange();
 initializeActivityRange();
 initializeTrafficRange();
-addSource();

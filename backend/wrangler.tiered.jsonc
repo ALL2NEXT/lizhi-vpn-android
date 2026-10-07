@@ -1,0 +1,44 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "chimera-tiered",
+  "main": "serverless.js",
+  "compatibility_date": "2026-08-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "ab015799322591cab5c7ae3d57d337ac",
+  "workers_dev": true,
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/*.html", "**/*.css", "**/*.client.js"],
+      "fallthrough": false
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG",
+      "id": "5be0aaedd6334c4ba8e5dbebac724e8e"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "USERS_DB",
+      "database_name": "chimera-tiered-users",
+      "database_id": "17e35fe6-9b3e-4c1e-95d8-bec4210639a2"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  }
+}

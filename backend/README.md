@@ -86,3 +86,15 @@ npx.cmd wrangler deploy
 ```
 
 新版本以 Chimera 的 KV 键保存后台数据，并兼容读取、同步旧 Firefly 键；加密订阅响应同时返回新旧客户端 IP 响应头，便于客户端逐步迁移。
+
+## 最低账户等级分组 Worker
+
+隔离部署配置位于 `wrangler.tiered.jsonc`，Worker 名称为 `chimera-tiered`，绑定独立的 `chimera-tiered-config` KV 与 `chimera-tiered-users` D1，不读取或覆盖现有 `chimera` Worker 的数据。后台订阅线路按最低账户等级分组展示；客户端接口仍返回兼容的平铺线路列表。
+
+部署此项目：
+
+```powershell
+npx.cmd wrangler deploy --config wrangler.tiered.jsonc
+npx.cmd wrangler secret put ADMIN_PATH --config wrangler.tiered.jsonc
+npx.cmd wrangler secret put ADMIN_TOKEN --config wrangler.tiered.jsonc
+```
