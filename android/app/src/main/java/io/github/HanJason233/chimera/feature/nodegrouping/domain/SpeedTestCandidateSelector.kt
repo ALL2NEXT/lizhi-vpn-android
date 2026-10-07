@@ -38,6 +38,28 @@ internal object SpeedTestCandidateSelector {
         return takeTop(orderedResults, selection.mode, selection.value)
     }
 
+    fun concurrencyForStage(
+        scheme: SpeedTestScheme,
+        stage: SpeedTestStage,
+        testedCount: Int
+    ): Int {
+        val (mode, value) = when (stage) {
+            SpeedTestStage.TCPING -> scheme.tcpingConcurrencyMode to scheme.tcpingConcurrency
+            SpeedTestStage.URL_TEST -> scheme.urlTestConcurrencyMode to scheme.urlTestConcurrency
+            SpeedTestStage.BANDWIDTH -> scheme.bandwidthTestConcurrencyMode to scheme.bandwidthTestConcurrency
+            else -> error("连接后的测试没有节点并发数量")
+        }
+        val normalizedValue = value.coerceAtLeast(1)
+        return when (mode) {
+            SpeedTestSelectionMode.PERCENT ->
+                ((testedCount.coerceAtLeast(1).toLong() * normalizedValue + 99L) / 100L)
+                    .toInt()
+                    .coerceIn(1, testedCount.coerceAtLeast(1))
+
+            SpeedTestSelectionMode.COUNT -> normalizedValue
+        }
+    }
+
     fun <T> takeTop(
         items: List<T>,
         mode: SpeedTestSelectionMode,

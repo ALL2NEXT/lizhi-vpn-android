@@ -122,8 +122,17 @@ fun SpeedTestSchemeEditorScreen(
         mutableStateOf(scheme.urlTestMeasurementTimeoutMs.toString())
     }
     var bandwidthDuration by remember(scheme.id, scheme.bandwidthTestDurationMs) { mutableStateOf(scheme.bandwidthTestDurationMs.toString()) }
+    var tcpingConcurrencyMode by remember(scheme.id, scheme.tcpingConcurrencyMode) {
+        mutableStateOf(scheme.tcpingConcurrencyMode)
+    }
     var tcpingConcurrency by remember(scheme.id, scheme.tcpingConcurrency) { mutableStateOf(scheme.tcpingConcurrency.toString()) }
+    var urlConcurrencyMode by remember(scheme.id, scheme.urlTestConcurrencyMode) {
+        mutableStateOf(scheme.urlTestConcurrencyMode)
+    }
     var urlConcurrency by remember(scheme.id, scheme.urlTestConcurrency) { mutableStateOf(scheme.urlTestConcurrency.toString()) }
+    var bandwidthConcurrencyMode by remember(scheme.id, scheme.bandwidthTestConcurrencyMode) {
+        mutableStateOf(scheme.bandwidthTestConcurrencyMode)
+    }
     var bandwidthConcurrency by remember(scheme.id, scheme.bandwidthTestConcurrency) { mutableStateOf(scheme.bandwidthTestConcurrency.toString()) }
     var urlTestUrl by remember(scheme.id, scheme.urlTestUrl) { mutableStateOf(scheme.urlTestUrl) }
     var urlTestBackupUrl by remember(scheme.id, scheme.urlTestBackupUrl) {
@@ -180,10 +189,13 @@ fun SpeedTestSchemeEditorScreen(
                                     ?: scheme.urlTestMeasurementTimeoutMs,
                                 bandwidthTestDurationMs = bandwidthDuration.toLongOrNull()
                                     ?: scheme.bandwidthTestDurationMs,
+                                tcpingConcurrencyMode = tcpingConcurrencyMode,
                                 tcpingConcurrency = tcpingConcurrency.toIntOrNull()
                                     ?: scheme.tcpingConcurrency,
+                                urlTestConcurrencyMode = urlConcurrencyMode,
                                 urlTestConcurrency = urlConcurrency.toIntOrNull()
                                     ?: scheme.urlTestConcurrency,
+                                bandwidthTestConcurrencyMode = bandwidthConcurrencyMode,
                                 bandwidthTestConcurrency = bandwidthConcurrency.toIntOrNull()
                                     ?: scheme.bandwidthTestConcurrency,
                                 urlTestUrl = normalizedUrl ?: scheme.urlTestUrl,
@@ -224,7 +236,13 @@ fun SpeedTestSchemeEditorScreen(
                 onEnabledChange = { tcpingEnabled = it }
             ) {
                 NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) { tcpingTimeout = it }
-                NumberInput("并发", tcpingConcurrency, enabled = tcpingEnabled) { tcpingConcurrency = it }
+                ConcurrencyInput(
+                    mode = tcpingConcurrencyMode,
+                    value = tcpingConcurrency,
+                    enabled = tcpingEnabled,
+                    onModeChange = { tcpingConcurrencyMode = it },
+                    onValueChange = { tcpingConcurrency = it }
+                )
                 AutoDeleteSwitchRow(
                     label = "自动删除 TCPing 超时节点",
                     checked = tcpingAutoDeleteTimeoutNodes,
@@ -261,7 +279,13 @@ fun SpeedTestSchemeEditorScreen(
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                NumberInput("并发", urlConcurrency, enabled = urlTestEnabled) { urlConcurrency = it }
+                ConcurrencyInput(
+                    mode = urlConcurrencyMode,
+                    value = urlConcurrency,
+                    enabled = urlTestEnabled,
+                    onModeChange = { urlConcurrencyMode = it },
+                    onValueChange = { urlConcurrency = it }
+                )
                 OutlinedTextField(
                     value = urlTestUrl,
                     onValueChange = { urlTestUrl = it },
@@ -314,7 +338,13 @@ fun SpeedTestSchemeEditorScreen(
                 onEnabledChange = { bandwidthEnabled = it }
             ) {
                 NumberInput("测速时长 (ms)", bandwidthDuration, enabled = bandwidthEnabled) { bandwidthDuration = it }
-                NumberInput("并发", bandwidthConcurrency, enabled = bandwidthEnabled) { bandwidthConcurrency = it }
+                ConcurrencyInput(
+                    mode = bandwidthConcurrencyMode,
+                    value = bandwidthConcurrency,
+                    enabled = bandwidthEnabled,
+                    onModeChange = { bandwidthConcurrencyMode = it },
+                    onValueChange = { bandwidthConcurrency = it }
+                )
                 OutlinedTextField(
                     value = bandwidthUrl,
                     onValueChange = { bandwidthUrl = it },
@@ -505,7 +535,31 @@ private fun SchemeCard(
 }
 
 @Composable
+private fun ConcurrencyInput(
+    mode: SpeedTestSelectionMode,
+    value: String,
+    enabled: Boolean,
+    onModeChange: (SpeedTestSelectionMode) -> Unit,
+    onValueChange: (String) -> Unit
+) {
+    ResultRetentionInput(
+        label = "并发",
+        mode = mode,
+        value = value,
+        enabled = enabled,
+        onModeChange = onModeChange,
+        onValueChange = onValueChange
+    )
+    Text(
+        text = "百分比按本项待测试节点数计算",
+        fontSize = 12.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
 private fun ResultRetentionInput(
+    label: String = "输出给下一项",
     mode: SpeedTestSelectionMode,
     value: String,
     enabled: Boolean,
@@ -518,7 +572,7 @@ private fun ResultRetentionInput(
     OutlinedTextField(
         value = value,
         onValueChange = { onValueChange(it.filter(Char::isDigit)) },
-        label = { Text("输出给下一项") },
+        label = { Text(label) },
         singleLine = true,
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

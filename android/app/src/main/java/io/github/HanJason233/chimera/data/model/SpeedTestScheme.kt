@@ -56,9 +56,12 @@ data class SpeedTestScheme(
     val urlTestBackupUrl: String = UrlTestTargets.DEFAULT_BACKUP_URL,
     val bandwidthTestDurationMs: Long = 3_000L,
     val bandwidthTestUrl: String = BandwidthTestTargets.DEFAULT_URL,
-    val tcpingConcurrency: Int = 16,
-    val urlTestConcurrency: Int = 10,
-    val bandwidthTestConcurrency: Int = 1
+    val tcpingConcurrencyMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
+    val tcpingConcurrency: Int = 30,
+    val urlTestConcurrencyMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
+    val urlTestConcurrency: Int = 30,
+    val bandwidthTestConcurrencyMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
+    val bandwidthTestConcurrency: Int = 30
 ) {
     companion object {
         /** 当前版本唯一的内置测速方案；旧的标准/全面方案不再展示。 */
@@ -82,8 +85,12 @@ data class SpeedTestScheme(
             urlTestMeasurementTimeoutMs = 1_000L,
             urlTestUrl = UrlTestTargets.DEFAULT_URL,
             urlTestBackupUrl = UrlTestTargets.DEFAULT_BACKUP_URL,
-            tcpingConcurrency = 16,
-            urlTestConcurrency = 10
+            tcpingConcurrencyMode = SpeedTestSelectionMode.PERCENT,
+            tcpingConcurrency = 30,
+            urlTestConcurrencyMode = SpeedTestSelectionMode.PERCENT,
+            urlTestConcurrency = 30,
+            bandwidthTestConcurrencyMode = SpeedTestSelectionMode.PERCENT,
+            bandwidthTestConcurrency = 30
         )
 
         fun create(name: String, template: SpeedTestScheme = default()): SpeedTestScheme =

@@ -823,7 +823,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     val tcpingResults = internalTestNodes(
                         currentNodes = tcpingNodes,
-                        concurrency = scheme.tcpingConcurrency,
+                        concurrency = SpeedTestCandidateSelector.concurrencyForStage(
+                            scheme,
+                            SpeedTestStage.TCPING,
+                            tcpingNodes.size
+                        ),
                         timeoutMs = scheme.tcpingTimeoutMs,
                         autoDeleteTimeoutNodes = scheme.tcpingAutoDeleteTimeoutNodes,
                         onProgress = { completed, total ->
@@ -858,7 +862,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     val urlTestResults = runUrlTestNodes(
                         nodes = urlTestNodes,
-                        concurrency = scheme.urlTestConcurrency,
+                        concurrency = SpeedTestCandidateSelector.concurrencyForStage(
+                            scheme,
+                            SpeedTestStage.URL_TEST,
+                            urlTestNodes.size
+                        ),
                         warmupTimeoutMs = scheme.urlTestWarmupTimeoutMs,
                         measurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs,
                         targetUrl = scheme.urlTestUrl,
@@ -899,7 +907,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     var completedBandwidthNodes = 0
                     val speedResults = speedTestNodes
-                        .chunked(scheme.bandwidthTestConcurrency)
+                        .chunked(
+                            SpeedTestCandidateSelector.concurrencyForStage(
+                                scheme,
+                                SpeedTestStage.BANDWIDTH,
+                                speedTestNodes.size
+                            )
+                        )
                         .flatMap { batch ->
                             val results = coroutineScope {
                                 batch.map { node ->
@@ -1044,7 +1058,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         internalTestNodes(
                             currentNodes = candidates,
-                            concurrency = scheme.tcpingConcurrency,
+                            concurrency = SpeedTestCandidateSelector.concurrencyForStage(
+                                scheme,
+                                SpeedTestStage.TCPING,
+                                candidates.size
+                            ),
                             timeoutMs = scheme.tcpingTimeoutMs,
                             autoDeleteTimeoutNodes = scheme.tcpingAutoDeleteTimeoutNodes,
                             onProgress = { completed, total ->
@@ -1069,7 +1087,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         val results = runUrlTestNodes(
                             nodes = candidates,
-                            concurrency = scheme.urlTestConcurrency,
+                            concurrency = SpeedTestCandidateSelector.concurrencyForStage(
+                                scheme,
+                                SpeedTestStage.URL_TEST,
+                                candidates.size
+                            ),
                             warmupTimeoutMs = scheme.urlTestWarmupTimeoutMs,
                             measurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs,
                             targetUrl = scheme.urlTestUrl,
@@ -1104,7 +1126,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         var completedBandwidthNodes = 0
                         val speedResults = candidates
-                            .chunked(scheme.bandwidthTestConcurrency)
+                            .chunked(
+                                SpeedTestCandidateSelector.concurrencyForStage(
+                                    scheme,
+                                    SpeedTestStage.BANDWIDTH,
+                                    candidates.size
+                                )
+                            )
                             .flatMap { batch ->
                                 val results = coroutineScope {
                                     batch.map { node ->

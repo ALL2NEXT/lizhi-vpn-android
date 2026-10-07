@@ -62,7 +62,7 @@ class SettingsRepository(
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
         private const val AUTO_REFRESH_SOURCE_PREFIX = "auto_refresh_source_on_startup:"
         /** 默认测速与默认主题方案分别维护版本；升级后保存新版本并尊重后续修改。 */
-        private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 2
+        private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 3
         private const val DEFAULT_SKIN_PARTICLE_PRESET_REVISION = 1
         private const val DEFAULT_SKIN_PRESET_REVISION = 3
         private const val MIN_SERVICE_REQUEST_TIMEOUT_MS = 5_000L
@@ -1069,6 +1069,15 @@ class SettingsRepository(
                                 item.put("urlTestSelectionMode", defaults.urlTestSelectionMode.name)
                                 item.put("urlTestSelectionValue", defaults.urlTestSelectionValue)
                                 item.put("linkTypeTestEnabled", defaults.linkTypeTestEnabled)
+                                item.put("tcpingConcurrencyMode", defaults.tcpingConcurrencyMode.name)
+                                item.put("tcpingConcurrency", defaults.tcpingConcurrency)
+                                item.put("urlTestConcurrencyMode", defaults.urlTestConcurrencyMode.name)
+                                item.put("urlTestConcurrency", defaults.urlTestConcurrency)
+                                item.put(
+                                    "bandwidthTestConcurrencyMode",
+                                    defaults.bandwidthTestConcurrencyMode.name
+                                )
+                                item.put("bandwidthTestConcurrency", defaults.bandwidthTestConcurrency)
                             }
                             add(
                                 normalizeSpeedTestScheme(
@@ -1165,8 +1174,20 @@ class SettingsRepository(
                                             "bandwidthTestUrl",
                                             io.github.HanJason233.chimera.AppConfig.SPEED_TEST_DOWNLOAD_URL
                                         ),
+                                        tcpingConcurrencyMode = readConcurrencyMode(
+                                            item,
+                                            "tcpingConcurrencyMode"
+                                        ),
                                         tcpingConcurrency = item.optInt("tcpingConcurrency", 16),
+                                        urlTestConcurrencyMode = readConcurrencyMode(
+                                            item,
+                                            "urlTestConcurrencyMode"
+                                        ),
                                         urlTestConcurrency = item.optInt("urlTestConcurrency", 10),
+                                        bandwidthTestConcurrencyMode = readConcurrencyMode(
+                                            item,
+                                            "bandwidthTestConcurrencyMode"
+                                        ),
                                         bandwidthTestConcurrency = item.optInt(
                                             "bandwidthTestConcurrency",
                                             1
@@ -1215,6 +1236,10 @@ class SettingsRepository(
         item.optInt(legacyKey, legacyDefault)
     )
 
+    private fun readConcurrencyMode(item: JSONObject, key: String): SpeedTestSelectionMode = runCatching {
+        SpeedTestSelectionMode.valueOf(item.optString(key))
+    }.getOrDefault(SpeedTestSelectionMode.COUNT)
+
     private fun normalizeSelectionValue(
         mode: SpeedTestSelectionMode,
         value: Int
@@ -1256,9 +1281,18 @@ class SettingsRepository(
             bandwidthTestDurationMs = scheme.bandwidthTestDurationMs.coerceAtLeast(1_000L),
             bandwidthTestUrl = BandwidthTestTargets.normalize(scheme.bandwidthTestUrl)
                 ?: io.github.HanJason233.chimera.AppConfig.SPEED_TEST_DOWNLOAD_URL,
-            tcpingConcurrency = scheme.tcpingConcurrency.coerceIn(1, 512),
-            urlTestConcurrency = scheme.urlTestConcurrency.coerceIn(1, 128),
-            bandwidthTestConcurrency = scheme.bandwidthTestConcurrency.coerceIn(1, 3)
+            tcpingConcurrency = normalizeSelectionValue(
+                scheme.tcpingConcurrencyMode,
+                scheme.tcpingConcurrency
+            ).coerceAtMost(if (scheme.tcpingConcurrencyMode == SpeedTestSelectionMode.COUNT) 512 else 100),
+            urlTestConcurrency = normalizeSelectionValue(
+                scheme.urlTestConcurrencyMode,
+                scheme.urlTestConcurrency
+            ).coerceAtMost(if (scheme.urlTestConcurrencyMode == SpeedTestSelectionMode.COUNT) 128 else 100),
+            bandwidthTestConcurrency = normalizeSelectionValue(
+                scheme.bandwidthTestConcurrencyMode,
+                scheme.bandwidthTestConcurrency
+            ).coerceAtMost(if (scheme.bandwidthTestConcurrencyMode == SpeedTestSelectionMode.COUNT) 3 else 100)
         )
     }
 
@@ -1320,8 +1354,11 @@ class SettingsRepository(
                     put("urlTestBackupUrl", normalized.urlTestBackupUrl)
                     put("bandwidthTestDurationMs", normalized.bandwidthTestDurationMs)
                     put("bandwidthTestUrl", normalized.bandwidthTestUrl)
+                    put("tcpingConcurrencyMode", normalized.tcpingConcurrencyMode.name)
                     put("tcpingConcurrency", normalized.tcpingConcurrency)
+                    put("urlTestConcurrencyMode", normalized.urlTestConcurrencyMode.name)
                     put("urlTestConcurrency", normalized.urlTestConcurrency)
+                    put("bandwidthTestConcurrencyMode", normalized.bandwidthTestConcurrencyMode.name)
                     put("bandwidthTestConcurrency", normalized.bandwidthTestConcurrency)
                 }
             )
