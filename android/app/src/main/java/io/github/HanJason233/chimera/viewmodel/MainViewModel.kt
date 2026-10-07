@@ -271,6 +271,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
     private val _isSyncingAccount = MutableStateFlow(false)
     val isSyncingAccount = _isSyncingAccount.asStateFlow()
+    private val _isStartupAccountActionInProgress = MutableStateFlow(false)
+    val isStartupAccountActionInProgress = _isStartupAccountActionInProgress.asStateFlow()
+    private val _startupAccountAuthenticated = MutableStateFlow(accountManager.currentAccount() != null)
+    val startupAccountAuthenticated = _startupAccountAuthenticated.asStateFlow()
     private val _isBindingAccount = MutableStateFlow(false)
     val isBindingAccount = _isBindingAccount.asStateFlow()
     private val _isSwitchingAccount = MutableStateFlow(false)
@@ -668,23 +672,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // data should not blank and rewrite DataStore on every launch.
                 _isInitialized.value = true
 
-                // 先加载缓存，再按每个远程源的设置决定是否在冷启动时更新。
+                // 无本地账户时只读缓存；已有账户直接恢复订阅数据，不再要求重新选择登录方式。
 
                 subscriptionDataLoader.loadCachedSubscriptionList()
-                val autoRefreshOverrides = settingsRepository.autoRefreshOnStartupOverrides.first()
-                if (!initializeSubscriptionsWithRefreshState(
-                        forceRefresh = true,
-                        shouldRefreshSource = { sourceId ->
-                            autoRefreshOverrides[sourceId] ?: true
-                        }
-                    )
-                ) {
-                    // A successful refresh schedules enrichment for fresh nodes.
-                    scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
+                if (_startupAccountAuthenticated.value) {
+                    loadStartupDataAfterAuthentication()
                 }
-                refreshUserSubscriptionGroupsOnStartup(autoRefreshOverrides)
-                checkNotice()
-                checkUpdateInternal(isAuto = true)
             } catch (error: Exception) {
                 Log.e(tag, "Startup preload failed", error)
             }
@@ -3038,6 +3031,82 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun loginAtStartup(email: String, password: String) {
+        runStartupAccountAction {
+            accountManager.loginAccount(
+                email = email,
+                password = password,
+                timeoutMs = serviceRequestTimeoutMs.value
+            ).getOrThrow()
+        }
+    }
+
+    fun registerAtStartup(
+        email: String,
+        password: String,
+        registrationCode: String
+    ) {
+        runStartupAccountAction {
+            if (accountManager.currentAccount() == null) {
+                accountManager.register(serviceRequestTimeoutMs.value).getOrThrow()
+            }
+            accountManager.bindEmailPassword(
+                email = email,
+                password = password,
+                registrationCode = registrationCode,
+                timeoutMs = serviceRequestTimeoutMs.value
+            ).getOrThrow()
+        }
+    }
+
+    fun continueAsGuestAtStartup() {
+        runStartupAccountAction {
+            accountManager.register(serviceRequestTimeoutMs.value).getOrThrow()
+        }
+    }
+
+    private fun runStartupAccountAction(action: suspend () -> AccountInfo) {
+        if (_isStartupAccountActionInProgress.value || _startupAccountAuthenticated.value) return
+        viewModelScope.launch {
+            _isStartupAccountActionInProgress.value = true
+            _accountMessage.value = null
+            try {
+                action()
+                _startupAccountAuthenticated.value = true
+                viewModelScope.launch { loadStartupDataAfterAuthentication() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(tag, "Startup account action failed", error)
+                _accountMessage.value = startupAccountErrorMessage(error)
+            } finally {
+                _isStartupAccountActionInProgress.value = false
+            }
+        }
+    }
+
+    private suspend fun loadStartupDataAfterAuthentication() {
+        try {
+            val autoRefreshOverrides = settingsRepository.autoRefreshOnStartupOverrides.first()
+            if (!initializeSubscriptionsWithRefreshState(
+                    forceRefresh = true,
+                    shouldRefreshSource = { sourceId ->
+                        autoRefreshOverrides[sourceId] ?: true
+                    }
+                )
+            ) {
+                scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
+            }
+            refreshUserSubscriptionGroupsOnStartup(autoRefreshOverrides)
+            checkNotice()
+            checkUpdateInternal(isAuto = true)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.e(tag, "Post-authentication startup refresh failed", error)
+        }
+    }
+
     fun clearAccountMessage() {
         _accountMessage.value = null
     }
@@ -3120,6 +3189,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun startupAccountErrorMessage(error: Throwable): String = when (error.message) {
+        "invalid_email" -> "邮箱格式无效"
+        "invalid_password" -> "密码长度需在 8～128 个字符之间"
+        "device_banned" -> "当前设备已被封禁"
+        "registration_disabled",
+        "registration_code_required",
+        "invalid_registration_code",
+        "formal_registration_closed",
+        "invalid_bind_credentials",
+        "account_already_bound",
+        "email_already_bound" -> accountBindingErrorMessage(error)
+        else -> accountActionErrorMessage(error)
+    }
+
     private fun accountBindingErrorMessage(error: Throwable): String {
         return when (error.message) {
             "registration_disabled" -> "用户注册暂未开放"
@@ -3137,6 +3220,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun accountActionErrorMessage(error: Throwable): String {
         return when (error.message) {
+            "backend_url_missing" -> "未配置服务地址"
             "invalid_login_credentials" -> "邮箱或密码错误"
             "invalid_account_password" -> "当前账户密码错误"
             "account_banned" -> "账户已被封禁，无法切换"

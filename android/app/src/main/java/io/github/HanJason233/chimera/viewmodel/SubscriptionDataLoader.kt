@@ -31,7 +31,7 @@ import io.github.HanJason233.chimera.network.subscription.SubscriptionListParser
 import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
 import io.github.HanJason233.chimera.util.NetworkUtils
 
-/** Owns backend metadata, account registration and subscription persistence. */
+/** Owns backend metadata and subscription persistence. */
 internal class SubscriptionDataLoader(
     private val context: Context,
     private val settingsRepository: SettingsRepository,
@@ -93,9 +93,8 @@ internal class SubscriptionDataLoader(
         shouldRefreshSource: ((String) -> Boolean)? = null
     ): Boolean = coroutineScope {
         val listRequest = async { fetchSubscriptionList(forceRefresh) }
-        val accountRequest = async { registerAccountForSession() }
         val listResult = listRequest.await()
-        val account = accountRequest.await()
+        val account = accountManager.currentAccount()
         val subscriptionList = listResult.getOrNull()
 
         if (subscriptionList == null) {
@@ -152,13 +151,6 @@ internal class SubscriptionDataLoader(
         )
         fetched
     }
-
-    private suspend fun registerAccountForSession() =
-        accountManager.register(settingsRepository.serviceRequestTimeoutMs.first())
-            .onFailure { error ->
-                Log.w(TAG, "Account registration failed; continuing without a fresh account response", error)
-            }
-            .getOrNull()
 
     private suspend fun fetchSubscriptionList(forceRefresh: Boolean): Result<SubscriptionList> {
         if (AppConfig.BACKEND_URL.isBlank()) {

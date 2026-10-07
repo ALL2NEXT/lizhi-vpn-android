@@ -54,6 +54,7 @@ import io.github.HanJason233.chimera.ui.screens.CoreRoutingScreen
 import io.github.HanJason233.chimera.ui.screens.QrScannerScreen
 import io.github.HanJason233.chimera.ui.screens.SkinScreen
 import io.github.HanJason233.chimera.ui.screens.SkinSchemeEditorScreen
+import io.github.HanJason233.chimera.ui.screens.StartupAccountDialog
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemeEditorScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemesScreen
 import io.github.HanJason233.chimera.ui.screens.WebNavigationScreen
@@ -89,6 +90,11 @@ class MainActivity : ComponentActivity() {
             val viewModel: MainViewModel = viewModel()
             val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
             val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
+            val startupAccountAuthenticated by
+                viewModel.startupAccountAuthenticated.collectAsStateWithLifecycle()
+            val isStartupAccountActionInProgress by
+                viewModel.isStartupAccountActionInProgress.collectAsStateWithLifecycle()
+            val accountMessage by viewModel.accountMessage.collectAsStateWithLifecycle()
             LaunchedEffect(skinSettings.activeScheme.appIconPresetId) {
                 LauncherIdentityManager.apply(
                     this@MainActivity,
@@ -478,6 +484,16 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                        }
+                        if (!startupAccountAuthenticated) {
+                            StartupAccountDialog(
+                                backendSettings = backendSettings,
+                                isBusy = isStartupAccountActionInProgress,
+                                message = accountMessage,
+                                onLogin = viewModel::loginAtStartup,
+                                onRegister = viewModel::registerAtStartup,
+                                onGuestLogin = viewModel::continueAsGuestAtStartup
+                            )
                         }
                 }
             }
