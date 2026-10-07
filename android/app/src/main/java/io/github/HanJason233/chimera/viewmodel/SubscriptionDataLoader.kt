@@ -76,11 +76,12 @@ internal class SubscriptionDataLoader(
 
     suspend fun initialize(
         forceRefresh: Boolean = false,
-        sourceId: String? = null
+        sourceId: String? = null,
+        shouldRefreshSource: ((String) -> Boolean)? = null
     ): Boolean {
         _isLoading.value = true
         return try {
-            initializeInternal(forceRefresh, sourceId)
+            initializeInternal(forceRefresh, sourceId, shouldRefreshSource)
         } finally {
             _isLoading.value = false
         }
@@ -88,7 +89,8 @@ internal class SubscriptionDataLoader(
 
     private suspend fun initializeInternal(
         forceRefresh: Boolean = false,
-        sourceId: String? = null
+        sourceId: String? = null,
+        shouldRefreshSource: ((String) -> Boolean)? = null
     ): Boolean = coroutineScope {
         val listRequest = async { fetchSubscriptionList(forceRefresh) }
         val accountRequest = async { registerAccountForSession() }
@@ -127,10 +129,12 @@ internal class SubscriptionDataLoader(
 
         val cachedNodes = nodeDao().getSubscriptionNodes().first()
         val accessibleSourceIds = accessibleSources.mapTo(mutableSetOf()) { it.id }
-        val targetSources = if (sourceId.isNullOrBlank()) {
-            accessibleSources
-        } else {
-            accessibleSources.filter { it.id == sourceId }
+        val targetSources = when {
+            shouldRefreshSource != null -> accessibleSources.filter {
+                shouldRefreshSource(it.id)
+            }
+            sourceId.isNullOrBlank() -> accessibleSources
+            else -> accessibleSources.filter { it.id == sourceId }
         }
         val cachedAccessibleNodes = cachedNodes.filter {
             it.subscriptionSourceId in accessibleSourceIds

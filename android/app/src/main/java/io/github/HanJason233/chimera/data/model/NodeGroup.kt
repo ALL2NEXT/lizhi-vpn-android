@@ -104,5 +104,6 @@ data class NodeGroupSummary(
     val customIconUrl: String? = null,
     val localIconFile: String? = null,
     val userAgentMode: String = PersonalSourceUserAgentMode.AUTO.name,
-    val customUserAgent: String? = null
+    val customUserAgent: String? = null,
+    val autoRefreshOnStartup: Boolean = false
 )

@@ -305,6 +305,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val subscriptionGroups = nodeDaoFlow.flatMapLatest { it.getSubscriptionGroups() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val autoRefreshOnStartupOverrides = settingsRepository.autoRefreshOnStartupOverrides
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
     private val storedSubscriptionSourceId = settingsRepository.selectedSubscriptionSourceId
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -347,7 +350,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** 私人源摘要。 */
     val userSubscriptionGroups = nodeDaoFlow
         .flatMapLatest { it.getUserSubscriptionGroupsWithCount() }
-        .map { groups ->
+        .combine(settingsRepository.autoRefreshOnStartupOverrides) { groups, overrides ->
             groups.map { item ->
                 NodeGroupSummary(
                     id = NodeGroupKey.Imported(item.group.id).value,
@@ -367,7 +370,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     customUserAgent = item.group.customUserAgent,
                     subscriptionUpdatedAt = item.group.subscriptionUpdatedAt
                         .takeIf { it > 0L }
-                        ?: item.group.createdAt.takeIf { it > 0L }
+                        ?: item.group.createdAt.takeIf { it > 0L },
+                    autoRefreshOnStartup = overrides[item.group.id] ?: false
                 )
             }
         }
@@ -567,16 +571,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         SettingsRepository.DEFAULT_SERVICE_REQUEST_TIMEOUT_MS
     )
-    val autoRefreshOfficialSubscriptions = settingsRepository.autoRefreshOfficialSubscriptions.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        SettingsRepository.DEFAULT_AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS
-    )
-    val autoRefreshPersonalSubscriptions = settingsRepository.autoRefreshPersonalSubscriptions.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        SettingsRepository.DEFAULT_AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS
-    )
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
     val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
     val speedTestDurationMs = settingsRepository.speedTestDurationMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
@@ -674,19 +668,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // data should not blank and rewrite DataStore on every launch.
                 _isInitialized.value = true
 
-                // 先加载缓存，再按设置决定是否在冷启动时更新两类订阅源。
+                // 先加载缓存，再按每个远程源的设置决定是否在冷启动时更新。
 
                 subscriptionDataLoader.loadCachedSubscriptionList()
-                if (settingsRepository.autoRefreshOfficialSubscriptions.first()) {
-                    if (!initializeSubscriptionsWithRefreshState(forceRefresh = true)) {
-                        // A successful refresh schedules enrichment for the fresh
-                        // nodes. Only fall back to cached nodes when refresh failed.
-                        scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
-                    }
+                val autoRefreshOverrides = settingsRepository.autoRefreshOnStartupOverrides.first()
+                if (!initializeSubscriptionsWithRefreshState(
+                        forceRefresh = true,
+                        shouldRefreshSource = { sourceId ->
+                            autoRefreshOverrides[sourceId] ?: true
+                        }
+                    )
+                ) {
+                    // A successful refresh schedules enrichment for fresh nodes.
+                    scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
                 }
-                if (settingsRepository.autoRefreshPersonalSubscriptions.first()) {
-                    refreshUserSubscriptionGroupsOnStartup()
-                }
+                refreshUserSubscriptionGroupsOnStartup(autoRefreshOverrides)
                 checkNotice()
                 checkUpdateInternal(isAuto = true)
             } catch (error: Exception) {
@@ -1417,15 +1413,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setAutoRefreshOfficialSubscriptions(enabled: Boolean) {
+    fun setAutoRefreshOnStartup(sourceId: String, enabled: Boolean) {
         viewModelScope.launch {
-            settingsRepository.setAutoRefreshOfficialSubscriptions(enabled)
-        }
-    }
-
-    fun setAutoRefreshPersonalSubscriptions(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoRefreshPersonalSubscriptions(enabled)
+            settingsRepository.setAutoRefreshOnStartup(sourceId, enabled)
         }
     }
 
@@ -2323,16 +2313,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 冷启动时顺序更新所有带远程订阅链接的个人源。 */
-    private suspend fun refreshUserSubscriptionGroupsOnStartup() {
+    /** 冷启动时顺序更新启用了自动更新的远程私人源。 */
+    private suspend fun refreshUserSubscriptionGroupsOnStartup(
+        autoRefreshOverrides: Map<String, Boolean>
+    ) {
         val groups = withContext(Dispatchers.IO) {
             nodeDao().getUserSubscriptionGroups().first()
         }
         groups.forEach { group ->
             val importInput = SubscriptionInputDetector.detect(group.subscriptionUrl.orEmpty())
             if (
-                importInput is SubscriptionImportInput.RemoteSubscription ||
-                importInput is SubscriptionImportInput.MultipleRemoteSubscriptions
+                autoRefreshOverrides[group.id] == true &&
+                    (importInput is SubscriptionImportInput.RemoteSubscription ||
+                        importInput is SubscriptionImportInput.MultipleRemoteSubscriptions)
             ) {
                 when (refreshUserSubscriptionGroupInternal(group.id)) {
                     SubscriptionGroupRefreshResult.REFRESHED -> Unit
@@ -3250,17 +3243,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 统一维护全量刷新提示，确保启动自动刷新与手动全部刷新表现一致。 */
+    /** 统一维护官方源刷新提示，覆盖启动更新和手动刷新。 */
     private suspend fun initializeSubscriptionsWithRefreshState(
         forceRefresh: Boolean,
-        sourceId: String? = null
+        sourceId: String? = null,
+        shouldRefreshSource: ((String) -> Boolean)? = null
     ): Boolean {
         val isRefreshAll = sourceId.isNullOrBlank()
         if (isRefreshAll) _isRefreshingAllSubscriptions.value = true
         return try {
             subscriptionDataLoader.initialize(
                 forceRefresh = forceRefresh,
-                sourceId = sourceId
+                sourceId = sourceId,
+                shouldRefreshSource = shouldRefreshSource
             )
         } finally {
             if (isRefreshAll) _isRefreshingAllSubscriptions.value = false

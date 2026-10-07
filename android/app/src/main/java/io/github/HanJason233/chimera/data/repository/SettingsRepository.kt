@@ -60,8 +60,7 @@ class SettingsRepository(
     
     companion object {
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
-        const val DEFAULT_AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS = true
-        const val DEFAULT_AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS = false
+        private const val AUTO_REFRESH_SOURCE_PREFIX = "auto_refresh_source_on_startup:"
         /** 默认测速与默认主题方案分别维护版本；升级后保存新版本并尊重后续修改。 */
         private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 2
         private const val DEFAULT_SKIN_PARTICLE_PRESET_REVISION = 1
@@ -99,10 +98,6 @@ class SettingsRepository(
         
         // 订阅列表缓存
         private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
-        private val AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS =
-            booleanPreferencesKey("auto_refresh_official_subscriptions")
-        private val AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS =
-            booleanPreferencesKey("auto_refresh_personal_subscriptions")
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
@@ -381,29 +376,23 @@ class SettingsRepository(
         }
     }
 
-    /** 冷启动时是否立即更新官方源；默认保持现有的启动更新行为。 */
-    val autoRefreshOfficialSubscriptions: Flow<Boolean> = store.data.map { preferences ->
-        preferences[AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS]
-            ?: DEFAULT_AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS
+    /** Per-source overrides; absent entries use the source type's default. */
+    val autoRefreshOnStartupOverrides: Flow<Map<String, Boolean>> = store.data.map { preferences ->
+        preferences.asMap().mapNotNull { (key, value) ->
+            key.name.takeIf { it.startsWith(AUTO_REFRESH_SOURCE_PREFIX) }
+                ?.removePrefix(AUTO_REFRESH_SOURCE_PREFIX)
+                ?.let { sourceId -> (value as? Boolean)?.let { sourceId to it } }
+        }.toMap()
     }
 
-    suspend fun setAutoRefreshOfficialSubscriptions(enabled: Boolean) {
+    suspend fun setAutoRefreshOnStartup(sourceId: String, enabled: Boolean) {
         store.edit { preferences ->
-            preferences[AUTO_REFRESH_OFFICIAL_SUBSCRIPTIONS] = enabled
+            preferences[autoRefreshOnStartupKey(sourceId)] = enabled
         }
     }
 
-    /** 冷启动时是否立即更新个人源；默认关闭，避免新增启动网络请求。 */
-    val autoRefreshPersonalSubscriptions: Flow<Boolean> = store.data.map { preferences ->
-        preferences[AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS]
-            ?: DEFAULT_AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS
-    }
-
-    suspend fun setAutoRefreshPersonalSubscriptions(enabled: Boolean) {
-        store.edit { preferences ->
-            preferences[AUTO_REFRESH_PERSONAL_SUBSCRIPTIONS] = enabled
-        }
-    }
+    private fun autoRefreshOnStartupKey(sourceId: String) =
+        booleanPreferencesKey(AUTO_REFRESH_SOURCE_PREFIX + sourceId)
 
     /** Reads all settings needed for one VPN start from a single DataStore snapshot. */
     suspend fun getVpnRuntimeSettings(): VpnRuntimeSettings {

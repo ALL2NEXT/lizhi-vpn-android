@@ -54,6 +54,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -150,6 +151,8 @@ internal fun SubscriptionGroupSelectionDestination(
     bottomContentPadding: Dp = 16.dp
 ) {
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
+    val autoRefreshOnStartupOverrides by viewModel.autoRefreshOnStartupOverrides
+        .collectAsStateWithLifecycle()
     val userGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val allWarehouseNodes by viewModel.allWarehouseNodes.collectAsStateWithLifecycle()
     val selectedCountryCodes by viewModel.warehouseGroupingCountryCodes
@@ -178,6 +181,7 @@ internal fun SubscriptionGroupSelectionDestination(
 
     SubscriptionGroupSelectionScreen(
         subscriptionGroups = subscriptionGroups,
+        autoRefreshOnStartupOverrides = autoRefreshOnStartupOverrides,
         userGroups = userGroups,
         selectedNodeGroupId = selectedNodeGroupId,
         nodeCounts = nodeCounts,
@@ -192,6 +196,7 @@ internal fun SubscriptionGroupSelectionDestination(
         onCreateSubscriptionGroup = onCreateSubscriptionGroup,
         onUpdateSubscriptionGroup = onUpdateSubscriptionGroup,
         onUpdateUserGroupIcon = viewModel::updatePersonalSourceIcon,
+        onSetAutoRefreshOnStartup = viewModel::setAutoRefreshOnStartup,
         onDeleteSubscriptionGroup = onDeleteSubscriptionGroup,
         onRefreshOfficialSubscription = { sourceId, onResult ->
             viewModel.refreshOfficialSubscription(sourceId, onResult)
@@ -214,6 +219,7 @@ internal fun SubscriptionGroupSelectionDestination(
 @Composable
 private fun SubscriptionGroupSelectionScreen(
     subscriptionGroups: List<SubscriptionGroup>,
+    autoRefreshOnStartupOverrides: Map<String, Boolean>,
     userGroups: List<NodeGroupSummary>,
     selectedNodeGroupId: String?,
     nodeCounts: Map<String, Int>,
@@ -235,6 +241,7 @@ private fun SubscriptionGroupSelectionScreen(
         (Boolean) -> Unit
     ) -> Unit,
     onUpdateUserGroupIcon: (String, String, String?, String?, (Boolean) -> Unit) -> Unit,
+    onSetAutoRefreshOnStartup: (String, Boolean) -> Unit,
     onDeleteSubscriptionGroup: (String, (Boolean) -> Unit) -> Unit,
     onRefreshOfficialSubscription: (String, (Boolean) -> Unit) -> Unit,
     onRefreshUserGroup: (String, (MainViewModel.SubscriptionGroupRefreshResult) -> Unit) -> Unit,
@@ -255,11 +262,14 @@ private fun SubscriptionGroupSelectionScreen(
     var deleteDialogVisible by rememberSaveable { mutableStateOf(false) }
     var editingGroupId by rememberSaveable { mutableStateOf("") }
     var deletingOfficialSubscription by rememberSaveable { mutableStateOf(false) }
+    var officialSettingDialogVisible by rememberSaveable { mutableStateOf(false) }
     var groupActionMode by rememberSaveable { mutableStateOf<GroupActionMode?>(null) }
     var importStatus by rememberSaveable { mutableStateOf<String?>(null) }
     var countryDialogVisible by rememberSaveable { mutableStateOf(false) }
     var draftCountryCodes by remember { mutableStateOf(emptySet<String>()) }
     var editingUserGroup by remember { mutableStateOf<NodeGroupSummary?>(null) }
+    var editingOfficialGroup by remember { mutableStateOf<SubscriptionGroup?>(null) }
+    var editingAutoRefreshOnStartup by rememberSaveable { mutableStateOf(false) }
     var editingIconMode by rememberSaveable { mutableStateOf(PersonalSourceIconMode.AUTO_REMOTE.name) }
     var editingCustomIconUrl by rememberSaveable { mutableStateOf("") }
     var editingUserAgentMode by rememberSaveable {
@@ -372,11 +382,20 @@ private fun SubscriptionGroupSelectionScreen(
         editingCustomIconUrl = group.customIconUrl.orEmpty()
         editingUserAgentMode = PersonalSourceUserAgentMode.fromStorage(group.userAgentMode).name
         editingCustomUserAgent = group.customUserAgent.orEmpty()
+        editingAutoRefreshOnStartup = group.autoRefreshOnStartup
         userAgentError = null
         stagedLocalIconFile = null
         iconUrlError = null
         groupActionMode = null
         editDialogVisible = true
+    }
+
+    fun editOfficialSubscription(group: SubscriptionGroup, autoRefreshOnStartup: Boolean) {
+        editingOfficialGroup = group
+        editingGroupId = group.sourceId
+        editingAutoRefreshOnStartup = autoRefreshOnStartup
+        groupActionMode = null
+        officialSettingDialogVisible = true
     }
 
     val localIconPicker = rememberLauncherForActivityResult(
@@ -542,7 +561,13 @@ private fun SubscriptionGroupSelectionScreen(
                                             ).show()
                                         }
                                     },
-                                    onDelete = { confirmDeleteOfficialSubscription(group) }
+                                    onDelete = { confirmDeleteOfficialSubscription(group) },
+                                    onEdit = {
+                                        editOfficialSubscription(
+                                            group,
+                                            autoRefreshOnStartupOverrides[group.sourceId] ?: true
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -841,6 +866,24 @@ private fun SubscriptionGroupSelectionScreen(
                         placeholder = { Text("留空则保留当前节点和链接") },
                         enabled = !isSubmitting
                     )
+                    if (
+                        !group?.subscriptionUrl.isNullOrBlank() ||
+                            subscriptionInput.isNotBlank()
+                    ) {
+                        AutoRefreshOnStartupRow(
+                            checked = editingAutoRefreshOnStartup,
+                            enabled = !isSubmitting,
+                            onCheckedChange = { enabled ->
+                                editingAutoRefreshOnStartup = enabled
+                                group?.let {
+                                    onSetAutoRefreshOnStartup(
+                                        it.id.removePrefix("imported:"),
+                                        enabled
+                                    )
+                                }
+                            }
+                        )
+                    }
                     Text(
                         text = "订阅请求 User-Agent",
                         color = MaterialTheme.colorScheme.primary,
@@ -1005,6 +1048,39 @@ private fun SubscriptionGroupSelectionScreen(
         )
     }
 
+    if (officialSettingDialogVisible) {
+        val group = editingOfficialGroup
+        AppAlertDialog(
+            onDismissRequest = { officialSettingDialogVisible = false },
+            title = { Text("编辑官方源") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    group?.let {
+                        Text(
+                            text = it.name,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    AutoRefreshOnStartupRow(
+                        checked = editingAutoRefreshOnStartup,
+                        onCheckedChange = { enabled ->
+                            editingAutoRefreshOnStartup = enabled
+                            group?.let {
+                                onSetAutoRefreshOnStartup(it.sourceId, enabled)
+                            }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { officialSettingDialogVisible = false }) {
+                    Text("完成")
+                }
+            }
+        )
+    }
+
     if (deleteDialogVisible) {
         AppAlertDialog(
             onDismissRequest = { if (!isSubmitting) deleteDialogVisible = false },
@@ -1087,6 +1163,36 @@ private fun PersonalIconModeOption(
 }
 
 @Composable
+private fun AutoRefreshOnStartupRow(
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "每次重新启动软件后立即更新",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "应用冷启动或进程被系统结束后重新打开时更新此源。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled
+        )
+    }
+}
+
+@Composable
 private fun PersonalSourceUserAgentOption(
     title: String,
     mode: PersonalSourceUserAgentMode,
@@ -1126,7 +1232,8 @@ private fun SubscriptionGroupCard(
     onClick: () -> Unit,
     onViewDetails: () -> Unit,
     onRefresh: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
 ) {
     val subscriptionActionMode = actionMode.takeIf {
         it == GroupActionMode.UPDATE || it == GroupActionMode.DELETE
@@ -1146,6 +1253,7 @@ private fun SubscriptionGroupCard(
             else -> onViewDetails
         },
         onRefresh = onRefresh,
+        onEdit = onEdit,
         onDelete = onDelete
     )
 }
