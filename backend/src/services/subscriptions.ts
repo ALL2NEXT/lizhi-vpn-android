@@ -1,3 +1,6 @@
+import type { Env } from "../types/env.ts";
+import type { SubscriptionSource } from "../types/models.ts";
+
 import {
   DEFAULT_SUBSCRIPTION_CACHE_MINUTES,
   MAX_MANAGED_SUBSCRIPTION_BYTES,
@@ -6,10 +9,10 @@ import {
   PRIVATE_B64_ALPHABET,
   SUBSCRIPTION_CACHE_KEY_PREFIX,
   TEXT_ENCODER,
-} from "../config.js";
-import { cleanText } from "../lib/values.js";
+} from "../config.ts";
+import { cleanText } from "../lib/values.ts";
 
-export function normalizeManagedContent(value) {
+export function normalizeManagedContent(value: unknown) {
   if (typeof value !== "string") return "";
   const content = value.replace(/\r\n?/g, "\n").trim();
   if (TEXT_ENCODER.encode(content).length > MAX_MANAGED_SUBSCRIPTION_BYTES) {
@@ -18,7 +21,7 @@ export function normalizeManagedContent(value) {
   return content;
 }
 
-export function normalizeSubscriptionCacheMinutes(value) {
+export function normalizeSubscriptionCacheMinutes(value: unknown) {
   if (value === undefined || value === null || value === "") {
     return DEFAULT_SUBSCRIPTION_CACHE_MINUTES;
   }
@@ -28,7 +31,7 @@ export function normalizeSubscriptionCacheMinutes(value) {
     : DEFAULT_SUBSCRIPTION_CACHE_MINUTES;
 }
 
-export function normalizeMinimumAppVersion(value) {
+export function normalizeMinimumAppVersion(value: unknown) {
   const version = cleanText(value).replace(/^v/i, "").slice(0, 40);
   if (!version) return "";
   if (!/^\d+(?:\.\d+)*$/.test(version)) {
@@ -37,13 +40,13 @@ export function normalizeMinimumAppVersion(value) {
   return version;
 }
 
-export function appVersionParts(value) {
+export function appVersionParts(value: unknown) {
   const version = cleanText(value).replace(/^v/i, "");
   if (!/^\d+(?:\.\d+)*$/.test(version)) return null;
   return version.split(".").map((part) => Number(part));
 }
 
-export function isAppVersionAtLeast(currentVersion, minimumVersion) {
+export function isAppVersionAtLeast(currentVersion: unknown, minimumVersion: unknown) {
   const current = appVersionParts(currentVersion);
   const minimum = appVersionParts(minimumVersion);
   if (!current || !minimum) return false;
@@ -56,7 +59,7 @@ export function isAppVersionAtLeast(currentVersion, minimumVersion) {
   return true;
 }
 
-export function assertPlainSubscriptionContent(value) {
+export function assertPlainSubscriptionContent(value: unknown) {
   const content = normalizeManagedContent(value);
   if (!content || !PLAINTEXT_NODE_PATTERN.test(content)) {
     throw new Error("subscription_must_be_plaintext_nodes");
@@ -65,7 +68,7 @@ export function assertPlainSubscriptionContent(value) {
 }
 
 /** 外部订阅同时兼容明文、标准 Base64 和 URL-safe Base64。 */
-export function decodeExternalSubscriptionContent(value) {
+export function decodeExternalSubscriptionContent(value: unknown) {
   const content = normalizeManagedContent(value).replace(/^\uFEFF/, "");
   if (PLAINTEXT_NODE_PATTERN.test(content)) return content;
 
@@ -92,7 +95,7 @@ export function decodeExternalSubscriptionContent(value) {
 }
 
 // 常见节点命名中的国家别名，用于把外部订阅节点统一整理成“国家+编号”。
-const COUNTRY_DEFINITIONS = [
+const COUNTRY_DEFINITIONS: [string, string, string[]][] = [
   ["CN", "中国", ["中国大陆", "中国", "china", "chn", "cn"]],
   ["US", "美国", ["美国", "usa", "united states", "united states of america", "us"]],
   ["JP", "日本", ["日本", "japan", "jpn", "jp"]],
@@ -157,15 +160,15 @@ const COUNTRY_ALIASES = COUNTRY_DEFINITIONS
 const UNKNOWN_COUNTRY = { code: "UN", name: "未知" };
 const NODE_LINK_PATTERN = /^(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive|naive\+https|wireguard|ss|socks|socks5|socks4|socks4a|https?):\/\/\S+$/i;
 
-function normalizeNodeName(value) {
+function normalizeNodeName(value: unknown) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-function escapeRegExp(value) {
+function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function matchesCountryAlias(name, alias) {
+function matchesCountryAlias(name: string, alias: string) {
   if (/^[a-z]+$/i.test(alias)) {
     const pattern = new RegExp(
       `(^|[^a-z])${escapeRegExp(alias)}(?=$|[^a-z]|\\d)`,
@@ -176,16 +179,16 @@ function matchesCountryAlias(name, alias) {
   return name.includes(alias);
 }
 
-function countryFromFlag(name) {
+function countryFromFlag(name: string) {
   const match = String(name || "").match(/([\u{1F1E6}-\u{1F1FF}]){2}/u);
   if (!match) return null;
   const code = Array.from(match[0])
-    .map((character) => String.fromCharCode(character.codePointAt(0) - 0x1f1e6 + 65))
+    .map((character) => String.fromCharCode(character.codePointAt(0)! - 0x1f1e6 + 65))
     .join("");
   return COUNTRY_BY_CODE.get(code) || null;
 }
 
-function findCountry(name) {
+function findCountry(name: string) {
   const flagCountry = countryFromFlag(name);
   if (flagCountry) return flagCountry;
 
@@ -197,7 +200,7 @@ function findCountry(name) {
   return match ? { code: match.code, name: match.name } : UNKNOWN_COUNTRY;
 }
 
-function decodeBase64Utf8(value) {
+function decodeBase64Utf8(value: string) {
   const normalized = String(value || "")
     .trim()
     .replace(/-/g, "+")
@@ -208,7 +211,7 @@ function decodeBase64Utf8(value) {
   return new TextDecoder().decode(bytes);
 }
 
-function encodeBase64Utf8(value) {
+function encodeBase64Utf8(value: string) {
   const bytes = TEXT_ENCODER.encode(value);
   let binary = "";
   for (let index = 0; index < bytes.length; index += 0x8000) {
@@ -217,7 +220,7 @@ function encodeBase64Utf8(value) {
   return btoa(binary);
 }
 
-function decodeUriFragment(value) {
+function decodeUriFragment(value: string) {
   try {
     return decodeURIComponent(value.replace(/\+/g, " "));
   } catch (_) {
@@ -225,7 +228,7 @@ function decodeUriFragment(value) {
   }
 }
 
-function extractNodeName(link) {
+function extractNodeName(link: string) {
   const trimmed = link.trim();
   if (/^vmess:\/\//i.test(trimmed)) {
     try {
@@ -240,7 +243,7 @@ function extractNodeName(link) {
   return hashIndex >= 0 ? decodeUriFragment(trimmed.slice(hashIndex + 1)) : "";
 }
 
-function renameNodeLink(link, name) {
+function renameNodeLink(link: string, name: string) {
   const trimmed = link.trim();
   if (/^vmess:\/\//i.test(trimmed)) {
     try {
@@ -259,8 +262,8 @@ function renameNodeLink(link, name) {
   return `${base}#${encodeURIComponent(name)}`;
 }
 
-export function autoRenameSubscriptionContent(content) {
-  const counters = new Map();
+export function autoRenameSubscriptionContent(content: string) {
+  const counters = new Map<string, number>();
   return String(content || "").split(/\r?\n/).map((line) => {
     const trimmed = line.trim();
     if (!NODE_LINK_PATTERN.test(trimmed)) return line;
@@ -272,11 +275,11 @@ export function autoRenameSubscriptionContent(content) {
   }).join("\n");
 }
 
-export function subscriptionCacheKey(source) {
+export function subscriptionCacheKey(source: SubscriptionSource) {
   return `${SUBSCRIPTION_CACHE_KEY_PREFIX}${source.id}`;
 }
 
-async function readManagedSubscriptionBody(response) {
+async function readManagedSubscriptionBody(response: Response) {
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_MANAGED_SUBSCRIPTION_BYTES) {
     throw new Error("managed_subscription_too_large");
@@ -300,7 +303,7 @@ async function readManagedSubscriptionBody(response) {
   return content + decoder.decode();
 }
 
-export async function readExternalSubscription(env, source) {
+export async function readExternalSubscription(env: Env, source: SubscriptionSource) {
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
   if (!source || !source.url) throw new Error("external_subscription_url_required");
 
@@ -308,7 +311,7 @@ export async function readExternalSubscription(env, source) {
   const cacheKey = subscriptionCacheKey(source);
   const now = Date.now();
   if (cacheMinutes > 0) {
-    const cached = await env.CONFIG.get(cacheKey, "json");
+    const cached = await env.CONFIG.get<{ url: string; content: unknown; cachedAt: unknown }>(cacheKey, "json");
     const cachedAt = Number(cached && cached.cachedAt);
     const freshUntil = cachedAt + cacheMinutes * 60 * 1000;
     if (
@@ -354,7 +357,7 @@ export async function readExternalSubscription(env, source) {
   return content;
 }
 
-export async function validateAndWarmSubscriptionSources(env, subscriptions) {
+export async function validateAndWarmSubscriptionSources(env: Env, subscriptions: SubscriptionSource[]) {
   for (const source of subscriptions) {
     if (source.enabled === false) continue;
     // 后台直接维护的文本订阅原样保存，不要求内容匹配特定节点协议。
@@ -364,7 +367,7 @@ export async function validateAndWarmSubscriptionSources(env, subscriptions) {
   }
 }
 
-export function privateBase64Encode(value) {
+export function privateBase64Encode(value: string) {
   const bytes = TEXT_ENCODER.encode(value);
   let result = "";
   let chunk = "";
@@ -393,7 +396,7 @@ export function privateBase64Encode(value) {
   return result + chunk;
 }
 
-export function parseIpv4Tail(value) {
+export function parseIpv4Tail(value: string) {
   let address = value;
   if (address.includes(":") && address.includes(".")) {
     address = address.slice(address.lastIndexOf(":") + 1);
@@ -411,7 +414,7 @@ export function parseIpv4Tail(value) {
   return numbers[3];
 }
 
-export function shiftFromClientIp(clientIp) {
+export function shiftFromClientIp(clientIp: string) {
   let address = String(clientIp || "").split(",", 1)[0].trim();
   if (address.startsWith("[") && address.includes("]")) {
     address = address.slice(1, address.indexOf("]"));
@@ -431,7 +434,7 @@ export function shiftFromClientIp(clientIp) {
   throw new Error("invalid_cf_connecting_ip");
 }
 
-export function protectSubscription(value, clientIp) {
+export function protectSubscription(value: string, clientIp: string) {
   const shift = shiftFromClientIp(clientIp);
   const encoded = privateBase64Encode(value);
   if (shift === 0) return encoded;
@@ -455,7 +458,7 @@ export function protectSubscription(value, clientIp) {
   return result + chunk;
 }
 
-export function getClientIp(request) {
+export function getClientIp(request: Request) {
   const clientIp = request.headers.get("CF-Connecting-IP");
   if (!clientIp) throw new Error("missing_cf_connecting_ip");
   shiftFromClientIp(clientIp);

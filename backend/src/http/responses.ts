@@ -1,7 +1,9 @@
-import { CLIENT_IP_HEADER, LEGACY_CLIENT_IP_HEADER } from "../config.js";
-import { cleanText } from "../lib/values.js";
+import type { Env } from "../types/env.ts";
 
-export async function isAdmin(request, env) {
+import { CLIENT_IP_HEADER, LEGACY_CLIENT_IP_HEADER } from "../config.ts";
+import { cleanText } from "../lib/values.ts";
+
+export async function isAdmin(request: Request, env: Env) {
   const token = cleanText(env.ADMIN_TOKEN);
   const authorization = cleanText(request.headers.get("authorization"));
   if (!token) return false;
@@ -14,7 +16,7 @@ export async function isAdmin(request, env) {
   return crypto.subtle.timingSafeEqual(providedHash, expectedHash);
 }
 
-export function corsHeaders() {
+export function corsHeaders(): Record<string, string> {
   return {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
@@ -23,7 +25,7 @@ export function corsHeaders() {
   };
 }
 
-export function json(value, status = 200) {
+export function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
     status,
     headers: {

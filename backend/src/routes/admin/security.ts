@@ -1,8 +1,39 @@
+import type { DeviceRelationRow, DeviceInventoryRow, DeviceLinkRow, SecurityAccountRow } from "../../types/database.ts";
+
+interface SecurityDevice {
+  deviceId: string;
+  brand: string;
+  model: string;
+  androidVersion: string;
+  androidSdk: number;
+  appVersion: string;
+  current: boolean;
+  blocked: boolean;
+  blockedByAccount: boolean;
+  firstBoundAt: string;
+  lastBoundAt: string;
+  lastSeenAt: string;
+}
+
+import type { Env } from "../../types/env.ts";
+import type { RouteDependencies } from "../../types/routes.ts";
+
 /*
  * Device inventory and account security read routes.
  */
 
-export function createAdminSecurityRoutes(deps) {
+export function createAdminSecurityRoutes(deps: Pick<
+  RouteDependencies,
+  | "beijingTimestamp"
+  | "cleanText"
+  | "ensureUserSchema"
+  | "json"
+  | "normalizeAccountId"
+  | "normalizeAndroidSdk"
+  | "normalizeStoredUid"
+  | "readState"
+  | "rowToUser"
+>) {
   const {
     beijingTimestamp,
     cleanText,
@@ -15,7 +46,7 @@ export function createAdminSecurityRoutes(deps) {
     rowToUser,
   } = deps;
 
-  return async function handleAdminSecurity(path, request, env) {
+  return async function handleAdminSecurity(path: string, request: Request, env: Env) {
   if (path === "/api/device-relations" && request.method === "GET") {
       const requestUrl = new URL(request.url);
       const requestedLimit = Number(requestUrl.searchParams.get("limit"));
@@ -55,7 +86,7 @@ export function createAdminSecurityRoutes(deps) {
          LEFT JOIN users_mb u ON u.id = l.user_id
          ORDER BY l.last_bound_at DESC, d.id DESC
          LIMIT ?`,
-      ).bind(limit).all();
+      ).bind(limit).all<DeviceRelationRow>();
       return json({
         ok: true,
         relations: (query.results || []).map((row) => ({
@@ -124,7 +155,7 @@ export function createAdminSecurityRoutes(deps) {
          LEFT JOIN active_bans b ON b.device_row_id = d.id
          ORDER BY d.last_seen_at DESC, d.id DESC
          LIMIT ?`,
-      ).bind(limit).all();
+      ).bind(limit).all<DeviceInventoryRow>();
       return json({
         ok: true,
         devices: (query.results || []).map((row) => ({
@@ -203,8 +234,8 @@ export function createAdminSecurityRoutes(deps) {
            WHERE l.user_id IS NOT NULL
            ORDER BY l.last_bound_at DESC, d.id DESC`,
         ),
-      ]);
-      const devicesByUser = new Map();
+      ]) as [D1Result<SecurityAccountRow>, D1Result<DeviceLinkRow>];
+      const devicesByUser = new Map<number, SecurityDevice[]>();
       for (const row of results[1].results || []) {
         const userId = Number(row.user_id);
         const devices = devicesByUser.get(userId) || [];

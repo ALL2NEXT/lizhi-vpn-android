@@ -1,8 +1,20 @@
+import type { RegistrationCodeRow } from "../../types/database.ts";
+import type { Env } from "../../types/env.ts";
+import type { RouteDependencies } from "../../types/routes.ts";
+
+import { readJsonObject } from "../../http/request.ts";
 /*
  * Administrator-issued one-time registration codes.
  */
 
-export function createAdminRegistrationCodeRoutes(deps) {
+export function createAdminRegistrationCodeRoutes(deps: Pick<
+  RouteDependencies,
+  | "beijingTimestamp"
+  | "cleanText"
+  | "ensureUserSchema"
+  | "json"
+  | "randomRegistrationCode"
+>) {
   const {
     beijingTimestamp,
     cleanText,
@@ -11,7 +23,7 @@ export function createAdminRegistrationCodeRoutes(deps) {
     randomRegistrationCode,
   } = deps;
 
-  return async function handleAdminRegistrationCodes(path, request, env) {
+  return async function handleAdminRegistrationCodes(path: string, request: Request, env: Env) {
     if (path !== "/api/registration-codes") return null;
 
     const db = await ensureUserSchema(env);
@@ -26,7 +38,7 @@ export function createAdminRegistrationCodeRoutes(deps) {
            FROM registration_codes_mb
           ORDER BY created_at DESC, id DESC
           LIMIT ?`,
-      ).bind(limit).all();
+      ).bind(limit).all<RegistrationCodeRow>();
       return json({
         ok: true,
         codes: (query.results || []).map((row) => ({
@@ -43,13 +55,13 @@ export function createAdminRegistrationCodeRoutes(deps) {
 
     if (request.method !== "POST") return null;
 
-    const body = await request.json();
+    const body = await readJsonObject(request);
     const requestedCount = Number(body && body.count);
     if (!Number.isInteger(requestedCount) || requestedCount < 1 || requestedCount > 100) {
       return json({ ok: false, error: "invalid_registration_code_count" }, 400);
     }
 
-    const codes = new Set();
+    const codes = new Set<string>();
     while (codes.size < requestedCount) codes.add(randomRegistrationCode());
     const createdAt = beijingTimestamp();
     const statements = Array.from(codes, (code) => db.prepare(

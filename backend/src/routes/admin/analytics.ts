@@ -1,8 +1,25 @@
+import type { GrowthRow, TrafficRow, ActivityRow, DeviceFields } from "../../types/database.ts";
+import type { Env } from "../../types/env.ts";
+import type { RouteDependencies } from "../../types/routes.ts";
+
 /*
  * Dashboard growth, traffic and device read routes.
  */
 
-export function createAdminAnalyticsRoutes(deps) {
+export function createAdminAnalyticsRoutes(deps: Pick<
+  RouteDependencies,
+  | "beijingTimestamp"
+  | "buildUserGrowthPoints"
+  | "buildUserActivityPoints"
+  | "buildUserTrafficPoints"
+  | "cleanText"
+  | "ensureUserSchema"
+  | "json"
+  | "normalizeGrowthDateKey"
+  | "normalizeGrowthPeriod"
+  | "normalizeStoredUid"
+  | "usagePeriodKeys"
+>) {
   const {
     beijingTimestamp,
     buildUserGrowthPoints,
@@ -17,7 +34,7 @@ export function createAdminAnalyticsRoutes(deps) {
     usagePeriodKeys,
   } = deps;
 
-  return async function handleAdminAnalytics(path, request, env) {
+  return async function handleAdminAnalytics(path: string, request: Request, env: Env) {
   if (path === "/api/users/growth" && request.method === "GET") {
       const requestUrl = new URL(request.url);
       const period = normalizeGrowthPeriod(requestUrl.searchParams.get("period"));
@@ -39,7 +56,7 @@ export function createAdminAnalyticsRoutes(deps) {
          WHERE created_day <> '' AND created_day <= ?
          GROUP BY created_day
          ORDER BY created_day ASC`,
-      ).bind(lastDay).all();
+      ).bind(lastDay).all<GrowthRow>();
       const points = buildUserGrowthPoints(
         query.results || [],
         period,
@@ -91,8 +108,8 @@ export function createAdminAnalyticsRoutes(deps) {
          ORDER BY usage_day ASC`,
       );
       const query = filterValues.length > 0
-        ? await trafficStatement.bind(...filterValues).all()
-        : await trafficStatement.all();
+        ? await trafficStatement.bind(...filterValues).all<TrafficRow>()
+        : await trafficStatement.all<TrafficRow>();
       const points = buildUserTrafficPoints(
         query.results || [],
         period,
@@ -143,8 +160,8 @@ export function createAdminAnalyticsRoutes(deps) {
          ORDER BY usage_day ASC`,
       );
       const query = filterValues.length > 0
-        ? await activityStatement.bind(...filterValues).all()
-        : await activityStatement.all();
+        ? await activityStatement.bind(...filterValues).all<ActivityRow>()
+        : await activityStatement.all<ActivityRow>();
       const points = buildUserActivityPoints(
         query.results || [],
         period,
@@ -178,7 +195,7 @@ export function createAdminAnalyticsRoutes(deps) {
            ORDER BY last_seen_at DESC, id DESC LIMIT 1
          )
          ORDER BY u.created_at DESC`,
-      ).all();
+      ).all<Pick<DeviceFields, "brand" | "android_version" | "app_version"> & { uid: string }>();
       return json({
         ok: true,
         users: (query.results || []).map((row) => ({

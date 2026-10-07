@@ -1,10 +1,40 @@
+import type { UserRow } from "../types/database.ts";
+import type { Env } from "../types/env.ts";
+import type { RouteDependencies } from "../types/routes.ts";
+
+import { readJsonObject } from "../http/request.ts";
 /*
  * Account routes.
  *
  * Accounts are exposed as one of three types: banned, guest, or formal.
  */
 
-export function createAccountRoutes(deps) {
+export function createAccountRoutes(deps: Pick<
+  RouteDependencies,
+  | "publicAccount"
+  | "usersDb"
+  | "ensureUserSchema"
+  | "resolveDeviceIdentity"
+  | "readDeviceContextFromDb"
+  | "readD1User"
+  | "readD1UserWithTraffic"
+  | "attachDeviceToUser"
+  | "registerOrTouchUser"
+  | "normalizeNickname"
+  | "normalizeRegistrationCode"
+  | "beijingTimestamp"
+  | "normalizeReportTimestamp"
+  | "normalizeAccountId"
+  | "normalizeAccountEmail"
+  | "normalizeAccountPassword"
+  | "hashAccountPassword"
+  | "verifyAccountPassword"
+  | "normalizeUid"
+  | "reportBytes"
+  | "readState"
+  | "cleanText"
+  | "json"
+>) {
   const {
     publicAccount,
     usersDb,
@@ -31,9 +61,9 @@ export function createAccountRoutes(deps) {
     json,
   } = deps;
 
-  async function handleAccount(path, request, env) {
+  async function handleAccount(path: string, request: Request, env: Env) {
     if (path === "/api/account/register" && request.method === "POST") {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       const deviceId = normalizeAccountId(body && body.deviceId);
       if (!deviceId) return json({ ok: false, error: "invalid_device_id" }, 400);
 
@@ -43,7 +73,7 @@ export function createAccountRoutes(deps) {
       const user = identity && identity.userId > 0
         ? await readD1UserWithTraffic(env, identity.userId, undefined, now)
         : null;
-      if (!user) {
+      if (!user || !identity) {
         if (identity && identity.deviceBanned) {
           return json({ ok: false, error: "device_banned", deviceBlocked: true }, 403);
         }
@@ -59,7 +89,7 @@ export function createAccountRoutes(deps) {
     }
 
     if (path === "/api/account/bind" && request.method === "POST") {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       const deviceId = normalizeAccountId(body && body.deviceId);
       const requestedUid = normalizeUid(body && body.uid);
       const email = normalizeAccountEmail(body && body.email);
@@ -95,13 +125,13 @@ export function createAccountRoutes(deps) {
       }
       const emailOwner = await db.prepare(
         "SELECT id FROM users_mb WHERE email = ? AND id <> ?",
-      ).bind(email, identity.userId).first();
+      ).bind(email, identity.userId).first<Pick<UserRow, "id">>();
       if (emailOwner) return json({ ok: false, error: "email_already_bound" }, 409);
 
       if (registrationCode) {
         const codeRow = await db.prepare(
           "SELECT id FROM registration_codes_mb WHERE code = ? AND used_at IS NULL",
-        ).bind(registrationCode).first();
+        ).bind(registrationCode).first<{ id: number }>();
         if (!codeRow) return json({ ok: false, error: "invalid_registration_code" }, 409);
       }
 
@@ -137,7 +167,7 @@ export function createAccountRoutes(deps) {
     }
 
     if (path === "/api/account/login" && request.method === "POST") {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       const deviceId = normalizeAccountId(body && body.deviceId);
       const email = normalizeAccountEmail(body && body.email);
       const password = normalizeAccountPassword(body && body.password);
@@ -153,7 +183,7 @@ export function createAccountRoutes(deps) {
       }
       const row = await db.prepare(
         "SELECT id, uid, status, email, password_hash FROM users_mb WHERE email = ?",
-      ).bind(email).first();
+      ).bind(email).first<Pick<UserRow, "id" | "uid" | "status" | "email" | "password_hash">>();
       if (!row || !(await verifyAccountPassword(password, cleanText(row.password_hash)))) {
         return json({ ok: false, error: "invalid_login_credentials" }, 401);
       }
@@ -170,10 +200,10 @@ export function createAccountRoutes(deps) {
     }
 
     if (path === "/api/account/delete" && request.method === "POST") {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       const deviceId = normalizeAccountId(body && body.deviceId);
       const requestedUid = normalizeUid(body && body.uid);
-      const password = typeof (body && body.password) === "string" ? body.password : "";
+      const password = typeof body.password === "string" ? body.password : "";
       if (!deviceId) return json({ ok: false, error: "invalid_delete_request" }, 400);
 
       const db = await ensureUserSchema(env);
@@ -188,8 +218,8 @@ export function createAccountRoutes(deps) {
       }
       const stored = await db.prepare(
         "SELECT email, password_hash FROM users_mb WHERE id = ?",
-      ).bind(identity.userId).first();
-      if (cleanText(stored && stored.email) &&
+      ).bind(identity.userId).first<Pick<UserRow, "email" | "password_hash">>();
+      if (stored && cleanText(stored.email) &&
           !(await verifyAccountPassword(password, cleanText(stored.password_hash)))) {
         return json({ ok: false, error: "invalid_account_password" }, 401);
       }
@@ -203,7 +233,7 @@ export function createAccountRoutes(deps) {
     }
 
     if (path === "/api/account/profile" && request.method === "PATCH") {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       const deviceId = normalizeAccountId(body && body.deviceId);
       const nickname = normalizeNickname(body && body.nickname);
       const identity = await resolveDeviceIdentity(env, deviceId);
@@ -223,7 +253,7 @@ export function createAccountRoutes(deps) {
     }
 
     if (path === "/api/account/report" && request.method === "POST") {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       const deviceId = normalizeAccountId(body && body.deviceId);
       const sessionId = cleanText(body && body.sessionId).slice(0, 128);
       const identity = await resolveDeviceIdentity(env, deviceId);

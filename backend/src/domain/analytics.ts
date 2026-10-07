@@ -1,12 +1,15 @@
-import { boundedBytes, bytesToMegabytes } from "./account.js";
-import { usagePeriodKeys } from "./time.js";
-import { cleanText } from "../lib/values.js";
+import type { GrowthPeriod } from "../types/models.ts";
+import type { GrowthRow, TrafficRow, ActivityRow } from "../types/database.ts";
 
-export function normalizeGrowthPeriod(value) {
+import { boundedBytes, bytesToMegabytes } from "./account.ts";
+import { usagePeriodKeys } from "./time.ts";
+import { cleanText } from "../lib/values.ts";
+
+export function normalizeGrowthPeriod(value: unknown): GrowthPeriod {
   return value === "week" || value === "month" ? value : "day";
 }
 
-export function normalizeGrowthDateKey(value) {
+export function normalizeGrowthDateKey(value: unknown): string | null {
   const dateKey = cleanText(value);
   if (!dateKey) return "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
@@ -15,8 +18,8 @@ export function normalizeGrowthDateKey(value) {
 }
 
 export function buildUserGrowthPoints(
-  rows,
-  period,
+  rows: GrowthRow[],
+  period: GrowthPeriod,
   now = new Date(),
   rangeStart = "",
   rangeEnd = "",
@@ -30,7 +33,7 @@ export function buildUserGrowthPoints(
       key: userGrowthPeriodKey(dayKeyToUtcDate(day), period),
       count,
     };
-  }).filter(Boolean);
+  }).filter((record) => record !== null);
 
   if (records.length === 0) return [];
 
@@ -50,7 +53,7 @@ export function buildUserGrowthPoints(
   if (firstKey > lastKey) return [];
 
   const points = [];
-  const counts = new Map();
+  const counts = new Map<string, number>();
   let totalUsers = 0;
   records.forEach((record) => {
     if (record.day < startDay) totalUsers += record.count;
@@ -70,8 +73,8 @@ export function buildUserGrowthPoints(
 }
 
 export function buildUserTrafficPoints(
-  rows,
-  period,
+  rows: TrafficRow[],
+  period: GrowthPeriod,
   now = new Date(),
   rangeStart = "",
   rangeEnd = "",
@@ -85,7 +88,7 @@ export function buildUserTrafficPoints(
       uploadBytes: boundedBytes(row && row.upload_bytes),
       downloadBytes: boundedBytes(row && row.download_bytes),
     };
-  }).filter(Boolean);
+  }).filter((record) => record !== null);
 
   if (records.length === 0) return [];
   const firstDataKey = records.map((record) => record.key).sort()[0];
@@ -103,7 +106,7 @@ export function buildUserTrafficPoints(
   const lastKey = requestedEndKey < currentKey ? requestedEndKey : currentKey;
   if (firstKey > lastKey) return [];
 
-  const counts = new Map();
+  const counts = new Map<string, { uploadBytes: number; downloadBytes: number }>();
   records.forEach((record) => {
     if (record.day < startDay || record.day > endDay) return;
     const current = counts.get(record.key) || { uploadBytes: 0, downloadBytes: 0 };
@@ -130,8 +133,8 @@ export function buildUserTrafficPoints(
 }
 
 export function buildUserActivityPoints(
-  rows,
-  period,
+  rows: ActivityRow[],
+  period: GrowthPeriod,
   now = new Date(),
   rangeStart = "",
   rangeEnd = "",
@@ -145,7 +148,7 @@ export function buildUserActivityPoints(
       key: userGrowthPeriodKey(dayKeyToUtcDate(day), period),
       userId,
     };
-  }).filter(Boolean);
+  }).filter((record) => record !== null);
 
   if (records.length === 0) return [];
   const firstDataKey = records.map((record) => record.key).sort()[0];
@@ -163,10 +166,10 @@ export function buildUserActivityPoints(
   const lastKey = requestedEndKey < currentKey ? requestedEndKey : currentKey;
   if (firstKey > lastKey) return [];
 
-  const counts = new Map();
+  const counts = new Map<string, Set<number>>();
   records.forEach((record) => {
     if (record.day < startDay || record.day > endDay) return;
-    const users = counts.get(record.key) || new Set();
+    const users = counts.get(record.key) || new Set<number>();
     users.add(record.userId);
     counts.set(record.key, users);
   });
@@ -176,28 +179,28 @@ export function buildUserActivityPoints(
   while (key <= lastKey) {
     points.push({
       key,
-      activeUsers: (counts.get(key) || new Set()).size,
+      activeUsers: (counts.get(key) || new Set<number>()).size,
     });
     key = nextUserGrowthPeriodKey(key, period);
   }
   return points;
 }
 
-export function userGrowthPeriodKey(date, period) {
+export function userGrowthPeriodKey(date: Date, period: GrowthPeriod) {
   const { day, month } = usagePeriodKeys(date);
   if (period === "month") return month;
   if (period === "week") return mondayOfDayKey(day);
   return day;
 }
 
-export function mondayOfDayKey(dayKey) {
+export function mondayOfDayKey(dayKey: string) {
   const date = dayKeyToUtcDate(dayKey);
   const daysSinceMonday = (date.getUTCDay() + 6) % 7;
   date.setUTCDate(date.getUTCDate() - daysSinceMonday);
   return utcDateKey(date);
 }
 
-export function nextUserGrowthPeriodKey(key, period) {
+export function nextUserGrowthPeriodKey(key: string, period: GrowthPeriod) {
   if (period === "month") {
     const [year, month] = key.split("-").map(Number);
     const date = new Date(Date.UTC(year, month, 1));
@@ -208,11 +211,11 @@ export function nextUserGrowthPeriodKey(key, period) {
   return utcDateKey(date);
 }
 
-export function dayKeyToUtcDate(dayKey) {
+export function dayKeyToUtcDate(dayKey: string) {
   const [year, month, day] = dayKey.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-export function utcDateKey(date) {
+export function utcDateKey(date: Date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }

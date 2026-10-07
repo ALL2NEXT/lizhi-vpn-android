@@ -7,7 +7,7 @@ const SUPPORTED_IMAGE_TYPES = new Set([
   "image/gif",
 ]);
 
-function validatePublicWebsiteUrl(value) {
+function validatePublicWebsiteUrl(value: string) {
   let url;
   try {
     url = new URL(value);
@@ -31,7 +31,7 @@ function validatePublicWebsiteUrl(value) {
   return url;
 }
 
-async function fetchPublicUrl(url, accept) {
+async function fetchPublicUrl(url: URL, accept: string) {
   let current = validatePublicWebsiteUrl(url.toString());
   for (let redirects = 0; redirects <= 4; redirects += 1) {
     const response = await fetch(current, {
@@ -55,7 +55,7 @@ async function fetchPublicUrl(url, accept) {
   throw new Error("navigation_icon_redirect_blocked");
 }
 
-async function readLimitedBody(response, maximumBytes) {
+async function readLimitedBody(response: Response, maximumBytes: number) {
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) return null;
 
@@ -87,7 +87,7 @@ async function readLimitedBody(response, maximumBytes) {
   return output;
 }
 
-function detectImageType(bytes) {
+function detectImageType(bytes: Uint8Array) {
   if (bytes.length >= 6 && bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 1 && bytes[3] === 0) {
     return "image/x-icon";
   }
@@ -109,7 +109,7 @@ function detectImageType(bytes) {
   return "";
 }
 
-function extractSupportedImage(bytes) {
+function extractSupportedImage(bytes: Uint8Array) {
   const mimeType = detectImageType(bytes);
   if (SUPPORTED_IMAGE_TYPES.has(mimeType)) return { bytes, mimeType };
 
@@ -131,7 +131,7 @@ function extractSupportedImage(bytes) {
   return null;
 }
 
-function encodeBase64(bytes) {
+function encodeBase64(bytes: Uint8Array) {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 8192) {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
@@ -139,8 +139,8 @@ function encodeBase64(bytes) {
   return btoa(binary);
 }
 
-function parseAttributes(tag) {
-  const attributes = {};
+function parseAttributes(tag: string) {
+  const attributes: Record<string, string> = {};
   const pattern = /([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
   let match;
   while ((match = pattern.exec(tag))) {
@@ -152,7 +152,7 @@ function parseAttributes(tag) {
   return attributes;
 }
 
-function findIconUrls(html, pageUrl) {
+function findIconUrls(html: string, pageUrl: URL) {
   const candidates = [];
   const tags = html.match(/<link\b[^>]*>/gi) || [];
   for (const tag of tags) {
@@ -170,7 +170,7 @@ function findIconUrls(html, pageUrl) {
   return candidates;
 }
 
-async function fetchImage(url) {
+async function fetchImage(url: URL): Promise<{ icon: { iconBase64: string; iconMimeType: string }; reason?: never } | { icon?: never; reason: string }> {
   try {
     const { response } = await fetchPublicUrl(url, "image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon,image/*;q=0.8");
     if (!response.ok) return { reason: "not_found" };
@@ -197,7 +197,7 @@ async function fetchImage(url) {
   }
 }
 
-export async function fetchWebsiteIcon(value) {
+export async function fetchWebsiteIcon(value: string) {
   const pageUrl = validatePublicWebsiteUrl(value);
   let finalPageUrl = pageUrl;
   let html = "";

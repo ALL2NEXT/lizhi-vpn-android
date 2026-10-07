@@ -1,10 +1,22 @@
+import type { Env } from "../../types/env.ts";
+import type { RouteDependencies } from "../../types/routes.ts";
+
 /*
  * KV-backed application settings and managed subscription configuration.
  */
 
-import { fetchWebsiteIcon } from "../../services/navigation-icons.js";
+import { fetchWebsiteIcon } from "../../services/navigation-icons.ts";
+import { readJsonObject } from "../../http/request.ts";
 
-export function createAdminStateRoutes(deps) {
+export function createAdminStateRoutes(deps: Pick<
+  RouteDependencies,
+  | "beijingTimestamp"
+  | "json"
+  | "normalizeState"
+  | "readState"
+  | "validateAndWarmSubscriptionSources"
+  | "writeState"
+>) {
   const {
     beijingTimestamp,
     json,
@@ -14,10 +26,10 @@ export function createAdminStateRoutes(deps) {
     writeState,
   } = deps;
 
-  return async function handleAdminState(path, request, env) {
+  return async function handleAdminState(path: string, request: Request, env: Env) {
     if (path === "/api/navigation-icon" && request.method === "POST") {
       try {
-        const incoming = await request.json();
+        const incoming = await readJsonObject(request);
         return json(await fetchWebsiteIcon(typeof incoming.url === "string" ? incoming.url.trim() : ""));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

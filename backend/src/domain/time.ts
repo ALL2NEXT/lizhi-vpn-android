@@ -2,7 +2,7 @@
  * Beijing business timestamps and reporting period keys.
  */
 
-export function usagePeriodKeys(date) {
+export function usagePeriodKeys(date: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
     hourCycle: "h23",
@@ -13,7 +13,7 @@ export function usagePeriodKeys(date) {
   }).formatToParts(date).reduce((result, part) => {
     if (part.type !== "literal") result[part.type] = part.value;
     return result;
-  }, {});
+  }, {} as Record<string, string>);
   const day = `${parts.year}-${parts.month}-${parts.day}`;
   return { day, hour: `${day}T${parts.hour}`, month: `${parts.year}-${parts.month}` };
 }
@@ -31,11 +31,11 @@ export function beijingTimestamp(date = new Date()) {
   }).formatToParts(date).reduce((result, part) => {
     if (part.type !== "literal") result[part.type] = part.value;
     return result;
-  }, {});
+  }, {} as Record<string, string>);
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}+08:00`;
 }
 
-export function normalizeReportTimestamp(value, fallback = "") {
+export function normalizeReportTimestamp(value: unknown, fallback: string | null = ""): string | null {
   if (value === undefined || value === null || value === "") return fallback;
   const date = typeof value === "number"
     ? new Date(value)

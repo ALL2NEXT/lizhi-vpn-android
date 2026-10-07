@@ -1,3 +1,6 @@
+import type { Env } from "../types/env.ts";
+import type { RouteDependencies } from "../types/routes.ts";
+
 /*
  * Client routes.
  *
@@ -8,7 +11,25 @@ const PROXY_APP_LIST_URL =
   "https://raw.githubusercontent.com/2dust/androidpackagenamelist/master/proxy.txt";
 const MAX_PROXY_APP_LIST_BYTES = 1024 * 1024;
 
-export function createClientRoutes(deps) {
+export function createClientRoutes(deps: Pick<
+  RouteDependencies,
+  | "CLIENT_IP_HEADER"
+  | "LEGACY_CLIENT_IP_HEADER"
+  | "canAccessAccountType"
+  | "resolveAccountAccess"
+  | "beijingTimestamp"
+  | "normalizeAccountId"
+  | "isAppVersionAtLeast"
+  | "readExternalSubscription"
+  | "autoRenameSubscriptionContent"
+  | "protectSubscription"
+  | "getClientIp"
+  | "readState"
+  | "visibleNotice"
+  | "publicClientSettings"
+  | "corsHeaders"
+  | "json"
+>) {
   const {
     CLIENT_IP_HEADER,
     LEGACY_CLIENT_IP_HEADER,
@@ -28,7 +49,7 @@ export function createClientRoutes(deps) {
     json,
   } = deps;
 
-async function handleClient(request, env) {
+async function handleClient(request: Request, env: Env) {
   const requestUrl = new URL(request.url);
   const origin = requestUrl.origin;
   const state = await readState(env);
@@ -106,7 +127,7 @@ async function handleProxyAppList() {
   });
 }
 
-async function handleManagedSubscription(path, request, env) {
+async function handleManagedSubscription(path: string, request: Request, env: Env) {
   const suffix = path.slice("/api/subscription/".length);
   const id = suffix;
   if (!/^\d+$/.test(id)) {
@@ -149,7 +170,7 @@ async function handleManagedSubscription(path, request, env) {
     ? autoRenameSubscriptionContent(fetchedContent)
     : fetchedContent;
   const responseContent = protectSubscription(plaintextContent, clientIp);
-  const responseHeaders = {
+  const responseHeaders: Record<string, string> = {
     ...corsHeaders(),
     "content-type": "text/plain; charset=utf-8",
     "cache-control": "no-store",
@@ -164,7 +185,7 @@ async function handleManagedSubscription(path, request, env) {
 const DEBUG_INTERFACE_PATH_PREFIX = "/api/subscription/debug/";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function handleDebugSubscription(path, _request, env) {
+async function handleDebugSubscription(path: string, _request: Request, env: Env) {
   const token = path.slice(DEBUG_INTERFACE_PATH_PREFIX.length);
   if (!UUID_PATTERN.test(token)) {
     return json({ error: "subscription_not_found" }, 404);

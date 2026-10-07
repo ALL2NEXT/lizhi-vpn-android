@@ -1,3 +1,7 @@
+import type { Env } from "../types/env.ts";
+import type { recordAdminLogin as recordLogin } from "./admin-access.ts";
+import type { json as jsonResponse } from "../http/responses.ts";
+
 /*
  * 常见后台路径蜜罐。
  *
@@ -29,7 +33,7 @@ const HONEYPOT_PATHS = new Set([
   "/api/admin/login",
 ]);
 
-export function isHoneypotPath(path) {
+export function isHoneypotPath(path: string) {
   return HONEYPOT_PATHS.has(String(path || "").toLowerCase());
 }
 
@@ -66,7 +70,7 @@ function fakeLoginPage() {
   ].join("\n");
 }
 
-export async function handleHoneypotRoute(path, request, env, recordAdminLogin, json) {
+export async function handleHoneypotRoute(path: string, request: Request, env: Env, recordAdminLogin: typeof recordLogin, json: typeof jsonResponse) {
   await recordAdminLogin(env, request, false, {
     honeypot: true,
     path,

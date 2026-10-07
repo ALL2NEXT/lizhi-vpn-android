@@ -4,4 +4,4 @@
  * Keep this file stable for existing deployment commands. Implementation is
  * composed from the modules in ./src.
  */
-export { default } from "./src/worker-core.js";
+export { default } from "./src/worker-core.ts";

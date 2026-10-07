@@ -1,3 +1,6 @@
+import type { Env } from "./types/env.ts";
+import type { RouteDependencies } from "./types/routes.ts";
+
 /*
  * Chimera Cloudflare Worker composition root.
  *
@@ -11,8 +14,8 @@ import {
   MAX_BATCH_USER_COUNT,
   resolveAdminBasePath,
   USER_SCHEMA_VERSION,
-} from "./config.js";
-import { adminHtml } from "./admin-ui.js";
+} from "./config.ts";
+import { adminHtml } from "./admin-ui.ts";
 import {
   hashAccountPassword,
   normalizeAccountEmail,
@@ -28,20 +31,20 @@ import {
   normalizeUid,
   reportBytes,
   verifyAccountPassword,
-} from "./domain/account.js";
+} from "./domain/account.ts";
 import {
   buildUserGrowthPoints,
   buildUserActivityPoints,
   buildUserTrafficPoints,
   normalizeGrowthDateKey,
   normalizeGrowthPeriod,
-} from "./domain/analytics.js";
-import { beijingTimestamp, normalizeReportTimestamp, usagePeriodKeys } from "./domain/time.js";
-import { corsHeaders, isAdmin, json } from "./http/responses.js";
-import { cleanText } from "./lib/values.js";
-import { createAccountRoutes } from "./routes/account.js";
-import { createAdminRoutes } from "./routes/admin.js";
-import { createClientRoutes } from "./routes/client.js";
+} from "./domain/analytics.ts";
+import { beijingTimestamp, normalizeReportTimestamp, usagePeriodKeys } from "./domain/time.ts";
+import { corsHeaders, isAdmin, json } from "./http/responses.ts";
+import { cleanText } from "./lib/values.ts";
+import { createAccountRoutes } from "./routes/account.ts";
+import { createAdminRoutes } from "./routes/admin.ts";
+import { createClientRoutes } from "./routes/client.ts";
 import {
   getClientIp,
   autoRenameSubscriptionContent,
@@ -49,14 +52,14 @@ import {
   protectSubscription,
   readExternalSubscription,
   validateAndWarmSubscriptionSources,
-} from "./services/subscriptions.js";
+} from "./services/subscriptions.ts";
 import {
   normalizeState,
   publicClientSettings,
   readState,
   visibleNotice,
   writeState,
-} from "./services/state.js";
+} from "./services/state.ts";
 import {
   attachDeviceToUser,
   ensureUserSchema,
@@ -72,13 +75,13 @@ import {
   resolveUserIdentity,
   rowToUser,
   usersDb,
-} from "./services/user-store.js";
+} from "./services/user-store.ts";
 import {
   clearAdminLoginRecords,
   readAdminLoginRecords,
   recordAdminLogin,
-} from "./services/admin-access.js";
-import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.js";
+} from "./services/admin-access.ts";
+import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.ts";
 
 const routeDeps = {
   CLIENT_IP_HEADER,
@@ -136,7 +139,7 @@ const routeDeps = {
   normalizeState,
   clearAdminLoginRecords,
   readAdminLoginRecords,
-};
+} satisfies RouteDependencies;
 
 const {
   handleClient,
@@ -148,7 +151,7 @@ const { handleAccount } = createAccountRoutes(routeDeps);
 const { handleAdmin } = createAdminRoutes(routeDeps);
 
 const worker = {
-  async fetch(request, env) {
+  async fetch(request: Request, env: Env) {
     try {
       if (request.method === "OPTIONS") {
         return new Response(null, { status: 204, headers: corsHeaders() });
@@ -232,6 +235,6 @@ const worker = {
       return json({ error: "internal_error" }, 500);
     }
   },
-};
+} satisfies ExportedHandler<Env>;
 
 export default worker;

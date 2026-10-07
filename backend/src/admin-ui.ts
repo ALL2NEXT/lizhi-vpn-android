@@ -22,7 +22,7 @@ const adminScript = [
   settingsScript,
 ].join("\n");
 
-export function adminHtml(basePath) {
+export function adminHtml(basePath: string): string {
   return adminDocument
     .replace("/* __ADMIN_STYLES__ */", () => adminStyles)
     .replace("/* __ADMIN_SCRIPT__ */", () => adminScript)

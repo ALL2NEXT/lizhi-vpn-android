@@ -1,8 +1,12 @@
+import type { Env } from "../types/env.ts";
+import type { AccountType, DeviceProfile, PublicAccount, Settings, User } from "../types/models.ts";
+import type { AccountRow, DeviceContextRow, TrafficFields, UserRow } from "../types/database.ts";
+
 import {
   USER_SCHEMA_MIGRATIONS,
   USER_SCHEMA_STATEMENTS,
   USER_SCHEMA_VERSION,
-} from "../config.js";
+} from "../config.ts";
 import {
   accountTypeForUser,
   bytesToMegabytes,
@@ -14,26 +18,26 @@ import {
   normalizeUid,
   normalizeUserReference,
   randomPublicUid,
-} from "../domain/account.js";
-import { beijingTimestamp, usagePeriodKeys } from "../domain/time.js";
-import { cleanText } from "../lib/values.js";
+} from "../domain/account.ts";
+import { beijingTimestamp, usagePeriodKeys } from "../domain/time.ts";
+import { cleanText } from "../lib/values.ts";
 
 let userSchemaReady = false;
-let userSchemaInitialization = null;
+let userSchemaInitialization: Promise<number> | null = null;
 
-export function usersDb(env) {
+export function usersDb(env: Env) {
   if (!env.USERS_DB) throw new Error("Missing D1 binding USERS_DB");
   return env.USERS_DB;
 }
 
-export async function ensureUserSchema(env) {
+export async function ensureUserSchema(env: Env) {
   const db = usersDb(env);
   if (userSchemaReady) return db;
   await initializeUserSchema(env);
   return db;
 }
 
-export async function initializeUserSchema(env) {
+export async function initializeUserSchema(env: Env) {
   const db = usersDb(env);
   if (userSchemaReady) return USER_SCHEMA_VERSION;
   if (!userSchemaInitialization) {
@@ -49,16 +53,16 @@ export async function initializeUserSchema(env) {
   }
 }
 
-export async function initializeUserSchemaDatabase(db) {
+export async function initializeUserSchemaDatabase(db: D1Database) {
   await restoreUsageCompatibilityColumns(db);
 
   let schema;
   try {
     schema = await db.prepare(
       "SELECT version FROM app_schema_mb WHERE component = 'users'",
-    ).first();
+    ).first<{ version: number }>();
   } catch (error) {
-    const message = String(error && error.message || error);
+    const message = String(error instanceof Error ? error.message : error);
     if (!/no such table[^]*app_schema_mb/i.test(message)) throw error;
     schema = null;
   }
@@ -91,7 +95,7 @@ export async function initializeUserSchemaDatabase(db) {
        'user_usage_mb'
      )
      LIMIT 1`,
-  ).first();
+  ).first<{ name: string }>();
   if (existing) {
     throw new Error("users_db_unversioned_schema_detected");
   }
@@ -101,15 +105,15 @@ export async function initializeUserSchemaDatabase(db) {
   );
   const initialized = await db.prepare(
     "SELECT version FROM app_schema_mb WHERE component = 'users'",
-  ).first();
+  ).first<{ version: number }>();
   if (!initialized || Number(initialized.version) !== USER_SCHEMA_VERSION) {
     throw new Error("users_db_initialization_failed");
   }
   return Number(initialized.version);
 }
 
-async function restoreUsageCompatibilityColumns(db) {
-  const tableInfo = await db.prepare("PRAGMA table_info(user_usage_mb)").all();
+async function restoreUsageCompatibilityColumns(db: D1Database) {
+  const tableInfo = await db.prepare("PRAGMA table_info(user_usage_mb)").all<{ name: string }>();
   const columns = new Set((tableInfo.results || []).map((row) => String(row.name || "")));
   if (columns.size === 0) return;
 
@@ -129,26 +133,26 @@ async function restoreUsageCompatibilityColumns(db) {
   }
 }
 
-export async function resolveUserIdentity(env, reference) {
+export async function resolveUserIdentity(env: Env, reference: unknown) {
   const normalized = normalizeUserReference(reference);
   if (!normalized) return null;
   const db = await ensureUserSchema(env);
   let row = null;
   if (normalizeUid(normalized)) {
     row = await db.prepare("SELECT id AS user_id, uid FROM users_mb WHERE uid = ?")
-      .bind(normalized).first();
+      .bind(normalized).first<{ user_id: number; uid: string }>();
   } else {
     row = await db.prepare(
       "SELECT u.id AS user_id, u.uid FROM users_mb u " +
       "JOIN user_devices_mb d ON d.user_id = u.id WHERE d.device_id = ?",
-    ).bind(normalized).first();
+    ).bind(normalized).first<{ user_id: number; uid: string }>();
   }
   return row
     ? { userId: Number(row.user_id), uid: normalizeStoredUid(row.uid) }
     : null;
 }
 
-export async function resolveDeviceIdentity(env, value) {
+export async function resolveDeviceIdentity(env: Env, value: unknown) {
   const context = await readDeviceContext(env, value);
   return context && !context.deviceBanned && context.userStatus === "active" &&
       context.userId > 0
@@ -156,13 +160,13 @@ export async function resolveDeviceIdentity(env, value) {
     : null;
 }
 
-export async function readDeviceContext(env, value) {
+export async function readDeviceContext(env: Env, value: unknown) {
   const deviceId = normalizeAccountId(value);
   if (!deviceId) return null;
   return readDeviceContextFromDb(await ensureUserSchema(env), deviceId);
 }
 
-export async function readDeviceContextFromDb(db, deviceId) {
+export async function readDeviceContextFromDb(db: D1Database, deviceId: string) {
   const row = await db.prepare(
     `SELECT
        d.id AS device_row_id,
@@ -187,7 +191,7 @@ export async function readDeviceContextFromDb(db, deviceId) {
      FROM user_devices_mb d
      LEFT JOIN users_mb u ON u.id = d.user_id
      WHERE d.device_id = ?`,
-  ).bind(deviceId).first();
+  ).bind(deviceId).first<DeviceContextRow>();
   if (!row) return null;
   const userId = Number(row.user_id);
   return {
@@ -206,7 +210,7 @@ export async function readDeviceContextFromDb(db, deviceId) {
   };
 }
 
-export async function resolveAccountAccess(env, deviceId) {
+export async function resolveAccountAccess(env: Env, deviceId: string): Promise<{ accountType: AccountType; appVersion: string }> {
   const identity = await resolveDeviceIdentity(env, deviceId);
   if (!identity) return { accountType: "banned", appVersion: "" };
   const db = await ensureUserSchema(env);
@@ -214,7 +218,7 @@ export async function resolveAccountAccess(env, deviceId) {
     "SELECT u.status, u.email, COALESCE(d.app_version, '') AS app_version " +
       "FROM users_mb u JOIN user_devices_mb d ON d.user_id = u.id " +
       "WHERE u.id = ? AND d.device_id = ?",
-  ).bind(identity.userId, identity.deviceId).first();
+  ).bind(identity.userId, identity.deviceId).first<Pick<UserRow, "status" | "email"> & { app_version: string }>();
   return row
     ? {
       accountType: accountTypeForUser(row),
@@ -223,7 +227,7 @@ export async function resolveAccountAccess(env, deviceId) {
     : { accountType: "banned", appVersion: "" };
 }
 
-export async function readD1User(env, userId, settings) {
+export async function readD1User(env: Env, userId: number, settings?: Settings) {
   const db = await ensureUserSchema(env);
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
@@ -235,11 +239,11 @@ export async function readD1User(env, userId, settings) {
     "SELECT id FROM user_devices_mb WHERE user_id = u.id " +
     "ORDER BY last_seen_at DESC, id DESC LIMIT 1" +
     ") WHERE u.id = ?",
-  ).bind(normalizedUserId).first();
+  ).bind(normalizedUserId).first<UserRow>();
   return row ? rowToUser(row, settings) : null;
 }
 
-export async function readD1UserWithTraffic(env, userId, settings, now = new Date()) {
+export async function readD1UserWithTraffic(env: Env, userId: number, settings?: Settings, now = new Date()) {
   const db = await ensureUserSchema(env);
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
@@ -272,7 +276,7 @@ export async function readD1UserWithTraffic(env, userId, settings, now = new Dat
      LEFT JOIN user_usage_mb r ON r.user_id = u.id
      WHERE u.id = ?
      GROUP BY u.id`,
-  ).bind(day, day, month, month, normalizedUserId).first();
+  ).bind(day, day, month, month, normalizedUserId).first<UserRow>();
   if (!row) return null;
   return {
     ...rowToUser(row, settings),
@@ -280,8 +284,8 @@ export async function readD1UserWithTraffic(env, userId, settings, now = new Dat
   };
 }
 
-function accountTrafficFromRow(row) {
-  const period = (uploadValue, downloadValue) => {
+function accountTrafficFromRow(row: Partial<TrafficFields>) {
+  const period = (uploadValue: unknown, downloadValue: unknown) => {
     const uploadBytes = safeTrafficBytes(uploadValue);
     const downloadBytes = safeTrafficBytes(downloadValue);
     return {
@@ -298,13 +302,13 @@ function accountTrafficFromRow(row) {
   };
 }
 
-function safeTrafficBytes(value) {
+function safeTrafficBytes(value: unknown) {
   const bytes = Number(value);
   if (!Number.isFinite(bytes) || bytes <= 0) return 0;
   return Math.min(Math.round(bytes), Number.MAX_SAFE_INTEGER);
 }
 
-export function rowToUser(row, settings) {
+export function rowToUser(row: AccountRow, settings?: Settings): User {
   const uid = normalizeStoredUid(row.uid);
   return {
     uid,
@@ -320,13 +324,14 @@ export function rowToUser(row, settings) {
   };
 }
 
-export function publicAccount(user) {
-  const accountType = user.deviceBlocked
+export function publicAccount(user: User | null): PublicAccount {
+  if (!user) throw new Error("account_not_found");
+  const accountType: AccountType = user.deviceBlocked
     ? "banned"
     : ["banned", "guest", "formal"].includes(cleanText(user.accountType))
-    ? cleanText(user.accountType)
+    ? user.accountType
     : accountTypeForUser(user);
-  const account = {
+  const account: PublicAccount = {
     uid: user.uid,
     nickname: user.nickname,
     accountType,
@@ -342,7 +347,7 @@ export function publicAccount(user) {
   return account;
 }
 
-export function publicAdminUser(row, settings) {
+export function publicAdminUser(row: UserRow, settings?: Settings) {
   const todayUpload = bytesToMegabytes(row.today_upload_bytes);
   const todayDownload = bytesToMegabytes(row.today_download_bytes);
   const monthUpload = bytesToMegabytes(row.month_upload_bytes);
@@ -371,7 +376,7 @@ export function publicAdminUser(row, settings) {
   };
 }
 
-export async function attachDeviceToUser(db, userId, deviceId, profile, allowTransfer = false) {
+export async function attachDeviceToUser(db: D1Database, userId: number, deviceId: string, profile: DeviceProfile, allowTransfer = false) {
   const brand = cleanText(profile && profile.brand).slice(0, 80);
   const model = cleanText(profile && profile.model).slice(0, 120);
   const androidVersion = cleanText(profile && profile.androidVersion).slice(0, 80);
@@ -382,7 +387,7 @@ export async function attachDeviceToUser(db, userId, deviceId, profile, allowTra
   if (existing && existing.deviceBanned) return false;
   const user = await db.prepare(
     "SELECT uid, status FROM users_mb WHERE id = ?",
-  ).bind(userId).first();
+  ).bind(userId).first<Pick<UserRow, "uid" | "status">>();
   if (!user || cleanText(user.status) !== "active") return false;
 
   const results = await db.batch([
@@ -438,7 +443,7 @@ export async function attachDeviceToUser(db, userId, deviceId, profile, allowTra
     Number(results[1] && results[1].meta && results[1].meta.changes) > 0;
 }
 
-export async function registerOrTouchUser(env, deviceId, profile, now) {
+export async function registerOrTouchUser(env: Env, deviceId: string, profile: DeviceProfile, now: Date) {
   const db = await ensureUserSchema(env);
   const seenAt = beijingTimestamp(now);
   const existing = await readDeviceContextFromDb(db, deviceId);
@@ -460,9 +465,9 @@ export async function registerOrTouchUser(env, deviceId, profile, now) {
       ).bind(uid, defaultNickname(uid), seenAt).run();
       created = await db.prepare(
         "SELECT id FROM users_mb WHERE uid = ?",
-      ).bind(uid).first();
+      ).bind(uid).first<Pick<UserRow, "id">>();
     } catch (error) {
-      if (!/unique|constraint/i.test(String(error && error.message || error))) throw error;
+      if (!/unique|constraint/i.test(String(error instanceof Error ? error.message : error))) throw error;
     }
   }
   if (!created) throw new Error("account_create_failed");

@@ -1,3 +1,5 @@
+import type { AppState } from "./types/models.ts";
+
 /*
  * Runtime configuration and D1 bootstrap schema.
  * Keep deployment-independent values here so route code stays focused on behavior.
@@ -147,7 +149,7 @@ export const USER_SCHEMA_STATEMENTS = [
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
-export const USER_SCHEMA_MIGRATIONS = {
+export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
   2: [],
   3: [],
   4: [
@@ -279,14 +281,14 @@ export const USER_SCHEMA_MIGRATIONS = {
     `PRAGMA defer_foreign_keys = OFF`,
   ],
 };
-export function resolveAdminBasePath(value) {
+export function resolveAdminBasePath(value: unknown): string | null {
   const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");
   return /^[A-Za-z0-9_-]{1,128}$/.test(route)
     ? `/${route}`
     : null;
 }
 
-export const DEFAULT_STATE = {
+export const DEFAULT_STATE: AppState = {
   version: 1,
   subscriptions: [],
   notice: null,

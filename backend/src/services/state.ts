@@ -1,20 +1,23 @@
-import { DEFAULT_STATE, LEGACY_STATE_KEY, STATE_KEY } from "../config.js";
-import { normalizeAccountType } from "../domain/account.js";
-import { beijingTimestamp } from "../domain/time.js";
-import { cleanText, parseFlag, plainObject } from "../lib/values.js";
+import type { Env } from "../types/env.ts";
+import type { AppState, DebugInterface, JsonObject, NavigationGroup, Notice, Settings, SubscriptionSource } from "../types/models.ts";
+
+import { DEFAULT_STATE, LEGACY_STATE_KEY, STATE_KEY } from "../config.ts";
+import { normalizeAccountType } from "../domain/account.ts";
+import { beijingTimestamp } from "../domain/time.ts";
+import { cleanText, parseFlag, plainObject } from "../lib/values.ts";
 import {
   normalizeManagedContent,
   normalizeMinimumAppVersion,
   normalizeSubscriptionCacheMinutes,
-} from "./subscriptions.js";
+} from "./subscriptions.ts";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function randomDebugInterfaceToken() {
-  return globalThis.crypto.randomUUID();
+  return crypto.randomUUID();
 }
 
-function normalizeDebugInterface(value, subscriptions) {
+function normalizeDebugInterface(value: unknown, subscriptions: SubscriptionSource[]): DebugInterface {
   const input = plainObject(value) ? value : {};
   const availableIds = new Set(subscriptions.map((item) => item.id));
   const rawIds = input.subscriptionIds ?? input.sourceIds ?? input.subscriptions;
@@ -30,16 +33,16 @@ function normalizeDebugInterface(value, subscriptions) {
   };
 }
 
-export async function readState(env) {
+export async function readState(env: Env): Promise<AppState> {
   if (!env.CONFIG) {
     throw new Error("Missing KV binding CONFIG");
   }
   const [chimeraState, legacyState] = await Promise.all([
-    env.CONFIG.get(STATE_KEY, "json"),
-    env.CONFIG.get(LEGACY_STATE_KEY, "json"),
+    env.CONFIG.get<JsonObject>(STATE_KEY, "json"),
+    env.CONFIG.get<JsonObject>(LEGACY_STATE_KEY, "json"),
   ]);
-  const chimeraUpdatedAt = Date.parse(chimeraState?.updatedAt || "") || 0;
-  const legacyUpdatedAt = Date.parse(legacyState?.updatedAt || "") || 0;
+  const chimeraUpdatedAt = Date.parse(String(chimeraState?.updatedAt || "")) || 0;
+  const legacyUpdatedAt = Date.parse(String(legacyState?.updatedAt || "")) || 0;
   const stored = legacyUpdatedAt > chimeraUpdatedAt ? legacyState : chimeraState || legacyState;
   const normalized = normalizeState(stored || DEFAULT_STATE);
   if (stored && !chimeraState) {
@@ -48,7 +51,7 @@ export async function readState(env) {
   return normalized;
 }
 
-export async function writeState(env, state) {
+export async function writeState(env: Env, state: AppState) {
   if (!env.CONFIG) {
     throw new Error("Missing KV binding CONFIG");
   }
@@ -60,16 +63,16 @@ export async function writeState(env, state) {
   ]);
 }
 
-export function normalizeState(input) {
-  const value = input && typeof input === "object" ? input : {};
-  const list = Array.isArray(value.subscriptions)
+export function normalizeState(input: unknown): AppState {
+  const value = plainObject(input) ? input : {};
+  const list: unknown[] = Array.isArray(value.subscriptions)
     ? value.subscriptions
     : Array.isArray(value.sources)
       ? value.sources
       : [];
 
   const subscriptions = list
-    .filter((item) => item && typeof item === "object")
+    .filter(plainObject)
     .map((item) => {
       const content = normalizeManagedContent(
         item.content ?? item.managedContent ?? item.nodesText,
@@ -119,7 +122,7 @@ export function normalizeState(input) {
   };
 }
 
-export function normalizeNotice(value) {
+export function normalizeNotice(value: unknown): Notice | null {
   if (!plainObject(value)) return null;
   const startAt = normalizeNoticeTimestamp(value.startAt, "start_at");
   const endAt = normalizeNoticeTimestamp(value.endAt, "end_at");
@@ -137,7 +140,7 @@ export function normalizeNotice(value) {
   };
 }
 
-export function normalizeNoticeTimestamp(value, field) {
+export function normalizeNoticeTimestamp(value: unknown, field: string) {
   const text = cleanText(value);
   if (!text) return "";
   const localMinute = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text);
@@ -154,7 +157,7 @@ export function normalizeNoticeTimestamp(value, field) {
   return beijingTimestamp(date);
 }
 
-export function visibleNotice(notice, now = Date.now()) {
+export function visibleNotice(notice: Notice | null, now = Date.now()) {
   if (!notice || !notice.hasNotice) return null;
   const startAt = Date.parse(notice.startAt || "");
   const endAt = Date.parse(notice.endAt || "");
@@ -163,7 +166,7 @@ export function visibleNotice(notice, now = Date.now()) {
   return notice;
 }
 
-export function normalizeSettings(value, subscriptions = []) {
+export function normalizeSettings(value: unknown, subscriptions: SubscriptionSource[] = []): Settings {
   const settings = plainObject(value) ? value : {};
   // 旧版状态没有注册控制字段，升级时采用新的邮箱绑定经验默认值。
   const hasRegistrationControl =
@@ -194,7 +197,7 @@ export function normalizeSettings(value, subscriptions = []) {
   };
 }
 
-function normalizeWebNavigationGroups(value) {
+function normalizeWebNavigationGroups(value: unknown): NavigationGroup[] {
   if (!Array.isArray(value) || value.length > 50) {
     throw new Error("invalid_web_navigation_groups");
   }
@@ -202,8 +205,9 @@ function normalizeWebNavigationGroups(value) {
   let itemCount = 0;
   // 图标直接随 KV 配置保存，限制总 Base64 体积以避免配置过大。
   let iconTotalSize = 0;
-  return value.map((rawGroup) => {
-    if (!rawGroup || typeof rawGroup !== "object" || Array.isArray(rawGroup)) {
+  const groups: unknown[] = value;
+  return groups.map((rawGroup) => {
+    if (!plainObject(rawGroup)) {
       throw new Error("invalid_web_navigation_group");
     }
     const title = cleanText(rawGroup.title);
@@ -211,8 +215,9 @@ function normalizeWebNavigationGroups(value) {
       throw new Error("invalid_web_navigation_group");
     }
 
-    const items = rawGroup.items.map((rawItem) => {
-      if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) {
+    const rawItems: unknown[] = rawGroup.items;
+    const items = rawItems.map((rawItem) => {
+      if (!plainObject(rawItem)) {
         throw new Error("invalid_web_navigation_item");
       }
       const itemTitle = cleanText(rawItem.title);
@@ -255,7 +260,7 @@ function normalizeWebNavigationGroups(value) {
   });
 }
 
-export function publicClientSettings(settings) {
+export function publicClientSettings(settings: Settings) {
   const normalized = normalizeSettings(settings);
   const { debugInterface: _debugInterface, ...publicSettings } = normalized;
   return publicSettings;

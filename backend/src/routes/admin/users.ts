@@ -1,8 +1,27 @@
+import type { UserRow } from "../../types/database.ts";
+import type { Env } from "../../types/env.ts";
+import type { RouteDependencies } from "../../types/routes.ts";
+
+import { readJsonObject } from "../../http/request.ts";
 /*
  * User list, batch operations and individual account maintenance.
  */
 
-export function createAdminUserRoutes(deps) {
+export function createAdminUserRoutes(deps: Pick<
+  RouteDependencies,
+  | "MAX_BATCH_USER_COUNT"
+  | "beijingTimestamp"
+  | "cleanText"
+  | "ensureUserSchema"
+  | "json"
+  | "normalizeBatchUserReferences"
+  | "normalizeNickname"
+  | "publicAccount"
+  | "publicAdminUser"
+  | "readD1User"
+  | "resolveUserIdentity"
+  | "usagePeriodKeys"
+>) {
   const {
     MAX_BATCH_USER_COUNT,
     beijingTimestamp,
@@ -18,7 +37,7 @@ export function createAdminUserRoutes(deps) {
     usagePeriodKeys,
   } = deps;
 
-  return async function handleAdminUsers(path, request, env) {
+  return async function handleAdminUsers(path: string, request: Request, env: Env) {
   if (path === "/api/users" && request.method === "GET") {
       const db = await ensureUserSchema(env);
       const { day, month } = usagePeriodKeys(new Date());
@@ -59,7 +78,7 @@ export function createAdminUserRoutes(deps) {
           ORDER BY last_seen_at DESC, id DESC LIMIT 1
         )
         LEFT JOIN usage_stats s ON s.user_id = u.id
-        ORDER BY u.created_at DESC`).bind(day, day, day, month, month, month).all();
+        ORDER BY u.created_at DESC`).bind(day, day, day, month, month, month).all<UserRow>();
       const publicUsers = (query.results || []).map((row) =>
         publicAdminUser(row));
 
@@ -73,7 +92,7 @@ export function createAdminUserRoutes(deps) {
     }
 
     if (path === "/api/users/batch" && request.method === "PATCH") {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       const accountIds = normalizeBatchUserReferences(body && (body.uids || body.accountIds));
       const accountType = cleanText(body && body.accountType);
       if (
@@ -100,7 +119,7 @@ export function createAdminUserRoutes(deps) {
     }
 
     if (path === "/api/users/batch" && request.method === "DELETE") {
-      const body = await request.json();
+      const body = await readJsonObject(request);
       const accountIds = normalizeBatchUserReferences(body && (body.uids || body.accountIds));
       if (accountIds.length === 0 || accountIds.length > MAX_BATCH_USER_COUNT) {
         return json({ ok: false, error: "invalid_batch_user_delete" }, 400);
@@ -151,7 +170,7 @@ export function createAdminUserRoutes(deps) {
            ON active_ban.device_row_id = l.device_row_id
           AND active_ban.lifted_at IS NULL
          WHERE l.user_id = ?`,
-      ).bind(identity.uid, identity.userId).first();
+      ).bind(identity.uid, identity.userId).first<{ historical_device_count: number; account_banned_device_count: number; blocked_device_count: number }>();
       return json({
         ok: true,
         uid: identity.uid,
@@ -179,7 +198,7 @@ export function createAdminUserRoutes(deps) {
     if (userMatch && request.method === "PATCH") {
       const identity = await resolveUserIdentity(env, decodeURIComponent(userMatch[1]));
       if (!identity) return json({ ok: false, error: "account_not_found" }, 404);
-      const body = await request.json();
+      const body = await readJsonObject(request);
       const userAssignments = [];
       const userValues = [];
       const deviceAssignments = [];
@@ -192,7 +211,7 @@ export function createAdminUserRoutes(deps) {
         userAssignments.push("nickname = ?");
         userValues.push(nickname);
       }
-      const editableTextFields = [
+      const editableTextFields: [string, string, number][] = [
         ["brand", "brand", 80],
         ["model", "model", 120],
         ["androidVersion", "android_version", 80],
