@@ -19,7 +19,7 @@ function ensureSourceTierGroups() {
       '<div class="source-tier-rows" data-tier-rows></div>' +
       '<button class="secondary source-tier-add" type="button" data-add-source>添加线路</button>';
     group.querySelector('[data-add-source]').addEventListener('click', function() {
-      addSource({}, undefined, tier.id);
+      openSubscriptionImport(tier.id);
     });
     container.appendChild(group);
   });
@@ -91,9 +91,9 @@ function addSource(source, sourceOrderValue, tierOverride) {
         '</select></label></div>' +
       '</div>' +
       '<div class="source-mode" data-source-mode="url"><div class="grid">' +
-        '<div class="field"><label>外部明文订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/plain-sub"></label></div>' +
+        '<div class="field"><label>外部订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/sub"></label></div>' +
         '<div class="field"><label>接口缓存时间（分钟）<input data-field="cacheMinutes" type="number" min="0" max="10080" step="1" value="' + esc(source.cacheMinutes == null ? 30 : source.cacheMinutes) + '"></label></div>' +
-      '</div><label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label><small>按节点名称识别国家，并批量改为“国家+编号”，例如：日本1、日本2。</small><small>接口必须返回可识别的明文节点，由 Worker 中转并加密；缓存时间设为 0 会每次请求上游。</small></div>' +
+      '</div><label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label><small>按节点名称识别国家，并批量改为“国家+编号”，例如：日本1、日本2。</small><small>支持节点 URI、Base64、Clash、sing-box 和 Xray 订阅，由 Worker 转换后加密下发；缓存时间设为 0 会每次请求上游。</small></div>' +
       '<div class="source-mode" data-source-mode="content"><div class="field"><label>纯文本节点（每行一个）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div><small>保存后由 Worker 直接加密下发，不经过外部接口缓存。</small></div>' +
     '</section>' +
     '<div class="row-actions"><button class="danger" type="button">删除</button></div>' +
@@ -115,6 +115,7 @@ function addSource(source, sourceOrderValue, tierOverride) {
   updateSourceMode(row);
   insertSourceByOrder(row, minAccountType);
   updateSourceRowsMeta();
+  return row;
 }
 function getSourceRows() {
   return Array.from(el('subscriptionRows').querySelectorAll('.source-row'));

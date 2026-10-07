@@ -254,8 +254,31 @@
 
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <h2>订阅线路</h2>
+    <small>添加线路支持智能导入。导入后可继续编辑，点击「推送」保存并下发到客户端。</small>
     <div id="subscriptionRows"></div>
      <button type="button" onclick="pushSection('subscriptions')">推送</button>
+    <dialog id="subscriptionImportDialog" aria-labelledby="subscriptionImportTitle" class="subscription-import-dialog">
+      <form id="subscriptionImportForm">
+        <h2 id="subscriptionImportTitle">智能导入订阅线路</h2>
+        <p id="subscriptionImportTier"></p>
+        <label class="field" for="subscriptionImportInput">智能识别
+          <textarea id="subscriptionImportInput" rows="8" placeholder="粘贴订阅地址、节点 URI、Base64、Clash YAML 或 sing-box / Xray JSON。支持多个地址与配置混合导入。"></textarea>
+        </label>
+        <div class="subscription-import-tools">
+          <button class="secondary" type="button" id="subscriptionImportClipboard">从剪贴板粘贴</button>
+          <button class="secondary" type="button" id="subscriptionImportFileButton">选择文件</button>
+          <input id="subscriptionImportFile" type="file" accept=".txt,.conf,.yaml,.yml,.json,text/plain,application/json" hidden>
+        </div>
+        <small>远程订阅分别创建线路，本地节点合并为「导入内容」。留空可新建手动维护的线路；输入和文件最大 2 MB。</small>
+        <p id="subscriptionImportStatus" role="status" aria-live="polite"></p>
+        <div id="subscriptionImportPreview" class="subscription-import-preview"></div>
+        <div class="subscription-import-actions">
+          <button class="secondary" type="button" id="subscriptionImportCancel">取消</button>
+          <button type="submit" id="subscriptionImportRecognize">识别并预览</button>
+          <button type="button" id="subscriptionImportAdd" disabled>添加到线路列表</button>
+        </div>
+      </form>
+    </dialog>
    </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="about-page">

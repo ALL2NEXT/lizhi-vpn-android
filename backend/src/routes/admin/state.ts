@@ -7,6 +7,7 @@ import type { RouteDependencies } from "../../types/routes.ts";
 
 import { fetchWebsiteIcon } from "../../services/navigation-icons.ts";
 import { readJsonObject } from "../../http/request.ts";
+import { importSubscriptionSources } from "../../services/subscription-import.ts";
 
 export function createAdminStateRoutes(deps: Pick<
   RouteDependencies,
@@ -27,6 +28,16 @@ export function createAdminStateRoutes(deps: Pick<
   } = deps;
 
   return async function handleAdminState(path: string, request: Request, env: Env) {
+    if (path === "/api/subscriptions/import" && request.method === "POST") {
+      try {
+        const incoming = await readJsonObject(request);
+        const result = await importSubscriptionSources(incoming.input, incoming.minAccountType);
+        return json({ ok: result.sources.length > 0, ...result }, result.sources.length ? 200 : 422);
+      } catch (error) {
+        return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+      }
+    }
+
     if (path === "/api/navigation-icon" && request.method === "POST") {
       try {
         const incoming = await readJsonObject(request);

@@ -54,6 +54,16 @@ Authorization: Bearer <ADMIN_TOKEN>
 
 TypeScript 迁移保持现有 API 路径、有效请求的响应字段、KV 状态格式和数据库 schema。JSON 请求字段先作为 `unknown` 读取，再由业务校验接受；非对象请求采用空对象进入原有字段校验，语法错误仍由现有异常处理返回。部署时仍指向 `backend/serverless.js`。
 
+## 订阅线路智能导入
+
+在订阅线路页面选择对应账户等级的「添加线路」，粘贴内容或从剪贴板、文件读取，再点击「识别并预览」。确认结果后添加到线路列表，可继续编辑名称、最低版本、缓存和自动重命名，点击「推送」才会保存并下发。
+
+识别规则移植自 Android 私人源导入：支持节点 URI、递归/换行/URL-safe Base64、Clash YAML、sing-box/Xray JSON，以及混合输入和多文档。配置字段中的 URL 和 Base64 凭据保持原义。远程 URL 去重后分别创建线路并保留地址；本地节点去重后合并成「导入内容」。节点保留 TLS、Reality 与原生传输参数，其他路由、规则集和选择组配置丢弃。
+
+远程订阅按客户端 AUTO 模式尝试 User-Agent，并用响应的 `Profile-Title`、`Subscription-Name`、`Content-Disposition` 或域名命名。每个来源最多等待 25 秒，单个来源失败不影响其他成功来源。输入、文件和单个上游响应最大 2 MB；一次最多导入 20 个远程地址。留空可创建待填写的空白线路。
+
+管理 API `POST /<ADMIN_PATH>/api/subscriptions/import` 接收 `{ "input": "...", "minAccountType": "guest" }`，返回 `sources`、`nodeCount` 和 `failedSources`，只生成预览，不写 KV。现有外部订阅的缓存预热与更新也使用同一格式转换器。
+
 ## 明文调试接口
 
 后台设置中的“调试接口”板块可以一次选择一个或多个订阅线路（包括停用线路），生成一个带随机 UUID 的聚合明文接口。接口地址为：

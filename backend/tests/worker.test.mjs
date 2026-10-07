@@ -3,6 +3,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { createServer } from "node:http";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 
 test("本地 Worker 的账号、订阅和管理接口", async (t) => {
@@ -57,6 +58,42 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     assert.ok(html.includes("/local-admin"));
     assert.equal(html.includes("__ADMIN_BASE_PATH__"), false);
     await call("/missing", { status: 404 });
+  });
+
+  await t.test("智能导入遵循管理鉴权，只预览不保存，推送后可下发转换的节点", async t => {
+    const upstream = createServer((request, response) => {
+      if (request.url === "/failed") { response.writeHead(503); response.end("unavailable"); return; }
+      response.writeHead(200, { "content-type": "application/yaml", "profile-title": "Remote YAML" });
+      response.end("proxies:\n  - type: trojan\n    name: yaml-node\n    server: yaml.example\n    port: 443\n    password: secret");
+    });
+    await new Promise(resolve => upstream.listen(0, "127.0.0.1", resolve));
+    t.after(() => new Promise(resolve => upstream.close(resolve)));
+    const origin = `http://127.0.0.1:${upstream.address().port}`;
+    const route = "/local-admin/api/subscriptions/import";
+    await call(route, { method: "POST", body: { input: source }, status: 401 });
+    await call(route, { method: "POST", admin: true, body: { input: 12 }, status: 400 });
+    await call(route, { method: "POST", admin: true, body: { input: "no nodes" }, status: 400 });
+    const initial = (await call("/local-admin/api/state", { admin: true })).data;
+    const before = (await call("/local-admin/api/state", { method: "PUT", admin: true, body: initial })).data.state;
+    const preview = (await call(route, { method: "POST", admin: true, body: { input: source + `\n${origin}/sub\n${origin}/failed`, minAccountType: "banned" } })).data;
+    assert.equal(preview.ok, true);
+    assert.equal(preview.nodeCount, 2);
+    assert.equal(preview.sources.length, 2);
+    assert.equal(preview.sources[1].name, "Remote YAML");
+    assert.equal(preview.sources[1].url, origin + "/sub");
+    assert.equal(preview.sources[1].content, "");
+    assert.ok(preview.sources.every(source => source.minAccountType === "banned"));
+    assert.equal(preview.failedSources.length, 1);
+    assert.deepEqual((await call("/local-admin/api/state", { admin: true })).data, before);
+    const allFailed = (await call(route, { method: "POST", admin: true, body: { input: origin + "/failed" }, status: 422 })).data;
+    assert.equal(allFailed.sources.length, 0);
+    const saved = (await call("/local-admin/api/state", { method: "PUT", admin: true, body: { ...before, subscriptions: preview.sources } })).data.state;
+    saved.settings.debugInterface.subscriptionIds = ["1", "2"];
+    await call("/local-admin/api/state", { method: "PUT", admin: true, body: saved });
+    const combined = (await call("/api/subscription/debug/" + saved.settings.debugInterface.token)).data;
+    assert.ok(combined.includes(source));
+    assert.ok(combined.includes("@yaml.example:443"));
+    await call("/local-admin/api/state", { method: "PUT", admin: true, body: before });
   });
 
   await t.test("游客注册可重复调用，非法 JSON 字段不会绕过校验", async () => {

@@ -17,5 +17,8 @@
     "build:tiered": "npm run typecheck && wrangler deploy --dry-run --config wrangler.tiered.jsonc --outdir .wrangler/build-tiered",
     "dev": "npm run types && wrangler dev --local",
     "test": "npm run build && node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
   }
 }

@@ -11,6 +11,8 @@ import {
   TEXT_ENCODER,
 } from "../config.ts";
 import { cleanText } from "../lib/values.ts";
+import { normalizeRemoteUrl, toStandardUris } from "../domain/subscription-import/index.ts";
+import { decodeBase64, encodeBase64 } from "../domain/subscription-import/text.ts";
 
 export function normalizeManagedContent(value: unknown) {
   if (typeof value !== "string") return "";
@@ -67,31 +69,11 @@ export function assertPlainSubscriptionContent(value: unknown) {
   return content;
 }
 
-/** 外部订阅同时兼容明文、标准 Base64 和 URL-safe Base64。 */
+/** 本地导入与远程更新使用相同的 URI / Base64 / Clash / sing-box / Xray 转换。 */
 export function decodeExternalSubscriptionContent(value: unknown) {
-  const content = normalizeManagedContent(value).replace(/^\uFEFF/, "");
-  if (PLAINTEXT_NODE_PATTERN.test(content)) return content;
-
-  const compact = content.replace(/\s+/g, "");
-  if (!compact || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(compact)) {
-    throw new Error("subscription_must_be_plaintext_nodes");
-  }
-
-  try {
-    const normalized = compact.replace(/-/g, "+").replace(/_/g, "/");
-    if (normalized.length % 4 === 1) {
-      throw new Error("invalid_base64_length");
-    }
-    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
-    const binary = atob(padded);
-    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-    const decoded = normalizeManagedContent(
-      new TextDecoder().decode(bytes).replace(/^\uFEFF/, ""),
-    );
-    return assertPlainSubscriptionContent(decoded);
-  } catch (_) {
-    throw new Error("subscription_must_be_plaintext_nodes");
-  }
+  const nodes = toStandardUris(normalizeManagedContent(value));
+  if (!nodes.length) throw new Error("subscription_must_be_plaintext_nodes");
+  return normalizeManagedContent(nodes.join("\n"));
 }
 
 // 常见节点命名中的国家别名，用于把外部订阅节点统一整理成“国家+编号”。
@@ -282,6 +264,7 @@ export function subscriptionCacheKey(source: SubscriptionSource) {
 async function readManagedSubscriptionBody(response: Response) {
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_MANAGED_SUBSCRIPTION_BYTES) {
+    await response.body?.cancel();
     throw new Error("managed_subscription_too_large");
   }
   if (!response.body) return "";
@@ -301,6 +284,65 @@ async function readManagedSubscriptionBody(response: Response) {
     content += decoder.decode(value, { stream: true });
   }
   return content + decoder.decode();
+}
+
+// 与 Android 私人源 AUTO 模式相同，兼容按 User-Agent 返回不同格式的机场。
+const SUBSCRIPTION_USER_AGENTS = [
+  "NekoBox/Android/1.4.2 (Prefer ClashMeta Format)",
+  "sing-box/1.15.0", "Singbox/1.14", "clash-meta", "v2rayN/7.8.2",
+  "Throne/1.0.0", "sing-box/1.14.0",
+];
+
+function subscriptionName(headers: Headers, url: string) {
+  const decodeTitle = (value: string) => {
+    const title = value.trim().replace(/^"|"$/g, "");
+    return /^base64:/i.test(title) ? decodeBase64(title.slice(7))?.trim() || "" : title;
+  };
+  for (const key of ["profile-title", "subscription-name"]) {
+    const value = headers.get(key)?.trim();
+    if (value && decodeTitle(value)) return decodeTitle(value).slice(0, 120);
+  }
+  const disposition = headers.get("content-disposition") || "";
+  const extended = disposition.match(/(?:^|;)\s*filename\*\s*=\s*UTF-8''([^;]+)/i)?.[1];
+  const filename = extended || disposition.match(/(?:^|;)\s*filename\s*=\s*("[^"]*"|[^;]+)/i)?.[1];
+  if (filename) {
+    let title = filename.trim().replace(/^"|"$/g, "");
+    if (extended) { try { title = decodeURIComponent(title); } catch { title = ""; } }
+    title = title.split(/[\\/]/).pop()!.replace(/\.(?:yaml|yml|txt|conf)$/i, "").trim();
+    if (title) return title.slice(0, 120);
+  }
+  return new URL(url).hostname.replace(/^www\./, "");
+}
+
+export async function fetchExternalSubscription(url: string) {
+  const normalized = normalizeRemoteUrl(url);
+  if (!normalized) throw new Error("invalid_subscription_url");
+  const target = new URL(normalized);
+  const authorization = target.username || target.password ? "Basic " + encodeBase64(`${decodeURIComponent(target.username)}:${decodeURIComponent(target.password)}`) : "";
+  target.username = ""; target.password = "";
+  let failure = new Error("external_subscription_unreachable");
+  // 一条来源的自动尝试共享 25 秒，避免失败来源长时间占据整个导入请求。
+  const deadline = Date.now() + 25000;
+  for (const userAgent of SUBSCRIPTION_USER_AGENTS) {
+    if (Date.now() >= deadline) break;
+    try {
+      const response = await fetch(target.href, {
+        method: "GET", redirect: "follow", signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+        headers: { accept: "text/plain, application/yaml, application/json, */*;q=0.1", "user-agent": userAgent, ...(authorization ? { authorization } : {}) },
+      });
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new Error(`external_subscription_http_${response.status}`);
+      }
+      const content = decodeExternalSubscriptionContent(await readManagedSubscriptionBody(response));
+      return { content, name: subscriptionName(response.headers, normalized), nodeCount: content.split("\n").length };
+    } catch (error) {
+      if (error instanceof Error && error.message === "managed_subscription_too_large") throw error;
+      failure = error instanceof Error && /^(?:external_subscription_http_|subscription_must_be_plaintext_nodes)/.test(error.message)
+        ? error : new Error("external_subscription_unreachable");
+    }
+  }
+  throw failure;
 }
 
 export async function readExternalSubscription(env: Env, source: SubscriptionSource) {
@@ -324,26 +366,7 @@ export async function readExternalSubscription(env: Env, source: SubscriptionSou
     }
   }
 
-  let response;
-  try {
-    response = await fetch(source.url, {
-      method: "GET",
-      headers: {
-        accept: "text/plain, */*;q=0.1",
-        "user-agent": "Chimera-Worker/1.0",
-      },
-      redirect: "follow",
-    });
-  } catch (_) {
-    throw new Error("external_subscription_unreachable");
-  }
-  if (!response.ok) {
-    throw new Error(`external_subscription_http_${response.status}`);
-  }
-
-  const content = decodeExternalSubscriptionContent(
-    await readManagedSubscriptionBody(response),
-  );
+  const { content } = await fetchExternalSubscription(source.url);
   if (cacheMinutes > 0) {
     const cacheSeconds = cacheMinutes * 60;
     await env.CONFIG.put(cacheKey, JSON.stringify({
