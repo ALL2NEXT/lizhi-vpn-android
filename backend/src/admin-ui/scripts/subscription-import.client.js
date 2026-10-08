@@ -28,7 +28,7 @@ function openSubscriptionImport(groupRow) {
   el('subscriptionImportInput').value = '';
   el('subscriptionImportFile').value = '';
   const groupName = groupRow.querySelector('[data-field="groupName"]').value.trim() || '未命名分组';
-  el('subscriptionImportTier').textContent = '添加到订阅分组：' + groupName;
+  el('subscriptionImportTier').textContent = '添加到分组：' + groupName;
   el('subscriptionImportDialog').showModal();
   el('subscriptionImportInput').focus();
 }

@@ -39,7 +39,7 @@ function addSubscriptionGroup(group) {
     ? group.allowedAccountTypes
     : ['guest', 'formal'];
   row.innerHTML = '<div class="subscription-group-heading">' +
-    '<div class="subscription-group-title"><span>订阅分组</span>' +
+    '<div class="subscription-group-title"><span>分组</span>' +
       '<label>分组名称<input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label>' +
     '</div>' +
     '<div class="subscription-group-controls" role="group" aria-label="分组排序和删除操作">' +
@@ -598,7 +598,7 @@ function readSubscriptionGroups() {
       .filter(function(source) { return source.url || source.content; });
     return {
       id: group.dataset.groupId || String(groupIndex + 1),
-      name: group.querySelector('[data-field="groupName"]').value.trim() || '订阅分组' + (groupIndex + 1),
+      name: group.querySelector('[data-field="groupName"]').value.trim() || '分组' + (groupIndex + 1),
       enabled: group.querySelector('[data-field="groupEnabled"]').checked,
       allowedStatuses: Array.from(group.querySelectorAll('[data-field="allowedStatuses"]:checked'))
         .map(function(input) { return input.value; }),

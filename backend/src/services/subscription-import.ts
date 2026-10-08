@@ -5,7 +5,7 @@ import { fetchExternalSubscription, normalizeManagedContent } from "./subscripti
 
 export interface ImportedSubscription extends Omit<SubscriptionSource, "id"> {
   nodeCount: number;
-  /** 兼容旧版管理端的预览字段；持久化时由订阅分组负责权限。 */
+  /** 兼容旧版管理端的预览字段；持久化时由分组负责权限。 */
   minAccountType: AccountType;
   minAppVersion: string;
 }

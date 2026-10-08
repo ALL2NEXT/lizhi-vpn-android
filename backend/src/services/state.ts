@@ -64,7 +64,7 @@ function normalizeSubscriptionGroup(
     .filter((item): item is SubscriptionSource => item !== null);
   return {
     id: cleanText(input.id).slice(0, 80) || String(index + 1),
-    name: cleanText(input.name || input.title).slice(0, 80) || `订阅分组${index + 1}`,
+    name: cleanText(input.name || input.title).slice(0, 80) || `分组${index + 1}`,
     enabled: parseFlag(input.enabled, true),
     allowedStatuses: normalizeSelection(input.allowedStatuses, SUBSCRIPTION_STATUSES, ["normal"]),
     allowedAccountTypes: normalizeSelection(input.allowedAccountTypes, SUBSCRIPTION_ACCOUNT_TYPES, ["guest", "formal"]),
@@ -150,7 +150,7 @@ export function normalizeState(input: unknown): AppState {
         );
         return [{
           id: String(index + 1),
-          name: cleanText(item.groupName || item.name || item.title) || `订阅分组${index + 1}`,
+          name: cleanText(item.groupName || item.name || item.title) || `分组${index + 1}`,
           enabled: true,
           allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
           allowedAccountTypes: minimumType === "formal" ? ["formal"] : ["guest", "formal"],
