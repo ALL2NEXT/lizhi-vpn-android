@@ -112,11 +112,17 @@ internal class DisconnectRecoveryManager(
             Log.w(TAG, "Disconnect recovery skipped: subscription source $sourceId is unavailable")
             return false
         }
-        val accountType = accountManager.currentAccount()?.accountType ?: ACCOUNT_TYPE_BANNED
-        if (!source.canBeRequestedBy(accountType)) {
+        val account = accountManager.currentAccount()
+        val accountType = if (account?.email?.isNotBlank() == true) "formal" else "guest"
+        val accountStatus = if (account?.accountType == ACCOUNT_TYPE_BANNED || account?.deviceBlocked == true) {
+            "banned"
+        } else {
+            "normal"
+        }
+        if (!source.canBeRequestedBy(account, io.github.HanJason233.chimera.BuildConfig.VERSION_NAME)) {
             Log.w(
                 TAG,
-                "Disconnect recovery skipped: $accountType is below ${source.minAccountType}"
+                "Disconnect recovery skipped: $accountStatus/$accountType does not meet subscription group permissions"
             )
             return false
         }

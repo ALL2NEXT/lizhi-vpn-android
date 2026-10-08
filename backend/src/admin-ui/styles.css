@@ -82,12 +82,22 @@
     button.secondary { background: #374151; color: #e5e7eb; }
     button.danger { background: #7f1d1d; color: #fee2e2; }
     .check { display: flex; align-items: center; margin: 8px 0; }
-    .source-tier-group { margin: 18px 0 24px; padding: 14px; background: #111827; border: 1px solid #374151; border-radius: 12px; }
-    .source-tier-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid #374151; }
-    .source-tier-heading h3 { margin: 0 0 4px; color: #f8fafc; font-size: 16px; }
-    .source-tier-heading span { color: #94a3b8; }
-    .source-tier-rows { padding-top: 4px; }
-    .source-tier-add { margin-top: 4px; }
+    .subscription-group { margin: 18px 0 24px; padding: 16px; background: #111827; border: 1px solid #374151; border-radius: 12px; }
+    .subscription-group-heading { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #374151; }
+    .subscription-group-title { display: grid; flex: 1 1 260px; grid-template-columns: auto minmax(180px, 1fr); align-items: end; gap: 12px; color: #f8fafc; font-weight: 700; }
+    .subscription-group-title label { display: flex; flex-direction: column; gap: 6px; color: #aab4c5; font-size: 12px; font-weight: 400; }
+    .subscription-group-title input { min-height: 38px; }
+    .subscription-group-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .subscription-group-controls span { margin-right: 4px; color: #94a3b8; white-space: nowrap; }
+    .subscription-group-controls button { margin: 0; padding: 7px 10px; }
+    .subscription-group-enabled { margin: 0; padding: 6px 8px; color: #e5e7eb; background: #1f2937; border: 1px solid #4b5563; border-radius: 7px; white-space: nowrap; }
+    .subscription-group-permissions { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)); gap: 12px; margin: 14px 0 8px; }
+    .subscription-group-permissions fieldset { min-width: 0; margin: 0; padding: 8px 10px; border: 1px solid #374151; border-radius: 8px; }
+    .subscription-group-permissions legend { padding: 0 4px; color: #aab4c5; font-size: 12px; }
+    .subscription-group-permissions .check { margin: 5px 0; }
+    .subscription-group-hint { display: block; margin: 4px 0 12px; color: #94a3b8; }
+    .subscription-group-sources { padding-top: 4px; }
+    .subscription-group-add { margin-top: 4px; }
     .subscription-import-dialog { box-sizing: border-box; width: min(680px, calc(100% - 32px)); max-height: calc(100vh - 48px); padding: 24px; color: #e5e7eb; background: #1f2937; border: 1px solid #4b5563; border-radius: 14px; overflow-y: auto; }
     .subscription-import-dialog::backdrop { background: rgb(0 0 0 / 65%); }
     .subscription-import-dialog textarea { min-height: 180px; }
@@ -101,7 +111,7 @@
     button:disabled { cursor: default; opacity: .5; }
     .source-row { border: 1px solid #4b5563; border-radius: 10px; padding: 14px; margin: 10px 0; }
     .source-row-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #374151; }
-    .source-row-heading { display: grid; flex: 1 1 720px; min-width: 0; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.35fr) minmax(130px, .85fr); gap: 10px; }
+    .source-row-heading { display: grid; flex: 1 1 520px; min-width: 0; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.35fr); gap: 10px; }
     .source-row-heading .field { min-width: 0; }
     .source-row-heading label { display: flex; flex-direction: column; gap: 5px; color: #94a3b8; font-size: 12px; }
     .source-row-heading input, .source-row-heading select { min-height: 34px; padding: 7px 9px; }
@@ -336,6 +346,10 @@
        .distribution-grid { grid-template-columns: 1fr; }
        .user-admin-control-grid { grid-template-columns: 1fr; }
        .table-wrap { max-height: calc(100vh - 190px); }
+       .subscription-group-heading { align-items: stretch; flex-direction: column; }
+       .subscription-group-title { grid-template-columns: 1fr; }
+       .subscription-group-controls { justify-content: flex-start; }
+       .subscription-group-permissions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
        .source-row-header { align-items: flex-start; flex-direction: column; }
        .source-row-heading { width: 100%; grid-template-columns: 1fr; }
        .source-row-controls { width: 100%; justify-content: flex-start; }

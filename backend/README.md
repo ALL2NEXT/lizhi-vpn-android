@@ -54,9 +54,9 @@ Authorization: Bearer <ADMIN_TOKEN>
 
 TypeScript 迁移保持现有 API 路径、有效请求的响应字段、KV 状态格式和数据库 schema。JSON 请求字段先作为 `unknown` 读取，再由业务校验接受；非对象请求采用空对象进入原有字段校验，语法错误仍由现有异常处理返回。部署时仍指向 `backend/serverless.js`。
 
-## 订阅线路智能导入
+## 订阅分组与智能导入
 
-在订阅线路页面选择对应账户等级的「添加线路」，粘贴内容或从剪贴板、文件读取，再点击「识别并预览」。确认结果后添加到线路列表，可继续编辑名称、最低版本、缓存和自动重命名，点击「推送」才会保存并下发。
+在订阅分组页面创建分组，并为分组设置账号状态、账户类型和最低 App 版本权限。账号状态由封禁记录判断；账户类型根据是否绑定邮箱区分游客和正式用户。每个分组可包含多条订阅，点击「添加订阅」后可粘贴内容或从剪贴板、文件读取，再点击「识别并预览」。确认后添加到当前分组，可继续编辑订阅名称、缓存和自动重命名，点击「推送」保存并下发。
 
 识别规则移植自 Android 私人源导入：支持节点 URI、递归/换行/URL-safe Base64、Clash YAML、sing-box/Xray JSON，以及混合输入和多文档。配置字段中的 URL 和 Base64 凭据保持原义。远程 URL 去重后分别创建线路并保留地址；本地节点去重后合并成「导入内容」。节点保留 TLS、Reality 与原生传输参数，其他路由、规则集和选择组配置丢弃。
 
@@ -106,9 +106,9 @@ npx.cmd wrangler deploy
 
 新版本以 Chimera 的 KV 键保存后台数据，并兼容读取、同步旧 Firefly 键；加密订阅响应同时返回新旧客户端 IP 响应头，便于客户端逐步迁移。
 
-## 最低账户等级分组 Worker
+## 独立配置 Worker
 
-隔离部署配置位于 `wrangler.tiered.jsonc`，Worker 名称为 `chimera-tiered`，绑定独立的 `chimera-tiered-config` KV 与 `chimera-tiered-users` D1，不读取或覆盖现有 `chimera` Worker 的数据。后台订阅线路按最低账户等级分组展示；客户端接口仍返回兼容的平铺线路列表。
+隔离部署配置位于 `wrangler.tiered.jsonc`，Worker 名称为 `chimera-tiered`，绑定独立的 `chimera-tiered-config` KV 与 `chimera-tiered-users` D1，不读取或覆盖现有 `chimera` Worker 的数据。后台按订阅分组配置权限；客户端接口返回兼容的平铺订阅列表，并附带分组权限，订阅下载接口会再次校验账号状态、邮箱绑定类型和 App 版本。
 
 部署此项目：
 

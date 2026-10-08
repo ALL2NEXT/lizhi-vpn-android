@@ -1,42 +1,14 @@
-const SOURCE_ACCOUNT_TIERS = [
-  { id: 'banned', title: '被封禁账户' },
-  { id: 'guest', title: '游客' },
-  { id: 'formal', title: '正式用户' }
-];
-
-function ensureSourceTierGroups() {
-  const container = el('subscriptionRows');
-  if (container.querySelectorAll('.source-tier-group').length === SOURCE_ACCOUNT_TIERS.length) return;
-  container.innerHTML = '';
-  SOURCE_ACCOUNT_TIERS.forEach(function(tier) {
-    const group = document.createElement('section');
-    group.className = 'source-tier-group';
-    group.dataset.accountTier = tier.id;
-    group.innerHTML = '<div class="source-tier-heading"><div>' +
-      '<h3>' + esc(tier.title) + '</h3>' +
-      '</div>' +
-      '<span data-tier-count>0 条线路</span></div>' +
-      '<div class="source-tier-rows" data-tier-rows></div>' +
-      '<button class="secondary source-tier-add" type="button" data-add-source>添加线路</button>';
-    group.querySelector('[data-add-source]').addEventListener('click', function() {
-      openSubscriptionImport(tier.id);
-    });
-    container.appendChild(group);
-  });
-}
-
-function sourceTierRows(tier) {
-  return el('subscriptionRows')
-    .querySelector('.source-tier-group[data-account-tier="' + tier + '"] [data-tier-rows]');
-}
-
 function sourceOrder(row) {
   const order = Number(row.dataset.sourceOrder);
   return Number.isFinite(order) ? order : 0;
 }
 
-function insertSourceByOrder(row, tier) {
-  const container = sourceTierRows(tier);
+function getSubscriptionGroupRows() {
+  return Array.from(el('subscriptionRows').querySelectorAll(':scope > .subscription-group'));
+}
+
+function insertSourceByOrder(row, groupRow) {
+  const container = groupRow.querySelector('[data-group-sources]');
   if (!container) return;
   const nextRow = Array.from(container.children).find(function(candidate) {
     return candidate.classList.contains('source-row') && sourceOrder(candidate) > sourceOrder(row);
@@ -44,35 +16,107 @@ function insertSourceByOrder(row, tier) {
   container.insertBefore(row, nextRow || null);
 }
 
-// 管理界面按最低账户等级展示线路；保存时仍按原始线路顺序输出，避免无意更换线路 ID。
-function renderSubscriptionSources(sources) {
-  el('subscriptionRows').innerHTML = '';
-  ensureSourceTierGroups();
-  (Array.isArray(sources) ? sources : []).forEach(function(source, index) {
-    addSource(source, index);
+function renderSubscriptionGroups(groups) {
+  const container = el('subscriptionRows');
+  container.innerHTML = '';
+  (Array.isArray(groups) ? groups : []).forEach(function(group) {
+    const row = addSubscriptionGroup(group);
+    (Array.isArray(group.subscriptions) ? group.subscriptions : []).forEach(function(source, index) {
+      addSource(row, source, index);
+    });
   });
   updateSourceRowsMeta();
+  updateSubscriptionGroupControls();
 }
 
-function addSource(source, sourceOrderValue, tierOverride) {
+function addSubscriptionGroup(group) {
+  group = group || {};
+  const row = document.createElement('section');
+  row.className = 'subscription-group';
+  row.dataset.groupId = String(group.id || crypto.randomUUID());
+  const allowedStatuses = Array.isArray(group.allowedStatuses) ? group.allowedStatuses : ['normal'];
+  const allowedAccountTypes = Array.isArray(group.allowedAccountTypes)
+    ? group.allowedAccountTypes
+    : ['guest', 'formal'];
+  row.innerHTML = '<div class="subscription-group-heading">' +
+    '<div class="subscription-group-title"><span>订阅分组</span>' +
+      '<label>分组名称<input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label>' +
+    '</div>' +
+    '<div class="subscription-group-controls" role="group" aria-label="分组排序和删除操作">' +
+      '<span data-group-count>0 条订阅</span>' +
+      '<label class="check subscription-group-enabled"><input data-field="groupEnabled" type="checkbox" ' + (group.enabled === false ? '' : 'checked') + '>启用</label>' +
+      '<button class="secondary" type="button" data-action="group-up" aria-label="上移分组" title="上移分组">↑</button>' +
+      '<button class="secondary" type="button" data-action="group-down" aria-label="下移分组" title="下移分组">↓</button>' +
+      '<button class="danger" type="button" data-action="group-delete">删除分组</button>' +
+    '</div>' +
+  '</div>' +
+  '<div class="subscription-group-permissions">' +
+    '<fieldset><legend>账号状态</legend>' +
+      '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="normal" ' + (allowedStatuses.includes('normal') ? 'checked' : '') + '>正常</label>' +
+      '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="banned" ' + (allowedStatuses.includes('banned') ? 'checked' : '') + '>封禁</label>' +
+    '</fieldset>' +
+    '<fieldset><legend>账户类型</legend>' +
+      '<label class="check"><input data-field="allowedAccountTypes" type="checkbox" value="guest" ' + (allowedAccountTypes.includes('guest') ? 'checked' : '') + '>游客</label>' +
+      '<label class="check"><input data-field="allowedAccountTypes" type="checkbox" value="formal" ' + (allowedAccountTypes.includes('formal') ? 'checked' : '') + '>正式用户</label>' +
+    '</fieldset>' +
+    '<div class="field"><label>最低 App 版本<input data-field="minAppVersion" type="text" placeholder="留空不限制，例如 1.2.0"></label></div>' +
+  '</div>' +
+    '<small class="subscription-group-hint">账号状态依据封禁记录判断；账户类型依据是否绑定邮箱判断。两个权限维度必须同时满足。</small>' +
+  '<div class="subscription-group-sources" data-group-sources></div>' +
+  '<button class="secondary subscription-group-add" type="button" data-action="add-source">添加订阅</button>';
+  row.querySelector('[data-field="groupName"]').value = String(group.name || '');
+  row.querySelector('[data-field="minAppVersion"]').value = String(group.minAppVersion || '');
+  el('subscriptionRows').appendChild(row);
+  row.querySelector('[data-action="add-source"]').onclick = function() {
+    openSubscriptionImport(row);
+  };
+  row.querySelector('[data-action="group-up"]').onclick = function() {
+    moveSubscriptionGroup(row, -1);
+  };
+  row.querySelector('[data-action="group-down"]').onclick = function() {
+    moveSubscriptionGroup(row, 1);
+  };
+  row.querySelector('[data-action="group-delete"]').onclick = function() {
+    row.remove();
+    updateSubscriptionGroupControls();
+  };
+  updateSubscriptionGroupControls();
+  return row;
+}
+
+function moveSubscriptionGroup(row, direction) {
+  const groups = getSubscriptionGroupRows();
+  const index = groups.indexOf(row);
+  const target = groups[index + direction];
+  if (!target) return;
+  if (direction < 0) row.parentElement.insertBefore(row, target);
+  else row.parentElement.insertBefore(target, row);
+  updateSubscriptionGroupControls();
+}
+
+function updateSubscriptionGroupControls() {
+  const groups = getSubscriptionGroupRows();
+  groups.forEach(function(group, index) {
+    const up = group.querySelector('[data-action="group-up"]');
+    const down = group.querySelector('[data-action="group-down"]');
+    if (up) up.disabled = index === 0;
+    if (down) down.disabled = index === groups.length - 1;
+  });
+}
+
+function addSource(groupRow, source, sourceOrderValue) {
   source = source || {};
-  ensureSourceTierGroups();
   const row = document.createElement('div');
   row.className = 'source-row collapsed';
-  const existingOrders = getSourceRows().map(sourceOrder);
+  const existingOrders = Array.from(groupRow.querySelectorAll('.source-row')).map(sourceOrder);
   row.dataset.sourceOrder = Number.isFinite(Number(sourceOrderValue))
     ? String(Number(sourceOrderValue))
     : String(existingOrders.length ? Math.max.apply(null, existingOrders) + 1 : 0);
   const sourceType = source.content ? 'content' : 'url';
-  const minAccountType = tierOverride || (['banned', 'guest', 'formal'].includes(source.minAccountType)
-    ? source.minAccountType
-    : 'guest');
-  row.dataset.accountTier = minAccountType;
   row.innerHTML = '<div class="source-row-header">' +
     '<div class="source-row-heading">' +
       '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
       '<div class="field"><label>备注<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="仅后台保存"></label></div>' +
-      '<div class="field"><label>最低应用版本<input data-field="minAppVersion" type="text" value="' + esc(source.minAppVersion) + '" placeholder="留空不限制"></label></div>' +
     '</div>' +
     '<div class="source-row-controls" role="group" aria-label="线路启用、排序和折叠操作">' +
       '<label class="check source-enabled-check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用</label>' +
@@ -113,7 +157,7 @@ function addSource(source, sourceOrderValue, tierOverride) {
     moveSourceRow(row, 1);
   };
   updateSourceMode(row);
-  insertSourceByOrder(row, minAccountType);
+  insertSourceByOrder(row, groupRow);
   updateSourceRowsMeta();
   return row;
 }
@@ -121,14 +165,13 @@ function getSourceRows() {
   return Array.from(el('subscriptionRows').querySelectorAll('.source-row'));
 }
 function updateSourceRowsMeta() {
-  SOURCE_ACCOUNT_TIERS.forEach(function(tier) {
-    const container = sourceTierRows(tier.id);
-    if (!container) return;
+  getSubscriptionGroupRows().forEach(function(group) {
+    const container = group.querySelector('[data-group-sources]');
     const rows = Array.from(container.children).filter(function(row) {
       return row.classList.contains('source-row');
     });
-    const count = container.parentElement.querySelector('[data-tier-count]');
-    if (count) count.textContent = rows.length + ' 条线路';
+    const count = group.querySelector('[data-group-count]');
+    if (count) count.textContent = rows.length + ' 条订阅';
     rows.forEach(function(row, index) {
       const nameInput = row.querySelector('[data-field="name"]');
       const moveUp = row.querySelector('[data-action="move-up"]');
@@ -420,8 +463,10 @@ function validateWebNavigationGroups(groups) {
 
 function fillState(state) {
   currentState = state || {};
-  const subscriptions = Array.isArray(currentState.subscriptions) ? currentState.subscriptions : [];
-  renderSubscriptionSources(subscriptions);
+  const subscriptionGroups = Array.isArray(currentState.subscriptionGroups)
+    ? currentState.subscriptionGroups
+    : [];
+  renderSubscriptionGroups(subscriptionGroups);
   const settings = currentState.settings || {};
   el('webNavigationGroups').innerHTML = '';
   (Array.isArray(settings.webNavigationGroups) ? settings.webNavigationGroups : []).forEach(addWebNavigationGroup);
@@ -480,9 +525,12 @@ function updateDebugInterfaceUrl() {
 function renderDebugInterface() {
   const host = el('debugInterfaceSources');
   if (!host) return;
-  const sources = Array.isArray(currentState && currentState.subscriptions)
-    ? currentState.subscriptions
+  const groups = Array.isArray(currentState && currentState.subscriptionGroups)
+    ? currentState.subscriptionGroups
     : [];
+  const sources = groups.flatMap(function(group) {
+    return Array.isArray(group.subscriptions) ? group.subscriptions : [];
+  });
   const config = getDebugInterfaceConfig();
   const selected = new Set(config.subscriptionIds);
   if (!sources.length) {
@@ -527,10 +575,7 @@ async function copyDebugInterfaceUrl() {
     show('无法自动复制，请手动复制地址', true);
   }
 }
-function formState() {
-  const subscriptions = Array.from(document.querySelectorAll('.source-row'))
-    .sort(function(left, right) { return sourceOrder(left) - sourceOrder(right); })
-    .map(function(row, index) {
+function readSubscriptionSource(row, index) {
     const sourceType = row.querySelector('[data-field="sourceType"]').value;
     const url = row.querySelector('[data-field="url"]').value.trim();
     const content = row.querySelector('[data-field="content"]').value.trim();
@@ -538,8 +583,6 @@ function formState() {
       name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
       url: sourceType === 'url' ? url : '',
       enabled: row.querySelector('[data-field="enabled"]').checked,
-      minAccountType: row.dataset.accountTier,
-      minAppVersion: row.querySelector('[data-field="minAppVersion"]').value.trim(),
       cacheMinutes: sourceType === 'url'
         ? Number(row.querySelector('[data-field="cacheMinutes"]').value || 0)
         : 0,
@@ -547,7 +590,27 @@ function formState() {
       content: sourceType === 'content' ? content : '',
       remark: row.querySelector('[data-field="remark"]').value.trim()
     };
-  }).filter(function(item) { return item.url || item.content; });
+}
+function readSubscriptionGroups() {
+  return getSubscriptionGroupRows().map(function(group, groupIndex) {
+    const sources = Array.from(group.querySelectorAll('[data-group-sources] > .source-row'))
+      .map(readSubscriptionSource)
+      .filter(function(source) { return source.url || source.content; });
+    return {
+      id: group.dataset.groupId || String(groupIndex + 1),
+      name: group.querySelector('[data-field="groupName"]').value.trim() || '订阅分组' + (groupIndex + 1),
+      enabled: group.querySelector('[data-field="groupEnabled"]').checked,
+      allowedStatuses: Array.from(group.querySelectorAll('[data-field="allowedStatuses"]:checked'))
+        .map(function(input) { return input.value; }),
+      allowedAccountTypes: Array.from(group.querySelectorAll('[data-field="allowedAccountTypes"]:checked'))
+        .map(function(input) { return input.value; }),
+      minAppVersion: group.querySelector('[data-field="minAppVersion"]').value.trim(),
+      subscriptions: sources
+    };
+  });
+}
+function formState() {
+  const subscriptionGroups = readSubscriptionGroups();
   const notice = el('noticeEnabled').checked ? {
     hasNotice: true,
     title: value('noticeTitle'),
@@ -568,7 +631,7 @@ function formState() {
   debugConfig.subscriptionIds = Array.from(document.querySelectorAll('[data-debug-source-id]:checked'))
     .map(function(control) { return control.dataset.debugSourceId; });
   return {
-    subscriptions: subscriptions,
+    subscriptionGroups: subscriptionGroups,
     settings: {
       websiteUrl: value('websiteUrl'),
       webNavigationGroups: readWebNavigationGroups(),
@@ -668,7 +731,7 @@ async function pushSection(section) {
         })
       : currentState.settings;
   const state = {
-    subscriptions: section === 'subscriptions' ? form.subscriptions : currentState.subscriptions,
+    subscriptionGroups: section === 'subscriptions' ? form.subscriptionGroups : currentState.subscriptionGroups,
     settings: settings,
     notice: section === 'notice' ? form.notice : currentState.notice,
     appUpdate: section === 'about-page' || section === 'app-update' ? form.appUpdate : currentState.appUpdate

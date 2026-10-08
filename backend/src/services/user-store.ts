@@ -1,5 +1,12 @@
 import type { Env } from "../types/env.ts";
-import type { AccountType, DeviceProfile, PublicAccount, Settings, User } from "../types/models.ts";
+import type {
+  AccountType,
+  DeviceProfile,
+  PublicAccount,
+  Settings,
+  SubscriptionAccountStatus,
+  User,
+} from "../types/models.ts";
 import type { AccountRow, DeviceContextRow, TrafficFields, UserRow } from "../types/database.ts";
 
 import {
@@ -210,21 +217,30 @@ export async function readDeviceContextFromDb(db: D1Database, deviceId: string) 
   };
 }
 
-export async function resolveAccountAccess(env: Env, deviceId: string): Promise<{ accountType: AccountType; appVersion: string }> {
-  const identity = await resolveDeviceIdentity(env, deviceId);
-  if (!identity) return { accountType: "banned", appVersion: "" };
+export async function resolveAccountAccess(env: Env, deviceId: string): Promise<{
+  accountStatus: SubscriptionAccountStatus;
+  accountType: Exclude<AccountType, "banned">;
+  appVersion: string;
+  registered: boolean;
+}> {
+  // 读取原始设备状态，封禁账号仍需根据邮箱类型参与分组的 AND 权限判断。
+  const identity = await readDeviceContext(env, deviceId);
+  if (!identity || identity.userId <= 0) {
+    return { accountStatus: "banned", accountType: "guest", appVersion: "", registered: false };
+  }
   const db = await ensureUserSchema(env);
   const row = await db.prepare(
-    "SELECT u.status, u.email, COALESCE(d.app_version, '') AS app_version " +
-      "FROM users_mb u JOIN user_devices_mb d ON d.user_id = u.id " +
-      "WHERE u.id = ? AND d.device_id = ?",
-  ).bind(identity.userId, identity.deviceId).first<Pick<UserRow, "status" | "email"> & { app_version: string }>();
-  return row
-    ? {
-      accountType: accountTypeForUser(row),
-      appVersion: cleanText(row.app_version),
-    }
-    : { accountType: "banned", appVersion: "" };
+    "SELECT status, email FROM users_mb WHERE id = ?",
+  ).bind(identity.userId).first<Pick<UserRow, "status" | "email">>();
+  if (!row || !(row.status === "active" || row.status === "banned")) {
+    return { accountStatus: "banned", accountType: "guest", appVersion: "", registered: false };
+  }
+  return {
+    accountStatus: row.status === "banned" || identity.deviceBanned ? "banned" : "normal",
+    accountType: cleanText(row.email) ? "formal" : "guest",
+    appVersion: cleanText(identity.appVersion),
+    registered: true,
+  };
 }
 
 export async function readD1User(env: Env, userId: number, settings?: Settings) {

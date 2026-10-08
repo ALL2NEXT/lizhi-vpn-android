@@ -63,7 +63,10 @@ export function createAdminStateRoutes(deps: Pick<
       const incoming = await request.json();
       try {
         const next = normalizeState(incoming);
-        await validateAndWarmSubscriptionSources(env, next.subscriptions);
+        await validateAndWarmSubscriptionSources(
+          env,
+          next.subscriptionGroups.flatMap((group) => group.subscriptions),
+        );
         next.updatedAt = beijingTimestamp();
         await writeState(env, next);
         return json({ ok: true, state: next });

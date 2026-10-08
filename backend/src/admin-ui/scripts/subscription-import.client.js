@@ -1,4 +1,4 @@
-let subscriptionImportTier = 'guest';
+let subscriptionImportGroup = null;
 let subscriptionImportPreview = null;
 let subscriptionImportRequest = null;
 let subscriptionImportGeneration = 0;
@@ -22,13 +22,13 @@ function setSubscriptionImportBusy(busy) {
   el('subscriptionImportRecognize').textContent = busy ? '正在识别…' : '识别并预览';
 }
 
-function openSubscriptionImport(tier) {
+function openSubscriptionImport(groupRow) {
   resetSubscriptionImport();
-  subscriptionImportTier = tier;
+  subscriptionImportGroup = groupRow;
   el('subscriptionImportInput').value = '';
   el('subscriptionImportFile').value = '';
-  const group = SOURCE_ACCOUNT_TIERS.find(function(item) { return item.id === tier; });
-  el('subscriptionImportTier').textContent = '添加到：' + (group ? group.title : '游客');
+  const groupName = groupRow.querySelector('[data-field="groupName"]').value.trim() || '未命名分组';
+  el('subscriptionImportTier').textContent = '添加到订阅分组：' + groupName;
   el('subscriptionImportDialog').showModal();
   el('subscriptionImportInput').focus();
 }
@@ -77,7 +77,7 @@ el('subscriptionImportForm').onsubmit = async function(event) {
   try {
     const response = await fetch(adminApiUrl('/subscriptions/import'), {
       method: 'POST', headers: headers(), signal: subscriptionImportRequest.signal,
-      body: JSON.stringify({ input: input, minAccountType: subscriptionImportTier })
+      body: JSON.stringify({ input: input })
     });
     const result = await response.json();
     if (generation !== subscriptionImportGeneration || !el('subscriptionImportDialog').open) return;
@@ -121,7 +121,8 @@ el('subscriptionImportForm').onsubmit = async function(event) {
 el('subscriptionImportAdd').onclick = function() {
   if (!subscriptionImportPreview) return;
   const result = subscriptionImportPreview;
-  const rows = result.sources.map(function(source) { return addSource(source, undefined, subscriptionImportTier); });
+  if (!subscriptionImportGroup || !subscriptionImportGroup.isConnected) return;
+  const rows = result.sources.map(function(source) { return addSource(subscriptionImportGroup, source); });
   el('subscriptionImportDialog').close();
   if (rows.length === 1) toggleSourceRow(rows[0]);
   rows[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });

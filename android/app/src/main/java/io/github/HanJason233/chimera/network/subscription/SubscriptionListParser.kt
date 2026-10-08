@@ -67,14 +67,27 @@ class SubscriptionListParser {
         val minAccountType = normalizeSubscriptionAccountType(
             readString(source, "minAccountType", "requiredAccountType", "minimumAccountType")
         )
+        val allowedStatuses = readStringList(source, "allowedStatuses")
+        val allowedAccountTypes = readStringList(source, "allowedAccountTypes")
+        val minAppVersion = readString(source, "minAppVersion")?.trim().orEmpty()
         return SubscriptionSource(
             id = "",
             name = name,
             url = url,
             enabled = enabled,
             encrypted = encrypted,
-            minAccountType = minAccountType.ifBlank { DEFAULT_MIN_ACCOUNT_TYPE }
+            minAccountType = minAccountType.ifBlank { DEFAULT_MIN_ACCOUNT_TYPE },
+            allowedStatuses = allowedStatuses,
+            allowedAccountTypes = allowedAccountTypes,
+            minAppVersion = minAppVersion
         )
+    }
+
+    private fun readStringList(objectValue: JsonObject, key: String): List<String>? {
+        val element = objectValue.get(key)?.takeIf { it.isJsonArray } ?: return null
+        return element.asJsonArray.mapNotNull { item ->
+            item.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+        }
     }
 
     private fun readString(objectValue: JsonObject, vararg keys: String): String? {

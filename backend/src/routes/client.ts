@@ -1,5 +1,7 @@
 import type { Env } from "../types/env.ts";
 import type { RouteDependencies } from "../types/routes.ts";
+import type { SubscriptionGroup } from "../types/models.ts";
+import { subscriptionGroupAccessError } from "../domain/subscription-access.ts";
 
 /*
  * Client routes.
@@ -15,7 +17,6 @@ export function createClientRoutes(deps: Pick<
   RouteDependencies,
   | "CLIENT_IP_HEADER"
   | "LEGACY_CLIENT_IP_HEADER"
-  | "canAccessAccountType"
   | "resolveAccountAccess"
   | "beijingTimestamp"
   | "normalizeAccountId"
@@ -33,7 +34,6 @@ export function createClientRoutes(deps: Pick<
   const {
     CLIENT_IP_HEADER,
     LEGACY_CLIENT_IP_HEADER,
-    canAccessAccountType,
     resolveAccountAccess,
     beijingTimestamp,
     normalizeAccountId,
@@ -53,18 +53,23 @@ async function handleClient(request: Request, env: Env) {
   const requestUrl = new URL(request.url);
   const origin = requestUrl.origin;
   const state = await readState(env);
+  const groups = state.subscriptionGroups.filter((group) => group.enabled);
 
   return json({
-    subscriptions: state.subscriptions
+    subscriptions: groups.flatMap((group) => group.subscriptions
       .filter((source) => source.enabled)
       .map((source) => ({
         id: source.id,
         name: source.name,
         enabled: source.enabled,
         encrypted: true,
-        minAccountType: source.minAccountType,
+        // 保留旧客户端识别的最低等级，并给新客户端完整分组权限用于隐藏无权线路。
+        minAccountType: legacyMinimumAccountType(group),
+        allowedStatuses: group.allowedStatuses,
+        allowedAccountTypes: group.allowedAccountTypes,
+        minAppVersion: group.minAppVersion,
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
-      })),
+      }))),
     notice: visibleNotice(state.notice),
     appUpdate: state.appUpdate,
     settings: publicClientSettings(state.settings),
@@ -135,8 +140,10 @@ async function handleManagedSubscription(path: string, request: Request, env: En
   }
 
   const state = await readState(env);
-  const source = state.subscriptions.find((item) => item.id === id);
-  if (!source || !source.enabled || (!source.content && !source.url)) {
+  const group = state.subscriptionGroups.find((item) =>
+    item.subscriptions.some((source) => source.id === id));
+  const source = group?.subscriptions.find((item) => item.id === id);
+  if (!group || !group.enabled || !source || !source.enabled || (!source.content && !source.url)) {
     return json({ error: "subscription_not_found" }, 404);
   }
 
@@ -146,19 +153,22 @@ async function handleManagedSubscription(path: string, request: Request, env: En
     return json({ ok: false, error: "device_id_required" }, 401);
   }
   const access = await resolveAccountAccess(env, deviceId);
-  if (!canAccessAccountType(access.accountType, source.minAccountType)) {
+  const accessError = subscriptionGroupAccessError(group, access, isAppVersionAtLeast);
+  if (accessError === "account_access_denied") {
     return json({
       ok: false,
       error: "account_access_denied",
-      requiredAccountType: source.minAccountType,
+      requiredStatuses: group.allowedStatuses,
+      requiredAccountTypes: group.allowedAccountTypes,
+      accountStatus: access.accountStatus,
       accountType: access.accountType,
     }, 403);
   }
-  if (source.minAppVersion && !isAppVersionAtLeast(access.appVersion, source.minAppVersion)) {
+  if (accessError === "app_version_too_low") {
     return json({
       ok: false,
       error: "app_version_too_low",
-      requiredVersion: source.minAppVersion,
+      requiredVersion: group.minAppVersion,
       currentVersion: access.appVersion || null,
     }, 403);
   }
@@ -198,7 +208,7 @@ async function handleDebugSubscription(path: string, _request: Request, env: Env
   }
 
   const selectedIds = new Set(debugInterface.subscriptionIds);
-  const sources = state.subscriptions.filter((source) =>
+  const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions).filter((source) =>
     selectedIds.has(source.id) && (source.content || source.url));
   if (!sources.length) {
     return json({ error: "subscription_not_found" }, 404);
@@ -224,6 +234,17 @@ async function handleDebugSubscription(path: string, _request: Request, env: Env
       "cache-control": "no-store",
     },
   });
+}
+
+function legacyMinimumAccountType(group: SubscriptionGroup) {
+  if (group.allowedStatuses.includes("banned")) return "banned" as const;
+  if (
+    group.allowedAccountTypes.includes("formal") &&
+    !group.allowedAccountTypes.includes("guest")
+  ) {
+    return "formal" as const;
+  }
+  return "guest" as const;
 }
 
   return {

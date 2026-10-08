@@ -102,18 +102,23 @@ internal class SubscriptionDataLoader(
             return@coroutineScope false
         }
 
-        val accountType = account?.accountType
-            ?: accountManager.currentAccount()?.accountType
-            ?: ACCOUNT_TYPE_BANNED
+        val accountStatus = if (account?.accountType == ACCOUNT_TYPE_BANNED || account?.deviceBlocked == true) {
+            "banned"
+        } else {
+            "normal"
+        }
+        val accountType = if (account?.email?.isNotBlank() == true) "formal" else "guest"
         val accessibleSources = subscriptionList.sources.filter { source ->
-            source.canBeRequestedBy(accountType)
+            source.canBeRequestedBy(account, io.github.HanJason233.chimera.BuildConfig.VERSION_NAME)
         }
         val skippedSources = subscriptionList.sources - accessibleSources.toSet()
         if (skippedSources.isNotEmpty()) {
             Log.i(
                 TAG,
-                "Skipped inaccessible subscription sources for $accountType: " +
-                    skippedSources.joinToString { "${it.name}(min=${it.minAccountType})" }
+                "Skipped inaccessible subscription sources for $accountStatus/$accountType: " +
+                    skippedSources.joinToString {
+                        "${it.name}(statuses=${it.allowedStatuses}, types=${it.allowedAccountTypes}, minVersion=${it.minAppVersion})"
+                    }
             )
         }
         if (accessibleSources.isEmpty()) {
@@ -121,7 +126,7 @@ internal class SubscriptionDataLoader(
             lastFetchedNodes = emptyList()
             onNodesPersisted(emptyList())
             if (subscriptionList.sources.isNotEmpty()) {
-                onMessage("当前账户等级为$accountType，暂无可用线路")
+                onMessage("当前账号状态为$accountStatus、类型为$accountType，暂无可用线路")
             }
             return@coroutineScope true
         }

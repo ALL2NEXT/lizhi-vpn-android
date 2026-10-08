@@ -1,5 +1,6 @@
 export type AccountType = "banned" | "guest" | "formal";
 export type UserStatus = "active" | "banned";
+export type SubscriptionAccountStatus = "normal" | "banned";
 export type GrowthPeriod = "day" | "week" | "month";
 export type JsonObject = Record<string, unknown>;
 
@@ -8,12 +9,20 @@ export interface SubscriptionSource {
   name: string;
   url: string;
   enabled: boolean;
-  minAccountType: AccountType;
-  minAppVersion: string;
   cacheMinutes: number;
   autoRename: boolean;
   content: string;
   remark: string;
+}
+
+export interface SubscriptionGroup {
+  id: string;
+  name: string;
+  enabled: boolean;
+  allowedStatuses: SubscriptionAccountStatus[];
+  allowedAccountTypes: Exclude<AccountType, "banned">[];
+  minAppVersion: string;
+  subscriptions: SubscriptionSource[];
 }
 
 export interface Notice {
@@ -56,8 +65,8 @@ export interface Settings {
 }
 
 export interface AppState {
-  version: 1;
-  subscriptions: SubscriptionSource[];
+  version: 2;
+  subscriptionGroups: SubscriptionGroup[];
   notice: Notice | null;
   // App update metadata is passed through for client version compatibility.
   appUpdate: JsonObject | null;
@@ -86,6 +95,13 @@ export interface DeviceContext {
   androidVersion: string;
   androidSdk: number;
   appVersion: string;
+}
+
+export interface SubscriptionAccess {
+  accountStatus: SubscriptionAccountStatus;
+  accountType: Exclude<AccountType, "banned">;
+  appVersion: string;
+  registered: boolean;
 }
 
 export interface TrafficPeriod {

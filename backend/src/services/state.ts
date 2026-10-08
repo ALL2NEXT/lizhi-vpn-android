@@ -1,5 +1,15 @@
 import type { Env } from "../types/env.ts";
-import type { AppState, DebugInterface, JsonObject, NavigationGroup, Notice, Settings, SubscriptionSource } from "../types/models.ts";
+import type {
+  AppState,
+  DebugInterface,
+  JsonObject,
+  NavigationGroup,
+  Notice,
+  Settings,
+  SubscriptionAccountStatus,
+  SubscriptionGroup,
+  SubscriptionSource,
+} from "../types/models.ts";
 
 import { DEFAULT_STATE, LEGACY_STATE_KEY, STATE_KEY } from "../config.ts";
 import { normalizeAccountType } from "../domain/account.ts";
@@ -12,6 +22,56 @@ import {
 } from "./subscriptions.ts";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SUBSCRIPTION_STATUSES: SubscriptionAccountStatus[] = ["normal", "banned"];
+const SUBSCRIPTION_ACCOUNT_TYPES = ["guest", "formal"] as const;
+
+function normalizeSelection<T extends string>(value: unknown, allowed: readonly T[], fallback: T[]): T[] {
+  const input = Array.isArray(value) ? value : fallback;
+  return Array.from(new Set(input.filter((item): item is T =>
+    typeof item === "string" && allowed.includes(item as T))));
+}
+
+function normalizeSubscriptionSource(item: JsonObject, id: number): SubscriptionSource | null {
+  const content = normalizeManagedContent(
+    item.content ?? item.managedContent ?? item.nodesText,
+  );
+  const externalUrl = typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
+    ? item.url.trim()
+    : "";
+  if (!content && !externalUrl) return null;
+  return {
+    id: String(id),
+    name: cleanText(item.name || item.title) || `线路${id}`,
+    url: content ? "" : externalUrl,
+    enabled: parseFlag(item.enabled, true),
+    cacheMinutes: normalizeSubscriptionCacheMinutes(item.cacheMinutes),
+    // 自动重命名只对外部订阅生效。
+    autoRename: !content && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
+    content,
+    remark: cleanText(item.remark || item.note).slice(0, 500),
+  };
+}
+
+function normalizeSubscriptionGroup(
+  input: JsonObject,
+  index: number,
+  nextSourceId: () => number,
+): SubscriptionGroup {
+  const rawSources = input.subscriptions ?? input.sources;
+  const sources = (Array.isArray(rawSources) ? rawSources : [])
+    .filter(plainObject)
+    .map((item) => normalizeSubscriptionSource(item, nextSourceId()))
+    .filter((item): item is SubscriptionSource => item !== null);
+  return {
+    id: cleanText(input.id).slice(0, 80) || String(index + 1),
+    name: cleanText(input.name || input.title).slice(0, 80) || `订阅分组${index + 1}`,
+    enabled: parseFlag(input.enabled, true),
+    allowedStatuses: normalizeSelection(input.allowedStatuses, SUBSCRIPTION_STATUSES, ["normal"]),
+    allowedAccountTypes: normalizeSelection(input.allowedAccountTypes, SUBSCRIPTION_ACCOUNT_TYPES, ["guest", "formal"]),
+    minAppVersion: normalizeMinimumAppVersion(input.minAppVersion ?? input.minimumAppVersion),
+    subscriptions: sources,
+  };
+}
 
 function randomDebugInterfaceToken() {
   return crypto.randomUUID();
@@ -65,56 +125,44 @@ export async function writeState(env: Env, state: AppState) {
 
 export function normalizeState(input: unknown): AppState {
   const value = plainObject(input) ? input : {};
-  const list: unknown[] = Array.isArray(value.subscriptions)
-    ? value.subscriptions
-    : Array.isArray(value.sources)
-      ? value.sources
-      : [];
-
-  const subscriptions = list
-    .filter(plainObject)
-    .map((item) => {
-      const content = normalizeManagedContent(
-        item.content ?? item.managedContent ?? item.nodesText,
-      );
-      const externalUrl = typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
-        ? item.url.trim()
-        : "";
-      return {
-        url: content ? "" : externalUrl,
-        name: cleanText(item.name || item.title),
-        enabled: parseFlag(item.enabled, true),
-        minAccountType: normalizeAccountType(
+  let sourceId = 0;
+  const nextSourceId = () => ++sourceId;
+  const storedGroups = Array.isArray(value.subscriptionGroups)
+    ? value.subscriptionGroups
+    : [];
+  const subscriptionGroups: SubscriptionGroup[] = storedGroups.length
+    ? storedGroups
+      .filter(plainObject)
+      .map((group, index) => normalizeSubscriptionGroup(group, index, nextSourceId))
+    : (Array.isArray(value.subscriptions)
+      ? value.subscriptions
+      : Array.isArray(value.sources)
+        ? value.sources
+        : [])
+      .filter(plainObject)
+      .flatMap((item, index) => {
+        const source = normalizeSubscriptionSource(item, nextSourceId());
+        if (!source) return [];
+        // 旧版每条线路独立配置最低等级和版本，迁移时各自成为一个可编辑分组。
+        const minimumType = normalizeAccountType(
           item.minAccountType ?? item.requiredAccountType ?? item.minimumAccountType,
           "guest",
-        ),
-        minAppVersion: normalizeMinimumAppVersion(
-          item.minAppVersion ?? item.minimumAppVersion,
-        ),
-        cacheMinutes: normalizeSubscriptionCacheMinutes(item.cacheMinutes),
-        // 只有外部订阅允许在 Worker 转发前自动重命名节点。
-        autoRename: !content && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
-        content,
-        remark: cleanText(item.remark || item.note).slice(0, 500),
-      };
-    })
-    .filter((item) => item.url || item.content)
-    .map((item, index) => ({
-      id: String(index + 1),
-      name: item.name || `线路${index + 1}`,
-      url: item.url,
-      enabled: item.enabled,
-      minAccountType: item.minAccountType,
-      minAppVersion: item.minAppVersion,
-      cacheMinutes: item.cacheMinutes,
-      autoRename: item.autoRename,
-      content: item.content,
-      remark: item.remark,
-    }));
+        );
+        return [{
+          id: String(index + 1),
+          name: cleanText(item.groupName || item.name || item.title) || `订阅分组${index + 1}`,
+          enabled: true,
+          allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
+          allowedAccountTypes: minimumType === "formal" ? ["formal"] : ["guest", "formal"],
+          minAppVersion: normalizeMinimumAppVersion(item.minAppVersion ?? item.minimumAppVersion),
+          subscriptions: [source],
+        }];
+      });
+  const subscriptions = subscriptionGroups.flatMap((group) => group.subscriptions);
 
   return {
-    version: 1,
-    subscriptions,
+    version: 2,
+    subscriptionGroups,
     notice: normalizeNotice(value.notice),
     appUpdate: plainObject(value.appUpdate) ? value.appUpdate : null,
     settings: normalizeSettings(value.settings, subscriptions),

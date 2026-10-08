@@ -3,7 +3,12 @@ import { DEFAULT_SUBSCRIPTION_CACHE_MINUTES } from "../config.ts";
 import { detectSubscriptionInput, toStandardUris } from "../domain/subscription-import/index.ts";
 import { fetchExternalSubscription, normalizeManagedContent } from "./subscriptions.ts";
 
-export interface ImportedSubscription extends Omit<SubscriptionSource, "id"> { nodeCount: number }
+export interface ImportedSubscription extends Omit<SubscriptionSource, "id"> {
+  nodeCount: number;
+  /** 兼容旧版管理端的预览字段；持久化时由订阅分组负责权限。 */
+  minAccountType: AccountType;
+  minAppVersion: string;
+}
 export interface SubscriptionImportResult {
   sources: ImportedSubscription[];
   failedSources: { url: string; error: string }[];

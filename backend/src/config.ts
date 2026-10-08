@@ -289,8 +289,8 @@ export function resolveAdminBasePath(value: unknown): string | null {
 }
 
 export const DEFAULT_STATE: AppState = {
-  version: 1,
-  subscriptions: [],
+  version: 2,
+  subscriptionGroups: [],
   notice: null,
   appUpdate: null,
   settings: {
