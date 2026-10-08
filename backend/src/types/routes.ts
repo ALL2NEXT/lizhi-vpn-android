@@ -18,6 +18,7 @@ export interface RouteDependencies {
   normalizeAccountId: typeof account.normalizeAccountId;
   isAppVersionAtLeast: typeof subscriptions.isAppVersionAtLeast;
   readExternalSubscription: typeof subscriptions.readExternalSubscription;
+  readExternalSubscriptionTraffic: typeof subscriptions.readExternalSubscriptionTraffic;
   autoRenameSubscriptionContent: typeof subscriptions.autoRenameSubscriptionContent;
   protectSubscription: typeof subscriptions.protectSubscription;
   getClientIp: typeof subscriptions.getClientIp;

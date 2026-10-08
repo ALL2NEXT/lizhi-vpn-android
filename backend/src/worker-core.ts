@@ -51,6 +51,7 @@ import {
   isAppVersionAtLeast,
   protectSubscription,
   readExternalSubscription,
+  readExternalSubscriptionTraffic,
   validateAndWarmSubscriptionSources,
 } from "./services/subscriptions.ts";
 import {
@@ -92,6 +93,7 @@ const routeDeps = {
   normalizeAccountId,
   isAppVersionAtLeast,
   readExternalSubscription,
+  readExternalSubscriptionTraffic,
   autoRenameSubscriptionContent,
   protectSubscription,
   getClientIp,

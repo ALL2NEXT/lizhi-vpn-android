@@ -15,6 +15,7 @@ export function createAdminStateRoutes(deps: Pick<
   | "json"
   | "normalizeState"
   | "readState"
+  | "readExternalSubscriptionTraffic"
   | "validateAndWarmSubscriptionSources"
   | "writeState"
 >) {
@@ -23,6 +24,7 @@ export function createAdminStateRoutes(deps: Pick<
     json,
     normalizeState,
     readState,
+    readExternalSubscriptionTraffic,
     validateAndWarmSubscriptionSources,
     writeState,
   } = deps;
@@ -55,6 +57,34 @@ export function createAdminStateRoutes(deps: Pick<
       }
     }
 
+    if (path === "/api/subscriptions/traffic" && request.method === "GET") {
+      const state = await readState(env);
+      const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions.map((source) => ({
+        source,
+        cacheMinutes: group.cacheMinutes,
+      })));
+      const items = sources.map((source) => ({
+        id: source.source.id,
+        traffic: null as Awaited<ReturnType<typeof readExternalSubscriptionTraffic>>,
+        unavailable: false,
+      }));
+      const activeSources = sources
+        .map((source, index) => ({ source, item: items[index] }))
+        .filter(({ source }) => source.source.url && source.source.enabled !== false);
+
+      for (let index = 0; index < activeSources.length; index += 4) {
+        await Promise.all(activeSources.slice(index, index + 4).map(async ({ source, item }) => {
+          try {
+            item.traffic = await readExternalSubscriptionTraffic(env, source.source, source.cacheMinutes);
+          } catch {
+            item.unavailable = true;
+          }
+        }));
+      }
+
+      return json({ ok: true, items });
+    }
+
     if (path === "/api/state" && request.method === "GET") {
       return json(await readState(env));
     }
@@ -65,7 +95,7 @@ export function createAdminStateRoutes(deps: Pick<
         const next = normalizeState(incoming);
         await validateAndWarmSubscriptionSources(
           env,
-          next.subscriptionGroups.flatMap((group) => group.subscriptions),
+          next.subscriptionGroups,
         );
         next.updatedAt = beijingTimestamp();
         await writeState(env, next);

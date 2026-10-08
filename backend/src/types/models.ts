@@ -9,10 +9,13 @@ export interface SubscriptionSource {
   name: string;
   url: string;
   enabled: boolean;
-  cacheMinutes: number;
   autoRename: boolean;
   content: string;
   remark: string;
+  iconMode: "DEFAULT" | "AUTO_REMOTE" | "CUSTOM_REMOTE" | "LOCAL";
+  customIconUrl: string;
+  iconBase64: string;
+  iconMimeType: string;
 }
 
 export interface SubscriptionGroup {
@@ -21,6 +24,7 @@ export interface SubscriptionGroup {
   enabled: boolean;
   allowedStatuses: SubscriptionAccountStatus[];
   allowedAccountTypes: Exclude<AccountType, "banned">[];
+  cacheMinutes: number;
   minAppVersion: string;
   maxAppVersion: string;
   subscriptions: SubscriptionSource[];

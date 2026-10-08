@@ -185,7 +185,7 @@ async function handleManagedSubscription(path: string, request: Request, env: En
   }
 
   const clientIp = getClientIp(request);
-  const fetchedContent = source.content || await readExternalSubscription(env, source);
+  const fetchedContent = source.content || await readExternalSubscription(env, source, group.cacheMinutes);
   // 纯文本节点由后台直接维护，自动重命名只对外部接口生效。
   const plaintextContent = source.autoRename && !source.content
     ? autoRenameSubscriptionContent(fetchedContent)
@@ -219,16 +219,17 @@ async function handleDebugSubscription(path: string, _request: Request, env: Env
   }
 
   const selectedIds = new Set(debugInterface.subscriptionIds);
-  const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions).filter((source) =>
-    selectedIds.has(source.id) && (source.content || source.url));
+  const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions
+    .filter((source) => selectedIds.has(source.id) && (source.content || source.url))
+    .map((source) => ({ source, cacheMinutes: group.cacheMinutes })));
   if (!sources.length) {
     return json({ error: "subscription_not_found" }, 404);
   }
 
   let responseContent;
   try {
-    const contents = await Promise.all(sources.map(async (source) => {
-      const fetchedContent = source.content || await readExternalSubscription(env, source);
+    const contents = await Promise.all(sources.map(async ({ source, cacheMinutes }) => {
+      const fetchedContent = source.content || await readExternalSubscription(env, source, cacheMinutes);
       return source.autoRename && !source.content
         ? autoRenameSubscriptionContent(fetchedContent)
         : fetchedContent;

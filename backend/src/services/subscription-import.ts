@@ -1,5 +1,4 @@
 import type { AccountType, SubscriptionSource } from "../types/models.ts";
-import { DEFAULT_SUBSCRIPTION_CACHE_MINUTES } from "../config.ts";
 import { detectSubscriptionInput, toStandardUris } from "../domain/subscription-import/index.ts";
 import { fetchExternalSubscription, normalizeManagedContent } from "./subscriptions.ts";
 
@@ -23,7 +22,7 @@ export async function importSubscriptionSources(input: unknown, accountType: unk
   const source = (name: string, url: string, localContent: string, nodeCount: number): ImportedSubscription => ({
     name, url, content: localContent, nodeCount, minAccountType, enabled: true,
     minAppVersion: "", remark: "", autoRename: false,
-    cacheMinutes: url ? DEFAULT_SUBSCRIPTION_CACHE_MINUTES : 0,
+    iconMode: "AUTO_REMOTE", customIconUrl: "", iconBase64: "", iconMimeType: "",
   });
   if (!content) return { sources: [source("新建线路", "", "", 0)], failedSources: [], nodeCount: 0 };
   const { urls, local } = detectSubscriptionInput(content);

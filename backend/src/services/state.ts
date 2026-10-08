@@ -25,6 +25,24 @@ import {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SUBSCRIPTION_STATUSES: SubscriptionAccountStatus[] = ["normal", "banned"];
 const SUBSCRIPTION_ACCOUNT_TYPES = ["guest", "formal"] as const;
+const SUBSCRIPTION_ICON_MODES = ["DEFAULT", "AUTO_REMOTE", "CUSTOM_REMOTE", "LOCAL"] as const;
+const SUBSCRIPTION_ICON_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+] as const;
+
+function normalizeSubscriptionIconUrl(value: unknown) {
+  if (typeof value !== "string" || value.length > 2048) return "";
+  try {
+    const url = new URL(value.trim());
+    if (!(["http:", "https:"].includes(url.protocol)) || url.username || url.password) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
 
 function normalizeSelection<T extends string>(value: unknown, allowed: readonly T[], fallback: T[]): T[] {
   const input = Array.isArray(value) ? value : fallback;
@@ -40,16 +58,33 @@ function normalizeSubscriptionSource(item: JsonObject, id: number): Subscription
     ? item.url.trim()
     : "";
   if (!content && !externalUrl) return null;
+  const iconMode = typeof item.iconMode === "string" &&
+      SUBSCRIPTION_ICON_MODES.includes(item.iconMode as (typeof SUBSCRIPTION_ICON_MODES)[number])
+    ? item.iconMode as SubscriptionSource["iconMode"]
+    : "AUTO_REMOTE";
+  const customIconUrl = normalizeSubscriptionIconUrl(item.customIconUrl);
+  const candidateIconBase64 = typeof item.iconBase64 === "string" ? item.iconBase64 : "";
+  const iconMimeType = typeof item.iconMimeType === "string" &&
+      SUBSCRIPTION_ICON_MIME_TYPES.includes(item.iconMimeType as (typeof SUBSCRIPTION_ICON_MIME_TYPES)[number])
+    ? item.iconMimeType
+    : "";
+  const iconBase64 = candidateIconBase64.length <= 180_000 &&
+      /^[A-Za-z0-9+/]*={0,2}$/.test(candidateIconBase64)
+    ? candidateIconBase64
+    : "";
   return {
     id: String(id),
     name: cleanText(item.name || item.title) || `线路${id}`,
     url: content ? "" : externalUrl,
     enabled: parseFlag(item.enabled, true),
-    cacheMinutes: normalizeSubscriptionCacheMinutes(item.cacheMinutes),
     // 自动重命名只对外部订阅生效。
     autoRename: !content && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
     content,
     remark: cleanText(item.remark || item.note).slice(0, 500),
+    iconMode,
+    customIconUrl,
+    iconBase64: iconMimeType ? iconBase64 : "",
+    iconMimeType: iconBase64 ? iconMimeType : "",
   };
 }
 
@@ -59,10 +94,15 @@ function normalizeSubscriptionGroup(
   nextSourceId: () => number,
 ): SubscriptionGroup {
   const rawSources = input.subscriptions ?? input.sources;
-  const sources = (Array.isArray(rawSources) ? rawSources : [])
-    .filter(plainObject)
+  const sourceInputs = (Array.isArray(rawSources) ? rawSources : []).filter(plainObject);
+  const sources = sourceInputs
     .map((item) => normalizeSubscriptionSource(item, nextSourceId()))
     .filter((item): item is SubscriptionSource => item !== null);
+  // 旧配置把缓存时间存在订阅行；迁移时采用组内第一条外部订阅的旧值。
+  const legacyCacheMinutes = sourceInputs.find((item) =>
+    typeof item.url === "string" && item.url.trim() && !item.content &&
+    item.cacheMinutes !== undefined && item.cacheMinutes !== null && item.cacheMinutes !== "")?.cacheMinutes;
+  const cacheMinutes = normalizeSubscriptionCacheMinutes(input.cacheMinutes ?? legacyCacheMinutes);
   const minAppVersion = normalizeMinimumAppVersion(input.minAppVersion ?? input.minimumAppVersion);
   const maxAppVersion = normalizeMinimumAppVersion(input.maxAppVersion ?? input.maximumAppVersion);
   if (minAppVersion && maxAppVersion && !isAppVersionAtLeast(maxAppVersion, minAppVersion)) {
@@ -74,6 +114,7 @@ function normalizeSubscriptionGroup(
     enabled: parseFlag(input.enabled, true),
     allowedStatuses: normalizeSelection(input.allowedStatuses, SUBSCRIPTION_STATUSES, ["normal"]),
     allowedAccountTypes: normalizeSelection(input.allowedAccountTypes, SUBSCRIPTION_ACCOUNT_TYPES, ["guest", "formal"]),
+    cacheMinutes,
     minAppVersion,
     maxAppVersion,
     subscriptions: sources,
@@ -161,11 +202,18 @@ export function normalizeState(input: unknown): AppState {
           enabled: true,
           allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
           allowedAccountTypes: minimumType === "formal" ? ["formal"] : ["guest", "formal"],
+          cacheMinutes: normalizeSubscriptionCacheMinutes(source.url ? item.cacheMinutes : undefined),
           minAppVersion: normalizeMinimumAppVersion(item.minAppVersion ?? item.minimumAppVersion),
           maxAppVersion: "",
           subscriptions: [source],
         }];
       });
+  const subscriptionIconBytes = subscriptionGroups
+    .flatMap((group) => group.subscriptions)
+    .reduce((total, source) => total + source.iconBase64.length, 0);
+  if (subscriptionIconBytes > 4 * 1024 * 1024) {
+    throw new Error("subscription_icons_too_large");
+  }
   const subscriptions = subscriptionGroups.flatMap((group) => group.subscriptions);
 
   return {
