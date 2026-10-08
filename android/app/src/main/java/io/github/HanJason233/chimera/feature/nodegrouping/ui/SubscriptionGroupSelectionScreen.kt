@@ -48,6 +48,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -509,18 +510,6 @@ private fun SubscriptionGroupSelectionScreen(
                     }
                 )
             }
-            IconButton(
-                onClick = {
-                    subscriptionInput = ""
-                    importStatus = null
-                    addDialogVisible = true
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "添加私人源"
-                )
-            }
         },
         contentPadding = PaddingValues(
             start = 20.dp,
@@ -535,7 +524,7 @@ private fun SubscriptionGroupSelectionScreen(
                 subscriptionGroups.isNotEmpty() || userGroups.isNotEmpty() ->
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = bottomContentPadding),
+                        contentPadding = PaddingValues(bottom = bottomContentPadding + 72.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (subscriptionGroups.isNotEmpty()) {
@@ -631,6 +620,24 @@ private fun SubscriptionGroupSelectionScreen(
                     )
                 }
             }
+
+            ExtendedFloatingActionButton(
+                onClick = {
+                    subscriptionInput = ""
+                    importStatus = null
+                    addDialogVisible = true
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 4.dp, bottom = bottomContentPadding),
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null
+                    )
+                },
+                text = { Text("智能导入") }
+            )
         }
     }
 
