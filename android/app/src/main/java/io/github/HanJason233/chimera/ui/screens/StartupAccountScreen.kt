@@ -1,13 +1,18 @@
 package io.github.HanJason233.chimera.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -26,19 +31,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import io.github.HanJason233.chimera.data.model.BackendAppSettings
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun StartupAccountDialog(
+fun StartupAccountScreen(
     backendSettings: BackendAppSettings,
     isBusy: Boolean,
     message: String?,
@@ -65,39 +69,43 @@ fun StartupAccountDialog(
         validEmail && validPassword
     }
 
-    Dialog(
-        onDismissRequest = {},
-        properties = DialogProperties(
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false
-        )
+    BackHandler(enabled = true) { }
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .imePadding()
+            .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
         Surface(
             modifier = Modifier
+                .align(Alignment.Center)
                 .fillMaxWidth()
-                .widthIn(max = 460.dp)
-                .heightIn(max = 680.dp),
+                .widthIn(max = 480.dp)
+                .heightIn(max = maxHeight)
+                .verticalScroll(rememberScrollState()),
             shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .widthIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(28.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = "欢迎使用 Chimera",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "请登录或注册，也可以使用游客身份继续。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 14.sp
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "欢迎使用 Chimera",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "登录或注册账户，也可以先以游客身份继续使用。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp
+                    )
+                }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
@@ -128,7 +136,7 @@ fun StartupAccountDialog(
                     value = password,
                     onValueChange = { password = it.take(128) },
                     label = { Text("密码") },
-                    supportingText = { Text("8～128 个字符") },
+                    supportingText = { Text("密码需为 8 到 128 个字符") },
                     singleLine = true,
                     enabled = !isBusy,
                     visualTransformation = PasswordVisualTransformation(),
@@ -166,7 +174,7 @@ fun StartupAccountDialog(
                     )
                     if (!backendSettings.registrationEnabled) {
                         Text(
-                            text = "暂未开放正式注册，你仍可选择游客登录。",
+                            text = "暂未开放正式注册，你仍可以选择游客登录。",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp
                         )
@@ -201,17 +209,13 @@ fun StartupAccountDialog(
                     Text(if (isBusy) "正在处理…" else if (isRegistration) "注册并登录" else "登录")
                 }
 
-                if (isRegistration) {
-                    OutlinedButton(
-                        onClick = onGuestLogin,
-                        enabled = !isBusy,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (isBusy) "正在登录…" else "游客登录")
-                    }
+                OutlinedButton(
+                    onClick = onGuestLogin,
+                    enabled = !isBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (isBusy) "正在登录…" else "以游客身份继续")
                 }
-
-                Spacer(modifier = Modifier.height(2.dp))
             }
         }
     }

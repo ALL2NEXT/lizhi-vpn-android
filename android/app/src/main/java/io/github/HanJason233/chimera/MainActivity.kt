@@ -54,7 +54,7 @@ import io.github.HanJason233.chimera.ui.screens.CoreRoutingScreen
 import io.github.HanJason233.chimera.ui.screens.QrScannerScreen
 import io.github.HanJason233.chimera.ui.screens.SkinScreen
 import io.github.HanJason233.chimera.ui.screens.SkinSchemeEditorScreen
-import io.github.HanJason233.chimera.ui.screens.StartupAccountDialog
+import io.github.HanJason233.chimera.ui.screens.StartupAccountScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemeEditorScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemesScreen
 import io.github.HanJason233.chimera.ui.screens.WebNavigationScreen
@@ -195,7 +195,8 @@ class MainActivity : ComponentActivity() {
                                     onComplete(success)
                                 }
                             }
-                        NavHost(
+                        // 完成启动认证后再创建主导航，未登录时单独显示账号界面。
+                        if (startupAccountAuthenticated) NavHost(
                             navController = navController,
                             startDestination = AppRoute.MAIN,
                             enterTransition = {
@@ -484,9 +485,8 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                        }
-                        if (!startupAccountAuthenticated) {
-                            StartupAccountDialog(
+                        } else {
+                            StartupAccountScreen(
                                 backendSettings = backendSettings,
                                 isBusy = isStartupAccountActionInProgress,
                                 message = accountMessage,
