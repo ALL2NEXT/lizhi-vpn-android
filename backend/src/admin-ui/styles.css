@@ -35,6 +35,12 @@
      .dashboard-heading h2 { margin-bottom: 6px; }
      .dashboard-heading p { margin: 0; }
      .dashboard-heading button { flex: 0 0 auto; margin: 0; }
+    .subscription-page-heading { flex-wrap: wrap; gap: 20px; }
+    .subscription-page-save { display: grid; flex: 0 0 auto; justify-items: end; gap: 8px; }
+    .subscription-page-save-status { color: var(--ink-muted); font-size: 13px; }
+    .subscription-page-save-status.error { color: var(--red); }
+    .subscription-page-save-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .subscription-page-save-actions button { margin: 0; }
      .growth-card { margin-bottom: 14px; padding: 18px; background: #ffffff; border: 1px solid #dadce0; border-radius: 14px; }
      .growth-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
      .growth-toolbar h3 { margin: 0 0 4px; color: #202124; font-size: 16px; }
@@ -87,10 +93,13 @@
     .subscription-group-title { display: grid; flex: 1 1 260px; grid-template-columns: auto minmax(180px, 1fr); align-items: end; gap: 12px; color: #202124; font-weight: 700; }
     .subscription-group-title label { display: flex; flex-direction: column; gap: 6px; color: #5f6368; font-size: 12px; font-weight: 400; }
     .subscription-group-title input { min-height: 38px; }
+    .subscription-group-leading-controls { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+    .subscription-group-leading-controls button { margin: 0; padding: 7px 10px; }
     .subscription-group-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
     .subscription-group-controls span { margin-right: 4px; color: #5f6368; white-space: nowrap; }
     .subscription-group-controls button { margin: 0; padding: 7px 10px; }
-    .subscription-group-enabled { margin: 0; padding: 6px 8px; color: #202124; background: #ffffff; border: 1px solid #dadce0; border-radius: 7px; white-space: nowrap; }
+    .subscription-group-enabled, .source-enabled-check { box-sizing: border-box; min-height: 32px; margin: 0; padding: 7px 10px; color: #3c4043; background: var(--surface-soft); border: 1px solid transparent; border-radius: 8px; font-weight: 500; white-space: nowrap; }
+    .subscription-group-enabled:hover, .source-enabled-check:hover { color: var(--blue-ink); background: #dfe7f0; cursor: pointer; }
     .subscription-group-permissions { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 6px; }
     .subscription-group-permissions fieldset { min-width: 0; margin: 0; padding: 6px 10px; border: 1px solid #dadce0; border-radius: 8px; }
     .subscription-group-permissions legend { padding: 0 4px; color: #5f6368; font-size: 12px; }
@@ -101,8 +110,17 @@
     .subscription-version-range label { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px; color: #5f6368; font-size: 12px; }
     .subscription-version-range input { min-height: 34px; padding: 7px 9px; }
     .subscription-version-range > span { color: #5f6368; }
+    /* 分组权限集中在同一个弹窗里编辑，卡片上只保留权限摘要。 */
+    .subscription-permissions-dialog { box-sizing: border-box; width: min(620px, calc(100% - 32px)); max-height: calc(100vh - 48px); margin: auto; padding: 24px; overflow-y: auto; color: #202124; background: #ffffff; border: 1px solid #dadce0; border-radius: 14px; }
+    .subscription-permissions-dialog::backdrop { background: rgb(0 0 0 / 65%); }
+    .subscription-permissions-dialog .subscription-group-permissions { margin: 0; }
+    .subscription-permissions-dialog .subscription-group-permissions fieldset { padding: 12px; }
+    .subscription-permissions-dialog .subscription-group-permissions .check { margin-top: 8px; margin-bottom: 4px; }
+    .subscription-permissions-dialog .subscription-permissions-dialog-actions { justify-content: space-between; }
     .subscription-group-sources { padding-top: 2px; }
     .subscription-group-add { margin-top: 2px; }
+    .subscription-group-add-row { position: fixed; right: 32px; bottom: 32px; z-index: 30; display: flex; }
+    .subscription-group-add-row button { margin: 0; padding: 13px 20px; border-radius: 999px; box-shadow: 0 8px 24px rgb(26 115 232 / 28%); }
     .subscription-import-dialog { box-sizing: border-box; width: min(680px, calc(100% - 32px)); max-height: calc(100vh - 48px); padding: 24px; color: #202124; background: #ffffff; border: 1px solid #dadce0; border-radius: 14px; overflow-y: auto; }
     .subscription-import-dialog::backdrop { background: rgb(0 0 0 / 65%); }
     .subscription-import-dialog textarea { min-height: 180px; }
@@ -116,6 +134,8 @@
     button:disabled { cursor: default; opacity: .5; }
     .source-row { border: 1px solid #dadce0; border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
     .source-row-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #dadce0; }
+    .source-row-leading-controls { display: flex; flex: 0 0 auto; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .source-row-leading-controls button { margin: 0; padding: 7px 10px; }
     .source-row-heading { display: grid; flex: 1 1 520px; min-width: 0; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.35fr); gap: 10px; }
     .source-row-heading .field { min-width: 0; }
     .source-row-heading label { display: flex; flex-direction: column; gap: 5px; color: #5f6368; font-size: 12px; }
@@ -123,8 +143,7 @@
     .source-row-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .source-row-controls button { margin: 0; padding: 7px 10px; }
     .source-row-controls .source-edit-button { min-width: 32px; min-height: 32px; padding: 5px 8px; font-size: 18px; line-height: 1; }
-    .source-enabled-check { box-sizing: border-box; min-height: 32px; margin: 0; padding: 5px 10px; color: #202124; background: #ffffff; border: 1px solid #dadce0; border-radius: 7px; white-space: nowrap; }
-    .source-row-controls .source-move-button { min-width: 32px; min-height: 32px; padding: 5px 8px; font-size: 16px; line-height: 1; }
+    .source-row-leading-controls .source-move-button { min-width: 32px; min-height: 32px; padding: 5px 8px; font-size: 16px; line-height: 1; }
     .source-section { padding: 12px; background: #f8fafd; border: 1px solid #dadce0; border-radius: 8px; }
     .source-section + .source-section { margin-top: 12px; }
     .source-section-title { margin: 0 0 10px; color: #202124; font-size: 14px; }
@@ -566,7 +585,7 @@
     .settings-save-bar { background: rgb(255 255 255 / 96%); border-color: var(--line); border-radius: 14px; box-shadow: 0 -4px 16px rgb(60 64 67 / 8%); backdrop-filter: blur(8px); }
     #status { color: var(--green); background: var(--surface); }
     #status:not(:empty) { padding-right: 32px; padding-left: 32px; border-bottom-color: var(--line); }
-    .subscription-import-dialog, .source-settings-dialog, .device-relation-modal-card,
+    .subscription-import-dialog, .source-settings-dialog, .subscription-permissions-dialog, .device-relation-modal-card,
     .user-detail-dialog { color: var(--ink); background: var(--surface); border-color: var(--line); box-shadow: 0 8px 28px rgb(60 64 67 / 20%); }
     button.device-relation-chip:hover:not(:disabled), button.device-relation-chip:focus-visible {
       color: var(--blue-ink);
@@ -580,7 +599,7 @@
       box-shadow: none;
       text-decoration: underline;
     }
-    .subscription-import-dialog::backdrop, .source-settings-dialog::backdrop,
+    .subscription-import-dialog::backdrop, .source-settings-dialog::backdrop, .subscription-permissions-dialog::backdrop,
     .user-detail-dialog::backdrop { background: rgb(32 33 36 / 48%); }
     .device-relation-modal { background: rgb(32 33 36 / 48%); }
     .device-relation-modal-card { border-color: var(--line); box-shadow: 0 8px 28px rgb(60 64 67 / 20%); }
@@ -643,7 +662,6 @@
     }
 
     /* 长列表页把保存操作放回文档流，避免固定栏遮住列表末尾。 */
-    .tab-panel[data-panel="subscriptions"] > .settings-save-bar,
     .tab-panel[data-panel="navigation-page"] > .settings-save-bar { position: static; }
     .tab-panel[data-settings-dirty="false"] [data-settings-save]:disabled {
       color: #778397;
@@ -728,3 +746,203 @@
     .web-nav-item-editor .web-nav-icon-editor { padding-top: 12px; }
     .web-nav-item-editor .web-nav-icon-actions { gap: 8px; }
     .web-nav-item-editor .web-nav-icon-actions button { margin: 0; }
+
+    /* 订阅分组按状态摘要、订阅表头和逐行编辑分层展示。 */
+    .tab-panel[data-panel="subscriptions"] { padding: 16px 24px 16px 16px; background: var(--surface-page); }
+    .subscription-page-heading { min-height: 68px; margin-bottom: 20px; }
+    .subscription-page-heading p { margin-top: 2px; }
+    .subscription-page-heading h2 { margin-bottom: 0; }
+    .subscription-page-save { gap: 5px; }
+    .subscription-group {
+      padding: 12px 12px 8px;
+      background: #fff;
+      border-color: #dfe5ec;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgb(32 33 36 / 7%);
+    }
+    .subscription-group-heading {
+      display: grid;
+      grid-template-columns: 127px minmax(250px, 1fr) auto;
+      grid-template-rows: auto auto;
+      align-items: center;
+      gap: 8px 14px;
+      padding-bottom: 14px;
+    }
+    .subscription-group-leading-controls {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      grid-template-rows: 22px 22px;
+      grid-column: 1;
+      grid-row: 1 / 3;
+      align-content: center;
+      gap: 2px 4px;
+    }
+    .subscription-group-leading-controls .subscription-switch { grid-column: 2; grid-row: 1 / 3; }
+    .subscription-group-leading-controls > button {
+      width: 28px;
+      min-width: 28px;
+      min-height: 22px;
+      padding: 0;
+      border-radius: 7px;
+    }
+    .subscription-group-leading-controls [data-action="group-up"] { grid-column: 1; grid-row: 1; }
+    .subscription-group-leading-controls [data-action="group-down"] { grid-column: 1; grid-row: 2; }
+    .subscription-group-title {
+      grid-column: 2 / 4;
+      grid-row: 1 / 3;
+      min-width: 0;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-rows: auto auto;
+      align-items: end;
+      gap: 6px 10px;
+    }
+    .subscription-group-title > span { align-self: end; padding-left: 4px; }
+    .subscription-group-title > label {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
+      gap: 5px;
+      font-size: 13px;
+    }
+    .subscription-group-title input { max-width: 548px; min-height: 36px; padding: 7px 10px; }
+    .subscription-group-summary {
+      display: flex;
+      grid-column: 1 / 3;
+      grid-row: 2;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0;
+      padding-left: 4px;
+      color: var(--ink-muted);
+      font-size: 12px;
+      font-weight: 400;
+    }
+    .subscription-group-summary > span {
+      padding: 3px 9px;
+      color: #3c4043;
+      background: #e9eff6;
+      border-radius: 999px;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+    .subscription-group-controls {
+      grid-column: 3;
+      grid-row: 2;
+      flex-wrap: nowrap;
+      align-self: center;
+      gap: 6px;
+    }
+    .subscription-group-controls span { font-size: 13px; }
+    .subscription-group-controls button { min-height: 32px; padding: 6px 10px; }
+    .subscription-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin: 0;
+      padding: 0;
+      color: #3c4043;
+      background: transparent;
+      border: 0;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .subscription-switch:hover { color: var(--blue-ink); background: transparent; }
+    .subscription-switch-control { position: relative; display: inline-flex; width: 38px; height: 22px; flex: 0 0 38px; }
+    .subscription-switch-control input {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      width: 38px;
+      min-height: 22px;
+      margin: 0;
+      padding: 0;
+      opacity: 0;
+      cursor: pointer;
+      transform: none;
+    }
+    .subscription-switch-track {
+      position: absolute;
+      inset: 0;
+      background: #c6cbd2;
+      border-radius: 999px;
+      transition: background-color .16s ease;
+    }
+    .subscription-switch-track > span {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgb(32 33 36 / 24%);
+      transition: transform .16s ease;
+    }
+    .subscription-switch-control input:checked + .subscription-switch-track { background: #4285f4; }
+    .subscription-switch-control input:checked + .subscription-switch-track > span { transform: translateX(16px); }
+    .subscription-switch-control input:focus { border: 0; box-shadow: none; outline: 0; }
+    .subscription-switch-control input:focus-visible + .subscription-switch-track { outline: 2px solid var(--blue); outline-offset: 2px; }
+    .subscription-group-enabled, .source-enabled-check { min-height: 0; }
+    .source-enabled-check { justify-content: flex-start; }
+    .source-list-header, .source-row {
+      display: grid;
+      grid-template-columns: 52px 63px minmax(220px, 1fr) minmax(240px, 1.2fr) 78px;
+      align-items: center;
+      column-gap: 10px;
+    }
+    .source-list-header {
+      margin-top: 12px;
+      margin-bottom: 5px;
+      padding: 6px 10px;
+      color: #3c4043;
+      background: #edf1f6;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .subscription-group-sources { display: grid; padding-top: 0; }
+    .source-row {
+      min-width: 0;
+      padding: 6px 10px 10px;
+      margin: 0;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid #e2e7ef;
+      border-radius: 0;
+    }
+    .source-row-header, .source-row-heading { display: contents; }
+    .source-row-sort-controls { display: flex; align-items: center; gap: 4px; }
+    .source-row-sort-controls .source-move-button {
+      width: 24px;
+      min-width: 24px;
+      min-height: 24px;
+      padding: 0;
+      margin: 0;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .source-row-heading .field { min-width: 0; }
+    .source-row-heading input { height: 34px; min-height: 34px; padding: 7px 9px; }
+    .source-row-controls { justify-content: flex-end; gap: 5px; }
+    .source-row-controls button {
+      width: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      padding: 4px;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .source-row-controls .source-delete-button { color: var(--red); background: #fce8e6; }
+    .source-row-controls .source-delete-button:hover:not(:disabled) { color: #8c1d18; background: #f9d4d1; }
+    button.secondary.subscription-group-add {
+      min-height: 34px;
+      padding: 6px 12px;
+      margin-top: 18px;
+      color: #3c4043;
+      background: #fff;
+      border: 1px dashed #c7d0dc;
+      box-shadow: none;
+    }
+    button.secondary.subscription-group-add:hover:not(:disabled) { color: var(--blue-ink); background: #f5f8fc; border-color: #a8c7fa; }

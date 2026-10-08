@@ -3,6 +3,17 @@ function sourceOrder(row) {
   return Number.isFinite(order) ? order : 0;
 }
 
+function bindSubscriptionSwitchStates(row) {
+  row.querySelectorAll('.subscription-switch').forEach(function(label) {
+    const input = label.querySelector('input[type="checkbox"]');
+    const state = label.querySelector('[data-switch-state]');
+    if (!input || !state) return;
+    const update = function() { state.textContent = input.checked ? '已启用' : '已停用'; };
+    input.addEventListener('change', update);
+    update();
+  });
+}
+
 function getSubscriptionGroupRows() {
   return Array.from(el('subscriptionRows').querySelectorAll(':scope > .subscription-group'));
 }
@@ -48,19 +59,26 @@ function addSubscriptionGroup(group) {
     ? group.allowedAccountTypes
     : ['guest', 'formal'];
   row.innerHTML = '<div class="subscription-group-heading">' +
-    '<div class="subscription-group-title"><span>分组</span>' +
-      '<label>分组名称<input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label><small class="subscription-group-summary" data-group-summary></small>' +
-    '</div>' +
-    '<div class="subscription-group-controls" role="group" aria-label="分组排序和删除操作">' +
-      '<span data-group-count>0 条订阅</span>' +
-      '<label class="check subscription-group-enabled"><input data-field="groupEnabled" type="checkbox" ' + (group.enabled === false ? '' : 'checked') + '>启用</label>' +
+    '<div class="subscription-group-leading-controls" role="group" aria-label="启用和分组排序">' +
+      '<label class="subscription-switch subscription-group-enabled"><span class="subscription-switch-control"><input data-field="groupEnabled" type="checkbox" aria-label="启用分组" ' + (group.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span><span class="subscription-switch-state" data-switch-state></span></label>' +
       '<button class="secondary" type="button" data-action="group-up" aria-label="上移分组" title="上移分组">↑</button>' +
       '<button class="secondary" type="button" data-action="group-down" aria-label="下移分组" title="下移分组">↓</button>' +
+    '</div>' +
+    '<div class="subscription-group-title"><span>分组</span>' +
+      '<label>分组名称<input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label>' +
+      '<small class="subscription-group-summary" data-group-summary></small>' +
+    '</div>' +
+    '<div class="subscription-group-controls" role="group" aria-label="订阅数量和分组设置">' +
+      '<span data-group-count>0 条订阅</span>' +
       '<button class="secondary" type="button" data-action="group-collapse" aria-expanded="true">收起</button>' +
-      '<button class="danger" type="button" data-action="group-delete">删除分组</button>' +
+      '<button class="secondary" type="button" data-action="permissions" aria-haspopup="dialog">设置 &#9881;&#65038;</button>' +
     '</div>' +
   '</div>' +
-  '<div data-group-body><div class="subscription-group-permissions">' +
+  '<dialog class="subscription-permissions-dialog" data-group-permissions-dialog aria-label="分组权限设置">' +
+    '<div class="source-settings-dialog-header"><div><h3>分组权限设置</h3><p>设置允许访问此分组的账号状态、账户类型和 App 版本区间。</p></div>' +
+      '<button class="secondary" type="button" data-action="permissions-close">关闭</button>' +
+    '</div>' +
+    '<div class="subscription-group-permissions">' +
     '<fieldset><legend>账号状态</legend>' +
       '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="normal" ' + (allowedStatuses.includes('normal') ? 'checked' : '') + '>正常</label>' +
       '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="banned" ' + (allowedStatuses.includes('banned') ? 'checked' : '') + '>封禁</label>' +
@@ -74,12 +92,20 @@ function addSubscriptionGroup(group) {
       '<span aria-hidden="true">至</span>' +
       '<label><span>右侧 · 最高</span><input data-field="maxAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
     '</fieldset>' +
-  '</div>' +
+    '</div>' +
+    '<div class="source-settings-dialog-actions subscription-permissions-dialog-actions">' +
+      '<button class="danger" type="button" data-action="group-delete">删除分组</button>' +
+      '<button class="secondary" type="button" data-action="permissions-close">完成</button>' +
+    '</div>' +
+  '</dialog>' +
+  '<div data-group-body>' +
+  '<div class="source-list-header" aria-hidden="true"><span>排序</span><span>启用</span><span>订阅名称</span><span>备注</span><span>操作</span></div>' +
   '<div class="subscription-group-sources" data-group-sources></div>' +
   '<button class="secondary subscription-group-add" type="button" data-action="add-source">添加订阅</button></div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="minAppVersion"]').value = String(group.minAppVersion || '');
   row.querySelector('[data-field="maxAppVersion"]').value = String(group.maxAppVersion || '');
+  bindSubscriptionSwitchStates(row);
   el('subscriptionRows').appendChild(row);
   row.querySelector('[data-field="minAppVersion"]').addEventListener('change', updateSubscriptionAppVersionOptions);
   row.querySelector('[data-field="maxAppVersion"]').addEventListener('change', updateSubscriptionAppVersionOptions);
@@ -92,11 +118,22 @@ function addSubscriptionGroup(group) {
   row.querySelector('[data-action="group-down"]').onclick = function() {
     moveSubscriptionGroup(row, 1);
   };
+  const permissionsDialog = row.querySelector('[data-group-permissions-dialog]');
+  row.querySelector('[data-action="permissions"]').onclick = function() {
+    if (permissionsDialog && !permissionsDialog.open) permissionsDialog.showModal();
+  };
+  row.querySelectorAll('[data-action="permissions-close"]').forEach(function(button) {
+    button.onclick = function() { permissionsDialog.close(); };
+  });
+  permissionsDialog.addEventListener('click', function(event) {
+    if (event.target === permissionsDialog) permissionsDialog.close();
+  });
   row.querySelector('[data-action="group-collapse"]').onclick = function() {
     const body = row.querySelector('[data-group-body]');
     setSubscriptionGroupExpanded(row, body.hidden);
   };
   row.querySelector('[data-action="group-delete"]').onclick = function() {
+    if (permissionsDialog.open) permissionsDialog.close();
     row.remove();
     updateSubscriptionGroupControls();
     markSettingsDirty('subscriptions');
@@ -200,15 +237,18 @@ function addSource(groupRow, source, sourceOrderValue) {
   const sourceType = source.content ? 'content' : 'url';
   // 每条订阅的设定弹窗保留在行内，关闭后输入仍作为当前页面草稿保留。
   row.innerHTML = '<div class="source-row-header">' +
-    '<div class="source-row-heading">' +
-      '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
-      '<div class="field"><label>备注<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="仅后台保存"></label></div>' +
+    '<div class="source-row-sort-controls" role="group" aria-label="订阅排序">' +
+      '<button class="secondary source-move-button" type="button" data-action="move-up" aria-label="上移订阅" title="上移订阅">↑</button>' +
+      '<button class="secondary source-move-button" type="button" data-action="move-down" aria-label="下移订阅" title="下移订阅">↓</button>' +
     '</div>' +
-    '<div class="source-row-controls" role="group" aria-label="线路启用、排序和详细设置">' +
-      '<label class="check source-enabled-check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用</label>' +
-      '<button class="secondary source-move-button" type="button" data-action="move-up" aria-label="上移线路" title="上移线路">↑</button>' +
-      '<button class="secondary source-move-button" type="button" data-action="move-down" aria-label="下移线路" title="下移线路">↓</button>' +
+    '<label class="subscription-switch source-enabled-check"><span class="subscription-switch-control"><input data-field="enabled" type="checkbox" aria-label="启用订阅" ' + (source.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
+    '<div class="source-row-heading">' +
+      '<div class="field"><input data-field="name" aria-label="订阅名称" value="' + esc(source.name) + '"></div>' +
+      '<div class="field"><input data-field="remark" type="text" aria-label="备注" value="' + esc(source.remark) + '" placeholder="仅后台保存"></div>' +
+    '</div>' +
+    '<div class="source-row-controls" role="group" aria-label="订阅详细设置">' +
       '<button class="secondary source-edit-button" type="button" data-action="details" aria-haspopup="dialog" aria-label="订阅详细设定" title="订阅详细设定">&#9881;&#65038;</button>' +
+      '<button class="danger source-delete-button" type="button" data-action="source-delete-row" aria-label="删除订阅" title="删除订阅">&#128465;&#65038;</button>' +
     '</div>' +
   '</div>' +
   '<dialog class="source-settings-dialog" data-source-dialog aria-label="订阅详细设定">' +
@@ -230,13 +270,15 @@ function addSource(groupRow, source, sourceOrderValue) {
     '</section>' +
     '<div class="source-settings-dialog-actions"><button class="danger" type="button" data-action="source-delete">删除订阅</button></div>' +
   '</dialog>';
-  row.querySelector('[data-action="source-delete"]').onclick = function() {
+  const removeSource = function() {
     const dialog = row.querySelector('[data-source-dialog]');
     if (dialog.open) dialog.close();
     row.remove();
     updateSourceRowsMeta();
     markSettingsDirty('subscriptions');
   };
+  row.querySelector('[data-action="source-delete"]').onclick = removeSource;
+  row.querySelector('[data-action="source-delete-row"]').onclick = removeSource;
   row.querySelector('[data-field="sourceType"]').onchange = function() { updateSourceMode(row); };
   row.querySelector('[data-field="name"]').addEventListener('input', updateSourceRowsMeta);
   // 使用原生弹窗，让浏览器处理焦点约束、Esc 关闭和背景遮罩。
@@ -253,6 +295,7 @@ function addSource(groupRow, source, sourceOrderValue) {
   row.querySelector('[data-action="move-down"]').onclick = function() {
     moveSourceRow(row, 1);
   };
+  bindSubscriptionSwitchStates(row);
   updateSourceMode(row);
   insertSourceByOrder(row, groupRow);
   updateSourceRowsMeta();
@@ -270,20 +313,28 @@ function updateSourceRowsMeta() {
     });
     const count = group.querySelector('[data-group-count]');
     const enabledCount = rows.filter(function(row) { return row.querySelector('[data-field="enabled"]').checked; }).length;
-    if (count) count.textContent = rows.length + ' 条订阅 · ' + enabledCount + ' 条启用';
+    if (count) count.textContent = rows.length + '条订阅 · ' + enabledCount + '条启用';
     const summary = group.querySelector('[data-group-summary]');
     if (summary) {
       const statuses = Array.from(group.querySelectorAll('[data-field="allowedStatuses"]:checked')).map(function(input) { return input.value === 'banned' ? '封禁' : '正常'; });
       const types = Array.from(group.querySelectorAll('[data-field="allowedAccountTypes"]:checked')).map(function(input) { return input.value === 'formal' ? '正式用户' : '游客'; });
       const minimum = group.querySelector('[data-field="minAppVersion"]').value.trim();
       const maximum = group.querySelector('[data-field="maxAppVersion"]').value.trim();
-      summary.textContent = (group.querySelector('[data-field="groupEnabled"]').checked ? '已启用' : '已停用') +
-        ' · ' + (statuses.join('、') || '未允许任何状态') + ' / ' + (types.join('、') || '未允许任何类型') +
-        ' · 版本 ' + (minimum || '不限') + ' 至 ' + (maximum || '不限');
+      const items = [
+        statuses.join('、') || '未允许任何状态',
+        types.join('、') || '未允许任何类型',
+        '版本：' + (minimum || '不限') + '至' + (maximum || '不限')
+      ];
+      summary.replaceChildren();
+      items.forEach(function(text) {
+        const chip = document.createElement('span');
+        chip.textContent = text;
+        summary.appendChild(chip);
+      });
     }
     rows.forEach(function(row, index) {
       const nameInput = row.querySelector('[data-field="name"]');
-      if (nameInput) nameInput.placeholder = '线路' + (sourceOrder(row) + 1);
+      if (nameInput) nameInput.placeholder = '订阅' + (sourceOrder(row) + 1);
       const dialogName = row.querySelector('[data-source-dialog-name]');
       if (dialogName) dialogName.textContent = nameInput.value.trim() || nameInput.placeholder;
       const moveUp = row.querySelector('[data-action="move-up"]');
@@ -714,7 +765,7 @@ function renderDebugInterface(override) {
     return '<label class="debug-interface-source' + (disabled ? ' disabled' : '') + '">' +
       '<input type="checkbox" data-debug-source-id="' + esc(id) + '" ' +
       (selected.has(id) ? 'checked ' : '') + '>' +
-      '<span>' + esc(source.name || ('线路' + id)) + '</span>' +
+      '<span>' + esc(source.name || ('订阅' + id)) + '</span>' +
       (disabled ? '<small>已停用</small>' : '') +
       '</label>';
   }).join('');
@@ -751,7 +802,7 @@ function readSubscriptionSource(row, index) {
     const url = row.querySelector('[data-field="url"]').value.trim();
     const content = row.querySelector('[data-field="content"]').value.trim();
     return {
-      name: row.querySelector('[data-field="name"]').value.trim() || '线路' + (index + 1),
+      name: row.querySelector('[data-field="name"]').value.trim() || '订阅' + (index + 1),
       url: sourceType === 'url' ? url : '',
       enabled: row.querySelector('[data-field="enabled"]').checked,
       cacheMinutes: sourceType === 'url'

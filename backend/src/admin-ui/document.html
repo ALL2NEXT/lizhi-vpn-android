@@ -274,10 +274,16 @@
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
-    <div class="dashboard-heading"><div><h2>订阅分组</h2><p>按账户状态、类型和版本区间配置线路权限。新增和编辑后，保存配置才会生效。</p></div><button class="secondary" type="button" onclick="addSubscriptionGroup()">添加分组</button></div>
+    <div class="dashboard-heading subscription-page-heading">
+      <div><h2>订阅分组</h2><p>按账户状态、类型和版本区间配置线路权限。新增和编辑后，保存配置才会生效。</p></div>
+      <div class="subscription-page-save">
+        <span class="subscription-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span>
+        <div class="subscription-page-save-actions"><button class="secondary" type="button" data-settings-discard="subscriptions" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('subscriptions')" disabled>保存配置</button></div>
+      </div>
+    </div>
     <div id="subscriptionRows"></div>
+    <div class="subscription-group-add-row"><button type="button" onclick="addSubscriptionGroup()" aria-label="添加分组">＋ 添加分组</button></div>
     <datalist id="subscriptionAppVersionOptions"></datalist>
-    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="subscriptions" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('subscriptions')" disabled>保存配置</button></div></div>
     <dialog id="subscriptionImportDialog" aria-labelledby="subscriptionImportTitle" class="subscription-import-dialog">
       <form id="subscriptionImportForm">
         <h2 id="subscriptionImportTitle">智能导入订阅</h2>
