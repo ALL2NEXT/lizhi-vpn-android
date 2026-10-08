@@ -1,6 +1,4 @@
 let subscriptionTrafficRequestId = 0;
-let subscriptionIconControlId = 0;
-
 function sourceOrder(row) {
   const order = Number(row.dataset.sourceOrder);
   return Number.isFinite(order) ? order : 1;
@@ -27,98 +25,6 @@ function getSubscriptionGroupRows() {
   return Array.from(el('subscriptionRows').querySelectorAll(':scope > .subscription-group'));
 }
 
-function sourceFaviconUrl(value) {
-  try {
-    const url = new URL(String(value || '').trim());
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
-    url.pathname = '/favicon.ico';
-    url.search = '';
-    url.hash = '';
-    url.username = '';
-    url.password = '';
-    return url.href;
-  } catch (_) {
-    return '';
-  }
-}
-
-function updateSourceRowIcon(row) {
-  const image = row.querySelector('[data-source-icon]');
-  const fallback = row.querySelector('[data-source-icon-fallback]');
-  if (!image || !fallback) return;
-  const mode = row.querySelector('[data-field="iconMode"]:checked').value;
-  const isUrlSource = row.querySelector('[data-field="sourceType"]').value === 'url';
-  const customIconUrl = row.querySelector('[data-field="customIconUrl"]').value.trim();
-  const localIconUrl = row.dataset.iconBase64 && row.dataset.iconMimeType
-    ? 'data:' + row.dataset.iconMimeType + ';base64,' + row.dataset.iconBase64
-    : '';
-  const iconUrl = mode === 'AUTO_REMOTE' && isUrlSource
-    ? sourceFaviconUrl(row.querySelector('[data-field="url"]').value)
-    : mode === 'CUSTOM_REMOTE' ? customIconUrl
-    : mode === 'LOCAL' ? localIconUrl
-    : '';
-  if (!iconUrl) {
-    image.hidden = true;
-    image.removeAttribute('src');
-    image.dataset.iconUrl = '';
-    fallback.hidden = false;
-    return;
-  }
-  if (image.dataset.iconUrl === iconUrl) return;
-  image.dataset.iconUrl = iconUrl;
-  image.referrerPolicy = 'no-referrer';
-  image.hidden = true;
-  fallback.hidden = false;
-  image.onload = function() {
-    if (image.dataset.iconUrl !== iconUrl) return;
-    image.hidden = false;
-    fallback.hidden = true;
-  };
-  image.onerror = function() {
-    if (image.dataset.iconUrl !== iconUrl) return;
-    image.hidden = true;
-    fallback.hidden = false;
-  };
-  image.src = iconUrl;
-}
-
-function updateSourceIconMode(row) {
-  const selected = row.querySelector('[data-field="iconMode"]:checked');
-  if (!selected) return;
-  row.querySelectorAll('[data-icon-mode]').forEach(function(panel) {
-    const active = panel.dataset.iconMode === selected.value;
-    panel.hidden = !active;
-    panel.querySelectorAll('input, button').forEach(function(control) {
-      control.disabled = !active;
-    });
-  });
-  updateSourceRowIcon(row);
-}
-
-function setSourceLocalIcon(row, base64, mimeType) {
-  row.dataset.iconBase64 = String(base64 || '');
-  row.dataset.iconMimeType = String(mimeType || '');
-  const label = row.querySelector('[data-source-icon-file-label]');
-  if (label) label.textContent = row.dataset.iconBase64 ? '已选择图片' : '尚未选择图片';
-  updateSourceRowIcon(row);
-}
-
-function loadSourceLocalIcon(row, file) {
-  const supportedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-  if (!file) return;
-  if (!supportedTypes.includes(file.type)) return show('图标格式需为 PNG、JPEG、WebP 或 GIF', true);
-  if (file.size > 128 * 1024) return show('单张订阅图标不能超过 128 KB', true);
-  const reader = new FileReader();
-  reader.onload = function() {
-    const encoded = String(reader.result || '').match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
-    if (!encoded) return show('无法读取该图标文件', true);
-    setSourceLocalIcon(row, encoded[2], encoded[1]);
-    markSettingsDirty('subscriptions');
-  };
-  reader.onerror = function() { show('读取图标文件失败', true); };
-  reader.readAsDataURL(file);
-}
-
 function setSourceTrafficMessage(row, message, error) {
   const host = row.querySelector('[data-source-traffic]');
   const text = row.querySelector('[data-source-traffic-text]');
@@ -140,7 +46,6 @@ function setSourceTrafficMessage(row, message, error) {
 }
 
 function updateSourceRowPresentation(row) {
-  updateSourceRowIcon(row);
   const sourceType = row.querySelector('[data-field="sourceType"]').value;
   const url = row.querySelector('[data-field="url"]').value.trim();
   const trafficHost = row.querySelector('[data-source-traffic]');
@@ -208,7 +113,7 @@ function renderSourceTraffic(row, traffic, unavailable) {
     const ratio = used / total;
     fill.style.width = Math.min(100, Math.max(0, ratio * 100)) + '%';
     fill.className = 'source-traffic-progress ' + (
-      ratio > 1 ? 'exhausted' : ratio > 0.9 ? 'critical' : ratio > 0.5 ? 'warning' : 'safe'
+      ratio >= 1 ? 'exhausted' : ratio > 0.9 ? 'critical' : ratio > 0.5 ? 'warning' : 'safe'
     );
     track.setAttribute('aria-valuenow', String(Math.min(100, Math.max(0, Math.round(ratio * 100)))));
     track.title = '上传 ' + formatSubscriptionTrafficBytes(upload) + ' · 下载 ' + formatSubscriptionTrafficBytes(download);
@@ -275,6 +180,82 @@ async function loadSubscriptionTraffic() {
   }
 }
 
+async function deleteExhaustedSubscriptions() {
+  const button = document.querySelector('[data-action="delete-exhausted-subscriptions"]');
+  if (!button || button.disabled) return;
+  if (!currentState || settingsSaveInFlight) return show('请等待配置保存完成后再清理订阅', true);
+
+  const savedSources = new Map();
+  (Array.isArray(currentState.subscriptionGroups) ? currentState.subscriptionGroups : [])
+    .forEach(function(group) {
+      (Array.isArray(group.subscriptions) ? group.subscriptions : []).forEach(function(source) {
+        savedSources.set(String(source.id), source);
+      });
+    });
+  const rows = getSourceRows().filter(function(row) {
+    const savedSource = savedSources.get(row.dataset.sourceId);
+    return row.dataset.sourceId && savedSource &&
+      row.querySelector('[data-field="sourceType"]').value === 'url' &&
+      row.querySelector('[data-field="url"]').value.trim() === row.dataset.persistedUrl &&
+      savedSource.url === row.dataset.persistedUrl;
+  });
+  if (!rows.length) return show('没有可检查的已保存外部订阅');
+
+  const baselineState = currentState;
+  const baselineDraftVersion = settingsDraftVersions.get('subscriptions') || 0;
+  button.disabled = true;
+  button.textContent = '正在检查流量…';
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/subscriptions/traffic', {
+      method: 'GET',
+      headers: headers(),
+      cache: 'no-store'
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error('subscription_traffic_unavailable');
+    if (settingsSaveInFlight || currentState !== baselineState ||
+        (settingsDraftVersions.get('subscriptions') || 0) !== baselineDraftVersion) {
+      return show('检查期间订阅配置已变化，请重新点击清理', true);
+    }
+
+    const items = new Map((Array.isArray(data.items) ? data.items : []).map(function(item) {
+      return [String(item.id), item];
+    }));
+    const exhaustedRows = rows.filter(function(row) {
+      if (!row.isConnected || row.querySelector('[data-field="sourceType"]').value !== 'url' ||
+          row.querySelector('[data-field="url"]').value.trim() !== row.dataset.persistedUrl) return false;
+      const item = items.get(row.dataset.sourceId);
+      const traffic = item && item.traffic;
+      renderSourceTraffic(row, traffic, !item || item.unavailable === true);
+      if (!traffic || item.unavailable === true) return false;
+
+      const toBytes = function(value) {
+        if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
+        const bytes = Number(value);
+        return Number.isFinite(bytes) && bytes >= 0 ? bytes : null;
+      };
+      const total = toBytes(traffic.totalBytes);
+      const upload = toBytes(traffic.uploadBytes);
+      const download = toBytes(traffic.downloadBytes);
+      // 只有总量和至少一项用量都明确时，才把订阅判定为流量用尽。
+      return total !== null && total > 0 && (upload !== null || download !== null) &&
+        (upload || 0) + (download || 0) >= total;
+    });
+
+    if (!exhaustedRows.length) return show('没有发现流量用尽的订阅');
+    exhaustedRows.forEach(function(row) {
+      const removeButton = row.querySelector('[data-action="source-delete-row"]');
+      if (removeButton) removeButton.click();
+    });
+    show('已移除 ' + exhaustedRows.length + ' 个流量用尽订阅，请点击“保存配置”使其生效');
+  } catch (_) {
+    show('读取订阅流量失败，未删除订阅', true);
+  } finally {
+    button.disabled = false;
+    button.textContent = '一键删除流量用尽订阅';
+  }
+}
+
 function insertSourceByOrder(row, groupRow) {
   const container = groupRow.querySelector('[data-group-sources]');
   if (!container) return;
@@ -332,7 +313,7 @@ function addSubscriptionGroup(group) {
     '</div>' +
   '</div>' +
   '<dialog class="subscription-permissions-dialog" data-group-permissions-dialog aria-label="分组设置">' +
-    '<div class="source-settings-dialog-header"><div><h3>分组设置</h3><p>设置分组访问条件、App 版本区间和组内外部接口的统一缓存时间。</p></div>' +
+    '<div class="source-settings-dialog-header"><div><h3>分组设置</h3><p>设置分组访问条件、App 版本区间和组内上游订阅的更新策略。</p></div>' +
       '<button class="secondary" type="button" data-action="permissions-close">关闭</button>' +
     '</div>' +
     '<div class="subscription-group-permissions">' +
@@ -349,9 +330,10 @@ function addSubscriptionGroup(group) {
       '<span aria-hidden="true">至</span>' +
       '<label><span>右侧 · 最高</span><input data-field="maxAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
     '</fieldset>' +
-    '<fieldset class="subscription-cache-setting"><legend>订阅缓存</legend>' +
+    '<fieldset class="subscription-cache-setting"><legend>更新设置</legend>' +
+      '<label class="subscription-switch subscription-update-toggle"><span class="subscription-switch-control"><input data-field="updateEnabled" type="checkbox" aria-label="启用外部订阅更新" ' + (group.updateEnabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span><span>启用更新</span><span data-switch-state></span></label>' +
       '<label><span>接口缓存时间（分钟）</span><input data-field="groupCacheMinutes" type="number" min="0" max="10080" step="1"></label>' +
-      '<small>该时间应用于本分组的所有外部接口订阅；设为 0 表示每次请求上游。</small>' +
+      '<small>该时间应用于本分组的所有外部接口订阅；启用更新时设为 0 表示每次请求上游。关闭更新后使用最近成功获取的内容；若无快照，保存时会尝试获取一次。</small>' +
     '</fieldset>' +
     '</div>' +
     '<div class="source-settings-dialog-actions subscription-permissions-dialog-actions">' +
@@ -448,7 +430,6 @@ function compareAppVersions(left, right) {
 }
 
 function validateSubscriptionGroupVersions(groups) {
-  let iconTotalSize = 0;
   for (let index = 0; index < groups.length; index += 1) {
     const group = groups[index];
     if (!Number.isInteger(group.cacheMinutes) || group.cacheMinutes < 0 || group.cacheMinutes > 10080) {
@@ -463,31 +444,6 @@ function validateSubscriptionGroupVersions(groups) {
     if (group.minAppVersion && group.maxAppVersion &&
         compareAppVersions(group.minAppVersion, group.maxAppVersion) > 0) {
       return '分组「' + group.name + '」的左侧版本不能高于右侧版本';
-    }
-    for (let sourceIndex = 0; sourceIndex < group.subscriptions.length; sourceIndex += 1) {
-      const source = group.subscriptions[sourceIndex];
-      const label = '「' + group.name + '」中的「' + source.name + '」';
-      if (source.iconMode === 'CUSTOM_REMOTE') {
-        let iconUrl;
-        try {
-          iconUrl = new URL(source.customIconUrl);
-        } catch (_) {
-          return label + '的图标链接无效';
-        }
-        if (!['http:', 'https:'].includes(iconUrl.protocol) || iconUrl.username || iconUrl.password) {
-          return label + '的图标链接需使用 HTTP 或 HTTPS，且不能包含账号密码';
-        }
-      }
-      if (source.iconMode === 'LOCAL' && (!source.iconBase64 || !source.iconMimeType)) {
-        return label + '尚未选择本地图标';
-      }
-      if (source.iconBase64 && (source.iconBase64.length > 180000 ||
-          !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(source.iconMimeType))) {
-        return label + '的图标格式无效或超过 128 KB';
-      }
-      if (!source.iconBase64 && source.iconMimeType) return label + '的图标数据不完整';
-      iconTotalSize += source.iconBase64.length;
-      if (iconTotalSize > 4 * 1024 * 1024) return '订阅图标数据总量不能超过 4 MB';
     }
   }
   return '';
@@ -522,19 +478,11 @@ function addSource(groupRow, source, sourceOrderValue) {
   row.dataset.sourceId = String(source.id || '');
   row.dataset.persistedUrl = String(source.url || '');
   row.dataset.persistedEnabled = String(source.enabled !== false);
-  row.dataset.iconBase64 = String(source.iconBase64 || '');
-  row.dataset.iconMimeType = String(source.iconMimeType || '');
   const existingOrders = Array.from(groupRow.querySelectorAll('.source-row')).map(sourceOrder);
   row.dataset.sourceOrder = Number.isFinite(Number(sourceOrderValue)) && Number(sourceOrderValue) > 0
     ? String(Number(sourceOrderValue))
     : String(existingOrders.length ? Math.max.apply(null, existingOrders) + 1 : 1);
   const sourceType = source.content ? 'content' : 'url';
-  const supportedIconModes = ['DEFAULT', 'AUTO_REMOTE', 'CUSTOM_REMOTE', 'LOCAL'];
-  const iconMode = supportedIconModes.includes(source.iconMode) ? source.iconMode : 'AUTO_REMOTE';
-  const iconModeName = 'subscription-icon-mode-' + (++subscriptionIconControlId);
-  const iconModeOption = function(mode, title) {
-    return '<label class="source-icon-mode-option"><input data-field="iconMode" type="radio" name="' + iconModeName + '" value="' + mode + '" ' + (iconMode === mode ? 'checked' : '') + '><span>' + title + '</span></label>';
-  };
   // 每条订阅的设定弹窗保留在行内，关闭后输入仍作为当前页面草稿保留。
   row.innerHTML = '<div class="source-row-header">' +
     '<div class="source-row-sort-controls" role="group" aria-label="订阅排序序号">' +
@@ -542,7 +490,7 @@ function addSource(groupRow, source, sourceOrderValue) {
     '</div>' +
     '<label class="subscription-switch source-enabled-check"><span class="subscription-switch-control"><input data-field="enabled" type="checkbox" aria-label="启用订阅" ' + (source.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
     '<div class="source-row-heading">' +
-      '<div class="field source-name-field"><div class="source-name-control"><span class="source-icon" aria-hidden="true"><img data-source-icon alt="" hidden><svg data-source-icon-fallback viewBox="0 0 24 24"><path d="M4 6h16v2L4 8V6zm2-4h12v2H6V2zm14 8H4c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2zm0 10H4v-8h16v8zm-10-7.27v6.53L16 16l-6-3.27z"></path></svg></span><input data-field="name" aria-label="订阅名称" value="' + esc(source.name) + '"></div><div class="source-traffic" data-source-traffic aria-live="polite"><div class="source-traffic-line"><span data-source-traffic-text>等待读取流量信息…</span><span class="source-expiry" data-source-expiry></span></div><div class="source-traffic-track" data-source-traffic-track role="progressbar" aria-label="订阅流量使用比例" aria-valuemin="0" aria-valuemax="100" hidden><span class="source-traffic-progress" data-source-traffic-progress></span></div></div></div>' +
+      '<div class="field source-name-field"><div class="source-name-control"><span class="source-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16v2L4 8V6zm2-4h12v2H6V2zm14 8H4c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2zm0 10H4v-8h16v8zm-10-7.27v6.53L16 16l-6-3.27z"></path></svg></span><input data-field="name" aria-label="订阅名称" value="' + esc(source.name) + '"></div><div class="source-traffic" data-source-traffic aria-live="polite"><div class="source-traffic-line"><span data-source-traffic-text>等待读取流量信息…</span><span class="source-expiry" data-source-expiry></span></div><div class="source-traffic-track" data-source-traffic-track role="progressbar" aria-label="订阅流量使用比例" aria-valuemin="0" aria-valuemax="100" hidden><span class="source-traffic-progress" data-source-traffic-progress></span></div></div></div>' +
       '<div class="field"><input data-field="remark" type="text" aria-label="备注" value="' + esc(source.remark) + '" placeholder="仅后台保存"></div>' +
     '</div>' +
     '<div class="source-row-controls" role="group" aria-label="订阅详细设置">' +
@@ -565,16 +513,6 @@ function addSource(groupRow, source, sourceOrderValue) {
         '<div class="field"><label>外部订阅地址<input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/sub"></label></div>' +
       '<label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label><small>按节点名称识别国家，并批量改为“国家+编号”，例如：日本1、日本2。</small><small>支持节点 URI、Base64、Clash、sing-box 和 Xray 订阅，由 Worker 转换后加密下发。缓存时间在所属分组设置中统一配置。</small></div>' +
       '<div class="source-mode" data-source-mode="content"><div class="field"><label>纯文本节点（每行一个）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div><small>保存后由 Worker 直接加密下发，不经过外部接口缓存。</small></div>' +
-      '<section class="source-icon-settings"><h4>图标设置</h4>' +
-        '<div class="source-icon-mode-options" role="radiogroup" aria-label="订阅图标来源">' +
-          iconModeOption('DEFAULT', '默认图标') +
-          iconModeOption('AUTO_REMOTE', '远程自动获取（根据订阅地址）') +
-          iconModeOption('CUSTOM_REMOTE', '远程指定图标链接') +
-          iconModeOption('LOCAL', '本地选择图标') +
-        '</div>' +
-        '<div class="source-icon-mode-panel" data-icon-mode="CUSTOM_REMOTE"><div class="field"><label>图标图片链接<input data-field="customIconUrl" type="url" value="' + esc(source.customIconUrl || '') + '" placeholder="https://example.com/icon.png"></label></div></div>' +
-        '<div class="source-icon-mode-panel source-icon-local-panel" data-icon-mode="LOCAL"><span data-source-icon-file-label>' + (row.dataset.iconBase64 ? '已选择图片' : '尚未选择图片') + '</span><input data-field="icon-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><button class="secondary" type="button" data-action="icon-select">选择图片</button><button class="secondary" type="button" data-action="icon-clear">清除图片</button></div>' +
-        '<small>远程图标不可用时会显示默认订阅图标；本地图标会随客户端配置下发。</small></section>' +
     '</section>' +
     '<div class="source-settings-dialog-actions"><button class="danger" type="button" data-action="source-delete">删除订阅</button></div>' +
   '</dialog>';
@@ -596,22 +534,6 @@ function addSource(groupRow, source, sourceOrderValue) {
   row.querySelector('[data-field="url"]').addEventListener('input', function() {
     updateSourceRowPresentation(row);
   });
-  row.querySelectorAll('[data-field="iconMode"]').forEach(function(control) {
-    control.addEventListener('change', function() { updateSourceIconMode(row); });
-  });
-  row.querySelector('[data-field="customIconUrl"]').addEventListener('input', function() {
-    updateSourceRowIcon(row);
-  });
-  const iconFileInput = row.querySelector('[data-field="icon-file"]');
-  row.querySelector('[data-action="icon-select"]').onclick = function() { iconFileInput.click(); };
-  iconFileInput.addEventListener('change', function() {
-    loadSourceLocalIcon(row, iconFileInput.files && iconFileInput.files[0]);
-    iconFileInput.value = '';
-  });
-  row.querySelector('[data-action="icon-clear"]').onclick = function() {
-    setSourceLocalIcon(row, '', '');
-    markSettingsDirty('subscriptions');
-  };
   row.querySelector('[data-field="name"]').addEventListener('input', updateSourceRowsMeta);
   // 使用原生弹窗，让浏览器处理焦点约束、Esc 关闭和背景遮罩。
   row.querySelector('[data-action="details"]').onclick = function() {
@@ -626,7 +548,6 @@ function addSource(groupRow, source, sourceOrderValue) {
   });
   bindSubscriptionSwitchStates(row);
   updateSourceMode(row);
-  updateSourceIconMode(row);
   updateSourceRowPresentation(row);
   insertSourceByOrder(row, groupRow);
   updateSubscriptionSourceOrder(groupRow);
@@ -652,11 +573,13 @@ function updateSourceRowsMeta() {
       const types = Array.from(group.querySelectorAll('[data-field="allowedAccountTypes"]:checked')).map(function(input) { return input.value === 'formal' ? '正式用户' : '游客'; });
       const minimum = group.querySelector('[data-field="minAppVersion"]').value.trim();
       const maximum = group.querySelector('[data-field="maxAppVersion"]').value.trim();
+      const updateEnabled = group.querySelector('[data-field="updateEnabled"]').checked;
       const cacheMinutes = group.querySelector('[data-field="groupCacheMinutes"]').value || '0';
       const items = [
         statuses.join('、') || '未允许任何状态',
         types.join('、') || '未允许任何类型',
         '版本：' + (minimum || '不限') + '至' + (maximum || '不限'),
+        '更新：' + (updateEnabled ? '已启用' : '已停用'),
         '缓存：' + cacheMinutes + ' 分钟'
       ];
       summary.replaceChildren();
@@ -1141,20 +1064,13 @@ function readSubscriptionSource(row, index) {
     const sourceType = row.querySelector('[data-field="sourceType"]').value;
     const url = row.querySelector('[data-field="url"]').value.trim();
     const content = row.querySelector('[data-field="content"]').value.trim();
-    const iconMode = row.querySelector('[data-field="iconMode"]:checked').value;
     return {
       name: row.querySelector('[data-field="name"]').value.trim() || '订阅' + (index + 1),
       url: sourceType === 'url' ? url : '',
       enabled: row.querySelector('[data-field="enabled"]').checked,
       autoRename: sourceType === 'url' && row.querySelector('[data-field="autoRename"]').checked,
       content: sourceType === 'content' ? content : '',
-      remark: row.querySelector('[data-field="remark"]').value.trim(),
-      iconMode: iconMode,
-      customIconUrl: iconMode === 'CUSTOM_REMOTE'
-        ? row.querySelector('[data-field="customIconUrl"]').value.trim()
-        : '',
-      iconBase64: iconMode === 'LOCAL' ? row.dataset.iconBase64 || '' : '',
-      iconMimeType: iconMode === 'LOCAL' ? row.dataset.iconMimeType || '' : ''
+      remark: row.querySelector('[data-field="remark"]').value.trim()
     };
 }
 function readSubscriptionGroups() {
@@ -1170,6 +1086,7 @@ function readSubscriptionGroups() {
         .map(function(input) { return input.value; }),
       allowedAccountTypes: Array.from(group.querySelectorAll('[data-field="allowedAccountTypes"]:checked'))
         .map(function(input) { return input.value; }),
+      updateEnabled: group.querySelector('[data-field="updateEnabled"]').checked,
       cacheMinutes: Number(group.querySelector('[data-field="groupCacheMinutes"]').value || 0),
       minAppVersion: group.querySelector('[data-field="minAppVersion"]').value.trim(),
       maxAppVersion: group.querySelector('[data-field="maxAppVersion"]').value.trim(),
@@ -1354,3 +1271,7 @@ initializeTrafficRange();
 initializeSettingsDrafts();
 const subscriptionTabButton = document.querySelector('[data-tab="subscriptions"]');
 if (subscriptionTabButton) subscriptionTabButton.addEventListener('click', loadSubscriptionTraffic);
+const deleteExhaustedSubscriptionsButton = document.querySelector('[data-action="delete-exhausted-subscriptions"]');
+if (deleteExhaustedSubscriptionsButton) {
+  deleteExhaustedSubscriptionsButton.addEventListener('click', deleteExhaustedSubscriptions);
+}

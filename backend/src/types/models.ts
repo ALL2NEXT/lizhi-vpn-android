@@ -12,10 +12,6 @@ export interface SubscriptionSource {
   autoRename: boolean;
   content: string;
   remark: string;
-  iconMode: "DEFAULT" | "AUTO_REMOTE" | "CUSTOM_REMOTE" | "LOCAL";
-  customIconUrl: string;
-  iconBase64: string;
-  iconMimeType: string;
 }
 
 export interface SubscriptionGroup {
@@ -24,6 +20,7 @@ export interface SubscriptionGroup {
   enabled: boolean;
   allowedStatuses: SubscriptionAccountStatus[];
   allowedAccountTypes: Exclude<AccountType, "banned">[];
+  updateEnabled: boolean;
   cacheMinutes: number;
   minAppVersion: string;
   maxAppVersion: string;

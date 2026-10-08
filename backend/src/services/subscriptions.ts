@@ -329,24 +329,25 @@ async function cacheExternalSubscription(
 ) {
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
   const cacheMinutes = normalizeSubscriptionCacheMinutes(cacheMinutesValue);
-  if (cacheMinutes > 0) {
-    await env.CONFIG.put(subscriptionCacheKey(source), JSON.stringify({
-      url: source.url,
-      content: result.content,
-      cachedAt,
-      trafficFetched: true,
-      traffic: result.traffic,
-    }), { expirationTtl: Math.max(cacheMinutes * 60, 60) });
-    return;
+  const writes = [env.CONFIG.put(subscriptionCacheKey(source), JSON.stringify({
+    url: source.url,
+    content: result.content,
+    cachedAt,
+    trafficFetched: true,
+    traffic: result.traffic,
+  }))];
+  if (cacheMinutes === 0) {
+    writes.push(env.CONFIG.put(
+      subscriptionTrafficCacheKey(source),
+      JSON.stringify({
+        url: source.url,
+        trafficFetchedAt: cachedAt,
+        traffic: result.traffic,
+      }),
+      { expirationTtl: 300 },
+    ));
   }
-  await Promise.all([
-    env.CONFIG.delete(subscriptionCacheKey(source)),
-    env.CONFIG.put(subscriptionTrafficCacheKey(source), JSON.stringify({
-      url: source.url,
-      trafficFetchedAt: cachedAt,
-      traffic: result.traffic,
-    }), { expirationTtl: 300 }),
-  ]);
+  await Promise.all(writes);
 }
 
 async function readManagedSubscriptionBody(response: Response) {
@@ -443,6 +444,7 @@ export async function readExternalSubscription(
   env: Env,
   source: SubscriptionSource,
   cacheMinutesValue: unknown = DEFAULT_SUBSCRIPTION_CACHE_MINUTES,
+  updateEnabled = true,
 ) {
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
   if (!source || !source.url) throw new Error("external_subscription_url_required");
@@ -450,8 +452,14 @@ export async function readExternalSubscription(
   const cacheMinutes = normalizeSubscriptionCacheMinutes(cacheMinutesValue);
   const cacheKey = subscriptionCacheKey(source);
   const now = Date.now();
+  const cached = await env.CONFIG.get<{ url: string; content: unknown; cachedAt: unknown }>(cacheKey, "json");
+  if (!updateEnabled) {
+    if (cached?.url === source.url && typeof cached.content === "string") {
+      return decodeExternalSubscriptionContent(cached.content);
+    }
+    throw new Error("subscription_update_disabled_cache_missing");
+  }
   if (cacheMinutes > 0) {
-    const cached = await env.CONFIG.get<{ url: string; content: unknown; cachedAt: unknown }>(cacheKey, "json");
     const cachedAt = Number(cached && cached.cachedAt);
     const freshUntil = cachedAt + cacheMinutes * 60 * 1000;
     if (
@@ -473,26 +481,23 @@ export async function readExternalSubscriptionTraffic(
   env: Env,
   source: SubscriptionSource,
   cacheMinutesValue: unknown = DEFAULT_SUBSCRIPTION_CACHE_MINUTES,
+  updateEnabled = true,
 ): Promise<SubscriptionTrafficMetadata | null> {
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
   if (!source?.url) return null;
 
   const cacheMinutes = normalizeSubscriptionCacheMinutes(cacheMinutesValue);
   const now = Date.now();
-  if (cacheMinutes > 0) {
-    const cached = await env.CONFIG.get<{
-      url: string;
-      cachedAt: number;
-      trafficFetched?: boolean;
-      traffic?: unknown;
-    }>(subscriptionCacheKey(source), "json");
-    const cachedAt = Number(cached?.cachedAt);
-    if (
-      cached?.url === source.url &&
-      cached.trafficFetched === true &&
-      Number.isFinite(cachedAt) &&
-      cachedAt + cacheMinutes * 60 * 1000 > now
-    ) {
+  const cached = await env.CONFIG.get<{
+    url: string;
+    cachedAt: number;
+    trafficFetched?: boolean;
+    traffic?: unknown;
+  }>(subscriptionCacheKey(source), "json");
+  if (cached?.url === source.url && cached.trafficFetched === true) {
+    const cachedAt = Number(cached.cachedAt);
+    if (!updateEnabled || (cacheMinutes > 0 && Number.isFinite(cachedAt) &&
+        cachedAt + cacheMinutes * 60 * 1000 > now)) {
       return cachedSubscriptionTraffic(cached.traffic);
     }
   }
@@ -505,11 +510,12 @@ export async function readExternalSubscriptionTraffic(
   const trafficFetchedAt = Number(trafficCache?.trafficFetchedAt);
   if (
     trafficCache?.url === source.url &&
-    Number.isFinite(trafficFetchedAt) &&
-    trafficFetchedAt + 5 * 60 * 1000 > now
+    (!updateEnabled || (Number.isFinite(trafficFetchedAt) &&
+      trafficFetchedAt + 5 * 60 * 1000 > now))
   ) {
     return cachedSubscriptionTraffic(trafficCache.traffic);
   }
+  if (!updateEnabled) return null;
 
   const fetched = await fetchExternalSubscription(source.url);
   await cacheExternalSubscription(env, source, fetched, now, cacheMinutes);
@@ -522,7 +528,24 @@ export async function validateAndWarmSubscriptionSources(env: Env, groups: Subsc
       if (source.enabled === false) continue;
       // 后台直接维护的文本订阅原样保存，不要求内容匹配特定节点协议。
       if (source.url && !source.content) {
-        await readExternalSubscription(env, source, group.cacheMinutes);
+        if (!group.updateEnabled) {
+          if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
+          const cacheKey = subscriptionCacheKey(source);
+          const cached = await env.CONFIG.get<{ url: string; content: unknown }>(cacheKey, "json");
+          if (cached?.url === source.url && typeof cached.content === "string") {
+            // 停用更新后保留最近一次订阅快照，不再按原缓存时长过期。
+            await env.CONFIG.put(cacheKey, JSON.stringify(cached));
+          } else {
+            // 尚无可用快照时尝试预热一次；失败不阻止关闭后续更新。
+            try {
+              await readExternalSubscription(env, source, group.cacheMinutes, true);
+            } catch {
+              // 无快照时客户端会收到明确的缓存缺失错误。
+            }
+          }
+          continue;
+        }
+        await readExternalSubscription(env, source, group.cacheMinutes, group.updateEnabled);
       }
     }
   }

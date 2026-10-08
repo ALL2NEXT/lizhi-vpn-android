@@ -22,7 +22,6 @@ export async function importSubscriptionSources(input: unknown, accountType: unk
   const source = (name: string, url: string, localContent: string, nodeCount: number): ImportedSubscription => ({
     name, url, content: localContent, nodeCount, minAccountType, enabled: true,
     minAppVersion: "", remark: "", autoRename: false,
-    iconMode: "AUTO_REMOTE", customIconUrl: "", iconBase64: "", iconMimeType: "",
   });
   if (!content) return { sources: [source("新建线路", "", "", 0)], failedSources: [], nodeCount: 0 };
   const { urls, local } = detectSubscriptionInput(content);

@@ -279,7 +279,7 @@
       <div><h2>订阅分组</h2><p>按账户状态、类型和版本区间配置线路权限。新增和编辑后，保存配置才会生效。</p></div>
       <div class="settings-page-save">
         <span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span>
-        <div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="subscriptions" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('subscriptions')" disabled>保存配置</button></div>
+        <div class="settings-page-save-actions"><button class="danger" type="button" data-action="delete-exhausted-subscriptions" title="删除用量达到或超过总流量的外部订阅">一键删除流量用尽订阅</button><button class="secondary" type="button" data-settings-discard="subscriptions" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('subscriptions')" disabled>保存配置</button></div>
       </div>
     </div>
     <div id="subscriptionRows"></div>

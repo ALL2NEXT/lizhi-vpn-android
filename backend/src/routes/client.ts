@@ -185,7 +185,22 @@ async function handleManagedSubscription(path: string, request: Request, env: En
   }
 
   const clientIp = getClientIp(request);
-  const fetchedContent = source.content || await readExternalSubscription(env, source, group.cacheMinutes);
+  let fetchedContent = source.content;
+  if (!fetchedContent) {
+    try {
+      fetchedContent = await readExternalSubscription(
+        env,
+        source,
+        group.cacheMinutes,
+        group.updateEnabled,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === "subscription_update_disabled_cache_missing") {
+        return json({ error: "subscription_update_disabled_cache_missing" }, 503);
+      }
+      return json({ error: "subscription_fetch_failed" }, 502);
+    }
+  }
   // 纯文本节点由后台直接维护，自动重命名只对外部接口生效。
   const plaintextContent = source.autoRename && !source.content
     ? autoRenameSubscriptionContent(fetchedContent)
@@ -221,15 +236,19 @@ async function handleDebugSubscription(path: string, _request: Request, env: Env
   const selectedIds = new Set(debugInterface.subscriptionIds);
   const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions
     .filter((source) => selectedIds.has(source.id) && (source.content || source.url))
-    .map((source) => ({ source, cacheMinutes: group.cacheMinutes })));
+    .map((source) => ({
+      source,
+      cacheMinutes: group.cacheMinutes,
+      updateEnabled: group.updateEnabled,
+    })));
   if (!sources.length) {
     return json({ error: "subscription_not_found" }, 404);
   }
 
   let responseContent;
   try {
-    const contents = await Promise.all(sources.map(async ({ source, cacheMinutes }) => {
-      const fetchedContent = source.content || await readExternalSubscription(env, source, cacheMinutes);
+    const contents = await Promise.all(sources.map(async ({ source, cacheMinutes, updateEnabled }) => {
+      const fetchedContent = source.content || await readExternalSubscription(env, source, cacheMinutes, updateEnabled);
       return source.autoRename && !source.content
         ? autoRenameSubscriptionContent(fetchedContent)
         : fetchedContent;

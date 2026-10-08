@@ -62,6 +62,7 @@ export function createAdminStateRoutes(deps: Pick<
       const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions.map((source) => ({
         source,
         cacheMinutes: group.cacheMinutes,
+        updateEnabled: group.updateEnabled,
       })));
       const items = sources.map((source) => ({
         id: source.source.id,
@@ -75,7 +76,12 @@ export function createAdminStateRoutes(deps: Pick<
       for (let index = 0; index < activeSources.length; index += 4) {
         await Promise.all(activeSources.slice(index, index + 4).map(async ({ source, item }) => {
           try {
-            item.traffic = await readExternalSubscriptionTraffic(env, source.source, source.cacheMinutes);
+            item.traffic = await readExternalSubscriptionTraffic(
+              env,
+              source.source,
+              source.cacheMinutes,
+              source.updateEnabled,
+            );
           } catch {
             item.unavailable = true;
           }
