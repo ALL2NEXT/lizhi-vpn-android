@@ -16,6 +16,7 @@ import { normalizeAccountType } from "../domain/account.ts";
 import { beijingTimestamp } from "../domain/time.ts";
 import { cleanText, parseFlag, plainObject } from "../lib/values.ts";
 import {
+  isAppVersionAtLeast,
   normalizeManagedContent,
   normalizeMinimumAppVersion,
   normalizeSubscriptionCacheMinutes,
@@ -62,13 +63,19 @@ function normalizeSubscriptionGroup(
     .filter(plainObject)
     .map((item) => normalizeSubscriptionSource(item, nextSourceId()))
     .filter((item): item is SubscriptionSource => item !== null);
+  const minAppVersion = normalizeMinimumAppVersion(input.minAppVersion ?? input.minimumAppVersion);
+  const maxAppVersion = normalizeMinimumAppVersion(input.maxAppVersion ?? input.maximumAppVersion);
+  if (minAppVersion && maxAppVersion && !isAppVersionAtLeast(maxAppVersion, minAppVersion)) {
+    throw new Error("invalid_app_version_range");
+  }
   return {
     id: cleanText(input.id).slice(0, 80) || String(index + 1),
     name: cleanText(input.name || input.title).slice(0, 80) || `分组${index + 1}`,
     enabled: parseFlag(input.enabled, true),
     allowedStatuses: normalizeSelection(input.allowedStatuses, SUBSCRIPTION_STATUSES, ["normal"]),
     allowedAccountTypes: normalizeSelection(input.allowedAccountTypes, SUBSCRIPTION_ACCOUNT_TYPES, ["guest", "formal"]),
-    minAppVersion: normalizeMinimumAppVersion(input.minAppVersion ?? input.minimumAppVersion),
+    minAppVersion,
+    maxAppVersion,
     subscriptions: sources,
   };
 }
@@ -155,6 +162,7 @@ export function normalizeState(input: unknown): AppState {
           allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
           allowedAccountTypes: minimumType === "formal" ? ["formal"] : ["guest", "formal"],
           minAppVersion: normalizeMinimumAppVersion(item.minAppVersion ?? item.minimumAppVersion),
+          maxAppVersion: "",
           subscriptions: [source],
         }];
       });

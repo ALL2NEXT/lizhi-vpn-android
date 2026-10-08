@@ -1,6 +1,9 @@
 import type { SubscriptionAccess, SubscriptionGroup } from "../types/models.ts";
 
-export type SubscriptionGroupAccessError = "account_access_denied" | "app_version_too_low";
+export type SubscriptionGroupAccessError =
+  | "account_access_denied"
+  | "app_version_too_low"
+  | "app_version_too_high";
 
 export function subscriptionGroupAccessError(
   group: SubscriptionGroup,
@@ -19,6 +22,12 @@ export function subscriptionGroupAccessError(
     !isAppVersionAtLeast(access.appVersion, group.minAppVersion)
   ) {
     return "app_version_too_low";
+  }
+  if (
+    group.maxAppVersion &&
+    !isAppVersionAtLeast(group.maxAppVersion, access.appVersion)
+  ) {
+    return "app_version_too_high";
   }
   return null;
 }

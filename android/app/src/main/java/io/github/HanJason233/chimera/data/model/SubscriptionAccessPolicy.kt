@@ -18,7 +18,7 @@ fun normalizeSubscriptionAccountType(accountType: String?): String = when (accou
     else -> DEFAULT_MIN_ACCOUNT_TYPE
 }
 
-/** 只有当前账户等级达到线路要求的最低等级时，才允许请求该订阅。 */
+/** 只有账号权限与客户端版本区间均匹配时，才允许请求该订阅。 */
 internal fun SubscriptionSource.canBeRequestedBy(
     account: AccountInfo?,
     currentAppVersion: String
@@ -37,7 +37,9 @@ internal fun SubscriptionSource.canBeRequestedBy(
         if (allowedAccountTypes?.contains(accountType) != true) return false
     }
 
-    return minAppVersion.isBlank() || isVersionAtLeast(currentAppVersion, minAppVersion)
+    val meetsMinimum = minAppVersion.isBlank() || isVersionAtLeast(currentAppVersion, minAppVersion)
+    val meetsMaximum = maxAppVersion.isBlank() || isVersionAtLeast(maxAppVersion, currentAppVersion)
+    return meetsMinimum && meetsMaximum
 }
 
 /** 与后台保持一致，按点分隔的数字逐段比较客户端版本。 */

@@ -59,14 +59,20 @@ function addSubscriptionGroup(group) {
       '<label class="check"><input data-field="allowedAccountTypes" type="checkbox" value="guest" ' + (allowedAccountTypes.includes('guest') ? 'checked' : '') + '>游客</label>' +
       '<label class="check"><input data-field="allowedAccountTypes" type="checkbox" value="formal" ' + (allowedAccountTypes.includes('formal') ? 'checked' : '') + '>正式用户</label>' +
     '</fieldset>' +
-    '<div class="field"><label>最低 App 版本<input data-field="minAppVersion" type="text" placeholder="留空不限制，例如 1.2.0"></label></div>' +
+    '<fieldset class="subscription-version-range"><legend>App 版本区间（包含边界）</legend>' +
+      '<label><span>左侧 · 最低</span><input data-field="minAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
+      '<span aria-hidden="true">至</span>' +
+      '<label><span>右侧 · 最高</span><input data-field="maxAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
+    '</fieldset>' +
   '</div>' +
-    '<small class="subscription-group-hint">账号状态依据封禁记录判断；账户类型依据是否绑定邮箱判断。两个权限维度必须同时满足。</small>' +
   '<div class="subscription-group-sources" data-group-sources></div>' +
   '<button class="secondary subscription-group-add" type="button" data-action="add-source">添加订阅</button>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="minAppVersion"]').value = String(group.minAppVersion || '');
+  row.querySelector('[data-field="maxAppVersion"]').value = String(group.maxAppVersion || '');
   el('subscriptionRows').appendChild(row);
+  row.querySelector('[data-field="minAppVersion"]').addEventListener('change', updateSubscriptionAppVersionOptions);
+  row.querySelector('[data-field="maxAppVersion"]').addEventListener('change', updateSubscriptionAppVersionOptions);
   row.querySelector('[data-action="add-source"]').onclick = function() {
     openSubscriptionImport(row);
   };
@@ -81,7 +87,68 @@ function addSubscriptionGroup(group) {
     updateSubscriptionGroupControls();
   };
   updateSubscriptionGroupControls();
+  updateSubscriptionAppVersionOptions();
   return row;
+}
+
+function updateSubscriptionAppVersionOptions() {
+  const host = el('subscriptionAppVersionOptions');
+  if (!host) return;
+  const versions = new Set();
+  const versionInput = document.getElementById('appVersion');
+  const currentVersion = String(versionInput && versionInput.value || currentState && currentState.appUpdate && currentState.appUpdate.version || '').trim();
+  if (currentVersion) versions.add(currentVersion);
+  getSubscriptionGroupRows().forEach(function(group) {
+    ['minAppVersion', 'maxAppVersion'].forEach(function(field) {
+      const value = String(group.querySelector('[data-field="' + field + '"]').value || '').trim();
+      if (value) versions.add(value);
+    });
+  });
+  const sortedVersions = Array.from(versions).sort(function(left, right) {
+    const leftParts = left.replace(/^v/i, '').split('.').map(Number);
+    const rightParts = right.replace(/^v/i, '').split('.').map(Number);
+    for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+      const difference = (leftParts[index] || 0) - (rightParts[index] || 0);
+      if (difference) return difference;
+    }
+    return left.localeCompare(right);
+  });
+  host.innerHTML = sortedVersions.map(function(version) {
+    return '<option value="' + esc(version) + '"></option>';
+  }).join('');
+}
+
+function compareAppVersions(left, right) {
+  const normalize = function(value) {
+    const version = String(value || '').trim().replace(/^v/i, '');
+    if (!/^\d+(?:\.\d+)*$/.test(version)) return null;
+    return version.split('.').map(function(part) { return Number(part); });
+  };
+  const leftParts = normalize(left);
+  const rightParts = normalize(right);
+  if (!leftParts || !rightParts) return null;
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const difference = (leftParts[index] || 0) - (rightParts[index] || 0);
+    if (difference) return difference < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+function validateSubscriptionGroupVersions(groups) {
+  for (let index = 0; index < groups.length; index += 1) {
+    const group = groups[index];
+    if (group.minAppVersion && compareAppVersions(group.minAppVersion, group.minAppVersion) === null) {
+      return '分组「' + group.name + '」的左侧版本格式无效';
+    }
+    if (group.maxAppVersion && compareAppVersions(group.maxAppVersion, group.maxAppVersion) === null) {
+      return '分组「' + group.name + '」的右侧版本格式无效';
+    }
+    if (group.minAppVersion && group.maxAppVersion &&
+        compareAppVersions(group.minAppVersion, group.maxAppVersion) > 0) {
+      return '分组「' + group.name + '」的左侧版本不能高于右侧版本';
+    }
+  }
+  return '';
 }
 
 function moveSubscriptionGroup(row, direction) {
@@ -605,6 +672,7 @@ function readSubscriptionGroups() {
       allowedAccountTypes: Array.from(group.querySelectorAll('[data-field="allowedAccountTypes"]:checked'))
         .map(function(input) { return input.value; }),
       minAppVersion: group.querySelector('[data-field="minAppVersion"]').value.trim(),
+      maxAppVersion: group.querySelector('[data-field="maxAppVersion"]').value.trim(),
       subscriptions: sources
     };
   });
@@ -707,6 +775,10 @@ async function pushSection(section) {
   if (section === 'navigation-page') {
     const validationError = validateWebNavigationGroups(form.settings.webNavigationGroups);
     if (validationError) return show(validationError, true);
+  }
+  if (section === 'subscriptions') {
+    const versionError = validateSubscriptionGroupVersions(form.subscriptionGroups);
+    if (versionError) return show(versionError, true);
   }
   const settings = section === 'navigation-page'
       ? Object.assign({}, currentState.settings, {

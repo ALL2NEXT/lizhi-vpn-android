@@ -68,6 +68,7 @@ async function handleClient(request: Request, env: Env) {
         allowedStatuses: group.allowedStatuses,
         allowedAccountTypes: group.allowedAccountTypes,
         minAppVersion: group.minAppVersion,
+        maxAppVersion: group.maxAppVersion,
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
       }))),
     notice: visibleNotice(state.notice),
@@ -168,7 +169,17 @@ async function handleManagedSubscription(path: string, request: Request, env: En
     return json({
       ok: false,
       error: "app_version_too_low",
-      requiredVersion: group.minAppVersion,
+      minimumVersion: group.minAppVersion,
+      maximumVersion: group.maxAppVersion || null,
+      currentVersion: access.appVersion || null,
+    }, 403);
+  }
+  if (accessError === "app_version_too_high") {
+    return json({
+      ok: false,
+      error: "app_version_too_high",
+      minimumVersion: group.minAppVersion || null,
+      maximumVersion: group.maxAppVersion,
       currentVersion: access.appVersion || null,
     }, 403);
   }

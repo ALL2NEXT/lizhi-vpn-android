@@ -22,6 +22,7 @@ export interface SubscriptionGroup {
   allowedStatuses: SubscriptionAccountStatus[];
   allowedAccountTypes: Exclude<AccountType, "banned">[];
   minAppVersion: string;
+  maxAppVersion: string;
   subscriptions: SubscriptionSource[];
 }
 
