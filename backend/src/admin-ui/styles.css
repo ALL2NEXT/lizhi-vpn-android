@@ -367,7 +367,7 @@
      .user-detail-devices { flex: 1; margin-top: 24px; }
      .user-detail-devices h3 { font-size: 16px; }
 
-    /* Google Material inspired light admin theme */
+    /* Google Material 风格：浅色主题与基础色彩 */
     :root {
       --surface: #ffffff;
       --surface-page: #f0f4f9;
@@ -382,22 +382,23 @@
       --red: #b3261e;
     }
     *, *::before, *::after { box-sizing: border-box; }
-    body { background: var(--surface-page); color: var(--ink); font-size: 14px; }
+    body { background: var(--surface-page); color: var(--ink); font-size: 15px; }
     main { min-width: 1200px; }
     h1, h2, h3, h4 { color: var(--ink); letter-spacing: -.01em; }
-    h2 { font-size: 22px; font-weight: 600; }
-    p, small, label { line-height: 1.55; }
+    h2 { font-size: 24px; font-weight: 600; }
+    p, small, label { line-height: 1.6; }
+    small { font-size: 13px; }
     a { color: var(--blue); }
     #dashboard { grid-template-columns: 256px minmax(0, 1fr); }
     .dashboard-sidebar {
       padding: 24px 16px 18px;
       background: #edf2f8;
       border-right-color: var(--line);
-      box-shadow: 1px 0 2px rgb(60 64 67 / 4%);
+      box-shadow: none;
     }
     .sidebar-brand { padding: 0 10px 20px; border-bottom-color: var(--line); }
     .sidebar-brand h1 { color: var(--blue); font-size: 21px; font-weight: 650; letter-spacing: -.04em; }
-    .sidebar-brand small { color: var(--ink-muted); font-size: 12px; }
+    .sidebar-brand small { color: var(--ink-muted); font-size: 13px; }
     .tab-nav { gap: 4px; padding: 16px 0; }
     .tab-button {
       min-height: 40px;
@@ -422,37 +423,61 @@
     .tab-nav button.tab-button.active:hover:not(:disabled) { background: #d3e3fd; color: var(--blue-ink); }
     .nav-parent { color: #444746; font-weight: 600; }
     .nav-chevron { color: var(--ink-muted); }
+    .nav-label { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+    .nav-icon { display: block; width: 18px; height: 18px; flex: 0 0 18px; fill: currentColor; opacity: .78; }
     .nav-submenu { gap: 2px; margin: 0 0 4px 12px; padding-left: 8px; border-left-color: var(--line); }
-    .nav-submenu .tab-button { min-height: 36px; padding: 7px 12px; font-size: 13px; }
+    .nav-submenu .tab-button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 36px; padding: 7px 12px; font-size: 13px; }
     .sidebar-logout { width: 100%; }
     .dashboard-workspace { background: var(--surface-page); }
     .tab-panel {
-      width: calc(100% - 56px);
-      max-width: 1680px;
-      padding: 32px;
-      margin: 28px auto;
-      background: var(--surface);
-      border: 1px solid #e8eaed;
-      border-radius: 20px;
-      box-shadow: 0 1px 2px rgb(60 64 67 / 8%);
+      width: 100%;
+      max-width: 1640px;
+      padding: 36px 44px;
+      margin: 0 auto;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
     }
-    .dashboard-heading { align-items: center; margin-bottom: 24px; }
+    .dashboard-heading { align-items: center; margin-bottom: 30px; }
     .dashboard-heading h2 { margin-bottom: 6px; }
-    .dashboard-heading p { max-width: 900px; color: var(--ink-muted); }
-    .growth-card, .distribution-card, .user-admin-control-panel, .user-table-card {
+    .dashboard-heading p { max-width: 900px; margin-top: 8px; color: var(--ink-muted); font-size: 14px; }
+    .growth-card, .distribution-card, .user-table-card {
       background: var(--surface);
-      border-color: #e8eaed;
+      border-color: #e3e9f1;
       border-radius: 16px;
-      box-shadow: 0 1px 2px rgb(60 64 67 / 6%);
+      box-shadow: none;
     }
-    .growth-card, .distribution-card { padding: 20px; }
+    .growth-card, .distribution-card { padding: 24px; }
+    .user-admin-control-panel {
+      min-width: 0;
+      padding: 18px 0 20px;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      box-shadow: none;
+    }
+    .user-admin-control-grid { gap: 0; }
     .growth-toolbar h3, .distribution-card h3, .user-admin-control-panel h3,
     .user-table-card h3, .settings-section-title, .source-section-title { color: var(--ink); }
     .growth-toolbar small, .distribution-card > small { color: var(--ink-muted); }
-    .settings-section { background: #f8fafd; border-color: var(--line); border-radius: 14px; }
-    .source-row, .web-nav-group, .subscription-group { background: var(--surface-page); border-color: var(--line); }
-    .source-section, .debug-interface-source, .user-admin-device-detail,
-    .device-relation-detail-item, .security-batch-toolbar { background: var(--surface-soft); }
+    .settings-sections { gap: 0; }
+    .settings-section {
+      padding: 24px 0;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+    }
+    .settings-section:last-child { border-bottom: 0; }
+    .settings-section-title { margin-bottom: 8px; font-size: 18px; }
+    .settings-section-description { margin-bottom: 16px; font-size: 13px; }
+    .source-row { background: transparent; border-color: transparent; border-top: 1px solid #e3e9f1; border-radius: 0; padding: 16px 0; margin: 0; }
+    .web-nav-group, .subscription-group { background: #f8fafd; border-color: #e2e9f1; border-radius: 12px; }
+    .source-section { padding: 12px 0; background: transparent; border: 0; border-radius: 0; }
+    .debug-interface-source, .user-admin-device-detail, .device-relation-detail-item,
+    .security-batch-toolbar { background: var(--surface-soft); }
     input, textarea, select {
       min-height: 40px;
       color: var(--ink);
@@ -468,7 +493,7 @@
     button {
       min-height: 38px;
       padding: 9px 16px;
-      border-radius: 999px;
+      border-radius: 8px;
       background: var(--blue);
       color: #fff;
       font: inherit;
@@ -481,11 +506,11 @@
     button:active:not(:disabled) { transform: translateY(1px); }
     button.secondary {
       color: #3c4043;
-      background: var(--surface);
-      border: 1px solid #dadce0;
+      background: var(--surface-soft);
+      border: 1px solid transparent;
       font-weight: 500;
     }
-    button.secondary:hover:not(:disabled) { color: var(--blue-ink); background: #f8fafd; border-color: #c4d7f8; }
+    button.secondary:hover:not(:disabled) { color: var(--blue-ink); background: #dfe7f0; border-color: transparent; }
     button.danger { color: var(--red); background: #fce8e6; }
     button.danger:hover:not(:disabled) { color: #8c1d18; background: #f9d4d1; }
     button:disabled { box-shadow: none; }
@@ -564,4 +589,55 @@
     .admin-login-badge.success, .security-badge, .user-status-badge.active { color: #137333; background: #e6f4ea; }
     .admin-login-badge.failed, .security-badge.banned, .user-status-badge.banned { color: var(--red); background: #fce8e6; }
     .login-gate { width: min(430px, calc(100% - 32px)); margin-top: max(8vh, 48px); }
-    .login-gate .card { padding: 28px; border-color: #e8eaed; border-radius: 20px; box-shadow: 0 4px 18px rgb(60 64 67 / 10%); }
+    .login-gate .card { padding: 28px; border-color: #e3e9f1; border-radius: 16px; box-shadow: 0 2px 10px rgb(60 64 67 / 7%); }
+
+    /* 用留白和细分隔线维持层级，避免每个嵌套区域都加边框。 */
+    .growth-card { margin-bottom: 20px; }
+    .distribution-grid { gap: 18px; }
+    .user-table-card { padding: 20px; }
+    .user-table-scroll { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+    .growth-range-field, .subscription-group-title label, .subscription-version-range label,
+    .subscription-group-permissions legend, .source-row-heading label,
+    .web-nav-group-name, .web-nav-item label { font-size: 13px; }
+    .settings-section-description, .subscription-group-summary, .traffic-detail-summary,
+    .security-selection-count, .user-table-meta, .user-admin-device-detail span,
+    .device-relation-detail-item span { font-size: 13px; }
+    .admin-login-table, .security-account-table, .security-device-table,
+    .traffic-detail-table, .user-data-table { font-size: 13px; }
+    .admin-login-table th, .admin-login-table td, .security-account-table th,
+    .security-account-table td, .security-device-table th, .security-device-table td,
+    .traffic-detail-table th, .traffic-detail-table td, .user-data-table th,
+    .user-data-table td, .user-sheet th, .user-sheet td {
+      border-right: 0;
+      border-bottom-color: #e7edf4;
+    }
+    .admin-login-table th, .admin-login-table td, .security-account-table th,
+    .security-account-table td, .security-device-table th, .security-device-table td,
+    .traffic-detail-table th, .traffic-detail-table td, .user-data-table th,
+    .user-data-table td { padding: 10px 12px; }
+    .traffic-detail-table th, .security-account-table th, .admin-login-table th,
+    .security-device-table th, .user-data-table th, .user-sheet th,
+    .user-admin-table th:first-child, .user-admin-table th:nth-child(2) { background: #e9eff6; }
+    .user-sheet td:first-child, .user-admin-table th:first-child, .user-admin-table td:first-child,
+    .user-admin-table th:nth-child(2), .user-admin-table td:nth-child(2) { background: #f8fafd; }
+    .traffic-detail-wrap, .security-account-list, .admin-login-record-wrap,
+    .table-wrap, .security-device-wrap { border-color: #e1e8f0; }
+    .security-device-wrap { border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }
+    .subscription-import-item { padding: 12px 4px; border: 0; border-bottom: 1px solid #e7edf4; border-radius: 0; }
+    .device-relation-chip { border-color: #dfe6ee; border-radius: 8px; background: #fff; }
+    .admin-login-badge, .security-badge, .user-status-badge, .draft-badge { border-radius: 8px; font-size: 13px; }
+    .user-draft-count, .user-detail-heading p { font-size: 14px; }
+    .settings-save-bar {
+      padding: 12px 16px;
+      background: #fff;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+    #status { background: var(--surface-page); }
+    .subscription-import-dialog, .source-settings-dialog, .device-relation-modal-card {
+      border-radius: 16px;
+      box-shadow: 0 8px 28px rgb(32 33 36 / 16%);
+    }
