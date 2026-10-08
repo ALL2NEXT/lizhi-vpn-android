@@ -7,7 +7,11 @@ import type { RouteDependencies } from "../../types/routes.ts";
 
 import { fetchWebsiteIcon } from "../../services/navigation-icons.ts";
 import { readJsonObject } from "../../http/request.ts";
-import { importSubscriptionSources } from "../../services/subscription-import.ts";
+import {
+  importSubscriptionSources,
+  parseLocalSubscriptionResponse,
+  prepareLocalSubscriptionImport,
+} from "../../services/subscription-import.ts";
 
 export function createAdminStateRoutes(deps: Pick<
   RouteDependencies,
@@ -33,6 +37,22 @@ export function createAdminStateRoutes(deps: Pick<
     if (path === "/api/subscriptions/import" && request.method === "POST") {
       try {
         const incoming = await readJsonObject(request);
+        if (incoming.mode === "prepare-local") {
+          return json({
+            ok: true,
+            ...prepareLocalSubscriptionImport(incoming.input, incoming.minAccountType),
+          });
+        }
+        if (incoming.mode === "parse-local-response") {
+          return json({
+            ok: true,
+            source: parseLocalSubscriptionResponse(
+              incoming.url,
+              incoming.content,
+              incoming.minAccountType,
+            ),
+          });
+        }
         const result = await importSubscriptionSources(incoming.input, incoming.minAccountType);
         return json({ ok: result.sources.length > 0, ...result }, result.sources.length ? 200 : 422);
       } catch (error) {

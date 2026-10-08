@@ -292,6 +292,13 @@
         <label class="field" for="subscriptionImportInput">智能识别
           <textarea id="subscriptionImportInput" rows="8" placeholder="粘贴订阅地址、节点 URI、Base64、Clash YAML 或 sing-box / Xray JSON。支持多个地址与配置混合导入。"></textarea>
         </label>
+        <label class="field subscription-import-fetch-setting">远程订阅获取方式
+          <select id="subscriptionImportFetchMode">
+            <option value="server" selected>服务器获取（当前方式）</option>
+            <option value="local">本地获取（当前浏览器）</option>
+          </select>
+        </label>
+        <small id="subscriptionImportFetchHint">服务器获取由 Worker 访问订阅地址，适用于不允许浏览器跨域访问的来源。</small>
         <div class="subscription-import-tools">
           <button class="secondary" type="button" id="subscriptionImportClipboard">从剪贴板粘贴</button>
           <button class="secondary" type="button" id="subscriptionImportFileButton">选择文件</button>
