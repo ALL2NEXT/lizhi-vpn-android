@@ -185,27 +185,30 @@ function updateSubscriptionGroupControls() {
 function addSource(groupRow, source, sourceOrderValue) {
   source = source || {};
   const row = document.createElement('div');
-  row.className = 'source-row collapsed';
+  row.className = 'source-row';
   const existingOrders = Array.from(groupRow.querySelectorAll('.source-row')).map(sourceOrder);
   row.dataset.sourceOrder = Number.isFinite(Number(sourceOrderValue))
     ? String(Number(sourceOrderValue))
     : String(existingOrders.length ? Math.max.apply(null, existingOrders) + 1 : 0);
   const sourceType = source.content ? 'content' : 'url';
+  // 每条订阅的设定弹窗保留在行内，关闭后输入仍作为当前页面草稿保留。
   row.innerHTML = '<div class="source-row-header">' +
     '<div class="source-row-heading">' +
       '<div class="field"><label>线路名称<input data-field="name" value="' + esc(source.name) + '"></label></div>' +
       '<div class="field"><label>备注<input data-field="remark" type="text" value="' + esc(source.remark) + '" placeholder="仅后台保存"></label></div>' +
     '</div>' +
-    '<div class="source-row-controls" role="group" aria-label="线路启用、排序和折叠操作">' +
+    '<div class="source-row-controls" role="group" aria-label="线路启用、排序和详细设置">' +
       '<label class="check source-enabled-check"><input data-field="enabled" type="checkbox" ' + (source.enabled === false ? '' : 'checked') + '>启用</label>' +
       '<button class="secondary source-move-button" type="button" data-action="move-up" aria-label="上移线路" title="上移线路">↑</button>' +
       '<button class="secondary source-move-button" type="button" data-action="move-down" aria-label="下移线路" title="下移线路">↓</button>' +
-      '<button class="secondary source-edit-button" type="button" data-action="collapse" aria-expanded="false" aria-label="编辑订阅线路" title="编辑订阅线路">&#9881;&#65038;</button>' +
+      '<button class="secondary source-edit-button" type="button" data-action="details" aria-haspopup="dialog" aria-label="订阅详细设定" title="订阅详细设定">&#9881;&#65038;</button>' +
     '</div>' +
   '</div>' +
-  '<div class="source-row-body" data-source-body hidden>' +
+  '<dialog class="source-settings-dialog" data-source-dialog aria-label="订阅详细设定">' +
+    '<div class="source-settings-dialog-header"><div><h3>订阅详细设定</h3><p data-source-dialog-name></p></div>' +
+      '<button class="secondary" type="button" data-action="source-close">关闭</button>' +
+    '</div>' +
     '<section class="source-section source-details-section">' +
-      '<h3 class="source-section-title">订阅详细设定</h3>' +
       '<div class="grid source-details-grid">' +
         '<div class="field source-type-field"><label>订阅来源<select data-field="sourceType">' +
           '<option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>外部接口</option>' +
@@ -218,16 +221,24 @@ function addSource(groupRow, source, sourceOrderValue) {
       '</div><label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label><small>按节点名称识别国家，并批量改为“国家+编号”，例如：日本1、日本2。</small><small>支持节点 URI、Base64、Clash、sing-box 和 Xray 订阅，由 Worker 转换后加密下发；缓存时间设为 0 会每次请求上游。</small></div>' +
       '<div class="source-mode" data-source-mode="content"><div class="field"><label>纯文本节点（每行一个）<textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></label></div><small>保存后由 Worker 直接加密下发，不经过外部接口缓存。</small></div>' +
     '</section>' +
-    '<div class="row-actions"><button class="danger" type="button">删除</button></div>' +
-  '</div>';
-  row.querySelector('.danger').onclick = function() {
+    '<div class="source-settings-dialog-actions"><button class="danger" type="button" data-action="source-delete">删除订阅</button></div>' +
+  '</dialog>';
+  row.querySelector('[data-action="source-delete"]').onclick = function() {
+    const dialog = row.querySelector('[data-source-dialog]');
+    if (dialog.open) dialog.close();
     row.remove();
     updateSourceRowsMeta();
     markSettingsDirty('subscriptions');
   };
   row.querySelector('[data-field="sourceType"]').onchange = function() { updateSourceMode(row); };
-  row.querySelector('[data-action="collapse"]').onclick = function() {
-    toggleSourceRow(row);
+  row.querySelector('[data-field="name"]').addEventListener('input', updateSourceRowsMeta);
+  // 使用原生弹窗，让浏览器处理焦点约束、Esc 关闭和背景遮罩。
+  row.querySelector('[data-action="details"]').onclick = function() {
+    const dialog = row.querySelector('[data-source-dialog]');
+    if (dialog && !dialog.open) dialog.showModal();
+  };
+  row.querySelector('[data-action="source-close"]').onclick = function() {
+    row.querySelector('[data-source-dialog]').close();
   };
   row.querySelector('[data-action="move-up"]').onclick = function() {
     moveSourceRow(row, -1);
@@ -265,9 +276,11 @@ function updateSourceRowsMeta() {
     }
     rows.forEach(function(row, index) {
       const nameInput = row.querySelector('[data-field="name"]');
+      if (nameInput) nameInput.placeholder = '线路' + (sourceOrder(row) + 1);
+      const dialogName = row.querySelector('[data-source-dialog-name]');
+      if (dialogName) dialogName.textContent = nameInput.value.trim() || nameInput.placeholder;
       const moveUp = row.querySelector('[data-action="move-up"]');
       const moveDown = row.querySelector('[data-action="move-down"]');
-      if (nameInput) nameInput.placeholder = '线路' + (sourceOrder(row) + 1);
       if (moveUp) moveUp.disabled = index === 0;
       if (moveDown) moveDown.disabled = index === rows.length - 1;
     });
@@ -289,18 +302,6 @@ function moveSourceRow(row, direction) {
   else container.insertBefore(target, row);
   updateSourceRowsMeta();
   markSettingsDirty('subscriptions');
-}
-function toggleSourceRow(row) {
-  const body = row.querySelector('[data-source-body]');
-  const button = row.querySelector('[data-action="collapse"]');
-  if (!body || !button) return;
-  const collapsed = !body.hidden;
-  body.hidden = collapsed;
-  row.classList.toggle('collapsed', collapsed);
-  button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-  button.textContent = collapsed ? '\u2699\uFE0E' : '\u00D7';
-  button.setAttribute('aria-label', collapsed ? '编辑订阅线路' : '关闭订阅编辑');
-  button.title = collapsed ? '编辑订阅线路' : '关闭订阅编辑';
 }
 function updateSourceMode(row) {
   const type = row.querySelector('[data-field="sourceType"]').value;

@@ -123,15 +123,22 @@
     .source-row-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .source-row-controls button { margin: 0; padding: 7px 10px; }
     .source-row-controls .source-edit-button { min-width: 32px; min-height: 32px; padding: 5px 8px; font-size: 18px; line-height: 1; }
-    .source-row-controls .source-edit-button[aria-expanded="true"] { font-size: 24px; font-weight: 400; }
     .source-enabled-check { box-sizing: border-box; min-height: 32px; margin: 0; padding: 5px 10px; color: #e5e7eb; background: #111827; border: 1px solid #4b5563; border-radius: 7px; white-space: nowrap; }
     .source-row-controls .source-move-button { min-width: 32px; min-height: 32px; padding: 5px 8px; font-size: 16px; line-height: 1; }
-    .source-row-body[hidden] { display: none; }
-    .source-row.collapsed .source-row-header { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
     .source-section { padding: 12px; background: #172033; border: 1px solid #374151; border-radius: 8px; }
     .source-section + .source-section { margin-top: 12px; }
     .source-section-title { margin: 0 0 10px; color: #f8fafc; font-size: 14px; }
     .source-details-grid { margin-bottom: 12px; }
+    /* 订阅详细设定弹窗固定桌面宽度，内容超出窗口高度时在弹窗内滚动。 */
+    .source-settings-dialog { box-sizing: border-box; width: 820px; max-width: calc(100vw - 48px); max-height: calc(100vh - 48px); margin: auto; padding: 24px; overflow-y: auto; color: #e5e7eb; background: #1f2937; border: 1px solid #4b5563; border-radius: 14px; }
+    .source-settings-dialog::backdrop { background: rgb(0 0 0 / 65%); }
+    .source-settings-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid #374151; }
+    .source-settings-dialog-header h3 { margin: 0; color: #f8fafc; font-size: 18px; }
+    .source-settings-dialog-header p { margin: 4px 0 0; color: #94a3b8; font-size: 13px; }
+    .source-settings-dialog-header button { flex: 0 0 auto; margin: 0; }
+    .source-settings-dialog .source-details-section { padding: 0; background: transparent; border: 0; }
+    .source-settings-dialog-actions { display: flex; justify-content: flex-end; padding-top: 16px; margin-top: 18px; border-top: 1px solid #374151; }
+    .source-settings-dialog-actions button { margin: 0; }
     .source-mode { margin-top: 12px; }
     .source-mode[hidden] { display: none; }
     .source-type-field { max-width: 280px; }
