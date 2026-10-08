@@ -18,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material3.*
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,8 +43,6 @@ fun AboutDialog(
     websiteUrl: String = "",
     feedbackEmail: String = "",
     feedbackUrl: String = "",
-    showUpdateAction: Boolean = false,
-    onCheckUpdate: () -> Unit = {},
     onOpenBackendDialog: () -> Unit = {},
     telegramUrl: String = "",
     appDisplayName: String = "Chimera",
@@ -197,7 +194,6 @@ fun AboutDialog(
                     )
 
                     if (
-                        showUpdateAction ||
                         websiteUrl.isNotBlank() ||
                         hasFeedbackAction ||
                         githubUrl.isNotBlank() ||
@@ -209,17 +205,6 @@ fun AboutDialog(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (showUpdateAction) {
-                                AboutIconAction(
-                                    icon = Icons.Outlined.SystemUpdate,
-                                    contentDescription = "检查更新",
-                                    onClick = {
-                                        onDismiss()
-                                        onCheckUpdate()
-                                    }
-                                )
-                            }
-
                             if (websiteUrl.isNotBlank()) {
                                 AboutIconAction(
                                     icon = Icons.Outlined.Language,

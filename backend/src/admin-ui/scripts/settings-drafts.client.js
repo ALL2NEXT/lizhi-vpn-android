@@ -1,4 +1,4 @@
-const SETTINGS_SECTIONS = ['subscriptions', 'navigation-page', 'about-page', 'registration-control', 'notice', 'debug-interface'];
+const SETTINGS_SECTIONS = ['subscriptions', 'navigation-page', 'about-page', 'app-update', 'registration-control', 'notice', 'debug-interface'];
 const settingsDirtySections = new Set();
 const settingsDraftVersions = new Map();
 const settingsSaveMessages = new Map();

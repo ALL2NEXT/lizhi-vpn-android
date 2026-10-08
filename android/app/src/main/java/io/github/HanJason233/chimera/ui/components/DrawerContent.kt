@@ -121,6 +121,14 @@ fun DrawerContent(
                 onClick = onOpenSkin
             )
 
+            if (AppConfig.BACKEND_URL.isNotBlank()) {
+                DrawerMenuItem(
+                    icon = Icons.Outlined.SystemUpdate,
+                    title = "检查更新",
+                    onClick = onCheckUpdate
+                )
+            }
+
             DrawerMenuItem(
                 icon = Icons.Outlined.Info,
                 title = "关于",
@@ -142,11 +150,6 @@ fun DrawerContent(
             telegramUrl = telegramUrl,
             appDisplayName = appDisplayName,
             appIconResourceId = appIconResourceId,
-            showUpdateAction = AppConfig.BACKEND_URL.isNotBlank(),
-            onCheckUpdate = {
-                showAboutDialog = false
-                onCheckUpdate()
-            },
             onOpenBackendDialog = {
                 showAboutDialog = false
                 onOpenBackendDialog()

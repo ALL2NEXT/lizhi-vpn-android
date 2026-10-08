@@ -53,6 +53,7 @@
              <div id="app-settings-subnav" class="nav-submenu" role="group" aria-label="应用设置子菜单">
                <button class="tab-button" role="tab" type="button" data-tab="subscriptions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5h16v3H4V5zm0 5h16v4H4v-4zm0 6h16v3H4v-3z"/></svg><span>订阅分组</span></button>
                <button class="tab-button" role="tab" type="button" data-tab="navigation-page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 4h18v16H3V4zm2 2v2h14V6H5zm0 4v8h14v-8H5zm2 2h4v2H7v-2z"/></svg><span>导航页</span></button>
+               <button class="tab-button" role="tab" type="button" data-tab="app-update"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 18H5v-2H3v2c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h-2v2zM13 3h-2v8.17L8.41 8.59 7 10l5 5 5-5-1.41-1.41L13 11.17V3z"/></svg><span>版本更新</span></button>
                <button class="tab-button" role="tab" type="button" data-tab="about-page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg><span>关于页</span></button>
                <button class="tab-button" role="tab" type="button" data-tab="notice"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10v4h3l11 5V5L6 10H3zm5 5.2 7 3.2v-2.2l-7-3.2v2.2zm12-5.7v5a3 3 0 0 0 0-5z"/></svg><span>公告</span></button>
             </div>
@@ -308,6 +309,22 @@
     </dialog>
    </section>
 
+  <section class="card tab-panel" role="tabpanel" data-panel="app-update">
+    <h2>版本更新</h2>
+    <div class="settings-sections">
+      <section class="settings-section">
+        <label class="check"><input id="appUpdateEnabled" type="checkbox">启用版本更新提示</label>
+        <div class="grid">
+          <div class="field"><label>版本名称<input id="appVersion" type="text" placeholder="1.1.0"></label></div>
+          <div class="field"><label>版本号<input id="appVersionCode" type="number" min="1" step="1"></label></div>
+          <div class="field"><label>APK 下载地址<input id="appDownloadUrl" type="url" placeholder="https://example.com/app.apk"></label></div>
+        </div>
+        <div class="field"><label>更新说明<textarea id="appChangelog"></textarea></label></div>
+        <label class="check"><input id="appForce" type="checkbox">强制更新</label>
+      </section>
+    </div>
+    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="app-update" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('app-update')" disabled>保存配置</button></div></div>
+  </section>
   <section class="card tab-panel" role="tabpanel" data-panel="about-page">
     <h2>关于页</h2>
     <div class="settings-sections">
@@ -327,17 +344,6 @@
           <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-github"></use></svg>项目源码链接</span><input id="githubUrl" type="url" placeholder="https://github.com/.../..."></label></div>
           <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-telegram"></use></svg>Telegram 群组链接</span><input id="telegramUrl" type="url" placeholder="https://t.me/..."></label></div>
         </div>
-      </section>
-      <section class="settings-section">
-        <h3 class="settings-section-title">版本更新</h3>
-        <label class="check"><input id="appUpdateEnabled" type="checkbox">启用版本更新提示</label>
-        <div class="grid">
-          <div class="field"><label>版本名称<input id="appVersion" type="text" placeholder="1.1.0"></label></div>
-          <div class="field"><label>版本号<input id="appVersionCode" type="number" min="1" step="1"></label></div>
-          <div class="field"><label>APK 下载地址<input id="appDownloadUrl" type="url" placeholder="https://example.com/app.apk"></label></div>
-        </div>
-        <div class="field"><label>更新说明<textarea id="appChangelog"></textarea></label></div>
-        <label class="check"><input id="appForce" type="checkbox">强制更新</label>
       </section>
     </div>
     <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="about-page" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('about-page')" disabled>保存配置</button></div></div>

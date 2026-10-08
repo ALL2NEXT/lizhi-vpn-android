@@ -681,6 +681,8 @@ function fillState(state, section) {
       setValue('feedbackUrl', settings.feedbackUrl);
       setValue('githubUrl', settings.githubUrl);
       setValue('telegramUrl', settings.telegramUrl);
+    }
+    if (!section || section === 'app-update') {
       const update = currentState.appUpdate || {};
       checked('appUpdateEnabled', Boolean(currentState.appUpdate));
       setValue('appVersion', update.version);
@@ -954,6 +956,8 @@ async function pushSection(section) {
           githubUrl: form.settings.githubUrl,
           telegramUrl: form.settings.telegramUrl
         })
+      : section === 'app-update'
+        ? currentState.settings
       : section === 'registration-control'
         ? Object.assign({}, currentState.settings, {
           registrationEnabled: form.settings.registrationEnabled,
@@ -968,7 +972,7 @@ async function pushSection(section) {
       subscriptionGroups: section === 'subscriptions' ? form.subscriptionGroups : currentState.subscriptionGroups,
       settings: settings,
       notice: section === 'notice' ? form.notice : currentState.notice,
-      appUpdate: section === 'about-page' || section === 'app-update' ? form.appUpdate : currentState.appUpdate
+      appUpdate: section === 'app-update' ? form.appUpdate : currentState.appUpdate
     };
     const response = await fetch(ADMIN_API_BASE + '/state', {
       method: 'PUT',
