@@ -35,12 +35,13 @@
      .dashboard-heading h2 { margin-bottom: 6px; }
      .dashboard-heading p { margin: 0; }
      .dashboard-heading button { flex: 0 0 auto; margin: 0; }
-    .subscription-page-heading { flex-wrap: wrap; gap: 20px; }
-    .subscription-page-save { display: grid; flex: 0 0 auto; justify-items: end; gap: 8px; }
-    .subscription-page-save-status { color: var(--ink-muted); font-size: 13px; }
-    .subscription-page-save-status.error { color: var(--red); }
-    .subscription-page-save-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    .subscription-page-save-actions button { margin: 0; }
+    .settings-page-heading { flex-wrap: wrap; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+    .settings-page-heading h2 { margin-bottom: 0; }
+    .settings-page-save { display: grid; flex: 0 0 auto; justify-items: end; gap: 5px; }
+    .settings-page-save-status { color: var(--ink-muted); font-size: 13px; }
+    .settings-page-save-status.error { color: var(--red); }
+    .settings-page-save-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .settings-page-save-actions button { margin: 0; }
      .growth-card { margin-bottom: 14px; padding: 18px; background: #ffffff; border: 1px solid #dadce0; border-radius: 14px; }
      .growth-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
      .growth-toolbar h3 { margin: 0 0 4px; color: #202124; font-size: 16px; }
@@ -662,7 +663,6 @@
     }
 
     /* 长列表页把保存操作放回文档流，避免固定栏遮住列表末尾。 */
-    .tab-panel[data-panel="navigation-page"] > .settings-save-bar { position: static; }
     .tab-panel[data-settings-dirty="false"] [data-settings-save]:disabled {
       color: #778397;
       background: #e8edf4;
@@ -749,10 +749,8 @@
 
     /* 订阅分组按状态摘要、订阅表头和逐行编辑分层展示。 */
     .tab-panel[data-panel="subscriptions"] { padding: 16px 24px 16px 16px; background: var(--surface-page); }
-    .subscription-page-heading { min-height: 68px; margin-bottom: 20px; }
+    .subscription-page-heading { min-height: 68px; }
     .subscription-page-heading p { margin-top: 2px; }
-    .subscription-page-heading h2 { margin-bottom: 0; }
-    .subscription-page-save { gap: 5px; }
     .subscription-group {
       padding: 12px 12px 8px;
       background: #fff;

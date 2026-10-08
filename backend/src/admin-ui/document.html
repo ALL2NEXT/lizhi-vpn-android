@@ -275,11 +275,11 @@
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
-    <div class="dashboard-heading subscription-page-heading">
+    <div class="dashboard-heading subscription-page-heading settings-page-heading">
       <div><h2>订阅分组</h2><p>按账户状态、类型和版本区间配置线路权限。新增和编辑后，保存配置才会生效。</p></div>
-      <div class="subscription-page-save">
-        <span class="subscription-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span>
-        <div class="subscription-page-save-actions"><button class="secondary" type="button" data-settings-discard="subscriptions" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('subscriptions')" disabled>保存配置</button></div>
+      <div class="settings-page-save">
+        <span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span>
+        <div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="subscriptions" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('subscriptions')" disabled>保存配置</button></div>
       </div>
     </div>
     <div id="subscriptionRows"></div>
@@ -310,7 +310,10 @@
    </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="app-update">
-    <h2>版本更新</h2>
+    <div class="dashboard-heading settings-page-heading">
+      <h2>版本更新</h2>
+      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="app-update" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('app-update')" disabled>保存配置</button></div></div>
+    </div>
     <div class="settings-sections">
       <section class="settings-section">
         <label class="check"><input id="appUpdateEnabled" type="checkbox">启用版本更新提示</label>
@@ -323,10 +326,12 @@
         <label class="check"><input id="appForce" type="checkbox">强制更新</label>
       </section>
     </div>
-    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="app-update" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('app-update')" disabled>保存配置</button></div></div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="about-page">
-    <h2>关于页</h2>
+    <div class="dashboard-heading settings-page-heading">
+      <h2>关于页</h2>
+      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="about-page" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('about-page')" disabled>保存配置</button></div></div>
+    </div>
     <div class="settings-sections">
       <section class="settings-section">
         <h3 class="settings-section-title">应用基础信息</h3>
@@ -346,10 +351,12 @@
         </div>
       </section>
     </div>
-    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="about-page" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('about-page')" disabled>保存配置</button></div></div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="navigation-page">
-    <h2>导航页</h2>
+    <div class="dashboard-heading settings-page-heading">
+      <h2>导航页</h2>
+      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="navigation-page" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('navigation-page')" disabled>保存配置</button></div></div>
+    </div>
     <div class="settings-sections">
       <section class="settings-section">
         <h3 class="settings-section-title">导航网站</h3>
@@ -359,11 +366,13 @@
         <small>网站名称和网址都要填写，网址需以 http:// 或 https:// 开头；图标支持 PNG、JPEG、WebP、GIF、ICO，单张不超过 128 KB，保存在后台 KV 配置中。</small>
       </section>
     </div>
-    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="navigation-page" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('navigation-page')" disabled>保存配置</button></div></div>
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="registration-control">
-    <h2>注册控制</h2>
+    <div class="dashboard-heading settings-page-heading">
+      <h2>注册控制</h2>
+      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="registration-control" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('registration-control')" disabled>保存配置</button></div></div>
+    </div>
     <div class="settings-sections">
       <section class="settings-section">
         <h3 class="settings-section-title">注册控制</h3>
@@ -379,10 +388,12 @@
         <small class="hint">注册码每次成功注册后立即失效，只能使用一次。</small>
       </section>
     </div>
-    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="registration-control" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('registration-control')" disabled>保存配置</button></div></div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="notice">
-    <h2>公告</h2>
+    <div class="dashboard-heading settings-page-heading">
+      <h2>公告</h2>
+      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="notice" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('notice')" disabled>保存配置</button></div></div>
+    </div>
     <label class="check"><input id="noticeEnabled" type="checkbox">显示公告</label>
     <div class="grid">
       <div class="field"><label>公告标题<input id="noticeTitle" type="text"></label></div>
@@ -393,16 +404,16 @@
     <div class="field"><label>公告内容<textarea id="noticeContent" placeholder="支持普通文本和 HTML"></textarea></label></div>
     <label class="check"><input id="noticeShowOnce" type="checkbox">每个公告 ID 只显示一次</label>
     <small class="hint">时间按北京时间执行。开始时间留空表示立即显示，结束时间留空表示永不过期。</small>
-     <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="notice" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('notice')" disabled>保存配置</button></div></div>
    </section>
 
 
   <section class="card tab-panel" role="tabpanel" data-panel="debug-interface">
-    <div class="dashboard-heading">
+    <div class="dashboard-heading settings-page-heading">
       <div>
         <h2>调试接口</h2>
         <p>一次选择一个或多个订阅线路，生成统一的明文订阅地址。该地址仅用于调试，请勿用于生产客户端。</p>
       </div>
+      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="debug-interface" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('debug-interface')" disabled>保存配置</button></div></div>
     </div>
     <div class="settings-sections">
       <section class="settings-section">
@@ -424,7 +435,6 @@
         </div>
       </section>
     </div>
-    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="debug-interface" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('debug-interface')" disabled>保存配置</button></div></div>
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="admin-login-records">
