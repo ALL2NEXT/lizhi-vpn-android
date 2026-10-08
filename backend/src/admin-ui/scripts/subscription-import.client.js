@@ -104,7 +104,7 @@ el('subscriptionImportForm').onsubmit = async function(event) {
         message += '\n失败来源 ' + (index + 1) + '（' + new URL(failure.url).hostname + '）：' + adminErrorMessage(failure.error, '获取失败');
       });
     }
-    if (!input.trim()) message += '\n空白线路需填写订阅地址或节点后再推送。';
+    if (!input.trim()) message += '\n空白线路需填写订阅地址或节点后再保存。';
     el('subscriptionImportStatus').textContent = message;
     el('subscriptionImportAdd').disabled = false;
   } catch (error) {
@@ -126,5 +126,5 @@ el('subscriptionImportAdd').onclick = function() {
   el('subscriptionImportDialog').close();
   if (rows.length === 1) toggleSourceRow(rows[0]);
   rows[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  show('已添加 ' + rows.length + ' 条线路、' + result.nodeCount + ' 个节点，请检查后点击「推送」保存。');
+  show('已加入草稿：' + rows.length + ' 条线路、' + result.nodeCount + ' 个节点，检查后点击「保存配置」生效。');
 };

@@ -40,17 +40,18 @@ function addSubscriptionGroup(group) {
     : ['guest', 'formal'];
   row.innerHTML = '<div class="subscription-group-heading">' +
     '<div class="subscription-group-title"><span>分组</span>' +
-      '<label>分组名称<input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label>' +
+      '<label>分组名称<input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label><small class="subscription-group-summary" data-group-summary></small>' +
     '</div>' +
     '<div class="subscription-group-controls" role="group" aria-label="分组排序和删除操作">' +
       '<span data-group-count>0 条订阅</span>' +
       '<label class="check subscription-group-enabled"><input data-field="groupEnabled" type="checkbox" ' + (group.enabled === false ? '' : 'checked') + '>启用</label>' +
       '<button class="secondary" type="button" data-action="group-up" aria-label="上移分组" title="上移分组">↑</button>' +
       '<button class="secondary" type="button" data-action="group-down" aria-label="下移分组" title="下移分组">↓</button>' +
+      '<button class="secondary" type="button" data-action="group-collapse" aria-expanded="true">收起</button>' +
       '<button class="danger" type="button" data-action="group-delete">删除分组</button>' +
     '</div>' +
   '</div>' +
-  '<div class="subscription-group-permissions">' +
+  '<div data-group-body><div class="subscription-group-permissions">' +
     '<fieldset><legend>账号状态</legend>' +
       '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="normal" ' + (allowedStatuses.includes('normal') ? 'checked' : '') + '>正常</label>' +
       '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="banned" ' + (allowedStatuses.includes('banned') ? 'checked' : '') + '>封禁</label>' +
@@ -66,7 +67,7 @@ function addSubscriptionGroup(group) {
     '</fieldset>' +
   '</div>' +
   '<div class="subscription-group-sources" data-group-sources></div>' +
-  '<button class="secondary subscription-group-add" type="button" data-action="add-source">添加订阅</button>';
+  '<button class="secondary subscription-group-add" type="button" data-action="add-source">添加订阅</button></div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="minAppVersion"]').value = String(group.minAppVersion || '');
   row.querySelector('[data-field="maxAppVersion"]').value = String(group.maxAppVersion || '');
@@ -82,12 +83,21 @@ function addSubscriptionGroup(group) {
   row.querySelector('[data-action="group-down"]').onclick = function() {
     moveSubscriptionGroup(row, 1);
   };
+  row.querySelector('[data-action="group-collapse"]').onclick = function() {
+    const body = row.querySelector('[data-group-body]');
+    body.hidden = !body.hidden;
+    this.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+    this.textContent = body.hidden ? '展开' : '收起';
+  };
   row.querySelector('[data-action="group-delete"]').onclick = function() {
     row.remove();
     updateSubscriptionGroupControls();
+    markSettingsDirty('subscriptions');
   };
   updateSubscriptionGroupControls();
   updateSubscriptionAppVersionOptions();
+  updateSourceRowsMeta();
+  markSettingsDirty('subscriptions');
   return row;
 }
 
@@ -159,6 +169,7 @@ function moveSubscriptionGroup(row, direction) {
   if (direction < 0) row.parentElement.insertBefore(row, target);
   else row.parentElement.insertBefore(target, row);
   updateSubscriptionGroupControls();
+  markSettingsDirty('subscriptions');
 }
 
 function updateSubscriptionGroupControls() {
@@ -212,6 +223,7 @@ function addSource(groupRow, source, sourceOrderValue) {
   row.querySelector('.danger').onclick = function() {
     row.remove();
     updateSourceRowsMeta();
+    markSettingsDirty('subscriptions');
   };
   row.querySelector('[data-field="sourceType"]').onchange = function() { updateSourceMode(row); };
   row.querySelector('[data-action="collapse"]').onclick = function() {
@@ -226,6 +238,7 @@ function addSource(groupRow, source, sourceOrderValue) {
   updateSourceMode(row);
   insertSourceByOrder(row, groupRow);
   updateSourceRowsMeta();
+  markSettingsDirty('subscriptions');
   return row;
 }
 function getSourceRows() {
@@ -238,7 +251,18 @@ function updateSourceRowsMeta() {
       return row.classList.contains('source-row');
     });
     const count = group.querySelector('[data-group-count]');
-    if (count) count.textContent = rows.length + ' 条订阅';
+    const enabledCount = rows.filter(function(row) { return row.querySelector('[data-field="enabled"]').checked; }).length;
+    if (count) count.textContent = rows.length + ' 条订阅 · ' + enabledCount + ' 条启用';
+    const summary = group.querySelector('[data-group-summary]');
+    if (summary) {
+      const statuses = Array.from(group.querySelectorAll('[data-field="allowedStatuses"]:checked')).map(function(input) { return input.value === 'banned' ? '封禁' : '正常'; });
+      const types = Array.from(group.querySelectorAll('[data-field="allowedAccountTypes"]:checked')).map(function(input) { return input.value === 'formal' ? '正式用户' : '游客'; });
+      const minimum = group.querySelector('[data-field="minAppVersion"]').value.trim();
+      const maximum = group.querySelector('[data-field="maxAppVersion"]').value.trim();
+      summary.textContent = (group.querySelector('[data-field="groupEnabled"]').checked ? '已启用' : '已停用') +
+        ' · ' + (statuses.join('、') || '未允许任何状态') + ' / ' + (types.join('、') || '未允许任何类型') +
+        ' · 版本 ' + (minimum || '不限') + ' 至 ' + (maximum || '不限');
+    }
     rows.forEach(function(row, index) {
       const nameInput = row.querySelector('[data-field="name"]');
       const moveUp = row.querySelector('[data-action="move-up"]');
@@ -264,6 +288,7 @@ function moveSourceRow(row, direction) {
   if (direction < 0) container.insertBefore(row, target);
   else container.insertBefore(target, row);
   updateSourceRowsMeta();
+  markSettingsDirty('subscriptions');
 }
 function toggleSourceRow(row) {
   const body = row.querySelector('[data-source-body]');
@@ -317,11 +342,13 @@ function addWebNavigationGroup(group) {
   row.querySelector('[data-action="group-delete"]').onclick = function() {
     row.remove();
     updateWebNavigationControls();
+    markSettingsDirty('navigation-page');
   };
   row.querySelector('[data-action="add-site"]').onclick = function() {
     addWebNavigationItem(row, {});
   };
   updateWebNavigationControls();
+  markSettingsDirty('navigation-page');
 }
 
 function addWebNavigationItem(groupRow, item) {
@@ -367,12 +394,15 @@ function addWebNavigationItem(groupRow, item) {
   row.querySelector('[data-action="item-delete"]').onclick = function() {
     row.remove();
     updateWebNavigationControls();
+    markSettingsDirty('navigation-page');
   };
   updateWebNavigationControls();
+  markSettingsDirty('navigation-page');
 }
 
 // 后台上传和抓取的图标统一保存为 MIME 类型加原始 Base64 数据。
 function setWebNavigationIcon(row, iconBase64, iconMimeType) {
+  markSettingsDirty('navigation-page');
   row.dataset.iconBase64 = String(iconBase64 || '');
   row.dataset.iconMimeType = String(iconMimeType || '');
   const preview = row.querySelector('[data-role="icon-preview"]');
@@ -451,6 +481,7 @@ function moveWebNavigationRow(row, direction) {
   if (direction < 0) row.parentElement.insertBefore(row, sibling);
   else row.parentElement.insertBefore(sibling, row);
   updateWebNavigationControls();
+  markSettingsDirty('navigation-page');
 }
 
 function updateWebNavigationControls() {
@@ -528,39 +559,58 @@ function validateWebNavigationGroups(groups) {
   return '';
 }
 
-function fillState(state) {
+function fillState(state, section) {
   currentState = state || {};
-  const subscriptionGroups = Array.isArray(currentState.subscriptionGroups)
-    ? currentState.subscriptionGroups
-    : [];
-  renderSubscriptionGroups(subscriptionGroups);
-  const settings = currentState.settings || {};
-  el('webNavigationGroups').innerHTML = '';
-  (Array.isArray(settings.webNavigationGroups) ? settings.webNavigationGroups : []).forEach(addWebNavigationGroup);
-  setValue('websiteUrl', settings.websiteUrl);
-  setValue('feedbackEmail', settings.feedbackEmail);
-  setValue('feedbackUrl', settings.feedbackUrl);
-   setValue('githubUrl', settings.githubUrl);
-  setValue('telegramUrl', settings.telegramUrl);
-  checked('registrationEnabled', settings.registrationEnabled !== false);
-  checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
-  const notice = currentState.notice || {};
-  checked('noticeEnabled', Boolean(currentState.notice && notice.hasNotice !== false));
-  setValue('noticeTitle', notice.title);
-  setValue('noticeId', notice.noticeId);
-  setValue('noticeStartAt', noticeDateTimeValue(notice.startAt));
-  setValue('noticeEndAt', noticeDateTimeValue(notice.endAt));
-  setValue('noticeContent', notice.content);
-  checked('noticeShowOnce', notice.showOnce !== false);
-  const update = currentState.appUpdate || {};
-  checked('appUpdateEnabled', Boolean(currentState.appUpdate));
-  setValue('appVersion', update.version);
-  setValue('appVersionCode', update.versionCode);
-  setValue('appDownloadUrl', update.downloadUrl);
-  setValue('appChangelog', update.changelog);
-  checked('appForce', update.is_force === 1 || update.isForce === 1);
-  renderDebugInterface();
-  loadRegistrationCodes();
+  settingsFilling = true;
+  try {
+    const settings = currentState.settings || {};
+    if (!section || section === 'subscriptions') {
+      renderSubscriptionGroups(Array.isArray(currentState.subscriptionGroups) ? currentState.subscriptionGroups : []);
+    }
+    if (!section || section === 'navigation-page') {
+      el('webNavigationGroups').innerHTML = '';
+      (Array.isArray(settings.webNavigationGroups) ? settings.webNavigationGroups : []).forEach(addWebNavigationGroup);
+    }
+    if (!section || section === 'about-page') {
+      setValue('websiteUrl', settings.websiteUrl);
+      setValue('feedbackEmail', settings.feedbackEmail);
+      setValue('feedbackUrl', settings.feedbackUrl);
+      setValue('githubUrl', settings.githubUrl);
+      setValue('telegramUrl', settings.telegramUrl);
+      const update = currentState.appUpdate || {};
+      checked('appUpdateEnabled', Boolean(currentState.appUpdate));
+      setValue('appVersion', update.version);
+      setValue('appVersionCode', update.versionCode);
+      setValue('appDownloadUrl', update.downloadUrl);
+      setValue('appChangelog', update.changelog);
+      checked('appForce', update.is_force === 1 || update.isForce === 1);
+    }
+    if (!section || section === 'registration-control') {
+      checked('registrationEnabled', settings.registrationEnabled !== false);
+      checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
+      loadRegistrationCodes();
+    }
+    if (!section || section === 'notice') {
+      const notice = currentState.notice || {};
+      checked('noticeEnabled', Boolean(currentState.notice && notice.hasNotice !== false));
+      setValue('noticeTitle', notice.title);
+      setValue('noticeId', notice.noticeId);
+      setValue('noticeStartAt', noticeDateTimeValue(notice.startAt));
+      setValue('noticeEndAt', noticeDateTimeValue(notice.endAt));
+      setValue('noticeContent', notice.content);
+      checked('noticeShowOnce', notice.showOnce !== false);
+    }
+    if (!section || section === 'debug-interface') {
+      debugInterfaceTokenDraft = null;
+      renderDebugInterface();
+    } else if (section === 'subscriptions' && !settingsDirtySections.has('debug-interface')) {
+      renderDebugInterface();
+    }
+  } finally {
+    settingsFilling = false;
+  }
+  if (!section) resetSettingsDrafts();
+  updateSettingsSaveControls();
 }
 function noticeDateTimeValue(data) {
   const text = String(data == null ? '' : data).trim();
@@ -571,7 +621,7 @@ function getDebugInterfaceConfig() {
   const settings = currentState && currentState.settings ? currentState.settings : {};
   const config = settings.debugInterface || {};
   return {
-    token: String(config.token || ''),
+    token: debugInterfaceTokenDraft === null ? String(config.token || '') : debugInterfaceTokenDraft,
     subscriptionIds: Array.isArray(config.subscriptionIds)
       ? config.subscriptionIds.map(function(id) { return String(id); })
       : []
@@ -589,7 +639,7 @@ function updateDebugInterfaceUrl() {
   const selected = Array.from(document.querySelectorAll('[data-debug-source-id]:checked'));
   input.value = selected.length ? debugInterfaceUrl(config.token) : '';
 }
-function renderDebugInterface() {
+function renderDebugInterface(override) {
   const host = el('debugInterfaceSources');
   if (!host) return;
   const groups = Array.isArray(currentState && currentState.subscriptionGroups)
@@ -598,7 +648,7 @@ function renderDebugInterface() {
   const sources = groups.flatMap(function(group) {
     return Array.isArray(group.subscriptions) ? group.subscriptions : [];
   });
-  const config = getDebugInterfaceConfig();
+  const config = override || getDebugInterfaceConfig();
   const selected = new Set(config.subscriptionIds);
   if (!sources.length) {
     host.innerHTML = '<div class="loading-state">暂无可用订阅线路</div>';
@@ -622,11 +672,12 @@ function renderDebugInterface() {
 }
 function regenerateDebugInterfaceToken() {
   if (!currentState) return;
-  if (!currentState.settings) currentState.settings = {};
   const config = getDebugInterfaceConfig();
-  config.token = crypto.randomUUID();
-  currentState.settings.debugInterface = config;
-  renderDebugInterface();
+  config.subscriptionIds = Array.from(document.querySelectorAll('[data-debug-source-id]:checked')).map(function(control) { return control.dataset.debugSourceId; });
+  debugInterfaceTokenDraft = crypto.randomUUID();
+  config.token = debugInterfaceTokenDraft;
+  renderDebugInterface(config);
+  markSettingsDirty('debug-interface');
   show('UUID 已重新生成，请保存调试接口后生效');
 }
 async function copyDebugInterfaceUrl() {
@@ -771,54 +822,82 @@ async function pushSection(section) {
     return;
   }
 
-  const form = formState();
-  if (section === 'navigation-page') {
-    const validationError = validateWebNavigationGroups(form.settings.webNavigationGroups);
-    if (validationError) return show(validationError, true);
-  }
-  if (section === 'subscriptions') {
-    const versionError = validateSubscriptionGroupVersions(form.subscriptionGroups);
-    if (versionError) return show(versionError, true);
-  }
-  const settings = section === 'navigation-page'
-      ? Object.assign({}, currentState.settings, {
-        webNavigationGroups: form.settings.webNavigationGroups
-      })
-    : section === 'about-page'
-      ? Object.assign({}, currentState.settings, {
-        websiteUrl: form.settings.websiteUrl,
-        feedbackEmail: form.settings.feedbackEmail,
-        feedbackUrl: form.settings.feedbackUrl,
-        githubUrl: form.settings.githubUrl,
-        telegramUrl: form.settings.telegramUrl
-      })
-    : section === 'registration-control'
-      ? Object.assign({}, currentState.settings, {
-        registrationEnabled: form.settings.registrationEnabled,
-        requireAdminRegistrationCode: form.settings.requireAdminRegistrationCode
-      })
-      : section === 'debug-interface'
+  if (!currentState || settingsSaveInFlight || !SETTINGS_SECTIONS.includes(section)) return false;
+  const session = settingsSession;
+  const version = settingsDraftVersions.get(section) || 0;
+  settingsSaveInFlight = section;
+  settingsSaveMessages.delete(section);
+  updateSettingsSaveControls();
+  try {
+    const form = formState();
+    if (section === 'navigation-page') {
+      const validationError = validateWebNavigationGroups(form.settings.webNavigationGroups);
+      if (validationError) throw new Error(validationError);
+    }
+    if (section === 'subscriptions') {
+      const versionError = validateSubscriptionGroupVersions(form.subscriptionGroups);
+      if (versionError) throw new Error(versionError);
+    }
+    const settings = section === 'navigation-page'
         ? Object.assign({}, currentState.settings, {
-          debugInterface: form.debugInterface
+          webNavigationGroups: form.settings.webNavigationGroups
         })
-      : currentState.settings;
-  const state = {
-    subscriptionGroups: section === 'subscriptions' ? form.subscriptionGroups : currentState.subscriptionGroups,
-    settings: settings,
-    notice: section === 'notice' ? form.notice : currentState.notice,
-    appUpdate: section === 'about-page' || section === 'app-update' ? form.appUpdate : currentState.appUpdate
-  };
-  const response = await fetch(ADMIN_API_BASE + '/state', {
-    method: 'PUT',
-    headers: headers(),
-    body: JSON.stringify(state)
-  });
-  const data = await response.json();
-  if (!response.ok) return show(adminErrorMessage(data.error, '推送失败'), true);
-  currentState = data.state;
-  fillState(data.state);
-  show('当前模块已推送');
+      : section === 'about-page'
+        ? Object.assign({}, currentState.settings, {
+          websiteUrl: form.settings.websiteUrl,
+          feedbackEmail: form.settings.feedbackEmail,
+          feedbackUrl: form.settings.feedbackUrl,
+          githubUrl: form.settings.githubUrl,
+          telegramUrl: form.settings.telegramUrl
+        })
+      : section === 'registration-control'
+        ? Object.assign({}, currentState.settings, {
+          registrationEnabled: form.settings.registrationEnabled,
+          requireAdminRegistrationCode: form.settings.requireAdminRegistrationCode
+        })
+        : section === 'debug-interface'
+          ? Object.assign({}, currentState.settings, {
+            debugInterface: form.debugInterface
+          })
+        : currentState.settings;
+    const state = {
+      subscriptionGroups: section === 'subscriptions' ? form.subscriptionGroups : currentState.subscriptionGroups,
+      settings: settings,
+      notice: section === 'notice' ? form.notice : currentState.notice,
+      appUpdate: section === 'about-page' || section === 'app-update' ? form.appUpdate : currentState.appUpdate
+    };
+    const response = await fetch(ADMIN_API_BASE + '/state', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify(state)
+    });
+    const data = await response.json();
+    if (session !== settingsSession) return false;
+    if (!response.ok) throw new Error(adminErrorMessage(data.error, '保存失败'));
+    currentState = data.state;
+    if ((settingsDraftVersions.get(section) || 0) === version) {
+      fillState(data.state, section);
+      settingsDirtySections.delete(section);
+      settingsSaveMessages.set(section, {text: '已保存' + (data.state.updatedAt ? ' · ' + data.state.updatedAt.replace('T', ' ') : ''), error: false});
+    } else {
+      settingsSaveMessages.set(section, {text: '已保存提交时的内容，后续修改仍未保存', error: false});
+    }
+    show('当前模块已保存，其他模块的草稿已保留');
+    return true;
+  } catch (error) {
+    if (session !== settingsSession) return false;
+    const message = error.message || '保存失败，请检查网络后重试';
+    settingsSaveMessages.set(section, {text: message + '，草稿已保留', error: true});
+    show(message, true);
+    return false;
+  } finally {
+    if (session === settingsSession) {
+      settingsSaveInFlight = '';
+      updateSettingsSaveControls();
+    }
+  }
 }
 initializeGrowthRange();
 initializeActivityRange();
 initializeTrafficRange();
+initializeSettingsDrafts();

@@ -113,12 +113,12 @@ test("旧 KV 字段可迁移，内联订阅不会自动重命名，调试地址�
     sources: [null, { title: "line", nodesText: node, autoRename: true, minimumAccountType: "formal" }],
     settings: { debugInterface: { token: "00000000-0000-4000-8000-000000000001", sourceIds: ["1", "1", "2"] } },
   });
-  assert.equal(state.subscriptions[0].minAccountType, "formal");
-  assert.equal(state.subscriptions[0].autoRename, false);
+  assert.deepEqual(state.subscriptionGroups[0].allowedAccountTypes, ["formal"]);
+  assert.equal(state.subscriptionGroups[0].subscriptions[0].autoRename, false);
   assert.deepEqual(state.settings.debugInterface.subscriptionIds, ["1"]);
   assert.equal("debugInterface" in publicClientSettings(state.settings), false);
   assert.equal(state.settings.registrationEnabled, true);
-  assert.equal(normalizeState(null).subscriptions.length, 0);
+  assert.equal(normalizeState(null).subscriptionGroups.length, 0);
 });
 
 test("公告时间校验和导航配置校验继续生效", () => {
@@ -139,12 +139,12 @@ test("KV 使用较新的旧键数据并同步双写", async () => {
     put: async (key, value) => storage.set(key, JSON.parse(value)),
   } };
   const state = await readState(env);
-  assert.equal(state.subscriptions[0].name, "legacy");
+  assert.equal(state.subscriptionGroups[0].subscriptions[0].name, "legacy");
   await writeState(env, state);
   assert.deepEqual(storage.get("chimera:state:v1"), storage.get("fireflyvpn:state:v1"));
   storage.delete("chimera:state:v1");
   await readState(env);
-  assert.equal(storage.get("chimera:state:v1").subscriptions[0].name, "legacy");
+  assert.equal(storage.get("chimera:state:v1").subscriptionGroups[0].subscriptions[0].name, "legacy");
 });
 
 test("JSON 请求字段保持 unknown 边界，非对象输入采用空对象，坏 JSON 抛错", async () => {

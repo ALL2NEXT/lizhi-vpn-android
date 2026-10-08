@@ -150,8 +150,17 @@
    }
  };
  function logout() {
+   if ((typeof settingsSaveInFlight !== 'undefined' && settingsSaveInFlight) ||
+       (typeof adminUserBatchBusy !== 'undefined' && adminUserBatchBusy) ||
+       (typeof adminUserSaving !== 'undefined' && adminUserSaving.size > 0)) {
+     show('正在保存或处理用户，请等待完成后退出', true);
+     return;
+   }
+   if (typeof hasUnsavedAdminChanges === 'function' && hasUnsavedAdminChanges() &&
+       !confirm('还有未保存修改，确定放弃并退出后台？')) return;
    adminToken = '';
    currentState = null;
+   if (typeof resetSettingsDrafts === 'function') resetSettingsDrafts();
    if (typeof resetAdminUsers === 'function') resetAdminUsers();
    accountSecurityData = null;
    accountSecuritySelection.clear();

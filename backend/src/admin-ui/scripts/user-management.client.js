@@ -1,10 +1,15 @@
 let adminUserData = null;
 let adminUserLoading = false;
 let adminUserUidHidden = true;
+let adminUserBatchBusy = false;
+let adminUserDetailUid = '';
+let adminUserSecuritySource = null;
+let adminUserSecurityIndex = new Map();
 const adminUserSaving = new Set();
 const adminUserSelection = new Set();
 const adminUserDirty = new Set();
 const adminUserDrafts = new Map();
+const adminUserErrors = new Map();
 const adminUserZeroFilters = {today: false, month: false, total: false};
 const ADMIN_USER_SORTS = {
   created_desc: {valueKey: 'createdAt', direction: -1, label: '注册时间（新到旧）'},
@@ -24,10 +29,17 @@ function resetAdminUsers() {
   adminUserData = null;
   adminUserLoading = false;
   adminUserUidHidden = true;
+  adminUserBatchBusy = false;
+  adminUserDetailUid = '';
+  adminUserSecuritySource = null;
+  adminUserSecurityIndex.clear();
+  const dialog = el('adminUserDetailDialog');
+  if (dialog && dialog.open) dialog.close();
   adminUserSaving.clear();
   adminUserSelection.clear();
   adminUserDirty.clear();
   adminUserDrafts.clear();
+  adminUserErrors.clear();
   adminUserZeroFilters.today = false;
   adminUserZeroFilters.month = false;
   adminUserZeroFilters.total = false;
@@ -45,9 +57,14 @@ function adminUserDisplayUid(uid) {
 function adminUserSecurity(user) {
   const accounts = adminUserData && Array.isArray(adminUserData.securityAccounts)
     ? adminUserData.securityAccounts : [];
-  return accounts.find(function(account) {
-    return String(account.uid || '') === String(user.uid || '');
-  }) || {devices: [], historicalDeviceCount: 0, bannedDeviceCount: 0};
+  if (adminUserSecuritySource !== accounts) {
+    adminUserSecuritySource = accounts;
+    adminUserSecurityIndex = new Map(accounts.map(function(account) {
+      return [String(account.uid || ''), account];
+    }));
+  }
+  return adminUserSecurityIndex.get(String(user.uid || '')) ||
+    {devices: [], historicalDeviceCount: 0, bannedDeviceCount: 0};
 }
 
 function adminUserDevices(user) {
@@ -79,8 +96,8 @@ function adminUserList() {
     ? adminUserData.users : [];
   const search = String(value('userAdminSearch') || '').toLowerCase();
   const filter = value('userAdminStatusFilter');
+  const typeFilter = value('userAdminTypeFilter');
   const filtered = users.filter(function(user) {
-    const security = adminUserSecurity(user);
     const deviceSearch = adminUserDevices(user).map(function(device) {
       return [device.deviceId, device.brand, device.model, device.androidVersion, device.appVersion].join(' ');
     }).join(' ');
@@ -92,7 +109,8 @@ function adminUserList() {
     const accountLevel = String(user.email || '').trim() ? 'formal' : 'guest';
     if (search && searchable.indexOf(search) < 0) return false;
     if (filter === 'active' && user.accountType === 'banned') return false;
-    if (filter && filter !== 'active' && accountLevel !== filter) return false;
+    if (filter === 'banned' && user.accountType !== 'banned') return false;
+    if (typeFilter && accountLevel !== typeFilter) return false;
     if (adminUserZeroFilters.today && todayTotal === 0) return false;
     if (adminUserZeroFilters.month && monthTotal === 0) return false;
     if (adminUserZeroFilters.total && total === 0) return false;
@@ -110,11 +128,6 @@ function adminUserList() {
   }).map(function(item) {
     return item.user;
   });
-}
-
-function adminUserField(row, field) {
-  const control = row && row.querySelector('[data-admin-user-field="' + field + '"]');
-  return control ? control.value.trim() : '';
 }
 
 function adminUserDraftValue(user, draft, field) {
@@ -152,9 +165,13 @@ function updateAdminUserSelectionControls(filtered) {
   const selectAll = el('userAdminSelectAll');
   const count = el('userAdminSelectionCount');
   const selectedTotal = adminUserSelection.size;
-  if (count) count.textContent = '已选择 ' + selectedTotal + ' 个用户';
+  const hiddenSelected = selectedTotal - selectedVisible;
+  if (count) count.textContent = '已选择 ' + selectedTotal + ' 个用户' +
+    (hiddenSelected ? '，其中 ' + hiddenSelected + ' 个不在当前结果中' : '');
+  const clearButton = el('userAdminClearSelection');
+  if (clearButton) clearButton.disabled = selectedTotal === 0 || adminUserBatchBusy;
   if (selectAll) {
-    selectAll.disabled = filtered.length === 0;
+    selectAll.disabled = filtered.length === 0 || adminUserBatchBusy;
     selectAll.checked = filtered.length > 0 && selectedVisible === filtered.length;
     selectAll.indeterminate = selectedVisible > 0 && selectedVisible < filtered.length;
   }
@@ -165,10 +182,17 @@ function updateAdminUserSelectionControls(filtered) {
   const dirtySelected = Array.from(adminUserSelection).some(function(uid) {
     return adminUserDirty.has(uid);
   });
-  if (saveButton) saveButton.disabled = !dirtySelected;
-  if (banButton) banButton.disabled = selectedTotal === 0;
-  if (unbanButton) unbanButton.disabled = selectedTotal === 0;
-  if (deleteButton) deleteButton.disabled = selectedTotal === 0 || dirtySelected;
+  if (saveButton) {
+    saveButton.disabled = !dirtySelected || adminUserBatchBusy || adminUserSaving.size > 0;
+    saveButton.textContent = adminUserBatchBusy ? '正在处理…' : '保存选中修改';
+  }
+  if (banButton) banButton.disabled = selectedTotal === 0 || adminUserBatchBusy || adminUserSaving.size > 0;
+  if (unbanButton) unbanButton.disabled = selectedTotal === 0 || adminUserBatchBusy || adminUserSaving.size > 0;
+  if (deleteButton) deleteButton.disabled = selectedTotal === 0 || dirtySelected || adminUserBatchBusy || adminUserSaving.size > 0;
+  const dirtySummary = el('userAdminDraftCount');
+  if (dirtySummary) dirtySummary.textContent = adminUserDirty.size ? adminUserDirty.size + ' 个用户有未保存修改' : '所有修改已保存';
+  document.querySelectorAll('[data-admin-user-select]').forEach(function(input) { input.disabled = adminUserBatchBusy; });
+  updateAdminUserDetailControls();
   document.querySelectorAll('[data-admin-zero-filter]').forEach(function(button) {
     const active = adminUserZeroFilters[button.dataset.adminZeroFilter] === true;
     button.classList.toggle('active', active);
@@ -201,56 +225,98 @@ function renderAdminUsers() {
     const today = user.today || {};
     const month = user.month || {};
     const draft = adminUserDrafts.get(uid);
-    return '<tr class="' + (banned ? 'banned' : '') + '" data-admin-user-row="' + esc(uid) + '">' +
-      '<td><input class="user-admin-checkbox" type="checkbox" data-admin-user-select="' + esc(uid) + '"' + (adminUserSelection.has(uid) ? ' checked' : '') + ' aria-label="选择用户"></td>' +
-      '<td><code>' + esc(adminUserDisplayUid(uid)) + '</code></td>' +
-      '<td><input class="user-admin-nickname" data-admin-user-field="nickname" value="' + esc(adminUserDraftValue(user, draft, 'nickname')) + '" aria-label="' + esc(adminUserDisplayUid(uid) + ' 昵称') + '"></td>' +
-      '<td>' + esc(user.email || '游客账户') + '</td>' +
-      '<td>' + (banned ? '封禁' : '正常') + '</td>' +
-      '<td class="user-admin-device-cell">' + adminUserDeviceCell(user) + '</td>' +
-      '<td><input data-admin-user-field="brand" value="' + esc(adminUserDraftValue(user, draft, 'brand')) + '" aria-label="品牌"></td>' +
-      '<td><input data-admin-user-field="model" value="' + esc(adminUserDraftValue(user, draft, 'model')) + '" aria-label="型号"></td>' +
-      '<td><input data-admin-user-field="androidVersion" value="' + esc(adminUserDraftValue(user, draft, 'androidVersion')) + '" aria-label="Android 版本"></td>' +
-      '<td><input data-admin-user-field="appVersion" value="' + esc(adminUserDraftValue(user, draft, 'appVersion')) + '" aria-label="App 版本"></td>' +
+    const nickname = adminUserDraftValue(user, draft, 'nickname') || '未命名用户';
+    return '<tr class="' + (banned ? 'banned ' : '') + (adminUserDirty.has(uid) ? 'dirty' : '') + '" data-admin-user-row="' + esc(uid) + '">' +
+      '<td><input class="user-admin-checkbox" type="checkbox" data-admin-user-select="' + esc(uid) + '"' + (adminUserSelection.has(uid) ? ' checked' : '') + ' aria-label="选择用户 ' + esc(nickname) + '"></td>' +
+      '<td class="user-admin-identity"><button class="user-detail-link" type="button" data-admin-user-detail="' + esc(uid) + '">' + esc(nickname) + '</button>' +
+        '<small>' + esc(user.email || '游客账户') + '</small>' +
+        (!adminUserUidHidden ? '<code>' + esc(uid) + '</code>' : '') +
+        (adminUserDirty.has(uid) ? '<span class="draft-badge">未保存</span>' : '') + '</td>' +
+      '<td><span class="user-status-badge ' + (banned ? 'banned' : 'active') + '">' + (banned ? '封禁' : '正常') + '</span></td>' +
       '<td>' + formatMegabytes(today.totalMb) + '</td>' +
       '<td>' + formatMegabytes(month.totalMb) + '</td>' +
-      '<td>' + formatMegabytes(user.totalMb) + '</td>' +
       '<td>' + esc(user.lastReportAt || '暂无') + '</td>' +
+      '<td><button class="secondary" type="button" data-admin-user-detail="' + esc(uid) + '">详情与编辑</button></td>' +
       '</tr>';
   }).join('');
-  host.innerHTML = '<table class="traffic-detail-table user-admin-table' + (adminUserUidHidden ? ' user-admin-hide-uid' : '') + '" aria-label="用户总表">' +
-    '<thead><tr><th>选择</th><th>UID</th><th>昵称</th><th>邮箱</th><th>状态</th><th>设备关系</th><th>品牌</th><th>型号</th><th>Android</th><th>App 版本</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th></tr></thead>' +
+  host.innerHTML = '<table class="traffic-detail-table user-admin-table" aria-label="用户总表">' +
+    '<thead><tr><th>选择</th><th>用户</th><th>状态</th><th>今日流量</th><th>本月流量</th><th>最后上报</th><th>操作</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
     input.addEventListener('change', function() {
       const uid = input.dataset.adminUserSelect;
       if (input.checked) adminUserSelection.add(uid);
       else adminUserSelection.delete(uid);
-      renderAdminUsers();
-    });
-  });
-  host.querySelectorAll('[data-admin-user-field]').forEach(function(input) {
-    input.addEventListener('input', function() {
-      const row = input.closest('[data-admin-user-row]');
-      if (!row) return;
-      const uid = row.dataset.adminUserRow;
-      adminUserSelection.add(uid);
-      adminUserDirty.add(uid);
-      adminUserDrafts.set(uid, {
-        nickname: adminUserField(row, 'nickname'),
-        brand: adminUserField(row, 'brand'),
-        model: adminUserField(row, 'model'),
-        androidVersion: adminUserField(row, 'androidVersion'),
-        appVersion: adminUserField(row, 'appVersion'),
-      });
-      const checkbox = row.querySelector('[data-admin-user-select]');
-      if (checkbox) checkbox.checked = true;
       updateAdminUserSelectionControls(adminUserList());
     });
+  });
+  host.querySelectorAll('[data-admin-user-detail]').forEach(function(button) {
+    button.addEventListener('click', function() { openAdminUserDetail(button.dataset.adminUserDetail); });
+  });
+}
+
+function clearAdminUserSelection() {
+  if (adminUserBatchBusy) return;
+  adminUserSelection.clear();
+  renderAdminUsers();
+}
+
+function updateAdminUserDetailControls() {
+  const form = el('adminUserDetailForm');
+  if (!form) return;
+  const saving = adminUserSaving.has(adminUserDetailUid);
+  form.querySelectorAll('[data-admin-user-field]').forEach(function(control) { control.disabled = saving || adminUserBatchBusy; });
+  el('adminUserDetailSave').disabled = saving || !adminUserDirty.has(adminUserDetailUid) || adminUserBatchBusy;
+  el('adminUserDetailSave').textContent = saving ? '保存中…' : '保存用户修改';
+  const error = adminUserErrors.get(adminUserDetailUid);
+  const status = el('adminUserDetailStatus');
+  status.textContent = saving ? '正在保存…' : error || (adminUserDirty.has(adminUserDetailUid) ? '有未保存修改，关闭详情会保留草稿' : '资料已保存');
+  status.classList.toggle('error', Boolean(error));
+}
+
+function openAdminUserDetail(uid) {
+  const user = adminUserData && adminUserData.users.find(function(item) { return String(item.uid) === uid; });
+  if (!user) return;
+  adminUserDetailUid = uid;
+  const draft = adminUserDrafts.get(uid);
+  const form = el('adminUserDetailForm');
+  el('adminUserDetailTitle').textContent = user.nickname || '用户详情';
+  el('adminUserDetailIdentity').textContent = (user.email || '游客账户') + ' · UID ' + adminUserDisplayUid(uid);
+  form.querySelectorAll('[data-admin-user-field]').forEach(function(input) {
+    input.value = adminUserDraftValue(user, draft, input.dataset.adminUserField);
+  });
+  el('adminUserDetailUsage').textContent = '今日 ' + formatMegabytes(user.today && user.today.totalMb) +
+    ' · 本月 ' + formatMegabytes(user.month && user.month.totalMb) + ' · 累计 ' + formatMegabytes(user.totalMb);
+  el('adminUserDetailDevices').innerHTML = adminUserDeviceCell(user);
+  updateAdminUserDetailControls();
+  const dialog = el('adminUserDetailDialog');
+  if (!dialog.open) dialog.showModal();
+}
+
+const adminUserDetailForm = el('adminUserDetailForm');
+if (adminUserDetailForm) {
+  adminUserDetailForm.addEventListener('input', function(event) {
+    if (!event.target.matches('[data-admin-user-field]') || !adminUserDetailUid) return;
+    const draft = {};
+    adminUserDetailForm.querySelectorAll('[data-admin-user-field]').forEach(function(input) {
+      draft[input.dataset.adminUserField] = input.value.trim();
+    });
+    adminUserDrafts.set(adminUserDetailUid, draft);
+    adminUserErrors.delete(adminUserDetailUid);
+    adminUserDirty.add(adminUserDetailUid);
+    adminUserSelection.add(adminUserDetailUid);
+    updateAdminUserDetailControls();
+    renderAdminUsers();
+  });
+  adminUserDetailForm.addEventListener('submit', async function(event) {
+    event.preventDefault();
+    await saveAdminUser(adminUserDetailUid);
+    updateAdminUserDetailControls();
   });
 }
 
 function toggleAllAdminUsers(checked) {
+  if (adminUserBatchBusy) return;
   adminUserList().forEach(function(user) {
     const uid = String(user.uid || '');
     if (checked) adminUserSelection.add(uid);
@@ -299,27 +365,19 @@ async function loadAdminUsers(force) {
   }
 }
 
-function adminUserRow(uid) {
-  return Array.from(document.querySelectorAll('[data-admin-user-row]')).find(function(row) {
-    return row.dataset.adminUserRow === uid;
-  });
-}
-
 async function saveAdminUser(uid, silent, refresh) {
-  const row = adminUserRow(uid);
-  if (!row || adminUserSaving.has(uid)) return false;
-  const payload = adminUserDrafts.get(uid) || {
-    nickname: adminUserField(row, 'nickname'),
-    brand: adminUserField(row, 'brand'),
-    model: adminUserField(row, 'model'),
-    androidVersion: adminUserField(row, 'androidVersion'),
-    appVersion: adminUserField(row, 'appVersion'),
-  };
+  const draft = adminUserDrafts.get(uid);
+  if (!draft || adminUserSaving.has(uid)) return false;
+  const payload = Object.assign({}, draft);
   if (!payload.nickname) {
+    adminUserErrors.set(uid, '昵称不能为空');
+    updateAdminUserDetailControls();
     show('昵称不能为空', true);
     return false;
   }
   adminUserSaving.add(uid);
+  adminUserErrors.delete(uid);
+  updateAdminUserDetailControls();
   if (refresh !== false) renderAdminUsers();
   try {
     const response = await fetch(ADMIN_API_BASE + '/users/' + encodeURIComponent(uid), {
@@ -327,24 +385,33 @@ async function saveAdminUser(uid, silent, refresh) {
     });
     const data = parseResponseJson(await response.text());
     if (!response.ok) {
-      show(adminErrorMessage(data.error, '用户信息保存失败（HTTP ' + response.status + '）'), true);
+      const message = adminErrorMessage(data.error, '用户信息保存失败（HTTP ' + response.status + '）');
+      adminUserErrors.set(uid, message);
+      show(message, true);
       return false;
     }
-    adminUserDirty.delete(uid);
-    adminUserDrafts.delete(uid);
+    if (adminUserDrafts.get(uid) === draft) {
+      adminUserDirty.delete(uid);
+      adminUserDrafts.delete(uid);
+    }
+    const user = adminUserData && adminUserData.users.find(function(item) { return String(item.uid) === uid; });
+    if (user) Object.assign(user, payload);
     if (!silent) show('用户信息已保存');
     if (refresh !== false) await loadAdminUsers(true);
     return true;
   } catch (_) {
+    adminUserErrors.set(uid, '用户信息保存失败，请检查网络后重试');
     show('用户信息保存失败，请检查网络', true);
     return false;
   } finally {
     adminUserSaving.delete(uid);
+    updateAdminUserDetailControls();
     if (adminUserData && refresh !== false) renderAdminUsers();
   }
 }
 
 async function saveSelectedAdminUsers() {
+  if (adminUserBatchBusy || adminUserSaving.size > 0) return false;
   const uids = Array.from(adminUserSelection).filter(function(uid) {
     return adminUserDirty.has(uid);
   });
@@ -352,13 +419,22 @@ async function saveSelectedAdminUsers() {
     show('当前选择中没有未保存的修改', true);
     return false;
   }
+  adminUserBatchBusy = true;
+  updateAdminUserSelectionControls(adminUserList());
   let saved = 0;
-  for (const uid of uids) {
-    if (await saveAdminUser(uid, true, false)) saved += 1;
+  try {
+    for (const uid of uids) {
+      if (await saveAdminUser(uid, true, false)) saved += 1;
+    }
+    const refreshed = await loadAdminUsers(true);
+    show('已保存 ' + saved + ' 个用户' + (saved < uids.length ? '，' + (uids.length - saved) + ' 个失败，草稿已保留' : '') +
+      (!refreshed ? '；列表刷新失败，可稍后重试' : ''), saved !== uids.length || !refreshed);
+    return saved === uids.length;
+  } finally {
+    adminUserBatchBusy = false;
+    updateAdminUserSelectionControls(adminUserList());
+    updateAdminUserDetailControls();
   }
-  await loadAdminUsers(true);
-  show('已保存 ' + saved + ' 个用户的修改', saved !== uids.length);
-  return saved === uids.length;
 }
 
 async function setAdminUserBan(uid, banned) {
@@ -389,6 +465,7 @@ async function setAdminUserBan(uid, banned) {
 }
 
 async function batchSetAdminUserBan(banned) {
+  if (adminUserBatchBusy || adminUserSaving.size > 0) return false;
   const uids = Array.from(adminUserSelection);
   if (uids.length === 0) {
     show('请先选择用户', true);
@@ -399,7 +476,9 @@ async function batchSetAdminUserBan(banned) {
     return false;
   }
   const action = banned ? '封禁' : '解封';
-  if (!confirm('确定要' + action + '选中的 ' + uids.length + ' 个用户吗？')) return false;
+  if (!confirm('确定要' + action + '选中的 ' + uids.length + ' 个用户吗？选择范围包括当前筛选隐藏的用户。')) return false;
+  adminUserBatchBusy = true;
+  updateAdminUserSelectionControls(adminUserList());
   try {
     const response = await fetch(ADMIN_API_BASE + '/users/batch', {
       method: 'PATCH',
@@ -418,10 +497,14 @@ async function batchSetAdminUserBan(banned) {
   } catch (_) {
     show(action + '失败，请检查网络', true);
     return false;
+  } finally {
+    adminUserBatchBusy = false;
+    updateAdminUserSelectionControls(adminUserList());
   }
 }
 
 async function batchDeleteAdminUsers() {
+  if (adminUserBatchBusy || adminUserSaving.size > 0) return false;
   const uids = Array.from(adminUserSelection);
   if (uids.length === 0) {
     show('请先选择用户', true);
@@ -438,9 +521,11 @@ async function batchDeleteAdminUsers() {
     show('请先保存未保存的用户修改，再删除用户', true);
     return false;
   }
-  if (!confirm('确定永久删除选中的 ' + uids.length + ' 个用户及其全部流量统计吗？此操作不可恢复。')) {
+  if (!confirm('确定永久删除选中的 ' + uids.length + ' 个用户及其全部流量统计吗？包括当前筛选隐藏的已选用户，此操作不可恢复。')) {
     return false;
   }
+  adminUserBatchBusy = true;
+  updateAdminUserSelectionControls(adminUserList());
   try {
     const response = await fetch(ADMIN_API_BASE + '/users/batch', {
       method: 'DELETE',
@@ -452,9 +537,13 @@ async function batchDeleteAdminUsers() {
       show(adminErrorMessage(data.error, '删除用户失败（HTTP ' + response.status + '）'), true);
       return false;
     }
-    adminUserSelection.clear();
-    adminUserDirty.clear();
-    adminUserDrafts.clear();
+    uids.forEach(function(uid) {
+      adminUserSelection.delete(uid);
+      adminUserDirty.delete(uid);
+      adminUserDrafts.delete(uid);
+      adminUserErrors.delete(uid);
+    });
+    if (uids.includes(adminUserDetailUid)) el('adminUserDetailDialog').close();
     const refreshed = await loadAdminUsers(true);
     show(refreshed
       ? '已删除 ' + (Number(data.changed) || 0) + ' 个用户及其流量统计'
@@ -463,6 +552,9 @@ async function batchDeleteAdminUsers() {
   } catch (_) {
     show('删除用户失败，请检查网络', true);
     return false;
+  } finally {
+    adminUserBatchBusy = false;
+    updateAdminUserSelectionControls(adminUserList());
   }
 }
 

@@ -50,7 +50,7 @@
               <span>应用设置</span><span class="nav-chevron" aria-hidden="true">⌄</span>
             </button>
              <div id="app-settings-subnav" class="nav-submenu" role="group" aria-label="应用设置子菜单">
-               <button class="tab-button" role="tab" type="button" data-tab="subscriptions">分组</button>
+               <button class="tab-button" role="tab" type="button" data-tab="subscriptions">订阅分组</button>
                <button class="tab-button" role="tab" type="button" data-tab="navigation-page">导航页</button>
                <button class="tab-button" role="tab" type="button" data-tab="about-page">关于页</button>
                <button class="tab-button" role="tab" type="button" data-tab="notice">公告</button>
@@ -187,7 +187,7 @@
     <div class="dashboard-heading">
       <div>
         <h2>用户总表</h2>
-        <p>账户、安全、设备和流量统一展示在一张表中。支持编辑资料、批量封禁/解封、删除用户和导出；删除操作不可恢复，请谨慎使用。</p>
+        <p>快速查看状态与流量，点击用户查看设备并编辑资料。批量操作包含当前筛选隐藏的已选用户。</p>
       </div>
     </div>
     <div class="user-admin-control-grid">
@@ -200,6 +200,9 @@
               <option value="">全部状态</option>
               <option value="active">正常</option>
               <option value="banned">封禁</option>
+            </select>
+            <select id="userAdminTypeFilter" aria-label="筛选账户类型" onchange="renderAdminUsers()">
+              <option value="">全部账户类型</option>
               <option value="formal">正式用户</option>
               <option value="guest">游客</option>
             </select>
@@ -239,26 +242,41 @@
           <button class="secondary" type="button" onclick="loadAdminUsers(true)">刷新用户</button>
           <label><input id="userAdminSelectAll" type="checkbox" onchange="toggleAllAdminUsers(this.checked)">全选当前结果</label>
           <span id="userAdminSelectionCount" class="security-selection-count">已选择 0 个用户</span>
-          <button id="userAdminSaveSelected" class="secondary" type="button" disabled onclick="saveSelectedAdminUsers()">保存选中修改</button>
+          <button id="userAdminClearSelection" class="secondary" type="button" disabled onclick="clearAdminUserSelection()">清空选择</button>
+          <button id="userAdminSaveSelected" type="button" disabled onclick="saveSelectedAdminUsers()">保存选中修改</button>
           <button id="userAdminBatchBan" class="danger" type="button" disabled onclick="batchSetAdminUserBan(true)">批量封禁</button>
           <button id="userAdminBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminUserBan(false)">批量解封</button>
           <button id="userAdminBatchDelete" class="danger" type="button" disabled onclick="batchDeleteAdminUsers()">删除用户</button>
           <button class="secondary" type="button" onclick="exportAdminUsersCsv()">导出当前结果</button>
+          <span id="userAdminDraftCount" class="user-draft-count" role="status" aria-live="polite">所有修改已保存</span>
         </div>
       </section>
     </div>
     <div id="userAdminTable" class="traffic-detail-wrap">
       <div class="loading-state">打开此模块后读取用户数据</div>
     </div>
+    <dialog id="adminUserDetailDialog" class="user-detail-dialog" aria-labelledby="adminUserDetailTitle">
+      <form id="adminUserDetailForm">
+        <div class="user-detail-heading"><div><h2 id="adminUserDetailTitle">用户详情</h2><p id="adminUserDetailIdentity"></p></div><button class="secondary" type="button" onclick="document.getElementById('adminUserDetailDialog').close()">关闭</button></div>
+        <p id="adminUserDetailUsage" class="user-detail-usage"></p>
+        <div class="grid">
+          <label class="field">昵称<input data-admin-user-field="nickname" type="text" required maxlength="24"></label>
+          <label class="field">品牌<input data-admin-user-field="brand" type="text" maxlength="80"></label>
+          <label class="field">型号<input data-admin-user-field="model" type="text" maxlength="120"></label>
+          <label class="field">Android 版本<input data-admin-user-field="androidVersion" type="text" maxlength="80"></label>
+          <label class="field">App 版本<input data-admin-user-field="appVersion" type="text" maxlength="40"></label>
+        </div>
+        <section class="user-detail-devices"><h3>历史设备</h3><div id="adminUserDetailDevices"></div></section>
+        <div class="settings-save-bar"><span id="adminUserDetailStatus" role="status" aria-live="polite"></span><button id="adminUserDetailSave" type="submit" disabled>保存用户修改</button></div>
+      </form>
+    </dialog>
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
-    <h2>分组</h2>
-    <small>每组可含多条订阅；状态按封禁记录、类型按邮箱绑定判断。账号状态、类型和版本区间需同时满足；版本边界包含在内，留空不限。</small>
-    <div><button class="secondary" type="button" onclick="addSubscriptionGroup()">添加分组</button></div>
+    <div class="dashboard-heading"><div><h2>订阅分组</h2><p>按账户状态、类型和版本区间配置线路权限。新增和编辑后，保存配置才会生效。</p></div><button class="secondary" type="button" onclick="addSubscriptionGroup()">添加分组</button></div>
     <div id="subscriptionRows"></div>
     <datalist id="subscriptionAppVersionOptions"></datalist>
-     <button type="button" onclick="pushSection('subscriptions')">推送</button>
+    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="subscriptions" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('subscriptions')" disabled>保存配置</button></div></div>
     <dialog id="subscriptionImportDialog" aria-labelledby="subscriptionImportTitle" class="subscription-import-dialog">
       <form id="subscriptionImportForm">
         <h2 id="subscriptionImportTitle">智能导入订阅</h2>
@@ -315,7 +333,7 @@
         <label class="check"><input id="appForce" type="checkbox">强制更新</label>
       </section>
     </div>
-    <button type="button" onclick="pushSection('about-page')">推送</button>
+    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="about-page" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('about-page')" disabled>保存配置</button></div></div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="navigation-page">
     <h2>导航页</h2>
@@ -328,7 +346,7 @@
         <small>网站名称和网址都要填写，网址需以 http:// 或 https:// 开头；图标保存在后台 KV 配置中。</small>
       </section>
     </div>
-    <button type="button" onclick="pushSection('navigation-page')">推送</button>
+    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="navigation-page" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('navigation-page')" disabled>保存配置</button></div></div>
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="registration-control">
@@ -346,9 +364,9 @@
         </div>
         <div id="registrationCodesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取注册码</div></div>
         <small class="hint">注册码每次成功注册后立即失效，只能使用一次。</small>
-        <button type="button" onclick="pushSection('registration-control')">保存注册控制</button>
       </section>
     </div>
+    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="registration-control" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('registration-control')" disabled>保存配置</button></div></div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="notice">
     <h2>公告</h2>
@@ -362,7 +380,7 @@
     <div class="field"><label>公告内容<textarea id="noticeContent" placeholder="支持普通文本和 HTML"></textarea></label></div>
     <label class="check"><input id="noticeShowOnce" type="checkbox">每个公告 ID 只显示一次</label>
     <small class="hint">时间按北京时间执行。开始时间留空表示立即显示，结束时间留空表示永不过期。</small>
-     <button type="button" onclick="pushSection('notice')">推送</button>
+     <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="notice" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('notice')" disabled>保存配置</button></div></div>
    </section>
 
 
@@ -393,7 +411,7 @@
         </div>
       </section>
     </div>
-    <button type="button" onclick="pushSection('debug-interface')">保存调试接口</button>
+    <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="debug-interface" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('debug-interface')" disabled>保存配置</button></div></div>
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="admin-login-records">
