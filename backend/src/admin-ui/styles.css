@@ -948,7 +948,7 @@
     button.secondary.subscription-group-add {
       min-height: 34px;
       padding: 6px 12px;
-      margin-top: 18px;
+      margin-top: 0;
       color: #3c4043;
       background: #fff;
       border: 1px dashed #c7d0dc;

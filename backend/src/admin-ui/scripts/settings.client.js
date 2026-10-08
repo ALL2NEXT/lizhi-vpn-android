@@ -310,6 +310,7 @@ function addSubscriptionGroup(group) {
       '<span data-group-count>0 条订阅</span>' +
       '<button class="secondary" type="button" data-action="group-collapse" aria-expanded="true">收起</button>' +
       '<button class="secondary" type="button" data-action="permissions" aria-haspopup="dialog">设置 &#9881;&#65038;</button>' +
+      '<button class="secondary subscription-group-add" type="button" data-action="add-source">添加订阅</button>' +
     '</div>' +
   '</div>' +
   '<dialog class="subscription-permissions-dialog" data-group-permissions-dialog aria-label="分组设置">' +
@@ -343,8 +344,7 @@ function addSubscriptionGroup(group) {
   '</dialog>' +
   '<div data-group-body>' +
   '<div class="source-list-header" aria-hidden="true"><span>排序</span><span>启用</span><span>订阅名称</span><span>备注</span><span>操作</span></div>' +
-  '<div class="subscription-group-sources" data-group-sources></div>' +
-  '<button class="secondary subscription-group-add" type="button" data-action="add-source">添加订阅</button></div>';
+  '<div class="subscription-group-sources" data-group-sources></div></div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
   row.querySelector('[data-field="minAppVersion"]').value = String(group.minAppVersion || '');
