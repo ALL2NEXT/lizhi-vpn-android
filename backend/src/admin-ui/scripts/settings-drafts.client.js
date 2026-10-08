@@ -13,6 +13,7 @@ function updateSettingsSaveControls() {
     if (!panel) return;
     const dirty = settingsDirtySections.has(section);
     const saving = settingsSaveInFlight === section;
+    panel.dataset.settingsDirty = dirty ? 'true' : 'false';
     const status = panel.querySelector('[data-settings-save-status]');
     const save = panel.querySelector('[data-settings-save]');
     const discard = panel.querySelector('[data-settings-discard]');

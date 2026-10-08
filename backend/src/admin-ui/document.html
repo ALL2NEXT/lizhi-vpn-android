@@ -48,7 +48,7 @@
           </div>
           <div class="nav-group" data-nav-group="app-settings">
             <button class="tab-button nav-parent" type="button" aria-expanded="true" aria-controls="app-settings-subnav">
-              <span class="nav-label"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"/></svg>应用设置</span><span class="nav-chevron" aria-hidden="true">⌄</span>
+              <span class="nav-label"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17.6,11.48 L19.44,8.3a0.63,0.63 0,0 0,-1.09 -0.63l-1.88,3.24a11.43,11.43 0,0 0,-8.94 0L5.65,7.67a0.63,0.63 0,0 0,-1.09 0.63L6.4,11.48A10.81,10.81 0,0 0,1 20L23,20A10.81,10.81 0,0 0,17.6 11.48ZM7,17.25A1.25,1.25 0,1 1,8.25 16,1.25 1.25,0 0,1 7,17.25ZM17,17.25A1.25,1.25 0,1 1,18.25 16,1.25 1.25,0 0,1 17,17.25Z"/></svg>应用设置</span><span class="nav-chevron" aria-hidden="true">⌄</span>
             </button>
              <div id="app-settings-subnav" class="nav-submenu" role="group" aria-label="应用设置子菜单">
                <button class="tab-button" role="tab" type="button" data-tab="subscriptions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5h16v3H4V5zm0 5h16v4H4v-4zm0 6h16v3H4v-3z"/></svg><span>订阅分组</span></button>
@@ -314,7 +314,7 @@
           <symbol id="app-icon-github" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.084-.729.084-.729 1.205.084 1.84 1.237 1.84 1.237 1.07 1.835 2.809 1.305 3.495.998.108-.776.418-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-.908 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></symbol>
           <symbol id="app-icon-telegram" viewBox="0 0 24 24"><path d="M21.9 2.6 2.4 10.1c-1.1.4-1.1 1.2-.2 1.5l5 1.6L9.1 19c.2.6.1.9.8.9.5 0 .7-.2 1-.5l2.4-2.3 5 3.7c.9.5 1.6.3 1.8-.9l3.2-15.2c.3-1.3-.5-2.5-1.4-2.1ZM8 12.8l10.9-6.9c.5-.3 1-.1.6.2l-9 8.1-.3 3.2L8 12.8Z"/></symbol>
         </svg>
-        <div class="grid">
+        <div class="grid about-links-grid">
           <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-language"></use></svg>官方网站</span><input id="websiteUrl" type="url" placeholder="https://example.com"></label></div>
           <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-email"></use></svg>反馈邮箱</span><input id="feedbackEmail" type="email" placeholder="support@example.com"></label></div>
           <div class="field"><label><span class="app-info-label"><svg aria-hidden="true"><use href="#app-icon-email"></use></svg>问题反馈链接</span><input id="feedbackUrl" type="url" placeholder="https://github.com/.../issues"></label></div>
@@ -344,7 +344,7 @@
         <p class="settings-section-description">添加网站分组，把同类网站放在一起。可上传图标或从网站获取，保存后随配置下发到客户端。</p>
         <div id="webNavigationGroups" class="web-nav-groups"></div>
         <button class="secondary" type="button" onclick="addWebNavigationGroup()">添加网站分组</button>
-        <small>网站名称和网址都要填写，网址需以 http:// 或 https:// 开头；图标保存在后台 KV 配置中。</small>
+        <small>网站名称和网址都要填写，网址需以 http:// 或 https:// 开头；图标支持 PNG、JPEG、WebP、GIF、ICO，单张不超过 128 KB，保存在后台 KV 配置中。</small>
       </section>
     </div>
     <div class="settings-save-bar"><span data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div><button class="secondary" type="button" data-settings-discard="navigation-page" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('navigation-page')" disabled>保存配置</button></div></div>

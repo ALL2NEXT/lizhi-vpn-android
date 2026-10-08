@@ -641,3 +641,90 @@
       border-radius: 16px;
       box-shadow: 0 8px 28px rgb(32 33 36 / 16%);
     }
+
+    /* 长列表页把保存操作放回文档流，避免固定栏遮住列表末尾。 */
+    .tab-panel[data-panel="subscriptions"] > .settings-save-bar,
+    .tab-panel[data-panel="navigation-page"] > .settings-save-bar { position: static; }
+    .tab-panel[data-settings-dirty="false"] [data-settings-save]:disabled {
+      color: #778397;
+      background: #e8edf4;
+      opacity: 1;
+      cursor: not-allowed;
+    }
+
+    /* 关于页链接使用两列，给长网址留出可读空间。 */
+    .about-links-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    /* 导航条目默认只显示摘要，编辑和图标维护按需展开。 */
+    .web-nav-group-heading { align-items: center; }
+    .web-nav-group-count { color: var(--ink-muted); font-size: 13px; white-space: nowrap; }
+    .web-nav-item { display: block; padding: 0; border-bottom-color: var(--line); }
+    .web-nav-item-summary {
+      display: flex;
+      min-height: 66px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .web-nav-item-identity { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; gap: 12px; }
+    .web-nav-item-icon-fallback, .web-nav-icon-preview {
+      box-sizing: border-box;
+      display: grid;
+      flex: 0 0 36px;
+      width: 36px;
+      height: 36px;
+      place-items: center;
+      overflow: hidden;
+      color: var(--blue-ink);
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .web-nav-item-icon-fallback[hidden] { display: none !important; }
+    .web-nav-icon-preview[hidden] { display: none !important; }
+    .web-nav-icon-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .web-nav-item-copy { display: grid; flex: 1 1 auto; min-width: 0; gap: 4px; }
+    .web-nav-item-copy strong, .web-nav-item-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .web-nav-item-copy strong { color: var(--ink); font-size: 14px; font-weight: 600; }
+    .web-nav-item-copy span { color: var(--ink-muted); font-size: 12px; }
+    .web-nav-item-controls { flex: 0 0 auto; align-items: center; padding: 0; }
+    .web-nav-item-controls button { margin: 0; }
+    .web-nav-item-actions { position: relative; }
+    .web-nav-item-actions > summary {
+      display: grid;
+      min-height: 38px;
+      padding: 8px 12px;
+      place-items: center;
+      color: var(--ink);
+      background: var(--surface-soft);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      list-style: none;
+      white-space: nowrap;
+    }
+    .web-nav-item-actions > summary::-webkit-details-marker { display: none; }
+    .web-nav-item-actions:not([open]) > .web-nav-item-action-menu { display: none; }
+    .web-nav-item-action-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 20;
+      display: grid;
+      width: 132px;
+      gap: 4px;
+      padding: 6px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgb(32 33 36 / 16%);
+    }
+    .web-nav-item-action-menu button { width: 100%; text-align: left; }
+    .web-nav-item-editor { padding: 0 0 14px 48px; }
+    .web-nav-item-editor[hidden] { display: none !important; }
+    .web-nav-item-fields { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.5fr); gap: 12px; }
+    .web-nav-item-editor .web-nav-icon-editor { padding-top: 12px; }
+    .web-nav-item-editor .web-nav-icon-actions { gap: 8px; }
+    .web-nav-item-editor .web-nav-icon-actions button { margin: 0; }

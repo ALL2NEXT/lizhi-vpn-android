@@ -16,14 +16,23 @@ function insertSourceByOrder(row, groupRow) {
   container.insertBefore(row, nextRow || null);
 }
 
+function setSubscriptionGroupExpanded(row, expanded) {
+  const body = row.querySelector('[data-group-body]');
+  const button = row.querySelector('[data-action="group-collapse"]');
+  body.hidden = !expanded;
+  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  button.textContent = expanded ? '收起' : '展开';
+}
+
 function renderSubscriptionGroups(groups) {
   const container = el('subscriptionRows');
   container.innerHTML = '';
-  (Array.isArray(groups) ? groups : []).forEach(function(group) {
+  (Array.isArray(groups) ? groups : []).forEach(function(group, groupIndex) {
     const row = addSubscriptionGroup(group);
     (Array.isArray(group.subscriptions) ? group.subscriptions : []).forEach(function(source, index) {
       addSource(row, source, index);
     });
+    if (groupIndex > 0) setSubscriptionGroupExpanded(row, false);
   });
   updateSourceRowsMeta();
   updateSubscriptionGroupControls();
@@ -85,9 +94,7 @@ function addSubscriptionGroup(group) {
   };
   row.querySelector('[data-action="group-collapse"]').onclick = function() {
     const body = row.querySelector('[data-group-body]');
-    body.hidden = !body.hidden;
-    this.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
-    this.textContent = body.hidden ? '展开' : '收起';
+    setSubscriptionGroupExpanded(row, body.hidden);
   };
   row.querySelector('[data-action="group-delete"]').onclick = function() {
     row.remove();
@@ -322,6 +329,7 @@ function addWebNavigationGroup(group) {
   row.innerHTML = '<div class="web-nav-group-heading">' +
     '<label class="web-nav-group-name">分组名称<input data-field="title" type="text" placeholder="例如：国内测速"></label>' +
     '<div class="web-nav-controls" role="group" aria-label="分组排序和删除操作">' +
+      '<span class="web-nav-group-count" data-group-count>0 个网站</span>' +
       '<button class="secondary" type="button" data-action="group-up" aria-label="上移分组" title="上移分组">↑</button>' +
       '<button class="secondary" type="button" data-action="group-down" aria-label="下移分组" title="下移分组">↓</button>' +
       '<button class="danger" type="button" data-action="group-delete">删除分组</button>' +
@@ -354,29 +362,58 @@ function addWebNavigationGroup(group) {
 
 function addWebNavigationItem(groupRow, item) {
   item = item || {};
+  const isBlank = !String(item.title || '').trim() && !String(item.url || '').trim();
   const row = document.createElement('div');
   row.className = 'web-nav-item';
-  row.innerHTML = '<label>网站名称<input data-field="title" type="text" placeholder="例如：中科大测速"></label>' +
-    '<label>网站网址<input data-field="url" type="url" placeholder="https://example.com"></label>' +
-    '<div class="web-nav-icon-editor">' +
-      '<div class="web-nav-icon-preview" data-role="icon-preview" hidden><img alt="网站图标预览"></div>' +
+  const editorId = 'web-nav-item-editor-' + crypto.randomUUID();
+  row.innerHTML = '<div class="web-nav-item-summary">' +
+      '<div class="web-nav-item-identity">' +
+        '<span class="web-nav-item-icon-fallback" data-role="icon-fallback" aria-hidden="true">站</span>' +
+        '<div class="web-nav-icon-preview" data-role="icon-preview" hidden><img alt=""></div>' +
+        '<div class="web-nav-item-copy"><strong data-role="summary-title">未命名网站</strong><span data-role="summary-url">请填写网站地址</span></div>' +
+      '</div>' +
+      '<div class="web-nav-item-controls" role="group" aria-label="网站操作">' +
+        '<button class="secondary" type="button" data-action="edit-site" aria-expanded="' + (isBlank ? 'true' : 'false') + '" aria-controls="' + editorId + '">' + (isBlank ? '收起' : '编辑') + '</button>' +
+        '<details class="web-nav-item-actions"><summary aria-label="网站排序和删除操作">更多</summary>' +
+          '<div class="web-nav-item-action-menu" role="group" aria-label="网站排序和删除操作">' +
+            '<button class="secondary" type="button" data-action="item-up" aria-label="上移网站">上移</button>' +
+            '<button class="secondary" type="button" data-action="item-down" aria-label="下移网站">下移</button>' +
+            '<button class="danger" type="button" data-action="item-delete">删除</button>' +
+          '</div>' +
+        '</details>' +
+      '</div>' +
+    '</div>' +
+    '<div class="web-nav-item-editor" id="' + editorId + '" data-role="editor"' + (isBlank ? '' : ' hidden') + '>' +
+      '<div class="web-nav-item-fields">' +
+        '<label>网站名称<input data-field="title" type="text" placeholder="例如：中科大测速"></label>' +
+        '<label>网站网址<input data-field="url" type="url" placeholder="https://example.com"></label>' +
+      '</div>' +
+      '<div class="web-nav-icon-editor">' +
       '<div class="web-nav-icon-actions">' +
         '<input data-field="icon-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon" hidden>' +
         '<button class="secondary" type="button" data-action="icon-upload">上传图标</button>' +
         '<button class="secondary" type="button" data-action="icon-fetch">从网站获取</button>' +
         '<button class="secondary" type="button" data-action="icon-clear">清除图标</button>' +
       '</div>' +
-      '<small>支持 PNG、JPEG、WebP、GIF、ICO，单张不超过 128 KB。</small>' +
-    '</div>' +
-    '<div class="web-nav-item-controls" role="group" aria-label="网站排序和删除操作">' +
-      '<button class="secondary" type="button" data-action="item-up" aria-label="上移网站" title="上移网站">↑</button>' +
-      '<button class="secondary" type="button" data-action="item-down" aria-label="下移网站" title="下移网站">↓</button>' +
-      '<button class="danger" type="button" data-action="item-delete">删除</button>' +
+      '</div>' +
     '</div>';
   row.querySelector('[data-field="title"]').value = String(item.title || '');
   row.querySelector('[data-field="url"]').value = String(item.url || '');
   setWebNavigationIcon(row, item.iconBase64 || '', item.iconMimeType || '');
+  updateWebNavigationItemSummary(row);
   groupRow.querySelector('.web-nav-items').appendChild(row);
+  row.querySelector('[data-action="edit-site"]').onclick = function() {
+    const editor = row.querySelector('[data-role="editor"]');
+    const expanded = editor.hidden;
+    editor.hidden = !expanded;
+    this.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    this.textContent = expanded ? '收起' : '编辑';
+  };
+  ['title', 'url'].forEach(function(field) {
+    row.querySelector('[data-field="' + field + '"]').addEventListener('input', function() {
+      updateWebNavigationItemSummary(row);
+    });
+  });
   const fileInput = row.querySelector('[data-field="icon-file"]');
   row.querySelector('[data-action="icon-upload"]').onclick = function() { fileInput.click(); };
   fileInput.onchange = function() { readWebNavigationIconFile(row, fileInput); };
@@ -407,12 +444,25 @@ function setWebNavigationIcon(row, iconBase64, iconMimeType) {
   row.dataset.iconBase64 = String(iconBase64 || '');
   row.dataset.iconMimeType = String(iconMimeType || '');
   const preview = row.querySelector('[data-role="icon-preview"]');
+  const fallback = row.querySelector('[data-role="icon-fallback"]');
   const image = preview.querySelector('img');
   const hasIcon = Boolean(row.dataset.iconBase64 && row.dataset.iconMimeType);
   preview.hidden = !hasIcon;
+  fallback.hidden = hasIcon;
   image.src = hasIcon
     ? 'data:' + row.dataset.iconMimeType + ';base64,' + row.dataset.iconBase64
     : '';
+}
+
+function updateWebNavigationItemSummary(row) {
+  const title = row.querySelector('[data-field="title"]').value.trim();
+  const url = row.querySelector('[data-field="url"]').value.trim();
+  const titleSummary = row.querySelector('[data-role="summary-title"]');
+  const urlSummary = row.querySelector('[data-role="summary-url"]');
+  titleSummary.textContent = title || '未命名网站';
+  titleSummary.title = title;
+  urlSummary.textContent = url || '请填写网站地址';
+  urlSummary.title = url;
 }
 
 function readWebNavigationIconFile(row, input) {
@@ -493,6 +543,8 @@ function updateWebNavigationControls() {
     if (groupUp) groupUp.disabled = groupIndex === 0;
     if (groupDown) groupDown.disabled = groupIndex === groups.length - 1;
     const items = Array.from(group.querySelector('.web-nav-items').children);
+    const count = group.querySelector('[data-group-count]');
+    if (count) count.textContent = items.length + ' 个网站';
     items.forEach(function(item, itemIndex) {
       const itemUp = item.querySelector('[data-action="item-up"]');
       const itemDown = item.querySelector('[data-action="item-down"]');
