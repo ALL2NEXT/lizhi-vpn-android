@@ -95,30 +95,30 @@ function renderGrowthChart(data) {
     const value = tickStep * index;
     const y = yFor(value).toFixed(2);
     return '<line x1="' + padding.left + '" y1="' + y + '" x2="' + (width - padding.right) +
-      '" y2="' + y + '" stroke="#374151" stroke-width="1" />' +
+      '" y2="' + y + '" stroke="#dadce0" stroke-width="1" />' +
       '<text x="' + (padding.left - 10) + '" y="' + (Number(y) + 4) +
-      '" text-anchor="end" fill="#94a3b8" font-size="12">' + value + '</text>';
+      '" text-anchor="end" fill="#5f6368" font-size="12">' + value + '</text>';
   }).join('');
   const labelEvery = Math.max(1, Math.ceil(points.length / 8));
   const labels = points.map(function(point, index) {
     const isLast = index === points.length - 1;
     if (index !== 0 && !isLast && index % labelEvery !== 0) return '';
     return '<text x="' + xFor(index).toFixed(2) + '" y="' + (height - 16) +
-      '" text-anchor="middle" fill="#94a3b8" font-size="12">' +
+      '" text-anchor="middle" fill="#5f6368" font-size="12">' +
       esc(growthPointLabel(point.key, period)) + '</text>';
   }).join('');
   const circles = points.map(function(point, index) {
     const label = growthPointLabel(point.key, period);
     return '<circle cx="' + xFor(index).toFixed(2) + '" cy="' + yFor(point.totalUsers).toFixed(2) +
-      '" r="4" fill="#38bdf8" stroke="#0f172a" stroke-width="2"><title>' +
+      '" r="4" fill="#1a73e8" stroke="#ffffff" stroke-width="2"><title>' +
       esc(label + '：累计 ' + point.totalUsers + '，新增 ' + point.newUsers) + '</title></circle>';
   }).join('');
   host.innerHTML = '<svg class="growth-chart" viewBox="0 0 ' + width + ' ' + height +
     '" role="img" aria-label="' + esc('用户增长折线图，按' + (period === 'day' ? '日' : period === 'week' ? '周' : '月') + '统计') + '">' +
     grid +
     '<line x1="' + padding.left + '" y1="' + (padding.top + plotHeight) + '" x2="' +
-    (width - padding.right) + '" y2="' + (padding.top + plotHeight) + '" stroke="#64748b" stroke-width="1" />' +
-    '<path d="' + linePath + '" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
+    (width - padding.right) + '" y2="' + (padding.top + plotHeight) + '" stroke="#80868b" stroke-width="1" />' +
+    '<path d="' + linePath + '" fill="none" stroke="#1a73e8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
     circles + labels +
     '</svg>';
   if (summary) {
@@ -175,30 +175,30 @@ function renderActivityChart(data) {
     const value = tickStep * index;
     const y = yFor(value).toFixed(2);
     return '<line x1="' + padding.left + '" y1="' + y + '" x2="' + (width - padding.right) +
-      '" y2="' + y + '" stroke="#374151" stroke-width="1" />' +
+      '" y2="' + y + '" stroke="#dadce0" stroke-width="1" />' +
       '<text x="' + (padding.left - 10) + '" y="' + (Number(y) + 4) +
-      '" text-anchor="end" fill="#94a3b8" font-size="12">' + value + '</text>';
+      '" text-anchor="end" fill="#5f6368" font-size="12">' + value + '</text>';
   }).join('');
   const labelEvery = Math.max(1, Math.ceil(points.length / 8));
   const labels = points.map(function(point, index) {
     const isLast = index === points.length - 1;
     if (index !== 0 && !isLast && index % labelEvery !== 0) return '';
     return '<text x="' + xFor(index).toFixed(2) + '" y="' + (height - 16) +
-      '" text-anchor="middle" fill="#94a3b8" font-size="12">' +
+      '" text-anchor="middle" fill="#5f6368" font-size="12">' +
       esc(growthPointLabel(point.key, period)) + '</text>';
   }).join('');
   const circles = points.map(function(point, index) {
     const label = growthPointLabel(point.key, period);
     return '<circle cx="' + xFor(index).toFixed(2) + '" cy="' + yFor(point.activeUsers).toFixed(2) +
-      '" r="4" fill="#22c55e" stroke="#0f172a" stroke-width="2"><title>' +
+      '" r="4" fill="#34a853" stroke="#ffffff" stroke-width="2"><title>' +
       esc(label + '：活跃用户 ' + point.activeUsers) + '</title></circle>';
   }).join('');
   host.innerHTML = '<svg class="growth-chart" viewBox="0 0 ' + width + ' ' + height +
     '" role="img" aria-label="' + esc('活跃用户趋势图，按' + (period === 'day' ? '日' : period === 'week' ? '周' : '月') + '统计') + '">' +
     grid +
     '<line x1="' + padding.left + '" y1="' + (padding.top + plotHeight) + '" x2="' +
-    (width - padding.right) + '" y2="' + (padding.top + plotHeight) + '" stroke="#64748b" stroke-width="1" />' +
-    '<path d="' + linePath + '" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
+    (width - padding.right) + '" y2="' + (padding.top + plotHeight) + '" stroke="#80868b" stroke-width="1" />' +
+    '<path d="' + linePath + '" fill="none" stroke="#34a853" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
     circles + labels +
     '</svg>';
   if (summary) {
@@ -208,7 +208,7 @@ function renderActivityChart(data) {
     }, 0);
     summary.innerHTML = '<span>当前周期活跃 <strong>' + latest.activeUsers + '</strong> 个用户</span>' +
       '<span>范围峰值 <strong>' + peak + '</strong> 个用户</span>' +
-      '<span class="growth-legend"><i style="background:#22c55e"></i>活跃用户</span>';
+      '<span class="growth-legend"><i style="background:#34a853"></i>活跃用户</span>';
   }
 }
 function renderTrafficChart(data) {
@@ -258,9 +258,9 @@ function renderTrafficChart(data) {
     const value = tickStep * index;
     const y = yFor(value).toFixed(2);
     return '<line x1="' + padding.left + '" y1="' + y + '" x2="' + (width - padding.right) +
-      '" y2="' + y + '" stroke="#374151" stroke-width="1" />' +
+      '" y2="' + y + '" stroke="#dadce0" stroke-width="1" />' +
       '<text x="' + (padding.left - 10) + '" y="' + (Number(y) + 4) +
-      '" text-anchor="end" fill="#94a3b8" font-size="12">' + esc(formatMegabytes(value)) + '</text>';
+      '" text-anchor="end" fill="#5f6368" font-size="12">' + esc(formatMegabytes(value)) + '</text>';
   }).join('');
   const groupWidth = plotWidth / Math.max(points.length, 1);
   const barWidth = Math.max(8, Math.min(36, groupWidth * 0.58));
@@ -274,11 +274,11 @@ function renderTrafficChart(data) {
     const label = growthPointLabel(point.key, period);
     return '<rect x="' + x.toFixed(2) + '" y="' + downloadY.toFixed(2) +
       '" width="' + barWidth.toFixed(2) + '" height="' + downloadHeight.toFixed(2) +
-      '" rx="2" fill="#a78bfa"><title>' + esc(label + '：下载 ' + formatMegabytes(point.downloadMb)) +
+      '" rx="2" fill="#a142f4"><title>' + esc(label + '：下载 ' + formatMegabytes(point.downloadMb)) +
       '</title></rect>' +
       '<rect x="' + x.toFixed(2) + '" y="' + totalY.toFixed(2) +
       '" width="' + barWidth.toFixed(2) + '" height="' + uploadHeight.toFixed(2) +
-      '" rx="2" fill="#22c55e"><title>' + esc(label + '：上传 ' + formatMegabytes(point.uploadMb)) +
+      '" rx="2" fill="#34a853"><title>' + esc(label + '：上传 ' + formatMegabytes(point.uploadMb)) +
       '</title></rect>';
   }).join('');
   const linePath = points.map(function(point, index) {
@@ -289,22 +289,22 @@ function renderTrafficChart(data) {
     const isLast = index === points.length - 1;
     if (index !== 0 && !isLast && index % labelEvery !== 0) return '';
     return '<text x="' + xFor(index).toFixed(2) + '" y="' + (height - 16) +
-      '" text-anchor="middle" fill="#94a3b8" font-size="12">' +
+      '" text-anchor="middle" fill="#5f6368" font-size="12">' +
       esc(growthPointLabel(point.key, period)) + '</text>';
   }).join('');
   const circles = points.map(function(point, index) {
     const label = growthPointLabel(point.key, period);
     return '<circle cx="' + xFor(index).toFixed(2) + '" cy="' + yFor(point.totalMb).toFixed(2) +
-      '" r="4" fill="#f59e0b" stroke="#0f172a" stroke-width="2"><title>' +
+      '" r="4" fill="#f9ab00" stroke="#ffffff" stroke-width="2"><title>' +
       esc(label + '：总流量 ' + formatMegabytes(point.totalMb)) + '</title></circle>';
   }).join('');
   host.innerHTML = '<svg class="traffic-chart" viewBox="0 0 ' + width + ' ' + height +
     '" role="img" aria-label="' + esc('流量消耗图，按' + (period === 'day' ? '日' : period === 'week' ? '周' : '月') + '统计') + '">' +
     grid +
     '<line x1="' + padding.left + '" y1="' + baseline + '" x2="' + (width - padding.right) +
-    '" y2="' + baseline + '" stroke="#64748b" stroke-width="1" />' +
+    '" y2="' + baseline + '" stroke="#80868b" stroke-width="1" />' +
     bars +
-    '<path d="' + linePath + '" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
+    '<path d="' + linePath + '" fill="none" stroke="#f9ab00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />' +
     circles + labels +
     '</svg>';
   if (summary) {
