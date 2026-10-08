@@ -3,7 +3,7 @@ let subscriptionIconControlId = 0;
 
 function sourceOrder(row) {
   const order = Number(row.dataset.sourceOrder);
-  return Number.isFinite(order) ? order : 0;
+  return Number.isFinite(order) ? order : 1;
 }
 
 function bindSubscriptionSwitchStates(row) {
@@ -298,7 +298,7 @@ function renderSubscriptionGroups(groups) {
   (Array.isArray(groups) ? groups : []).forEach(function(group, groupIndex) {
     const row = addSubscriptionGroup(group);
     (Array.isArray(group.subscriptions) ? group.subscriptions : []).forEach(function(source, index) {
-      addSource(row, source, index);
+      addSource(row, source, index + 1);
     });
     if (groupIndex > 0) setSubscriptionGroupExpanded(row, false);
   });
@@ -311,15 +311,15 @@ function addSubscriptionGroup(group) {
   const row = document.createElement('section');
   row.className = 'subscription-group';
   row.dataset.groupId = String(group.id || crypto.randomUUID());
+  const groupOrder = getSubscriptionGroupRows().length + 1;
   const allowedStatuses = Array.isArray(group.allowedStatuses) ? group.allowedStatuses : ['normal'];
   const allowedAccountTypes = Array.isArray(group.allowedAccountTypes)
     ? group.allowedAccountTypes
     : ['guest', 'formal'];
   row.innerHTML = '<div class="subscription-group-heading">' +
-    '<div class="subscription-group-leading-controls" role="group" aria-label="启用和分组排序">' +
+    '<div class="subscription-group-leading-controls" role="group" aria-label="启用和分组排序序号">' +
       '<label class="subscription-switch subscription-group-enabled"><span class="subscription-switch-control"><input data-field="groupEnabled" type="checkbox" aria-label="启用分组" ' + (group.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span><span class="subscription-switch-state" data-switch-state></span></label>' +
-      '<button class="secondary" type="button" data-action="group-up" aria-label="上移分组" title="上移分组">↑</button>' +
-      '<button class="secondary" type="button" data-action="group-down" aria-label="下移分组" title="下移分组">↓</button>' +
+      '<label class="subscription-order-field"><span>序号</span><input data-field="groupOrder" type="number" min="1" step="1" value="' + groupOrder + '" aria-label="分组排序序号"></label>' +
     '</div>' +
     '<div class="subscription-group-title"><span>分组</span>' +
       '<label>分组名称<input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label>' +
@@ -374,12 +374,9 @@ function addSubscriptionGroup(group) {
   row.querySelector('[data-action="add-source"]').onclick = function() {
     openSubscriptionImport(row);
   };
-  row.querySelector('[data-action="group-up"]').onclick = function() {
-    moveSubscriptionGroup(row, -1);
-  };
-  row.querySelector('[data-action="group-down"]').onclick = function() {
-    moveSubscriptionGroup(row, 1);
-  };
+  row.querySelector('[data-field="groupOrder"]').addEventListener('change', function() {
+    moveSubscriptionGroupToOrder(row, this.value);
+  });
   const permissionsDialog = row.querySelector('[data-group-permissions-dialog]');
   row.querySelector('[data-action="permissions"]').onclick = function() {
     if (permissionsDialog && !permissionsDialog.open) permissionsDialog.showModal();
@@ -496,24 +493,25 @@ function validateSubscriptionGroupVersions(groups) {
   return '';
 }
 
-function moveSubscriptionGroup(row, direction) {
+function moveSubscriptionGroupToOrder(row, requestedOrder) {
   const groups = getSubscriptionGroupRows();
   const index = groups.indexOf(row);
-  const target = groups[index + direction];
-  if (!target) return;
-  if (direction < 0) row.parentElement.insertBefore(row, target);
-  else row.parentElement.insertBefore(target, row);
+  if (index < 0) return;
+  const order = Number(requestedOrder);
+  const targetIndex = Number.isInteger(order) && order > 0
+    ? Math.min(order - 1, groups.length - 1)
+    : index;
+  const reordered = groups.filter(function(group) { return group !== row; });
+  reordered.splice(targetIndex, 0, row);
+  reordered.forEach(function(group) { row.parentElement.appendChild(group); });
   updateSubscriptionGroupControls();
-  markSettingsDirty('subscriptions');
 }
 
 function updateSubscriptionGroupControls() {
   const groups = getSubscriptionGroupRows();
   groups.forEach(function(group, index) {
-    const up = group.querySelector('[data-action="group-up"]');
-    const down = group.querySelector('[data-action="group-down"]');
-    if (up) up.disabled = index === 0;
-    if (down) down.disabled = index === groups.length - 1;
+    const order = group.querySelector('[data-field="groupOrder"]');
+    if (order) order.value = String(index + 1);
   });
 }
 
@@ -527,9 +525,9 @@ function addSource(groupRow, source, sourceOrderValue) {
   row.dataset.iconBase64 = String(source.iconBase64 || '');
   row.dataset.iconMimeType = String(source.iconMimeType || '');
   const existingOrders = Array.from(groupRow.querySelectorAll('.source-row')).map(sourceOrder);
-  row.dataset.sourceOrder = Number.isFinite(Number(sourceOrderValue))
+  row.dataset.sourceOrder = Number.isFinite(Number(sourceOrderValue)) && Number(sourceOrderValue) > 0
     ? String(Number(sourceOrderValue))
-    : String(existingOrders.length ? Math.max.apply(null, existingOrders) + 1 : 0);
+    : String(existingOrders.length ? Math.max.apply(null, existingOrders) + 1 : 1);
   const sourceType = source.content ? 'content' : 'url';
   const supportedIconModes = ['DEFAULT', 'AUTO_REMOTE', 'CUSTOM_REMOTE', 'LOCAL'];
   const iconMode = supportedIconModes.includes(source.iconMode) ? source.iconMode : 'AUTO_REMOTE';
@@ -539,9 +537,8 @@ function addSource(groupRow, source, sourceOrderValue) {
   };
   // 每条订阅的设定弹窗保留在行内，关闭后输入仍作为当前页面草稿保留。
   row.innerHTML = '<div class="source-row-header">' +
-    '<div class="source-row-sort-controls" role="group" aria-label="订阅排序">' +
-      '<button class="secondary source-move-button" type="button" data-action="move-up" aria-label="上移订阅" title="上移订阅">↑</button>' +
-      '<button class="secondary source-move-button" type="button" data-action="move-down" aria-label="下移订阅" title="下移订阅">↓</button>' +
+    '<div class="source-row-sort-controls" role="group" aria-label="订阅排序序号">' +
+      '<input data-field="sourceOrder" type="number" min="1" step="1" value="' + row.dataset.sourceOrder + '" aria-label="订阅排序序号">' +
     '</div>' +
     '<label class="subscription-switch source-enabled-check"><span class="subscription-switch-control"><input data-field="enabled" type="checkbox" aria-label="启用订阅" ' + (source.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
     '<div class="source-row-heading">' +
@@ -584,7 +581,9 @@ function addSource(groupRow, source, sourceOrderValue) {
   const removeSource = function() {
     const dialog = row.querySelector('[data-source-dialog]');
     if (dialog.open) dialog.close();
+    const group = row.closest('.subscription-group');
     row.remove();
+    if (group) updateSubscriptionSourceOrder(group);
     updateSourceRowsMeta();
     markSettingsDirty('subscriptions');
   };
@@ -622,17 +621,15 @@ function addSource(groupRow, source, sourceOrderValue) {
   row.querySelector('[data-action="source-close"]').onclick = function() {
     row.querySelector('[data-source-dialog]').close();
   };
-  row.querySelector('[data-action="move-up"]').onclick = function() {
-    moveSourceRow(row, -1);
-  };
-  row.querySelector('[data-action="move-down"]').onclick = function() {
-    moveSourceRow(row, 1);
-  };
+  row.querySelector('[data-field="sourceOrder"]').addEventListener('change', function() {
+    moveSourceRowToOrder(row, this.value);
+  });
   bindSubscriptionSwitchStates(row);
   updateSourceMode(row);
   updateSourceIconMode(row);
   updateSourceRowPresentation(row);
   insertSourceByOrder(row, groupRow);
+  updateSubscriptionSourceOrder(groupRow);
   updateSourceRowsMeta();
   markSettingsDirty('subscriptions');
   return row;
@@ -671,32 +668,35 @@ function updateSourceRowsMeta() {
     }
     rows.forEach(function(row, index) {
       const nameInput = row.querySelector('[data-field="name"]');
-      if (nameInput) nameInput.placeholder = '订阅' + (sourceOrder(row) + 1);
+      if (nameInput) nameInput.placeholder = '订阅' + sourceOrder(row);
       const dialogName = row.querySelector('[data-source-dialog-name]');
       if (dialogName) dialogName.textContent = nameInput.value.trim() || nameInput.placeholder;
-      const moveUp = row.querySelector('[data-action="move-up"]');
-      const moveDown = row.querySelector('[data-action="move-down"]');
-      if (moveUp) moveUp.disabled = index === 0;
-      if (moveDown) moveDown.disabled = index === rows.length - 1;
     });
   });
 }
-function moveSourceRow(row, direction) {
-  const rows = Array.from(row.parentElement.children).filter(function(candidate) {
+function updateSubscriptionSourceOrder(group) {
+  const rows = Array.from(group.querySelectorAll('[data-group-sources] > .source-row'));
+  rows.forEach(function(row, index) {
+    row.dataset.sourceOrder = String(index + 1);
+    row.querySelector('[data-field="sourceOrder"]').value = String(index + 1);
+  });
+}
+function moveSourceRowToOrder(row, requestedOrder) {
+  const container = row.parentElement;
+  const rows = Array.from(container.children).filter(function(candidate) {
     return candidate.classList.contains('source-row');
   });
   const index = rows.indexOf(row);
-  const targetIndex = index + direction;
-  if (index < 0 || targetIndex < 0 || targetIndex >= rows.length) return;
-  const target = rows[targetIndex];
-  const rowOrder = row.dataset.sourceOrder;
-  row.dataset.sourceOrder = target.dataset.sourceOrder;
-  target.dataset.sourceOrder = rowOrder;
-  const container = row.parentElement;
-  if (direction < 0) container.insertBefore(row, target);
-  else container.insertBefore(target, row);
+  if (index < 0) return;
+  const order = Number(requestedOrder);
+  const targetIndex = Number.isInteger(order) && order > 0
+    ? Math.min(order - 1, rows.length - 1)
+    : index;
+  rows.splice(index, 1);
+  rows.splice(targetIndex, 0, row);
+  rows.forEach(function(sourceRow) { container.appendChild(sourceRow); });
+  updateSubscriptionSourceOrder(row.closest('.subscription-group'));
   updateSourceRowsMeta();
-  markSettingsDirty('subscriptions');
 }
 function updateSourceMode(row) {
   const type = row.querySelector('[data-field="sourceType"]').value;
