@@ -278,14 +278,6 @@ function insertSourceByOrder(row, groupRow) {
   container.insertBefore(row, nextRow || null);
 }
 
-function setSubscriptionGroupExpanded(row, expanded) {
-  const body = row.querySelector('[data-group-body]');
-  const button = row.querySelector('[data-action="group-collapse"]');
-  body.hidden = !expanded;
-  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  button.setAttribute('aria-label', expanded ? '折叠分组订阅' : '展开分组订阅');
-}
-
 function renderSubscriptionGroups(groups) {
   const container = el('subscriptionRows');
   selectSubscriptionSource(null);
@@ -329,7 +321,6 @@ function addSubscriptionGroup(group) {
     '<div class="subscription-group-controls" role="group" aria-label="分组操作">' +
       '<label class="subscription-switch subscription-group-enabled"><span class="subscription-switch-control"><input data-field="groupEnabled" type="checkbox" aria-label="启用分组" ' + (group.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span><span class="subscription-group-enabled-label">分组启用</span></label>' +
       '<button class="secondary" type="button" data-action="permissions" aria-haspopup="dialog" aria-label="分组设置">' + subscriptionIcon('settings') + ' 分组设置</button>' +
-      '<button class="secondary subscription-group-collapse" type="button" data-action="group-collapse" aria-expanded="true" aria-label="折叠分组订阅">' + subscriptionIcon('more') + '</button>' +
     '</div>' +
     '<input class="subscription-group-order-data" data-field="groupOrder" type="number" min="1" step="1" value="' + groupOrder + '" aria-label="分组排序序号">' +
   '</div>' +
@@ -371,9 +362,8 @@ function addSubscriptionGroup(group) {
       '<button class="secondary" type="button" data-action="permissions-close">完成</button>' +
     '</div>' +
   '</dialog>' +
-  '<div data-group-body>' +
   '<div class="source-list-header" aria-hidden="true"><span></span><span></span><span>#</span><span>订阅名称</span><span>流量使用</span><span>到期时间</span><span>备注</span><span>状态</span><span>启用</span><span>操作</span></div>' +
-  '<div class="subscription-group-sources" data-group-sources></div></div>';
+  '<div class="subscription-group-sources" data-group-sources></div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
   row.querySelector('[data-field="groupType"]').value = group.groupType === 'load_balanced' ? 'load_balanced' : 'standard';
@@ -406,10 +396,6 @@ function addSubscriptionGroup(group) {
   permissionsDialog.addEventListener('click', function(event) {
     if (event.target === permissionsDialog) permissionsDialog.close();
   });
-  row.querySelector('[data-action="group-collapse"]').onclick = function() {
-    const body = row.querySelector('[data-group-body]');
-    setSubscriptionGroupExpanded(row, body.hidden);
-  };
   row.querySelector('[data-action="group-delete"]').onclick = function() {
     if (permissionsDialog.open) permissionsDialog.close();
     const wasActive = activeSubscriptionGroupId === row.dataset.groupId;
@@ -658,7 +644,6 @@ function renderSubscriptionGroupNavigation() {
       '<button class="subscription-group-nav-item" type="button" data-group-nav="' + esc(group.dataset.groupId) + '"><span class="subscription-nav-icon" aria-hidden="true">' + subscriptionIcon('folder') + '</span><span class="subscription-nav-name">' + esc(groupName) + '</span><span class="subscription-nav-count">' + count + '</span></button>' +
       '</div>');
   });
-  rows.push('<button class="subscription-group-nav-item subscription-unassigned-nav-item" type="button" data-group-nav="__unassigned__"><span class="subscription-nav-icon" aria-hidden="true">' + subscriptionIcon('unassigned') + '</span><span class="subscription-nav-name">未分组</span><span class="subscription-nav-count">0</span></button>');
   nav.innerHTML = rows.join('');
   nav.querySelectorAll('[data-group-nav]').forEach(function(button) {
     button.addEventListener('click', function() {
@@ -813,9 +798,7 @@ function updateSubscriptionEditorTraffic(row) {
 function applySubscriptionFilters() {
   const groups = getSubscriptionGroupRows();
   const rows = getSourceRows();
-  const globalSearch = (document.querySelector('[data-subscription-global-search]') || {}).value || '';
   const localSearch = (document.querySelector('[data-source-search]') || {}).value || '';
-  const globalQuery = globalSearch.trim().toLocaleLowerCase();
   const localQuery = localSearch.trim().toLocaleLowerCase();
   const healthFilter = (document.querySelector('[data-source-health-filter]') || {}).value || 'all';
   const typeFilter = (document.querySelector('[data-source-type-filter]') || {}).value || 'all';
@@ -827,7 +810,7 @@ function applySubscriptionFilters() {
     const health = type === 'content' ? 'local' : row.dataset.sourceHealth || 'unknown';
     const text = [row.querySelector('[data-field="name"]').value, row.querySelector('[data-field="remark"]').value,
       row.querySelector('[data-field="url"]').value].join(' ').toLocaleLowerCase();
-    return (!globalQuery || text.includes(globalQuery)) && (!localQuery || text.includes(localQuery)) &&
+    return (!localQuery || text.includes(localQuery)) &&
       (typeFilter === 'all' || type === typeFilter) &&
       (healthFilter === 'all' || health === healthFilter);
   });
@@ -925,23 +908,8 @@ function initializeSubscriptionManager() {
     if (!group) group = addSubscriptionGroup();
     openSubscriptionImport(group);
   });
-  panel.querySelectorAll('[data-action="refresh-subscriptions"]').forEach(function(button) {
-    button.addEventListener('click', loadSubscriptionTraffic);
-  });
   panel.querySelectorAll('[data-action="delete-exhausted-subscriptions"]').forEach(function(button) {
     button.addEventListener('click', deleteExhaustedSubscriptions);
-  });
-  panel.querySelector('[data-action="toggle-group-menu"]').addEventListener('click', function() {
-    const menu = panel.querySelector('[data-group-sidebar-menu]');
-    menu.hidden = !menu.hidden;
-  });
-  panel.querySelector('[data-action="expand-all-groups"]').addEventListener('click', function() {
-    getSubscriptionGroupRows().forEach(function(group) { setSubscriptionGroupExpanded(group, true); });
-    panel.querySelector('[data-group-sidebar-menu]').hidden = true;
-  });
-  panel.querySelector('[data-action="collapse-all-groups"]').addEventListener('click', function() {
-    getSubscriptionGroupRows().forEach(function(group) { setSubscriptionGroupExpanded(group, false); });
-    panel.querySelector('[data-group-sidebar-menu]').hidden = true;
   });
   panel.querySelectorAll('[data-action="close-subscription-editor"]').forEach(function(button) {
     button.addEventListener('click', function() { selectSubscriptionSource(null); });
@@ -958,7 +926,6 @@ function initializeSubscriptionManager() {
     if (dialog && !dialog.open) dialog.showModal();
   });
   panel.querySelector('[data-source-search]').addEventListener('input', function() { subscriptionCurrentPage = 1; applySubscriptionFilters(); });
-  panel.querySelector('[data-subscription-global-search]').addEventListener('input', function() { subscriptionCurrentPage = 1; applySubscriptionFilters(); });
   ['[data-source-health-filter]', '[data-source-type-filter]', '[data-source-sort]'].forEach(function(selector) {
     panel.querySelector(selector).addEventListener('change', function() { subscriptionCurrentPage = 1; applySubscriptionFilters(); });
   });
