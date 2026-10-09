@@ -20,7 +20,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 12;
+export const USER_SCHEMA_VERSION = 13;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -146,6 +146,17 @@ export const USER_SCHEMA_STATEMENTS = [
     ON user_usage_mb(user_id, ended_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_user_usage_mb_day_user
     ON user_usage_mb(usage_day, user_id)`,
+  `CREATE TABLE IF NOT EXISTS subscription_group_assignments_mb (
+    group_id TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    source_id TEXT NOT NULL,
+    source_key TEXT NOT NULL,
+    assigned_at INTEGER NOT NULL CHECK (assigned_at > 0),
+    PRIMARY KEY (group_id, user_id),
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_subscription_group_assignments_capacity_mb
+    ON subscription_group_assignments_mb(group_id, source_key, assigned_at)`,
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
@@ -279,6 +290,19 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
         AND lifted_at IS NULL;
     END`,
     `PRAGMA defer_foreign_keys = OFF`,
+  ],
+  13: [
+    `CREATE TABLE IF NOT EXISTS subscription_group_assignments_mb (
+      group_id TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      source_id TEXT NOT NULL,
+      source_key TEXT NOT NULL,
+      assigned_at INTEGER NOT NULL CHECK (assigned_at > 0),
+      PRIMARY KEY (group_id, user_id),
+      FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_subscription_group_assignments_capacity_mb
+      ON subscription_group_assignments_mb(group_id, source_key, assigned_at)`,
   ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {

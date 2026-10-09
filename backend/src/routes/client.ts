@@ -1,7 +1,8 @@
 import type { Env } from "../types/env.ts";
 import type { RouteDependencies } from "../types/routes.ts";
-import type { SubscriptionGroup } from "../types/models.ts";
+import type { SubscriptionGroup, SubscriptionSource } from "../types/models.ts";
 import { subscriptionGroupAccessError } from "../domain/subscription-access.ts";
+import { getOrAssignBalancedSubscription } from "../services/subscription-balancing.ts";
 
 /*
  * Client routes.
@@ -26,6 +27,7 @@ export function createClientRoutes(deps: Pick<
   | "protectSubscription"
   | "getClientIp"
   | "readState"
+  | "resolveUserIdentity"
   | "visibleNotice"
   | "publicClientSettings"
   | "corsHeaders"
@@ -43,6 +45,7 @@ export function createClientRoutes(deps: Pick<
     protectSubscription,
     getClientIp,
     readState,
+    resolveUserIdentity,
     visibleNotice,
     publicClientSettings,
     corsHeaders,
@@ -56,21 +59,33 @@ async function handleClient(request: Request, env: Env) {
   const groups = state.subscriptionGroups.filter((group) => group.enabled);
 
   return json({
-    subscriptions: groups.flatMap((group) => group.subscriptions
-      .filter((source) => source.enabled)
-      .map((source) => ({
-        id: source.id,
-        name: source.name,
-        enabled: source.enabled,
+    subscriptions: groups.flatMap((group) => {
+      const sources = group.subscriptions.filter((source) => source.enabled);
+      if (!sources.length) return [];
+      const access = {
+        enabled: true,
         encrypted: true,
-        // 保留旧客户端识别的最低等级，并给新客户端完整分组权限用于隐藏无权线路。
         minAccountType: legacyMinimumAccountType(group),
         allowedStatuses: group.allowedStatuses,
         allowedAccountTypes: group.allowedAccountTypes,
         minAppVersion: group.minAppVersion,
         maxAppVersion: group.maxAppVersion,
+      };
+      if (group.groupType === "load_balanced") {
+        return [{
+          ...access,
+          id: `load-balanced:${group.id}`,
+          name: group.name,
+          url: `${origin}/api/subscription/lb/${encodeURIComponent(group.id)}`,
+        }];
+      }
+      return sources.map((source) => ({
+        ...access,
+        id: source.id,
+        name: source.name,
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
-      }))),
+      }));
+    }),
     notice: visibleNotice(state.notice),
     appUpdate: state.appUpdate,
     settings: publicClientSettings(state.settings),
@@ -135,16 +150,38 @@ async function handleProxyAppList() {
 
 async function handleManagedSubscription(path: string, request: Request, env: Env) {
   const suffix = path.slice("/api/subscription/".length);
-  const id = suffix;
-  if (!/^\d+$/.test(id)) {
+  const isLoadBalanced = suffix.startsWith("lb/");
+  let balancedGroupId = "";
+  if (isLoadBalanced) {
+    try {
+      balancedGroupId = decodeURIComponent(suffix.slice("lb/".length));
+    } catch {
+      return json({ error: "subscription_not_found" }, 404);
+    }
+  } else if (!/^\d+$/.test(suffix)) {
     return json({ error: "subscription_not_found" }, 404);
   }
 
   const state = await readState(env);
-  const group = state.subscriptionGroups.find((item) =>
-    item.subscriptions.some((source) => source.id === id));
-  const source = group?.subscriptions.find((item) => item.id === id);
-  if (!group || !group.enabled || !source || !source.enabled || (!source.content && !source.url)) {
+  let group: SubscriptionGroup | undefined;
+  let source: SubscriptionSource | undefined;
+  if (isLoadBalanced) {
+    group = state.subscriptionGroups.find((item) =>
+      item.id === balancedGroupId && item.groupType === "load_balanced");
+    if (!group || !group.enabled || !group.subscriptions.some((item) =>
+      item.enabled && (item.content || item.url)
+    )) {
+      return json({ error: "subscription_not_found" }, 404);
+    }
+  } else {
+    group = state.subscriptionGroups.find((item) =>
+      item.subscriptions.some((itemSource) => itemSource.id === suffix));
+    source = group?.subscriptions.find((item) => item.id === suffix);
+    if (!group || !group.enabled || !source || !source.enabled || (!source.content && !source.url)) {
+      return json({ error: "subscription_not_found" }, 404);
+    }
+  }
+  if (!group) {
     return json({ error: "subscription_not_found" }, 404);
   }
 
@@ -183,6 +220,18 @@ async function handleManagedSubscription(path: string, request: Request, env: En
       currentVersion: access.appVersion || null,
     }, 403);
   }
+
+  if (isLoadBalanced) {
+    const identity = await resolveUserIdentity(env, deviceId);
+    if (!identity || identity.userId <= 0) {
+      return json({ ok: false, error: "account_access_denied" }, 403);
+    }
+    source = (await getOrAssignBalancedSubscription(env, group, identity.userId)) || undefined;
+    if (!source) {
+      return json({ ok: false, error: "subscription_capacity_exhausted" }, 503);
+    }
+  }
+  if (!source) return json({ error: "subscription_not_found" }, 404);
 
   const clientIp = getClientIp(request);
   let fetchedContent = source.content;

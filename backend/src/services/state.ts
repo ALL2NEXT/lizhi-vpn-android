@@ -75,6 +75,7 @@ function normalizeSubscriptionGroup(
   return {
     id: cleanText(input.id).slice(0, 80) || String(index + 1),
     name: cleanText(input.name || input.title).slice(0, 80) || `分组${index + 1}`,
+    groupType: input.groupType === "load_balanced" ? "load_balanced" : "standard",
     enabled: parseFlag(input.enabled, true),
     allowedStatuses: normalizeSelection(input.allowedStatuses, SUBSCRIPTION_STATUSES, ["normal"]),
     allowedAccountTypes: normalizeSelection(input.allowedAccountTypes, SUBSCRIPTION_ACCOUNT_TYPES, ["guest", "formal"]),
@@ -82,8 +83,17 @@ function normalizeSubscriptionGroup(
     cacheMinutes,
     minAppVersion,
     maxAppVersion,
+    maxUsersPerSubscription: normalizeBoundedInteger(input.maxUsersPerSubscription, 10, 1, 1_000_000),
+    resetPeriodDays: normalizeBoundedInteger(input.resetPeriodDays, 30, 1, 3650),
     subscriptions: sources,
   };
+}
+
+function normalizeBoundedInteger(value: unknown, fallback: number, minimum: number, maximum: number) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= minimum && number <= maximum
+    ? number
+    : fallback;
 }
 
 function randomDebugInterfaceToken() {
@@ -164,6 +174,7 @@ export function normalizeState(input: unknown): AppState {
         return [{
           id: String(index + 1),
           name: cleanText(item.groupName || item.name || item.title) || `分组${index + 1}`,
+          groupType: "standard",
           enabled: true,
           allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
           allowedAccountTypes: minimumType === "formal" ? ["formal"] : ["guest", "formal"],
@@ -171,6 +182,8 @@ export function normalizeState(input: unknown): AppState {
           cacheMinutes: normalizeSubscriptionCacheMinutes(source.url ? item.cacheMinutes : undefined),
           minAppVersion: normalizeMinimumAppVersion(item.minAppVersion ?? item.minimumAppVersion),
           maxAppVersion: "",
+          maxUsersPerSubscription: 10,
+          resetPeriodDays: 30,
           subscriptions: [source],
         }];
       });

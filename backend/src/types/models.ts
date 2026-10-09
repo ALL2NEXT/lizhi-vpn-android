@@ -17,6 +17,7 @@ export interface SubscriptionSource {
 export interface SubscriptionGroup {
   id: string;
   name: string;
+  groupType: "standard" | "load_balanced";
   enabled: boolean;
   allowedStatuses: SubscriptionAccountStatus[];
   allowedAccountTypes: Exclude<AccountType, "banned">[];
@@ -24,6 +25,8 @@ export interface SubscriptionGroup {
   cacheMinutes: number;
   minAppVersion: string;
   maxAppVersion: string;
+  maxUsersPerSubscription: number;
+  resetPeriodDays: number;
   subscriptions: SubscriptionSource[];
 }
 

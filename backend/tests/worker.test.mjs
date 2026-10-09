@@ -48,10 +48,10 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
   let uid;
   let debugToken;
 
-  await t.test("健康检查初始化 schema v12，CORS 和管理资源可用", async () => {
+  await t.test("健康检查初始化 schema v13，CORS 和管理资源可用", async () => {
     const { data } = await call("/health");
     assert.equal(data.database.initialized, true);
-    assert.equal(data.database.schemaVersion, 12);
+    assert.equal(data.database.schemaVersion, 13);
     const { response } = await call("/api/client", { method: "OPTIONS", status: 204 });
     assert.equal(response.headers.get("access-control-allow-origin"), "*");
     const html = (await call("/local-admin")).data;

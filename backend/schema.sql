@@ -140,5 +140,18 @@ CREATE INDEX idx_user_usage_mb_user_ended
 CREATE INDEX idx_user_usage_mb_day_user
   ON user_usage_mb(usage_day, user_id);
 
+CREATE TABLE subscription_group_assignments_mb (
+  group_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  source_id TEXT NOT NULL,
+  source_key TEXT NOT NULL,
+  assigned_at INTEGER NOT NULL CHECK (assigned_at > 0),
+  PRIMARY KEY (group_id, user_id),
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_subscription_group_assignments_capacity_mb
+  ON subscription_group_assignments_mb(group_id, source_key, assigned_at);
+
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 12, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 13, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

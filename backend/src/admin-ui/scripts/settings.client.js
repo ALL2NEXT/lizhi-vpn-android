@@ -318,6 +318,15 @@ function addSubscriptionGroup(group) {
       '<button class="secondary" type="button" data-action="permissions-close">关闭</button>' +
     '</div>' +
     '<div class="subscription-group-permissions">' +
+    '<fieldset class="subscription-group-type-setting"><legend>分组类型</legend>' +
+      '<label><span>类型</span><select data-field="groupType"><option value="standard">普通常驻分组</option><option value="load_balanced">负载均衡分组</option></select></label>' +
+      '<small>普通常驻分组会向客户端提供全部启用订阅；负载均衡分组为每位用户分配其中一条订阅。</small>' +
+    '</fieldset>' +
+    '<fieldset class="subscription-load-balance-settings" data-group-type-settings hidden><legend>负载均衡设置</legend>' +
+      '<label><span>每个订阅最大分配人数</span><input data-field="maxUsersPerSubscription" type="number" min="1" max="1000000" step="1"></label>' +
+      '<label><span>用户分配重置周期（天）</span><input data-field="resetPeriodDays" type="number" min="1" max="3650" step="1"></label>' +
+      '<small>每位用户从首次分配时独立计时；周期到期后，下次获取订阅时重新分配。达到订阅人数上限后，该订阅不再分配给新用户。</small>' +
+    '</fieldset>' +
     '<fieldset><legend>账号状态</legend>' +
       '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="normal" ' + (allowedStatuses.includes('normal') ? 'checked' : '') + '>正常</label>' +
       '<label class="check"><input data-field="allowedStatuses" type="checkbox" value="banned" ' + (allowedStatuses.includes('banned') ? 'checked' : '') + '>封禁</label>' +
@@ -347,12 +356,23 @@ function addSubscriptionGroup(group) {
   '<div class="subscription-group-sources" data-group-sources></div></div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
+  row.querySelector('[data-field="groupType"]').value = group.groupType === 'load_balanced' ? 'load_balanced' : 'standard';
+  row.querySelector('[data-field="maxUsersPerSubscription"]').value = String(group.maxUsersPerSubscription == null ? 10 : group.maxUsersPerSubscription);
+  row.querySelector('[data-field="resetPeriodDays"]').value = String(group.resetPeriodDays == null ? 30 : group.resetPeriodDays);
   row.querySelector('[data-field="minAppVersion"]').value = String(group.minAppVersion || '');
   row.querySelector('[data-field="maxAppVersion"]').value = String(group.maxAppVersion || '');
+  updateSubscriptionGroupTypeSettings(row);
   bindSubscriptionSwitchStates(row);
   el('subscriptionRows').appendChild(row);
   row.querySelector('[data-field="minAppVersion"]').addEventListener('change', updateSubscriptionAppVersionOptions);
   row.querySelector('[data-field="maxAppVersion"]').addEventListener('change', updateSubscriptionAppVersionOptions);
+  row.querySelector('[data-field="groupType"]').addEventListener('change', function() {
+    updateSubscriptionGroupTypeSettings(row);
+    updateSourceRowsMeta();
+  });
+  ['maxUsersPerSubscription', 'resetPeriodDays'].forEach(function(field) {
+    row.querySelector('[data-field="' + field + '"]').addEventListener('input', updateSourceRowsMeta);
+  });
   row.querySelector('[data-action="add-source"]').onclick = function() {
     openSubscriptionImport(row);
   };
@@ -434,6 +454,14 @@ function validateSubscriptionGroupVersions(groups) {
     const group = groups[index];
     if (!Number.isInteger(group.cacheMinutes) || group.cacheMinutes < 0 || group.cacheMinutes > 10080) {
       return '分组「' + group.name + '」的接口缓存时间需为 0 至 10080 的整数分钟';
+    }
+    if (group.groupType === 'load_balanced' &&
+        (!Number.isInteger(group.maxUsersPerSubscription) || group.maxUsersPerSubscription < 1 || group.maxUsersPerSubscription > 1000000)) {
+      return '分组「' + group.name + '」的每订阅最大分配人数需为 1 至 1000000 的整数';
+    }
+    if (group.groupType === 'load_balanced' &&
+        (!Number.isInteger(group.resetPeriodDays) || group.resetPeriodDays < 1 || group.resetPeriodDays > 3650)) {
+      return '分组「' + group.name + '」的重置周期需为 1 至 3650 天的整数';
     }
     if (group.minAppVersion && compareAppVersions(group.minAppVersion, group.minAppVersion) === null) {
       return '分组「' + group.name + '」的左侧版本格式无效';
@@ -575,13 +603,19 @@ function updateSourceRowsMeta() {
       const maximum = group.querySelector('[data-field="maxAppVersion"]').value.trim();
       const updateEnabled = group.querySelector('[data-field="updateEnabled"]').checked;
       const cacheMinutes = group.querySelector('[data-field="groupCacheMinutes"]').value || '0';
+      const groupType = group.querySelector('[data-field="groupType"]').value;
       const items = [
+        '类型：' + (groupType === 'load_balanced' ? '负载均衡' : '普通常驻'),
         statuses.join('、') || '未允许任何状态',
         types.join('、') || '未允许任何类型',
         '版本：' + (minimum || '不限') + '至' + (maximum || '不限'),
         '更新：' + (updateEnabled ? '已启用' : '已停用'),
         '缓存：' + cacheMinutes + ' 分钟'
       ];
+      if (groupType === 'load_balanced') {
+        items.push('每订阅最多：' + group.querySelector('[data-field="maxUsersPerSubscription"]').value + ' 人');
+        items.push('分配周期：' + group.querySelector('[data-field="resetPeriodDays"]').value + ' 天');
+      }
       summary.replaceChildren();
       items.forEach(function(text) {
         const chip = document.createElement('span');
@@ -603,6 +637,10 @@ function updateSubscriptionSourceOrder(group) {
     row.dataset.sourceOrder = String(index + 1);
     row.querySelector('[data-field="sourceOrder"]').value = String(index + 1);
   });
+}
+function updateSubscriptionGroupTypeSettings(row) {
+  const balanced = row.querySelector('[data-field="groupType"]').value === 'load_balanced';
+  row.querySelector('[data-group-type-settings]').hidden = !balanced;
 }
 function moveSourceRowToOrder(row, requestedOrder) {
   const container = row.parentElement;
@@ -1088,6 +1126,9 @@ function readSubscriptionGroups() {
         .map(function(input) { return input.value; }),
       updateEnabled: group.querySelector('[data-field="updateEnabled"]').checked,
       cacheMinutes: Number(group.querySelector('[data-field="groupCacheMinutes"]').value || 0),
+      groupType: group.querySelector('[data-field="groupType"]').value,
+      maxUsersPerSubscription: Number(group.querySelector('[data-field="maxUsersPerSubscription"]').value || 0),
+      resetPeriodDays: Number(group.querySelector('[data-field="resetPeriodDays"]').value || 0),
       minAppVersion: group.querySelector('[data-field="minAppVersion"]').value.trim(),
       maxAppVersion: group.querySelector('[data-field="maxAppVersion"]').value.trim(),
       subscriptions: sources
