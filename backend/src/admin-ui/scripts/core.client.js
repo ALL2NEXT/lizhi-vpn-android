@@ -184,6 +184,7 @@
    passwordInput.focus();
  }
  function activateTab(name) {
+   document.body.classList.toggle('subscriptions-fullscreen', name === 'subscriptions');
    document.querySelectorAll('.tab-button[data-tab]').forEach(function(button) {
      const active = button.dataset.tab === name;
      button.classList.toggle('active', active);
