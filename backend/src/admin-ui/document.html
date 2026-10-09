@@ -12,7 +12,6 @@
  <svg class="subscription-icon-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
    <symbol id="subscription-icon-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></symbol>
    <symbol id="subscription-icon-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5"></path><path d="M20 12a8 8 0 1 0 1.2 4.2"></path></symbol>
-   <symbol id="subscription-icon-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"></path></symbol>
    <symbol id="subscription-icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></symbol>
    <symbol id="subscription-icon-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></symbol>
    <symbol id="subscription-icon-folder" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M3 5.5A1.5 1.5 0 0 1 4.5 4H10l2 2h7.5A1.5 1.5 0 0 1 21 7.5v11a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"></path></symbol>
@@ -298,22 +297,6 @@
           <h2>订阅管理</h2>
           <p id="subscriptionSummary">0 个分组 · 0 条订阅 · 0 条启用</p>
         </div>
-        <div class="subscription-manager-actions">
-          <details class="subscription-toolbar-menu">
-            <summary>更多操作 <svg class="subscription-icon subscription-icon-small" aria-hidden="true"><use href="#subscription-icon-chevron"></use></svg></summary>
-            <div class="subscription-toolbar-menu-panel">
-              <button class="secondary" type="button" data-action="delete-exhausted-subscriptions">一键删除流量用尽订阅</button>
-              <button class="secondary" type="button" data-settings-discard="subscriptions" disabled>放弃未保存修改</button>
-            </div>
-          </details>
-          <div class="subscription-add-split">
-            <button type="button" data-action="add-subscription"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 添加订阅</button>
-            <details class="subscription-add-menu">
-              <summary aria-label="更多添加选项"><svg class="subscription-icon subscription-icon-small" aria-hidden="true"><use href="#subscription-icon-chevron"></use></svg></summary>
-              <div class="subscription-toolbar-menu-panel"><button class="secondary" type="button" data-action="add-group">新建分组</button></div>
-            </details>
-          </div>
-        </div>
         <span class="settings-page-save-status subscription-manager-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span>
       </header>
 
@@ -338,7 +321,10 @@
           <div id="subscriptionRows" class="subscription-groups-host"></div>
           <footer class="subscription-list-footer">
             <label class="subscription-selection-count"><input class="subscription-select-page" type="checkbox" aria-label="选择当前页订阅"><span data-subscription-selection-meta>已选择 0 项</span></label>
-            <div class="subscription-pagination"><span data-subscription-filtered-count>共 0 条</span><button class="secondary" type="button" data-subscription-page-prev aria-label="上一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-prev"></use></svg></button><span data-subscription-page-number>1</span><button class="secondary" type="button" data-subscription-page-next aria-label="下一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><select data-subscription-page-size aria-label="每页显示条数"><option value="20" selected>20 条/页</option><option value="50">50 条/页</option><option value="100">100 条/页</option></select></div>
+            <div class="subscription-list-footer-actions">
+              <div class="subscription-pagination"><span data-subscription-filtered-count>共 0 条</span><button class="secondary" type="button" data-subscription-page-prev aria-label="上一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-prev"></use></svg></button><span data-subscription-page-number>1</span><button class="secondary" type="button" data-subscription-page-next aria-label="下一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><select data-subscription-page-size aria-label="每页显示条数"><option value="20" selected>20 条/页</option><option value="50">50 条/页</option><option value="100">100 条/页</option></select></div>
+              <div class="subscription-group-add-row"><button type="button" data-action="add-subscription"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 添加订阅</button></div>
+            </div>
           </footer>
         </section>
 

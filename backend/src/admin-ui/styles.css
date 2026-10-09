@@ -958,7 +958,7 @@
       display: grid;
       flex: 0 0 auto;
       grid-template-columns: minmax(220px, 1fr) auto;
-      grid-template-areas: "title actions" "title status";
+      grid-template-areas: "title status";
       align-items: center;
       gap: 0 16px;
       min-height: 90px;
@@ -971,7 +971,6 @@
     .subscription-manager-title { grid-area: title; min-width: 0; }
     .subscription-manager-title h2 { margin: 0 0 2px; color: #141b28; font-size: 28px; line-height: 1.2; }
     .subscription-manager-title p { margin: 0; color: #64748b; font-size: 14px; }
-    .subscription-manager-actions { grid-area: actions; display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; }
     .subscription-manager-save-status { grid-area: status; justify-self: end; min-height: 14px; font-size: 11px; }
     .subscription-list-search {
       box-sizing: border-box;
@@ -997,47 +996,7 @@
       box-shadow: none;
       font: inherit;
     }
-    .subscription-toolbar-menu > summary,
-    .subscription-add-split > button,
-    .subscription-add-menu > summary { min-height: 40px; margin: 0; white-space: nowrap; }
-    .subscription-toolbar-menu, .subscription-add-menu { position: relative; }
-    .subscription-toolbar-menu > summary, .subscription-add-menu > summary {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 0 14px;
-      color: #202938;
-      background: #fff;
-      border: 1px solid #d9e1ec;
-      border-radius: 8px;
-      cursor: pointer;
-      list-style: none;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .subscription-toolbar-menu > summary::-webkit-details-marker,
-    .subscription-add-menu > summary::-webkit-details-marker,
     .source-row-more > summary::-webkit-details-marker { display: none; }
-    .subscription-toolbar-menu-panel {
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
-      z-index: 50;
-      display: grid;
-      min-width: 210px;
-      gap: 4px;
-      padding: 6px;
-      background: #fff;
-      border: 1px solid #e1e7ef;
-      border-radius: 10px;
-      box-shadow: 0 8px 22px rgb(31 41 55 / 14%);
-    }
-    .subscription-toolbar-menu-panel button { width: 100%; margin: 0; padding: 9px 10px; text-align: left; background: transparent; }
-    .subscription-add-split { display: flex; overflow: visible; border-radius: 8px; box-shadow: 0 2px 6px rgb(26 115 232 / 18%); }
-    .subscription-add-split > button { padding: 0 15px; border-radius: 8px 0 0 8px; }
-    .subscription-add-menu > summary { width: 42px; padding: 0; color: #fff; background: #1a73e8; border-color: rgb(255 255 255 / 40%); border-radius: 0 8px 8px 0; }
-    .subscription-add-menu .subscription-toolbar-menu-panel { min-width: 150px; }
     .subscription-manager-layout { display: grid; flex: 1 1 auto; grid-template-columns: 200px minmax(0, 1fr) 330px; gap: 8px; min-width: 0; min-height: 0; }
     .subscription-group-sidebar, .subscription-group-workspace, .subscription-editor {
       box-sizing: border-box;
@@ -1165,6 +1124,9 @@
     .subscription-list-empty { display: grid; flex: 1 1 auto; min-height: 120px; place-items: center; color: #758198; font-size: 14px; }
     .subscription-list-empty[hidden] { display: none !important; }
     .subscription-list-footer { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; min-height: 58px; color: #64748b; font-size: 13px; }
+    .subscription-list-footer-actions { display: flex; align-items: center; gap: 14px; }
+    .subscription-list-footer .subscription-group-add-row { position: static; right: auto; bottom: auto; z-index: auto; display: flex; margin: 0; }
+    .subscription-list-footer .subscription-group-add-row button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 12px 20px; border-radius: 999px; box-shadow: 0 8px 24px rgb(26 115 232 / 28%); white-space: nowrap; }
     .subscription-selection-count { display: inline-flex; align-items: center; gap: 8px; margin: 0; white-space: nowrap; }
     .subscription-selection-count input { width: 16px !important; min-height: 16px !important; margin: 0 !important; }
     .subscription-pagination { display: flex; align-items: center; gap: 8px; }
@@ -1211,7 +1173,6 @@
 
     @media (max-width: 1280px) {
       .subscription-manager-header { grid-template-columns: minmax(180px, 1fr) minmax(0, auto); }
-      .subscription-manager-actions { gap: 6px; }
       .subscription-manager-layout { grid-template-columns: 190px minmax(0, 1fr) 300px; }
       .subscription-list-toolbar { flex-wrap: wrap; }
       .subscription-list-search { flex-basis: 100%; }
@@ -1231,9 +1192,8 @@
       body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace { height: auto; min-height: 100vh; overflow: visible; }
       body.subscriptions-fullscreen .tab-panel[data-panel="subscriptions"].active { min-height: 100vh; height: auto; overflow: visible; padding: 8px; }
       .subscription-manager { min-height: calc(100vh - 16px); }
-      .subscription-manager-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "actions" "status"; gap: 12px; padding: 14px; }
+      .subscription-manager-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "status"; gap: 12px; padding: 14px; }
       .subscription-manager-title h2 { font-size: 24px; }
-      .subscription-manager-actions { justify-content: flex-start; flex-wrap: wrap; }
       .subscription-manager-save-status { justify-self: start; }
       .subscription-manager-layout { grid-template-columns: minmax(0, 1fr); min-height: 0; }
       .subscription-group-sidebar { min-height: 138px; max-height: 180px; }
@@ -1259,5 +1219,6 @@
       .subscription-group-controls > button[data-action="permissions"] { width: 38px; min-width: 38px; overflow: hidden; padding: 0; font-size: 0; }
       .subscription-group-controls > button[data-action="permissions"]::first-letter { font-size: 18px; }
       .subscription-list-footer { align-items: flex-start; flex-direction: column; padding: 10px 0; }
+      .subscription-list-footer-actions { width: 100%; align-items: flex-end; flex-direction: column; gap: 10px; }
       .subscription-pagination { width: 100%; justify-content: flex-end; }
     }

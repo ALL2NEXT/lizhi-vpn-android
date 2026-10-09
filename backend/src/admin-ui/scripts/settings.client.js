@@ -193,82 +193,6 @@ async function loadSubscriptionTraffic() {
   }
 }
 
-async function deleteExhaustedSubscriptions() {
-  const button = document.querySelector('[data-action="delete-exhausted-subscriptions"]');
-  if (!button || button.disabled) return;
-  if (!currentState || settingsSaveInFlight) return show('请等待配置保存完成后再清理订阅', true);
-
-  const savedSources = new Map();
-  (Array.isArray(currentState.subscriptionGroups) ? currentState.subscriptionGroups : [])
-    .forEach(function(group) {
-      (Array.isArray(group.subscriptions) ? group.subscriptions : []).forEach(function(source) {
-        savedSources.set(String(source.id), source);
-      });
-    });
-  const rows = getSourceRows().filter(function(row) {
-    const savedSource = savedSources.get(row.dataset.sourceId);
-    return row.dataset.sourceId && savedSource &&
-      row.querySelector('[data-field="sourceType"]').value === 'url' &&
-      row.querySelector('[data-field="url"]').value.trim() === row.dataset.persistedUrl &&
-      savedSource.url === row.dataset.persistedUrl;
-  });
-  if (!rows.length) return show('没有可检查的已保存外部订阅');
-
-  const baselineState = currentState;
-  const baselineDraftVersion = settingsDraftVersions.get('subscriptions') || 0;
-  button.disabled = true;
-  button.textContent = '正在检查流量…';
-  try {
-    const response = await fetch(ADMIN_API_BASE + '/subscriptions/traffic', {
-      method: 'GET',
-      headers: headers(),
-      cache: 'no-store'
-    });
-    const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error('subscription_traffic_unavailable');
-    if (settingsSaveInFlight || currentState !== baselineState ||
-        (settingsDraftVersions.get('subscriptions') || 0) !== baselineDraftVersion) {
-      return show('检查期间订阅配置已变化，请重新点击清理', true);
-    }
-
-    const items = new Map((Array.isArray(data.items) ? data.items : []).map(function(item) {
-      return [String(item.id), item];
-    }));
-    const exhaustedRows = rows.filter(function(row) {
-      if (!row.isConnected || row.querySelector('[data-field="sourceType"]').value !== 'url' ||
-          row.querySelector('[data-field="url"]').value.trim() !== row.dataset.persistedUrl) return false;
-      const item = items.get(row.dataset.sourceId);
-      const traffic = item && item.traffic;
-      renderSourceTraffic(row, traffic, !item || item.unavailable === true);
-      if (!traffic || item.unavailable === true) return false;
-
-      const toBytes = function(value) {
-        if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
-        const bytes = Number(value);
-        return Number.isFinite(bytes) && bytes >= 0 ? bytes : null;
-      };
-      const total = toBytes(traffic.totalBytes);
-      const upload = toBytes(traffic.uploadBytes);
-      const download = toBytes(traffic.downloadBytes);
-      // 只有总量和至少一项用量都明确时，才把订阅判定为流量用尽。
-      return total !== null && total > 0 && (upload !== null || download !== null) &&
-        (upload || 0) + (download || 0) >= total;
-    });
-
-    if (!exhaustedRows.length) return show('没有发现流量用尽的订阅');
-    exhaustedRows.forEach(function(row) {
-      const removeButton = row.querySelector('[data-action="source-delete-row"]');
-      if (removeButton) removeButton.click();
-    });
-    show('已移除 ' + exhaustedRows.length + ' 个流量用尽订阅，请点击“保存配置”使其生效');
-  } catch (_) {
-    show('读取订阅流量失败，未删除订阅', true);
-  } finally {
-    button.disabled = false;
-    button.textContent = '一键删除流量用尽订阅';
-  }
-}
-
 function insertSourceByOrder(row, groupRow) {
   const container = groupRow.querySelector('[data-group-sources]');
   if (!container) return;
@@ -907,9 +831,6 @@ function initializeSubscriptionManager() {
     if (!group) group = getSubscriptionGroupRows()[0];
     if (!group) group = addSubscriptionGroup();
     openSubscriptionImport(group);
-  });
-  panel.querySelectorAll('[data-action="delete-exhausted-subscriptions"]').forEach(function(button) {
-    button.addEventListener('click', deleteExhaustedSubscriptions);
   });
   panel.querySelectorAll('[data-action="close-subscription-editor"]').forEach(function(button) {
     button.addEventListener('click', function() { selectSubscriptionSource(null); });
