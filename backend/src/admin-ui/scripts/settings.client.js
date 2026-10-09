@@ -242,10 +242,7 @@ function addSubscriptionGroup(group) {
       '<label><span class="visually-hidden">分组名称</span><input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label>' +
       '<small data-group-count>0 条订阅</small>' +
     '</div>' +
-    '<div class="subscription-group-controls" role="group" aria-label="分组操作">' +
-      '<label class="subscription-switch subscription-group-enabled"><span class="subscription-switch-control"><input data-field="groupEnabled" type="checkbox" aria-label="启用分组" ' + (group.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span><span class="subscription-group-enabled-label">分组启用</span></label>' +
-      '<button class="secondary" type="button" data-action="permissions" aria-haspopup="dialog" aria-label="分组设置">' + subscriptionIcon('settings') + ' 分组设置</button>' +
-    '</div>' +
+    '<input class="subscription-group-enabled-data" data-field="groupEnabled" type="checkbox" ' + (group.enabled === false ? '' : 'checked') + ' hidden>' +
     '<input class="subscription-group-order-data" data-field="groupOrder" type="number" min="1" step="1" value="' + groupOrder + '" aria-label="分组排序序号">' +
   '</div>' +
   '<dialog class="subscription-permissions-dialog" data-group-permissions-dialog aria-label="分组设置">' +
@@ -286,7 +283,7 @@ function addSubscriptionGroup(group) {
       '<button class="secondary" type="button" data-action="permissions-close">完成</button>' +
     '</div>' +
   '</dialog>' +
-  '<div class="source-list-header" aria-hidden="true"><span></span><span></span><span>#</span><span>订阅名称</span><span>流量使用</span><span>到期时间</span><span>备注</span><span>状态</span><span>启用</span><span>操作</span></div>' +
+  '<div class="source-list-header" aria-hidden="true"><span></span><span></span><span>#</span><span>订阅名称</span><span>流量使用</span><span>到期时间</span><span>备注</span><span>状态</span><span>启用</span></div>' +
   '<div class="subscription-group-sources" data-group-sources></div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
@@ -311,9 +308,6 @@ function addSubscriptionGroup(group) {
   });
   row.querySelector('[data-field="groupName"]').addEventListener('input', updateSubscriptionGroupNavigation);
   const permissionsDialog = row.querySelector('[data-group-permissions-dialog]');
-  row.querySelector('[data-action="permissions"]').onclick = function() {
-    if (permissionsDialog && !permissionsDialog.open) permissionsDialog.showModal();
-  };
   row.querySelectorAll('[data-action="permissions-close"]').forEach(function(button) {
     button.onclick = function() { permissionsDialog.close(); };
   });
@@ -324,6 +318,7 @@ function addSubscriptionGroup(group) {
     if (permissionsDialog.open) permissionsDialog.close();
     const wasActive = activeSubscriptionGroupId === row.dataset.groupId;
     if (selectedSubscriptionRow && row.contains(selectedSubscriptionRow)) selectSubscriptionSource(null);
+    row.querySelectorAll('.source-row').forEach(function(source) { selectedSubscriptionRows.delete(source); });
     row.remove();
     updateSubscriptionGroupControls();
     renderSubscriptionGroupNavigation();
@@ -331,6 +326,7 @@ function addSubscriptionGroup(group) {
       const nextGroup = getSubscriptionGroupRows()[0];
       selectSubscriptionGroup(nextGroup ? nextGroup.dataset.groupId : '__all__');
     }
+    updateSourceRowsMeta();
     markSettingsDirty('subscriptions');
   };
   updateSubscriptionGroupControls();
@@ -462,7 +458,6 @@ function addSource(groupRow, source, sourceOrderValue) {
     '<span class="source-row-remark" data-source-display-remark>' + esc(source.remark || '—') + '</span>' +
     '<span class="subscription-state-badge source-row-status" data-source-status>' + (sourceType === 'content' ? '本地' : '未知') + '</span>' +
     '<label class="subscription-switch source-enabled-check"><span class="subscription-switch-control"><input data-field="enabled" type="checkbox" aria-label="启用订阅" ' + (source.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
-    '<details class="source-row-more"><summary aria-label="订阅操作">' + subscriptionIcon('more') + '</summary><div><button class="secondary source-delete-button" type="button" data-action="source-delete-row">删除订阅</button></div></details>' +
     '<div class="source-row-fields" hidden>' +
       '<input data-field="name" type="text" value="' + esc(source.name) + '">' +
       '<input data-field="remark" type="text" value="' + esc(source.remark) + '">' +
@@ -470,21 +465,6 @@ function addSource(groupRow, source, sourceOrderValue) {
       '<div class="source-mode" data-source-mode="url"><input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/sub"><label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label></div>' +
       '<div class="source-mode" data-source-mode="content"><textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></div>' +
     '</div>';
-  const removeSource = function() {
-    const group = row.closest('.subscription-group');
-    if (selectedSubscriptionRow === row) selectSubscriptionSource(null);
-    selectedSubscriptionRows.delete(row);
-    row.remove();
-    if (group) updateSubscriptionSourceOrder(group);
-    updateSourceRowsMeta();
-    renderSubscriptionGroupNavigation();
-    if (group && group.dataset.groupId === activeSubscriptionGroupId) {
-      const nextSource = group.querySelector('.source-row');
-      if (nextSource) selectSubscriptionSource(nextSource);
-    }
-    markSettingsDirty('subscriptions');
-  };
-  row.querySelector('[data-action="source-delete-row"]').onclick = removeSource;
   row.querySelector('[data-field="sourceType"]').onchange = function() {
     updateSourceMode(row);
     updateSourceRowPresentation(row);
@@ -496,9 +476,6 @@ function addSource(groupRow, source, sourceOrderValue) {
   row.querySelector('[data-action="details"]').onclick = function() {
     selectSubscriptionSource(row);
   };
-  row.querySelector('.source-row-more').addEventListener('toggle', function() {
-    if (this.open) selectSubscriptionSource(row);
-  });
   row.querySelector('[data-field="sourceOrder"]').addEventListener('change', function() {
     moveSourceRowToOrder(row, this.value);
   });
@@ -563,15 +540,42 @@ function renderSubscriptionGroupNavigation() {
     const groupName = group.querySelector('[data-field="groupName"]').value.trim() || '分组' + (index + 1);
     const count = group.querySelectorAll('[data-group-sources] > .source-row').length;
     const order = group.querySelector('[data-field="groupOrder"]').value || String(index + 1);
+    const enabled = group.querySelector('[data-field="groupEnabled"]').checked;
+    const groupId = group.dataset.groupId;
     rows.push('<div class="subscription-group-nav-entry" data-group-nav-entry="' + esc(group.dataset.groupId) + '">' +
-      '<input class="subscription-group-order-proxy" type="number" min="1" step="1" value="' + esc(order) + '" data-group-order-for="' + esc(group.dataset.groupId) + '" aria-label="' + esc(groupName) + '排序序号">' +
-      '<button class="subscription-group-nav-item" type="button" data-group-nav="' + esc(group.dataset.groupId) + '"><span class="subscription-nav-icon" aria-hidden="true">' + subscriptionIcon('folder') + '</span><span class="subscription-nav-name">' + esc(groupName) + '</span><span class="subscription-nav-count">' + count + '</span></button>' +
+      '<input class="subscription-group-order-proxy" type="number" min="1" step="1" value="' + esc(order) + '" data-group-order-for="' + esc(groupId) + '" aria-label="' + esc(groupName) + '排序序号">' +
+      '<div class="subscription-group-nav-row">' +
+      '<button class="subscription-group-nav-item" type="button" data-group-nav="' + esc(groupId) + '"><span class="subscription-nav-icon" aria-hidden="true">' + subscriptionIcon('folder') + '</span><span class="subscription-nav-name">' + esc(groupName) + '</span><span class="subscription-nav-count">' + count + '</span></button>' +
+      '<div class="subscription-group-nav-actions" role="group" aria-label="' + esc(groupName) + '操作">' +
+        '<label class="subscription-switch subscription-group-nav-toggle" title="启用分组：' + esc(groupName) + '"><span class="subscription-switch-control"><input type="checkbox" data-group-enabled-for="' + esc(groupId) + '" aria-label="启用分组：' + esc(groupName) + '" ' + (enabled ? 'checked' : '') + '><span class="subscription-switch-track" aria-hidden="true"><span></span></span></span></label>' +
+        '<button class="secondary subscription-group-nav-settings" type="button" data-group-settings-for="' + esc(groupId) + '" aria-haspopup="dialog" title="分组设置：' + esc(groupName) + '" aria-label="分组设置：' + esc(groupName) + '">' + subscriptionIcon('wrench') + '</button>' +
+      '</div>' +
+      '</div>' +
       '</div>');
   });
   nav.innerHTML = rows.join('');
   nav.querySelectorAll('[data-group-nav]').forEach(function(button) {
     button.addEventListener('click', function() {
       selectSubscriptionGroup(button.dataset.groupNav);
+    });
+  });
+  nav.querySelectorAll('[data-group-enabled-for]').forEach(function(input) {
+    input.addEventListener('change', function() {
+      const group = groups.find(function(candidate) { return candidate.dataset.groupId === input.dataset.groupEnabledFor; });
+      const enabled = group && group.querySelector('[data-field="groupEnabled"]');
+      if (!enabled) return;
+      enabled.checked = input.checked;
+      markSettingsDirty('subscriptions');
+      updateSubscriptionGroupNavigation();
+    });
+  });
+  nav.querySelectorAll('[data-group-settings-for]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      const group = groups.find(function(candidate) { return candidate.dataset.groupId === button.dataset.groupSettingsFor; });
+      const dialog = group && group.querySelector('[data-group-permissions-dialog]');
+      if (!group || !dialog) return;
+      selectSubscriptionGroup(group.dataset.groupId);
+      if (!dialog.open) dialog.showModal();
     });
   });
   nav.querySelectorAll('[data-group-order-for]').forEach(function(input) {
@@ -594,12 +598,31 @@ function updateSubscriptionGroupNavigation() {
   nav.querySelectorAll('[data-group-nav]').forEach(function(button) {
     const id = button.dataset.groupNav;
     button.classList.toggle('active', id === activeSubscriptionGroupId);
+    const entry = button.closest('.subscription-group-nav-entry');
+    const row = entry && entry.querySelector('.subscription-group-nav-row');
+    if (row) row.classList.toggle('active', id === activeSubscriptionGroupId);
     if (id === '__all__') button.querySelector('.subscription-nav-count').textContent = String(total);
     const group = groups.find(function(candidate) { return candidate.dataset.groupId === id; });
     if (!group) return;
     const index = groups.indexOf(group);
-    button.querySelector('.subscription-nav-name').textContent = group.querySelector('[data-field="groupName"]').value.trim() || '分组' + (index + 1);
+    const groupName = group.querySelector('[data-field="groupName"]').value.trim() || '分组' + (index + 1);
+    button.querySelector('.subscription-nav-name').textContent = groupName;
     button.querySelector('.subscription-nav-count').textContent = String(group.querySelectorAll('[data-group-sources] > .source-row').length);
+    const enabledInput = Array.from(nav.querySelectorAll('[data-group-enabled-for]')).find(function(input) {
+      return input.dataset.groupEnabledFor === id;
+    });
+    if (enabledInput) {
+      if (document.activeElement !== enabledInput) enabledInput.checked = group.querySelector('[data-field="groupEnabled"]').checked;
+      enabledInput.setAttribute('aria-label', '启用分组：' + groupName);
+      enabledInput.closest('label').title = '启用分组：' + groupName;
+    }
+    const settingsButton = Array.from(nav.querySelectorAll('[data-group-settings-for]')).find(function(control) {
+      return control.dataset.groupSettingsFor === id;
+    });
+    if (settingsButton) {
+      settingsButton.setAttribute('aria-label', '分组设置：' + groupName);
+      settingsButton.title = '分组设置：' + groupName;
+    }
     const order = group.querySelector('[data-field="groupOrder"]');
     const proxy = Array.from(nav.querySelectorAll('[data-group-order-for]')).find(function(input) {
       return input.dataset.groupOrderFor === id;
@@ -781,8 +804,33 @@ function applySubscriptionFilters() {
   }
   const selectedMeta = document.querySelector('[data-subscription-selection-meta]');
   if (selectedMeta) selectedMeta.textContent = '已选择 ' + selectedSubscriptionRows.size + ' 项';
+  const deleteSelectedButton = document.querySelector('[data-action="delete-selected-subscriptions"]');
+  if (deleteSelectedButton) deleteSelectedButton.disabled = selectedSubscriptionRows.size === 0;
   const workspace = document.querySelector('.subscription-group-workspace');
   if (workspace) workspace.classList.toggle('grid-view', subscriptionView === 'grid');
+}
+
+function deleteSelectedSubscriptions() {
+  Array.from(selectedSubscriptionRows).forEach(function(row) {
+    if (!row.isConnected || !row.classList.contains('source-row')) selectedSubscriptionRows.delete(row);
+  });
+  const rows = Array.from(selectedSubscriptionRows);
+  if (!rows.length) {
+    applySubscriptionFilters();
+    return;
+  }
+  if (!window.confirm('确定删除已选中的 ' + rows.length + ' 条订阅吗？此操作无法撤销。')) return;
+  if (selectedSubscriptionRow && rows.indexOf(selectedSubscriptionRow) >= 0) selectSubscriptionSource(null);
+  const groups = new Set();
+  rows.forEach(function(row) {
+    const group = row.closest('.subscription-group');
+    if (group) groups.add(group);
+    selectedSubscriptionRows.delete(row);
+    row.remove();
+  });
+  groups.forEach(updateSubscriptionSourceOrder);
+  updateSourceRowsMeta();
+  markSettingsDirty('subscriptions');
 }
 
 function initializeSubscriptionManager() {
@@ -832,6 +880,7 @@ function initializeSubscriptionManager() {
     if (!group) group = addSubscriptionGroup();
     openSubscriptionImport(group);
   });
+  panel.querySelector('[data-action="delete-selected-subscriptions"]').addEventListener('click', deleteSelectedSubscriptions);
   panel.querySelectorAll('[data-action="close-subscription-editor"]').forEach(function(button) {
     button.addEventListener('click', function() { selectSubscriptionSource(null); });
   });

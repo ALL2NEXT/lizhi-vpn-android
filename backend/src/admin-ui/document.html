@@ -22,6 +22,7 @@
    <symbol id="subscription-icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"></path></symbol>
    <symbol id="subscription-icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></symbol>
    <symbol id="subscription-icon-settings" viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"></path><path d="m19.4 13.5 1.2.9-1.8 3.1-1.4-.6a7.8 7.8 0 0 1-1.6.9l-.2 1.5h-3.6l-.2-1.5a7.8 7.8 0 0 1-1.6-.9l-1.4.6L7 14.4l1.2-.9a7.7 7.7 0 0 1 0-1.8L7 10.8l1.8-3.1 1.4.6a7.8 7.8 0 0 1 1.6-.9L12 5.9h3.6l.2 1.5a7.8 7.8 0 0 1 1.6.9l1.4-.6 1.8 3.1-1.2.9a7.7 7.7 0 0 1 0 1.8Z"></path></symbol>
+   <symbol id="subscription-icon-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94L14.7 6.3z"></path></symbol>
    <symbol id="subscription-icon-prev" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"></path></symbol>
    <symbol id="subscription-icon-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"></path></symbol>
  </svg>
@@ -301,12 +302,12 @@
       </header>
 
       <div class="subscription-manager-layout">
-        <aside class="subscription-group-sidebar" aria-label="订阅分组">
+        <aside class="subscription-group-sidebar" aria-label="分组管理">
           <div class="subscription-group-sidebar-heading">
-            <h3>分组</h3>
+            <h3>分组管理</h3>
             <button class="secondary" type="button" data-action="add-group" aria-label="添加分组" title="添加分组"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg></button>
           </div>
-          <nav id="subscriptionGroupNavigation" class="subscription-group-navigation" aria-label="订阅分组列表"></nav>
+          <nav id="subscriptionGroupNavigation" class="subscription-group-navigation" aria-label="分组列表"></nav>
         </aside>
 
         <section class="subscription-group-workspace">
@@ -323,7 +324,7 @@
             <label class="subscription-selection-count"><input class="subscription-select-page" type="checkbox" aria-label="选择当前页订阅"><span data-subscription-selection-meta>已选择 0 项</span></label>
             <div class="subscription-list-footer-actions">
               <div class="subscription-pagination"><span data-subscription-filtered-count>共 0 条</span><button class="secondary" type="button" data-subscription-page-prev aria-label="上一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-prev"></use></svg></button><span data-subscription-page-number>1</span><button class="secondary" type="button" data-subscription-page-next aria-label="下一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><select data-subscription-page-size aria-label="每页显示条数"><option value="20" selected>20 条/页</option><option value="50">50 条/页</option><option value="100">100 条/页</option></select></div>
-              <div class="subscription-group-add-row"><button type="button" data-action="add-subscription"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 添加订阅</button></div>
+              <div class="subscription-group-add-row"><button type="button" data-action="add-subscription"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 添加订阅</button><button class="danger subscription-delete-selected" type="button" data-action="delete-selected-subscriptions" aria-label="删除已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg> 删除订阅</button></div>
             </div>
           </footer>
         </section>
