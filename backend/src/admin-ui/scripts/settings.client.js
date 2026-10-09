@@ -51,10 +51,10 @@ function updateSourceRowPresentation(row) {
   const trafficHost = row.querySelector('[data-source-traffic]');
   if (sourceType !== 'url') {
     trafficHost.dataset.sourceUrl = '';
-    setSourceTrafficMessage(row, '纯文本订阅没有上游流量信息');
+    setSourceTrafficMessage(row, '本地文本订阅没有上游流量信息');
   } else if (!url) {
     trafficHost.dataset.sourceUrl = '';
-    setSourceTrafficMessage(row, '填写外部订阅地址以获取流量信息');
+    setSourceTrafficMessage(row, '填写远程订阅地址以获取流量信息');
   } else if (url !== row.dataset.persistedUrl || !row.dataset.sourceId ||
       String(row.querySelector('[data-field="enabled"]').checked) !== row.dataset.persistedEnabled) {
     trafficHost.dataset.sourceUrl = '';
@@ -273,7 +273,7 @@ function addSubscriptionGroup(group) {
       '<label><span>右侧 · 最高</span><input data-field="maxAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
     '</fieldset>' +
     '<fieldset class="subscription-cache-setting"><legend>更新设置</legend>' +
-      '<label class="subscription-switch subscription-update-toggle"><span class="subscription-switch-control"><input data-field="updateEnabled" type="checkbox" aria-label="启用外部订阅更新" ' + (group.updateEnabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span><span>启用更新</span></label>' +
+      '<label class="subscription-switch subscription-update-toggle"><span class="subscription-switch-control"><input data-field="updateEnabled" type="checkbox" aria-label="启用远程订阅更新" ' + (group.updateEnabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span><span>启用更新</span></label>' +
       '<label><span>接口缓存时间（分钟）</span><input data-field="groupCacheMinutes" type="number" min="0" max="10080" step="1"></label>' +
       '<small>该时间应用于本分组的所有外部接口订阅；启用更新时设为 0 表示每次请求上游。关闭更新后使用最近成功获取的内容；若无快照，保存时会尝试获取一次。</small>' +
     '</fieldset>' +
@@ -283,7 +283,7 @@ function addSubscriptionGroup(group) {
       '<button class="secondary" type="button" data-action="permissions-close">完成</button>' +
     '</div>' +
   '</dialog>' +
-  '<div class="source-list-header" aria-hidden="true"><span></span><span></span><span>#</span><span>订阅名称</span><span>流量使用</span><span>到期时间</span><span>备注</span><span>状态</span><span>启用</span></div>' +
+  '<div class="source-list-header" aria-hidden="true"><span></span><span></span><span>#</span><span>订阅名称</span><span>流量使用</span><span>到期时间</span><span>备注</span><span>状态</span><span>启用</span><span>设置</span></div>' +
   '<div class="subscription-group-sources" data-group-sources></div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
@@ -452,16 +452,17 @@ function addSource(groupRow, source, sourceOrderValue) {
   row.innerHTML = subscriptionIcon('grip', 'source-row-drag') +
     '<input class="source-row-select" type="checkbox" data-source-select aria-label="选择订阅：' + esc(source.name || '未命名订阅') + '">' +
     '<div class="source-row-sort-controls"><input data-field="sourceOrder" type="number" min="1" step="1" value="' + row.dataset.sourceOrder + '" aria-label="订阅排序序号"></div>' +
-    '<button class="source-name-cell" type="button" data-action="details" aria-label="编辑订阅：' + esc(source.name || '未命名订阅') + '"><span class="source-name-line"><strong data-source-display-name>' + esc(source.name || '未命名订阅') + '</strong><span class="source-type-badge" data-source-type-label>' + (sourceType === 'content' ? '本地' : 'URL') + '</span></span></button>' +
+    '<button class="source-name-cell" type="button" data-action="details" aria-haspopup="dialog" aria-controls="subscriptionEditor" aria-label="编辑订阅：' + esc(source.name || '未命名订阅') + '"><span class="source-name-line"><strong data-source-display-name>' + esc(source.name || '未命名订阅') + '</strong><span class="source-type-badge" data-source-type-label>' + (sourceType === 'content' ? '本地' : 'URL') + '</span></span></button>' +
     '<div class="source-traffic" data-source-traffic aria-live="polite"><div class="source-traffic-line"><span data-source-traffic-text>等待读取流量信息…</span></div><div class="source-traffic-track" data-source-traffic-track role="progressbar" aria-label="订阅流量使用比例" aria-valuemin="0" aria-valuemax="100" hidden><span class="source-traffic-progress" data-source-traffic-progress></span></div></div>' +
     '<div class="source-expiry-cell"><span class="source-expiry" data-source-expiry></span></div>' +
     '<span class="source-row-remark" data-source-display-remark>' + esc(source.remark || '—') + '</span>' +
     '<span class="subscription-state-badge source-row-status" data-source-status>' + (sourceType === 'content' ? '本地' : '未知') + '</span>' +
     '<label class="subscription-switch source-enabled-check"><span class="subscription-switch-control"><input data-field="enabled" type="checkbox" aria-label="启用订阅" ' + (source.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
+    '<button class="source-settings-button" type="button" data-action="source-settings" aria-haspopup="dialog" aria-controls="subscriptionEditor" aria-label="设置订阅：' + esc(source.name || '未命名订阅') + '" title="设置订阅：' + esc(source.name || '未命名订阅') + '">' + subscriptionIcon('wrench') + '<span>设置</span></button>' +
     '<div class="source-row-fields" hidden>' +
       '<input data-field="name" type="text" value="' + esc(source.name) + '">' +
       '<input data-field="remark" type="text" value="' + esc(source.remark) + '">' +
-      '<select data-field="sourceType"><option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>外部订阅</option><option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>本地内容</option></select>' +
+      '<select data-field="sourceType"><option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>远程订阅</option><option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>本地文本</option></select>' +
       '<div class="source-mode" data-source-mode="url"><input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/sub"><label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label></div>' +
       '<div class="source-mode" data-source-mode="content"><textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></div>' +
     '</div>';
@@ -474,7 +475,10 @@ function addSource(groupRow, source, sourceOrderValue) {
   });
   row.querySelector('[data-field="name"]').addEventListener('input', updateSourceRowsMeta);
   row.querySelector('[data-action="details"]').onclick = function() {
-    selectSubscriptionSource(row);
+    openSubscriptionEditor(row);
+  };
+  row.querySelector('[data-action="source-settings"]').onclick = function() {
+    openSubscriptionEditor(row);
   };
   row.querySelector('[data-field="sourceOrder"]').addEventListener('change', function() {
     moveSourceRowToOrder(row, this.value);
@@ -508,6 +512,13 @@ function updateSourceRowsMeta() {
       const type = row.querySelector('[data-field="sourceType"]').value;
       const sourceName = nameInput.value.trim() || nameInput.placeholder;
       if (displayName) displayName.textContent = sourceName;
+      const detailsButton = row.querySelector('[data-action="details"]');
+      if (detailsButton) detailsButton.setAttribute('aria-label', '编辑订阅：' + sourceName);
+      const settingsButton = row.querySelector('[data-action="source-settings"]');
+      if (settingsButton) {
+        settingsButton.setAttribute('aria-label', '设置订阅：' + sourceName);
+        settingsButton.title = '设置订阅：' + sourceName;
+      }
       if (displayRemark) displayRemark.textContent = row.querySelector('[data-field="remark"]').value.trim() || '—';
       const typeBadge = row.querySelector('[data-source-type-label]');
       if (typeBadge) typeBadge.textContent = type === 'content' ? '本地' : 'URL';
@@ -656,14 +667,14 @@ function selectSubscriptionSource(row) {
   const editor = el('subscriptionEditor');
   const empty = editor.querySelector('[data-subscription-editor-empty]');
   const content = editor.querySelector('[data-subscription-editor-content]');
-  const save = editor.querySelector('[data-settings-save]');
   editor.classList.toggle('is-empty', !row);
   if (empty) empty.hidden = Boolean(row);
   if (content) content.hidden = !row;
-  if (save) save.disabled = !settingsDirtySections.has('subscriptions') || Boolean(settingsSaveInFlight);
-  if (!row) return;
+  if (!row) {
+    if (editor.open) editor.close();
+    return;
+  }
   row.classList.add('selected');
-  editor.hidden = false;
   ['name', 'url', 'remark', 'sourceType', 'content', 'autoRename'].forEach(function(field) {
     const sourceControl = row.querySelector('[data-field="' + field + '"]');
     const editorControl = editor.querySelector('[data-editor-field="' + field + '"]');
@@ -677,11 +688,13 @@ function selectSubscriptionSource(row) {
   groupSelect.value = group ? group.dataset.groupId : '';
   updateSubscriptionEditorType(row.querySelector('[data-field="sourceType"]').value);
   updateSubscriptionEditorTraffic(row);
-  editor.querySelectorAll('[data-editor-tab]').forEach(function(button, index) {
-    button.classList.toggle('active', index === 0);
-    button.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
-  });
-  editor.querySelectorAll('[data-editor-panel]').forEach(function(panel) { panel.hidden = panel.dataset.editorPanel !== 'basic'; });
+}
+
+function openSubscriptionEditor(row) {
+  if (!row) return;
+  selectSubscriptionSource(row);
+  const editor = el('subscriptionEditor');
+  if (!editor.open) editor.showModal();
 }
 
 function groupsForEditorOptions() {
@@ -692,14 +705,19 @@ function groupsForEditorOptions() {
 }
 
 function updateSubscriptionEditorType(type) {
-  const urlField = el('subscriptionEditor').querySelector('[data-editor-field="url"]').closest('.subscription-editor-field');
-  const contentField = el('subscriptionEditor').querySelector('[data-editor-content-field]');
+  const infoField = el('subscriptionEditor').querySelector('[data-editor-source-info]');
   const note = el('subscriptionEditor').querySelector('[data-editor-type-note]');
-  urlField.hidden = type !== 'url';
-  contentField.hidden = type !== 'content';
+  const fieldName = type === 'content' ? 'content' : 'url';
+  const sourceField = selectedSubscriptionRow && selectedSubscriptionRow.querySelector('[data-field="' + fieldName + '"]');
+  infoField.dataset.editorField = fieldName;
+  infoField.value = sourceField ? sourceField.value : '';
+  infoField.rows = type === 'content' ? 8 : 3;
+  infoField.placeholder = type === 'content'
+    ? 'vless://...\nhy2://...\nss://...'
+    : 'https://example.com/sub';
   if (note) note.textContent = type === 'content'
-    ? '本地节点内容会由 Worker 直接加密下发，不经过外部接口缓存。'
-    : '外部订阅由 Worker 获取、转换并加密下发。';
+    ? '本地文本由 Worker 直接加密下发，不经过远程接口获取。'
+    : '远程订阅由 Worker 获取、转换并加密下发。';
 }
 
 function updateSubscriptionEditorTraffic(row) {
@@ -836,6 +854,9 @@ function deleteSelectedSubscriptions() {
 function initializeSubscriptionManager() {
   const panel = document.querySelector('[data-panel="subscriptions"]');
   const editor = el('subscriptionEditor');
+  editor.addEventListener('close', function() {
+    if (selectedSubscriptionRow) selectSubscriptionSource(null);
+  });
   ['input', 'change'].forEach(function(type) {
     editor.querySelectorAll('[data-editor-field]').forEach(function(control) {
       control.addEventListener(type, function() {
@@ -856,18 +877,6 @@ function initializeSubscriptionManager() {
       });
     });
   });
-  editor.querySelectorAll('[data-editor-tab]').forEach(function(button) {
-    button.addEventListener('click', function() {
-      editor.querySelectorAll('[data-editor-tab]').forEach(function(tab) {
-        const active = tab === button;
-        tab.classList.toggle('active', active);
-        tab.setAttribute('aria-selected', active ? 'true' : 'false');
-      });
-      editor.querySelectorAll('[data-editor-panel]').forEach(function(section) {
-        section.hidden = section.dataset.editorPanel !== button.dataset.editorTab;
-      });
-    });
-  });
   panel.querySelectorAll('[data-action="add-group"]').forEach(function(button) {
     button.addEventListener('click', function() { addSubscriptionGroup(); });
   });
@@ -884,16 +893,11 @@ function initializeSubscriptionManager() {
   panel.querySelectorAll('[data-action="close-subscription-editor"]').forEach(function(button) {
     button.addEventListener('click', function() { selectSubscriptionSource(null); });
   });
-  panel.querySelector('[data-action="copy-subscription-url"]').addEventListener('click', async function() {
-    const input = editor.querySelector('[data-editor-field="url"]');
-    if (!input.value) return show('没有可复制的订阅地址', true);
-    try { await navigator.clipboard.writeText(input.value); show('订阅地址已复制'); }
-    catch (_) { input.focus(); input.select(); show('无法自动复制，请手动复制地址', true); }
-  });
-  panel.querySelector('[data-action="open-editor-group-settings"]').addEventListener('click', function() {
-    const group = selectedSubscriptionRow && selectedSubscriptionRow.closest('.subscription-group');
-    const dialog = group && group.querySelector('[data-group-permissions-dialog]');
-    if (dialog && !dialog.open) dialog.showModal();
+  panel.querySelector('[data-action="copy-subscription-info"]').addEventListener('click', async function() {
+    const input = editor.querySelector('[data-editor-source-info]');
+    if (!input.value) return show('没有可复制的订阅信息', true);
+    try { await navigator.clipboard.writeText(input.value); show('订阅信息已复制'); }
+    catch (_) { input.focus(); input.select(); show('无法自动复制，请手动复制订阅信息', true); }
   });
   panel.querySelector('[data-source-search]').addEventListener('input', function() { subscriptionCurrentPage = 1; applySubscriptionFilters(); });
   ['[data-source-health-filter]', '[data-source-type-filter]', '[data-source-sort]'].forEach(function(selector) {

@@ -298,7 +298,13 @@
           <h2>订阅管理</h2>
           <p id="subscriptionSummary">0 个分组 · 0 条订阅 · 0 条启用</p>
         </div>
-        <span class="settings-page-save-status subscription-manager-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span>
+        <div class="settings-page-save subscription-manager-save">
+          <span class="settings-page-save-status subscription-manager-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span>
+          <div class="settings-page-save-actions subscription-manager-save-actions">
+            <button class="secondary" type="button" data-action="close-subscription-editor">关闭</button>
+            <button type="button" data-settings-save onclick="pushSection('subscriptions')" disabled>保存配置</button>
+          </div>
+        </div>
       </header>
 
       <div class="subscription-manager-layout">
@@ -314,7 +320,7 @@
           <div class="subscription-list-toolbar">
             <label class="subscription-list-search"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-search"></use></svg><input data-source-search type="search" placeholder="搜索订阅…" aria-label="搜索当前分组订阅"></label>
             <select data-source-health-filter aria-label="按状态筛选"><option value="all">全部状态</option><option value="normal">正常</option><option value="unknown">未知</option><option value="local">本地</option></select>
-            <select data-source-type-filter aria-label="按类型筛选"><option value="all">全部类型</option><option value="url">外部订阅</option><option value="content">本地内容</option></select>
+            <select data-source-type-filter aria-label="按类型筛选"><option value="all">全部类型</option><option value="url">远程订阅</option><option value="content">本地文本</option></select>
             <select data-source-sort aria-label="订阅排序"><option value="custom">排序：自定义</option><option value="name">名称：升序</option><option value="name-desc">名称：降序</option></select>
             <div class="subscription-view-toggle" role="group" aria-label="订阅显示方式"><button class="active" type="button" data-subscription-view="list" aria-label="列表视图" aria-pressed="true"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-list"></use></svg></button><button type="button" data-subscription-view="grid" aria-label="网格视图" aria-pressed="false"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-grid"></use></svg></button></div>
           </div>
@@ -329,19 +335,16 @@
           </footer>
         </section>
 
-        <aside class="subscription-editor" id="subscriptionEditor" aria-label="订阅编辑器">
-          <div class="subscription-editor-header"><h3>编辑订阅</h3><button class="secondary" type="button" data-action="close-subscription-editor" aria-label="关闭编辑器"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg></button></div>
+        <dialog class="subscription-editor" id="subscriptionEditor" aria-labelledby="subscriptionEditorTitle">
+          <div class="subscription-editor-header"><h3 id="subscriptionEditorTitle">编辑订阅</h3><button class="secondary" type="button" data-action="close-subscription-editor" aria-label="关闭编辑订阅弹窗" title="关闭"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg></button></div>
           <div class="subscription-editor-empty" data-subscription-editor-empty>选择一条订阅以查看和编辑详细信息。</div>
           <div class="subscription-editor-content" data-subscription-editor-content hidden>
-            <div class="subscription-editor-tabs" role="tablist" aria-label="订阅设置分类">
-              <button class="active" type="button" role="tab" aria-selected="true" data-editor-tab="basic">基础设置</button>
-              <button type="button" role="tab" aria-selected="false" data-editor-tab="update">更新设置</button>
-              <button type="button" role="tab" aria-selected="false" data-editor-tab="advanced">高级设置</button>
-            </div>
             <div class="subscription-editor-scroll">
-              <section class="subscription-editor-section" data-editor-panel="basic">
+              <section class="subscription-editor-section">
                 <label class="subscription-editor-field">订阅名称 <span class="required-mark">*</span><input data-editor-field="name" type="text" maxlength="120" required></label>
-                <label class="subscription-editor-field">订阅地址 <span class="required-mark">*</span><span class="subscription-editor-copy-field"><input data-editor-field="url" type="url" placeholder="https://example.com/sub"><button class="secondary" type="button" data-action="copy-subscription-url" aria-label="复制订阅地址"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-copy"></use></svg></button></span></label>
+                <label class="subscription-editor-field">订阅类型<select data-editor-field="sourceType"><option value="url">远程订阅</option><option value="content">本地文本</option></select></label>
+                <label class="subscription-editor-field">订阅信息 <span class="required-mark">*</span><span class="subscription-editor-copy-field"><textarea data-editor-source-info data-editor-field="url" rows="3" placeholder="https://example.com/sub"></textarea><button class="secondary" type="button" data-action="copy-subscription-info" aria-label="复制订阅信息"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-copy"></use></svg></button></span></label>
+                <p class="subscription-editor-note" data-editor-type-note>远程订阅由 Worker 获取、转换并加密下发。</p>
                 <!-- 分组在本次仅展示，避免样式调整新增跨分组迁移数据的行为。 -->
                 <label class="subscription-editor-field">所属分组<select data-editor-field="group" disabled></select></label>
                 <label class="subscription-editor-field">备注<textarea data-editor-field="remark" maxlength="200" rows="3" placeholder="仅后台保存"></textarea></label>
@@ -350,23 +353,13 @@
                   <dl><div><dt>已用流量</dt><dd data-editor-traffic-used>—</dd></div><div><dt>总流量</dt><dd data-editor-traffic-total>—</dd></div><div><dt>使用进度</dt><dd><span class="subscription-editor-progress"><span data-editor-traffic-progress></span></span><span data-editor-traffic-percent>—</span></dd></div><div><dt>到期时间</dt><dd data-editor-traffic-expiry>—</dd></div><div><dt>更新时间</dt><dd data-editor-traffic-updated>—</dd></div><div><dt>状态</dt><dd><span class="subscription-state-badge" data-editor-traffic-state>未知</span></dd></div></dl>
                 </section>
               </section>
-              <section class="subscription-editor-section" data-editor-panel="update" hidden>
+              <section class="subscription-editor-section">
+                <h4 class="subscription-editor-section-title">更新设置</h4>
                 <label class="check subscription-editor-check"><input data-editor-field="autoRename" type="checkbox">自动重命名节点</label>
-                <p class="subscription-editor-note">更新开关和接口缓存时间在所属分组的“分组设置”中统一配置。</p>
-                <button class="secondary" type="button" data-action="open-editor-group-settings">打开分组设置</button>
-              </section>
-              <section class="subscription-editor-section" data-editor-panel="advanced" hidden>
-                <label class="subscription-editor-field">订阅来源<select data-editor-field="sourceType"><option value="url">外部订阅</option><option value="content">本地内容</option></select></label>
-                <label class="subscription-editor-field" data-editor-content-field>纯文本节点（每行一个）<textarea data-editor-field="content" rows="8" placeholder="vless://...&#10;hy2://...&#10;ss://..."></textarea></label>
-                <p class="subscription-editor-note" data-editor-type-note>外部订阅由 Worker 获取、转换并加密下发。</p>
               </section>
             </div>
           </div>
-          <div class="subscription-editor-footer">
-            <button class="secondary" type="button" data-action="close-subscription-editor">关闭</button>
-            <button type="button" data-settings-save onclick="pushSection('subscriptions')" disabled>保存配置</button>
-          </div>
-        </aside>
+        </dialog>
       </div>
     </div>
     <datalist id="subscriptionAppVersionOptions"></datalist>
