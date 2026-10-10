@@ -1523,10 +1523,10 @@ function renderRegistrationCodes(codes) {
   if (!host) return;
   const rows = Array.isArray(codes) ? codes : [];
   if (!rows.length) {
-    host.innerHTML = '<div class="loading-state">暂无管理员注册码</div>';
+    host.innerHTML = '<div class="loading-state">暂无注册码</div>';
     return;
   }
-  host.innerHTML = '<table class="security-account-table" aria-label="一次性注册码">' +
+  host.innerHTML = '<table class="security-account-table" aria-label="注册码">' +
     '<thead><tr><th>注册码</th><th>状态</th><th>发放时间</th><th>使用时间</th><th>使用账户 UID</th></tr></thead>' +
     '<tbody>' + rows.map(function(row) {
       return '<tr><td><code>' + esc(row.code) + '</code></td>' +
@@ -1565,7 +1565,7 @@ async function issueRegistrationCodes() {
   });
   const data = await response.json();
   if (!response.ok) return show(adminErrorMessage(data.error, '注册码发放失败'), true);
-  show('已发放 ' + (data.codes || []).length + ' 个一次性注册码');
+  show('已发放 ' + (data.codes || []).length + ' 个注册码');
   await loadRegistrationCodes();
 }
 async function pushSection(section) {

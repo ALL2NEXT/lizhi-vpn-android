@@ -385,14 +385,6 @@ fun AccountSettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
-                        value = registrationCode,
-                        onValueChange = { if (it.length <= 32) registrationCode = it },
-                        label = { Text(if (backendSettings.requireAdminRegistrationCode) "管理员一次性注册码（必填）" else "管理员一次性注册码（可选）") },
-                        singleLine = true,
-                        enabled = !isBindingAccount,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
                         label = { Text("邮箱") },
@@ -420,6 +412,14 @@ fun AccountSettingsScreen(
                         enabled = !isBindingAccount,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = registrationCode,
+                        onValueChange = { if (it.length <= 32) registrationCode = it },
+                        label = { Text(if (backendSettings.requireAdminRegistrationCode) "注册码（必填）" else "注册码（可选）") },
+                        singleLine = true,
+                        enabled = !isBindingAccount,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

@@ -3206,7 +3206,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun accountBindingErrorMessage(error: Throwable): String {
         return when (error.message) {
             "registration_disabled" -> "用户注册暂未开放"
-            "registration_code_required" -> "必须使用管理员发放的一次性注册码注册"
+            "registration_code_required" -> "必须使用管理员发放的注册码注册"
             "invalid_registration_code" -> "注册码无效或已使用"
             "formal_registration_closed" -> "正式用户注册暂未开放"
             "invalid_bind_credentials" -> "邮箱或密码格式无效"

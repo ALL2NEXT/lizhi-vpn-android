@@ -162,9 +162,9 @@ fun StartupAccountScreen(
                         label = {
                             Text(
                                 if (backendSettings.requireAdminRegistrationCode) {
-                                    "管理员一次性注册码（必填）"
+                                    "注册码（必填）"
                                 } else {
-                                    "管理员一次性注册码（可选）"
+                                    "注册码（可选）"
                                 }
                             )
                         },

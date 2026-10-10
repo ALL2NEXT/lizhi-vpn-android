@@ -480,11 +480,11 @@
         <h3 class="settings-section-title">注册控制</h3>
         <div class="grid">
           <label class="check"><input id="registrationEnabled" type="checkbox">用户注册总开关</label>
-          <label class="check"><input id="requireAdminRegistrationCode" type="checkbox">必须使用管理员发放的一次性注册码才可以注册</label>
+          <label class="check"><input id="requireAdminRegistrationCode" type="checkbox">必须使用管理员发放的注册码才可以注册</label>
         </div>
         <div class="grid">
           <div class="field"><label>一次发放数量<input id="registrationCodeCount" type="number" min="1" max="100" step="1" value="1"></label></div>
-          <div class="field"><button class="secondary" type="button" onclick="issueRegistrationCodes()">发放一次性注册码</button></div>
+          <div class="field"><button class="secondary" type="button" onclick="issueRegistrationCodes()">发放注册码</button></div>
         </div>
         <div id="registrationCodesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取注册码</div></div>
         <small class="hint">注册码每次成功注册后立即失效，只能使用一次。</small>
