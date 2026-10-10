@@ -437,18 +437,37 @@
     </div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="navigation-page">
-    <div class="dashboard-heading settings-page-heading">
-      <h2>导航页</h2>
-      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="navigation-page" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('navigation-page')" disabled>保存配置</button></div></div>
-    </div>
-    <div class="settings-sections">
-      <section class="settings-section">
-        <h3 class="settings-section-title">导航网站</h3>
-        <p class="settings-section-description">添加网站分组，把同类网站放在一起。可上传图标或从网站获取，保存后随配置下发到客户端。</p>
-        <div id="webNavigationGroups" class="web-nav-groups"></div>
-        <button class="secondary" type="button" onclick="addWebNavigationGroup()">添加网站分组</button>
-        <small>网站名称和网址都要填写，网址需以 http:// 或 https:// 开头；图标支持 PNG、JPEG、WebP、GIF、ICO，单张不超过 128 KB，保存在后台 KV 配置中。</small>
-      </section>
+    <div class="subscription-manager navigation-manager">
+      <header class="subscription-manager-header">
+        <div class="subscription-manager-title">
+          <h2>导航页</h2>
+          <p>管理网站分组和组内网站入口，保存后同步到客户端。</p>
+        </div>
+        <div class="settings-page-save subscription-manager-save">
+          <span class="settings-page-save-status subscription-manager-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span>
+          <div class="settings-page-save-actions subscription-manager-save-actions">
+            <button class="secondary" type="button" data-settings-discard="navigation-page" disabled>放弃修改</button>
+            <button type="button" data-settings-save onclick="pushSection('navigation-page')" disabled>保存配置</button>
+          </div>
+        </div>
+      </header>
+      <div class="subscription-manager-layout navigation-manager-layout">
+        <aside class="subscription-group-sidebar" aria-label="网站分组管理">
+          <div class="subscription-group-sidebar-heading">
+            <h3>网站分组</h3>
+            <button class="secondary" type="button" data-action="add-web-navigation-group" aria-label="添加网站分组" title="添加网站分组"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg></button>
+          </div>
+          <nav id="webNavigationGroupNavigation" class="subscription-group-navigation" aria-label="网站分组列表"></nav>
+        </aside>
+        <section class="subscription-group-workspace navigation-group-workspace">
+          <div id="webNavigationEmpty" class="web-nav-workspace-empty" hidden>
+            <p>还没有网站分组，请先添加一个分组。</p>
+            <button class="secondary" type="button" data-action="add-web-navigation-group">添加网站分组</button>
+          </div>
+          <div id="webNavigationGroups" class="web-nav-groups" hidden></div>
+          <small class="web-nav-workspace-note">网站名称和网址必填，网址需以 http:// 或 https:// 开头；图标支持 PNG、JPEG、WebP、GIF、ICO，单张不超过 128 KB，保存在后台 KV 配置中。</small>
+        </section>
+      </div>
     </div>
   </section>
 

@@ -1,5 +1,6 @@
 let subscriptionTrafficRequestId = 0;
 let activeSubscriptionGroupId = '__all__';
+let activeWebNavigationGroupId = '';
 let selectedSubscriptionRow = null;
 const selectedSubscriptionRows = new Set();
 let subscriptionCurrentPage = 1;
@@ -1022,9 +1023,11 @@ function updateSourceMode(row) {
 
 // 后台用可视化表单维护导航配置，分组与网站顺序对应客户端显示顺序。
 function addWebNavigationGroup(group) {
+  const isNewGroup = !group;
   group = group || {};
   const row = document.createElement('section');
   row.className = 'web-nav-group';
+  row.dataset.webNavGroupId = crypto.randomUUID();
   row.innerHTML = '<div class="web-nav-group-heading">' +
     '<label class="web-nav-group-name">分组名称<input data-field="title" type="text" placeholder="例如：国内测速"></label>' +
     '<div class="web-nav-controls" role="group" aria-label="分组排序和删除操作">' +
@@ -1035,12 +1038,15 @@ function addWebNavigationGroup(group) {
     '</div>' +
   '</div>' +
   '<div class="web-nav-items"></div>' +
+  '<div class="web-nav-group-empty" data-group-empty hidden>该分组还没有网站入口。</div>' +
   '<button class="secondary web-nav-add-site" type="button" data-action="add-site">添加网站</button>';
   row.querySelector('[data-field="title"]').value = String(group.title || '');
   const container = el('webNavigationGroups');
   container.appendChild(row);
+  if (isNewGroup) activeWebNavigationGroupId = row.dataset.webNavGroupId;
   const items = Array.isArray(group.items) ? group.items : [{}];
   items.forEach(function(item) { addWebNavigationItem(row, item); });
+  row.querySelector('[data-field="title"]').addEventListener('input', renderWebNavigationGroupNavigation);
   row.querySelector('[data-action="group-up"]').onclick = function() {
     moveWebNavigationRow(row, -1);
   };
@@ -1048,7 +1054,15 @@ function addWebNavigationGroup(group) {
     moveWebNavigationRow(row, 1);
   };
   row.querySelector('[data-action="group-delete"]').onclick = function() {
+    const groupRows = getWebNavigationGroupRows();
+    const groupIndex = groupRows.indexOf(row);
+    const wasActive = row.dataset.webNavGroupId === activeWebNavigationGroupId;
     row.remove();
+    if (wasActive) {
+      const remainingGroups = getWebNavigationGroupRows();
+      const nextGroup = remainingGroups[Math.min(groupIndex, remainingGroups.length - 1)];
+      activeWebNavigationGroupId = nextGroup ? nextGroup.dataset.webNavGroupId : '';
+    }
     updateWebNavigationControls();
     markSettingsDirty('navigation-page');
   };
@@ -1235,7 +1249,7 @@ function moveWebNavigationRow(row, direction) {
 }
 
 function updateWebNavigationControls() {
-  const groups = Array.from(el('webNavigationGroups').children);
+  const groups = getWebNavigationGroupRows();
   groups.forEach(function(group, groupIndex) {
     const groupUp = group.querySelector('[data-action="group-up"]');
     const groupDown = group.querySelector('[data-action="group-down"]');
@@ -1244,12 +1258,78 @@ function updateWebNavigationControls() {
     const items = Array.from(group.querySelector('.web-nav-items').children);
     const count = group.querySelector('[data-group-count]');
     if (count) count.textContent = items.length + ' 个网站';
+    const empty = group.querySelector('[data-group-empty]');
+    if (empty) empty.hidden = items.length > 0;
     items.forEach(function(item, itemIndex) {
       const itemUp = item.querySelector('[data-action="item-up"]');
       const itemDown = item.querySelector('[data-action="item-down"]');
       if (itemUp) itemUp.disabled = itemIndex === 0;
       if (itemDown) itemDown.disabled = itemIndex === items.length - 1;
     });
+  });
+  renderWebNavigationGroupNavigation();
+}
+
+function getWebNavigationGroupRows() {
+  const host = el('webNavigationGroups');
+  return host ? Array.from(host.children).filter(function(group) {
+    return group.classList.contains('web-nav-group');
+  }) : [];
+}
+
+function renderWebNavigationGroupNavigation() {
+  const nav = el('webNavigationGroupNavigation');
+  const host = el('webNavigationGroups');
+  const empty = el('webNavigationEmpty');
+  const groups = getWebNavigationGroupRows();
+  if (!nav || !host) return;
+  if (!groups.some(function(group) { return group.dataset.webNavGroupId === activeWebNavigationGroupId; })) {
+    activeWebNavigationGroupId = groups.length ? groups[0].dataset.webNavGroupId : '';
+  }
+  nav.innerHTML = groups.map(function(group, index) {
+    const title = group.querySelector('[data-field="title"]').value.trim() || '未命名分组';
+    const count = group.querySelectorAll('.web-nav-item').length;
+    return '<button class="subscription-group-nav-item web-nav-group-nav-item" type="button" data-web-nav-group-id="' +
+      esc(group.dataset.webNavGroupId) + '" aria-label="' + esc(title) + '，' + count + ' 个网站，第 ' + (index + 1) + ' 组">' +
+      '<span class="subscription-nav-icon" aria-hidden="true">' + subscriptionIcon('folder') + '</span>' +
+      '<span class="subscription-nav-name">' + esc(title) + '</span>' +
+      '<span class="subscription-nav-count">' + count + '</span>' +
+    '</button>';
+  }).join('');
+  host.hidden = groups.length === 0;
+  if (empty) empty.hidden = groups.length > 0;
+  selectWebNavigationGroup(activeWebNavigationGroupId);
+}
+
+function selectWebNavigationGroup(groupId) {
+  const groups = getWebNavigationGroupRows();
+  const activeGroup = groups.find(function(group) { return group.dataset.webNavGroupId === groupId; }) || null;
+  activeWebNavigationGroupId = activeGroup ? activeGroup.dataset.webNavGroupId : '';
+  groups.forEach(function(group) {
+    const active = group === activeGroup;
+    group.hidden = !active;
+    group.classList.toggle('active', active);
+  });
+  const nav = el('webNavigationGroupNavigation');
+  if (nav) nav.querySelectorAll('[data-web-nav-group-id]').forEach(function(button) {
+    const active = button.dataset.webNavGroupId === activeWebNavigationGroupId;
+    button.classList.toggle('active', active);
+    if (active) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+}
+
+function initializeWebNavigationManager() {
+  const panel = document.querySelector('[data-panel="navigation-page"]');
+  if (!panel) return;
+  panel.querySelectorAll('[data-action="add-web-navigation-group"]').forEach(function(button) {
+    button.addEventListener('click', function() { addWebNavigationGroup(); });
+  });
+  const nav = el('webNavigationGroupNavigation');
+  nav.addEventListener('click', function(event) {
+    const button = event.target.closest('[data-web-nav-group-id]');
+    if (!button || !nav.contains(button)) return;
+    selectWebNavigationGroup(button.dataset.webNavGroupId);
   });
 }
 
@@ -1321,7 +1401,10 @@ function fillState(state, section) {
     }
     if (!section || section === 'navigation-page') {
       el('webNavigationGroups').innerHTML = '';
+      el('webNavigationGroupNavigation').innerHTML = '';
+      activeWebNavigationGroupId = '';
       (Array.isArray(settings.webNavigationGroups) ? settings.webNavigationGroups : []).forEach(addWebNavigationGroup);
+      updateWebNavigationControls();
     }
     if (!section || section === 'about-page') {
       setValue('websiteUrl', settings.websiteUrl);
@@ -1664,6 +1747,7 @@ initializeGrowthRange();
 initializeActivityRange();
 initializeTrafficRange();
 initializeSubscriptionManager();
+initializeWebNavigationManager();
 initializeSettingsDrafts();
 const subscriptionTabButton = document.querySelector('[data-tab="subscriptions"]');
 if (subscriptionTabButton) subscriptionTabButton.addEventListener('click', loadSubscriptionTraffic);

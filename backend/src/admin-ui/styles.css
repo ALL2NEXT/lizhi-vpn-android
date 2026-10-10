@@ -212,7 +212,6 @@
     .web-nav-icon-editor small { flex-basis: 100%; margin: 0; color: #5f6368; }
     .web-nav-item-controls { padding-bottom: 1px; }
     .web-nav-add-site { margin: 12px 0 0; }
-    .web-nav-empty { padding: 8px 0; color: #5f6368; font-size: 13px; }
      .settings-section-description { margin: 0 0 12px; color: #5f6368; font-size: 12px; }
      .settings-section .grid { margin-top: 0; }
      .debug-interface-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
@@ -914,13 +913,23 @@
     }
     button.secondary.subscription-group-add:hover:not(:disabled) { color: var(--blue-ink); background: #f5f8fc; border-color: #a8c7fa; }
 
-    /* 订阅管理使用分组导航、线路列表和右侧详情面板组成工作区。 */
-    body.subscriptions-fullscreen { overflow: hidden; background: #eef2f8; }
-    body.subscriptions-fullscreen main { min-width: 0; }
-    body.subscriptions-fullscreen #dashboard { display: grid; grid-template-columns: 256px minmax(0, 1fr); width: 100%; height: 100vh; min-height: 0; }
-    body.subscriptions-fullscreen .dashboard-sidebar { display: flex; }
-    body.subscriptions-fullscreen .dashboard-workspace { width: auto; min-width: 0; height: 100vh; min-height: 0; overflow: hidden; background: #eef2f8; }
+    /* 订阅管理和导航页共用左侧分组导航与右侧工作区布局。 */
+    body.subscriptions-fullscreen, body.navigation-page-fullscreen { overflow: hidden; background: #eef2f8; }
+    body.subscriptions-fullscreen main, body.navigation-page-fullscreen main { min-width: 0; }
+    body.subscriptions-fullscreen #dashboard, body.navigation-page-fullscreen #dashboard { display: grid; grid-template-columns: 256px minmax(0, 1fr); width: 100%; height: 100vh; min-height: 0; }
+    body.subscriptions-fullscreen .dashboard-sidebar, body.navigation-page-fullscreen .dashboard-sidebar { display: flex; }
+    body.subscriptions-fullscreen .dashboard-workspace, body.navigation-page-fullscreen .dashboard-workspace { width: auto; min-width: 0; height: 100vh; min-height: 0; overflow: hidden; background: #eef2f8; }
     body.subscriptions-fullscreen .tab-panel[data-panel="subscriptions"].active {
+      display: flex;
+      box-sizing: border-box;
+      width: 100%;
+      height: 100vh;
+      min-height: 0;
+      padding: 10px;
+      overflow: hidden;
+      background: #eef2f8;
+    }
+    body.navigation-page-fullscreen .tab-panel[data-panel="navigation-page"].active {
       display: flex;
       box-sizing: border-box;
       width: 100%;
@@ -952,6 +961,22 @@
     .subscription-manager-save-status { min-height: 14px; font-size: 11px; text-align: right; }
     .subscription-manager-save-actions { flex-wrap: nowrap; }
     .subscription-manager-save-actions button { min-height: 36px; padding: 8px 14px; }
+    .navigation-group-workspace { position: relative; }
+    .web-nav-groups { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; margin: 0; overflow-y: auto; scrollbar-width: thin; }
+    .web-nav-groups[hidden] { display: none !important; }
+    .navigation-group-workspace .web-nav-group { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 100%; padding: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+    .navigation-group-workspace .web-nav-group[hidden] { display: none !important; }
+    .navigation-group-workspace .web-nav-group-heading { flex: 0 0 auto; min-height: 68px; padding: 0 0 12px; margin: 0 0 10px; border-bottom-color: #e4eaf2; }
+    .navigation-group-workspace .web-nav-group-name { max-width: 520px; color: #64748b; }
+    .navigation-group-workspace .web-nav-group-empty { display: grid; flex: 1 1 auto; min-height: 120px; place-items: center; color: #758198; font-size: 14px; }
+    .navigation-group-workspace .web-nav-group-empty[hidden] { display: none !important; }
+    .navigation-group-workspace .web-nav-items { display: grid; flex: 0 0 auto; gap: 0; }
+    .navigation-group-workspace .web-nav-add-site { align-self: flex-start; margin: 12px 0 0; }
+    .web-nav-workspace-empty { display: grid; flex: 1 1 auto; align-content: center; justify-items: center; gap: 12px; color: #758198; text-align: center; }
+    .web-nav-workspace-empty[hidden] { display: none !important; }
+    .web-nav-workspace-empty p { margin: 0; }
+    .web-nav-workspace-note { flex: 0 0 auto; margin-top: 12px; padding-top: 10px; color: #718096; border-top: 1px solid #e7edf4; font-size: 12px; line-height: 1.6; }
+    .web-nav-group-nav-item { text-align: left; }
     .subscription-list-search {
       box-sizing: border-box;
       display: flex;
@@ -1170,9 +1195,11 @@
       .source-list-header, .source-row { grid-template-columns: 15px 18px 27px minmax(80px, 1.1fr) minmax(85px, .9fr) 48px 42px 64px; }
     }
     @media (max-width: 700px) {
-      body.subscriptions-fullscreen { overflow: auto; }
-      body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace { height: auto; min-height: 100vh; overflow: visible; }
+      body.subscriptions-fullscreen, body.navigation-page-fullscreen { overflow: auto; }
+      body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace,
+      body.navigation-page-fullscreen #dashboard, body.navigation-page-fullscreen .dashboard-workspace { height: auto; min-height: 100vh; overflow: visible; }
       body.subscriptions-fullscreen .tab-panel[data-panel="subscriptions"].active { min-height: 100vh; height: auto; overflow: visible; padding: 8px; }
+      body.navigation-page-fullscreen .tab-panel[data-panel="navigation-page"].active { min-height: 100vh; height: auto; overflow: visible; padding: 8px; }
       .subscription-manager { min-height: calc(100vh - 16px); }
       .subscription-manager-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title status"; gap: 12px; padding: 14px; }
       .subscription-manager-title h2 { font-size: 24px; }
@@ -1182,6 +1209,11 @@
       .subscription-group-navigation { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
       .subscription-group-sidebar-heading { padding-bottom: 6px; }
       .subscription-group-workspace { min-height: 520px; padding: 10px; }
+      .navigation-group-workspace { min-height: 520px; padding: 10px; }
+      .web-nav-groups { overflow: visible; }
+      .navigation-group-workspace .web-nav-group-heading { align-items: flex-start; flex-direction: column; }
+      .navigation-group-workspace .web-nav-group-name { width: 100%; max-width: none; }
+      .navigation-group-workspace .web-nav-item-fields { grid-template-columns: minmax(0, 1fr); }
       .subscription-editor { width: calc(100vw - 16px); max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
       .subscription-list-toolbar > select { min-width: 100px; }
       .subscription-list-toolbar > select[data-source-sort] { min-width: 128px; }

@@ -185,6 +185,7 @@
  }
  function activateTab(name) {
    document.body.classList.toggle('subscriptions-fullscreen', name === 'subscriptions');
+   document.body.classList.toggle('navigation-page-fullscreen', name === 'navigation-page');
    document.querySelectorAll('.tab-button[data-tab]').forEach(function(button) {
      const active = button.dataset.tab === name;
      button.classList.toggle('active', active);
