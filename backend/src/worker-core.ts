@@ -23,6 +23,7 @@ import {
   normalizeAndroidSdk,
   normalizeBatchUserReferences,
   normalizeRegistrationCode,
+  normalizeVipActivationCode,
   normalizeNickname,
   normalizeStoredUid,
   randomRegistrationCode,
@@ -121,6 +122,7 @@ const routeDeps = {
   publicAccount,
   normalizeNickname,
   normalizeRegistrationCode,
+  normalizeVipActivationCode,
   usagePeriodKeys,
   normalizeReportTimestamp,
   normalizeAccountEmail,
@@ -222,6 +224,7 @@ function adminOperationLabel(method: string, path: string) {
   if (path.endsWith("/api/system-log-settings") && method === "PUT") return "修改系统日志记录设置";
   if (path.endsWith("/api/state") && method === "PUT") return "保存后台配置";
   if (path.endsWith("/api/registration-codes") && method === "POST") return "生成注册码";
+  if (path.endsWith("/api/vip-codes") && method === "POST") return "发放 VIP 卡密";
   if (path.includes("/api/users/batch") && method === "DELETE") return "批量删除用户";
   if (path.includes("/api/users/batch")) return "批量修改用户";
   if (path.includes("/api/users/") && path.endsWith("/ban")) {
@@ -237,6 +240,7 @@ function isAdminWriteOperation(method: string, path: string) {
   if (method === "PUT" && path.endsWith("/api/system-log-settings")) return true;
   if (method === "PUT" && path.endsWith("/api/state")) return true;
   if (method === "POST" && path.endsWith("/api/registration-codes")) return true;
+  if (method === "POST" && path.endsWith("/api/vip-codes")) return true;
   if (path.includes("/api/users/") || path.includes("/api/users/batch")) {
     return ["PATCH", "POST", "DELETE"].includes(method);
   }
@@ -337,10 +341,13 @@ const worker = {
     } catch {
       recordingSettings = undefined;
     }
-    // 避免查看已保存的全量正文时，再把整份正文重复写入日志。
-    const isLogPayloadRead = isAdminApi && path.endsWith("/api/system-logs/payload");
+    // 日志载荷读取和 VIP 卡密兑换/发放接口不保存正文，避免递归记录或泄露卡密。
+    const skipFullCapture =
+      (isAdminApi && path.endsWith("/api/system-logs/payload")) ||
+      path.endsWith("/api/account/activate-vip") ||
+      (isAdminApi && path.endsWith("/api/vip-codes"));
     const captureFullRequest = recordingSettings?.mode === "full" &&
-      recordingSettings.categories.request && !isLogPayloadRead;
+      recordingSettings.categories.request && !skipFullCapture;
     const requestCapturePromise = captureFullRequest
       ? captureRequest(request.clone()).catch(() => null)
       : null;

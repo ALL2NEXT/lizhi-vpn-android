@@ -117,7 +117,7 @@ internal class SubscriptionDataLoader(
                 TAG,
                 "Skipped inaccessible subscription sources for $accountStatus/$accountType: " +
                     skippedSources.joinToString {
-                        "${it.name}(statuses=${it.allowedStatuses}, types=${it.allowedAccountTypes}, version=${it.minAppVersion}..${it.maxAppVersion})"
+                        "${it.name}(statuses=${it.allowedStatuses}, types=${it.allowedAccountTypes}, memberships=${it.allowedMembershipTypes}, version=${it.minAppVersion}..${it.maxAppVersion})"
                     }
             )
         }

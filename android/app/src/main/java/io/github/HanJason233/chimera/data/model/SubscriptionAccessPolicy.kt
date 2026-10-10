@@ -37,6 +37,9 @@ internal fun SubscriptionSource.canBeRequestedBy(
         if (allowedAccountTypes?.contains(accountType) != true) return false
     }
 
+    val membershipType = if (account?.vipActive == true) "member" else "non_member"
+    if (allowedMembershipTypes != null && !allowedMembershipTypes.contains(membershipType)) return false
+
     val meetsMinimum = minAppVersion.isBlank() || isVersionAtLeast(currentAppVersion, minAppVersion)
     val meetsMaximum = maxAppVersion.isBlank() || isVersionAtLeast(maxAppVersion, currentAppVersion)
     return meetsMinimum && meetsMaximum

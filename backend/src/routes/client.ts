@@ -69,6 +69,7 @@ async function handleClient(request: Request, env: Env) {
         minAccountType: legacyMinimumAccountType(group),
         allowedStatuses: group.allowedStatuses,
         allowedAccountTypes: group.allowedAccountTypes,
+        allowedMembershipTypes: group.allowedMembershipTypes,
         minAppVersion: group.minAppVersion,
         maxAppVersion: group.maxAppVersion,
       };
@@ -199,8 +200,10 @@ async function handleManagedSubscription(path: string, request: Request, env: En
       error: "account_access_denied",
       requiredStatuses: group.allowedStatuses,
       requiredAccountTypes: group.allowedAccountTypes,
+      requiredMembershipTypes: group.allowedMembershipTypes,
       accountStatus: access.accountStatus,
       accountType: access.accountType,
+      vipActive: access.vipActive,
     }, 403);
   }
   if (accessError === "app_version_too_low") {

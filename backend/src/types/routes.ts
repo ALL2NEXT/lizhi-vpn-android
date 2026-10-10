@@ -37,6 +37,7 @@ export interface RouteDependencies {
   publicAccount: typeof users.publicAccount;
   normalizeNickname: typeof account.normalizeNickname;
   normalizeRegistrationCode: typeof account.normalizeRegistrationCode;
+  normalizeVipActivationCode: typeof account.normalizeVipActivationCode;
   usagePeriodKeys: typeof time.usagePeriodKeys;
   normalizeReportTimestamp: typeof time.normalizeReportTimestamp;
   normalizeAccountEmail: typeof account.normalizeAccountEmail;

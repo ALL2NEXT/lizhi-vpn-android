@@ -12,6 +12,7 @@ import io.github.HanJason233.chimera.data.model.AccountBindingRequest
 import io.github.HanJason233.chimera.data.model.AccountActionResponse
 import io.github.HanJason233.chimera.data.model.AccountDeleteRequest
 import io.github.HanJason233.chimera.data.model.AccountLoginRequest
+import io.github.HanJason233.chimera.data.model.AccountVipActivationRequest
 import io.github.HanJason233.chimera.data.model.AccountProfileUpdateRequest
 import io.github.HanJason233.chimera.data.model.AccountRegisterRequest
 import io.github.HanJason233.chimera.data.model.AccountRegisterResponse
@@ -46,6 +47,12 @@ interface ApiService {
         @Url url: String,
         @Body request: AccountLoginRequest
     ): AccountRegisterResponse
+
+    @POST
+    suspend fun activateVip(
+        @Url url: String,
+        @Body request: AccountVipActivationRequest
+    ): Response<AccountRegisterResponse>
 
     @POST
     suspend fun deleteAccount(

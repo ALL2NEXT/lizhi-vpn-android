@@ -7,6 +7,7 @@ import type {
   Settings,
   SubscriptionAccountStatus,
   SubscriptionGroup,
+  SubscriptionMembershipStatus,
   SubscriptionSource,
 } from "../types/models.ts";
 
@@ -27,6 +28,7 @@ import {
 
 const SUBSCRIPTION_STATUSES: SubscriptionAccountStatus[] = ["normal", "banned"];
 const SUBSCRIPTION_ACCOUNT_TYPES = ["guest", "formal"] as const;
+const SUBSCRIPTION_MEMBERSHIP_TYPES: SubscriptionMembershipStatus[] = ["member", "non_member"];
 
 function normalizeSelection<T extends string>(value: unknown, allowed: readonly T[], fallback: T[]): T[] {
   const input = Array.isArray(value) ? value : fallback;
@@ -86,6 +88,11 @@ function normalizeSubscriptionGroup(
     enabled: parseFlag(input.enabled, true),
     allowedStatuses: normalizeSelection(input.allowedStatuses, SUBSCRIPTION_STATUSES, ["normal"]),
     allowedAccountTypes: normalizeSelection(input.allowedAccountTypes, SUBSCRIPTION_ACCOUNT_TYPES, ["guest", "formal"]),
+    allowedMembershipTypes: normalizeSelection(
+      input.allowedMembershipTypes,
+      SUBSCRIPTION_MEMBERSHIP_TYPES,
+      ["member", "non_member"],
+    ),
     updateEnabled: parseFlag(input.updateEnabled, true),
     cacheMinutes,
     minAppVersion,
@@ -233,6 +240,7 @@ export function normalizeState(input: unknown): AppState {
           enabled: true,
           allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
           allowedAccountTypes: minimumType === "formal" ? ["formal"] : ["guest", "formal"],
+          allowedMembershipTypes: ["member", "non_member"],
           updateEnabled: true,
           cacheMinutes: normalizeSubscriptionCacheMinutes(source.url ? item.cacheMinutes : undefined),
           minAppVersion: normalizeMinimumAppVersion(item.minAppVersion ?? item.minimumAppVersion),

@@ -22,6 +22,7 @@ export function createAccountRoutes(deps: Pick<
   | "registerOrTouchUser"
   | "normalizeNickname"
   | "normalizeRegistrationCode"
+  | "normalizeVipActivationCode"
   | "beijingTimestamp"
   | "normalizeReportTimestamp"
   | "normalizeAccountId"
@@ -47,6 +48,7 @@ export function createAccountRoutes(deps: Pick<
     registerOrTouchUser,
     normalizeNickname,
     normalizeRegistrationCode,
+    normalizeVipActivationCode,
     beijingTimestamp,
     normalizeReportTimestamp,
     normalizeAccountId,
@@ -217,6 +219,63 @@ export function createAccountRoutes(deps: Pick<
       return json({
         ok: true,
         account: publicAccount(await readD1UserWithTraffic(env, Number(row.id))),
+      });
+    }
+
+    if (path === "/api/account/activate-vip" && request.method === "POST") {
+      const body = await readJsonObject(request);
+      const deviceId = normalizeAccountId(body && body.deviceId);
+      const code = normalizeVipActivationCode(body && body.code);
+      if (!deviceId || !code) return json({ ok: false, error: "invalid_vip_activation_request" }, 400);
+
+      const identity = await resolveDeviceIdentity(env, deviceId);
+      if (!identity) return json({ ok: false, error: "account_not_found" }, 404);
+      if (identity.deviceBanned) return json({ ok: false, error: "account_banned" }, 403);
+
+      const db = await ensureUserSchema(env);
+      const user = await db.prepare(
+        "SELECT status FROM users_mb WHERE id = ?",
+      ).bind(identity.userId).first<{ status: string }>();
+      if (!user) return json({ ok: false, error: "account_not_found" }, 404);
+      if (cleanText(user.status) !== "active") {
+        return json({ ok: false, error: "account_banned" }, 403);
+      }
+
+      const card = await db.prepare(
+        "SELECT duration_days FROM vip_activation_codes_mb WHERE code = ? AND used_at IS NULL",
+      ).bind(code).first<{ duration_days: number }>();
+      if (!card) return json({ ok: false, error: "invalid_or_used_vip_card" }, 409);
+
+      const now = new Date();
+      const usedAt = beijingTimestamp(now);
+      const results = await db.batch([
+        db.prepare(
+          `UPDATE vip_activation_codes_mb
+              SET used_at = ?, used_by_user_id = ?, used_by_uid = ?
+            WHERE code = ? AND used_at IS NULL
+              AND EXISTS (SELECT 1 FROM users_mb WHERE id = ? AND status = 'active')`,
+        ).bind(usedAt, identity.userId, identity.uid, code, identity.userId),
+        db.prepare(
+          `UPDATE users_mb
+              SET vip_expires_at = strftime(
+                '%Y-%m-%dT%H:%M:%S+08:00',
+                MAX(COALESCE(unixepoch(vip_expires_at), 0), unixepoch(?)) + ? * 86400,
+                'unixepoch', '+8 hours'
+              )
+            WHERE id = ? AND status = 'active' AND changes() > 0`,
+        ).bind(usedAt, Number(card.duration_days), identity.userId),
+      ]);
+      if (!results[0].meta || Number(results[0].meta.changes) < 1) {
+        return json({ ok: false, error: "invalid_or_used_vip_card" }, 409);
+      }
+      if (!results[1].meta || Number(results[1].meta.changes) < 1) {
+        throw new Error("vip_activation_update_failed");
+      }
+
+      return json({
+        ok: true,
+        account: publicAccount(await readD1UserWithTraffic(env, identity.userId)),
+        addedDays: Number(card.duration_days),
       });
     }
 

@@ -236,6 +236,9 @@ function addSubscriptionGroup(group) {
   const allowedAccountTypes = Array.isArray(group.allowedAccountTypes)
     ? group.allowedAccountTypes
     : ['guest', 'formal'];
+  const allowedMembershipTypes = Array.isArray(group.allowedMembershipTypes)
+    ? group.allowedMembershipTypes
+    : ['member', 'non_member'];
   // 保留原有字段作为保存数据源，右侧编辑器只同步到这些字段，不改变接口结构。
   row.innerHTML = '<div class="subscription-group-heading">' +
     '<div class="subscription-group-title">' +
@@ -267,6 +270,11 @@ function addSubscriptionGroup(group) {
     '<fieldset><legend>账户类型</legend>' +
       '<label class="check"><input data-field="allowedAccountTypes" type="checkbox" value="guest" ' + (allowedAccountTypes.includes('guest') ? 'checked' : '') + '>游客</label>' +
       '<label class="check"><input data-field="allowedAccountTypes" type="checkbox" value="formal" ' + (allowedAccountTypes.includes('formal') ? 'checked' : '') + '>正式用户</label>' +
+    '</fieldset>' +
+    '<fieldset><legend>会员状态</legend>' +
+      '<label class="check"><input data-field="allowedMembershipTypes" type="checkbox" value="member" ' + (allowedMembershipTypes.includes('member') ? 'checked' : '') + '>会员</label>' +
+      '<label class="check"><input data-field="allowedMembershipTypes" type="checkbox" value="non_member" ' + (allowedMembershipTypes.includes('non_member') ? 'checked' : '') + '>非会员</label>' +
+      '<small>会员状态根据账户 VIP 有效期判断。</small>' +
     '</fieldset>' +
     '<fieldset class="subscription-version-range"><legend>App 版本区间（包含边界）</legend>' +
       '<label><span>左侧 · 最低</span><input data-field="minAppVersion" type="text" list="subscriptionAppVersionOptions" placeholder="不限制"></label>' +
@@ -1425,6 +1433,7 @@ function fillState(state, section) {
           : 'normal';
       setRegistrationMode(registrationMode);
       loadRegistrationCodes();
+      loadVipCodes();
     }
     if (!section || section === 'notice') {
       const notice = currentState.notice || {};
@@ -1476,6 +1485,8 @@ function readSubscriptionGroups() {
       allowedStatuses: Array.from(group.querySelectorAll('[data-field="allowedStatuses"]:checked'))
         .map(function(input) { return input.value; }),
       allowedAccountTypes: Array.from(group.querySelectorAll('[data-field="allowedAccountTypes"]:checked'))
+        .map(function(input) { return input.value; }),
+      allowedMembershipTypes: Array.from(group.querySelectorAll('[data-field="allowedMembershipTypes"]:checked'))
         .map(function(input) { return input.value; }),
       updateEnabled: group.querySelector('[data-field="updateEnabled"]').checked,
       cacheMinutes: Number(group.querySelector('[data-field="groupCacheMinutes"]').value || 0),
@@ -1623,6 +1634,72 @@ async function loadRegistrationCodes() {
     renderRegistrationCodes(data.codes);
   } catch (error) {
     host.innerHTML = '<div class="error-state">注册码读取失败</div>';
+  }
+}
+
+function renderVipCodes(codes) {
+  const host = el('vipCodesTable');
+  if (!host) return;
+  const rows = Array.isArray(codes) ? codes : [];
+  if (!rows.length) {
+    host.innerHTML = '<div class="loading-state">暂无 VIP 卡密</div>';
+    return;
+  }
+  host.innerHTML = '<table class="security-account-table" aria-label="VIP 卡密">' +
+    '<thead><tr><th>卡密</th><th>状态</th><th>有效时长</th><th>发放时间</th><th>兑换时间</th><th>使用账户 UID</th></tr></thead>' +
+    '<tbody>' + rows.map(function(row) {
+      return '<tr><td><span class="registration-code-cell"><code>' + esc(row.code || '') + '</code>' +
+        '<button class="registration-code-copy" type="button" title="复制 VIP 卡密" aria-label="复制 VIP 卡密" data-vip-code="' + esc(row.code || '') + '" onclick="copyVipCode(this.dataset.vipCode)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg></button></span></td>' +
+        '<td>' + (row.used ? '已兑换' : '未使用') + '</td>' +
+        '<td>' + Number(row.durationDays || 0) + ' 天</td>' +
+        '<td>' + esc(row.createdAt || '-') + '</td>' +
+        '<td>' + esc(row.usedAt || '-') + '</td>' +
+        '<td><code>' + esc(row.usedByUid || '-') + '</code></td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+async function loadVipCodes() {
+  const host = el('vipCodesTable');
+  if (!host || !adminToken) return;
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/vip-codes?limit=200', {
+      headers: headers(),
+      cache: 'no-store'
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    renderVipCodes(data.codes);
+  } catch (error) {
+    host.innerHTML = '<div class="error-state">VIP 卡密读取失败</div>';
+  }
+}
+
+async function issueVipCodes() {
+  const count = Number(value('vipCodeCount') || 1);
+  const durationDays = Number(value('vipCodeDurationDays') || 30);
+  if (!Number.isInteger(count) || count < 1 || count > 100) {
+    return show('一次最多发放 100 个 VIP 卡密', true);
+  }
+  if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 36500) {
+    return show('VIP 有效天数必须是 1 到 36500 之间的整数', true);
+  }
+  const response = await fetch(ADMIN_API_BASE + '/vip-codes', {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({count: count, durationDays: durationDays})
+  });
+  const data = await response.json();
+  if (!response.ok) return show(adminErrorMessage(data.error, 'VIP 卡密发放失败'), true);
+  show('已发放 ' + (data.codes || []).length + ' 张 VIP 卡密，每张有效 ' + durationDays + ' 天');
+  await loadVipCodes();
+}
+
+async function copyVipCode(code) {
+  try {
+    await navigator.clipboard.writeText(String(code || ''));
+    show('VIP 卡密已复制');
+  } catch (error) {
+    show('复制失败，请手动复制 VIP 卡密', true);
   }
 }
 

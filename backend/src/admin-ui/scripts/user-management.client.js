@@ -54,6 +54,15 @@ function adminUserDisplayUid(uid) {
   return adminUserUidHidden ? '••••••••' : uid;
 }
 
+function adminUserVipLabel(user) {
+  const expiresAt = String(user.vipExpiresAt || '');
+  if (!user.vipActive && !expiresAt) return '';
+  const label = user.vipActive ? 'VIP 有效至 ' : 'VIP 已过期 · ';
+  const displayTime = expiresAt.replace('T', ' ').replace(/(?:Z|[+-]\d{2}:\d{2})$/, '').slice(0, 16);
+  return '<small class="user-admin-vip-status' + (user.vipActive ? ' active' : ' expired') + '">' +
+    label + esc(displayTime || '-') + '</small>';
+}
+
 function adminUserSecurity(user) {
   const accounts = adminUserData && Array.isArray(adminUserData.securityAccounts)
     ? adminUserData.securityAccounts : [];
@@ -230,6 +239,7 @@ function renderAdminUsers() {
       '<td><input class="user-admin-checkbox" type="checkbox" data-admin-user-select="' + esc(uid) + '"' + (adminUserSelection.has(uid) ? ' checked' : '') + ' aria-label="选择用户 ' + esc(nickname) + '"></td>' +
       '<td class="user-admin-identity"><button class="user-detail-link" type="button" data-admin-user-detail="' + esc(uid) + '">' + esc(nickname) + '</button>' +
         '<small>' + esc(user.email || '游客账户') + '</small>' +
+        adminUserVipLabel(user) +
         (!adminUserUidHidden ? '<code>' + esc(uid) + '</code>' : '') +
         (adminUserDirty.has(uid) ? '<span class="draft-badge">未保存</span>' : '') + '</td>' +
       '<td><span class="user-status-badge ' + (banned ? 'banned' : 'active') + '">' + (banned ? '封禁' : '正常') + '</span></td>' +

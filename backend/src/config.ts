@@ -51,6 +51,18 @@ BEGIN
          used_by_uid = NEW.uid
    WHERE id = NEW.registration_code_id;
 END`;
+const VIP_ACTIVATION_CODE_SCHEMA = `CREATE TABLE IF NOT EXISTS vip_activation_codes_mb (
+  id INTEGER PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  duration_days INTEGER NOT NULL CHECK (duration_days BETWEEN 1 AND 36500),
+  created_at TEXT NOT NULL,
+  used_at TEXT,
+  used_by_user_id INTEGER,
+  used_by_uid TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY (used_by_user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+)`;
+const VIP_ACTIVATION_CODE_INDEX = `CREATE INDEX IF NOT EXISTS idx_vip_activation_codes_mb_status
+  ON vip_activation_codes_mb(used_at, created_at DESC, id DESC)`;
 const SYSTEM_LOG_PAYLOADS_SCHEMA = `CREATE TABLE IF NOT EXISTS system_log_payload_parts_mb (
   request_id TEXT NOT NULL,
   occurred_at TEXT NOT NULL,
@@ -62,7 +74,7 @@ const SYSTEM_LOG_PAYLOADS_SCHEMA = `CREATE TABLE IF NOT EXISTS system_log_payloa
 const SYSTEM_LOG_PAYLOADS_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_log_payload_parts_occurred_mb
   ON system_log_payload_parts_mb(occurred_at)`;
 
-export const USER_SCHEMA_VERSION = 16;
+export const USER_SCHEMA_VERSION = 17;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -77,6 +89,7 @@ export const USER_SCHEMA_STATEMENTS = [
       CHECK (status IN ('active', 'banned')),
     email TEXT COLLATE NOCASE,
     password_hash TEXT NOT NULL DEFAULT '',
+    vip_expires_at TEXT,
     created_at TEXT NOT NULL,
     created_day TEXT GENERATED ALWAYS AS (substr(created_at, 1, 10)) VIRTUAL
   )`,
@@ -100,6 +113,8 @@ export const USER_SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_registration_codes_mb_status
     ON registration_codes_mb(use_count, max_uses, created_at DESC, id DESC)`,
+  VIP_ACTIVATION_CODE_SCHEMA,
+  VIP_ACTIVATION_CODE_INDEX,
   REGISTRATION_CODE_USAGE_SCHEMA,
   REGISTRATION_CODE_USAGE_INDEX,
   REGISTRATION_CODE_USAGE_VALIDATE_TRIGGER,
@@ -425,6 +440,11 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
   16: [
     SYSTEM_LOG_PAYLOADS_SCHEMA,
     SYSTEM_LOG_PAYLOADS_INDEX,
+  ],
+  17: [
+    `ALTER TABLE users_mb ADD COLUMN vip_expires_at TEXT`,
+    VIP_ACTIVATION_CODE_SCHEMA,
+    VIP_ACTIVATION_CODE_INDEX,
   ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {

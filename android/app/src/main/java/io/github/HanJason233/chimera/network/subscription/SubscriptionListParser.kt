@@ -66,6 +66,7 @@ class SubscriptionListParser {
         )
         val allowedStatuses = readStringList(source, "allowedStatuses")
         val allowedAccountTypes = readStringList(source, "allowedAccountTypes")
+        val allowedMembershipTypes = readStringList(source, "allowedMembershipTypes")
         val minAppVersion = readString(source, "minAppVersion")?.trim().orEmpty()
         val maxAppVersion = readString(source, "maxAppVersion")?.trim().orEmpty()
         return SubscriptionSource(
@@ -76,6 +77,7 @@ class SubscriptionListParser {
             minAccountType = minAccountType.ifBlank { DEFAULT_MIN_ACCOUNT_TYPE },
             allowedStatuses = allowedStatuses,
             allowedAccountTypes = allowedAccountTypes,
+            allowedMembershipTypes = allowedMembershipTypes,
             minAppVersion = minAppVersion,
             maxAppVersion = maxAppVersion
         )

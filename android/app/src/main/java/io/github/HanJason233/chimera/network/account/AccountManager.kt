@@ -17,12 +17,15 @@ import io.github.HanJason233.chimera.data.model.AccountInfo
 import io.github.HanJason233.chimera.data.model.AccountTrafficInfo
 import io.github.HanJason233.chimera.data.model.AccountTrafficPeriod
 import io.github.HanJason233.chimera.data.model.AccountLoginRequest
+import io.github.HanJason233.chimera.data.model.AccountVipActivationRequest
 import io.github.HanJason233.chimera.data.model.AccountProfileUpdateRequest
 import io.github.HanJason233.chimera.data.model.AccountRegisterRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportResponse
 import java.security.MessageDigest
+import java.time.OffsetDateTime
 import java.util.UUID
+import org.json.JSONObject
 
 /** Registers this installation and keeps the current banned/guest/formal account identity. */
 class AccountManager(private val context: Context) {
@@ -64,6 +67,35 @@ class AccountManager(private val context: Context) {
 
     suspend fun syncCurrentAccount(timeoutMs: Long = 25000L): Result<AccountInfo> =
         register(timeoutMs)
+
+    suspend fun activateVipCard(code: String, timeoutMs: Long = 10000L): Result<AccountInfo> {
+        if (currentAccount() == null) {
+            return Result.failure(IllegalStateException("account_not_synced"))
+        }
+        val normalizedCode = code.trim().uppercase().replace("-", "").replace(" ", "")
+        if (!normalizedCode.matches(Regex("^VIP[A-HJ-NP-Z2-9]{12}$"))) {
+            return Result.failure(IllegalArgumentException("invalid_vip_activation_request"))
+        }
+        if (currentAccount()?.accountType == "banned") {
+            return Result.failure(IllegalStateException("account_banned"))
+        }
+        return runCatching {
+            val response = withTimeout(timeoutMs.coerceIn(5000L, 30000L)) {
+                NetworkClient.apiService.activateVip(
+                    accountEndpoint("/api/account/activate-vip"),
+                    AccountVipActivationRequest(accountId(), normalizedCode)
+                )
+            }
+            if (!response.isSuccessful) {
+                val errorBody = response.errorBody()?.string().orEmpty()
+                val errorCode = runCatching { JSONObject(errorBody).optString("error") }.getOrDefault("")
+                throw IllegalStateException(errorCode.ifBlank { "vip_activation_failed" })
+            }
+            val account = response.body()?.account ?: throw IllegalStateException("account_response_missing")
+            persistAccount(account)
+            account
+        }
+    }
 
     suspend fun updateNickname(nickname: String, timeoutMs: Long = 10000L): Result<AccountInfo> {
         if (currentAccount() == null) {
@@ -240,6 +272,7 @@ class AccountManager(private val context: Context) {
             lastReportAt = preferences.getString(TRAFFIC_LAST_REPORT_AT_KEY, null)
                 ?.takeIf { it.isNotBlank() }
         )
+        val vipExpiresAt = preferences.getString(VIP_EXPIRES_AT_KEY, null)?.takeIf { it.isNotBlank() }
         return AccountInfo(
             uid = uid,
             nickname = preferences.getString(ACCOUNT_NICKNAME_KEY, null)
@@ -252,6 +285,8 @@ class AccountManager(private val context: Context) {
             androidSdk = preferences.getInt(ACCOUNT_ANDROID_SDK_KEY, 0),
             appVersion = preferences.getString(ACCOUNT_APP_VERSION_KEY, "").orEmpty(),
             deviceBlocked = preferences.getBoolean(ACCOUNT_DEVICE_BLOCKED_KEY, false),
+            vipActive = vipExpiresAt?.let(::isVipExpiryActive) ?: false,
+            vipExpiresAt = vipExpiresAt,
             traffic = traffic
         )
     }
@@ -279,12 +314,18 @@ class AccountManager(private val context: Context) {
             .putInt(ACCOUNT_ANDROID_SDK_KEY, normalized.androidSdk)
             .putString(ACCOUNT_APP_VERSION_KEY, normalized.appVersion)
             .putBoolean(ACCOUNT_DEVICE_BLOCKED_KEY, normalized.deviceBlocked)
+            .putBoolean(VIP_ACTIVE_KEY, normalized.vipActive)
+            .putString(VIP_EXPIRES_AT_KEY, normalized.vipExpiresAt.orEmpty())
             .putTrafficPeriod(TRAFFIC_TODAY_PREFIX, traffic.today)
             .putTrafficPeriod(TRAFFIC_MONTH_PREFIX, traffic.month)
             .putTrafficPeriod(TRAFFIC_TOTAL_PREFIX, traffic.total)
             .putString(TRAFFIC_LAST_REPORT_AT_KEY, traffic.lastReportAt.orEmpty())
             .apply()
     }
+
+    private fun isVipExpiryActive(value: String): Boolean = runCatching {
+        OffsetDateTime.parse(value).toInstant().toEpochMilli() > System.currentTimeMillis()
+    }.getOrDefault(false)
 
     private fun android.content.SharedPreferences.Editor.putTrafficPeriod(
         prefix: String,
@@ -311,6 +352,8 @@ class AccountManager(private val context: Context) {
         const val ACCOUNT_ANDROID_SDK_KEY = "account_android_sdk"
         const val ACCOUNT_APP_VERSION_KEY = "account_app_version"
         const val ACCOUNT_DEVICE_BLOCKED_KEY = "account_device_blocked"
+        const val VIP_ACTIVE_KEY = "vip_active"
+        const val VIP_EXPIRES_AT_KEY = "vip_expires_at"
         const val TRAFFIC_TODAY_PREFIX = "traffic_today"
         const val TRAFFIC_MONTH_PREFIX = "traffic_month"
         const val TRAFFIC_TOTAL_PREFIX = "traffic_total"

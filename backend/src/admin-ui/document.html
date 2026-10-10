@@ -504,6 +504,16 @@
         <div id="registrationCodesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取注册码</div></div>
         <small class="hint">每个注册码可在设定次数内成功注册，达到使用上限后自动失效。</small>
       </section>
+      <section class="settings-section">
+        <h3 class="settings-section-title">VIP 卡密</h3>
+        <p class="settings-section-description">卡密单次兑换。已有 VIP 的用户兑换后，新增时长会接在当前有效期后。</p>
+        <div class="registration-code-issue-row">
+          <div class="field"><label for="vipCodeCount">一次发放数量</label><input id="vipCodeCount" type="number" min="1" max="100" step="1" value="1"></div>
+          <div class="field"><label for="vipCodeDurationDays">VIP 有效天数</label><input id="vipCodeDurationDays" type="number" min="1" max="36500" step="1" value="30"></div>
+          <button type="button" onclick="issueVipCodes()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 14.8 8l6.2.9-4.5 4.4 1.1 6.2L12 16.6l-5.6 2.9 1.1-6.2L3 8.9 9.2 8z"/></svg>发放 VIP 卡密</button>
+        </div>
+        <div id="vipCodesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取 VIP 卡密</div></div>
+      </section>
     </div>
   </section>
   <dialog id="registrationCodeUsagesDialog" class="registration-code-usages-dialog" aria-labelledby="registrationCodeUsagesTitle">

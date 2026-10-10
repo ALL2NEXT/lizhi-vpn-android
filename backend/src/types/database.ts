@@ -27,6 +27,7 @@ export interface UserRow extends Partial<DeviceFields>, Partial<TrafficFields> {
   status: UserStatus;
   email: string | null;
   password_hash: string;
+  vip_expires_at?: string | null;
   created_at: string;
   device_brand?: string | null;
   device_model?: string | null;

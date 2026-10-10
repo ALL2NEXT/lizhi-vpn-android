@@ -14,6 +14,8 @@ data class SubscriptionSource(
     val allowedStatuses: List<String>? = null,
     /** 新版后台按邮箱绑定情况控制访问；为空时表示旧版接口没有返回该规则。 */
     val allowedAccountTypes: List<String>? = null,
+    /** Group membership eligibility; null keeps compatibility with older backends. */
+    val allowedMembershipTypes: List<String>? = null,
     /** 分组要求的最低客户端版本。 */
     val minAppVersion: String = "",
     /** 分组允许访问的最高客户端版本；空值表示不设上限。 */

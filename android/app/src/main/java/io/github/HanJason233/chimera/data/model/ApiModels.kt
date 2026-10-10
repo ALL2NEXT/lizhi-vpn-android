@@ -169,6 +169,14 @@ data class AccountLoginRequest(
     val androidSdk: Int
 )
 
+data class AccountVipActivationRequest(
+    @SerializedName("deviceId")
+    val deviceId: String,
+
+    @SerializedName("code")
+    val code: String
+)
+
 data class AccountDeleteRequest(
     @SerializedName("deviceId")
     val deviceId: String,
@@ -218,6 +226,12 @@ data class AccountInfo(
 
     @SerializedName("deviceBlocked")
     val deviceBlocked: Boolean = false,
+
+    @SerializedName("vipActive")
+    val vipActive: Boolean = false,
+
+    @SerializedName("vipExpiresAt")
+    val vipExpiresAt: String? = null,
 
     @SerializedName("traffic")
     val traffic: AccountTrafficInfo? = null

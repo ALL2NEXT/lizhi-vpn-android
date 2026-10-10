@@ -374,6 +374,9 @@
      .system-logs-page-buttons button:disabled { color: #a5afbf; background: #f8fafd; cursor: default; }
      .system-logs-page-ellipsis { padding: 0 4px; }
      .system-logs-page-size { justify-self: end; margin: 0; }
+     .user-admin-identity .user-admin-vip-status { display: inline-flex; width: fit-content; align-items: center; margin-top: 3px; padding: 2px 6px; border-radius: 5px; font-size: 11px; line-height: 1.4; }
+     .user-admin-vip-status.active { color: #805500; background: #fff2cf; }
+     .user-admin-vip-status.expired { color: #68758a; background: #eef1f5; }
      .system-logs-page-size select { min-height: 34px; padding: 5px 8px; border: 1px solid #dbe3ed; border-radius: 7px; color: #34445b; background: #fff; font-size: 12px; }
      .system-log-detail-drawer { position: fixed; z-index: 10000; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column; box-sizing: border-box; width: min(470px, 46vw); min-width: 380px; padding: 0; overflow: hidden; color: var(--ink, #172238); background: var(--surface, #fff); border: 0; border-left: 1px solid #e0e7f0; box-shadow: -10px 0 30px rgb(28 43 65 / 10%); }
      .system-log-detail-drawer[hidden] { display: none; }

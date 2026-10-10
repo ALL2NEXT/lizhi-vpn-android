@@ -17,6 +17,7 @@ interface GroupRow {
   enabled: number;
   allowed_statuses_json: string;
   allowed_account_types_json: string;
+  allowed_membership_types_json: string;
   update_enabled: number;
   cache_minutes: number;
   min_app_version: string;
@@ -127,7 +128,8 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
        FROM subscription_sources ORDER BY group_id, source_order, id`;
   const [groupResult, sourceResult] = await db.batch([
     db.prepare(`SELECT id, group_order, name, group_type, enabled,
-        allowed_statuses_json, allowed_account_types_json, update_enabled, cache_minutes,
+        allowed_statuses_json, allowed_account_types_json, allowed_membership_types_json,
+        update_enabled, cache_minutes,
         min_app_version, max_app_version, max_users_per_subscription, reset_period_days
       FROM subscription_groups ORDER BY group_order, id`),
     db.prepare(sourceQuery),
@@ -160,6 +162,7 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
     enabled: row.enabled === 1,
     allowedStatuses: parseJsonArray(row.allowed_statuses_json, ["normal", "banned"]) as SubscriptionGroup["allowedStatuses"],
     allowedAccountTypes: parseJsonArray(row.allowed_account_types_json, ["guest", "formal"]) as SubscriptionGroup["allowedAccountTypes"],
+    allowedMembershipTypes: parseJsonArray(row.allowed_membership_types_json, ["member", "non_member"]) as SubscriptionGroup["allowedMembershipTypes"],
     updateEnabled: row.update_enabled === 1,
     cacheMinutes: row.cache_minutes,
     minAppVersion: row.min_app_version,
@@ -206,6 +209,7 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
       enabled: group.enabled ? 1 : 0,
       allowed_statuses_json: JSON.stringify(group.allowedStatuses),
       allowed_account_types_json: JSON.stringify(group.allowedAccountTypes),
+      allowed_membership_types_json: JSON.stringify(group.allowedMembershipTypes),
       update_enabled: group.updateEnabled ? 1 : 0,
       cache_minutes: group.cacheMinutes,
       min_app_version: group.minAppVersion,
@@ -260,13 +264,14 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
 
   const groupInsertSql = `INSERT INTO subscription_groups
     (id, group_order, name, group_type, encryption_mode, enabled, allowed_statuses_json,
-     allowed_account_types_json, update_enabled, cache_minutes, min_app_version,
+     allowed_account_types_json, allowed_membership_types_json, update_enabled, cache_minutes, min_app_version,
      max_app_version, max_users_per_subscription, reset_period_days)
     SELECT json_extract(j.value, '$.id'), json_extract(j.value, '$.group_order'),
       json_extract(j.value, '$.name'), json_extract(j.value, '$.group_type'),
       json_extract(j.value, '$.encryption_mode'),
       json_extract(j.value, '$.enabled'), json_extract(j.value, '$.allowed_statuses_json'),
-      json_extract(j.value, '$.allowed_account_types_json'), json_extract(j.value, '$.update_enabled'),
+      json_extract(j.value, '$.allowed_account_types_json'),
+      json_extract(j.value, '$.allowed_membership_types_json'), json_extract(j.value, '$.update_enabled'),
       json_extract(j.value, '$.cache_minutes'), json_extract(j.value, '$.min_app_version'),
       json_extract(j.value, '$.max_app_version'), json_extract(j.value, '$.max_users_per_subscription'),
       json_extract(j.value, '$.reset_period_days')

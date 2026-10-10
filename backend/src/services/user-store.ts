@@ -220,24 +220,26 @@ export async function readDeviceContextFromDb(db: D1Database, deviceId: string) 
 export async function resolveAccountAccess(env: Env, deviceId: string): Promise<{
   accountStatus: SubscriptionAccountStatus;
   accountType: Exclude<AccountType, "banned">;
+  vipActive: boolean;
   appVersion: string;
   registered: boolean;
 }> {
   // 读取原始设备状态，封禁账号仍需根据邮箱类型参与分组的 AND 权限判断。
   const identity = await readDeviceContext(env, deviceId);
   if (!identity || identity.userId <= 0) {
-    return { accountStatus: "banned", accountType: "guest", appVersion: "", registered: false };
+    return { accountStatus: "banned", accountType: "guest", vipActive: false, appVersion: "", registered: false };
   }
   const db = await ensureUserSchema(env);
   const row = await db.prepare(
-    "SELECT status, email FROM users_mb WHERE id = ?",
-  ).bind(identity.userId).first<Pick<UserRow, "status" | "email">>();
+    "SELECT status, email, vip_expires_at FROM users_mb WHERE id = ?",
+  ).bind(identity.userId).first<Pick<UserRow, "status" | "email" | "vip_expires_at">>();
   if (!row || !(row.status === "active" || row.status === "banned")) {
-    return { accountStatus: "banned", accountType: "guest", appVersion: "", registered: false };
+    return { accountStatus: "banned", accountType: "guest", vipActive: false, appVersion: "", registered: false };
   }
   return {
     accountStatus: row.status === "banned" || identity.deviceBanned ? "banned" : "normal",
     accountType: cleanText(row.email) ? "formal" : "guest",
+    vipActive: Date.parse(cleanText(row.vip_expires_at)) > Date.now(),
     appVersion: cleanText(identity.appVersion),
     registered: true,
   };
@@ -337,6 +339,8 @@ export function rowToUser(row: AccountRow, settings?: Settings): User {
     androidSdk: normalizeAndroidSdk(row.device_android_sdk ?? row.android_sdk),
     appVersion: cleanText(row.device_app_version ?? row.app_version),
     createdAt: cleanText(row.created_at),
+    vipExpiresAt: cleanText(row.vip_expires_at) || null,
+    vipActive: Date.parse(cleanText(row.vip_expires_at)) > Date.now(),
   };
 }
 
@@ -358,6 +362,8 @@ export function publicAccount(user: User | null): PublicAccount {
     androidSdk: normalizeAndroidSdk(user.androidSdk),
     appVersion: user.appVersion,
     deviceBlocked: Boolean(user.deviceBlocked),
+    vipActive: user.vipActive,
+    vipExpiresAt: user.vipExpiresAt,
   };
   if (user.traffic) account.traffic = user.traffic;
   return account;

@@ -1,6 +1,7 @@
 export type AccountType = "banned" | "guest" | "formal";
 export type UserStatus = "active" | "banned";
 export type SubscriptionAccountStatus = "normal" | "banned";
+export type SubscriptionMembershipStatus = "member" | "non_member";
 export type GrowthPeriod = "day" | "week" | "month";
 export type JsonObject = Record<string, unknown>;
 
@@ -25,6 +26,7 @@ export interface SubscriptionGroup {
   enabled: boolean;
   allowedStatuses: SubscriptionAccountStatus[];
   allowedAccountTypes: Exclude<AccountType, "banned">[];
+  allowedMembershipTypes: SubscriptionMembershipStatus[];
   updateEnabled: boolean;
   cacheMinutes: number;
   minAppVersion: string;
@@ -103,6 +105,7 @@ export interface DeviceContext {
 export interface SubscriptionAccess {
   accountStatus: SubscriptionAccountStatus;
   accountType: Exclude<AccountType, "banned">;
+  vipActive: boolean;
   appVersion: string;
   registered: boolean;
 }
@@ -131,6 +134,8 @@ export interface User {
   androidSdk: number;
   appVersion: string;
   createdAt: string;
+  vipActive: boolean;
+  vipExpiresAt: string | null;
   deviceBlocked?: boolean;
   traffic?: AccountTraffic;
 }

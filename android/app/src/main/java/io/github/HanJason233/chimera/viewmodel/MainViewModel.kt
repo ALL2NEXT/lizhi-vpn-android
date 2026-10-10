@@ -266,6 +266,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val backendSettings = subscriptionDataLoader.backendSettings
 
     val accountInfo = accountManager.accountInfo
+    private val _isActivatingVip = MutableStateFlow(false)
+    val isActivatingVip = _isActivatingVip.asStateFlow()
     private val _isUpdatingNickname = MutableStateFlow(false)
 
     val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
@@ -2943,7 +2945,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateNickname(nickname: String) {
-        if (_isUpdatingNickname.value) return
+        if (_isUpdatingNickname.value || _isActivatingVip.value) return
         viewModelScope.launch {
             _isUpdatingNickname.value = true
             _accountMessage.value = null
@@ -2965,13 +2967,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun activateVipCard(code: String) {
+        if (
+            _isActivatingVip.value || _isSyncingAccount.value || _isUpdatingNickname.value ||
+            _isBindingAccount.value || _isSwitchingAccount.value || _isDeletingAccount.value
+        ) return
+        viewModelScope.launch {
+            _isActivatingVip.value = true
+            _accountMessage.value = null
+            try {
+                accountManager.activateVipCard(
+                    code = code,
+                    timeoutMs = serviceRequestTimeoutMs.value
+                ).onSuccess {
+                    _accountMessage.value = "VIP 激活成功，有效期已更新"
+                }.onFailure { error ->
+                    Log.w(tag, "Failed to activate VIP card", error)
+                    _accountMessage.value = accountActionErrorMessage(error)
+                }
+            } finally {
+                _isActivatingVip.value = false
+            }
+        }
+    }
+
     fun syncCurrentAccount() {
         if (
             _isSyncingAccount.value ||
             _isUpdatingNickname.value ||
             _isBindingAccount.value ||
             _isSwitchingAccount.value ||
-            _isDeletingAccount.value
+            _isDeletingAccount.value ||
+            _isActivatingVip.value
         ) return
         viewModelScope.launch {
             _isSyncingAccount.value = true
@@ -3009,7 +3036,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         password: String,
         registrationCode: String = "",
     ) {
-        if (_isBindingAccount.value) return
+        if (_isBindingAccount.value || _isActivatingVip.value) return
         viewModelScope.launch {
             _isBindingAccount.value = true
             _accountMessage.value = null
@@ -3112,7 +3139,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun switchAccount(email: String, password: String) {
-        if (_isSwitchingAccount.value || _isDeletingAccount.value) return
+        if (_isSwitchingAccount.value || _isDeletingAccount.value || _isActivatingVip.value) return
         if (vpnState.value != VpnState.DISCONNECTED) {
             _accountMessage.value = "请先断开 VPN，再切换账户"
             return
@@ -3146,7 +3173,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteAccount(password: String, onDeleted: () -> Unit = {}) {
-        if (_isDeletingAccount.value || _isSwitchingAccount.value) return
+        if (_isDeletingAccount.value || _isSwitchingAccount.value || _isActivatingVip.value) return
         if (vpnState.value != VpnState.DISCONNECTED) {
             _accountMessage.value = "请先断开 VPN，再注销账户"
             return
@@ -3225,6 +3252,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "invalid_account_password" -> "当前账户密码错误"
             "account_banned" -> "账户已被封禁，无法切换"
             "account_not_found" -> "账户不存在，请重新同步账户"
+            "invalid_vip_activation_request" -> "VIP 卡密格式无效"
+            "invalid_or_used_vip_card" -> "VIP 卡密无效或已兑换"
+            "vip_activation_failed" -> "VIP 激活失败，请稍后重试"
             else -> error.message ?: "账户操作失败"
         }
     }

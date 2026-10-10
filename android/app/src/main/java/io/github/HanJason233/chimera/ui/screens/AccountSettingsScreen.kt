@@ -53,6 +53,7 @@ fun AccountSettingsScreen(
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val isSyncingAccount by viewModel.isSyncingAccount.collectAsStateWithLifecycle()
+    val isActivatingVip by viewModel.isActivatingVip.collectAsStateWithLifecycle()
     val isBindingAccount by viewModel.isBindingAccount.collectAsStateWithLifecycle()
     val isSwitchingAccount by viewModel.isSwitchingAccount.collectAsStateWithLifecycle()
     val isDeletingAccount by viewModel.isDeletingAccount.collectAsStateWithLifecycle()
@@ -66,6 +67,7 @@ fun AccountSettingsScreen(
         mutableStateOf(accountInfo?.email.orEmpty())
     }
     var registrationCode by remember(accountInfo?.uid) { mutableStateOf("") }
+    var vipCode by remember(accountInfo?.uid) { mutableStateOf("") }
     var password by remember(accountInfo?.uid) { mutableStateOf("") }
     var confirmPassword by remember(accountInfo?.uid) { mutableStateOf("") }
     var switchEmail by remember(accountInfo?.uid) { mutableStateOf("") }
@@ -101,6 +103,10 @@ fun AccountSettingsScreen(
         showDeleteConfirmation = false
     }
 
+    LaunchedEffect(accountInfo?.uid, accountInfo?.vipExpiresAt) {
+        vipCode = ""
+    }
+
     val normalizedNickname = nickname.trim()
     val canSaveNickname = account != null &&
         normalizedNickname.isNotBlank() &&
@@ -112,18 +118,30 @@ fun AccountSettingsScreen(
         !isUpdatingNickname &&
         !isBindingAccount &&
         !isSwitchingAccount &&
-        !isDeletingAccount
+        !isDeletingAccount &&
+        !isActivatingVip
     val canOpenBindDialog = account != null &&
         account.email.isBlank() &&
         account.accountType != "banned" &&
         backendSettings.registrationEnabled &&
         !isSyncingAccount &&
+        !isActivatingVip &&
         !isBindingAccount &&
         !isSwitchingAccount &&
         !isDeletingAccount
     val normalizedEmail = email.trim().lowercase()
     val normalizedRegistrationCode = registrationCode.trim().uppercase()
         .replace("-", "").replace(" ", "")
+    val normalizedVipCode = vipCode.trim().uppercase().replace("-", "").replace(" ", "")
+    val canActivateVip = account != null &&
+        account.accountType != "banned" &&
+        normalizedVipCode.matches(Regex("^VIP[A-HJ-NP-Z2-9]{12}$")) &&
+        !isActivatingVip &&
+        !isSyncingAccount &&
+        !isUpdatingNickname &&
+        !isBindingAccount &&
+        !isSwitchingAccount &&
+        !isDeletingAccount
     val canBindAccount = account != null &&
         account.email.isBlank() &&
         account.accountType != "banned" &&
@@ -227,6 +245,52 @@ fun AccountSettingsScreen(
                         label = "账户类型",
                         value = accountIdentityText(account)
                     )
+                }
+                AccountSettingsSection(title = "VIP 会员") {
+                    val vipExpiry = account.vipExpiresAt
+                    val formattedVipExpiry = vipExpiry
+                        ?.replace('T', ' ')
+                        ?.substringBefore('+')
+                        ?.take(19)
+                        ?.takeIf { it.isNotBlank() }
+                    AccountInfoRow(
+                        label = "会员状态",
+                        value = when {
+                            account.vipActive -> "VIP 已开通"
+                            formattedVipExpiry != null -> "VIP 已过期"
+                            else -> "未开通"
+                        }
+                    )
+                    if (formattedVipExpiry != null) {
+                        AccountInfoRow(label = "有效期至", value = formattedVipExpiry)
+                    }
+                    Text(
+                        text = if (account.vipActive) {
+                            "兑换卡密会在当前有效期后继续增加 VIP 时长。"
+                        } else {
+                            "输入管理员发放的 VIP 卡密，即可为当前账户开通会员。"
+                        },
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = vipCode,
+                        onValueChange = { value ->
+                            vipCode = value.uppercase().filterNot { it.isWhitespace() || it == '-' }.take(15)
+                        },
+                        label = { Text("VIP 卡密") },
+                        singleLine = true,
+                        enabled = account.accountType != "banned" && !isActivatingVip,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = { viewModel.activateVipCard(normalizedVipCode) },
+                        enabled = canActivateVip,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text(if (isActivatingVip) "兑换中…" else "激活 VIP")
+                    }
                 }
                 AccountSettingsSection(title = "流量信息") {
                     val traffic = account.traffic ?: AccountTrafficInfo()

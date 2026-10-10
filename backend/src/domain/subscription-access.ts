@@ -17,6 +17,10 @@ export function subscriptionGroupAccessError(
   if (!group.allowedAccountTypes.includes(access.accountType)) {
     return "account_access_denied";
   }
+  const membershipType = access.vipActive ? "member" : "non_member";
+  if (!group.allowedMembershipTypes.includes(membershipType)) {
+    return "account_access_denied";
+  }
   if (
     group.minAppVersion &&
     !isAppVersionAtLeast(access.appVersion, group.minAppVersion)

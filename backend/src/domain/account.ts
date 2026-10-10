@@ -88,6 +88,11 @@ export function normalizeRegistrationCode(value: unknown) {
   return /^[A-HJ-NP-Z2-9]{15}$/.test(code) ? code : "";
 }
 
+export function normalizeVipActivationCode(value: unknown) {
+  const code = cleanText(value).toUpperCase().replace(/[\s-]/g, "");
+  return /^VIP[A-HJ-NP-Z2-9]{12}$/.test(code) ? code : "";
+}
+
 export function randomRegistrationCode() {
   const bytes = new Uint8Array(12);
   crypto.getRandomValues(bytes);
