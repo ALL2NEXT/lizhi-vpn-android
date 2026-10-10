@@ -247,49 +247,123 @@
      .app-info-icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
      .app-info-label { display: inline-flex; align-items: center; gap: 7px; }
      .app-info-label svg { width: 19px; height: 19px; flex: 0 0 19px; fill: currentColor; color: #1a73e8; }
-     .system-logs-wrap { overflow: auto; border: 1px solid #dadce0; border-radius: 10px; background: #ffffff; }
-     .system-logs-table { width: 100%; min-width: 980px; border-collapse: collapse; font-size: 12px; }
-     .system-logs-table th, .system-logs-table td { padding: 10px 12px; text-align: left; vertical-align: top; border-right: 1px solid #dadce0; border-bottom: 1px solid #dadce0; }
-     .system-logs-table th { color: #5f6368; background: #f1f3f4; white-space: nowrap; }
-     .system-logs-table td { color: #202124; }
-     .system-logs-table code { color: #6941c6; }
-     .system-log-level-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-     .system-log-level-badge.success { color: #137333; background: #e6f4ea; }
-     .system-log-level-badge.failed { color: #b3261e; background: #fce8e6; }
-     .system-logs-empty { padding: 22px; color: #5f6368; text-align: center; }
+     .system-logs-wrap { overflow: auto; border: 1px solid #e1e8f0; border-radius: 10px; background: #fff; }
+     .system-logs-table { width: 100%; min-width: 1020px; border-collapse: collapse; font-size: 12px; }
+     .system-logs-table th, .system-logs-table td { padding: 9px 10px; text-align: left; vertical-align: middle; border-right: 0; border-bottom: 1px solid #e7edf4; }
+     .system-logs-table th { color: #526078; background: #f3f6fa; font-weight: 650; white-space: nowrap; }
+     .system-logs-table td { color: #26344a; }
+     .system-logs-table tbody tr { cursor: default; }
+     .system-logs-table tbody tr:hover td, .system-logs-table tbody tr.selected td { background: #eef5ff; }
+     .system-logs-table code { color: #50627f; font: inherit; }
+     .system-log-level-badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 750; line-height: 1; white-space: nowrap; }
+     .system-log-level-badge.info { color: #1260b4; background: #e7f1ff; }
+     .system-log-level-badge.warning { color: #a85a00; background: #fff1dc; }
+     .system-log-level-badge.error { color: #bd2028; background: #ffe7e8; }
+     .system-logs-empty { padding: 48px 22px; color: #687890; text-align: center; }
      .system-logs-heading { align-items: center; }
-     .system-logs-heading > button { margin: 0; }
-     .system-logs-manager-layout { grid-template-columns: 240px minmax(0, 1fr); min-height: 580px; }
-     .system-logs-category-option { grid-template-columns: 12px minmax(0, 1fr); gap: 10px; }
-     .system-log-type-mark { width: 9px; height: 9px; border-radius: 50%; background: #78869a; }
-     .system-log-type-mark.request { background: #1a73e8; }
+     .system-logs-heading-actions { display: flex; align-items: center; gap: 14px; }
+     .system-logs-heading-actions > button { margin: 0; }
+     .system-logs-auto-refresh { position: relative; display: inline-flex; align-items: center; gap: 8px; margin: 0; color: #526078; font-size: 12px; cursor: pointer; }
+     .system-logs-auto-refresh input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+     .system-logs-auto-refresh i { position: relative; display: inline-block; width: 38px; height: 22px; border-radius: 99px; background: #c6cfdb; transition: background .15s ease; }
+     .system-logs-auto-refresh i::after { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; content: ''; transition: transform .15s ease; box-shadow: 0 1px 2px #0002; }
+     .system-logs-auto-refresh input:checked + i { background: #1a73e8; }
+     .system-logs-auto-refresh input:checked + i::after { transform: translateX(16px); }
+     .system-logs-auto-refresh input:focus-visible + i { outline: 2px solid #1a73e8; outline-offset: 2px; }
+     .system-logs-stats { display: grid; flex: 0 0 auto; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 14px 14px 16px; }
+     .system-logs-stat-card { display: flex; align-items: center; gap: 14px; min-width: 0; min-height: 94px; padding: 16px 20px; border: 1px solid #e4eaf2; border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgb(40 62 92 / 3%); }
+     .system-logs-stat-icon { display: grid; flex: 0 0 44px; width: 44px; height: 44px; place-items: center; border-radius: 50%; font-size: 23px; font-weight: 700; }
+     .system-logs-stat-icon.blue { color: #1680ed; background: #e8f2ff; }
+     .system-logs-stat-icon.red { color: #eb3f49; background: #fff0f1; }
+     .system-logs-stat-icon.amber { color: #ee9300; background: #fff4df; }
+     .system-logs-stat-card > div { display: grid; min-width: 0; gap: 2px; }
+     .system-logs-stat-card strong { color: #33435c; font-size: 13px; }
+     .system-logs-stat-card b { color: #172238; font-size: 27px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+     .system-logs-stat-card b small { color: #64748b; font-size: 12px; font-weight: 500; }
+     .system-logs-stat-card small { color: #8a98ad; font-size: 11px; }
+     .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: 230px minmax(0, 1fr); gap: 10px; min-height: 540px; }
+     .system-logs-sidebar { align-self: stretch; }
+     .system-logs-sidebar .subscription-group-sidebar-heading h3 { font-size: 15px; }
+     .system-log-type-mark { display: inline-block; width: 10px; height: 10px; margin: 0 auto; border-radius: 50%; background: #7c8ba1; }
+     .system-log-type-mark.request { background: #2584ff; }
      .system-log-type-mark.operation { background: #8e63ce; }
      .system-log-type-mark.database { background: #f9ab00; }
-     .system-log-type-mark.outbound { background: #34a853; }
-     .system-logs-workspace { min-height: 0; }
-     .system-logs-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
-     .system-logs-toolbar input { flex: 1 1 300px; min-width: 180px; }
-     .system-logs-toolbar select { min-width: 132px; }
-     .system-logs-toolbar button { margin: 0; }
-     .system-logs-workspace .system-logs-toolbar { padding-bottom: 12px; margin-bottom: 0; border-bottom: 1px solid #e7edf4; }
-     .system-logs-summary { margin: 0 0 10px; color: #64748b; font-size: 13px; }
-     .system-logs-workspace .system-logs-summary { flex: 0 0 auto; margin: 10px 0; }
-     .system-logs-workspace .system-logs-wrap { flex: 1 1 auto; min-height: 180px; max-height: calc(100vh - 360px); }
-     .system-logs-table { min-width: 1120px; }
-     .system-logs-time { min-width: 160px; white-space: nowrap; }
-     .system-logs-path { min-width: 260px; max-width: 440px; }
-     .system-logs-path strong { display: block; font-weight: 600; }
-     .system-logs-path code { display: block; margin-top: 5px; color: #64748b; overflow-wrap: anywhere; }
-     .system-log-category { display: inline-flex; padding: 3px 8px; border-radius: 7px; color: #175ea8; background: #e8f0fe; white-space: nowrap; }
+     .system-log-type-mark.outbound { background: #20a69a; }
+     .tab-panel[data-panel="system-logs"] .system-logs-workspace { display: flex; min-height: 540px; padding: 0; }
+     .system-logs-browser { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+     .system-logs-toolbar { display: flex; align-items: center; flex-wrap: nowrap; gap: 9px; padding: 16px 18px 14px; }
+     .system-logs-toolbar input, .system-logs-toolbar select { box-sizing: border-box; min-width: 0; height: 40px; margin: 0; padding: 8px 10px; border-color: #d8e0eb; border-radius: 7px; color: #33435c; background: #fff; font-size: 12px; }
+     .system-logs-toolbar input[type="search"] { flex: 1 1 290px; }
+     .system-logs-toolbar select { flex: 0 1 140px; }
+     .system-logs-date-filter { flex: 0 1 150px; min-width: 125px; margin: 0; }
+     .system-logs-date-filter input { width: 100%; }
+     .system-logs-date-separator { flex: 0 0 auto; color: #8996a9; font-size: 12px; }
+     .system-logs-toolbar > button { flex: 0 0 auto; min-height: 40px; margin: 0; padding: 8px 16px; border: 1px solid #d8e0eb; color: #33435c; background: #fff; font-size: 12px; }
+     .system-logs-table-heading { min-height: 0; padding: 0 18px 10px; color: #72819a; font-size: 12px; }
+     .system-logs-browser .system-logs-wrap { flex: 1 1 auto; min-height: 180px; max-height: calc(100vh - 440px); }
+     .system-logs-time { min-width: 92px; color: #5e6e86 !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+     .system-log-category { display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 6px; color: #156cc2; background: #e9f3ff; font-size: 11px; white-space: nowrap; }
      .system-log-category.operation { color: #6941c6; background: #f0eafe; }
      .system-log-category.database { color: #9a5b00; background: #fff3d6; }
      .system-log-category.outbound { color: #087e8b; background: #e0f7fa; }
-     .system-log-level.warning { color: #9a5b00; background: #fff3d6; }
-     .system-log-detail summary { color: #1769aa; cursor: pointer; }
-     .system-log-detail pre { max-width: min(520px, 60vw); max-height: 220px; overflow: auto; margin: 8px 0 0; padding: 10px; color: #344054; background: #f6f8fb; border-radius: 7px; white-space: pre-wrap; overflow-wrap: anywhere; }
-     .system-logs-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 2px 0; color: #64748b; font-size: 13px; }
-     .system-logs-pagination > div { display: flex; gap: 8px; }
-     .system-logs-pagination button { margin: 0; }
+     .system-log-level.warning { color: #a85a00; background: #fff1dc; }
+     .system-log-level.error { color: #bd2028; background: #ffe7e8; }
+     .system-logs-path { display: flex; align-items: center; gap: 9px; min-width: 240px; max-width: 420px; }
+     .system-log-method { display: inline-flex; flex: 0 0 auto; align-items: center; padding: 4px 7px; border-radius: 5px; color: #34445b; background: #eef2f7; font-size: 11px; font-weight: 700; }
+     .system-log-path-text, .system-log-ip, .system-log-request-id { display: block; overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
+     .system-log-status { display: inline-flex; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+     .system-log-status.success { color: #16824c; background: #e4f6ec; }
+     .system-log-status.warning { color: #bd6500; background: #fff1dc; }
+     .system-log-status.error { color: #c32232; background: #ffe6e8; }
+     .system-log-status.neutral { color: #66758b; background: #eef2f7; }
+     .system-logs-duration { white-space: nowrap; font-variant-numeric: tabular-nums; }
+     .system-logs-duration.slow { color: #cf3037 !important; }
+     .system-log-view-button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; margin: 0; padding: 4px 2px; color: #1671df; background: transparent; font-size: 12px; }
+     .system-log-view-button:hover:not(:disabled) { color: #0c58b7; background: transparent; box-shadow: none; text-decoration: underline; }
+     .system-logs-pagination { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px 14px; color: #718099; font-size: 12px; }
+     .system-logs-page-buttons { display: flex; align-items: center; gap: 4px; }
+     .system-logs-page-buttons button { display: grid; min-width: 34px; min-height: 34px; place-items: center; margin: 0; padding: 5px 8px; color: #34445b; background: #fff; border: 1px solid #dbe3ed; font-size: 12px; }
+     .system-logs-page-buttons button.active { color: #1671df; background: #f1f7ff; border-color: #5b9bff; }
+     .system-logs-page-buttons button:disabled { color: #a5afbf; background: #f8fafd; cursor: default; }
+     .system-logs-page-ellipsis { padding: 0 4px; }
+     .system-logs-page-size { justify-self: end; margin: 0; }
+     .system-logs-page-size select { min-height: 34px; padding: 5px 8px; border: 1px solid #dbe3ed; border-radius: 7px; color: #34445b; background: #fff; font-size: 12px; }
+     .system-log-detail-drawer { position: fixed; z-index: 10000; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column; box-sizing: border-box; width: min(470px, 46vw); min-width: 380px; padding: 0; overflow: hidden; color: var(--ink, #172238); background: var(--surface, #fff); border: 0; border-left: 1px solid #e0e7f0; box-shadow: -10px 0 30px rgb(28 43 65 / 10%); }
+     .system-log-detail-drawer[hidden] { display: none; }
+     .system-log-drawer-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; min-height: 58px; padding: 0 20px; border-bottom: 1px solid #e7edf4; }
+     .system-log-drawer-header h3 { margin: 0; color: #172238; font-size: 18px; }
+     .system-log-drawer-close { display: grid; width: 34px; min-height: 34px; place-items: center; margin: 0; padding: 0; color: #526078; background: transparent; font-size: 24px; font-weight: 400; }
+     .system-log-drawer-close:hover:not(:disabled) { color: #172238; background: #f1f4f8; box-shadow: none; }
+     .system-log-drawer-summary { flex: 0 0 auto; padding: 14px 20px 4px; }
+     .system-log-drawer-badges { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+     .system-log-drawer-badges time { color: #526078; font-size: 12px; }
+     .system-log-drawer-route { display: flex; align-items: flex-start; gap: 12px; color: #152238; }
+     .system-log-drawer-route strong { min-width: 0; overflow-wrap: anywhere; font-size: 16px; font-weight: 600; }
+     .system-log-detail-tabs { display: flex; flex: 0 0 auto; gap: 18px; padding: 0 20px; margin-top: 10px; border-bottom: 1px solid #e7edf4; }
+     .system-log-detail-tabs button { position: relative; min-height: 42px; margin: 0; padding: 0 2px; color: #5e6d83; background: transparent; font-size: 12px; font-weight: 500; }
+     .system-log-detail-tabs button.active { color: #176fe0; }
+     .system-log-detail-tabs button.active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 3px; border-radius: 3px 3px 0 0; background: #2584ff; content: ''; }
+     .system-log-detail-tabs button:hover:not(:disabled) { color: #176fe0; background: transparent; box-shadow: none; }
+     .system-log-drawer-content { flex: 1 1 auto; min-height: 0; padding: 14px 20px 24px; overflow: auto; }
+     .system-log-detail-fields { display: grid; gap: 0; }
+     .system-log-detail-field { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: start; gap: 8px; min-height: 31px; padding: 5px 0; }
+     .system-log-detail-field > span { color: #70809a; font-size: 12px; }
+     .system-log-detail-field > div { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+     .system-log-detail-field strong { min-width: 0; color: #34445b; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+     .system-log-copy-inline { flex: 0 0 auto; min-height: 18px; margin: 0; padding: 0 3px; color: #66758b; background: transparent; font-size: 13px; }
+     .system-log-copy-inline:hover:not(:disabled) { color: #176fe0; background: transparent; box-shadow: none; }
+     .system-log-detail-note, .system-log-json-card { padding: 13px; border: 1px solid #e4eaf2; border-radius: 10px; background: #fff; }
+     .system-log-detail-note > strong, .system-log-json-heading > strong { color: #26364d; font-size: 13px; }
+     .system-log-detail-note p { margin: 8px 0 12px; color: #718099; font-size: 12px; }
+     .system-log-detail-note dl { display: grid; gap: 10px; margin: 0; }
+     .system-log-detail-note dl > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px; }
+     .system-log-detail-note dt { color: #718099; font-size: 12px; }
+     .system-log-detail-note dd { min-width: 0; margin: 0; color: #34445b; font-size: 12px; overflow-wrap: anywhere; }
+     .system-log-json-card { padding: 10px; }
+     .system-log-json-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+     .system-log-json-heading button { min-height: 30px; margin: 0; padding: 4px 8px; font-size: 11px; }
+     .system-log-json-card pre { max-height: calc(100vh - 210px); margin: 0; padding: 12px; overflow: auto; border-radius: 7px; color: #35445b; background: #f3f5f8; font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); border: 0; }
      .source-row .row-actions { display: flex; align-items: center; justify-content: space-between; }
      .source-row small { display: block; margin-top: 8px; }
      .security-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
@@ -1232,6 +1306,12 @@
       .subscription-manager-layout { grid-template-columns: 250px minmax(0, 1fr); }
       .subscription-list-toolbar { flex-wrap: wrap; }
       .subscription-list-search { flex-basis: 100%; }
+      .system-logs-toolbar { flex-wrap: wrap; }
+      .system-logs-toolbar input[type="search"] { flex: 1 1 100%; }
+      .system-logs-toolbar select { flex: 1 1 130px; }
+      .system-logs-date-filter { flex: 1 1 135px; }
+      .system-logs-stats { gap: 10px; }
+      .system-logs-stat-card { padding: 14px; }
       .source-list-header, .source-row { grid-template-columns: 15px 18px 25px minmax(74px, 1.2fr) minmax(76px, 1fr) 46px 42px 64px; }
       .source-list-header > :nth-child(6), .source-row > .source-expiry-cell,
       .source-list-header > :nth-child(7), .source-row > .source-row-remark { display: none; }
@@ -1246,15 +1326,25 @@
       .registration-code-issue-row { grid-template-columns: repeat(2, minmax(110px, 150px)); }
       .registration-code-issue-row > button { grid-column: 1 / -1; justify-self: start; }
       .registration-code-usages-dialog { width: calc(100% - 24px); padding: 16px; }
-      .system-logs-toolbar { align-items: stretch; }
-      .system-logs-toolbar input, .system-logs-toolbar select, .system-logs-toolbar button { flex-basis: 100%; width: 100%; }
+      .system-logs-heading { align-items: flex-start; flex-direction: column; }
+      .system-logs-heading-actions { width: 100%; justify-content: space-between; }
+      .system-logs-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .system-logs-stat-card { min-height: 76px; gap: 10px; padding: 10px; }
+      .system-logs-stat-icon { flex-basis: 36px; width: 36px; height: 36px; font-size: 19px; }
+      .system-logs-stat-card b { font-size: 22px; }
+      .system-logs-toolbar { align-items: stretch; flex-wrap: wrap; padding: 12px; }
+      .system-logs-toolbar input[type="search"], .system-logs-toolbar select,
+      .system-logs-date-filter, .system-logs-toolbar > button { flex: 1 1 100%; width: 100%; }
+      .system-logs-date-separator { display: none; }
       .system-logs-wrap { max-height: 60vh; }
-      .system-logs-pagination { align-items: flex-start; flex-direction: column; }
-      .system-logs-manager-layout { grid-template-columns: minmax(0, 1fr); min-height: 0; }
-      .system-logs-sidebar { min-height: 0; max-height: 250px; }
+      .system-logs-pagination { grid-template-columns: 1fr auto; align-items: start; }
+      .system-logs-pagination > span { grid-column: 1 / -1; }
+      .system-logs-page-buttons { flex-wrap: wrap; }
+      .system-log-detail-drawer { width: 100vw; min-width: 0; }
+      .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+      .system-logs-sidebar { min-height: 0; max-height: 180px; }
       .system-logs-sidebar .subscription-group-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .system-logs-workspace { min-height: 500px; }
-      .system-logs-workspace .system-logs-wrap { max-height: 60vh; }
+      .tab-panel[data-panel="system-logs"] .system-logs-workspace { min-height: 500px; padding: 0; }
       body.subscriptions-fullscreen, body.navigation-page-fullscreen { overflow: auto; }
       body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace,
       body.navigation-page-fullscreen #dashboard, body.navigation-page-fullscreen .dashboard-workspace { height: auto; min-height: 100vh; overflow: visible; }

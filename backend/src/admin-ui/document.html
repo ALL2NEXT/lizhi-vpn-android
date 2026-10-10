@@ -535,45 +535,60 @@
     <div class="dashboard-heading system-logs-heading">
       <div>
         <h2>系统日志</h2>
-        <p>记录 Worker 请求、后台管理操作，以及慢速或失败的 D1 和出站请求。保留 30 天；请求正文、认证信息和 SQL 参数不会保存。</p>
       </div>
-      <button class="secondary" type="button" onclick="loadSystemLogs(true)">刷新日志</button>
+      <div class="system-logs-heading-actions">
+        <button class="secondary" type="button" onclick="loadSystemLogs(true)">⟳ 刷新</button>
+        <label class="system-logs-auto-refresh"><span>自动刷新</span><span>10s</span><input id="systemLogsAutoRefreshToggle" type="checkbox" aria-label="每 10 秒自动刷新系统日志"><i aria-hidden="true"></i></label>
+      </div>
     </div>
     <div class="subscription-manager-layout system-logs-manager-layout">
       <aside class="subscription-group-sidebar system-logs-sidebar" aria-label="系统日志类型">
         <div class="subscription-group-sidebar-heading"><h3>日志类型</h3></div>
         <nav id="systemLogCategoryNavigation" class="subscription-group-navigation" aria-label="选择日志类型">
-          <button class="subscription-group-nav-item system-logs-category-option active" type="button" data-system-log-category="" aria-current="page"><span class="system-log-type-mark all" aria-hidden="true"></span><span class="subscription-nav-name">全部日志</span></button>
-          <button class="subscription-group-nav-item system-logs-category-option" type="button" data-system-log-category="request"><span class="system-log-type-mark request" aria-hidden="true"></span><span class="subscription-nav-name">网络请求</span></button>
-          <button class="subscription-group-nav-item system-logs-category-option" type="button" data-system-log-category="operation"><span class="system-log-type-mark operation" aria-hidden="true"></span><span class="subscription-nav-name">后台操作</span></button>
-          <button class="subscription-group-nav-item system-logs-category-option" type="button" data-system-log-category="database"><span class="system-log-type-mark database" aria-hidden="true"></span><span class="subscription-nav-name">数据库</span></button>
-          <button class="subscription-group-nav-item system-logs-category-option" type="button" data-system-log-category="outbound"><span class="system-log-type-mark outbound" aria-hidden="true"></span><span class="subscription-nav-name">出站请求</span></button>
+          <button class="subscription-group-nav-item active" type="button" data-system-log-category="" aria-current="page"><span class="system-log-type-mark all" aria-hidden="true"></span><span class="subscription-nav-name">全部日志</span></button>
+          <button class="subscription-group-nav-item" type="button" data-system-log-category="request"><span class="system-log-type-mark request" aria-hidden="true"></span><span class="subscription-nav-name">网络请求</span></button>
+          <button class="subscription-group-nav-item" type="button" data-system-log-category="operation"><span class="system-log-type-mark operation" aria-hidden="true"></span><span class="subscription-nav-name">后台操作</span></button>
+          <button class="subscription-group-nav-item" type="button" data-system-log-category="database"><span class="system-log-type-mark database" aria-hidden="true"></span><span class="subscription-nav-name">数据库</span></button>
+          <button class="subscription-group-nav-item" type="button" data-system-log-category="outbound"><span class="system-log-type-mark outbound" aria-hidden="true"></span><span class="subscription-nav-name">出站请求</span></button>
         </nav>
       </aside>
       <section class="subscription-group-workspace system-logs-workspace" aria-label="系统日志列表">
-        <div class="system-logs-toolbar">
-          <input id="systemLogSearch" type="search" placeholder="搜索路由、说明、IP 或请求 ID" aria-label="搜索系统日志">
-          <select id="systemLogLevel" aria-label="日志级别">
-            <option value="">全部级别</option>
-            <option value="error">错误</option>
-            <option value="warning">警告</option>
-            <option value="info">信息</option>
-          </select>
-          <button class="secondary" type="button" onclick="applySystemLogFilters()">筛选</button>
+        <div class="system-logs-stats" aria-label="当前时间范围日志统计">
+          <article class="system-logs-stat-card"><span class="system-logs-stat-icon blue">▤</span><div><strong>日志总数</strong><b id="systemLogsTotalStat">—</b><small>当前范围</small></div></article>
+          <article class="system-logs-stat-card"><span class="system-logs-stat-icon red">!</span><div><strong>错误数</strong><b id="systemLogsErrorStat">—</b><small>当前范围</small></div></article>
+          <article class="system-logs-stat-card"><span class="system-logs-stat-icon amber">▲</span><div><strong>警告数</strong><b id="systemLogsWarningStat">—</b><small>当前范围</small></div></article>
+          <article class="system-logs-stat-card"><span class="system-logs-stat-icon blue">◷</span><div><strong>平均耗时</strong><b><span id="systemLogsAverageStat">—</span> <small>ms</small></b><small>当前范围</small></div></article>
         </div>
-        <div id="systemLogsSummary" class="system-logs-summary" role="status" aria-live="polite"></div>
-        <div id="systemLogsTable" class="system-logs-wrap">
-          <div class="loading-state">打开此模块后读取系统日志</div>
-        </div>
-        <div class="system-logs-pagination">
-          <span id="systemLogsPageStatus"></span>
-          <div>
-            <button class="secondary" type="button" onclick="changeSystemLogsPage(-1)">上一页</button>
-            <button class="secondary" type="button" onclick="changeSystemLogsPage(1)">下一页</button>
+        <section class="system-logs-browser" aria-label="系统日志列表">
+          <div class="system-logs-toolbar">
+            <input id="systemLogSearch" type="search" placeholder="⌕ 搜索路径、说明、IP、请求 ID、User-Agent…" aria-label="搜索系统日志">
+            <select id="systemLogLevel" aria-label="日志级别"><option value="">全部级别</option><option value="error">错误</option><option value="warning">警告</option><option value="info">信息</option></select>
+            <select id="systemLogStatus" aria-label="状态码"><option value="">全部状态码</option><option value="success">2xx 成功</option><option value="redirect">3xx 重定向</option><option value="client-error">4xx 客户端错误</option><option value="server-error">5xx 服务端错误</option><option value="none">无状态码</option></select>
+            <label class="system-logs-date-filter"><span class="sr-only">开始日期</span><input id="systemLogStartDate" type="date" aria-label="开始日期"></label><span class="system-logs-date-separator">至</span>
+            <label class="system-logs-date-filter"><span class="sr-only">结束日期</span><input id="systemLogEndDate" type="date" aria-label="结束日期"></label>
+            <button class="secondary" type="button" onclick="resetSystemLogFilters()">重置</button>
           </div>
-        </div>
+          <div class="system-logs-table-heading"><span id="systemLogsSummary" role="status" aria-live="polite"></span></div>
+          <div id="systemLogsTable" class="system-logs-wrap"><div class="loading-state">打开此模块后读取系统日志</div></div>
+          <div class="system-logs-pagination">
+            <span id="systemLogsPageStatus"></span>
+            <nav id="systemLogsPager" class="system-logs-page-buttons" aria-label="日志分页"></nav>
+            <label class="system-logs-page-size"><select id="systemLogsPageSize" aria-label="每页条数"><option value="10">10 条/页</option><option value="20">20 条/页</option><option value="50">50 条/页</option></select></label>
+          </div>
+        </section>
       </section>
     </div>
+    <aside id="systemLogDetailDrawer" class="system-log-detail-drawer" aria-label="日志详情" aria-hidden="true" hidden>
+      <header class="system-log-drawer-header"><h3>日志详情</h3><button type="button" class="system-log-drawer-close" onclick="closeSystemLogDetails()" aria-label="关闭日志详情">×</button></header>
+      <div id="systemLogDrawerSummary" class="system-log-drawer-summary"></div>
+      <nav class="system-log-detail-tabs" aria-label="日志详情内容">
+        <button type="button" class="active" data-system-log-detail-tab="basic">基本信息</button>
+        <button type="button" data-system-log-detail-tab="request">请求头</button>
+        <button type="button" data-system-log-detail-tab="response">响应内容</button>
+        <button type="button" data-system-log-detail-tab="raw">原始日志</button>
+      </nav>
+      <div id="systemLogDrawerContent" class="system-log-drawer-content"></div>
+    </aside>
   </section>
    </div>
    </div>

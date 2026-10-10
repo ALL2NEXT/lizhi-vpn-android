@@ -278,11 +278,30 @@ export async function writeSystemLogs(env: Env, entries: SystemLogDraft[]) {
 
 export async function readSystemLogs(
   env: Env,
-  filters: { category?: string; level?: string; query?: string; limit?: number; offset?: number } = {},
+  filters: {
+    category?: string;
+    level?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    query?: string;
+    limit?: number;
+    offset?: number;
+  } = {},
 ) {
   const db = await ensureUserSchema(env);
   const conditions: string[] = [];
   const bindings: (string | number)[] = [];
+  const dateFilter = (value: string | undefined) => {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value ? null : value;
+  };
+  const nextDate = (value: string) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    date.setUTCDate(date.getUTCDate() + 1);
+    return `${date.toISOString().slice(0, 10)}T00:00:00+08:00`;
+  };
   const categories: SystemLogCategory[] = ["request", "operation", "database", "outbound"];
   if (categories.includes(filters.category as SystemLogCategory)) {
     conditions.push("category = ?");
@@ -292,16 +311,58 @@ export async function readSystemLogs(
     conditions.push("level = ?");
     bindings.push(String(filters.level));
   }
+  const statusRanges: Record<string, [number, number]> = {
+    success: [200, 299],
+    redirect: [300, 399],
+    "client-error": [400, 499],
+    "server-error": [500, 599],
+  };
+  if (filters.status === "none") {
+    conditions.push("status IS NULL");
+  } else if (filters.status && statusRanges[filters.status]) {
+    const [minimum, maximum] = statusRanges[filters.status];
+    conditions.push("status BETWEEN ? AND ?");
+    bindings.push(minimum, maximum);
+  }
+  const startDate = dateFilter(filters.startDate);
+  const endDate = dateFilter(filters.endDate);
+  if (startDate) {
+    conditions.push("occurred_at >= ?");
+    bindings.push(`${startDate}T00:00:00+08:00`);
+  }
+  if (endDate) {
+    conditions.push("occurred_at < ?");
+    bindings.push(nextDate(endDate));
+  }
   const query = truncate(filters.query, 100);
   if (query) {
-    conditions.push("(message LIKE ? OR path LIKE ? OR details LIKE ? OR ip LIKE ? OR request_id LIKE ?)");
+    conditions.push("(message LIKE ? OR path LIKE ? OR details LIKE ? OR ip LIKE ? OR request_id LIKE ? OR user_agent LIKE ?)");
     const pattern = `%${query}%`;
-    bindings.push(pattern, pattern, pattern, pattern, pattern);
+    bindings.push(pattern, pattern, pattern, pattern, pattern, pattern);
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const limit = Math.min(200, Math.max(1, Math.floor(Number(filters.limit) || 100)));
   const offset = Math.min(20000, Math.max(0, Math.floor(Number(filters.offset) || 0)));
-  const [count, rows] = await Promise.all([
+  const statsConditions: string[] = [];
+  const statsBindings: string[] = [];
+  if (categories.includes(filters.category as SystemLogCategory)) {
+    statsConditions.push("category = ?");
+    statsBindings.push(filters.category as string);
+  }
+  if (startDate) {
+    statsConditions.push("occurred_at >= ?");
+    statsBindings.push(`${startDate}T00:00:00+08:00`);
+  }
+  if (endDate) {
+    statsConditions.push("occurred_at < ?");
+    statsBindings.push(nextDate(endDate));
+  }
+  if (!startDate && !endDate) {
+    statsConditions.push("occurred_at >= ?");
+    statsBindings.push(beijingTimestamp(new Date(Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)));
+  }
+  const statsWhere = statsConditions.length ? `WHERE ${statsConditions.join(" AND ")}` : "";
+  const [count, rows, stats] = await Promise.all([
     db.prepare(`SELECT COUNT(*) AS total FROM system_logs_mb ${where}`)
       .bind(...bindings).first<{ total: number }>(),
     db.prepare(
@@ -310,6 +371,13 @@ export async function readSystemLogs(
        FROM system_logs_mb ${where}
        ORDER BY occurred_at DESC, id DESC LIMIT ? OFFSET ?`,
     ).bind(...bindings, limit, offset).all<Record<string, unknown>>(),
+    db.prepare(
+      `SELECT COUNT(*) AS total,
+        SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) AS error_count,
+        SUM(CASE WHEN level = 'warning' THEN 1 ELSE 0 END) AS warning_count,
+        ROUND(AVG(duration_ms)) AS average_duration_ms
+       FROM system_logs_mb ${statsWhere}`,
+    ).bind(...statsBindings).first<Record<string, number | null>>(),
   ]);
   const records: SystemLogRecord[] = (rows.results || []).map((row) => ({
     id: Number(row.id),
@@ -327,7 +395,19 @@ export async function readSystemLogs(
     message: String(row.message || ""),
     details: String(row.details || ""),
   }));
-  return { ok: true, total: Number(count?.total) || 0, limit, offset, records };
+  return {
+    ok: true,
+    total: Number(count?.total) || 0,
+    limit,
+    offset,
+    records,
+    stats: {
+      total: Number(stats?.total) || 0,
+      errorCount: Number(stats?.error_count) || 0,
+      warningCount: Number(stats?.warning_count) || 0,
+      averageDurationMs: Number(stats?.average_duration_ms) || 0,
+    },
+  };
 }
 
 export async function pruneSystemLogs(env: Env) {

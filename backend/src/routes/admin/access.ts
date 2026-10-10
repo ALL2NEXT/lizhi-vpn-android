@@ -16,6 +16,9 @@ export function createAdminAccessRoutes(deps: Pick<
       return json(await readSystemLogs(env, {
         category: url.searchParams.get("category") || undefined,
         level: url.searchParams.get("level") || undefined,
+        status: url.searchParams.get("status") || undefined,
+        startDate: url.searchParams.get("startDate") || undefined,
+        endDate: url.searchParams.get("endDate") || undefined,
         query: url.searchParams.get("q") || undefined,
         limit: Number(url.searchParams.get("limit")) || 100,
         offset: Number(url.searchParams.get("offset")) || 0,

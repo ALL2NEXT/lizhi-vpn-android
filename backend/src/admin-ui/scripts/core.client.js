@@ -176,6 +176,8 @@
    deviceRelationsLoading = false;
    trafficDetailsData = null;
    closeDeviceRelationDetail();
+   if (typeof stopSystemLogAutoRefresh === 'function') stopSystemLogAutoRefresh();
+   if (typeof closeSystemLogDetails === 'function') closeSystemLogDetails();
    systemLogsData = null;
    systemLogsLoading = false;
    systemLogsOffset = 0;
