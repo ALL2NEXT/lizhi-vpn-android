@@ -21,6 +21,7 @@ export interface RouteDependencies {
   readExternalSubscription: typeof subscriptions.readExternalSubscription;
   readExternalSubscriptionTraffic: typeof subscriptions.readExternalSubscriptionTraffic;
   autoRenameSubscriptionContent: typeof subscriptions.autoRenameSubscriptionContent;
+  deduplicateSubscriptionContent: typeof subscriptions.deduplicateSubscriptionContent;
   protectSubscription: typeof subscriptions.protectSubscription;
   getClientIp: typeof subscriptions.getClientIp;
   readState: typeof state.readState;

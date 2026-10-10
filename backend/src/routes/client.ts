@@ -26,6 +26,7 @@ export function createClientRoutes(deps: Pick<
   | "readSubscriptionContent"
   | "readSubscriptionContents"
   | "autoRenameSubscriptionContent"
+  | "deduplicateSubscriptionContent"
   | "protectSubscription"
   | "getClientIp"
   | "readState"
@@ -46,6 +47,7 @@ export function createClientRoutes(deps: Pick<
     readSubscriptionContent,
     readSubscriptionContents,
     autoRenameSubscriptionContent,
+    deduplicateSubscriptionContent,
     protectSubscription,
     getClientIp,
     readState,
@@ -73,7 +75,7 @@ async function handleClient(request: Request, env: Env) {
       if (!sources.length) return [];
       const access = {
         enabled: true,
-        encrypted: true,
+        encrypted: group.encryptionMode !== "none",
         minAccountType: legacyMinimumAccountType(group),
         allowedStatuses: group.allowedStatuses,
         allowedAccountTypes: group.allowedAccountTypes,
@@ -262,10 +264,15 @@ async function handleManagedSubscription(path: string, request: Request, env: En
     return json({ error: "subscription_fetch_failed" }, 502);
   }
   // 纯文本节点由后台直接维护，自动重命名只对外部接口生效。
-  const plaintextContent = source.autoRename && !isLocalSubscription(source)
-    ? autoRenameSubscriptionContent(fetchedContent)
+  const uniqueContent = source.deduplicate
+    ? deduplicateSubscriptionContent(fetchedContent)
     : fetchedContent;
-  const responseContent = protectSubscription(plaintextContent, clientIp);
+  const plaintextContent = source.autoRename && !isLocalSubscription(source)
+    ? autoRenameSubscriptionContent(uniqueContent)
+    : uniqueContent;
+  const responseContent = group.encryptionMode !== "none"
+    ? protectSubscription(plaintextContent, clientIp)
+    : plaintextContent;
   const responseHeaders: Record<string, string> = {
     ...corsHeaders(),
     "content-type": "text/plain; charset=utf-8",
@@ -317,9 +324,12 @@ async function handleDebugSubscription(path: string, _request: Request, env: Env
       const fetchedContent = local
         ? localContent.get(source.id) || ""
         : await readExternalSubscription(env, source, cacheMinutes, updateEnabled);
-      return source.autoRename && !local
-        ? autoRenameSubscriptionContent(fetchedContent)
+      const uniqueContent = source.deduplicate
+        ? deduplicateSubscriptionContent(fetchedContent)
         : fetchedContent;
+      return source.autoRename && !local
+        ? autoRenameSubscriptionContent(uniqueContent)
+        : uniqueContent;
     }));
     responseContent = contents.join("\n");
   } catch (_) {

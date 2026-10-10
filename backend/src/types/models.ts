@@ -13,6 +13,7 @@ export interface SubscriptionSource {
   assignmentKey?: string;
   enabled: boolean;
   autoRename: boolean;
+  deduplicate: boolean;
   content: string;
   remark: string;
 }
@@ -21,6 +22,7 @@ export interface SubscriptionGroup {
   id: string;
   name: string;
   groupType: "standard" | "load_balanced";
+  encryptionMode: "none" | "encrypted";
   enabled: boolean;
   allowedStatuses: SubscriptionAccountStatus[];
   allowedAccountTypes: Exclude<AccountType, "banned">[];

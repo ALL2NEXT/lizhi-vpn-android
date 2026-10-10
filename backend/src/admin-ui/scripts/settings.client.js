@@ -246,13 +246,17 @@ function addSubscriptionGroup(group) {
     '<input class="subscription-group-order-data" data-field="groupOrder" type="number" min="1" step="1" value="' + groupOrder + '" aria-label="分组排序序号">' +
   '</div>' +
   '<dialog class="subscription-permissions-dialog" data-group-permissions-dialog aria-label="分组设置">' +
-    '<div class="source-settings-dialog-header"><div><h3>分组设置</h3><p>设置分组访问条件、App 版本区间和组内上游订阅的更新策略。</p></div>' +
+    '<div class="source-settings-dialog-header"><div><h3>分组设置</h3><p>统一设置组内订阅的加密方式、访问条件、App 版本区间和更新策略。</p></div>' +
       '<button class="secondary" type="button" data-action="permissions-close">关闭</button>' +
     '</div>' +
     '<div class="subscription-group-permissions">' +
     '<fieldset class="subscription-group-type-setting"><legend>分组类型</legend>' +
       '<label><span>类型</span><select data-field="groupType"><option value="standard">普通常驻分组</option><option value="load_balanced">负载均衡分组</option></select></label>' +
       '<small>普通常驻分组会向客户端提供全部启用订阅；负载均衡分组为每位用户分配其中一条订阅。</small>' +
+    '</fieldset>' +
+    '<fieldset class="subscription-encryption-setting"><legend>加密设置</legend>' +
+      '<label><span>加密方式</span><select data-field="encryptionMode"><option value="none">无</option><option value="encrypted">加密</option></select></label>' +
+      '<small>本分组内所有订阅统一使用该设置。</small>' +
     '</fieldset>' +
     '<fieldset class="subscription-load-balance-settings" data-group-type-settings hidden><legend>负载均衡设置</legend>' +
       '<label><span>每个订阅最大分配人数</span><input data-field="maxUsersPerSubscription" type="number" min="1" max="1000000" step="1"></label>' +
@@ -288,6 +292,7 @@ function addSubscriptionGroup(group) {
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
   row.querySelector('[data-field="groupType"]').value = group.groupType === 'load_balanced' ? 'load_balanced' : 'standard';
+  row.querySelector('[data-field="encryptionMode"]').value = group.encryptionMode === 'none' ? 'none' : 'encrypted';
   row.querySelector('[data-field="maxUsersPerSubscription"]').value = String(group.maxUsersPerSubscription == null ? 10 : group.maxUsersPerSubscription);
   row.querySelector('[data-field="resetPeriodDays"]').value = String(group.resetPeriodDays == null ? 30 : group.resetPeriodDays);
   row.querySelector('[data-field="minAppVersion"]').value = String(group.minAppVersion || '');
@@ -465,6 +470,7 @@ function addSource(groupRow, source, sourceOrderValue) {
       '<input data-field="remark" type="text" value="' + esc(source.remark) + '">' +
       '<select data-field="sourceType"><option value="url" ' + (sourceType === 'url' ? 'selected' : '') + '>远程订阅</option><option value="content" ' + (sourceType === 'content' ? 'selected' : '') + '>本地文本</option></select>' +
       '<div class="source-mode" data-source-mode="url"><input data-field="url" type="url" value="' + esc(source.url) + '" placeholder="https://example.com/sub"><label class="check"><input data-field="autoRename" type="checkbox" ' + (source.autoRename === true ? 'checked' : '') + '>自动重命名节点</label></div>' +
+      '<input data-field="deduplicate" type="checkbox" ' + (source.deduplicate !== false ? 'checked' : '') + '>' +
       '<div class="source-mode" data-source-mode="content"><textarea data-field="content" placeholder="vless://...&#10;hy2://...&#10;ss://...">' + esc(source.content) + '</textarea></div>' +
     '</div>';
   row.querySelector('[data-field="sourceType"]').onchange = function() {
@@ -676,7 +682,7 @@ function selectSubscriptionSource(row) {
     return;
   }
   row.classList.add('selected');
-  ['name', 'url', 'remark', 'sourceType', 'content', 'autoRename'].forEach(function(field) {
+  ['name', 'url', 'remark', 'sourceType', 'content', 'autoRename', 'deduplicate'].forEach(function(field) {
     const sourceControl = row.querySelector('[data-field="' + field + '"]');
     const editorControl = editor.querySelector('[data-editor-field="' + field + '"]');
     if (!sourceControl || !editorControl) return;
@@ -736,7 +742,6 @@ function moveSubscriptionToGroup(row, targetGroupId) {
 
 function updateSubscriptionEditorType(type) {
   const infoField = el('subscriptionEditor').querySelector('[data-editor-source-info]');
-  const note = el('subscriptionEditor').querySelector('[data-editor-type-note]');
   const fieldName = type === 'content' ? 'content' : 'url';
   const sourceField = selectedSubscriptionRow && selectedSubscriptionRow.querySelector('[data-field="' + fieldName + '"]');
   infoField.dataset.editorField = fieldName;
@@ -745,9 +750,6 @@ function updateSubscriptionEditorType(type) {
   infoField.placeholder = type === 'content'
     ? 'vless://...\nhy2://...\nss://...'
     : 'https://example.com/sub';
-  if (note) note.textContent = type === 'content'
-    ? '本地文本由 Worker 直接加密下发，不经过远程接口获取。'
-    : '远程订阅由 Worker 获取、转换并加密下发。';
 }
 
 function updateSubscriptionEditorTraffic(row) {
@@ -1450,6 +1452,7 @@ function readSubscriptionSource(row, index) {
       url: sourceType === 'url' ? url : '',
       enabled: row.querySelector('[data-field="enabled"]').checked,
       autoRename: sourceType === 'url' && row.querySelector('[data-field="autoRename"]').checked,
+      deduplicate: row.querySelector('[data-field="deduplicate"]').checked,
       content: sourceType === 'content' ? content : '',
       remark: row.querySelector('[data-field="remark"]').value.trim()
     };
@@ -1470,6 +1473,7 @@ function readSubscriptionGroups() {
       updateEnabled: group.querySelector('[data-field="updateEnabled"]').checked,
       cacheMinutes: Number(group.querySelector('[data-field="groupCacheMinutes"]').value || 0),
       groupType: group.querySelector('[data-field="groupType"]').value,
+      encryptionMode: group.querySelector('[data-field="encryptionMode"]').value,
       maxUsersPerSubscription: Number(group.querySelector('[data-field="maxUsersPerSubscription"]').value || 0),
       resetPeriodDays: Number(group.querySelector('[data-field="resetPeriodDays"]').value || 0),
       minAppVersion: group.querySelector('[data-field="minAppVersion"]').value.trim(),

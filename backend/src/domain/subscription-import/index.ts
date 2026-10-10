@@ -47,7 +47,7 @@ export function isUsableNode(uri: string): boolean {
   } catch { return false; }
 }
 
-export function toStandardUris(input: string | string[]) {
+export function toStandardUris(input: string | string[], options: { deduplicate?: boolean } = {}) {
   const fragments = typeof input === "string" ? subscriptionFragments(input) : input;
   const uris: string[] = [];
   for (const fragment of fragments) {
@@ -61,5 +61,6 @@ export function toStandardUris(input: string | string[]) {
       } else uris.push(...extractUris(fragment));
     } catch { /* 一个损坏片段不能吞掉同次导入的其他来源。 */ }
   }
-  return [...new Set(uris.filter(isUsableNode))];
+  const usableUris = uris.filter(isUsableNode);
+  return options.deduplicate === false ? usableUris : [...new Set(usableUris)];
 }

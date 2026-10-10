@@ -42,6 +42,7 @@ function importedSource(
     enabled: true,
     remark: "",
     autoRename: false,
+    deduplicate: true,
   };
 }
 

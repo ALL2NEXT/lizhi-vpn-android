@@ -48,6 +48,7 @@ import { createClientRoutes } from "./routes/client.ts";
 import {
   getClientIp,
   autoRenameSubscriptionContent,
+  deduplicateSubscriptionContent,
   isAppVersionAtLeast,
   protectSubscription,
   readExternalSubscription,
@@ -99,6 +100,7 @@ const routeDeps = {
   readExternalSubscription,
   readExternalSubscriptionTraffic,
   autoRenameSubscriptionContent,
+  deduplicateSubscriptionContent,
   protectSubscription,
   getClientIp,
   readState,

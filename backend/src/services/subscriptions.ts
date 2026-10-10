@@ -70,8 +70,8 @@ export function assertPlainSubscriptionContent(value: unknown) {
 }
 
 /** 本地导入与远程更新使用相同的 URI / Base64 / Clash / sing-box / Xray 转换。 */
-export function decodeExternalSubscriptionContent(value: unknown) {
-  const nodes = toStandardUris(normalizeManagedContent(value));
+export function decodeExternalSubscriptionContent(value: unknown, options: { deduplicate?: boolean } = {}) {
+  const nodes = toStandardUris(normalizeManagedContent(value), options);
   if (!nodes.length) throw new Error("subscription_must_be_plaintext_nodes");
   return normalizeManagedContent(nodes.join("\n"));
 }
@@ -257,6 +257,17 @@ export function autoRenameSubscriptionContent(content: string) {
   }).join("\n");
 }
 
+export function deduplicateSubscriptionContent(content: string) {
+  const seen = new Set<string>();
+  return String(content || "").split(/\r?\n/).filter((line) => {
+    const trimmed = line.trim();
+    if (!NODE_LINK_PATTERN.test(trimmed)) return true;
+    if (seen.has(trimmed)) return false;
+    seen.add(trimmed);
+    return true;
+  }).join("\n");
+}
+
 export function subscriptionCacheKey(source: SubscriptionSource) {
   return `${SUBSCRIPTION_CACHE_KEY_PREFIX}${source.id}`;
 }
@@ -332,6 +343,7 @@ async function cacheExternalSubscription(
   const writes = [env.CONFIG.put(subscriptionCacheKey(source), JSON.stringify({
     url: source.url,
     content: result.content,
+    contentFormat: 2,
     cachedAt,
     trafficFetched: true,
     traffic: result.traffic,
@@ -403,7 +415,7 @@ function subscriptionName(headers: Headers, url: string) {
   return new URL(url).hostname.replace(/^www\./, "");
 }
 
-export async function fetchExternalSubscription(url: string) {
+export async function fetchExternalSubscription(url: string, options: { deduplicate?: boolean } = {}) {
   const normalized = normalizeRemoteUrl(url);
   if (!normalized) throw new Error("invalid_subscription_url");
   const target = new URL(normalized);
@@ -424,7 +436,7 @@ export async function fetchExternalSubscription(url: string) {
         throw new Error(`external_subscription_http_${response.status}`);
       }
       const traffic = parseSubscriptionUserInfo(response.headers.get("subscription-userinfo"));
-      const content = decodeExternalSubscriptionContent(await readManagedSubscriptionBody(response));
+      const content = decodeExternalSubscriptionContent(await readManagedSubscriptionBody(response), options);
       return {
         content,
         name: subscriptionName(response.headers, normalized),
@@ -452,10 +464,15 @@ export async function readExternalSubscription(
   const cacheMinutes = normalizeSubscriptionCacheMinutes(cacheMinutesValue);
   const cacheKey = subscriptionCacheKey(source);
   const now = Date.now();
-  const cached = await env.CONFIG.get<{ url: string; content: unknown; cachedAt: unknown }>(cacheKey, "json");
+  const cached = await env.CONFIG.get<{
+    url: string;
+    content: unknown;
+    contentFormat?: number;
+    cachedAt: unknown;
+  }>(cacheKey, "json");
   if (!updateEnabled) {
     if (cached?.url === source.url && typeof cached.content === "string") {
-      return decodeExternalSubscriptionContent(cached.content);
+      return decodeExternalSubscriptionContent(cached.content, { deduplicate: false });
     }
     throw new Error("subscription_update_disabled_cache_missing");
   }
@@ -465,14 +482,15 @@ export async function readExternalSubscription(
     if (
       cached &&
       cached.url === source.url &&
+      (source.deduplicate !== false || cached.contentFormat === 2) &&
       Number.isFinite(cachedAt) &&
       freshUntil > now
     ) {
-      return decodeExternalSubscriptionContent(cached.content);
+      return decodeExternalSubscriptionContent(cached.content, { deduplicate: false });
     }
   }
 
-  const fetched = await fetchExternalSubscription(source.url);
+  const fetched = await fetchExternalSubscription(source.url, { deduplicate: false });
   await cacheExternalSubscription(env, source, fetched, now, cacheMinutes);
   return fetched.content;
 }
@@ -517,7 +535,7 @@ export async function readExternalSubscriptionTraffic(
   }
   if (!updateEnabled) return null;
 
-  const fetched = await fetchExternalSubscription(source.url);
+  const fetched = await fetchExternalSubscription(source.url, { deduplicate: false });
   await cacheExternalSubscription(env, source, fetched, now, cacheMinutes);
   return fetched.traffic;
 }

@@ -55,6 +55,7 @@ function normalizeSubscriptionSource(item: JsonObject, id: number): Subscription
     enabled: parseFlag(item.enabled, true),
     // 自动重命名只对外部订阅生效。
     autoRename: sourceType === "url" && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
+    deduplicate: parseFlag(item.deduplicate, true),
     content,
     remark: cleanText(item.remark || item.note).slice(0, 500),
   };
@@ -84,6 +85,7 @@ function normalizeSubscriptionGroup(
     id: cleanText(input.id).slice(0, 80) || String(index + 1),
     name: cleanText(input.name || input.title).slice(0, 80) || `分组${index + 1}`,
     groupType: input.groupType === "load_balanced" ? "load_balanced" : "standard",
+    encryptionMode: input.encryptionMode === "none" ? "none" : "encrypted",
     enabled: parseFlag(input.enabled, true),
     allowedStatuses: normalizeSelection(input.allowedStatuses, SUBSCRIPTION_STATUSES, ["normal"]),
     allowedAccountTypes: normalizeSelection(input.allowedAccountTypes, SUBSCRIPTION_ACCOUNT_TYPES, ["guest", "formal"]),
@@ -251,6 +253,7 @@ export function normalizeState(input: unknown): AppState {
           id: String(index + 1),
           name: cleanText(item.groupName || item.name || item.title) || `分组${index + 1}`,
           groupType: "standard",
+          encryptionMode: "encrypted",
           enabled: true,
           allowedStatuses: minimumType === "banned" ? ["normal", "banned"] : ["normal"],
           allowedAccountTypes: minimumType === "formal" ? ["formal"] : ["guest", "formal"],
