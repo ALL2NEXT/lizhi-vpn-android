@@ -1061,6 +1061,9 @@
     }
     .source-list-header { flex: 0 0 auto; min-height: 46px; margin: 10px 0 0; padding: 0 4px; color: #435168; background: #f5f7fa; border-radius: 6px 6px 0 0; font-size: 12px; font-weight: 600; }
     .subscription-group-sources { display: grid; flex: 1 1 auto; align-content: start; min-height: 0; padding: 0; }
+    .subscription-group-sources.is-empty { align-content: stretch; }
+    .subscription-group-empty { display: grid; grid-column: 1 / -1; min-height: 120px; place-items: center; color: #758198; font-size: 14px; }
+    .subscription-group-empty[hidden] { display: none !important; }
     .source-row { position: relative; min-width: 0; min-height: 68px; padding: 7px 4px; margin: 0; background: #fff; border: 0; border-bottom: 1px solid #e6ebf2; border-radius: 0; }
     .source-row.selected { background: #f7faff; }
     .source-row-drag { display: block; width: 16px; height: 22px; color: #74839a; cursor: grab; }

@@ -288,7 +288,9 @@ function addSubscriptionGroup(group) {
     '</div>' +
   '</dialog>' +
   '<div class="source-list-header" aria-hidden="true"><span></span><span></span><span>#</span><span>订阅名称</span><span>流量使用</span><span>到期时间</span><span>备注</span><span>状态</span><span>启用</span><span>设置</span></div>' +
-  '<div class="subscription-group-sources" data-group-sources></div>';
+  '<div class="subscription-group-sources" data-group-sources>' +
+    '<div class="subscription-group-empty" data-group-subscription-empty hidden>没有符合条件的订阅</div>' +
+  '</div>';
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
   row.querySelector('[data-field="groupType"]').value = group.groupType === 'load_balanced' ? 'load_balanced' : 'standard';
@@ -835,9 +837,14 @@ function applySubscriptionFilters() {
     const active = activeSubscriptionGroupId === '__all__' || group.dataset.groupId === activeSubscriptionGroupId;
     const hasMatches = Array.from(group.querySelectorAll('.source-row')).some(function(row) { return matchSet.has(row); });
     group.hidden = !active || (activeSubscriptionGroupId === '__all__' && !hasMatches);
+    const groupEmpty = group.querySelector('[data-group-subscription-empty]');
+    const showGroupEmpty = active && activeSubscriptionGroupId !== '__all__' && !hasMatches;
+    if (groupEmpty) groupEmpty.hidden = !showGroupEmpty;
+    const groupSources = group.querySelector('[data-group-sources]');
+    if (groupSources) groupSources.classList.toggle('is-empty', showGroupEmpty);
   });
   const empty = document.querySelector('[data-subscription-empty]');
-  if (empty) empty.hidden = matches.length > 0;
+  if (empty) empty.hidden = matches.length > 0 || activeSubscriptionGroupId !== '__all__';
   const count = document.querySelector('[data-subscription-filtered-count]');
   if (count) count.textContent = '共 ' + matches.length + ' 条';
   const pageNumber = document.querySelector('[data-subscription-page-number]');
