@@ -22,7 +22,7 @@ export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria
 export const PRIVATE_B64_ALPHABET =
   "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 13;
+export const USER_SCHEMA_VERSION = 14;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -159,6 +159,26 @@ export const USER_SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_subscription_group_assignments_capacity_mb
     ON subscription_group_assignments_mb(group_id, source_key, assigned_at)`,
+  `CREATE TABLE IF NOT EXISTS system_logs_mb (
+    id INTEGER PRIMARY KEY,
+    occurred_at TEXT NOT NULL,
+    category TEXT NOT NULL CHECK (category IN ('request', 'operation', 'database', 'outbound')),
+    level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error')),
+    request_id TEXT NOT NULL DEFAULT '',
+    actor TEXT NOT NULL DEFAULT '',
+    method TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    status INTEGER,
+    duration_ms INTEGER,
+    ip TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    message TEXT NOT NULL,
+    details TEXT NOT NULL DEFAULT ''
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_occurred
+    ON system_logs_mb(occurred_at DESC, id DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_category_occurred
+    ON system_logs_mb(category, occurred_at DESC, id DESC)`,
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
@@ -306,6 +326,28 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
     `CREATE INDEX IF NOT EXISTS idx_subscription_group_assignments_capacity_mb
       ON subscription_group_assignments_mb(group_id, source_key, assigned_at)`,
   ],
+  14: [
+    `CREATE TABLE IF NOT EXISTS system_logs_mb (
+      id INTEGER PRIMARY KEY,
+      occurred_at TEXT NOT NULL,
+      category TEXT NOT NULL CHECK (category IN ('request', 'operation', 'database', 'outbound')),
+      level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error')),
+      request_id TEXT NOT NULL DEFAULT '',
+      actor TEXT NOT NULL DEFAULT '',
+      method TEXT NOT NULL DEFAULT '',
+      path TEXT NOT NULL DEFAULT '',
+      status INTEGER,
+      duration_ms INTEGER,
+      ip TEXT NOT NULL DEFAULT '',
+      user_agent TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL,
+      details TEXT NOT NULL DEFAULT ''
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_occurred
+      ON system_logs_mb(occurred_at DESC, id DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_category_occurred
+      ON system_logs_mb(category, occurred_at DESC, id DESC)`,
+  ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
   const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");
@@ -344,6 +386,5 @@ export const DEFAULT_STATE: AppState = {
     // 后台可关闭游客注册正式用户；默认保持现有注册流程开放。
     registrationEnabled: true,
     requireAdminRegistrationCode: false,
-    debugInterface: null,
   },
 };

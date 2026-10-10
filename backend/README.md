@@ -64,16 +64,6 @@ TypeScript 迁移保持现有 API 路径、有效请求的响应字段、KV 状�
 
 管理 API `POST /<ADMIN_PATH>/api/subscriptions/import` 接收 `{ "input": "...", "minAccountType": "guest" }`，返回 `sources`、`nodeCount` 和 `failedSources`，只生成预览，不写 KV。现有外部订阅的缓存预热与更新也使用同一格式转换器。
 
-## 明文调试接口
-
-后台设置中的“调试接口”板块可以一次选择一个或多个订阅线路（包括停用线路），生成一个带随机 UUID 的聚合明文接口。接口地址为：
-
-```http
-GET /api/subscription/debug/<uuid>
-```
-
-该接口不要求 `deviceId`，会按选择顺序合并返回所选线路的明文订阅内容，仅用于调试。它与普通订阅接口共用上游缓存和自动重命名处理，但不会执行订阅内容加密；请妥善保管 UUID，并勿将调试地址用于生产客户端。
-
 ## 本地验证
 
 使用 Node.js 22.18 或更新版本，推荐 Node.js 24。首次安装后生成与 Wrangler 配置匹配的 Workers 类型：

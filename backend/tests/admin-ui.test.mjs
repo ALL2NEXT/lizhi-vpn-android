@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
 import test from 'node:test';
 
@@ -29,7 +28,7 @@ function harness() {
     return elements.get(id);
   };
   const panels = new Map();
-  for (const section of ['subscriptions', 'navigation-page', 'about-page', 'registration-control', 'notice', 'debug-interface']) {
+  for (const section of ['subscriptions', 'navigation-page', 'about-page', 'registration-control', 'notice']) {
     const panel = element();
     panel.dataset.panel = section;
     const controls = new Map(['[data-settings-save-status]', '[data-settings-save]', '[data-settings-discard]'].map(selector => [selector, element()]));
@@ -74,7 +73,7 @@ function harness() {
     parseResponseJson: JSON.parse, adminErrorMessage: (error, fallback) => error || fallback,
     formatMegabytes: value => (value || 0) + ' MB',
     show: (message, error) => messages.push({message, error: Boolean(error)}), confirm: () => true,
-    crypto: {randomUUID}, URL,
+    URL,
     document: {
       getElementById: get,
       querySelector(selector) { return panels.get(selector.match(/^\[data-panel="(.+)"\]$/)?.[1]) || null; },
@@ -198,22 +197,6 @@ test('放弃当前模块修改仅恢复该模块，不影响其他草稿', () =>
   assert.equal(h.run('settingsDirtySections.has("about-page")'), true);
 });
 
-test('重新生成调试 UUID 属于草稿，保存其他模块不会意外轮换已发布地址', async () => {
-  const h = harness();
-  h.context.currentState.settings.debugInterface = {token: 'saved-token', subscriptionIds: []};
-  h.run('regenerateDebugInterfaceToken()');
-  const token = h.run('getDebugInterfaceConfig().token');
-  assert.notEqual(token, 'saved-token');
-  assert.equal(h.context.currentState.settings.debugInterface.token, 'saved-token');
-  h.get('websiteUrl').value = 'https://example.test';
-  h.run('markSettingsDirty("about-page")');
-  await h.run('pushSection("about-page")');
-  const request = h.calls.find(call => call.method === 'PUT');
-  assert.equal(JSON.parse(request.body).settings.debugInterface.token, 'saved-token');
-  assert.equal(h.run('getDebugInterfaceConfig().token'), token);
-  h.run('discardSettingsSection("debug-interface")');
-  assert.equal(h.run('getDebugInterfaceConfig().token'), 'saved-token');
-});
 
 test('详情编辑和关闭保留草稿，保存失败可在详情中读取错误', async () => {
   const h = harness();

@@ -46,7 +46,6 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
   const secondDeviceId = "b".repeat(64);
   const source = "vless://id@example.com:443#test";
   let uid;
-  let debugToken;
 
   await t.test("健康检查初始化 schema v13，CORS 和管理资源可用", async () => {
     const { data } = await call("/health");
@@ -87,13 +86,6 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     assert.deepEqual((await call("/local-admin/api/state", { admin: true })).data, before);
     const allFailed = (await call(route, { method: "POST", admin: true, body: { input: origin + "/failed" }, status: 422 })).data;
     assert.equal(allFailed.sources.length, 0);
-    const saved = (await call("/local-admin/api/state", { method: "PUT", admin: true, body: { ...before, subscriptions: preview.sources } })).data.state;
-    saved.settings.debugInterface.subscriptionIds = ["1", "2"];
-    await call("/local-admin/api/state", { method: "PUT", admin: true, body: saved });
-    const combined = (await call("/api/subscription/debug/" + saved.settings.debugInterface.token)).data;
-    assert.ok(combined.includes(source));
-    assert.ok(combined.includes("@yaml.example:443"));
-    await call("/local-admin/api/state", { method: "PUT", admin: true, body: before });
   });
 
   await t.test("游客注册可重复调用，非法 JSON 字段不会绕过校验", async () => {
@@ -109,20 +101,14 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     assert.equal(repeat.data.account.uid, uid);
   });
 
-  await t.test("管理鉴权、KV 保存、调试订阅和账号访问控制", async () => {
+  await t.test("管理鉴权、KV 保存和账号访问控制", async () => {
     await call("/local-admin/api/state", { status: 401 });
-    const { data } = await call("/local-admin/api/state", {
+    await call("/local-admin/api/state", {
       method: "PUT", admin: true,
       body: { subscriptions: [{ content: source, name: "formal", minAccountType: "formal", minAppVersion: "1.2" }], settings: { requireAdminRegistrationCode: true } },
     });
-    debugToken = data.state.settings.debugInterface.token;
-    const state = data.state;
-    state.settings.debugInterface.subscriptionIds = ["1"];
-    await call("/local-admin/api/state", { method: "PUT", admin: true, body: state });
     await call(`/api/subscription/1?deviceId=${deviceId}`, { status: 403 });
-    assert.equal((await call("/api/subscription/debug/" + debugToken)).data, source);
     const client = (await call("/api/client")).data;
-    assert.equal("debugInterface" in client.settings, false);
     assert.equal(client.subscriptions[0].encrypted, true);
   });
 
@@ -174,11 +160,8 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     assert.deepEqual((await call("/local-admin/api/users", { admin: true })).data.users, []);
   });
 
-  await t.test("蜜罐固定拒绝登录，记录可读取和清空", async () => {
+  await t.test("蜜罐固定拒绝登录，旧登录记录接口已移除", async () => {
     await call("/admin/login", { method: "POST", body: {}, status: 401 });
-    const { data } = await call("/local-admin/api/admin-login-records", { admin: true });
-    assert.ok(data.records.some((record) => record.honeypot && record.path === "/admin/login"));
-    await call("/local-admin/api/admin-login-records", { method: "DELETE", admin: true });
-    assert.deepEqual((await call("/local-admin/api/admin-login-records", { admin: true })).data.records, []);
+    await call("/local-admin/api/admin-login-records", { admin: true, status: 404 });
   });
 });

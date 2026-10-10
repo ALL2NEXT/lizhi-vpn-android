@@ -3,6 +3,7 @@ import type { RouteDependencies } from "../types/routes.ts";
 import type { SubscriptionGroup, SubscriptionSource } from "../types/models.ts";
 import { subscriptionGroupAccessError } from "../domain/subscription-access.ts";
 import { getOrAssignBalancedSubscription } from "../services/subscription-balancing.ts";
+import { observedFetch } from "../services/system-logs.ts";
 
 /*
  * Client routes.
@@ -24,7 +25,6 @@ export function createClientRoutes(deps: Pick<
   | "isAppVersionAtLeast"
   | "readExternalSubscription"
   | "readSubscriptionContent"
-  | "readSubscriptionContents"
   | "autoRenameSubscriptionContent"
   | "deduplicateSubscriptionContent"
   | "protectSubscription"
@@ -45,7 +45,6 @@ export function createClientRoutes(deps: Pick<
     isAppVersionAtLeast,
     readExternalSubscription,
     readSubscriptionContent,
-    readSubscriptionContents,
     autoRenameSubscriptionContent,
     deduplicateSubscriptionContent,
     protectSubscription,
@@ -104,11 +103,11 @@ async function handleClient(request: Request, env: Env) {
   });
 }
 
-async function handleProxyAppList() {
+async function handleProxyAppList(env: Env) {
   let upstream;
   try {
     // 固定上游名单地址，只代理这一份资源，避免端点成为任意 URL 代理。
-    upstream = await fetch(PROXY_APP_LIST_URL, {
+    upstream = await observedFetch(env, PROXY_APP_LIST_URL, {
       headers: {
         accept: "text/plain",
         "user-agent": "Chimera-Worker",
@@ -285,66 +284,6 @@ async function handleManagedSubscription(path: string, request: Request, env: En
   });
 }
 
-const DEBUG_INTERFACE_PATH_PREFIX = "/api/subscription/debug/";
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-async function handleDebugSubscription(path: string, _request: Request, env: Env) {
-  const token = path.slice(DEBUG_INTERFACE_PATH_PREFIX.length);
-  if (!UUID_PATTERN.test(token)) {
-    return json({ error: "subscription_not_found" }, 404);
-  }
-
-  const state = await readState(env);
-  const debugInterface = state.settings && state.settings.debugInterface;
-  if (!debugInterface || debugInterface.token.toLowerCase() !== token.toLowerCase()) {
-    return json({ error: "subscription_not_found" }, 404);
-  }
-
-  const selectedIds = new Set(debugInterface.subscriptionIds);
-  const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions
-    .filter((source) => selectedIds.has(source.id) && hasSubscriptionData(source))
-    .map((source) => ({
-      source,
-      cacheMinutes: group.cacheMinutes,
-      updateEnabled: group.updateEnabled,
-    })));
-  if (!sources.length) {
-    return json({ error: "subscription_not_found" }, 404);
-  }
-
-  let responseContent;
-  try {
-    const localSources = await readSubscriptionContents(
-      env,
-      sources.map(({ source }) => source).filter(isLocalSubscription),
-    );
-    const localContent = new Map(localSources.map((source) => [source.id, source.content]));
-    const contents = await Promise.all(sources.map(async ({ source, cacheMinutes, updateEnabled }) => {
-      const local = isLocalSubscription(source);
-      const fetchedContent = local
-        ? localContent.get(source.id) || ""
-        : await readExternalSubscription(env, source, cacheMinutes, updateEnabled);
-      const uniqueContent = source.deduplicate
-        ? deduplicateSubscriptionContent(fetchedContent)
-        : fetchedContent;
-      return source.autoRename && !local
-        ? autoRenameSubscriptionContent(uniqueContent)
-        : uniqueContent;
-    }));
-    responseContent = contents.join("\n");
-  } catch (_) {
-    return json({ error: "subscription_fetch_failed" }, 502);
-  }
-
-  return new Response(responseContent, {
-    headers: {
-      ...corsHeaders(),
-      "content-type": "text/plain; charset=utf-8",
-      "cache-control": "no-store",
-    },
-  });
-}
-
 function legacyMinimumAccountType(group: SubscriptionGroup) {
   if (group.allowedStatuses.includes("banned")) return "banned" as const;
   if (
@@ -360,6 +299,5 @@ function legacyMinimumAccountType(group: SubscriptionGroup) {
     handleClient,
     handleProxyAppList,
     handleManagedSubscription,
-    handleDebugSubscription,
   };
 }

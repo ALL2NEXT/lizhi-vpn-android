@@ -1,13 +1,6 @@
-import type { Env } from "../types/env.ts";
-import type { recordAdminLogin as recordLogin } from "./admin-access.ts";
 import type { json as jsonResponse } from "../http/responses.ts";
 
-/*
- * 常见后台路径蜜罐。
- *
- * 这些路径与真实后台 UUID 完全分离：只记录访问行为，不读取或保存密码，
- * 所有登录提交都固定失败，避免误把蜜罐请求放行到真实管理接口。
- */
+/* 常见后台路径蜜罐只返回虚假登录页，提交的登录请求固定失败。 */
 
 const HONEYPOT_PATHS = new Set([
   "/admin",
@@ -70,13 +63,7 @@ function fakeLoginPage() {
   ].join("\n");
 }
 
-export async function handleHoneypotRoute(path: string, request: Request, env: Env, recordAdminLogin: typeof recordLogin, json: typeof jsonResponse) {
-  await recordAdminLogin(env, request, false, {
-    honeypot: true,
-    path,
-    method: request.method,
-  });
-
+export async function handleHoneypotRoute(request: Request, json: typeof jsonResponse) {
   if (request.method === "GET" || request.method === "HEAD") {
     return new Response(request.method === "HEAD" ? null : fakeLoginPage(), {
       status: 200,

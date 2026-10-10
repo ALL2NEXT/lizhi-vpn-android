@@ -214,34 +214,42 @@
     .web-nav-add-site { margin: 12px 0 0; }
      .settings-section-description { margin: 0 0 12px; color: #5f6368; font-size: 12px; }
      .settings-section .grid { margin-top: 0; }
-     .debug-interface-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
-     .debug-interface-source { display: flex; align-items: center; gap: 8px; min-height: 42px; margin: 0; padding: 8px 10px; color: #202124; background: #ffffff; border: 1px solid #dadce0; border-radius: 8px; }
-     .debug-interface-source input { margin: 0; }
-     .debug-interface-source span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-     .debug-interface-source small { margin: 0 0 0 auto; color: #5f6368; white-space: nowrap; }
-     .debug-interface-source.disabled { color: #80868b; }
-     .debug-interface-url-row { display: flex; align-items: center; gap: 8px; }
-     .debug-interface-url-row input { flex: 1 1 auto; min-width: 0; }
-     .debug-interface-url-row button, .debug-interface-token-actions button { margin: 0; white-space: nowrap; }
-     .debug-interface-token-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-     .debug-interface-token-actions small { margin: 0; color: #b06000; }
      .app-info-icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
      .app-info-label { display: inline-flex; align-items: center; gap: 7px; }
      .app-info-label svg { width: 19px; height: 19px; flex: 0 0 19px; fill: currentColor; color: #1a73e8; }
-     .admin-login-record-wrap { overflow: auto; border: 1px solid #dadce0; border-radius: 10px; background: #ffffff; }
-     .admin-login-table { width: 100%; min-width: 980px; border-collapse: collapse; font-size: 12px; }
-     .admin-login-table th, .admin-login-table td { padding: 10px 12px; text-align: left; vertical-align: top; border-right: 1px solid #dadce0; border-bottom: 1px solid #dadce0; }
-     .admin-login-table th { color: #5f6368; background: #f1f3f4; white-space: nowrap; }
-     .admin-login-table td { color: #202124; }
-     .admin-login-table code { color: #6941c6; }
-     .admin-login-user-agent { min-width: 320px; color: #5f6368; word-break: break-word; }
-     .admin-login-path { min-width: 170px; }
-     .admin-login-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-     .admin-login-badge.success { color: #137333; background: #e6f4ea; }
-     .admin-login-badge.failed { color: #b3261e; background: #fce8e6; }
-     .admin-login-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-     .admin-login-actions button { margin: 0; }
-     .admin-login-empty { padding: 22px; color: #5f6368; text-align: center; }
+     .system-logs-wrap { overflow: auto; border: 1px solid #dadce0; border-radius: 10px; background: #ffffff; }
+     .system-logs-table { width: 100%; min-width: 980px; border-collapse: collapse; font-size: 12px; }
+     .system-logs-table th, .system-logs-table td { padding: 10px 12px; text-align: left; vertical-align: top; border-right: 1px solid #dadce0; border-bottom: 1px solid #dadce0; }
+     .system-logs-table th { color: #5f6368; background: #f1f3f4; white-space: nowrap; }
+     .system-logs-table td { color: #202124; }
+     .system-logs-table code { color: #6941c6; }
+     .system-log-level-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+     .system-log-level-badge.success { color: #137333; background: #e6f4ea; }
+     .system-log-level-badge.failed { color: #b3261e; background: #fce8e6; }
+     .system-logs-empty { padding: 22px; color: #5f6368; text-align: center; }
+     .system-logs-heading { align-items: center; }
+     .system-logs-heading > button { margin: 0; }
+     .system-logs-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
+     .system-logs-toolbar input { flex: 1 1 300px; min-width: 180px; }
+     .system-logs-toolbar select { min-width: 132px; }
+     .system-logs-toolbar button { margin: 0; }
+     .system-logs-summary { margin: 0 0 10px; color: #64748b; font-size: 13px; }
+     .system-logs-wrap { max-height: calc(100vh - 270px); }
+     .system-logs-table { min-width: 1120px; }
+     .system-logs-time { min-width: 160px; white-space: nowrap; }
+     .system-logs-path { min-width: 260px; max-width: 440px; }
+     .system-logs-path strong { display: block; font-weight: 600; }
+     .system-logs-path code { display: block; margin-top: 5px; color: #64748b; overflow-wrap: anywhere; }
+     .system-log-category { display: inline-flex; padding: 3px 8px; border-radius: 7px; color: #175ea8; background: #e8f0fe; white-space: nowrap; }
+     .system-log-category.operation { color: #6941c6; background: #f0eafe; }
+     .system-log-category.database { color: #9a5b00; background: #fff3d6; }
+     .system-log-category.outbound { color: #087e8b; background: #e0f7fa; }
+     .system-log-level.warning { color: #9a5b00; background: #fff3d6; }
+     .system-log-detail summary { color: #1769aa; cursor: pointer; }
+     .system-log-detail pre { max-width: min(520px, 60vw); max-height: 220px; overflow: auto; margin: 8px 0 0; padding: 10px; color: #344054; background: #f6f8fb; border-radius: 7px; white-space: pre-wrap; overflow-wrap: anywhere; }
+     .system-logs-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 2px 0; color: #64748b; font-size: 13px; }
+     .system-logs-pagination > div { display: flex; gap: 8px; }
+     .system-logs-pagination button { margin: 0; }
      .source-row .row-actions { display: flex; align-items: center; justify-content: space-between; }
      .source-row small { display: block; margin-top: 8px; }
      .security-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
@@ -520,7 +528,7 @@
     .source-row { background: transparent; border-color: transparent; border-top: 1px solid #e3e9f1; border-radius: 0; padding: 16px 0; margin: 0; }
     .web-nav-group, .subscription-group { background: #f8fafd; border-color: #e2e9f1; border-radius: 12px; }
     .source-section { padding: 12px 0; background: transparent; border: 0; border-radius: 0; }
-    .debug-interface-source, .user-admin-device-detail, .device-relation-detail-item,
+    .user-admin-device-detail, .device-relation-detail-item,
     .security-batch-toolbar { background: var(--surface-soft); }
     input, textarea, select {
       min-height: 40px;
@@ -578,22 +586,22 @@
     .traffic-upload i { background: #34a853; }
     .traffic-download i { background: #a142f4; }
     .traffic-total i { background: #f9ab00; }
-    .traffic-detail-wrap, .security-account-list, .admin-login-record-wrap,
+    .traffic-detail-wrap, .security-account-list, .system-logs-wrap,
     .table-wrap, .user-table-scroll, .security-device-wrap {
       background: var(--surface);
       border-color: var(--line);
       border-radius: 12px;
     }
-    .traffic-detail-table th, .security-account-table th, .admin-login-table th,
+    .traffic-detail-table th, .security-account-table th, .system-logs-table th,
     .security-device-table th, .user-data-table th, .user-sheet th {
       color: #3c4043;
       background: var(--surface-soft);
       border-color: var(--line);
     }
-    .traffic-detail-table td, .security-account-table td, .admin-login-table td,
+    .traffic-detail-table td, .security-account-table td, .system-logs-table td,
     .security-device-table td, .user-data-table td, .user-sheet td { color: #3c4043; border-color: #e8eaed; }
     .traffic-detail-table tbody tr:hover td, .security-account-table tbody tr:hover td,
-    .admin-login-table tbody tr:hover td, .user-data-table tbody tr:hover td { background: #f8fafd; }
+    .system-logs-table tbody tr:hover td, .user-data-table tbody tr:hover td { background: #f8fafd; }
     .user-sheet th[data-sort-column]:hover, .traffic-sort-button:hover,
     .traffic-sort-button:focus-visible { color: var(--blue-ink); background: #e8f0fe; }
     button.traffic-sort-button:hover:not(:disabled), button.traffic-sort-button:focus-visible {
@@ -602,7 +610,7 @@
       box-shadow: none;
     }
     .user-sheet td code, .traffic-detail-table code, .security-account-table code,
-    .admin-login-table code { color: #6941c6; }
+    .system-logs-table code { color: #6941c6; }
     .user-admin-table th:first-child, .user-admin-table td:first-child,
     .user-admin-table th:nth-child(2), .user-admin-table td:nth-child(2),
     .user-sheet td:first-child { background: #f8fafd; }
@@ -630,8 +638,8 @@
     .device-relation-modal-card { border-color: var(--line); box-shadow: 0 8px 28px rgb(60 64 67 / 20%); }
     .source-settings-dialog-header, .source-settings-dialog-actions { border-color: var(--line); }
     .source-settings-dialog-header h3, .device-relation-modal-header h3 { color: var(--ink); }
-    .admin-login-badge.success, .security-badge, .user-status-badge.active { color: #137333; background: #e6f4ea; }
-    .admin-login-badge.failed, .security-badge.banned, .user-status-badge.banned { color: var(--red); background: #fce8e6; }
+    .system-log-level-badge.success, .security-badge, .user-status-badge.active { color: #137333; background: #e6f4ea; }
+    .system-log-level-badge.failed, .security-badge.banned, .user-status-badge.banned { color: var(--red); background: #fce8e6; }
     .login-gate { width: min(430px, calc(100% - 32px)); margin-top: max(8vh, 48px); }
     .login-gate .card { padding: 28px; border-color: #e3e9f1; border-radius: 16px; box-shadow: 0 2px 10px rgb(60 64 67 / 7%); }
 
@@ -646,30 +654,30 @@
     .settings-section-description, .traffic-detail-summary,
     .security-selection-count, .user-table-meta, .user-admin-device-detail span,
     .device-relation-detail-item span { font-size: 13px; }
-    .admin-login-table, .security-account-table, .security-device-table,
+    .system-logs-table, .security-account-table, .security-device-table,
     .traffic-detail-table, .user-data-table { font-size: 13px; }
-    .admin-login-table th, .admin-login-table td, .security-account-table th,
+    .system-logs-table th, .system-logs-table td, .security-account-table th,
     .security-account-table td, .security-device-table th, .security-device-table td,
     .traffic-detail-table th, .traffic-detail-table td, .user-data-table th,
     .user-data-table td, .user-sheet th, .user-sheet td {
       border-right: 0;
       border-bottom-color: #e7edf4;
     }
-    .admin-login-table th, .admin-login-table td, .security-account-table th,
+    .system-logs-table th, .system-logs-table td, .security-account-table th,
     .security-account-table td, .security-device-table th, .security-device-table td,
     .traffic-detail-table th, .traffic-detail-table td, .user-data-table th,
     .user-data-table td { padding: 10px 12px; }
-    .traffic-detail-table th, .security-account-table th, .admin-login-table th,
+    .traffic-detail-table th, .security-account-table th, .system-logs-table th,
     .security-device-table th, .user-data-table th, .user-sheet th,
     .user-admin-table th:first-child, .user-admin-table th:nth-child(2) { background: #e9eff6; }
     .user-sheet td:first-child, .user-admin-table th:first-child, .user-admin-table td:first-child,
     .user-admin-table th:nth-child(2), .user-admin-table td:nth-child(2) { background: #f8fafd; }
-    .traffic-detail-wrap, .security-account-list, .admin-login-record-wrap,
+    .traffic-detail-wrap, .security-account-list, .system-logs-wrap,
     .table-wrap, .security-device-wrap { border-color: #e1e8f0; }
     .security-device-wrap { border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }
     .subscription-import-item { padding: 12px 4px; border: 0; border-bottom: 1px solid #e7edf4; border-radius: 0; }
     .device-relation-chip { border-color: #dfe6ee; border-radius: 8px; background: #fff; }
-    .admin-login-badge, .security-badge, .user-status-badge, .draft-badge { border-radius: 8px; font-size: 13px; }
+    .system-log-level-badge, .security-badge, .user-status-badge, .draft-badge { border-radius: 8px; font-size: 13px; }
     .user-draft-count, .user-detail-heading p { font-size: 14px; }
     .settings-save-bar {
       padding: 12px 16px;
@@ -1195,6 +1203,10 @@
       .source-list-header, .source-row { grid-template-columns: 15px 18px 27px minmax(80px, 1.1fr) minmax(85px, .9fr) 48px 42px 64px; }
     }
     @media (max-width: 700px) {
+      .system-logs-toolbar { align-items: stretch; }
+      .system-logs-toolbar input, .system-logs-toolbar select, .system-logs-toolbar button { flex-basis: 100%; width: 100%; }
+      .system-logs-wrap { max-height: 60vh; }
+      .system-logs-pagination { align-items: flex-start; flex-direction: column; }
       body.subscriptions-fullscreen, body.navigation-page-fullscreen { overflow: auto; }
       body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace,
       body.navigation-page-fullscreen #dashboard, body.navigation-page-fullscreen .dashboard-workspace { height: auto; min-height: 100vh; overflow: visible; }

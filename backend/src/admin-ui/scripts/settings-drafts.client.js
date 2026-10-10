@@ -1,11 +1,10 @@
-const SETTINGS_SECTIONS = ['subscriptions', 'navigation-page', 'about-page', 'app-update', 'registration-control', 'notice', 'debug-interface'];
+const SETTINGS_SECTIONS = ['subscriptions', 'navigation-page', 'about-page', 'app-update', 'registration-control', 'notice'];
 const settingsDirtySections = new Set();
 const settingsDraftVersions = new Map();
 const settingsSaveMessages = new Map();
 let settingsSaveInFlight = '';
 let settingsFilling = false;
 let settingsSession = 0;
-let debugInterfaceTokenDraft = null;
 
 function updateSettingsSaveControls() {
   SETTINGS_SECTIONS.forEach(function(section) {
@@ -45,7 +44,6 @@ function resetSettingsDrafts() {
   settingsDraftVersions.clear();
   settingsSaveMessages.clear();
   settingsSaveInFlight = '';
-  debugInterfaceTokenDraft = null;
   updateSettingsSaveControls();
 }
 

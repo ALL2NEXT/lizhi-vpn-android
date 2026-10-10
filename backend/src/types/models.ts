@@ -57,11 +57,6 @@ export interface NavigationGroup {
   items: NavigationItem[];
 }
 
-export interface DebugInterface {
-  token: string;
-  subscriptionIds: string[];
-}
-
 export interface Settings {
   websiteUrl: string;
   webNavigationGroups: NavigationGroup[];
@@ -71,7 +66,6 @@ export interface Settings {
   telegramUrl: string;
   registrationEnabled: boolean;
   requireAdminRegistrationCode: boolean;
-  debugInterface: DebugInterface | null;
 }
 
 export interface AppState {
@@ -144,18 +138,28 @@ export interface User {
 
 export type PublicAccount = Omit<User, "createdAt"> & { deviceBlocked: boolean };
 
-export interface AdminLoginRecord {
-  at: string;
-  ip: string;
-  userAgent: string;
-  success: boolean;
-  path: string;
-  method: string;
-  honeypot: boolean;
+export type SystemLogCategory = "request" | "operation" | "database" | "outbound";
+export type SystemLogLevel = "info" | "warning" | "error";
+
+export interface SystemLogDraft {
+  category: SystemLogCategory;
+  level: SystemLogLevel;
+  requestId?: string;
+  actor?: string;
+  method?: string;
+  path?: string;
+  status?: number | null;
+  durationMs?: number | null;
+  ip?: string;
+  userAgent?: string;
+  message: string;
+  details?: string;
+  occurredAt?: string;
 }
 
-export interface AdminLoginDetails {
-  path?: string;
-  method?: string;
-  honeypot?: boolean;
+export interface SystemLogRecord extends Required<Omit<SystemLogDraft, "occurredAt" | "status" | "durationMs">> {
+  id: number;
+  occurredAt: string;
+  status: number | null;
+  durationMs: number | null;
 }

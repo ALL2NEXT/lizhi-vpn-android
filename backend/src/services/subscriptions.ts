@@ -13,6 +13,7 @@ import {
 import { cleanText } from "../lib/values.ts";
 import { normalizeRemoteUrl, toStandardUris } from "../domain/subscription-import/index.ts";
 import { decodeBase64, encodeBase64 } from "../domain/subscription-import/text.ts";
+import { observedFetch } from "./system-logs.ts";
 
 export function normalizeManagedContent(value: unknown) {
   if (typeof value !== "string") return "";
@@ -415,7 +416,7 @@ function subscriptionName(headers: Headers, url: string) {
   return new URL(url).hostname.replace(/^www\./, "");
 }
 
-export async function fetchExternalSubscription(url: string, options: { deduplicate?: boolean } = {}) {
+export async function fetchExternalSubscription(url: string, options: { deduplicate?: boolean; env?: Env } = {}) {
   const normalized = normalizeRemoteUrl(url);
   if (!normalized) throw new Error("invalid_subscription_url");
   const target = new URL(normalized);
@@ -427,7 +428,7 @@ export async function fetchExternalSubscription(url: string, options: { deduplic
   for (const userAgent of SUBSCRIPTION_USER_AGENTS) {
     if (Date.now() >= deadline) break;
     try {
-      const response = await fetch(target.href, {
+      const response = await observedFetch(options.env, target.href, {
         method: "GET", redirect: "follow", signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
         headers: { accept: "text/plain, application/yaml, application/json, */*;q=0.1", "user-agent": userAgent, ...(authorization ? { authorization } : {}) },
       });
@@ -490,7 +491,7 @@ export async function readExternalSubscription(
     }
   }
 
-  const fetched = await fetchExternalSubscription(source.url, { deduplicate: false });
+  const fetched = await fetchExternalSubscription(source.url, { deduplicate: false, env });
   await cacheExternalSubscription(env, source, fetched, now, cacheMinutes);
   return fetched.content;
 }
@@ -535,7 +536,7 @@ export async function readExternalSubscriptionTraffic(
   }
   if (!updateEnabled) return null;
 
-  const fetched = await fetchExternalSubscription(source.url, { deduplicate: false });
+  const fetched = await fetchExternalSubscription(source.url, { deduplicate: false, env });
   await cacheExternalSubscription(env, source, fetched, now, cacheMinutes);
   return fetched.traffic;
 }

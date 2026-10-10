@@ -1,7 +1,6 @@
 import type { Env } from "../types/env.ts";
 import type {
   AppState,
-  DebugInterface,
   JsonObject,
   NavigationGroup,
   Notice,
@@ -26,7 +25,6 @@ import {
   normalizeSubscriptionCacheMinutes,
 } from "./subscriptions.ts";
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SUBSCRIPTION_STATUSES: SubscriptionAccountStatus[] = ["normal", "banned"];
 const SUBSCRIPTION_ACCOUNT_TYPES = ["guest", "formal"] as const;
 
@@ -104,26 +102,6 @@ function normalizeBoundedInteger(value: unknown, fallback: number, minimum: numb
   return Number.isInteger(number) && number >= minimum && number <= maximum
     ? number
     : fallback;
-}
-
-function randomDebugInterfaceToken() {
-  return crypto.randomUUID();
-}
-
-function normalizeDebugInterface(value: unknown, subscriptions: SubscriptionSource[]): DebugInterface {
-  const input = plainObject(value) ? value : {};
-  const availableIds = new Set(subscriptions.map((item) => item.id));
-  const rawIds = input.subscriptionIds ?? input.sourceIds ?? input.subscriptions;
-  const subscriptionIds = Array.from(new Set(
-    (Array.isArray(rawIds) ? rawIds : [])
-      .map((id) => String(id).trim())
-      .filter((id) => /^\d+$/.test(id) && availableIds.has(id)),
-  ));
-  const candidate = cleanText(input.token ?? input.uuid).toLowerCase();
-  return {
-    token: UUID_PATTERN.test(candidate) ? candidate : randomDebugInterfaceToken(),
-    subscriptionIds,
-  };
 }
 
 export interface ReadStateOptions {
@@ -266,14 +244,12 @@ export function normalizeState(input: unknown): AppState {
           subscriptions: [source],
         }];
       });
-  const subscriptions = subscriptionGroups.flatMap((group) => group.subscriptions);
-
   return {
     version: 2,
     subscriptionGroups,
     notice: normalizeNotice(value.notice),
     appUpdate: plainObject(value.appUpdate) ? value.appUpdate : null,
-    settings: normalizeSettings(value.settings, subscriptions),
+    settings: normalizeSettings(value.settings),
     ...(value.updatedAt ? { updatedAt: String(value.updatedAt) } : {}),
   };
 }
@@ -322,7 +298,7 @@ export function visibleNotice(notice: Notice | null, now = Date.now()) {
   return notice;
 }
 
-export function normalizeSettings(value: unknown, subscriptions: SubscriptionSource[] = []): Settings {
+export function normalizeSettings(value: unknown): Settings {
   const settings = plainObject(value) ? value : {};
   // 旧版状态没有注册控制字段，升级时采用新的邮箱绑定经验默认值。
   const hasRegistrationControl =
@@ -349,7 +325,6 @@ export function normalizeSettings(value: unknown, subscriptions: SubscriptionSou
       settings.requireAdminRegistrationCode,
       false,
     ),
-    debugInterface: normalizeDebugInterface(settings.debugInterface, subscriptions),
   };
 }
 
@@ -417,7 +392,5 @@ function normalizeWebNavigationGroups(value: unknown): NavigationGroup[] {
 }
 
 export function publicClientSettings(settings: Settings) {
-  const normalized = normalizeSettings(settings);
-  const { debugInterface: _debugInterface, ...publicSettings } = normalized;
-  return publicSettings;
+  return normalizeSettings(settings);
 }

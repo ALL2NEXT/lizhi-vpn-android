@@ -53,7 +53,7 @@ export function createAdminStateRoutes(deps: Pick<
             ),
           });
         }
-        const result = await importSubscriptionSources(incoming.input, incoming.minAccountType);
+        const result = await importSubscriptionSources(incoming.input, incoming.minAccountType, env);
         return json({ ok: result.sources.length > 0, ...result }, result.sources.length ? 200 : 422);
       } catch (error) {
         return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
@@ -63,7 +63,7 @@ export function createAdminStateRoutes(deps: Pick<
     if (path === "/api/navigation-icon" && request.method === "POST") {
       try {
         const incoming = await readJsonObject(request);
-        return json(await fetchWebsiteIcon(typeof incoming.url === "string" ? incoming.url.trim() : ""));
+        return json(await fetchWebsiteIcon(env, typeof incoming.url === "string" ? incoming.url.trim() : ""));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const status = message === "navigation_icon_not_found"

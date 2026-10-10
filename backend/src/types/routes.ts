@@ -7,8 +7,8 @@ import type * as values from "../lib/values.ts";
 import type * as subscriptions from "../services/subscriptions.ts";
 import type * as state from "../services/state.ts";
 import type * as users from "../services/user-store.ts";
-import type * as adminAccess from "../services/admin-access.ts";
 import type * as subscriptionStore from "../services/subscription-store.ts";
+import type * as systemLogs from "../services/system-logs.ts";
 
 export interface RouteDependencies {
   CLIENT_IP_HEADER: typeof config.CLIENT_IP_HEADER;
@@ -26,7 +26,6 @@ export interface RouteDependencies {
   getClientIp: typeof subscriptions.getClientIp;
   readState: typeof state.readState;
   readSubscriptionContent: typeof subscriptionStore.readSubscriptionContent;
-  readSubscriptionContents: typeof subscriptionStore.readSubscriptionContents;
   visibleNotice: typeof state.visibleNotice;
   publicClientSettings: typeof state.publicClientSettings;
   corsHeaders: typeof responses.corsHeaders;
@@ -67,6 +66,5 @@ export interface RouteDependencies {
   validateAndWarmSubscriptionSources: typeof subscriptions.validateAndWarmSubscriptionSources;
   writeState: typeof state.writeState;
   normalizeState: typeof state.normalizeState;
-  clearAdminLoginRecords: typeof adminAccess.clearAdminLoginRecords;
-  readAdminLoginRecords: typeof adminAccess.readAdminLoginRecords;
+  readSystemLogs: typeof systemLogs.readSystemLogs;
 }

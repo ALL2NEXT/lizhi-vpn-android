@@ -1,4 +1,5 @@
 import type { AccountType, SubscriptionSource } from "../types/models.ts";
+import type { Env } from "../types/env.ts";
 import { detectSubscriptionInput, toStandardUris } from "../domain/subscription-import/index.ts";
 import {
   decodeExternalSubscriptionContent,
@@ -102,7 +103,7 @@ export function parseLocalSubscriptionResponse(
 }
 
 /** 仅生成待编辑的线路，不修改 KV；原有「推送」操作负责保存和缓存预热。 */
-export async function importSubscriptionSources(input: unknown, accountType: unknown): Promise<SubscriptionImportResult> {
+export async function importSubscriptionSources(input: unknown, accountType: unknown, env?: Env): Promise<SubscriptionImportResult> {
   const plan = prepareLocalSubscriptionImport(input, accountType);
   if (!plan.urls.length) return plan;
 
@@ -114,7 +115,7 @@ export async function importSubscriptionSources(input: unknown, accountType: unk
   for (let start = 0; start < plan.urls.length; start += 3) {
     remote.push(...await Promise.all(plan.urls.slice(start, start + 3).map(async url => {
       try {
-        const result = await fetchExternalSubscription(url);
+        const result = await fetchExternalSubscription(url, { env });
         return {
           value: importedSource(result.name, url, "", result.nodeCount, minAccountType),
         };

@@ -1437,12 +1437,6 @@ function fillState(state, section) {
       setValue('noticeContent', notice.content);
       checked('noticeShowOnce', notice.showOnce !== false);
     }
-    if (!section || section === 'debug-interface') {
-      debugInterfaceTokenDraft = null;
-      renderDebugInterface();
-    } else if (section === 'subscriptions' && !settingsDirtySections.has('debug-interface')) {
-      renderDebugInterface();
-    }
   } finally {
     settingsFilling = false;
   }
@@ -1454,82 +1448,6 @@ function noticeDateTimeValue(data) {
   const text = String(data == null ? '' : data).trim();
   const match = text.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
   return match ? match[1] : '';
-}
-function getDebugInterfaceConfig() {
-  const settings = currentState && currentState.settings ? currentState.settings : {};
-  const config = settings.debugInterface || {};
-  return {
-    token: debugInterfaceTokenDraft === null ? String(config.token || '') : debugInterfaceTokenDraft,
-    subscriptionIds: Array.isArray(config.subscriptionIds)
-      ? config.subscriptionIds.map(function(id) { return String(id); })
-      : []
-  };
-}
-function debugInterfaceUrl(token) {
-  return token
-    ? new URL('/api/subscription/debug/' + encodeURIComponent(token), window.location.origin).toString()
-    : '';
-}
-function updateDebugInterfaceUrl() {
-  const input = el('debugInterfaceUrl');
-  if (!input) return;
-  const config = getDebugInterfaceConfig();
-  const selected = Array.from(document.querySelectorAll('[data-debug-source-id]:checked'));
-  input.value = selected.length ? debugInterfaceUrl(config.token) : '';
-}
-function renderDebugInterface(override) {
-  const host = el('debugInterfaceSources');
-  if (!host) return;
-  const groups = Array.isArray(currentState && currentState.subscriptionGroups)
-    ? currentState.subscriptionGroups
-    : [];
-  const sources = groups.flatMap(function(group) {
-    return Array.isArray(group.subscriptions) ? group.subscriptions : [];
-  });
-  const config = override || getDebugInterfaceConfig();
-  const selected = new Set(config.subscriptionIds);
-  if (!sources.length) {
-    host.innerHTML = '<div class="loading-state">暂无可用订阅线路</div>';
-    updateDebugInterfaceUrl();
-    return;
-  }
-  host.innerHTML = sources.map(function(source) {
-    const id = String(source.id || '');
-    const disabled = source.enabled === false;
-    return '<label class="debug-interface-source' + (disabled ? ' disabled' : '') + '">' +
-      '<input type="checkbox" data-debug-source-id="' + esc(id) + '" ' +
-      (selected.has(id) ? 'checked ' : '') + '>' +
-      '<span>' + esc(source.name || ('订阅' + id)) + '</span>' +
-      (disabled ? '<small>已停用</small>' : '') +
-      '</label>';
-  }).join('');
-  host.querySelectorAll('[data-debug-source-id]').forEach(function(control) {
-    control.addEventListener('change', updateDebugInterfaceUrl);
-  });
-  updateDebugInterfaceUrl();
-}
-function regenerateDebugInterfaceToken() {
-  if (!currentState) return;
-  const config = getDebugInterfaceConfig();
-  config.subscriptionIds = Array.from(document.querySelectorAll('[data-debug-source-id]:checked')).map(function(control) { return control.dataset.debugSourceId; });
-  debugInterfaceTokenDraft = crypto.randomUUID();
-  config.token = debugInterfaceTokenDraft;
-  renderDebugInterface(config);
-  markSettingsDirty('debug-interface');
-  show('UUID 已重新生成，请保存调试接口后生效');
-}
-async function copyDebugInterfaceUrl() {
-  const input = el('debugInterfaceUrl');
-  const url = input && input.value;
-  if (!url) return show('请先选择线路并保存调试接口', true);
-  try {
-    await navigator.clipboard.writeText(url);
-    show('调试接口地址已复制');
-  } catch (_) {
-    input.focus();
-    input.select();
-    show('无法自动复制，请手动复制地址', true);
-  }
 }
 function readSubscriptionSource(row, index) {
     const sourceType = row.querySelector('[data-field="sourceType"]').value;
@@ -1590,9 +1508,6 @@ function formState() {
     changelog: value('appChangelog'),
     is_force: el('appForce').checked ? 1 : 0
   } : null;
-  const debugConfig = getDebugInterfaceConfig();
-  debugConfig.subscriptionIds = Array.from(document.querySelectorAll('[data-debug-source-id]:checked'))
-    .map(function(control) { return control.dataset.debugSourceId; });
   return {
     subscriptionGroups: subscriptionGroups,
     settings: {
@@ -1604,8 +1519,7 @@ function formState() {
        telegramUrl: value('telegramUrl'),
        registrationEnabled: el('registrationEnabled').checked,
        requireAdminRegistrationCode: el('requireAdminRegistrationCode').checked,
-       },
-      debugInterface: debugConfig,
+      },
     notice: notice,
     appUpdate: appUpdate
   };
@@ -1701,10 +1615,6 @@ async function pushSection(section) {
           registrationEnabled: form.settings.registrationEnabled,
           requireAdminRegistrationCode: form.settings.requireAdminRegistrationCode
         })
-        : section === 'debug-interface'
-          ? Object.assign({}, currentState.settings, {
-            debugInterface: form.debugInterface
-          })
         : currentState.settings;
     const state = {
       subscriptionGroups: section === 'subscriptions' ? form.subscriptionGroups : currentState.subscriptionGroups,

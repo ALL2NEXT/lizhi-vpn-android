@@ -1,3 +1,6 @@
+import type { Env } from "../types/env.ts";
+import { observedFetch } from "./system-logs.ts";
+
 const MAX_ICON_BYTES = 128 * 1024;
 const MAX_PAGE_BYTES = 512 * 1024;
 const SUPPORTED_IMAGE_TYPES = new Set([
@@ -31,10 +34,10 @@ function validatePublicWebsiteUrl(value: string) {
   return url;
 }
 
-async function fetchPublicUrl(url: URL, accept: string) {
+async function fetchPublicUrl(env: Env, url: URL, accept: string) {
   let current = validatePublicWebsiteUrl(url.toString());
   for (let redirects = 0; redirects <= 4; redirects += 1) {
-    const response = await fetch(current, {
+    const response = await observedFetch(env, current, {
       method: "GET",
       redirect: "manual",
       headers: {
@@ -170,9 +173,9 @@ function findIconUrls(html: string, pageUrl: URL) {
   return candidates;
 }
 
-async function fetchImage(url: URL): Promise<{ icon: { iconBase64: string; iconMimeType: string }; reason?: never } | { icon?: never; reason: string }> {
+async function fetchImage(env: Env, url: URL): Promise<{ icon: { iconBase64: string; iconMimeType: string }; reason?: never } | { icon?: never; reason: string }> {
   try {
-    const { response } = await fetchPublicUrl(url, "image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon,image/*;q=0.8");
+    const { response } = await fetchPublicUrl(env, url, "image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon,image/*;q=0.8");
     if (!response.ok) return { reason: "not_found" };
     const declaredType = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
     const isHtml = declaredType === "text/html" || declaredType === "application/xhtml+xml";
@@ -197,7 +200,7 @@ async function fetchImage(url: URL): Promise<{ icon: { iconBase64: string; iconM
   }
 }
 
-export async function fetchWebsiteIcon(value: string) {
+export async function fetchWebsiteIcon(env: Env, value: string) {
   const pageUrl = validatePublicWebsiteUrl(value);
   let finalPageUrl = pageUrl;
   let html = "";
@@ -205,7 +208,7 @@ export async function fetchWebsiteIcon(value: string) {
   let sawUnsupportedFormat = false;
 
   try {
-    const result = await fetchPublicUrl(pageUrl, "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1");
+    const result = await fetchPublicUrl(env, pageUrl, "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1");
     finalPageUrl = result.url;
     const contentType = (result.response.headers.get("content-type") || "").toLowerCase();
     if (result.response.ok && (contentType.includes("text/html") || contentType.includes("application/xhtml+xml"))) {
@@ -223,7 +226,7 @@ export async function fetchWebsiteIcon(value: string) {
   const iconUrls = findIconUrls(html, finalPageUrl);
   iconUrls.push(new URL("/favicon.ico", finalPageUrl));
   for (const iconUrl of new Map(iconUrls.map((url) => [url.toString(), url])).values()) {
-    const result = await fetchImage(iconUrl);
+    const result = await fetchImage(env, iconUrl);
     if (result.icon) return result.icon;
     if (result.reason === "site_challenge") sawChallenge = true;
     if (result.reason === "unsupported_format") sawUnsupportedFormat = true;

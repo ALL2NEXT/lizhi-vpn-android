@@ -1,29 +1,25 @@
 import type { Env } from "../../types/env.ts";
 import type { RouteDependencies } from "../../types/routes.ts";
 
-/*
- * Admin access and login history routes.
- */
+/* System log query route. */
 
 export function createAdminAccessRoutes(deps: Pick<
   RouteDependencies,
-  | "clearAdminLoginRecords"
   | "json"
-  | "readAdminLoginRecords"
+  | "readSystemLogs"
 >) {
-  const { clearAdminLoginRecords, json, readAdminLoginRecords } = deps;
+  const { json, readSystemLogs } = deps;
 
   return async function handleAdminAccess(path: string, request: Request, env: Env) {
-    if (path === "/api/admin-login-records" && request.method === "GET") {
-      return json({
-        ok: true,
-        records: await readAdminLoginRecords(env),
-      });
-    }
-
-    if (path === "/api/admin-login-records" && request.method === "DELETE") {
-      await clearAdminLoginRecords(env);
-      return json({ ok: true, cleared: true });
+    if (path === "/api/system-logs" && request.method === "GET") {
+      const url = new URL(request.url);
+      return json(await readSystemLogs(env, {
+        category: url.searchParams.get("category") || undefined,
+        level: url.searchParams.get("level") || undefined,
+        query: url.searchParams.get("q") || undefined,
+        limit: Number(url.searchParams.get("limit")) || 100,
+        offset: Number(url.searchParams.get("offset")) || 0,
+      }));
     }
 
     return null;

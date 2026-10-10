@@ -8,8 +8,9 @@
   let deviceRelationsLoading = false;
   let trafficDetailsData = null;
   let trafficDetailsLoading = false;
-  let adminLoginRecordsData = null;
-  let adminLoginRecordsLoading = false;
+  let systemLogsData = null;
+  let systemLogsLoading = false;
+  let systemLogsOffset = 0;
   let trafficDetailsSortKey = '';
   let trafficDetailsSortDirection = 'asc';
   const trafficZeroFilters = {today: false, month: false, total: false};
@@ -172,8 +173,9 @@
    deviceRelationsLoading = false;
    trafficDetailsData = null;
    closeDeviceRelationDetail();
-   adminLoginRecordsData = null;
-   adminLoginRecordsLoading = false;
+   systemLogsData = null;
+   systemLogsLoading = false;
+   systemLogsOffset = 0;
    trafficZeroFilters.today = false;
    trafficZeroFilters.month = false;
    trafficZeroFilters.total = false;
@@ -217,8 +219,8 @@
    if (name === 'traffic-query' && !trafficDetailsData && !trafficDetailsLoading) {
      loadTrafficDetails();
    }
-   if (name === 'admin-login-records' && !adminLoginRecordsData && !adminLoginRecordsLoading) {
-     loadAdminLoginRecords();
+   if (name === 'system-logs' && !systemLogsData && !systemLogsLoading) {
+     loadSystemLogs();
    }
  }
    document.querySelectorAll('.tab-button[data-tab]').forEach(function(button) {

@@ -16,7 +16,7 @@ import {
   isAppVersionAtLeast, normalizeSubscriptionCacheMinutes,
   protectSubscription, shiftFromClientIp,
 } from "../src/services/subscriptions.ts";
-import { normalizeState, publicClientSettings, readState, visibleNotice, writeState } from "../src/services/state.ts";
+import { normalizeState, readState, visibleNotice, writeState } from "../src/services/state.ts";
 
 const now = new Date("2026-10-07T02:00:00Z");
 const node = "vless://id@example.com:443#日本";
@@ -108,15 +108,12 @@ test("版本号按数字比较，缓存期限受限，订阅 IP 编码保持协�
   assert.equal(protectSubscription("abc", "192.0.2.64"), "ISOc");
 });
 
-test("旧 KV 字段可迁移，内联订阅不会自动重命名，调试地址不返回客户端", () => {
+test("旧 KV 字段可迁移，内联订阅不会自动重命名", () =>", () => {
   const state = normalizeState({
     sources: [null, { title: "line", nodesText: node, autoRename: true, minimumAccountType: "formal" }],
-    settings: { debugInterface: { token: "00000000-0000-4000-8000-000000000001", sourceIds: ["1", "1", "2"] } },
   });
   assert.deepEqual(state.subscriptionGroups[0].allowedAccountTypes, ["formal"]);
   assert.equal(state.subscriptionGroups[0].subscriptions[0].autoRename, false);
-  assert.deepEqual(state.settings.debugInterface.subscriptionIds, ["1"]);
-  assert.equal("debugInterface" in publicClientSettings(state.settings), false);
   assert.equal(state.settings.registrationEnabled, true);
   assert.equal(normalizeState(null).subscriptionGroups.length, 0);
 });

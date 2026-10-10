@@ -62,10 +62,7 @@ import {
   visibleNotice,
   writeState,
 } from "./services/state.ts";
-import {
-  readSubscriptionContent,
-  readSubscriptionContents,
-} from "./services/subscription-store.ts";
+import { readSubscriptionContent } from "./services/subscription-store.ts";
 import {
   attachDeviceToUser,
   ensureUserSchema,
@@ -82,12 +79,14 @@ import {
   rowToUser,
   usersDb,
 } from "./services/user-store.ts";
-import {
-  clearAdminLoginRecords,
-  readAdminLoginRecords,
-  recordAdminLogin,
-} from "./services/admin-access.ts";
 import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.ts";
+import type { SystemLogDraft } from "./types/models.ts";
+import {
+  createObservedEnv,
+  pruneSystemLogs,
+  readSystemLogs,
+  writeSystemLogs,
+} from "./services/system-logs.ts";
 
 const routeDeps = {
   CLIENT_IP_HEADER,
@@ -105,7 +104,6 @@ const routeDeps = {
   getClientIp,
   readState,
   readSubscriptionContent,
-  readSubscriptionContents,
   visibleNotice,
   publicClientSettings,
   corsHeaders,
@@ -147,22 +145,53 @@ const routeDeps = {
   validateAndWarmSubscriptionSources,
   writeState,
   normalizeState,
-  clearAdminLoginRecords,
-  readAdminLoginRecords,
+  readSystemLogs,
 } satisfies RouteDependencies;
 
 const {
   handleClient,
   handleProxyAppList,
   handleManagedSubscription,
-  handleDebugSubscription,
 } = createClientRoutes(routeDeps);
 const { handleAccount } = createAccountRoutes(routeDeps);
 const { handleAdmin } = createAdminRoutes(routeDeps);
 
-const worker = {
-  async fetch(request: Request, env: Env) {
-    try {
+function safeRequestPath(path: string) {
+  return path
+    .replace(/(\/api\/subscription\/debug\/)[^/]+/i, "$1[redacted]")
+    .slice(0, 300);
+}
+
+function requestIp(request: Request) {
+  return String(request.headers.get("CF-Connecting-IP") || "").trim().slice(0, 64);
+}
+
+function adminOperationLabel(method: string, path: string) {
+  if (path.endsWith("/api/state") && method === "PUT") return "保存后台配置";
+  if (path.endsWith("/api/registration-codes") && method === "POST") return "生成注册码";
+  if (path.includes("/api/users/batch") && method === "DELETE") return "批量删除用户";
+  if (path.includes("/api/users/batch")) return "批量修改用户";
+  if (path.includes("/api/users/") && path.endsWith("/ban")) {
+    return method === "POST" ? "封禁用户" : "解除用户封禁";
+  }
+  if (path.includes("/api/users/") && method === "DELETE") return "删除用户";
+  if (path.includes("/api/users/") && method === "PATCH") return "编辑用户";
+  if (path.includes("/api/security/")) return "修改账户或设备安全设置";
+  return `后台操作 ${method} ${path}`;
+}
+
+function isAdminWriteOperation(method: string, path: string) {
+  if (method === "PUT" && path.endsWith("/api/state")) return true;
+  if (method === "POST" && path.endsWith("/api/registration-codes")) return true;
+  if (path.includes("/api/users/") || path.includes("/api/users/batch")) {
+    return ["PATCH", "POST", "DELETE"].includes(method);
+  }
+  if (path.includes("/api/security/")) return ["POST", "PATCH", "DELETE"].includes(method);
+  return false;
+}
+
+async function dispatchWorkerRequest(request: Request, env: Env) {
+  try {
       if (request.method === "OPTIONS") {
         return new Response(null, { status: 204, headers: corsHeaders() });
       }
@@ -172,7 +201,7 @@ const worker = {
       const adminBasePath = resolveAdminBasePath(env.ADMIN_PATH);
 
       if (isHoneypotPath(path)) {
-        return handleHoneypotRoute(path, request, env, recordAdminLogin, json);
+        return handleHoneypotRoute(request, json);
       }
 
       if (path === "/" || path === "/health") {
@@ -208,11 +237,7 @@ const worker = {
       }
 
       if (path === "/api/app/proxy-packages" && request.method === "GET") {
-        return handleProxyAppList();
-      }
-
-      if (path.startsWith("/api/subscription/debug/") && request.method === "GET") {
-        return handleDebugSubscription(path, request, env);
+        return handleProxyAppList(env);
       }
 
       if (path.startsWith("/api/subscription/") && request.method === "GET") {
@@ -224,13 +249,10 @@ const worker = {
       }
 
       if (adminBasePath && path.startsWith(`${adminBasePath}/api/`)) {
-        const isLoginRequest = path === `${adminBasePath}/api/state` && request.method === "GET";
         const authorized = await isAdmin(request, env);
         if (!authorized) {
-          if (isLoginRequest) await recordAdminLogin(env, request, false);
           return json({ error: "unauthorized" }, 401);
         }
-        if (isLoginRequest) await recordAdminLogin(env, request, true);
         return handleAdmin(path.slice(adminBasePath.length), request, env);
       }
 
@@ -244,6 +266,80 @@ const worker = {
       }));
       return json({ error: "internal_error" }, 500);
     }
+}
+
+const worker = {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext) {
+    const startedAt = performance.now();
+    const occurredAt = beijingTimestamp();
+    const url = new URL(request.url);
+    const path = safeRequestPath(url.pathname.replace(/\/+$/, "") || "/");
+    const adminBasePath = resolveAdminBasePath(env.ADMIN_PATH);
+    const isAdminApi = Boolean(adminBasePath && path.startsWith(`${adminBasePath}/api/`));
+    const requestId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const diagnostics: SystemLogDraft[] = [];
+    const sink = (entry: SystemLogDraft) => {
+      diagnostics.push({
+        ...entry,
+        requestId,
+        actor: entry.actor || "",
+        path: entry.path || path,
+        method: entry.method || request.method,
+        ip: entry.ip || requestIp(request),
+        userAgent: entry.userAgent || request.headers.get("user-agent") || "",
+        occurredAt: entry.occurredAt || beijingTimestamp(),
+      });
+    };
+    const observedEnv = createObservedEnv(env, sink);
+    const response = await dispatchWorkerRequest(request, observedEnv);
+    const durationMs = Math.round(performance.now() - startedAt);
+    const authorizedAdmin = isAdminApi && request.method !== "OPTIONS" && response.status !== 401;
+    const level = response.status >= 500 ? "error" : response.status >= 400 ? "warning" : "info";
+    const actor = authorizedAdmin
+      ? "管理员"
+      : isAdminApi && response.status === 401
+        ? "未认证"
+        : "";
+    const entries: SystemLogDraft[] = [
+      ...diagnostics.map((entry) => ({ ...entry, actor: entry.actor || actor })),
+      {
+        category: "request",
+        level,
+        requestId,
+        actor,
+        method: request.method,
+        path,
+        status: response.status,
+        durationMs,
+        ip: requestIp(request),
+        userAgent: request.headers.get("user-agent") || "",
+        message: `${request.method} ${path} 返回 HTTP ${response.status}`,
+        occurredAt,
+      },
+    ];
+    if (isAdminApi && authorizedAdmin && isAdminWriteOperation(request.method, path)) {
+      entries.push({
+        category: "operation",
+        level,
+        requestId,
+        actor,
+        method: request.method,
+        path,
+        status: response.status,
+        durationMs,
+        ip: requestIp(request),
+        userAgent: request.headers.get("user-agent") || "",
+        message: adminOperationLabel(request.method, path),
+        occurredAt,
+      });
+    }
+    const persist = writeSystemLogs(env, entries);
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(persist);
+    else await persist;
+    return response;
+  },
+  scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(pruneSystemLogs(env));
   },
 } satisfies ExportedHandler<Env>;
 

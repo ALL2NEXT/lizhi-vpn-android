@@ -6,6 +6,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "account_id": "ab015799322591cab5c7ae3d57d337ac",
   "workers_dev": true,
+  "triggers": {
+    "crons": ["0 19 * * *"]
+  },
   "rules": [
     {
       "type": "Text",
