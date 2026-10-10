@@ -247,17 +247,13 @@ function addSubscriptionGroup(group) {
     '<input class="subscription-group-order-data" data-field="groupOrder" type="number" min="1" step="1" value="' + groupOrder + '" aria-label="分组排序序号">' +
   '</div>' +
   '<dialog class="subscription-permissions-dialog" data-group-permissions-dialog aria-label="分组设置">' +
-    '<div class="source-settings-dialog-header"><div><h3>分组设置</h3><p>统一设置组内订阅的加密方式、访问条件、App 版本区间和更新策略。</p></div>' +
+    '<div class="source-settings-dialog-header"><div><h3>分组设置</h3></div>' +
       '<button class="secondary" type="button" data-action="permissions-close">关闭</button>' +
     '</div>' +
     '<div class="subscription-group-permissions">' +
     '<fieldset class="subscription-group-type-setting"><legend>分组类型</legend>' +
       '<label><span>类型</span><select data-field="groupType"><option value="standard">普通常驻分组</option><option value="load_balanced">负载均衡分组</option></select></label>' +
       '<small>普通常驻分组会向客户端提供全部启用订阅；负载均衡分组为每位用户分配其中一条订阅。</small>' +
-    '</fieldset>' +
-    '<fieldset class="subscription-encryption-setting"><legend>加密设置</legend>' +
-      '<label><span>加密方式</span><select data-field="encryptionMode"><option value="none">无</option><option value="encrypted">加密</option></select></label>' +
-      '<small>本分组内所有订阅统一使用该设置。</small>' +
     '</fieldset>' +
     '<fieldset class="subscription-load-balance-settings" data-group-type-settings hidden><legend>负载均衡设置</legend>' +
       '<label><span>每个订阅最大分配人数</span><input data-field="maxUsersPerSubscription" type="number" min="1" max="1000000" step="1"></label>' +
@@ -295,7 +291,6 @@ function addSubscriptionGroup(group) {
   row.querySelector('[data-field="groupName"]').value = String(group.name || '');
   row.querySelector('[data-field="groupCacheMinutes"]').value = String(group.cacheMinutes == null ? 30 : group.cacheMinutes);
   row.querySelector('[data-field="groupType"]').value = group.groupType === 'load_balanced' ? 'load_balanced' : 'standard';
-  row.querySelector('[data-field="encryptionMode"]').value = group.encryptionMode === 'none' ? 'none' : 'encrypted';
   row.querySelector('[data-field="maxUsersPerSubscription"]').value = String(group.maxUsersPerSubscription == null ? 10 : group.maxUsersPerSubscription);
   row.querySelector('[data-field="resetPeriodDays"]').value = String(group.resetPeriodDays == null ? 30 : group.resetPeriodDays);
   row.querySelector('[data-field="minAppVersion"]').value = String(group.minAppVersion || '');
@@ -1481,7 +1476,6 @@ function readSubscriptionGroups() {
       updateEnabled: group.querySelector('[data-field="updateEnabled"]').checked,
       cacheMinutes: Number(group.querySelector('[data-field="groupCacheMinutes"]').value || 0),
       groupType: group.querySelector('[data-field="groupType"]').value,
-      encryptionMode: group.querySelector('[data-field="encryptionMode"]').value,
       maxUsersPerSubscription: Number(group.querySelector('[data-field="maxUsersPerSubscription"]').value || 0),
       resetPeriodDays: Number(group.querySelector('[data-field="resetPeriodDays"]').value || 0),
       minAppVersion: group.querySelector('[data-field="minAppVersion"]').value.trim(),

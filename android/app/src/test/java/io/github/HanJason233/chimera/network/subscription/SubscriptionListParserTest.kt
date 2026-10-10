@@ -1,7 +1,5 @@
 package io.github.HanJason233.chimera.network.subscription
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import io.github.HanJason233.chimera.data.model.ACCOUNT_TYPE_FORMAL
 import io.github.HanJason233.chimera.data.model.ACCOUNT_TYPE_GUEST
@@ -11,22 +9,14 @@ class SubscriptionListParserTest {
     private val parser = SubscriptionListParser()
 
     @Test
-    fun parseReadsEncryptedFlagAndLegacyAlias() {
+    fun parseIgnoresLegacyEncryptionFlags() {
         val result = parser.parse(
             """
-            {
-              "subscriptions": [
-                {"name":"A","url":"https://example.com/a","encrypted":true},
-                {"name":"B","url":"https://example.com/b","isEncrypted":"1"},
-                {"name":"C","url":"https://example.com/c"}
-              ]
-            }
+            {"subscriptions":[{"name":"A","url":"https://example.com/a","encrypted":true},{"name":"B","url":"https://example.com/b","isEncrypted":"1"},{"name":"C","url":"https://example.com/c"}]}
             """.trimIndent()
         ).getOrThrow()
 
-        assertTrue(result.sources[0].encrypted)
-        assertTrue(result.sources[1].encrypted)
-        assertFalse(result.sources[2].encrypted)
+        assertEquals(listOf("https://example.com/a", "https://example.com/b", "https://example.com/c"), result.sources.map { it.url })
     }
 
     @Test
@@ -46,9 +36,7 @@ class SubscriptionListParserTest {
             }
             """.trimIndent()
         ).getOrThrow()
-
-        assertTrue(result.sources.single().encrypted)
-        assertTrue(result.sources.single().url.endsWith("/api/subscription/1"))
+        assertEquals("https://worker.example/api/subscription/1", result.sources.single().url)
     }
 
     @Test

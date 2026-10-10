@@ -6,7 +6,6 @@ import {
   MAX_MANAGED_SUBSCRIPTION_BYTES,
   MAX_SUBSCRIPTION_CACHE_MINUTES,
   PLAINTEXT_NODE_PATTERN,
-  PRIVATE_B64_ALPHABET,
   SUBSCRIPTION_CACHE_KEY_PREFIX,
   TEXT_ENCODER,
 } from "../config.ts";
@@ -568,102 +567,4 @@ export async function validateAndWarmSubscriptionSources(env: Env, groups: Subsc
       }
     }
   }
-}
-
-export function privateBase64Encode(value: string) {
-  const bytes = TEXT_ENCODER.encode(value);
-  let result = "";
-  let chunk = "";
-
-  for (let i = 0; i < bytes.length; i += 3) {
-    const remaining = bytes.length - i;
-    const a = bytes[i];
-    const b = remaining > 1 ? bytes[i + 1] : 0;
-    const c = remaining > 2 ? bytes[i + 2] : 0;
-    const block = (a << 16) | (b << 8) | c;
-
-    chunk += PRIVATE_B64_ALPHABET[(block >>> 18) & 0x3f];
-    chunk += PRIVATE_B64_ALPHABET[(block >>> 12) & 0x3f];
-    chunk += remaining > 1
-      ? PRIVATE_B64_ALPHABET[(block >>> 6) & 0x3f]
-      : "=";
-    chunk += remaining > 2
-      ? PRIVATE_B64_ALPHABET[block & 0x3f]
-      : "=";
-    if (chunk.length >= 0x8000) {
-      result += chunk;
-      chunk = "";
-    }
-  }
-
-  return result + chunk;
-}
-
-export function parseIpv4Tail(value: string) {
-  let address = value;
-  if (address.includes(":") && address.includes(".")) {
-    address = address.slice(address.lastIndexOf(":") + 1);
-  }
-
-  const parts = address.split(".");
-  if (parts.length !== 4) return null;
-  const numbers = parts.map((part) => {
-    if (!/^\d{1,3}$/.test(part)) return NaN;
-    return Number(part);
-  });
-  if (numbers.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
-    return null;
-  }
-  return numbers[3];
-}
-
-export function shiftFromClientIp(clientIp: string) {
-  let address = String(clientIp || "").split(",", 1)[0].trim();
-  if (address.startsWith("[") && address.includes("]")) {
-    address = address.slice(1, address.indexOf("]"));
-  }
-
-  const ipv4Tail = parseIpv4Tail(address);
-  if (ipv4Tail !== null) return ipv4Tail % 64;
-
-  if (address.includes(":")) {
-    const lastGroup = address.slice(address.lastIndexOf(":") + 1);
-    if (lastGroup === "") return 0;
-    if (/^[a-f\d]{1,4}$/i.test(lastGroup)) {
-      return parseInt(lastGroup, 16) % 64;
-    }
-  }
-
-  throw new Error("invalid_cf_connecting_ip");
-}
-
-export function protectSubscription(value: string, clientIp: string) {
-  const shift = shiftFromClientIp(clientIp);
-  const encoded = privateBase64Encode(value);
-  if (shift === 0) return encoded;
-
-  let result = "";
-
-  let chunk = "";
-  for (const character of encoded) {
-    if (character === "=") {
-      chunk += character;
-      continue;
-    }
-    const index = PRIVATE_B64_ALPHABET.indexOf(character);
-    if (index < 0) throw new Error("private_base64_encoding_failed");
-    chunk += PRIVATE_B64_ALPHABET[(index + shift) % 64];
-    if (chunk.length >= 0x8000) {
-      result += chunk;
-      chunk = "";
-    }
-  }
-  return result + chunk;
-}
-
-export function getClientIp(request: Request) {
-  const clientIp = request.headers.get("CF-Connecting-IP");
-  if (!clientIp) throw new Error("missing_cf_connecting_ip");
-  shiftFromClientIp(clientIp);
-  return clientIp.trim();
 }

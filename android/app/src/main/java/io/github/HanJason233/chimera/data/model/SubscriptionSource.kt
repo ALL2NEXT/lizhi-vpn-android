@@ -8,7 +8,6 @@ data class SubscriptionSource(
     val name: String,
     val url: String,
     val enabled: Boolean = true,
-    val encrypted: Boolean = false,
     /** 允许访问这条线路的最低账户等级：被封禁账户、游客、正式用户。 */
     val minAccountType: String = DEFAULT_MIN_ACCOUNT_TYPE,
     /** 新版后台按封禁状态控制访问；为空时表示旧版接口没有返回该规则。 */

@@ -11,8 +11,6 @@ import type * as subscriptionStore from "../services/subscription-store.ts";
 import type * as systemLogs from "../services/system-logs.ts";
 
 export interface RouteDependencies {
-  CLIENT_IP_HEADER: typeof config.CLIENT_IP_HEADER;
-  LEGACY_CLIENT_IP_HEADER: typeof config.LEGACY_CLIENT_IP_HEADER;
   canAccessAccountType: typeof account.canAccessAccountType;
   resolveAccountAccess: typeof users.resolveAccountAccess;
   beijingTimestamp: typeof time.beijingTimestamp;
@@ -22,8 +20,6 @@ export interface RouteDependencies {
   readExternalSubscriptionTraffic: typeof subscriptions.readExternalSubscriptionTraffic;
   autoRenameSubscriptionContent: typeof subscriptions.autoRenameSubscriptionContent;
   deduplicateSubscriptionContent: typeof subscriptions.deduplicateSubscriptionContent;
-  protectSubscription: typeof subscriptions.protectSubscription;
-  getClientIp: typeof subscriptions.getClientIp;
   readState: typeof state.readState;
   readSubscriptionContent: typeof subscriptionStore.readSubscriptionContent;
   visibleNotice: typeof state.visibleNotice;

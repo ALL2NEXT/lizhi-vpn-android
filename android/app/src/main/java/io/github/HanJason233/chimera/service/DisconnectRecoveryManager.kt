@@ -128,10 +128,10 @@ internal class DisconnectRecoveryManager(
         }
         val directClient = createPhysicalNetworkClient()
         val requestUrl = subscriptionRequestUrl(source.url)
-        var result = subscriptionParser.fetchAndParseWithClient(requestUrl, directClient, source.encrypted)
+        var result = subscriptionParser.fetchAndParseWithClient(requestUrl, directClient)
         if (result.isFailure) {
             Log.w(TAG, "Recovery subscription fetch failed, retrying once", result.exceptionOrNull())
-            result = subscriptionParser.fetchAndParseWithClient(requestUrl, directClient, source.encrypted)
+            result = subscriptionParser.fetchAndParseWithClient(requestUrl, directClient)
         }
         val refreshedNodes = result.getOrNull()
             ?.map { node ->

@@ -6,6 +6,13 @@
   "compatibility_flags": ["nodejs_compat"],
   "account_id": "ab015799322591cab5c7ae3d57d337ac",
   "workers_dev": true,
+  // 将客户端使用的自定义域名绑定到 tiered Worker。
+  "routes": [
+    {
+      "pattern": "test.11145149.xyz/*",
+      "zone_name": "11145149.xyz"
+    }
+  ],
   "triggers": {
     "crons": ["0 19 * * *"]
   },

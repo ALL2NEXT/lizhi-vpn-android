@@ -10,7 +10,8 @@ import io.github.HanJason233.chimera.data.model.UrlTestTargets
  */
 object AppConfig {
     // Cloudflare Worker 默认地址；主页连续点击标题五次可以切换到其他后端。
-    const val DEFAULT_BACKEND_URL = "https://chimera.11145149.xyz"
+    const val DEFAULT_BACKEND_URL = "https://test.11145149.xyz"
+    private const val LEGACY_DEFAULT_BACKEND_URL = "https://chimera.11145149.xyz"
 
     private const val PREFERENCES_NAME = "chimera_app_config"
     private const val BACKEND_URL_KEY = "backend_url"
@@ -22,9 +23,20 @@ object AppConfig {
     fun initialize(context: Context) {
         val appContext = context.applicationContext
         val currentPreferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-        configuredBackendUrl = normalizeBackendUrl(
+        val savedBackendUrl = normalizeBackendUrl(
             currentPreferences.getString(BACKEND_URL_KEY, null)
-        ) ?: DEFAULT_BACKEND_URL
+        )
+        configuredBackendUrl = when {
+            savedBackendUrl == null -> DEFAULT_BACKEND_URL
+            // 将旧版默认地址迁移到新 Worker，保留其他自定义地址。
+            savedBackendUrl.equals(LEGACY_DEFAULT_BACKEND_URL, ignoreCase = true) -> {
+                currentPreferences.edit()
+                    .putString(BACKEND_URL_KEY, DEFAULT_BACKEND_URL)
+                    .apply()
+                DEFAULT_BACKEND_URL
+            }
+            else -> savedBackendUrl
+        }
     }
 
     val BACKEND_URL: String

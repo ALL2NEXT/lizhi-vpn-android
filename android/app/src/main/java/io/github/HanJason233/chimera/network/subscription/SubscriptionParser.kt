@@ -18,7 +18,6 @@ import android.net.Uri
 import java.net.URLDecoder
 import java.security.MessageDigest
 import kotlinx.coroutines.withTimeout
-import io.github.HanJason233.chimera.util.RuntimeTuner
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.data.model.PersonalSourceUserAgentMode
@@ -37,15 +36,13 @@ class SubscriptionParser {
 
     suspend fun fetchAndParse(
         url: String,
-        timeoutMs: Long = 25000L,
-        encrypted: Boolean = false
-    ): Result<List<Node>> = fetchAndParseWithMetadata(url, timeoutMs, encrypted)
+        timeoutMs: Long = 25000L
+    ): Result<List<Node>> = fetchAndParseWithMetadata(url, timeoutMs)
         .map(ParsedSubscription::nodes)
 
     internal suspend fun fetchAndParseWithMetadata(
         url: String,
         timeoutMs: Long = 25000L,
-        encrypted: Boolean = false,
         userAgentMode: PersonalSourceUserAgentMode? = null,
         customUserAgent: String? = null
     ): Result<ParsedSubscription> {
@@ -74,17 +71,7 @@ class SubscriptionParser {
                         ?: throw IllegalStateException("订阅接口返回空内容")
                 }
                 val nodes = withContext(Dispatchers.Default) {
-                    val content = if (encrypted) {
-                        val route = response.headers()[CLIENT_IP_HEADER]
-                            ?: response.headers()[LEGACY_CLIENT_IP_HEADER]
-                            ?: throw IllegalStateException(
-                                "加密订阅缺少 $CLIENT_IP_HEADER 响应头"
-                            )
-                        RuntimeTuner.c1(raw, route)
-                    } else {
-                        raw
-                    }
-                    parseSubscription(content)
+                    parseSubscription(raw)
                 }
                 if (nodes.isEmpty()) {
                     throw IllegalStateException("订阅内容未解析到可用节点")
@@ -120,8 +107,7 @@ class SubscriptionParser {
     /** 使用指定网络客户端拉取订阅，供 VPN 断线后通过物理网络刷新当前订阅。 */
     suspend fun fetchAndParseWithClient(
         url: String,
-        client: OkHttpClient,
-        encrypted: Boolean = false
+        client: OkHttpClient
     ): Result<List<Node>> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder().url(url).get().build()
@@ -131,15 +117,7 @@ class SubscriptionParser {
                 }
                 val raw = response.body?.string()
                     ?: throw IllegalStateException("订阅接口返回空内容")
-                val content = if (encrypted) {
-                    val route = response.header(CLIENT_IP_HEADER)
-                        ?: response.header(LEGACY_CLIENT_IP_HEADER)
-                        ?: throw IllegalStateException("加密订阅缺少 $CLIENT_IP_HEADER 响应头")
-                    RuntimeTuner.c1(raw, route)
-                } else {
-                    raw
-                }
-                Result.success(parseSubscription(content))
+                Result.success(parseSubscription(raw))
             }
         } catch (e: Exception) {
             Log.e(tag, "Failed to fetch subscription with custom client", e)
@@ -540,8 +518,6 @@ class SubscriptionParser {
             "Throne/1.0.0",
             "sing-box/1.14.0"
         )
-        const val CLIENT_IP_HEADER = "X-Chimera-Client-IP"
-        private const val LEGACY_CLIENT_IP_HEADER = "X-Firefly-Client-IP"
         private const val SUBSCRIPTION_USERINFO_HEADER = "Subscription-Userinfo"
         val CONTENT_DISPOSITION_EXTENDED_FILENAME =
             Regex("""(?i)(?:^|;)\s*filename\*\s*=\s*UTF-8''([^;]+)""")

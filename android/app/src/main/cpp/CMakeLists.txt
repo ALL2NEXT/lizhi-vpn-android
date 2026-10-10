@@ -22,8 +22,7 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-             native-lib.cpp
-             runtime-tuner.cpp )
+             native-lib.cpp )
 
 target_compile_options(native-lib PRIVATE
         -fvisibility=hidden

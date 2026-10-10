@@ -61,9 +61,6 @@ class SubscriptionListParser {
             ?.trim()
             ?: ""
         val enabled = source.get("enabled")?.let { readBoolean(it) } ?: true
-        val encrypted = source.get("encrypted")?.let { readBoolean(it) }
-            ?: source.get("isEncrypted")?.let { readBoolean(it) }
-            ?: false
         val minAccountType = normalizeSubscriptionAccountType(
             readString(source, "minAccountType", "requiredAccountType", "minimumAccountType")
         )
@@ -76,7 +73,6 @@ class SubscriptionListParser {
             name = name,
             url = url,
             enabled = enabled,
-            encrypted = encrypted,
             minAccountType = minAccountType.ifBlank { DEFAULT_MIN_ACCOUNT_TYPE },
             allowedStatuses = allowedStatuses,
             allowedAccountTypes = allowedAccountTypes,

@@ -109,7 +109,7 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     });
     await call(`/api/subscription/1?deviceId=${deviceId}`, { status: 403 });
     const client = (await call("/api/client")).data;
-    assert.equal(client.subscriptions[0].encrypted, true);
+    assert.equal(Object.hasOwn(client.subscriptions[0], "encrypted"), false);
   });
 
   await t.test("一次性注册码绑定邮箱，密码登录附加第二台设备", async () => {
@@ -124,9 +124,9 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     const loggedIn = await call("/api/account/login", { method: "POST", body: { ...credentials, deviceId: secondDeviceId } });
     assert.equal(loggedIn.data.account.uid, uid);
     const subscription = await call(`/api/subscription/1?deviceId=${deviceId}`);
-    assert.notEqual(subscription.data, source);
-    assert.equal(subscription.response.headers.get("x-chimera-client-ip"), "192.0.2.65");
-    assert.equal(subscription.response.headers.get("x-firefly-client-ip"), "192.0.2.65");
+    assert.equal(subscription.data, source);
+    assert.equal(subscription.response.headers.get("x-chimera-client-ip"), null);
+    assert.equal(subscription.response.headers.get("x-firefly-client-ip"), null);
     await call(`/api/subscription/1?deviceId=${secondDeviceId}`, { status: 403 });
   });
 

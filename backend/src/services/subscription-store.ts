@@ -14,7 +14,6 @@ interface GroupRow {
   group_order: number;
   name: string;
   group_type: string;
-  encryption_mode: string;
   enabled: number;
   allowed_statuses_json: string;
   allowed_account_types_json: string;
@@ -127,7 +126,7 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
          enabled, auto_rename, deduplicate, remark
        FROM subscription_sources ORDER BY group_id, source_order, id`;
   const [groupResult, sourceResult] = await db.batch([
-    db.prepare(`SELECT id, group_order, name, group_type, encryption_mode, enabled,
+    db.prepare(`SELECT id, group_order, name, group_type, enabled,
         allowed_statuses_json, allowed_account_types_json, update_enabled, cache_minutes,
         min_app_version, max_app_version, max_users_per_subscription, reset_period_days
       FROM subscription_groups ORDER BY group_order, id`),
@@ -158,7 +157,6 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
     id: row.id,
     name: row.name,
     groupType: row.group_type === "load_balanced" ? "load_balanced" as const : "standard" as const,
-    encryptionMode: row.encryption_mode === "none" ? "none" as const : "encrypted" as const,
     enabled: row.enabled === 1,
     allowedStatuses: parseJsonArray(row.allowed_statuses_json, ["normal", "banned"]) as SubscriptionGroup["allowedStatuses"],
     allowedAccountTypes: parseJsonArray(row.allowed_account_types_json, ["guest", "formal"]) as SubscriptionGroup["allowedAccountTypes"],
@@ -203,7 +201,8 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
       group_order: groupIndex,
       name: group.name,
       group_type: group.groupType,
-      encryption_mode: group.encryptionMode,
+      // Retain the legacy D1 column for deployed databases; all subscriptions are plaintext.
+      encryption_mode: "none",
       enabled: group.enabled ? 1 : 0,
       allowed_statuses_json: JSON.stringify(group.allowedStatuses),
       allowed_account_types_json: JSON.stringify(group.allowedAccountTypes),

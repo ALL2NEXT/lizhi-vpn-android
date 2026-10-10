@@ -1,6 +1,5 @@
 import type { Env } from "../types/env.ts";
 
-import { CLIENT_IP_HEADER, LEGACY_CLIENT_IP_HEADER } from "../config.ts";
 import { cleanText } from "../lib/values.ts";
 
 export async function isAdmin(request: Request, env: Env) {
@@ -21,7 +20,6 @@ export function corsHeaders(): Record<string, string> {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "access-control-allow-headers": "Content-Type, Authorization",
-    "access-control-expose-headers": `${CLIENT_IP_HEADER}, ${LEGACY_CLIENT_IP_HEADER}`,
   };
 }
 

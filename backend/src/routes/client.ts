@@ -17,8 +17,6 @@ const MAX_PROXY_APP_LIST_BYTES = 1024 * 1024;
 
 export function createClientRoutes(deps: Pick<
   RouteDependencies,
-  | "CLIENT_IP_HEADER"
-  | "LEGACY_CLIENT_IP_HEADER"
   | "resolveAccountAccess"
   | "beijingTimestamp"
   | "normalizeAccountId"
@@ -27,8 +25,6 @@ export function createClientRoutes(deps: Pick<
   | "readSubscriptionContent"
   | "autoRenameSubscriptionContent"
   | "deduplicateSubscriptionContent"
-  | "protectSubscription"
-  | "getClientIp"
   | "readState"
   | "resolveUserIdentity"
   | "visibleNotice"
@@ -37,8 +33,6 @@ export function createClientRoutes(deps: Pick<
   | "json"
 >) {
   const {
-    CLIENT_IP_HEADER,
-    LEGACY_CLIENT_IP_HEADER,
     resolveAccountAccess,
     beijingTimestamp,
     normalizeAccountId,
@@ -47,8 +41,6 @@ export function createClientRoutes(deps: Pick<
     readSubscriptionContent,
     autoRenameSubscriptionContent,
     deduplicateSubscriptionContent,
-    protectSubscription,
-    getClientIp,
     readState,
     resolveUserIdentity,
     visibleNotice,
@@ -74,7 +66,6 @@ async function handleClient(request: Request, env: Env) {
       if (!sources.length) return [];
       const access = {
         enabled: true,
-        encrypted: group.encryptionMode !== "none",
         minAccountType: legacyMinimumAccountType(group),
         allowedStatuses: group.allowedStatuses,
         allowedAccountTypes: group.allowedAccountTypes,
@@ -243,7 +234,6 @@ async function handleManagedSubscription(path: string, request: Request, env: En
   }
   if (!source) return json({ error: "subscription_not_found" }, 404);
 
-  const clientIp = getClientIp(request);
   let fetchedContent = "";
   try {
     if (isLocalSubscription(source)) {
@@ -269,18 +259,12 @@ async function handleManagedSubscription(path: string, request: Request, env: En
   const plaintextContent = source.autoRename && !isLocalSubscription(source)
     ? autoRenameSubscriptionContent(uniqueContent)
     : uniqueContent;
-  const responseContent = group.encryptionMode !== "none"
-    ? protectSubscription(plaintextContent, clientIp)
-    : plaintextContent;
-  const responseHeaders: Record<string, string> = {
-    ...corsHeaders(),
-    "content-type": "text/plain; charset=utf-8",
-    "cache-control": "no-store",
-  };
-  responseHeaders[CLIENT_IP_HEADER] = clientIp;
-  responseHeaders[LEGACY_CLIENT_IP_HEADER] = clientIp;
-  return new Response(responseContent, {
-    headers: responseHeaders,
+  return new Response(plaintextContent, {
+    headers: {
+      ...corsHeaders(),
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+    },
   });
 }
 

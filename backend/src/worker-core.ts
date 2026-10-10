@@ -9,8 +9,6 @@ import type { RouteDependencies } from "./types/routes.ts";
  */
 
 import {
-  CLIENT_IP_HEADER,
-  LEGACY_CLIENT_IP_HEADER,
   MAX_BATCH_USER_COUNT,
   resolveAdminBasePath,
   USER_SCHEMA_VERSION,
@@ -46,11 +44,9 @@ import { createAccountRoutes } from "./routes/account.ts";
 import { createAdminRoutes } from "./routes/admin.ts";
 import { createClientRoutes } from "./routes/client.ts";
 import {
-  getClientIp,
   autoRenameSubscriptionContent,
   deduplicateSubscriptionContent,
   isAppVersionAtLeast,
-  protectSubscription,
   readExternalSubscription,
   readExternalSubscriptionTraffic,
   validateAndWarmSubscriptionSources,
@@ -89,8 +85,6 @@ import {
 } from "./services/system-logs.ts";
 
 const routeDeps = {
-  CLIENT_IP_HEADER,
-  LEGACY_CLIENT_IP_HEADER,
   canAccessAccountType,
   resolveAccountAccess,
   beijingTimestamp,
@@ -100,8 +94,6 @@ const routeDeps = {
   readExternalSubscriptionTraffic,
   autoRenameSubscriptionContent,
   deduplicateSubscriptionContent,
-  protectSubscription,
-  getClientIp,
   readState,
   readSubscriptionContent,
   visibleNotice,

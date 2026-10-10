@@ -6,10 +6,7 @@ import type { AppState } from "./types/models.ts";
  */
 
 export const STATE_KEY = "chimera:state:v1";
-// Keep the previous protocol header during the client migration window.
 export const LEGACY_STATE_KEY = "fireflyvpn:state:v1";
-export const CLIENT_IP_HEADER = "X-Chimera-Client-IP";
-export const LEGACY_CLIENT_IP_HEADER = "X-Firefly-Client-IP";
 export const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 export const MAX_D1_INLINE_SUBSCRIPTION_BYTES = 1_900_000;
 export const MAX_BATCH_USER_COUNT = 100;
@@ -19,8 +16,6 @@ export const SUBSCRIPTION_CONTENT_KEY_PREFIX = "chimera:subscription-content:v1:
 export const DEFAULT_SUBSCRIPTION_CACHE_MINUTES = 30;
 export const MAX_SUBSCRIPTION_CACHE_MINUTES = 7 * 24 * 60;
 export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive|naive\+https|wireguard|ss|socks|socks5|socks4|socks4a|https?):\/\/\S+/i;
-export const PRIVATE_B64_ALPHABET =
-  "iWm124UFyO7KG9NBPhCj5kS8IYbHRvtselQcTA3ugVEo6and-Lprq_DJMw0ZzfxX";
 export const TEXT_ENCODER = new TextEncoder();
 export const USER_SCHEMA_VERSION = 14;
 export const USER_SCHEMA_STATEMENTS = [

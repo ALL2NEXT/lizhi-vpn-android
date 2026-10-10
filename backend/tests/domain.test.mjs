@@ -14,7 +14,6 @@ import { DEFAULT_SUBSCRIPTION_CACHE_MINUTES, MAX_MANAGED_SUBSCRIPTION_BYTES } fr
 import {
   autoRenameSubscriptionContent, decodeExternalSubscriptionContent,
   isAppVersionAtLeast, normalizeSubscriptionCacheMinutes,
-  protectSubscription, shiftFromClientIp,
 } from "../src/services/subscriptions.ts";
 import { normalizeState, readState, visibleNotice, writeState } from "../src/services/state.ts";
 
@@ -95,17 +94,13 @@ test("节点国家重命名兼容 VMess，并保留非节点行", () => {
   assert.equal(JSON.parse(Buffer.from(renamed[3].slice(8), "base64").toString()).ps, "美国1");
 });
 
-test("版本号按数字比较，缓存期限受限，订阅 IP 编码保持协议兼容", () => {
+test("version comparison and cache bounds", () => {
   assert.equal(isAppVersionAtLeast("v1.10", "1.2.0"), true);
   assert.equal(isAppVersionAtLeast("1.2", "1.2.1"), false);
   assert.equal(isAppVersionAtLeast("bad", "1"), false);
   assert.equal(normalizeSubscriptionCacheMinutes(""), DEFAULT_SUBSCRIPTION_CACHE_MINUTES);
   assert.equal(normalizeSubscriptionCacheMinutes(-1), 0);
   assert.equal(normalizeSubscriptionCacheMinutes(1e8), 10080);
-  assert.equal(shiftFromClientIp("::ffff:192.0.2.65"), 1);
-  assert.equal(shiftFromClientIp("[2001:db8::41]"), 1);
-  assert.throws(() => shiftFromClientIp("not-an-ip"), /invalid_cf_connecting_ip/);
-  assert.equal(protectSubscription("abc", "192.0.2.64"), "ISOc");
 });
 
 test("旧 KV 字段可迁移，内联订阅不会自动重命名", () =>", () => {

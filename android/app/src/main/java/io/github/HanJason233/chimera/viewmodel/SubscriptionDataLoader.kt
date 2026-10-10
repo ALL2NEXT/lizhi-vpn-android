@@ -221,8 +221,7 @@ internal class SubscriptionDataLoader(
                 val requestUrl = subscriptionRequestUrl(subscription.url)
                 var result = subscriptionParser.fetchAndParse(
                     requestUrl,
-                    requestTimeoutMs,
-                    subscription.encrypted
+                    requestTimeoutMs
                 )
                 if (result.isFailure) {
                     Log.w(
@@ -232,8 +231,7 @@ internal class SubscriptionDataLoader(
                     )
                     result = subscriptionParser.fetchAndParse(
                         requestUrl,
-                        requestTimeoutMs,
-                        subscription.encrypted
+                        requestTimeoutMs
                     )
                 }
                 subscription to result
