@@ -2,8 +2,10 @@ import type { Env } from "../types/env.ts";
 import type {
   SystemLogCategory,
   SystemLogDraft,
+  SystemLogHttpCapture,
   SystemLogRecord,
   SystemLogRecordingSettings,
+  SystemLogRecordingMode,
 } from "../types/models.ts";
 
 import { SYSTEM_LOG_SETTINGS_KEY } from "../config.ts";
@@ -16,22 +18,26 @@ const LOG_RETENTION_DAYS = 30;
 const MAX_LOG_DETAILS_LENGTH = 1600;
 const SYSTEM_LOG_CATEGORIES: SystemLogCategory[] = ["request", "operation", "database", "outbound"];
 const DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS: SystemLogRecordingSettings = {
-  request: true,
-  operation: true,
-  database: true,
-  outbound: true,
+  mode: "simple",
+  categories: { request: true, operation: true, database: true, outbound: true },
 };
 const preparedMetadata = new WeakMap<object, { raw: D1PreparedStatement; sql: string }>();
 
 function normalizeSystemLogRecordingSettings(value: unknown): SystemLogRecordingSettings {
-  const settings = value && typeof value === "object"
-    ? value as Partial<SystemLogRecordingSettings>
+  const stored = value && typeof value === "object"
+    ? value as Record<string, unknown>
     : {};
+  const categories = stored.categories && typeof stored.categories === "object"
+    ? stored.categories as Record<string, unknown>
+    : stored;
   return {
-    request: settings.request !== false,
-    operation: settings.operation !== false,
-    database: settings.database !== false,
-    outbound: settings.outbound !== false,
+    mode: stored.mode === "full" ? "full" : "simple",
+    categories: {
+      request: categories.request !== false,
+      operation: categories.operation !== false,
+      database: categories.database !== false,
+      outbound: categories.outbound !== false,
+    },
   };
 }
 
@@ -54,7 +60,24 @@ export async function updateSystemLogRecordingSetting(
   }
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
   const settings = await readSystemLogRecordingSettings(env);
-  const next = { ...settings, [category as SystemLogCategory]: enabled };
+  const next = {
+    ...settings,
+    categories: { ...settings.categories, [category as SystemLogCategory]: enabled },
+  };
+  await env.CONFIG.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
+
+export async function updateSystemLogRecordingMode(
+  env: Env,
+  mode: unknown,
+): Promise<SystemLogRecordingSettings> {
+  if (mode !== "simple" && mode !== "full") {
+    throw new Error("invalid_system_log_recording_mode");
+  }
+  if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
+  const settings = await readSystemLogRecordingSettings(env);
+  const next = { ...settings, mode: mode as SystemLogRecordingMode };
   await env.CONFIG.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify(next));
   return next;
 }
@@ -299,11 +322,51 @@ function normalizeDraft(entry: SystemLogDraft) {
   };
 }
 
-export async function writeSystemLogs(env: Env, entries: SystemLogDraft[]) {
+function splitPayload(serialized: string) {
+  const maximumCodeUnits = 64 * 1024;
+  const parts: string[] = [];
+  for (let start = 0; start < serialized.length;) {
+    let end = Math.min(start + maximumCodeUnits, serialized.length);
+    if (end < serialized.length) {
+      const lastCodeUnit = serialized.charCodeAt(end - 1);
+      if (lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) end -= 1;
+    }
+    parts.push(serialized.slice(start, end));
+    start = end;
+  }
+  return parts.length ? parts : [""];
+}
+
+async function writeSystemLogPayload(
+  db: D1Database,
+  requestId: string,
+  occurredAt: string,
+  capture: SystemLogHttpCapture,
+) {
+  const id = truncate(requestId, 96);
+  if (!id) return;
+  const parts = splitPayload(JSON.stringify(capture));
+  await db.prepare("DELETE FROM system_log_payload_parts_mb WHERE request_id = ?").bind(id).run();
+  for (let start = 0; start < parts.length; start += 2) {
+    const statements = parts.slice(start, start + 2).map((content, index) =>
+      db.prepare(
+        `INSERT INTO system_log_payload_parts_mb (
+          request_id, occurred_at, part_index, part_count, content
+        ) VALUES (?, ?, ?, ?, ?)`,
+      ).bind(id, occurredAt, start + index, parts.length, content));
+    await db.batch(statements);
+  }
+}
+
+export async function writeSystemLogs(
+  env: Env,
+  entries: SystemLogDraft[],
+  recordingSettings?: SystemLogRecordingSettings,
+) {
   if (!entries.length || !env.USERS_DB) return;
   try {
-    const settings = await readSystemLogRecordingSettings(env);
-    const enabledEntries = entries.filter((entry) => settings[entry.category]);
+    const settings = recordingSettings || await readSystemLogRecordingSettings(env);
+    const enabledEntries = entries.filter((entry) => settings.categories[entry.category]);
     if (!enabledEntries.length) return;
     const db = await ensureUserSchema(env);
     const statements = enabledEntries.map((entry) => {
@@ -320,11 +383,40 @@ export async function writeSystemLogs(env: Env, entries: SystemLogDraft[]) {
       );
     });
     await db.batch(statements);
+    for (const entry of enabledEntries) {
+      if (entry.category === "request" && entry.fullCapture) {
+        await writeSystemLogPayload(db, entry.requestId || "", entry.occurredAt || beijingTimestamp(), entry.fullCapture);
+      }
+    }
   } catch (error) {
     console.error(JSON.stringify({
       message: "system_log_write_failed",
       error: safeError(error),
     }));
+  }
+}
+
+export async function readSystemLogPayload(env: Env, requestId: unknown) {
+  const id = truncate(requestId, 96);
+  if (!id) return { ok: true, payload: null as SystemLogHttpCapture | null };
+  const db = await ensureUserSchema(env);
+  const result = await db.prepare(
+    `SELECT part_index, part_count, content
+     FROM system_log_payload_parts_mb
+     WHERE request_id = ?
+     ORDER BY part_index ASC`,
+  ).bind(id).all<{ part_index: number; part_count: number; content: string }>();
+  const rows = result.results || [];
+  if (!rows.length) return { ok: true, payload: null as SystemLogHttpCapture | null };
+  const expectedParts = Number(rows[0].part_count);
+  if (!expectedParts || rows.length !== expectedParts) {
+    return { ok: false, error: "system_log_payload_incomplete", payload: null as SystemLogHttpCapture | null };
+  }
+  try {
+    const payload = JSON.parse(rows.map((row) => row.content).join("")) as SystemLogHttpCapture;
+    return { ok: true, payload };
+  } catch {
+    return { ok: false, error: "system_log_payload_invalid", payload: null as SystemLogHttpCapture | null };
   }
 }
 
@@ -466,7 +558,9 @@ export async function pruneSystemLogs(env: Env) {
   if (!env.USERS_DB) return 0;
   const db = await ensureUserSchema(env);
   const cutoff = beijingTimestamp(new Date(Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000));
-  const result = await db.prepare("DELETE FROM system_logs_mb WHERE occurred_at < ?")
-    .bind(cutoff).run();
+  const [, result] = await db.batch([
+    db.prepare("DELETE FROM system_log_payload_parts_mb WHERE occurred_at < ?").bind(cutoff),
+    db.prepare("DELETE FROM system_logs_mb WHERE occurred_at < ?").bind(cutoff),
+  ]);
   return Number(result.meta?.changes) || 0;
 }

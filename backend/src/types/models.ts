@@ -139,7 +139,34 @@ export type PublicAccount = Omit<User, "createdAt"> & { deviceBlocked: boolean }
 
 export type SystemLogCategory = "request" | "operation" | "database" | "outbound";
 export type SystemLogLevel = "info" | "warning" | "error";
-export type SystemLogRecordingSettings = Record<SystemLogCategory, boolean>;
+export type SystemLogRecordingMode = "simple" | "full";
+export type SystemLogCategorySettings = Record<SystemLogCategory, boolean>;
+
+export interface SystemLogRecordingSettings {
+  mode: SystemLogRecordingMode;
+  categories: SystemLogCategorySettings;
+}
+
+export interface SystemLogHttpBodyCapture {
+  contentType: string;
+  encoding: "utf-8" | "base64";
+  data: string;
+}
+
+export interface SystemLogHttpCapture {
+  request: {
+    method: string;
+    url: string;
+    headers: [string, string][];
+    body: SystemLogHttpBodyCapture;
+  };
+  response: {
+    status: number;
+    statusText: string;
+    headers: [string, string][];
+    body: SystemLogHttpBodyCapture;
+  };
+}
 
 export interface SystemLogDraft {
   category: SystemLogCategory;
@@ -154,10 +181,11 @@ export interface SystemLogDraft {
   userAgent?: string;
   message: string;
   details?: string;
+  fullCapture?: SystemLogHttpCapture;
   occurredAt?: string;
 }
 
-export interface SystemLogRecord extends Required<Omit<SystemLogDraft, "occurredAt" | "status" | "durationMs">> {
+export interface SystemLogRecord extends Required<Omit<SystemLogDraft, "occurredAt" | "status" | "durationMs" | "fullCapture">> {
   id: number;
   occurredAt: string;
   status: number | null;

@@ -7,6 +7,9 @@ let systemLogDetailRecord = null;
 let systemLogDetailTab = 'basic';
 let systemLogRecordingSettings = null;
 let systemLogRecordingSettingsLoading = false;
+let systemLogPayload = null;
+let systemLogPayloadLoading = false;
+let systemLogPayloadError = '';
 
 function systemLogCategoryName(category) {
   return ({request: '网络请求', operation: '后台操作', database: '数据库', outbound: '出站请求'})[category] || '系统';
@@ -210,15 +213,25 @@ function renderSystemLogRecordingSettings() {
   if (!systemLogRecordingSettings) return;
   document.querySelectorAll('[data-system-log-recording]').forEach(function(input) {
     const category = input.dataset.systemLogRecording;
-    input.checked = systemLogRecordingSettings[category] !== false;
+    input.checked = systemLogRecordingSettings.categories[category] !== false;
     input.disabled = false;
+  });
+  document.querySelectorAll('[data-system-log-mode]').forEach(function(input) {
+    input.checked = input.dataset.systemLogMode === systemLogRecordingSettings.mode;
+    input.disabled = false;
+  });
+}
+
+function disableSystemLogSettingControls(disabled) {
+  document.querySelectorAll('[data-system-log-recording], [data-system-log-mode]').forEach(function(input) {
+    input.disabled = disabled;
   });
 }
 
 async function loadSystemLogRecordingSettings(force) {
   if (systemLogRecordingSettingsLoading || (systemLogRecordingSettings && !force)) return;
   systemLogRecordingSettingsLoading = true;
-  document.querySelectorAll('[data-system-log-recording]').forEach(function(input) { input.disabled = true; });
+  disableSystemLogSettingControls(true);
   try {
     const response = await fetch(ADMIN_API_BASE + '/system-log-settings', {
       method: 'GET',
@@ -242,9 +255,9 @@ async function loadSystemLogRecordingSettings(force) {
 async function updateSystemLogRecordingSetting(input) {
   const category = input.dataset.systemLogRecording;
   if (!category || !systemLogRecordingSettings) return;
-  const previous = systemLogRecordingSettings[category] !== false;
+  const previous = systemLogRecordingSettings.categories[category] !== false;
   const enabled = input.checked;
-  document.querySelectorAll('[data-system-log-recording]').forEach(function(toggle) { toggle.disabled = true; });
+  disableSystemLogSettingControls(true);
   try {
     const response = await fetch(ADMIN_API_BASE + '/system-log-settings', {
       method: 'PUT',
@@ -261,10 +274,55 @@ async function updateSystemLogRecordingSetting(input) {
     renderSystemLogRecordingSettings();
     show(enabled ? '已开启该类型日志记录' : '已关闭该类型日志记录');
   } catch (error) {
-    systemLogRecordingSettings[category] = previous;
+    systemLogRecordingSettings.categories[category] = previous;
     renderSystemLogRecordingSettings();
     show(error.message || '日志记录设置保存失败', true);
   }
+}
+
+async function updateSystemLogRecordingMode(input) {
+  if (!systemLogRecordingSettings) return;
+  const previous = systemLogRecordingSettings.mode;
+  const mode = input.dataset.systemLogMode;
+  disableSystemLogSettingControls(true);
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/system-log-settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({mode: mode}),
+      cache: 'no-store'
+    });
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok || !data.settings) {
+      throw new Error(adminErrorMessage(data.error, '日志记录方式保存失败'));
+    }
+    systemLogRecordingSettings = data.settings;
+    renderSystemLogRecordingSettings();
+    show(mode === 'full' ? '已切换到全量记录' : '已切换到简易记录');
+  } catch (error) {
+    systemLogRecordingSettings.mode = previous;
+    renderSystemLogRecordingSettings();
+    show(error.message || '日志记录方式保存失败', true);
+  }
+}
+
+function openSystemLogSettings() {
+  const modal = el('systemLogSettingsModal');
+  if (!modal) return;
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+  loadSystemLogRecordingSettings(true);
+  const closeButton = modal.querySelector('[data-system-log-settings-close]');
+  if (closeButton) closeButton.focus();
+}
+
+function closeSystemLogSettings() {
+  const modal = el('systemLogSettingsModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  el('systemLogsSettingsButton').focus();
 }
 
 function applySystemLogFilters() {
@@ -326,6 +384,9 @@ function openSystemLogDetailsById(id) {
   if (!record) return;
   systemLogDetailRecord = record;
   systemLogDetailTab = 'basic';
+  systemLogPayload = null;
+  systemLogPayloadError = '';
+  systemLogPayloadLoading = Boolean(record.requestId);
   const drawer = el('systemLogDetailDrawer');
   drawer.hidden = false;
   drawer.setAttribute('aria-hidden', 'false');
@@ -334,6 +395,7 @@ function openSystemLogDetailsById(id) {
   });
   renderSystemLogDetails();
   renderSystemLogs();
+  if (systemLogPayloadLoading) loadSystemLogPayload(record.requestId);
 }
 
 function closeSystemLogDetails() {
@@ -342,7 +404,39 @@ function closeSystemLogDetails() {
   drawer.hidden = true;
   drawer.setAttribute('aria-hidden', 'true');
   systemLogDetailRecord = null;
+  systemLogPayload = null;
+  systemLogPayloadLoading = false;
+  systemLogPayloadError = '';
   renderSystemLogs();
+}
+
+async function loadSystemLogPayload(requestId) {
+  const requestedId = String(requestId || '');
+  try {
+    const query = new URLSearchParams({requestId: requestedId});
+    const response = await fetch(ADMIN_API_BASE + '/system-logs/payload?' + query.toString(), {
+      method: 'GET',
+      headers: headers(),
+      cache: 'no-store'
+    });
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok || data.ok === false) {
+      throw new Error(adminErrorMessage(data.error, '请求与响应详情读取失败'));
+    }
+    if (systemLogDetailRecord && systemLogDetailRecord.requestId === requestedId) {
+      systemLogPayload = data.payload || null;
+    }
+  } catch (error) {
+    if (systemLogDetailRecord && systemLogDetailRecord.requestId === requestedId) {
+      systemLogPayloadError = error.message || '请求与响应详情读取失败';
+    }
+  } finally {
+    if (systemLogDetailRecord && systemLogDetailRecord.requestId === requestedId) {
+      systemLogPayloadLoading = false;
+      renderSystemLogDetails();
+    }
+  }
 }
 
 function systemLogDetailField(label, value, copyValue) {
@@ -351,6 +445,28 @@ function systemLogDetailField(label, value, copyValue) {
   return '<div class="system-log-detail-field"><span>' + esc(label) + '</span><div><strong>' + esc(shown) + '</strong>' +
     (copy !== '-' ? '<button type="button" class="system-log-copy-inline" data-system-log-copy="' + esc(copy) + '" aria-label="复制' + esc(label) + '">▢</button>' : '') +
     '</div></div>';
+}
+
+function systemLogPayloadText(kind) {
+  if (!systemLogPayload || !systemLogPayload[kind]) return '';
+  const message = systemLogPayload[kind];
+  const headers = (message.headers || []).map(function(header) {
+    return String(header[0] || '') + ': ' + String(header[1] || '');
+  }).join('\n');
+  const body = message.body || {contentType: '', encoding: 'utf-8', data: ''};
+  const lines = [];
+  if (kind === 'request') {
+    lines.push(String(message.method || '-') + ' ' + String(message.url || '-'));
+  } else {
+    lines.push('HTTP ' + String(message.status || '-') + ' ' + String(message.statusText || ''));
+  }
+  lines.push('', 'Headers:', headers || '(none)', '', 'Body (' + String(body.contentType || 'unknown content type') + '; ' + String(body.encoding || 'utf-8') + '):', String(body.data || ''));
+  return lines.join('\n');
+}
+
+function systemLogPayloadCard(title, kind) {
+  const text = systemLogPayloadText(kind);
+  return '<section class="system-log-json-card"><div class="system-log-json-heading"><strong>' + esc(title) + '</strong><button type="button" class="secondary" data-system-log-copy-full="' + esc(kind) + '">复制</button></div><pre>' + esc(text) + '</pre></section>';
 }
 
 function renderSystemLogDetails() {
@@ -381,9 +497,21 @@ function renderSystemLogDetails() {
       systemLogDetailField('User-Agent', record.userAgent) +
       systemLogDetailField('请求路径', record.path) +
       '</div>';
+  } else if (detail === 'request' && systemLogPayloadLoading) {
+    content.innerHTML = '<div class="loading-state">正在读取完整请求记录…</div>';
+  } else if (detail === 'request' && systemLogPayloadError) {
+    content.innerHTML = '<div class="error-state">' + esc(systemLogPayloadError) + '</div>';
+  } else if (detail === 'request' && systemLogPayload) {
+    content.innerHTML = systemLogPayloadCard('完整请求', 'request');
   } else if (detail === 'request') {
     content.innerHTML = '<section class="system-log-detail-note"><strong>已保存的请求信息</strong><p>日志仅保留来源 IP 和 User-Agent，没有保存完整请求头、Cookie 或认证信息。</p>' +
       '<dl><div><dt>来源 IP</dt><dd>' + esc(record.ip || '-') + '</dd></div><div><dt>User-Agent</dt><dd>' + esc(record.userAgent || '-') + '</dd></div></dl></section>';
+  } else if (detail === 'response' && systemLogPayloadLoading) {
+    content.innerHTML = '<div class="loading-state">正在读取完整响应记录…</div>';
+  } else if (detail === 'response' && systemLogPayloadError) {
+    content.innerHTML = '<div class="error-state">' + esc(systemLogPayloadError) + '</div>';
+  } else if (detail === 'response' && systemLogPayload) {
+    content.innerHTML = systemLogPayloadCard('完整响应', 'response');
   } else if (detail === 'response') {
     content.innerHTML = '<section class="system-log-detail-note"><strong>响应摘要</strong><p>响应正文不会写入系统日志。这里展示当前日志中保留的状态和说明字段。</p>' +
       '<dl><div><dt>状态码</dt><dd>' + esc(status) + '</dd></div><div><dt>说明</dt><dd>' + esc(record.message || '-') + '</dd></div><div><dt>附加详情</dt><dd>' + esc(record.details || '-') + '</dd></div></dl></section>';
@@ -393,6 +521,11 @@ function renderSystemLogDetails() {
   }
   content.querySelectorAll('[data-system-log-copy]').forEach(function(button) {
     button.addEventListener('click', function() { copySystemLogText(button.dataset.systemLogCopy || ''); });
+  });
+  content.querySelectorAll('[data-system-log-copy-full]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      copySystemLogText(systemLogPayloadText(button.dataset.systemLogCopyFull || ''));
+    });
   });
 }
 
@@ -433,6 +566,22 @@ document.querySelectorAll('[data-system-log-recording]').forEach(function(input)
   input.addEventListener('change', function() {
     updateSystemLogRecordingSetting(input);
   });
+});
+
+document.querySelectorAll('[data-system-log-mode]').forEach(function(input) {
+  input.addEventListener('change', function() {
+    if (input.checked) updateSystemLogRecordingMode(input);
+  });
+});
+
+el('systemLogsSettingsButton').addEventListener('click', openSystemLogSettings);
+document.querySelectorAll('[data-system-log-settings-close]').forEach(function(button) {
+  button.addEventListener('click', closeSystemLogSettings);
+});
+el('systemLogSettingsModal').addEventListener('click', function(event) {
+  if (event.target === event.currentTarget || event.target.classList.contains('system-log-settings-backdrop')) {
+    closeSystemLogSettings();
+  }
 });
 
 document.querySelectorAll('[data-system-log-detail-tab]').forEach(function(button) {
@@ -479,7 +628,10 @@ el('systemLogsAutoRefreshToggle').addEventListener('change', function(event) {
 });
 
 document.addEventListener('keydown', function(event) {
-  if (event.key === 'Escape' && systemLogDetailRecord) closeSystemLogDetails();
+  if (event.key !== 'Escape') return;
+  const settingsModal = el('systemLogSettingsModal');
+  if (settingsModal && !settingsModal.hidden) closeSystemLogSettings();
+  else if (systemLogDetailRecord) closeSystemLogDetails();
 });
 
 setDefaultSystemLogDateRange();

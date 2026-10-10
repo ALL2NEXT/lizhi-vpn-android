@@ -8,14 +8,18 @@ export function createAdminAccessRoutes(deps: Pick<
   RouteDependencies,
   | "json"
   | "readSystemLogs"
+  | "readSystemLogPayload"
   | "readSystemLogRecordingSettings"
   | "updateSystemLogRecordingSetting"
+  | "updateSystemLogRecordingMode"
 >) {
   const {
     json,
     readSystemLogs,
+    readSystemLogPayload,
     readSystemLogRecordingSettings,
     updateSystemLogRecordingSetting,
+    updateSystemLogRecordingMode,
   } = deps;
 
   return async function handleAdminAccess(path: string, request: Request, env: Env) {
@@ -26,7 +30,9 @@ export function createAdminAccessRoutes(deps: Pick<
     if (path === "/api/system-log-settings" && request.method === "PUT") {
       try {
         const incoming = await readJsonObject(request);
-        const settings = await updateSystemLogRecordingSetting(env, incoming.category, incoming.enabled);
+        const settings = incoming.mode !== undefined
+          ? await updateSystemLogRecordingMode(env, incoming.mode)
+          : await updateSystemLogRecordingSetting(env, incoming.category, incoming.enabled);
         return json({ ok: true, settings });
       } catch (error) {
         return json({
@@ -34,6 +40,11 @@ export function createAdminAccessRoutes(deps: Pick<
           error: error instanceof Error ? error.message : String(error),
         }, 400);
       }
+    }
+
+    if (path === "/api/system-logs/payload" && request.method === "GET") {
+      const url = new URL(request.url);
+      return json(await readSystemLogPayload(env, url.searchParams.get("requestId")));
     }
 
     if (path === "/api/system-logs" && request.method === "GET") {

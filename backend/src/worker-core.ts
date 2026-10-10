@@ -76,12 +76,19 @@ import {
   usersDb,
 } from "./services/user-store.ts";
 import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.ts";
-import type { SystemLogDraft } from "./types/models.ts";
+import type {
+  SystemLogDraft,
+  SystemLogHttpBodyCapture,
+  SystemLogHttpCapture,
+  SystemLogRecordingSettings,
+} from "./types/models.ts";
 import {
   createObservedEnv,
   pruneSystemLogs,
+  readSystemLogPayload,
   readSystemLogs,
   readSystemLogRecordingSettings,
+  updateSystemLogRecordingMode,
   updateSystemLogRecordingSetting,
   writeSystemLogs,
 } from "./services/system-logs.ts";
@@ -139,8 +146,10 @@ const routeDeps = {
   validateAndWarmSubscriptionSources,
   writeState,
   normalizeState,
+  readSystemLogPayload,
   readSystemLogs,
   readSystemLogRecordingSettings,
+  updateSystemLogRecordingMode,
   updateSystemLogRecordingSetting,
 } satisfies RouteDependencies;
 
@@ -160,6 +169,53 @@ function safeRequestPath(path: string) {
 
 function requestIp(request: Request) {
   return String(request.headers.get("CF-Connecting-IP") || "").trim().slice(0, 64);
+}
+
+function serializeHeaders(headers: Headers): [string, string][] {
+  return Array.from(headers.entries());
+}
+
+function base64FromBytes(bytes: Uint8Array) {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+async function captureBody(message: Request | Response): Promise<SystemLogHttpBodyCapture> {
+  const contentType = message.headers.get("content-type") || "";
+  const charset = /charset\s*=\s*["']?([^;"'\s]+)/i.exec(contentType)?.[1].toLowerCase();
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  const textContent = !mediaType || mediaType.startsWith("text/") ||
+    /^application\/(?:[^;]+\+)?(?:json|xml|x-www-form-urlencoded|javascript|graphql)$/.test(mediaType);
+  const bytes = new Uint8Array(await message.arrayBuffer());
+  if (textContent && (!charset || charset === "utf-8" || charset === "utf8")) {
+    try {
+      return { contentType, encoding: "utf-8", data: new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes) };
+    } catch {
+      // Keep non-UTF-8 bytes losslessly as base64.
+    }
+  }
+  return { contentType, encoding: "base64", data: base64FromBytes(bytes) };
+}
+
+async function captureRequest(request: Request): Promise<SystemLogHttpCapture["request"]> {
+  return {
+    method: request.method,
+    url: request.url,
+    headers: serializeHeaders(request.headers),
+    body: await captureBody(request),
+  };
+}
+
+async function captureResponse(response: Response): Promise<SystemLogHttpCapture["response"]> {
+  return {
+    status: response.status,
+    statusText: response.statusText,
+    headers: serializeHeaders(response.headers),
+    body: await captureBody(response),
+  };
 }
 
 function adminOperationLabel(method: string, path: string) {
@@ -275,6 +331,19 @@ const worker = {
     const adminBasePath = resolveAdminBasePath(env.ADMIN_PATH);
     const isAdminApi = Boolean(adminBasePath && path.startsWith(`${adminBasePath}/api/`));
     const requestId = request.headers.get("cf-ray") || crypto.randomUUID();
+    let recordingSettings: SystemLogRecordingSettings | undefined;
+    try {
+      recordingSettings = await readSystemLogRecordingSettings(env);
+    } catch {
+      recordingSettings = undefined;
+    }
+    // 避免查看已保存的全量正文时，再把整份正文重复写入日志。
+    const isLogPayloadRead = isAdminApi && path.endsWith("/api/system-logs/payload");
+    const captureFullRequest = recordingSettings?.mode === "full" &&
+      recordingSettings.categories.request && !isLogPayloadRead;
+    const requestCapturePromise = captureFullRequest
+      ? captureRequest(request.clone()).catch(() => null)
+      : null;
     const diagnostics: SystemLogDraft[] = [];
     const sink = (entry: SystemLogDraft) => {
       diagnostics.push({
@@ -331,7 +400,24 @@ const worker = {
         occurredAt,
       });
     }
-    const persist = writeSystemLogs(env, entries);
+    const persist = (async () => {
+      if (requestCapturePromise) {
+        try {
+          const responseCapturePromise = captureResponse(response.clone());
+          const [capturedRequest, capturedResponse] = await Promise.all([
+            requestCapturePromise,
+            responseCapturePromise,
+          ]);
+          const requestEntry = entries.find((entry) => entry.category === "request");
+          if (capturedRequest && capturedResponse && requestEntry) {
+            requestEntry.fullCapture = { request: capturedRequest, response: capturedResponse };
+          }
+        } catch {
+          // Payload capture failures do not interfere with the original Worker response.
+        }
+      }
+      await writeSystemLogs(env, entries, recordingSettings);
+    })();
     if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(persist);
     else await persist;
     return response;

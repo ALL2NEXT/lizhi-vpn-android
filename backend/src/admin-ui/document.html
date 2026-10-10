@@ -533,8 +533,8 @@
 
   <section class="card tab-panel" role="tabpanel" data-panel="system-logs">
     <div class="dashboard-heading system-logs-heading">
-      <div>
-        <h2>系统日志</h2>
+      <div class="system-logs-title">
+        <h2>系统日志</h2><button id="systemLogsSettingsButton" class="system-logs-settings-button secondary" type="button" aria-label="系统日志设置" title="系统日志设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.7 7.7 0 0 0 .05-.94 7.7 7.7 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.89 2h-3.78a.49.49 0 0 0-.49.42L9.26 4.96a7.3 7.3 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.71 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.7 7.7 0 0 0-.05.94c0 .32.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.39 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.78c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.13-.55 1.63-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>
       </div>
       <div class="system-logs-heading-actions">
         <button class="secondary" type="button" onclick="loadSystemLogs(true)">⟳ 刷新</button>
@@ -546,10 +546,10 @@
         <div class="subscription-group-sidebar-heading"><h3>日志类型</h3></div>
         <nav id="systemLogCategoryNavigation" class="subscription-group-navigation" aria-label="选择日志类型">
           <button class="subscription-group-nav-item active" type="button" data-system-log-category="" aria-current="page"><span class="system-log-type-mark all" aria-hidden="true"></span><span class="subscription-nav-name">全部日志</span></button>
-          <div class="system-log-category-row"><button class="subscription-group-nav-item" type="button" data-system-log-category="request"><span class="system-log-type-mark request" aria-hidden="true"></span><span class="subscription-nav-name">网络请求</span></button><label class="system-log-record-toggle" title="记录网络请求"><input type="checkbox" data-system-log-recording="request" checked disabled aria-label="记录网络请求"><i aria-hidden="true"></i></label></div>
-          <div class="system-log-category-row"><button class="subscription-group-nav-item" type="button" data-system-log-category="operation"><span class="system-log-type-mark operation" aria-hidden="true"></span><span class="subscription-nav-name">后台操作</span></button><label class="system-log-record-toggle" title="记录后台操作"><input type="checkbox" data-system-log-recording="operation" checked disabled aria-label="记录后台操作"><i aria-hidden="true"></i></label></div>
-          <div class="system-log-category-row"><button class="subscription-group-nav-item" type="button" data-system-log-category="database"><span class="system-log-type-mark database" aria-hidden="true"></span><span class="subscription-nav-name">数据库</span></button><label class="system-log-record-toggle" title="记录数据库操作"><input type="checkbox" data-system-log-recording="database" checked disabled aria-label="记录数据库操作"><i aria-hidden="true"></i></label></div>
-          <div class="system-log-category-row"><button class="subscription-group-nav-item" type="button" data-system-log-category="outbound"><span class="system-log-type-mark outbound" aria-hidden="true"></span><span class="subscription-nav-name">出站请求</span></button><label class="system-log-record-toggle" title="记录出站请求"><input type="checkbox" data-system-log-recording="outbound" checked disabled aria-label="记录出站请求"><i aria-hidden="true"></i></label></div>
+          <button class="subscription-group-nav-item" type="button" data-system-log-category="request"><span class="system-log-type-mark request" aria-hidden="true"></span><span class="subscription-nav-name">网络请求</span></button>
+          <button class="subscription-group-nav-item" type="button" data-system-log-category="operation"><span class="system-log-type-mark operation" aria-hidden="true"></span><span class="subscription-nav-name">后台操作</span></button>
+          <button class="subscription-group-nav-item" type="button" data-system-log-category="database"><span class="system-log-type-mark database" aria-hidden="true"></span><span class="subscription-nav-name">数据库</span></button>
+          <button class="subscription-group-nav-item" type="button" data-system-log-category="outbound"><span class="system-log-type-mark outbound" aria-hidden="true"></span><span class="subscription-nav-name">出站请求</span></button>
         </nav>
       </aside>
       <section class="subscription-group-workspace system-logs-workspace" aria-label="系统日志列表">
@@ -578,12 +578,34 @@
         </section>
       </section>
     </div>
+    <div id="systemLogSettingsModal" class="system-log-settings-modal" hidden>
+      <div class="system-log-settings-backdrop" aria-hidden="true"></div>
+      <section class="system-log-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="systemLogSettingsTitle">
+        <header class="system-log-settings-header"><h3 id="systemLogSettingsTitle">系统日志设置</h3><button type="button" class="system-log-drawer-close" data-system-log-settings-close aria-label="关闭设置">×</button></header>
+        <div class="system-log-settings-content">
+          <fieldset class="system-log-mode-fieldset">
+            <legend>记录方式</legend>
+            <label class="system-log-mode-option"><input type="radio" name="systemLogRecordingMode" data-system-log-mode="simple" value="simple" checked disabled><span><strong>简易记录</strong><small>记录请求方法、路径、状态码、耗时等概要信息。</small></span></label>
+            <label class="system-log-mode-option"><input type="radio" name="systemLogRecordingMode" data-system-log-mode="full" value="full" disabled><span><strong>全量记录</strong><small>保存网络请求的完整 URL、请求头和正文，以及响应头和正文；需开启“网络请求”记录。</small></span></label>
+            <p class="system-log-full-warning">全量记录可能包含密码、令牌、Cookie 等敏感信息，并增加数据库占用；仅限可信管理员访问，日志按 30 天周期清理。</p>
+          </fieldset>
+          <fieldset class="system-log-category-settings">
+            <legend>分类记录开关</legend>
+            <div class="system-log-setting-category"><span><i class="system-log-type-mark request" aria-hidden="true"></i>网络请求</span><label class="system-log-record-toggle" title="记录网络请求"><input type="checkbox" data-system-log-recording="request" checked disabled aria-label="记录网络请求"><i aria-hidden="true"></i></label></div>
+            <div class="system-log-setting-category"><span><i class="system-log-type-mark operation" aria-hidden="true"></i>后台操作</span><label class="system-log-record-toggle" title="记录后台操作"><input type="checkbox" data-system-log-recording="operation" checked disabled aria-label="记录后台操作"><i aria-hidden="true"></i></label></div>
+            <div class="system-log-setting-category"><span><i class="system-log-type-mark database" aria-hidden="true"></i>数据库</span><label class="system-log-record-toggle" title="记录数据库操作"><input type="checkbox" data-system-log-recording="database" checked disabled aria-label="记录数据库操作"><i aria-hidden="true"></i></label></div>
+            <div class="system-log-setting-category"><span><i class="system-log-type-mark outbound" aria-hidden="true"></i>出站请求</span><label class="system-log-record-toggle" title="记录出站请求"><input type="checkbox" data-system-log-recording="outbound" checked disabled aria-label="记录出站请求"><i aria-hidden="true"></i></label></div>
+          </fieldset>
+        </div>
+        <footer class="system-log-settings-footer"><button type="button" class="secondary" data-system-log-settings-close>完成</button></footer>
+      </section>
+    </div>
     <aside id="systemLogDetailDrawer" class="system-log-detail-drawer" aria-label="日志详情" aria-hidden="true" hidden>
       <header class="system-log-drawer-header"><h3>日志详情</h3><button type="button" class="system-log-drawer-close" onclick="closeSystemLogDetails()" aria-label="关闭日志详情">×</button></header>
       <div id="systemLogDrawerSummary" class="system-log-drawer-summary"></div>
       <nav class="system-log-detail-tabs" aria-label="日志详情内容">
         <button type="button" class="active" data-system-log-detail-tab="basic">基本信息</button>
-        <button type="button" data-system-log-detail-tab="request">请求头</button>
+        <button type="button" data-system-log-detail-tab="request">请求内容</button>
         <button type="button" data-system-log-detail-tab="response">响应内容</button>
         <button type="button" data-system-log-detail-tab="raw">原始日志</button>
       </nav>

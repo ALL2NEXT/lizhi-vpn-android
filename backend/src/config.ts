@@ -51,7 +51,18 @@ BEGIN
          used_by_uid = NEW.uid
    WHERE id = NEW.registration_code_id;
 END`;
-export const USER_SCHEMA_VERSION = 15;
+const SYSTEM_LOG_PAYLOADS_SCHEMA = `CREATE TABLE IF NOT EXISTS system_log_payload_parts_mb (
+  request_id TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  part_index INTEGER NOT NULL CHECK (part_index >= 0),
+  part_count INTEGER NOT NULL CHECK (part_count > 0),
+  content TEXT NOT NULL,
+  PRIMARY KEY (request_id, part_index)
+)`;
+const SYSTEM_LOG_PAYLOADS_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_log_payload_parts_occurred_mb
+  ON system_log_payload_parts_mb(occurred_at)`;
+
+export const USER_SCHEMA_VERSION = 16;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -214,6 +225,8 @@ export const USER_SCHEMA_STATEMENTS = [
     ON system_logs_mb(occurred_at DESC, id DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_category_occurred
     ON system_logs_mb(category, occurred_at DESC, id DESC)`,
+  SYSTEM_LOG_PAYLOADS_SCHEMA,
+  SYSTEM_LOG_PAYLOADS_INDEX,
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
@@ -408,6 +421,10 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
     `DROP INDEX IF EXISTS idx_registration_codes_mb_status`,
     `CREATE INDEX IF NOT EXISTS idx_registration_codes_mb_status
       ON registration_codes_mb(use_count, max_uses, created_at DESC, id DESC)`,
+  ],
+  16: [
+    SYSTEM_LOG_PAYLOADS_SCHEMA,
+    SYSTEM_LOG_PAYLOADS_INDEX,
   ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
