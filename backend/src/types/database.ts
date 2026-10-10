@@ -92,6 +92,9 @@ export interface RegistrationCodeRow {
   id: number;
   code: string;
   created_at: string;
+  max_uses: number;
+  use_count: number;
   used_at: string | null;
   used_by_uid: string;
+  preview_uids: string;
 }

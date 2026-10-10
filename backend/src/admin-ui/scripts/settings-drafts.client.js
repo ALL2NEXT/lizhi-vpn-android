@@ -63,7 +63,7 @@ function discardSettingsSection(section) {
 function initializeSettingsDrafts() {
   ['input', 'change'].forEach(function(type) {
     document.addEventListener(type, function(event) {
-      if (!event.target.closest || event.target.id === 'registrationCodeCount' || event.target.closest('#subscriptionImportDialog')) return;
+      if (!event.target.closest || event.target.id === 'registrationCodeCount' || event.target.id === 'registrationCodeMaxUses' || event.target.closest('#subscriptionImportDialog')) return;
       const panel = event.target.closest('.tab-panel[data-panel]');
       if (panel) {
         markSettingsDirty(panel.dataset.panel);

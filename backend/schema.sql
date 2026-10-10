@@ -30,6 +30,8 @@ CREATE TABLE registration_codes_mb (
   id INTEGER PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL,
+  max_uses INTEGER NOT NULL DEFAULT 1 CHECK (max_uses BETWEEN 1 AND 1000),
+  use_count INTEGER NOT NULL DEFAULT 0 CHECK (use_count >= 0),
   used_at TEXT,
   used_by_user_id INTEGER,
   used_by_uid TEXT NOT NULL DEFAULT '',
@@ -37,7 +39,44 @@ CREATE TABLE registration_codes_mb (
 );
 
 CREATE INDEX idx_registration_codes_mb_status
-  ON registration_codes_mb(used_at, created_at DESC, id DESC);
+  ON registration_codes_mb(use_count, max_uses, created_at DESC, id DESC);
+
+CREATE TABLE registration_code_usages_mb (
+  id INTEGER PRIMARY KEY,
+  registration_code_id INTEGER NOT NULL,
+  use_number INTEGER NOT NULL CHECK (use_number > 0),
+  user_id INTEGER,
+  uid TEXT NOT NULL DEFAULT '',
+  used_at TEXT NOT NULL,
+  UNIQUE (registration_code_id, use_number),
+  FOREIGN KEY (registration_code_id) REFERENCES registration_codes_mb(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_registration_code_usages_mb_code
+  ON registration_code_usages_mb(registration_code_id, use_number);
+
+CREATE TRIGGER trg_registration_code_usage_validate_mb
+BEFORE INSERT ON registration_code_usages_mb
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM registration_codes_mb
+     WHERE id = NEW.registration_code_id
+       AND use_count < max_uses
+       AND NEW.use_number = use_count + 1
+  ) THEN RAISE(ABORT, 'registration_code_exhausted') END;
+END;
+
+CREATE TRIGGER trg_registration_code_usage_count_mb
+AFTER INSERT ON registration_code_usages_mb
+BEGIN
+  UPDATE registration_codes_mb
+     SET use_count = NEW.use_number,
+         used_at = NEW.used_at,
+         used_by_user_id = NEW.user_id,
+         used_by_uid = NEW.uid
+   WHERE id = NEW.registration_code_id;
+END;
 
 CREATE TABLE user_devices_mb (
   id INTEGER PRIMARY KEY,

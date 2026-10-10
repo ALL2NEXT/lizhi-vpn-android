@@ -192,6 +192,36 @@
     .settings-sections { display: grid; gap: 14px; }
     .settings-section { padding: 14px; background: #f8fafd; border: 1px solid #dadce0; border-radius: 10px; }
     .settings-section-title { margin: 0 0 6px; color: #202124; font-size: 16px; }
+    .registration-control-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin: 12px 0 16px; }
+    .registration-control-label { color: var(--ink); font-weight: 600; }
+    .registration-code-issue-row { display: grid; grid-template-columns: repeat(2, minmax(140px, 150px)) auto; align-items: end; justify-content: start; gap: 10px; margin: 4px 0 14px; }
+    .registration-code-issue-row .field { display: grid; gap: 5px; margin: 0; }
+    .registration-code-issue-row label { color: var(--ink-muted); font-size: 12px; }
+    .registration-code-issue-row input { box-sizing: border-box; width: 100%; min-height: 34px; padding: 6px 9px; }
+    .registration-code-issue-row button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; margin: 0; padding: 7px 16px; white-space: nowrap; }
+    .registration-code-issue-row button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+    .registration-code-cell, .registration-code-preview { display: inline-flex; align-items: center; gap: 7px; }
+    .registration-code-copy { display: inline-flex; align-items: center; justify-content: center; width: 23px; height: 23px; padding: 3px; margin: 0; color: var(--ink-muted); background: transparent; border: 0; box-shadow: none; cursor: pointer; }
+    .registration-code-copy:hover, .registration-code-copy:focus-visible { color: var(--blue-ink); background: var(--surface-active); box-shadow: none; }
+    .registration-code-copy svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+    .registration-code-history-link { padding: 0; margin: 0; color: var(--blue-ink); background: transparent; border: 0; box-shadow: none; font: inherit; cursor: pointer; }
+    .registration-code-history-link:hover, .registration-code-history-link:focus-visible { color: var(--blue); background: transparent; box-shadow: none; text-decoration: underline; }
+    .registration-code-usages-dialog { box-sizing: border-box; width: min(760px, calc(100% - 32px)); max-height: calc(100vh - 48px); margin: auto; padding: 22px; overflow: hidden; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 28px rgb(60 64 67 / 20%); }
+    .registration-code-usages-dialog::backdrop { background: rgb(32 33 36 / 48%); }
+    .registration-code-usages-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+    .registration-code-usages-header h3 { margin: 0; font-size: 18px; }
+    .registration-code-usages-header p { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 13px; }
+    .registration-code-usages-header button { flex: 0 0 auto; margin: 0; }
+    .registration-code-usages-dialog .traffic-detail-wrap { max-height: min(60vh, 560px); }
+    .registration-mode-switch { position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: min(100%, 520px); padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); }
+    .registration-mode-switch-thumb { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 3); border-radius: 999px; background: var(--surface); box-shadow: 0 1px 4px rgb(32 33 36 / 18%); pointer-events: none; transition: transform .2s ease; }
+    .registration-mode-switch[data-mode="code"] .registration-mode-switch-thumb { transform: translateX(100%); }
+    .registration-mode-switch[data-mode="closed"] .registration-mode-switch-thumb { transform: translateX(200%); }
+    .registration-mode-option { position: relative; z-index: 1; display: flex; min-width: 0; align-items: center; justify-content: center; margin: 0; color: var(--ink-muted); cursor: pointer; user-select: none; }
+    .registration-mode-option input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border: 0; opacity: 0; box-shadow: none; cursor: pointer; }
+    .registration-mode-option span { display: flex; min-height: 40px; align-items: center; justify-content: center; padding: 0 10px; border-radius: 999px; font-weight: 500; text-align: center; transition: color .16s ease; pointer-events: none; }
+    .registration-mode-option input:checked + span { color: var(--blue-ink); font-weight: 650; }
+    .registration-mode-option input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 1px; }
     .web-nav-groups { display: grid; gap: 12px; margin: 12px 0; }
     .web-nav-group { min-width: 0; padding: 14px; background: #ffffff; border: 1px solid #dadce0; border-radius: 10px; }
     .web-nav-group-heading { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #dadce0; }
@@ -1203,6 +1233,9 @@
       .source-list-header, .source-row { grid-template-columns: 15px 18px 27px minmax(80px, 1.1fr) minmax(85px, .9fr) 48px 42px 64px; }
     }
     @media (max-width: 700px) {
+      .registration-code-issue-row { grid-template-columns: repeat(2, minmax(110px, 150px)); }
+      .registration-code-issue-row > button { grid-column: 1 / -1; justify-self: start; }
+      .registration-code-usages-dialog { width: calc(100% - 24px); padding: 16px; }
       .system-logs-toolbar { align-items: stretch; }
       .system-logs-toolbar input, .system-logs-toolbar select, .system-logs-toolbar button { flex-basis: 100%; width: 100%; }
       .system-logs-wrap { max-height: 60vh; }
@@ -1244,6 +1277,7 @@
       .subscription-pagination { width: 100%; justify-content: flex-end; }
     }
     @media (max-width: 420px) {
+      .registration-code-issue-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .subscription-group-sidebar { max-height: 220px; }
       .subscription-group-nav-entry { grid-template-columns: 24px minmax(0, 1fr); }
       .subscription-group-order-proxy { width: 24px; }

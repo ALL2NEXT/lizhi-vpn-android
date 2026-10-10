@@ -130,7 +130,7 @@ export function createAccountRoutes(deps: Pick<
 
       if (registrationCode) {
         const codeRow = await db.prepare(
-          "SELECT id FROM registration_codes_mb WHERE code = ? AND used_at IS NULL",
+          "SELECT id FROM registration_codes_mb WHERE code = ? AND use_count < max_uses",
         ).bind(registrationCode).first<{ id: number }>();
         if (!codeRow) return json({ ok: false, error: "invalid_registration_code" }, 409);
       }
@@ -140,21 +140,42 @@ export function createAccountRoutes(deps: Pick<
       const bindingStatements = [
         db.prepare(
           "UPDATE users_mb SET email = ?, password_hash = ? " +
-            "WHERE id = ? AND (email IS NULL OR email = '')",
-        ).bind(email, passwordHash, identity.userId),
+            "WHERE id = ? AND (email IS NULL OR email = '') " +
+            "AND (? IS NULL OR EXISTS (" +
+              "SELECT 1 FROM registration_codes_mb " +
+              "WHERE code = ? AND use_count < max_uses" +
+            "))",
+        ).bind(
+          email,
+          passwordHash,
+          identity.userId,
+          registrationCode || null,
+          registrationCode || null,
+        ),
       ];
       if (registrationCode) {
         bindingStatements.push(
           db.prepare(
-            "UPDATE registration_codes_mb " +
-              "SET used_at = ?, used_by_user_id = ?, used_by_uid = ? " +
-              "WHERE code = ? AND used_at IS NULL",
-          ).bind(boundAt, identity.userId, identity.uid, registrationCode),
+            "INSERT INTO registration_code_usages_mb " +
+              "(registration_code_id, use_number, user_id, uid, used_at) " +
+              "SELECT id, use_count + 1, ?, ?, ? " +
+              "FROM registration_codes_mb " +
+              "WHERE code = ? AND use_count < max_uses AND changes() > 0",
+          ).bind(identity.userId, identity.uid, boundAt, registrationCode),
         );
       }
 
+      // 绑定账号和记录注册码使用次数放在同一批事务里，避免超限时只完成一半。
       const results = await db.batch(bindingStatements);
       if (!results[0].meta || Number(results[0].meta.changes) < 1) {
+        if (registrationCode) {
+          const availableCode = await db.prepare(
+            "SELECT id FROM registration_codes_mb WHERE code = ? AND use_count < max_uses",
+          ).bind(registrationCode).first<{ id: number }>();
+          if (!availableCode) {
+            return json({ ok: false, error: "invalid_registration_code" }, 409);
+          }
+        }
         return json({ ok: false, error: "account_not_found" }, 404);
       }
       if (registrationCode &&

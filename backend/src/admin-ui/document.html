@@ -478,19 +478,41 @@
     <div class="settings-sections">
       <section class="settings-section">
         <h3 class="settings-section-title">注册控制</h3>
-        <div class="grid">
-          <label class="check"><input id="registrationEnabled" type="checkbox">用户注册总开关</label>
-          <label class="check"><input id="requireAdminRegistrationCode" type="checkbox">必须使用管理员发放的注册码才可以注册</label>
+        <div class="registration-control-row">
+          <span id="registrationModeLabel" class="registration-control-label">正式用户控制</span>
+          <div id="registrationModeSwitch" class="registration-mode-switch" data-mode="normal" role="radiogroup" aria-labelledby="registrationModeLabel">
+            <span class="registration-mode-switch-thumb" aria-hidden="true"></span>
+            <label class="registration-mode-option">
+              <input type="radio" name="registrationMode" value="normal" checked onchange="setRegistrationMode(this.value)">
+              <span>正常注册</span>
+            </label>
+            <label class="registration-mode-option">
+              <input type="radio" name="registrationMode" value="code" onchange="setRegistrationMode(this.value)">
+              <span>注册码注册</span>
+            </label>
+            <label class="registration-mode-option">
+              <input type="radio" name="registrationMode" value="closed" onchange="setRegistrationMode(this.value)">
+              <span>关闭注册</span>
+            </label>
+          </div>
         </div>
-        <div class="grid">
-          <div class="field"><label>一次发放数量<input id="registrationCodeCount" type="number" min="1" max="100" step="1" value="1"></label></div>
-          <div class="field"><button class="secondary" type="button" onclick="issueRegistrationCodes()">发放注册码</button></div>
+        <div class="registration-code-issue-row">
+          <div class="field"><label for="registrationCodeCount">一次发放数量</label><input id="registrationCodeCount" type="number" min="1" max="100" step="1" value="1"></div>
+          <div class="field"><label for="registrationCodeMaxUses">单码可用次数</label><input id="registrationCodeMaxUses" type="number" min="1" max="1000" step="1" value="1"></div>
+          <button type="button" onclick="issueRegistrationCodes()"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3.25"></circle><path d="m10.4 10.4 8 8m-4.8-3.2 2-2m.8 4.8 2-2"></path></svg>发放注册码</button>
         </div>
         <div id="registrationCodesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取注册码</div></div>
-        <small class="hint">注册码每次成功注册后立即失效，只能使用一次。</small>
+        <small class="hint">每个注册码可在设定次数内成功注册，达到使用上限后自动失效。</small>
       </section>
     </div>
   </section>
+  <dialog id="registrationCodeUsagesDialog" class="registration-code-usages-dialog" aria-labelledby="registrationCodeUsagesTitle">
+    <div class="registration-code-usages-header">
+      <div><h3 id="registrationCodeUsagesTitle">注册码使用记录</h3><p id="registrationCodeUsagesSummary"></p></div>
+      <button class="secondary" type="button" onclick="closeRegistrationCodeUsages()">关闭</button>
+    </div>
+    <div id="registrationCodeUsagesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取使用记录</div></div>
+  </dialog>
   <section class="card tab-panel" role="tabpanel" data-panel="notice">
     <div class="dashboard-heading settings-page-heading">
       <h2>公告</h2>

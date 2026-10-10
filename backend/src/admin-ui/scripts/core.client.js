@@ -76,6 +76,8 @@
  }
  function adminErrorMessage(error, fallback) {
    if (error === 'invalid_registration_code_count') return '注册码数量必须是 1 到 100 之间的整数';
+   if (error === 'invalid_registration_code_max_uses') return '单个注册码可用次数必须是 1 到 1000 之间的整数';
+   if (error === 'registration_code_not_found') return '注册码不存在';
    if (error === 'formal_registration_closed') return '正式用户注册暂未开放';
    if (error === 'account_not_found') return '用户不存在，请检查 UID';
    if (error === 'account_banned') return '账户已被封禁';

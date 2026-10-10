@@ -1418,8 +1418,12 @@ function fillState(state, section) {
       checked('appForce', update.is_force === 1 || update.isForce === 1);
     }
     if (!section || section === 'registration-control') {
-      checked('registrationEnabled', settings.registrationEnabled !== false);
-      checked('requireAdminRegistrationCode', settings.requireAdminRegistrationCode === true);
+      const registrationMode = settings.registrationEnabled === false
+        ? 'closed'
+        : settings.requireAdminRegistrationCode === true
+          ? 'code'
+          : 'normal';
+      setRegistrationMode(registrationMode);
       loadRegistrationCodes();
     }
     if (!section || section === 'notice') {
@@ -1486,6 +1490,7 @@ function readSubscriptionGroups() {
 }
 function formState() {
   const subscriptionGroups = readSubscriptionGroups();
+  const registrationMode = selectedRegistrationMode();
   const notice = el('noticeEnabled').checked ? {
     hasNotice: true,
     title: value('noticeTitle'),
@@ -1511,12 +1516,24 @@ function formState() {
        feedbackUrl: value('feedbackUrl'),
        githubUrl: value('githubUrl'),
        telegramUrl: value('telegramUrl'),
-       registrationEnabled: el('registrationEnabled').checked,
-       requireAdminRegistrationCode: el('requireAdminRegistrationCode').checked,
+       registrationEnabled: registrationMode !== 'closed',
+       requireAdminRegistrationCode: registrationMode === 'code',
       },
     notice: notice,
     appUpdate: appUpdate
   };
+}
+function selectedRegistrationMode() {
+  const selected = el('registrationModeSwitch')
+    .querySelector('input[name="registrationMode"]:checked');
+  return selected ? selected.value : 'normal';
+}
+function setRegistrationMode(mode) {
+  const control = el('registrationModeSwitch');
+  const selectedMode = ['normal', 'code', 'closed'].includes(mode) ? mode : 'normal';
+  control.dataset.mode = selectedMode;
+  const selected = control.querySelector('input[name="registrationMode"][value="' + selectedMode + '"]');
+  if (selected) selected.checked = true;
 }
 function renderRegistrationCodes(codes) {
   const host = el('registrationCodesTable');
@@ -1527,14 +1544,70 @@ function renderRegistrationCodes(codes) {
     return;
   }
   host.innerHTML = '<table class="security-account-table" aria-label="注册码">' +
-    '<thead><tr><th>注册码</th><th>状态</th><th>发放时间</th><th>使用时间</th><th>使用账户 UID</th></tr></thead>' +
+    '<thead><tr><th>注册码</th><th>状态</th><th>使用次数</th><th>发放时间</th><th>使用时间</th><th>使用账户 UID</th></tr></thead>' +
     '<tbody>' + rows.map(function(row) {
-      return '<tr><td><code>' + esc(row.code) + '</code></td>' +
-        '<td>' + (row.used ? '已使用' : '未使用') + '</td>' +
+      const useCount = Math.max(0, Number(row.useCount) || 0);
+      const maxUses = Math.max(1, Number(row.maxUses) || 1);
+      const status = useCount >= maxUses ? '已用完' : useCount > 0 ? '生效中' : '未使用';
+      const previewUids = String(row.previewUids || row.usedByUid || '').trim();
+      const uidPreview = previewUids
+        ? esc(previewUids) + (useCount > 2 ? '…' : '')
+        : '-';
+      const history = useCount > 0
+        ? '<button class="registration-code-history-link" type="button" onclick="viewRegistrationCodeUsages(' + Number(row.id) + ')">查看记录 (' + useCount + '人)</button>'
+        : '';
+      return '<tr><td><span class="registration-code-cell"><code>' + esc(row.code) + '</code>' +
+        '<button class="registration-code-copy" type="button" title="复制注册码" aria-label="复制注册码" data-code="' + esc(row.code) + '" onclick="copyRegistrationCode(this.dataset.code)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg></button></span></td>' +
+        '<td>' + status + '</td>' +
+        '<td>' + useCount + ' / ' + maxUses + '</td>' +
         '<td>' + esc(row.createdAt || '-') + '</td>' +
         '<td>' + esc(row.usedAt || '-') + '</td>' +
-        '<td><code>' + esc(row.usedByUid || '-') + '</code></td></tr>';
+        '<td><span class="registration-code-preview"><code>' + uidPreview + '</code>' + history + '</span></td></tr>';
     }).join('') + '</tbody></table>';
+}
+
+async function copyRegistrationCode(code) {
+  try {
+    await navigator.clipboard.writeText(String(code || ''));
+    show('注册码已复制');
+  } catch (error) {
+    show('复制失败，请手动复制注册码', true);
+  }
+}
+
+async function viewRegistrationCodeUsages(codeId) {
+  const dialog = el('registrationCodeUsagesDialog');
+  const host = el('registrationCodeUsagesTable');
+  const summary = el('registrationCodeUsagesSummary');
+  if (!dialog || !host) return;
+  host.innerHTML = '<div class="loading-state">正在读取使用记录</div>';
+  if (summary) summary.textContent = '';
+  dialog.showModal();
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/registration-codes/' + encodeURIComponent(codeId) + '/usages', {
+      headers: headers(),
+      cache: 'no-store'
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    const usages = Array.isArray(data.usages) ? data.usages : [];
+    if (summary) summary.textContent = '注册码 ' + String(data.code || '') + ' · 共 ' + usages.length + ' 次使用';
+    if (!usages.length) {
+      host.innerHTML = '<div class="loading-state">暂无使用记录</div>';
+      return;
+    }
+    host.innerHTML = '<table class="traffic-detail-table" aria-label="注册码使用记录"><thead><tr><th>使用次数</th><th>使用账户 UID</th><th>使用时间</th></tr></thead><tbody>' +
+      usages.map(function(row) {
+        return '<tr><td>' + Number(row.useNumber || 0) + '</td><td><code>' + esc(row.uid || '-') + '</code></td><td>' + esc(row.usedAt || '-') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  } catch (error) {
+    host.innerHTML = '<div class="error-state">注册码使用记录读取失败</div>';
+  }
+}
+
+function closeRegistrationCodeUsages() {
+  const dialog = el('registrationCodeUsagesDialog');
+  if (dialog && dialog.open) dialog.close();
 }
 
 async function loadRegistrationCodes() {
@@ -1555,17 +1628,21 @@ async function loadRegistrationCodes() {
 
 async function issueRegistrationCodes() {
   const count = Number(value('registrationCodeCount') || 1);
+  const maxUses = Number(value('registrationCodeMaxUses') || 1);
   if (!Number.isInteger(count) || count < 1 || count > 100) {
     return show('一次最多发放 100 个注册码', true);
+  }
+  if (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > 1000) {
+    return show('单个注册码可用次数必须是 1 到 1000 之间的整数', true);
   }
   const response = await fetch(ADMIN_API_BASE + '/registration-codes', {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({count: count})
+    body: JSON.stringify({count: count, maxUses: maxUses})
   });
   const data = await response.json();
   if (!response.ok) return show(adminErrorMessage(data.error, '注册码发放失败'), true);
-  show('已发放 ' + (data.codes || []).length + ' 个注册码');
+  show('已发放 ' + (data.codes || []).length + ' 个注册码，每码可用 ' + maxUses + ' 次');
   await loadRegistrationCodes();
 }
 async function pushSection(section) {

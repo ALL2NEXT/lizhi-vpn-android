@@ -17,7 +17,40 @@ export const DEFAULT_SUBSCRIPTION_CACHE_MINUTES = 30;
 export const MAX_SUBSCRIPTION_CACHE_MINUTES = 7 * 24 * 60;
 export const PLAINTEXT_NODE_PATTERN = /(?:^|\n)\s*(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive|naive\+https|wireguard|ss|socks|socks5|socks4|socks4a|https?):\/\/\S+/i;
 export const TEXT_ENCODER = new TextEncoder();
-export const USER_SCHEMA_VERSION = 14;
+const REGISTRATION_CODE_USAGE_SCHEMA = `CREATE TABLE IF NOT EXISTS registration_code_usages_mb (
+  id INTEGER PRIMARY KEY,
+  registration_code_id INTEGER NOT NULL,
+  use_number INTEGER NOT NULL CHECK (use_number > 0),
+  user_id INTEGER,
+  uid TEXT NOT NULL DEFAULT '',
+  used_at TEXT NOT NULL,
+  UNIQUE (registration_code_id, use_number),
+  FOREIGN KEY (registration_code_id) REFERENCES registration_codes_mb(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+)`;
+const REGISTRATION_CODE_USAGE_INDEX = `CREATE INDEX IF NOT EXISTS idx_registration_code_usages_mb_code
+  ON registration_code_usages_mb(registration_code_id, use_number)`;
+const REGISTRATION_CODE_USAGE_VALIDATE_TRIGGER = `CREATE TRIGGER IF NOT EXISTS trg_registration_code_usage_validate_mb
+BEFORE INSERT ON registration_code_usages_mb
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM registration_codes_mb
+     WHERE id = NEW.registration_code_id
+       AND use_count < max_uses
+       AND NEW.use_number = use_count + 1
+  ) THEN RAISE(ABORT, 'registration_code_exhausted') END;
+END`;
+const REGISTRATION_CODE_USAGE_COUNT_TRIGGER = `CREATE TRIGGER IF NOT EXISTS trg_registration_code_usage_count_mb
+AFTER INSERT ON registration_code_usages_mb
+BEGIN
+  UPDATE registration_codes_mb
+     SET use_count = NEW.use_number,
+         used_at = NEW.used_at,
+         used_by_user_id = NEW.user_id,
+         used_by_uid = NEW.uid
+   WHERE id = NEW.registration_code_id;
+END`;
+export const USER_SCHEMA_VERSION = 15;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -46,13 +79,19 @@ export const USER_SCHEMA_STATEMENTS = [
     id INTEGER PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
     created_at TEXT NOT NULL,
+    max_uses INTEGER NOT NULL DEFAULT 1 CHECK (max_uses BETWEEN 1 AND 1000),
+    use_count INTEGER NOT NULL DEFAULT 0 CHECK (use_count >= 0),
     used_at TEXT,
     used_by_user_id INTEGER,
     used_by_uid TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (used_by_user_id) REFERENCES users_mb(id) ON DELETE SET NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_registration_codes_mb_status
-    ON registration_codes_mb(used_at, created_at DESC, id DESC)`,
+    ON registration_codes_mb(use_count, max_uses, created_at DESC, id DESC)`,
+  REGISTRATION_CODE_USAGE_SCHEMA,
+  REGISTRATION_CODE_USAGE_INDEX,
+  REGISTRATION_CODE_USAGE_VALIDATE_TRIGGER,
+  REGISTRATION_CODE_USAGE_COUNT_TRIGGER,
   `CREATE TABLE IF NOT EXISTS user_devices_mb (
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
@@ -342,6 +381,32 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
       ON system_logs_mb(occurred_at DESC, id DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_category_occurred
       ON system_logs_mb(category, occurred_at DESC, id DESC)`,
+  ],
+  15: [
+    `ALTER TABLE registration_codes_mb
+      ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 1 CHECK (max_uses BETWEEN 1 AND 1000)`,
+    `ALTER TABLE registration_codes_mb
+      ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0 CHECK (use_count >= 0)`,
+    REGISTRATION_CODE_USAGE_SCHEMA,
+    REGISTRATION_CODE_USAGE_INDEX,
+    REGISTRATION_CODE_USAGE_VALIDATE_TRIGGER,
+    REGISTRATION_CODE_USAGE_COUNT_TRIGGER,
+    // 旧版只保存 used_at，将历史已用注册码回填为第 1 次使用记录。
+    `INSERT INTO registration_code_usages_mb (
+      registration_code_id, use_number, user_id, uid, used_at
+    )
+    SELECT
+      codes.id,
+      1,
+      codes.used_by_user_id,
+      COALESCE(NULLIF(codes.used_by_uid, ''), users.uid, ''),
+      codes.used_at
+    FROM registration_codes_mb AS codes
+    LEFT JOIN users_mb AS users ON users.id = codes.used_by_user_id
+    WHERE codes.used_at IS NOT NULL`,
+    `DROP INDEX IF EXISTS idx_registration_codes_mb_status`,
+    `CREATE INDEX IF NOT EXISTS idx_registration_codes_mb_status
+      ON registration_codes_mb(use_count, max_uses, created_at DESC, id DESC)`,
   ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
