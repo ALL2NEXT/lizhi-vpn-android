@@ -208,70 +208,92 @@
         <p>快速查看状态与流量，点击用户查看设备并编辑资料。批量操作包含当前筛选隐藏的已选用户。</p>
       </div>
     </div>
-    <div class="user-admin-control-grid">
-      <section class="user-admin-control-panel">
-        <h3>过滤、搜索、排序</h3>
-        <div class="user-admin-filter-controls">
-          <div class="user-admin-control-group user-admin-control-group-filter">
-            <span class="user-admin-control-label">过滤</span>
-            <select id="userAdminStatusFilter" aria-label="筛选用户状态" onchange="renderAdminUsers()">
-              <option value="">全部状态</option>
-              <option value="active">正常</option>
-              <option value="banned">封禁</option>
-            </select>
-            <select id="userAdminTypeFilter" aria-label="筛选账户类型" onchange="renderAdminUsers()">
-              <option value="">全部账户类型</option>
-              <option value="formal">正式用户</option>
-              <option value="guest">游客</option>
-            </select>
-            <div class="traffic-zero-filters" role="group" aria-label="流量过滤">
-              <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="today" aria-pressed="false" onclick="toggleAdminUserZeroFilter('today')">过滤今日零流量</button>
-              <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="month" aria-pressed="false" onclick="toggleAdminUserZeroFilter('month')">过滤本月零流量</button>
-              <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="total" aria-pressed="false" onclick="toggleAdminUserZeroFilter('total')">过滤累计零流量</button>
+    <div class="user-admin-layout">
+      <aside class="user-admin-sidebar" aria-label="用户筛选条件">
+        <section class="user-admin-control-panel user-admin-filter-panel">
+          <h3>筛选条件</h3>
+          <div class="user-admin-filter-controls">
+            <label class="user-admin-filter-field">
+              <span>关键词</span>
+              <input id="userAdminSearch" type="search" placeholder="搜索 UID、昵称、邮箱、品牌或型号" oninput="renderAdminUsers()">
+            </label>
+            <fieldset class="user-admin-filter-section">
+              <legend>账号状态</legend>
+              <div class="user-admin-filter-options" role="group" aria-label="按账号状态筛选">
+                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="status" value="active" checked onchange="renderAdminUsers()">正常</label>
+                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="status" value="banned" checked onchange="renderAdminUsers()">封禁</label>
+              </div>
+            </fieldset>
+            <fieldset class="user-admin-filter-section">
+              <legend>账户类型</legend>
+              <div class="user-admin-filter-options" role="group" aria-label="按账户类型筛选">
+                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="type" value="guest" checked onchange="renderAdminUsers()">游客</label>
+                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="type" value="formal" checked onchange="renderAdminUsers()">正式用户</label>
+              </div>
+            </fieldset>
+            <fieldset class="user-admin-filter-section">
+              <legend>会员状态</legend>
+              <div class="user-admin-filter-options" role="group" aria-label="按会员状态筛选">
+                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="membership" value="member" checked onchange="renderAdminUsers()">会员</label>
+                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="membership" value="non_member" checked onchange="renderAdminUsers()">非会员</label>
+              </div>
+              <small class="user-admin-filter-note">会员状态根据账户 VIP 有效期判断。</small>
+            </fieldset>
+            <fieldset class="user-admin-filter-section">
+              <legend>流量条件</legend>
+              <div class="traffic-zero-filters" role="group" aria-label="流量过滤">
+                <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="today" aria-pressed="false" onclick="toggleAdminUserZeroFilter('today')">过滤今日零流量</button>
+                <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="month" aria-pressed="false" onclick="toggleAdminUserZeroFilter('month')">过滤本月零流量</button>
+                <button class="secondary user-admin-zero-filter" type="button" data-admin-zero-filter="total" aria-pressed="false" onclick="toggleAdminUserZeroFilter('total')">过滤累计零流量</button>
+              </div>
+            </fieldset>
+            <label class="user-admin-filter-field">
+              <span>排序方式</span>
+              <select id="userAdminSort" aria-label="排序用户" onchange="renderAdminUsers()">
+                <option value="created_desc">注册时间（新到旧）</option>
+                <option value="created_asc">注册时间（旧到新）</option>
+                <option value="today_desc">今日流量（高到低）</option>
+                <option value="today_asc">今日流量（低到高）</option>
+                <option value="month_desc">本月流量（高到低）</option>
+                <option value="month_asc">本月流量（低到高）</option>
+                <option value="total_desc">累计流量（高到低）</option>
+                <option value="total_asc">累计流量（低到高）</option>
+                <option value="last_report_desc">最后上报（新到旧）</option>
+                <option value="last_report_asc">最后上报（旧到新）</option>
+                <option value="nickname_asc">昵称（A-Z）</option>
+              </select>
+            </label>
+            <p id="userAdminSummary" class="user-admin-summary" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+      </aside>
+      <section class="user-admin-workspace" aria-label="用户总表">
+        <section class="user-admin-control-panel user-admin-operations-panel">
+          <div class="user-admin-operations-heading">
+            <div>
+              <h3>用户列表</h3>
+              <span id="userAdminSelectionCount" class="security-selection-count">已选择 0 个用户</span>
+            </div>
+            <div class="user-admin-header-actions">
+              <button id="userAdminUidToggle" class="secondary" type="button" aria-pressed="true" onclick="toggleAdminUserUidVisibility()">显示 UID</button>
+              <button class="secondary" type="button" onclick="loadAdminUsers(true)">刷新用户</button>
+              <button class="secondary" type="button" onclick="exportAdminUsersCsv()">导出当前结果</button>
             </div>
           </div>
-          <label class="user-admin-control-group">
-            <span class="user-admin-control-label">搜索</span>
-            <input id="userAdminSearch" type="search" placeholder="搜索 UID、昵称、邮箱、品牌或型号" oninput="renderAdminUsers()">
-          </label>
-          <label class="user-admin-control-group">
-            <span class="user-admin-control-label">排序</span>
-            <select id="userAdminSort" aria-label="排序用户" onchange="renderAdminUsers()">
-              <option value="created_desc">注册时间（新到旧）</option>
-              <option value="created_asc">注册时间（旧到新）</option>
-              <option value="today_desc">今日流量（高到低）</option>
-              <option value="today_asc">今日流量（低到高）</option>
-              <option value="month_desc">本月流量（高到低）</option>
-              <option value="month_asc">本月流量（低到高）</option>
-              <option value="total_desc">累计流量（高到低）</option>
-              <option value="total_asc">累计流量（低到高）</option>
-              <option value="last_report_desc">最后上报（新到旧）</option>
-              <option value="last_report_asc">最后上报（旧到新）</option>
-              <option value="nickname_asc">昵称（A-Z）</option>
-            </select>
-          </label>
-          <span id="userAdminSummary" class="traffic-detail-summary"></span>
+          <div class="user-admin-operation-controls">
+            <label><input id="userAdminSelectAll" type="checkbox" onchange="toggleAllAdminUsers(this.checked)">全选当前结果</label>
+            <button id="userAdminClearSelection" class="secondary" type="button" disabled onclick="clearAdminUserSelection()">清空选择</button>
+            <button id="userAdminSaveSelected" type="button" disabled onclick="saveSelectedAdminUsers()">保存选中修改</button>
+            <button id="userAdminBatchBan" class="danger" type="button" disabled onclick="batchSetAdminUserBan(true)">批量封禁</button>
+            <button id="userAdminBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminUserBan(false)">批量解封</button>
+            <button id="userAdminBatchDelete" class="danger" type="button" disabled onclick="batchDeleteAdminUsers()">删除用户</button>
+            <span id="userAdminDraftCount" class="user-draft-count" role="status" aria-live="polite">所有修改已保存</span>
+          </div>
+        </section>
+        <div id="userAdminTable" class="traffic-detail-wrap">
+          <div class="loading-state">打开此模块后读取用户数据</div>
         </div>
       </section>
-      <section class="user-admin-control-panel">
-        <h3>操作</h3>
-        <div class="user-admin-operation-controls">
-          <button id="userAdminUidToggle" class="secondary" type="button" aria-pressed="true" onclick="toggleAdminUserUidVisibility()">显示 UID</button>
-          <button class="secondary" type="button" onclick="loadAdminUsers(true)">刷新用户</button>
-          <label><input id="userAdminSelectAll" type="checkbox" onchange="toggleAllAdminUsers(this.checked)">全选当前结果</label>
-          <span id="userAdminSelectionCount" class="security-selection-count">已选择 0 个用户</span>
-          <button id="userAdminClearSelection" class="secondary" type="button" disabled onclick="clearAdminUserSelection()">清空选择</button>
-          <button id="userAdminSaveSelected" type="button" disabled onclick="saveSelectedAdminUsers()">保存选中修改</button>
-          <button id="userAdminBatchBan" class="danger" type="button" disabled onclick="batchSetAdminUserBan(true)">批量封禁</button>
-          <button id="userAdminBatchUnban" class="secondary" type="button" disabled onclick="batchSetAdminUserBan(false)">批量解封</button>
-          <button id="userAdminBatchDelete" class="danger" type="button" disabled onclick="batchDeleteAdminUsers()">删除用户</button>
-          <button class="secondary" type="button" onclick="exportAdminUsersCsv()">导出当前结果</button>
-          <span id="userAdminDraftCount" class="user-draft-count" role="status" aria-live="polite">所有修改已保存</span>
-        </div>
-      </section>
-    </div>
-    <div id="userAdminTable" class="traffic-detail-wrap">
-      <div class="loading-state">打开此模块后读取用户数据</div>
     </div>
     <dialog id="adminUserDetailDialog" class="user-detail-dialog" aria-labelledby="adminUserDetailTitle">
       <form id="adminUserDetailForm">

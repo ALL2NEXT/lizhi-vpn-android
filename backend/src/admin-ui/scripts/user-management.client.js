@@ -54,15 +54,6 @@ function adminUserDisplayUid(uid) {
   return adminUserUidHidden ? '••••••••' : uid;
 }
 
-function adminUserVipLabel(user) {
-  const expiresAt = String(user.vipExpiresAt || '');
-  if (!user.vipActive && !expiresAt) return '';
-  const label = user.vipActive ? 'VIP 有效至 ' : 'VIP 已过期 · ';
-  const displayTime = expiresAt.replace('T', ' ').replace(/(?:Z|[+-]\d{2}:\d{2})$/, '').slice(0, 16);
-  return '<small class="user-admin-vip-status' + (user.vipActive ? ' active' : ' expired') + '">' +
-    label + esc(displayTime || '-') + '</small>';
-}
-
 function adminUserSecurity(user) {
   const accounts = adminUserData && Array.isArray(adminUserData.securityAccounts)
     ? adminUserData.securityAccounts : [];
@@ -100,12 +91,18 @@ function compareAdminUserSortValues(left, right) {
   return String(left).localeCompare(String(right));
 }
 
+function selectedAdminUserFilters(category) {
+  return new Set(Array.from(document.querySelectorAll('[data-admin-user-filter="' + category + '"]:checked'))
+    .map(function(control) { return control.value; }));
+}
+
 function adminUserList() {
   const users = adminUserData && Array.isArray(adminUserData.users)
     ? adminUserData.users : [];
   const search = String(value('userAdminSearch') || '').toLowerCase();
-  const filter = value('userAdminStatusFilter');
-  const typeFilter = value('userAdminTypeFilter');
+  const statusFilters = selectedAdminUserFilters('status');
+  const typeFilters = selectedAdminUserFilters('type');
+  const membershipFilters = selectedAdminUserFilters('membership');
   const filtered = users.filter(function(user) {
     const deviceSearch = adminUserDevices(user).map(function(device) {
       return [device.deviceId, device.brand, device.model, device.androidVersion, device.appVersion].join(' ');
@@ -116,10 +113,12 @@ function adminUserList() {
     const monthTotal = Number(user.month && user.month.totalMb || 0);
     const total = Number(user.totalMb || 0);
     const accountLevel = String(user.email || '').trim() ? 'formal' : 'guest';
+    const accountStatus = user.accountType === 'banned' ? 'banned' : 'active';
+    const membership = user.vipActive === true ? 'member' : 'non_member';
     if (search && searchable.indexOf(search) < 0) return false;
-    if (filter === 'active' && user.accountType === 'banned') return false;
-    if (filter === 'banned' && user.accountType !== 'banned') return false;
-    if (typeFilter && accountLevel !== typeFilter) return false;
+    if (!statusFilters.has(accountStatus)) return false;
+    if (!typeFilters.has(accountLevel)) return false;
+    if (!membershipFilters.has(membership)) return false;
     if (adminUserZeroFilters.today && todayTotal === 0) return false;
     if (adminUserZeroFilters.month && monthTotal === 0) return false;
     if (adminUserZeroFilters.total && total === 0) return false;
@@ -234,23 +233,39 @@ function renderAdminUsers() {
     const today = user.today || {};
     const month = user.month || {};
     const draft = adminUserDrafts.get(uid);
+    const security = adminUserSecurity(user);
+    const deviceCount = Number(security.historicalDeviceCount) || adminUserDevices(user).length;
+    const bannedDeviceCount = Number(security.bannedDeviceCount) || 0;
     const nickname = adminUserDraftValue(user, draft, 'nickname') || '未命名用户';
+    const accountLevel = String(user.email || '').trim() ? '正式用户' : '游客';
+    const membershipStatus = user.vipActive === true ? '会员' : '非会员';
+    const vipExpiresAt = String(user.vipExpiresAt || '')
+      .replace('T', ' ')
+      .replace(/(?:Z|[+-]\d{2}:\d{2})$/, '')
+      .slice(0, 16);
     return '<tr class="' + (banned ? 'banned ' : '') + (adminUserDirty.has(uid) ? 'dirty' : '') + '" data-admin-user-row="' + esc(uid) + '">' +
       '<td><input class="user-admin-checkbox" type="checkbox" data-admin-user-select="' + esc(uid) + '"' + (adminUserSelection.has(uid) ? ' checked' : '') + ' aria-label="选择用户 ' + esc(nickname) + '"></td>' +
-      '<td class="user-admin-identity"><button class="user-detail-link" type="button" data-admin-user-detail="' + esc(uid) + '">' + esc(nickname) + '</button>' +
-        '<small>' + esc(user.email || '游客账户') + '</small>' +
-        adminUserVipLabel(user) +
-        (!adminUserUidHidden ? '<code>' + esc(uid) + '</code>' : '') +
-        (adminUserDirty.has(uid) ? '<span class="draft-badge">未保存</span>' : '') + '</td>' +
+      '<td class="user-admin-identity"><button class="user-detail-link" type="button" data-admin-user-detail="' + esc(uid) + '">' + esc(nickname) + '</button></td>' +
+      '<td><span class="user-admin-cell-ellipsis">' + esc(user.email || '—') + '</span></td>' +
+      '<td><span class="user-admin-cell-ellipsis user-admin-uid-value">' + (adminUserUidHidden ? '••••••••' : esc(uid)) + '</span></td>' +
       '<td><span class="user-status-badge ' + (banned ? 'banned' : 'active') + '">' + (banned ? '封禁' : '正常') + '</span></td>' +
+      '<td>' + accountLevel + '</td>' +
+      '<td><span class="user-admin-membership-badge ' + (user.vipActive === true ? 'active' : 'inactive') + '">' + membershipStatus + '</span></td>' +
+      '<td>' + esc(vipExpiresAt || '—') + '</td>' +
+      '<td>' + esc(user.brand || '—') + '</td>' +
+      '<td>' + esc(user.model || '—') + '</td>' +
+      '<td>' + esc(user.androidVersion || '暂无') + '</td>' +
+      '<td>' + esc(user.appVersion || '暂无') + '</td>' +
+      '<td>' + (deviceCount || 0) + '</td>' +
+      '<td>' + bannedDeviceCount + '</td>' +
       '<td>' + formatMegabytes(today.totalMb) + '</td>' +
       '<td>' + formatMegabytes(month.totalMb) + '</td>' +
+      '<td>' + formatMegabytes(user.totalMb) + '</td>' +
       '<td>' + esc(user.lastReportAt || '暂无') + '</td>' +
-      '<td><button class="secondary" type="button" data-admin-user-detail="' + esc(uid) + '">详情与编辑</button></td>' +
       '</tr>';
   }).join('');
-  host.innerHTML = '<table class="traffic-detail-table user-admin-table" aria-label="用户总表">' +
-    '<thead><tr><th>选择</th><th>用户</th><th>状态</th><th>今日流量</th><th>本月流量</th><th>最后上报</th><th>操作</th></tr></thead>' +
+  host.innerHTML = '<table class="traffic-detail-table user-admin-table' + (adminUserUidHidden ? ' user-admin-hide-uid' : '') + '" aria-label="用户总表">' +
+    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>账号状态</th><th>账户类型</th><th>会员状态</th><th>VIP 到期时间</th><th>品牌</th><th>型号</th><th>Android 版本</th><th>App 版本</th><th>设备数</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
     input.addEventListener('change', function() {
