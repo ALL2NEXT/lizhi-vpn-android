@@ -16,6 +16,10 @@ import { normalizeAccountType } from "../domain/account.ts";
 import { beijingTimestamp } from "../domain/time.ts";
 import { cleanText, parseFlag, plainObject } from "../lib/values.ts";
 import {
+  loadSubscriptionGroups,
+  saveSubscriptionGroups,
+} from "./subscription-store.ts";
+import {
   isAppVersionAtLeast,
   normalizeManagedContent,
   normalizeMinimumAppVersion,
@@ -36,17 +40,21 @@ function normalizeSubscriptionSource(item: JsonObject, id: number): Subscription
   const content = normalizeManagedContent(
     item.content ?? item.managedContent ?? item.nodesText,
   );
+  const sourceType = item.sourceType === "content" || content ? "content" : "url";
   const externalUrl = typeof item.url === "string" && /^https?:\/\//i.test(item.url.trim())
     ? item.url.trim()
     : "";
-  if (!content && !externalUrl) return null;
+  if (sourceType !== "content" && !externalUrl) return null;
   return {
     id: String(id),
     name: cleanText(item.name || item.title) || `线路${id}`,
-    url: content ? "" : externalUrl,
+    url: sourceType === "content" ? "" : externalUrl,
+    sourceType,
+    ...(typeof item.contentKey === "string" && item.contentKey ? { contentKey: item.contentKey } : {}),
+    ...(typeof item.assignmentKey === "string" && item.assignmentKey ? { assignmentKey: item.assignmentKey } : {}),
     enabled: parseFlag(item.enabled, true),
     // 自动重命名只对外部订阅生效。
-    autoRename: !content && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
+    autoRename: sourceType === "url" && parseFlag(item.autoRename ?? item.autoRenameNodes, false),
     content,
     remark: cleanText(item.remark || item.note).slice(0, 500),
   };
@@ -55,12 +63,12 @@ function normalizeSubscriptionSource(item: JsonObject, id: number): Subscription
 function normalizeSubscriptionGroup(
   input: JsonObject,
   index: number,
-  nextSourceId: () => number,
+  nextSourceId: (requestedId?: unknown) => number,
 ): SubscriptionGroup {
   const rawSources = input.subscriptions ?? input.sources;
   const sourceInputs = (Array.isArray(rawSources) ? rawSources : []).filter(plainObject);
   const sources = sourceInputs
-    .map((item) => normalizeSubscriptionSource(item, nextSourceId()))
+    .map((item) => normalizeSubscriptionSource(item, nextSourceId(item.id)))
     .filter((item): item is SubscriptionSource => item !== null);
   // 旧配置把缓存时间存在订阅行；迁移时采用组内第一条外部订阅的旧值。
   const legacyCacheMinutes = sourceInputs.find((item) =>
@@ -116,7 +124,11 @@ function normalizeDebugInterface(value: unknown, subscriptions: SubscriptionSour
   };
 }
 
-export async function readState(env: Env): Promise<AppState> {
+export interface ReadStateOptions {
+  includeSubscriptionContent?: boolean;
+}
+
+export async function readState(env: Env, options: ReadStateOptions = {}): Promise<AppState> {
   if (!env.CONFIG) {
     throw new Error("Missing KV binding CONFIG");
   }
@@ -128,18 +140,49 @@ export async function readState(env: Env): Promise<AppState> {
   const legacyUpdatedAt = Date.parse(String(legacyState?.updatedAt || "")) || 0;
   const stored = legacyUpdatedAt > chimeraUpdatedAt ? legacyState : chimeraState || legacyState;
   const normalized = normalizeState(stored || DEFAULT_STATE);
-  if (stored && !chimeraState) {
-    await env.CONFIG.put(STATE_KEY, JSON.stringify(normalized));
+  if (!env.SUBSCRIPTIONS_DB) {
+    if (stored && !chimeraState) {
+      await env.CONFIG.put(STATE_KEY, JSON.stringify(normalized));
+    }
+    return normalized;
   }
-  return normalized;
+
+  let groups = await loadSubscriptionGroups(env, options.includeSubscriptionContent === true);
+  if (!groups) {
+    await saveSubscriptionGroups(env, normalized.subscriptionGroups, { importLegacyOnly: true });
+    groups = await loadSubscriptionGroups(env, options.includeSubscriptionContent === true);
+    const [latestChimeraState, latestLegacyState] = await Promise.all([
+      env.CONFIG.get<JsonObject>(STATE_KEY, "json"),
+      env.CONFIG.get<JsonObject>(LEGACY_STATE_KEY, "json"),
+    ]);
+    const latestChimeraUpdatedAt = Date.parse(String(latestChimeraState?.updatedAt || "")) || 0;
+    const latestLegacyUpdatedAt = Date.parse(String(latestLegacyState?.updatedAt || "")) || 0;
+    const latestStored = latestLegacyUpdatedAt > latestChimeraUpdatedAt
+      ? latestLegacyState
+      : latestChimeraState || latestLegacyState;
+    const latestState = normalizeState(latestStored || stored || DEFAULT_STATE);
+    const compactState = JSON.stringify({ ...latestState, subscriptionGroups: [] });
+    // 把已有订阅正文从 KV 主状态剥离；如果并发管理请求已保存更新，保留较新的应用设置。
+    await Promise.all([
+      env.CONFIG.put(STATE_KEY, compactState),
+      env.CONFIG.put(LEGACY_STATE_KEY, compactState),
+    ]);
+  }
+  return normalizeState({ ...(stored || {}), subscriptionGroups: groups || [] });
 }
 
 export async function writeState(env: Env, state: AppState) {
   if (!env.CONFIG) {
     throw new Error("Missing KV binding CONFIG");
   }
-  const serialized = JSON.stringify(normalizeState(state));
-  // 双写旧键，迁移期间让仍在使用旧 Worker 的管理端保持数据一致。
+  const normalized = normalizeState(state);
+  if (env.SUBSCRIPTIONS_DB) {
+    await saveSubscriptionGroups(env, normalized.subscriptionGroups);
+  }
+  const storedState = env.SUBSCRIPTIONS_DB
+    ? { ...normalized, subscriptionGroups: [] }
+    : normalized;
+  const serialized = JSON.stringify(storedState);
   await Promise.all([
     env.CONFIG.put(STATE_KEY, serialized),
     env.CONFIG.put(LEGACY_STATE_KEY, serialized),
@@ -148,11 +191,44 @@ export async function writeState(env: Env, state: AppState) {
 
 export function normalizeState(input: unknown): AppState {
   const value = plainObject(input) ? input : {};
-  let sourceId = 0;
-  const nextSourceId = () => ++sourceId;
   const storedGroups = Array.isArray(value.subscriptionGroups)
     ? value.subscriptionGroups
     : [];
+  const sourceInputs = storedGroups.length
+    ? storedGroups.filter(plainObject).flatMap((group) => {
+      const sources = group.subscriptions ?? group.sources;
+      return (Array.isArray(sources) ? sources : []).filter(plainObject);
+    })
+    : (Array.isArray(value.subscriptions)
+      ? value.subscriptions
+      : Array.isArray(value.sources)
+        ? value.sources
+        : []).filter(plainObject);
+  const reservedSourceIds = new Set<number>();
+  let sourceId = 0;
+  for (const item of sourceInputs) {
+    const requested = Number(item.id);
+    if (/^\d+$/.test(String(item.id ?? "")) && Number.isSafeInteger(requested) && requested > 0) {
+      reservedSourceIds.add(requested);
+      sourceId = Math.max(sourceId, requested);
+    }
+  }
+  const claimedSourceIds = new Set<number>();
+  const nextSourceId = (requestedId?: unknown) => {
+    const requested = Number(requestedId);
+    if (
+      /^\d+$/.test(String(requestedId ?? "")) && Number.isSafeInteger(requested) && requested > 0 &&
+      reservedSourceIds.has(requested) && !claimedSourceIds.has(requested)
+    ) {
+      claimedSourceIds.add(requested);
+      return requested;
+    }
+    do {
+      sourceId += 1;
+    } while (reservedSourceIds.has(sourceId) || claimedSourceIds.has(sourceId));
+    claimedSourceIds.add(sourceId);
+    return sourceId;
+  };
   const subscriptionGroups: SubscriptionGroup[] = storedGroups.length
     ? storedGroups
       .filter(plainObject)
@@ -164,7 +240,7 @@ export function normalizeState(input: unknown): AppState {
         : [])
       .filter(plainObject)
       .flatMap((item, index) => {
-        const source = normalizeSubscriptionSource(item, nextSourceId());
+        const source = normalizeSubscriptionSource(item, nextSourceId(item.id));
         if (!source) return [];
         // 旧版每条线路独立配置最低等级和版本，迁移时各自成为一个可编辑分组。
         const minimumType = normalizeAccountType(

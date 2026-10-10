@@ -24,6 +24,12 @@
       "binding": "USERS_DB",
       "database_name": "chimera-tiered-users",
       "database_id": "17e35fe6-9b3e-4c1e-95d8-bec4210639a2"
+    },
+    {
+      "binding": "SUBSCRIPTIONS_DB",
+      "database_name": "chimera-tiered-subscriptions",
+      "database_id": "889f260a-21a2-48e2-8bc7-82cb57039b9f",
+      "migrations_dir": "migrations/subscriptions"
     }
   ],
   "observability": {

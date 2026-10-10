@@ -23,6 +23,8 @@ export function createClientRoutes(deps: Pick<
   | "normalizeAccountId"
   | "isAppVersionAtLeast"
   | "readExternalSubscription"
+  | "readSubscriptionContent"
+  | "readSubscriptionContents"
   | "autoRenameSubscriptionContent"
   | "protectSubscription"
   | "getClientIp"
@@ -41,6 +43,8 @@ export function createClientRoutes(deps: Pick<
     normalizeAccountId,
     isAppVersionAtLeast,
     readExternalSubscription,
+    readSubscriptionContent,
+    readSubscriptionContents,
     autoRenameSubscriptionContent,
     protectSubscription,
     getClientIp,
@@ -51,6 +55,11 @@ export function createClientRoutes(deps: Pick<
     corsHeaders,
     json,
   } = deps;
+
+  const hasSubscriptionData = (source: SubscriptionSource) =>
+    source.sourceType === "content" || Boolean(source.content || source.url);
+  const isLocalSubscription = (source: SubscriptionSource) =>
+    source.sourceType === "content" || Boolean(source.content);
 
 async function handleClient(request: Request, env: Env) {
   const requestUrl = new URL(request.url);
@@ -169,7 +178,7 @@ async function handleManagedSubscription(path: string, request: Request, env: En
     group = state.subscriptionGroups.find((item) =>
       item.id === balancedGroupId && item.groupType === "load_balanced");
     if (!group || !group.enabled || !group.subscriptions.some((item) =>
-      item.enabled && (item.content || item.url)
+      item.enabled && hasSubscriptionData(item)
     )) {
       return json({ error: "subscription_not_found" }, 404);
     }
@@ -177,7 +186,7 @@ async function handleManagedSubscription(path: string, request: Request, env: En
     group = state.subscriptionGroups.find((item) =>
       item.subscriptions.some((itemSource) => itemSource.id === suffix));
     source = group?.subscriptions.find((item) => item.id === suffix);
-    if (!group || !group.enabled || !source || !source.enabled || (!source.content && !source.url)) {
+    if (!group || !group.enabled || !source || !source.enabled || !hasSubscriptionData(source)) {
       return json({ error: "subscription_not_found" }, 404);
     }
   }
@@ -234,24 +243,26 @@ async function handleManagedSubscription(path: string, request: Request, env: En
   if (!source) return json({ error: "subscription_not_found" }, 404);
 
   const clientIp = getClientIp(request);
-  let fetchedContent = source.content;
-  if (!fetchedContent) {
-    try {
+  let fetchedContent = "";
+  try {
+    if (isLocalSubscription(source)) {
+      fetchedContent = await readSubscriptionContent(env, source);
+    } else {
       fetchedContent = await readExternalSubscription(
         env,
         source,
         group.cacheMinutes,
         group.updateEnabled,
       );
-    } catch (error) {
-      if (error instanceof Error && error.message === "subscription_update_disabled_cache_missing") {
-        return json({ error: "subscription_update_disabled_cache_missing" }, 503);
-      }
-      return json({ error: "subscription_fetch_failed" }, 502);
     }
+  } catch (error) {
+    if (error instanceof Error && error.message === "subscription_update_disabled_cache_missing") {
+      return json({ error: "subscription_update_disabled_cache_missing" }, 503);
+    }
+    return json({ error: "subscription_fetch_failed" }, 502);
   }
   // 纯文本节点由后台直接维护，自动重命名只对外部接口生效。
-  const plaintextContent = source.autoRename && !source.content
+  const plaintextContent = source.autoRename && !isLocalSubscription(source)
     ? autoRenameSubscriptionContent(fetchedContent)
     : fetchedContent;
   const responseContent = protectSubscription(plaintextContent, clientIp);
@@ -284,7 +295,7 @@ async function handleDebugSubscription(path: string, _request: Request, env: Env
 
   const selectedIds = new Set(debugInterface.subscriptionIds);
   const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions
-    .filter((source) => selectedIds.has(source.id) && (source.content || source.url))
+    .filter((source) => selectedIds.has(source.id) && hasSubscriptionData(source))
     .map((source) => ({
       source,
       cacheMinutes: group.cacheMinutes,
@@ -296,9 +307,17 @@ async function handleDebugSubscription(path: string, _request: Request, env: Env
 
   let responseContent;
   try {
+    const localSources = await readSubscriptionContents(
+      env,
+      sources.map(({ source }) => source).filter(isLocalSubscription),
+    );
+    const localContent = new Map(localSources.map((source) => [source.id, source.content]));
     const contents = await Promise.all(sources.map(async ({ source, cacheMinutes, updateEnabled }) => {
-      const fetchedContent = source.content || await readExternalSubscription(env, source, cacheMinutes, updateEnabled);
-      return source.autoRename && !source.content
+      const local = isLocalSubscription(source);
+      const fetchedContent = local
+        ? localContent.get(source.id) || ""
+        : await readExternalSubscription(env, source, cacheMinutes, updateEnabled);
+      return source.autoRename && !local
         ? autoRenameSubscriptionContent(fetchedContent)
         : fetchedContent;
     }));

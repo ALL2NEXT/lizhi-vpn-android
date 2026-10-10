@@ -2,6 +2,7 @@ import type { Env } from "../types/env.ts";
 import type { SubscriptionGroup, SubscriptionSource } from "../types/models.ts";
 
 import { ensureUserSchema } from "./user-store.ts";
+import { subscriptionAssignmentKey } from "./subscription-identity.ts";
 
 interface SubscriptionAssignmentRow {
   source_id: string;
@@ -15,22 +16,6 @@ interface AllocationCandidate {
   sortOrder: number;
 }
 
-function contentSample(content: string) {
-  if (content.length <= 512) return content;
-  return `${content.slice(0, 256)}${content.slice(-256)}`;
-}
-
-async function sourceAssignmentKey(source: SubscriptionSource) {
-  // 用上游地址或纯文本首尾摘要识别订阅，避免线路排序变化时误换用户分配。
-  const identity = source.url
-    ? `url\u0000${source.url.trim()}\u0000${source.name.trim()}`
-    : `content\u0000${source.name.trim()}\u0000${source.content.length}\u0000${contentSample(source.content)}`;
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(identity));
-  return Array.from(new Uint8Array(digest).slice(0, 16), (byte) =>
-    byte.toString(16).padStart(2, "0")
-  ).join("");
-}
-
 /** 按用户固定分配一条线路；容量检查和写入在同一条 D1 语句中完成。 */
 export async function getOrAssignBalancedSubscription(
   env: Env,
@@ -39,13 +24,13 @@ export async function getOrAssignBalancedSubscription(
   nowSeconds = Math.floor(Date.now() / 1000),
 ): Promise<SubscriptionSource | null> {
   const enabledSources = group.subscriptions.filter((source) =>
-    source.enabled && (source.content || source.url)
+    source.enabled && (source.sourceType === "content" || source.content || source.url)
   );
   if (!enabledSources.length) return null;
 
   const candidates: AllocationCandidate[] = await Promise.all(enabledSources.map(async (source, index) => ({
     source,
-    sourceKey: await sourceAssignmentKey(source),
+    sourceKey: await subscriptionAssignmentKey(source),
     sortOrder: index,
   })));
   const sourceByKey = new Map<string, SubscriptionSource>();

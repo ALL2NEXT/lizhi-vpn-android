@@ -442,13 +442,14 @@ function addSource(groupRow, source, sourceOrderValue) {
   const row = document.createElement('div');
   row.className = 'source-row';
   row.dataset.sourceId = String(source.id || '');
+  row.dataset.contentKey = String(source.contentKey || '');
   row.dataset.persistedUrl = String(source.url || '');
   row.dataset.persistedEnabled = String(source.enabled !== false);
   const existingOrders = Array.from(groupRow.querySelectorAll('.source-row')).map(sourceOrder);
   row.dataset.sourceOrder = Number.isFinite(Number(sourceOrderValue)) && Number(sourceOrderValue) > 0
     ? String(Number(sourceOrderValue))
     : String(existingOrders.length ? Math.max.apply(null, existingOrders) + 1 : 1);
-  const sourceType = source.content ? 'content' : 'url';
+  const sourceType = source.sourceType === 'content' || source.content ? 'content' : 'url';
   row.innerHTML = subscriptionIcon('grip', 'source-row-drag') +
     '<input class="source-row-select" type="checkbox" data-source-select aria-label="选择订阅：' + esc(source.name || '未命名订阅') + '">' +
     '<div class="source-row-sort-controls"><input data-field="sourceOrder" type="number" min="1" step="1" value="' + row.dataset.sourceOrder + '" aria-label="订阅排序序号"></div>' +
@@ -704,6 +705,35 @@ function groupsForEditorOptions() {
   }).join('');
 }
 
+function moveSubscriptionToGroup(row, targetGroupId) {
+  if (!row || !row.isConnected) return;
+  const currentGroup = row.closest('.subscription-group');
+  const targetGroup = getSubscriptionGroupRows().find(function(group) {
+    return group.dataset.groupId === targetGroupId;
+  });
+  if (!currentGroup || !targetGroup || currentGroup === targetGroup) return;
+
+  const targetSources = targetGroup.querySelector('[data-group-sources]');
+  if (!targetSources) return;
+  targetSources.appendChild(row);
+  updateSubscriptionSourceOrder(currentGroup);
+  updateSubscriptionSourceOrder(targetGroup);
+
+  if (activeSubscriptionGroupId === currentGroup.dataset.groupId) {
+    selectSubscriptionGroup(targetGroup.dataset.groupId, false);
+  } else {
+    updateSourceRowsMeta();
+  }
+
+  // 移动后将列表翻到订阅所在页，避免弹窗仍开着但列表里找不到当前项。
+  const rowPosition = Number(row.style.order);
+  if (Number.isFinite(rowPosition) && rowPosition >= 0) {
+    subscriptionCurrentPage = Math.floor(rowPosition / subscriptionPageSize) + 1;
+    applySubscriptionFilters();
+  }
+  markSettingsDirty('subscriptions');
+}
+
 function updateSubscriptionEditorType(type) {
   const infoField = el('subscriptionEditor').querySelector('[data-editor-source-info]');
   const note = el('subscriptionEditor').querySelector('[data-editor-type-note]');
@@ -862,7 +892,10 @@ function initializeSubscriptionManager() {
       control.addEventListener(type, function() {
         if (!selectedSubscriptionRow) return;
         const field = control.dataset.editorField;
-        if (field === 'group') return;
+        if (field === 'group') {
+          if (type === 'change') moveSubscriptionToGroup(selectedSubscriptionRow, control.value);
+          return;
+        }
         const sourceControl = selectedSubscriptionRow.querySelector('[data-field="' + field + '"]');
         if (!sourceControl) return;
         if (sourceControl.type === 'checkbox') sourceControl.checked = control.checked;
@@ -1411,6 +1444,8 @@ function readSubscriptionSource(row, index) {
     const url = row.querySelector('[data-field="url"]').value.trim();
     const content = row.querySelector('[data-field="content"]').value.trim();
     return {
+      id: row.dataset.sourceId || undefined,
+      contentKey: row.dataset.contentKey || undefined,
       name: row.querySelector('[data-field="name"]').value.trim() || '订阅' + (index + 1),
       url: sourceType === 'url' ? url : '',
       enabled: row.querySelector('[data-field="enabled"]').checked,

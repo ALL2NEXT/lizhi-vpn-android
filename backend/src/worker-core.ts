@@ -62,6 +62,10 @@ import {
   writeState,
 } from "./services/state.ts";
 import {
+  readSubscriptionContent,
+  readSubscriptionContents,
+} from "./services/subscription-store.ts";
+import {
   attachDeviceToUser,
   ensureUserSchema,
   initializeUserSchema,
@@ -98,6 +102,8 @@ const routeDeps = {
   protectSubscription,
   getClientIp,
   readState,
+  readSubscriptionContent,
+  readSubscriptionContents,
   visibleNotice,
   publicClientSettings,
   corsHeaders,

@@ -345,8 +345,8 @@
                 <label class="subscription-editor-field">订阅类型<select data-editor-field="sourceType"><option value="url">远程订阅</option><option value="content">本地文本</option></select></label>
                 <label class="subscription-editor-field">订阅信息 <span class="required-mark">*</span><span class="subscription-editor-copy-field"><textarea data-editor-source-info data-editor-field="url" rows="3" placeholder="https://example.com/sub"></textarea><button class="secondary" type="button" data-action="copy-subscription-info" aria-label="复制订阅信息"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-copy"></use></svg></button></span></label>
                 <p class="subscription-editor-note" data-editor-type-note>远程订阅由 Worker 获取、转换并加密下发。</p>
-                <!-- 分组在本次仅展示，避免样式调整新增跨分组迁移数据的行为。 -->
-                <label class="subscription-editor-field">所属分组<select data-editor-field="group" disabled></select></label>
+                <!-- 切换所属分组会将订阅移动到目标分组。 -->
+                <label class="subscription-editor-field">所属分组<select data-editor-field="group"></select></label>
                 <label class="subscription-editor-field">备注<textarea data-editor-field="remark" maxlength="200" rows="3" placeholder="仅后台保存"></textarea></label>
                 <section class="subscription-editor-traffic">
                   <div class="subscription-editor-section-heading"><h4>流量信息</h4><button class="secondary" type="button" data-action="refresh-subscription-traffic"><svg class="subscription-icon subscription-icon-small" aria-hidden="true"><use href="#subscription-icon-refresh"></use></svg> 刷新</button></div>

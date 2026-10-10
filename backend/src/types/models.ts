@@ -8,6 +8,9 @@ export interface SubscriptionSource {
   id: string;
   name: string;
   url: string;
+  sourceType?: "url" | "content";
+  contentKey?: string;
+  assignmentKey?: string;
   enabled: boolean;
   autoRename: boolean;
   content: string;

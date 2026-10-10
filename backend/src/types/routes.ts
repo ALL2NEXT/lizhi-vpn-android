@@ -8,6 +8,7 @@ import type * as subscriptions from "../services/subscriptions.ts";
 import type * as state from "../services/state.ts";
 import type * as users from "../services/user-store.ts";
 import type * as adminAccess from "../services/admin-access.ts";
+import type * as subscriptionStore from "../services/subscription-store.ts";
 
 export interface RouteDependencies {
   CLIENT_IP_HEADER: typeof config.CLIENT_IP_HEADER;
@@ -23,6 +24,8 @@ export interface RouteDependencies {
   protectSubscription: typeof subscriptions.protectSubscription;
   getClientIp: typeof subscriptions.getClientIp;
   readState: typeof state.readState;
+  readSubscriptionContent: typeof subscriptionStore.readSubscriptionContent;
+  readSubscriptionContents: typeof subscriptionStore.readSubscriptionContents;
   visibleNotice: typeof state.visibleNotice;
   publicClientSettings: typeof state.publicClientSettings;
   corsHeaders: typeof responses.corsHeaders;

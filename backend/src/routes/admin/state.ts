@@ -112,17 +112,32 @@ export function createAdminStateRoutes(deps: Pick<
     }
 
     if (path === "/api/state" && request.method === "GET") {
-      return json(await readState(env));
+      return json(await readState(env, { includeSubscriptionContent: true }));
     }
 
     if (path === "/api/state" && request.method === "PUT") {
       const incoming = await request.json();
       try {
         const next = normalizeState(incoming);
-        await validateAndWarmSubscriptionSources(
-          env,
-          next.subscriptionGroups,
-        );
+        const current = await readState(env);
+        const currentSources = new Map(current.subscriptionGroups.flatMap((group) =>
+          group.subscriptions.map((source) => [source.id, {
+            url: source.url,
+            enabled: source.enabled,
+            updateEnabled: group.updateEnabled,
+          }] as const)));
+        const sourcesToWarm = next.subscriptionGroups.map((group) => ({
+          ...group,
+          subscriptions: group.subscriptions.filter((source) => {
+            if (!source.url || source.enabled === false) return false;
+            const previous = currentSources.get(source.id);
+            return !previous || previous.url !== source.url || !previous.enabled ||
+              previous.updateEnabled !== group.updateEnabled;
+          }),
+        })).filter((group) => group.subscriptions.length > 0);
+        if (sourcesToWarm.length) {
+          await validateAndWarmSubscriptionSources(env, sourcesToWarm);
+        }
         next.updatedAt = beijingTimestamp();
         await writeState(env, next);
         return json({ ok: true, state: next });
