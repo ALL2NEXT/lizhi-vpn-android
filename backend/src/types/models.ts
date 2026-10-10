@@ -139,6 +139,7 @@ export type PublicAccount = Omit<User, "createdAt"> & { deviceBlocked: boolean }
 
 export type SystemLogCategory = "request" | "operation" | "database" | "outbound";
 export type SystemLogLevel = "info" | "warning" | "error";
+export type SystemLogRecordingSettings = Record<SystemLogCategory, boolean>;
 
 export interface SystemLogDraft {
   category: SystemLogCategory;

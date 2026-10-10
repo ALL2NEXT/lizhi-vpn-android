@@ -289,6 +289,19 @@
      .system-log-type-mark.operation { background: #8e63ce; }
      .system-log-type-mark.database { background: #f9ab00; }
      .system-log-type-mark.outbound { background: #20a69a; }
+     .system-logs-sidebar .subscription-group-navigation { gap: 3px; }
+     .system-log-category-row { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 42px; padding: 2px 4px; border-radius: 8px; }
+     .system-log-category-row:hover { background: #f3f7fd; }
+     .system-log-category-row .subscription-group-nav-item { flex: 1 1 auto; width: auto; min-width: 0; min-height: 38px; padding: 7px 6px; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; font-size: 13px; }
+     .system-log-category-row .subscription-group-nav-item.active { background: #e5efff; }
+     .system-log-record-toggle { position: relative; display: inline-flex; flex: 0 0 36px; align-items: center; justify-content: center; width: 36px; height: 28px; margin: 0; cursor: pointer; }
+     .system-log-record-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+     .system-log-record-toggle i { position: relative; display: inline-block; width: 32px; height: 18px; border-radius: 99px; background: #c6cfdb; transition: background .15s ease; }
+     .system-log-record-toggle i::after { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; content: ''; transition: transform .15s ease; box-shadow: 0 1px 2px #0002; }
+     .system-log-record-toggle input:checked + i { background: #1a73e8; }
+     .system-log-record-toggle input:checked + i::after { transform: translateX(14px); }
+     .system-log-record-toggle input:focus-visible + i { outline: 2px solid #1a73e8; outline-offset: 2px; }
+     .system-log-record-toggle input:disabled + i { opacity: .55; }
      .tab-panel[data-panel="system-logs"] .system-logs-workspace { display: flex; min-height: 540px; padding: 0; }
      .system-logs-browser { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
      .system-logs-toolbar { display: flex; align-items: center; flex-wrap: nowrap; gap: 9px; padding: 16px 18px 14px; }

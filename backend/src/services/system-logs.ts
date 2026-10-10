@@ -1,6 +1,12 @@
 import type { Env } from "../types/env.ts";
-import type { SystemLogCategory, SystemLogDraft, SystemLogRecord } from "../types/models.ts";
+import type {
+  SystemLogCategory,
+  SystemLogDraft,
+  SystemLogRecord,
+  SystemLogRecordingSettings,
+} from "../types/models.ts";
 
+import { SYSTEM_LOG_SETTINGS_KEY } from "../config.ts";
 import { beijingTimestamp } from "../domain/time.ts";
 import { ensureUserSchema } from "./user-store.ts";
 
@@ -8,7 +14,50 @@ const DATABASE_SLOW_MS = 250;
 const OUTBOUND_SLOW_MS = 1000;
 const LOG_RETENTION_DAYS = 30;
 const MAX_LOG_DETAILS_LENGTH = 1600;
+const SYSTEM_LOG_CATEGORIES: SystemLogCategory[] = ["request", "operation", "database", "outbound"];
+const DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS: SystemLogRecordingSettings = {
+  request: true,
+  operation: true,
+  database: true,
+  outbound: true,
+};
 const preparedMetadata = new WeakMap<object, { raw: D1PreparedStatement; sql: string }>();
+
+function normalizeSystemLogRecordingSettings(value: unknown): SystemLogRecordingSettings {
+  const settings = value && typeof value === "object"
+    ? value as Partial<SystemLogRecordingSettings>
+    : {};
+  return {
+    request: settings.request !== false,
+    operation: settings.operation !== false,
+    database: settings.database !== false,
+    outbound: settings.outbound !== false,
+  };
+}
+
+export async function readSystemLogRecordingSettings(env: Env): Promise<SystemLogRecordingSettings> {
+  if (!env.CONFIG) return { ...DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS };
+  const stored = await env.CONFIG.get<unknown>(SYSTEM_LOG_SETTINGS_KEY, "json");
+  return normalizeSystemLogRecordingSettings(stored);
+}
+
+export async function updateSystemLogRecordingSetting(
+  env: Env,
+  category: unknown,
+  enabled: unknown,
+): Promise<SystemLogRecordingSettings> {
+  if (!SYSTEM_LOG_CATEGORIES.includes(category as SystemLogCategory)) {
+    throw new Error("invalid_system_log_category");
+  }
+  if (typeof enabled !== "boolean") {
+    throw new Error("invalid_system_log_recording_state");
+  }
+  if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
+  const settings = await readSystemLogRecordingSettings(env);
+  const next = { ...settings, [category as SystemLogCategory]: enabled };
+  await env.CONFIG.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
 
 function truncate(value: unknown, maximum: number) {
   return String(value == null ? "" : value).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ").trim().slice(0, maximum);
@@ -253,8 +302,11 @@ function normalizeDraft(entry: SystemLogDraft) {
 export async function writeSystemLogs(env: Env, entries: SystemLogDraft[]) {
   if (!entries.length || !env.USERS_DB) return;
   try {
+    const settings = await readSystemLogRecordingSettings(env);
+    const enabledEntries = entries.filter((entry) => settings[entry.category]);
+    if (!enabledEntries.length) return;
     const db = await ensureUserSchema(env);
-    const statements = entries.map((entry) => {
+    const statements = enabledEntries.map((entry) => {
       const value = normalizeDraft(entry);
       return db.prepare(
         `INSERT INTO system_logs_mb (

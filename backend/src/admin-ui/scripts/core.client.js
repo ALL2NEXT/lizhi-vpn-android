@@ -229,6 +229,9 @@
    if (name === 'system-logs' && !systemLogsData && !systemLogsLoading) {
      loadSystemLogs();
    }
+   if (name === 'system-logs') {
+     loadSystemLogRecordingSettings();
+   }
  }
    document.querySelectorAll('.tab-button[data-tab]').forEach(function(button) {
    button.onclick = function() {

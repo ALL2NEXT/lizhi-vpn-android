@@ -81,6 +81,8 @@ import {
   createObservedEnv,
   pruneSystemLogs,
   readSystemLogs,
+  readSystemLogRecordingSettings,
+  updateSystemLogRecordingSetting,
   writeSystemLogs,
 } from "./services/system-logs.ts";
 
@@ -138,6 +140,8 @@ const routeDeps = {
   writeState,
   normalizeState,
   readSystemLogs,
+  readSystemLogRecordingSettings,
+  updateSystemLogRecordingSetting,
 } satisfies RouteDependencies;
 
 const {
@@ -159,6 +163,7 @@ function requestIp(request: Request) {
 }
 
 function adminOperationLabel(method: string, path: string) {
+  if (path.endsWith("/api/system-log-settings") && method === "PUT") return "修改系统日志记录设置";
   if (path.endsWith("/api/state") && method === "PUT") return "保存后台配置";
   if (path.endsWith("/api/registration-codes") && method === "POST") return "生成注册码";
   if (path.includes("/api/users/batch") && method === "DELETE") return "批量删除用户";
@@ -173,6 +178,7 @@ function adminOperationLabel(method: string, path: string) {
 }
 
 function isAdminWriteOperation(method: string, path: string) {
+  if (method === "PUT" && path.endsWith("/api/system-log-settings")) return true;
   if (method === "PUT" && path.endsWith("/api/state")) return true;
   if (method === "POST" && path.endsWith("/api/registration-codes")) return true;
   if (path.includes("/api/users/") || path.includes("/api/users/batch")) {

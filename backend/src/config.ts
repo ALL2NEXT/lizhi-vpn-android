@@ -7,6 +7,7 @@ import type { AppState } from "./types/models.ts";
 
 export const STATE_KEY = "chimera:state:v1";
 export const LEGACY_STATE_KEY = "fireflyvpn:state:v1";
+export const SYSTEM_LOG_SETTINGS_KEY = "chimera:system-log-settings:v1";
 export const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 export const MAX_D1_INLINE_SUBSCRIPTION_BYTES = 1_900_000;
 export const MAX_BATCH_USER_COUNT = 100;

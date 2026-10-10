@@ -5,6 +5,8 @@ let systemLogsRangeTimer = null;
 let systemLogsFilterRevision = 0;
 let systemLogDetailRecord = null;
 let systemLogDetailTab = 'basic';
+let systemLogRecordingSettings = null;
+let systemLogRecordingSettingsLoading = false;
 
 function systemLogCategoryName(category) {
   return ({request: '网络请求', operation: '后台操作', database: '数据库', outbound: '出站请求'})[category] || '系统';
@@ -204,6 +206,67 @@ function selectSystemLogCategory(category) {
   applySystemLogFilters();
 }
 
+function renderSystemLogRecordingSettings() {
+  if (!systemLogRecordingSettings) return;
+  document.querySelectorAll('[data-system-log-recording]').forEach(function(input) {
+    const category = input.dataset.systemLogRecording;
+    input.checked = systemLogRecordingSettings[category] !== false;
+    input.disabled = false;
+  });
+}
+
+async function loadSystemLogRecordingSettings(force) {
+  if (systemLogRecordingSettingsLoading || (systemLogRecordingSettings && !force)) return;
+  systemLogRecordingSettingsLoading = true;
+  document.querySelectorAll('[data-system-log-recording]').forEach(function(input) { input.disabled = true; });
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/system-log-settings', {
+      method: 'GET',
+      headers: headers(),
+      cache: 'no-store'
+    });
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok || !data.settings) {
+      throw new Error(adminErrorMessage(data.error, '日志记录设置读取失败'));
+    }
+    systemLogRecordingSettings = data.settings;
+    renderSystemLogRecordingSettings();
+  } catch (error) {
+    show(error.message || '日志记录设置读取失败', true);
+  } finally {
+    systemLogRecordingSettingsLoading = false;
+  }
+}
+
+async function updateSystemLogRecordingSetting(input) {
+  const category = input.dataset.systemLogRecording;
+  if (!category || !systemLogRecordingSettings) return;
+  const previous = systemLogRecordingSettings[category] !== false;
+  const enabled = input.checked;
+  document.querySelectorAll('[data-system-log-recording]').forEach(function(toggle) { toggle.disabled = true; });
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/system-log-settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({category: category, enabled: enabled}),
+      cache: 'no-store'
+    });
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok || !data.settings) {
+      throw new Error(adminErrorMessage(data.error, '日志记录设置保存失败'));
+    }
+    systemLogRecordingSettings = data.settings;
+    renderSystemLogRecordingSettings();
+    show(enabled ? '已开启该类型日志记录' : '已关闭该类型日志记录');
+  } catch (error) {
+    systemLogRecordingSettings[category] = previous;
+    renderSystemLogRecordingSettings();
+    show(error.message || '日志记录设置保存失败', true);
+  }
+}
+
 function applySystemLogFilters() {
   systemLogsFilterRevision += 1;
   if (systemLogDetailRecord) closeSystemLogDetails();
@@ -363,6 +426,12 @@ function stopSystemLogAutoRefresh() {
 document.querySelectorAll('[data-system-log-category]').forEach(function(button) {
   button.addEventListener('click', function() {
     selectSystemLogCategory(button.dataset.systemLogCategory || '');
+  });
+});
+
+document.querySelectorAll('[data-system-log-recording]').forEach(function(input) {
+  input.addEventListener('change', function() {
+    updateSystemLogRecordingSetting(input);
   });
 });
 
