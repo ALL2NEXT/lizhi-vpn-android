@@ -539,33 +539,40 @@
       </div>
       <button class="secondary" type="button" onclick="loadSystemLogs(true)">刷新日志</button>
     </div>
-    <div class="system-logs-toolbar">
-      <input id="systemLogSearch" type="search" placeholder="搜索路由、说明、IP 或请求 ID" aria-label="搜索系统日志">
-      <select id="systemLogCategory" aria-label="日志类型">
-        <option value="">全部类型</option>
-        <option value="request">网络请求</option>
-        <option value="operation">后台操作</option>
-        <option value="database">数据库</option>
-        <option value="outbound">出站请求</option>
-      </select>
-      <select id="systemLogLevel" aria-label="日志级别">
-        <option value="">全部级别</option>
-        <option value="error">错误</option>
-        <option value="warning">警告</option>
-        <option value="info">信息</option>
-      </select>
-      <button class="secondary" type="button" onclick="applySystemLogFilters()">筛选</button>
-    </div>
-    <div id="systemLogsSummary" class="system-logs-summary" role="status" aria-live="polite"></div>
-    <div id="systemLogsTable" class="system-logs-wrap">
-      <div class="loading-state">打开此模块后读取系统日志</div>
-    </div>
-    <div class="system-logs-pagination">
-      <span id="systemLogsPageStatus"></span>
-      <div>
-        <button class="secondary" type="button" onclick="changeSystemLogsPage(-1)">上一页</button>
-        <button class="secondary" type="button" onclick="changeSystemLogsPage(1)">下一页</button>
-      </div>
+    <div class="subscription-manager-layout system-logs-manager-layout">
+      <aside class="subscription-group-sidebar system-logs-sidebar" aria-label="系统日志类型">
+        <div class="subscription-group-sidebar-heading"><h3>日志类型</h3></div>
+        <nav id="systemLogCategoryNavigation" class="subscription-group-navigation" aria-label="选择日志类型">
+          <button class="subscription-group-nav-item system-logs-category-option active" type="button" data-system-log-category="" aria-current="page"><span class="system-log-type-mark all" aria-hidden="true"></span><span class="subscription-nav-name">全部日志</span></button>
+          <button class="subscription-group-nav-item system-logs-category-option" type="button" data-system-log-category="request"><span class="system-log-type-mark request" aria-hidden="true"></span><span class="subscription-nav-name">网络请求</span></button>
+          <button class="subscription-group-nav-item system-logs-category-option" type="button" data-system-log-category="operation"><span class="system-log-type-mark operation" aria-hidden="true"></span><span class="subscription-nav-name">后台操作</span></button>
+          <button class="subscription-group-nav-item system-logs-category-option" type="button" data-system-log-category="database"><span class="system-log-type-mark database" aria-hidden="true"></span><span class="subscription-nav-name">数据库</span></button>
+          <button class="subscription-group-nav-item system-logs-category-option" type="button" data-system-log-category="outbound"><span class="system-log-type-mark outbound" aria-hidden="true"></span><span class="subscription-nav-name">出站请求</span></button>
+        </nav>
+      </aside>
+      <section class="subscription-group-workspace system-logs-workspace" aria-label="系统日志列表">
+        <div class="system-logs-toolbar">
+          <input id="systemLogSearch" type="search" placeholder="搜索路由、说明、IP 或请求 ID" aria-label="搜索系统日志">
+          <select id="systemLogLevel" aria-label="日志级别">
+            <option value="">全部级别</option>
+            <option value="error">错误</option>
+            <option value="warning">警告</option>
+            <option value="info">信息</option>
+          </select>
+          <button class="secondary" type="button" onclick="applySystemLogFilters()">筛选</button>
+        </div>
+        <div id="systemLogsSummary" class="system-logs-summary" role="status" aria-live="polite"></div>
+        <div id="systemLogsTable" class="system-logs-wrap">
+          <div class="loading-state">打开此模块后读取系统日志</div>
+        </div>
+        <div class="system-logs-pagination">
+          <span id="systemLogsPageStatus"></span>
+          <div>
+            <button class="secondary" type="button" onclick="changeSystemLogsPage(-1)">上一页</button>
+            <button class="secondary" type="button" onclick="changeSystemLogsPage(1)">下一页</button>
+          </div>
+        </div>
+      </section>
     </div>
   </section>
    </div>

@@ -62,10 +62,9 @@ async function loadSystemLogs(force) {
   systemLogsLoading = true;
   if (host) host.innerHTML = '<div class="loading-state">正在读取系统日志</div>';
   const query = new URLSearchParams({limit: '100', offset: String(systemLogsOffset)});
-  const category = el('systemLogCategory').value;
   const level = el('systemLogLevel').value;
   const search = el('systemLogSearch').value.trim();
-  if (category) query.set('category', category);
+  if (systemLogsCategory) query.set('category', systemLogsCategory);
   if (level) query.set('level', level);
   if (search) query.set('q', search);
 
@@ -89,6 +88,24 @@ async function loadSystemLogs(force) {
   }
 }
 
+function syncSystemLogCategorySelection() {
+  document.querySelectorAll('[data-system-log-category]').forEach(function(button) {
+    const selected = button.dataset.systemLogCategory === systemLogsCategory;
+    button.classList.toggle('active', selected);
+    if (selected) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+}
+
+function selectSystemLogCategory(category) {
+  const allowedCategories = ['', 'request', 'operation', 'database', 'outbound'];
+  const selectedCategory = allowedCategories.includes(category) ? category : '';
+  if (selectedCategory === systemLogsCategory) return;
+  systemLogsCategory = selectedCategory;
+  syncSystemLogCategorySelection();
+  applySystemLogFilters();
+}
+
 function applySystemLogFilters() {
   systemLogsOffset = 0;
   systemLogsData = null;
@@ -109,3 +126,11 @@ const systemLogSearchInput = el('systemLogSearch');
 if (systemLogSearchInput) systemLogSearchInput.addEventListener('keydown', function(event) {
   if (event.key === 'Enter') applySystemLogFilters();
 });
+
+document.querySelectorAll('[data-system-log-category]').forEach(function(button) {
+  button.addEventListener('click', function() {
+    selectSystemLogCategory(button.dataset.systemLogCategory || '');
+  });
+});
+
+syncSystemLogCategorySelection();

@@ -259,12 +259,22 @@
      .system-logs-empty { padding: 22px; color: #5f6368; text-align: center; }
      .system-logs-heading { align-items: center; }
      .system-logs-heading > button { margin: 0; }
+     .system-logs-manager-layout { grid-template-columns: 240px minmax(0, 1fr); min-height: 580px; }
+     .system-logs-category-option { grid-template-columns: 12px minmax(0, 1fr); gap: 10px; }
+     .system-log-type-mark { width: 9px; height: 9px; border-radius: 50%; background: #78869a; }
+     .system-log-type-mark.request { background: #1a73e8; }
+     .system-log-type-mark.operation { background: #8e63ce; }
+     .system-log-type-mark.database { background: #f9ab00; }
+     .system-log-type-mark.outbound { background: #34a853; }
+     .system-logs-workspace { min-height: 0; }
      .system-logs-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
      .system-logs-toolbar input { flex: 1 1 300px; min-width: 180px; }
      .system-logs-toolbar select { min-width: 132px; }
      .system-logs-toolbar button { margin: 0; }
+     .system-logs-workspace .system-logs-toolbar { padding-bottom: 12px; margin-bottom: 0; border-bottom: 1px solid #e7edf4; }
      .system-logs-summary { margin: 0 0 10px; color: #64748b; font-size: 13px; }
-     .system-logs-wrap { max-height: calc(100vh - 270px); }
+     .system-logs-workspace .system-logs-summary { flex: 0 0 auto; margin: 10px 0; }
+     .system-logs-workspace .system-logs-wrap { flex: 1 1 auto; min-height: 180px; max-height: calc(100vh - 360px); }
      .system-logs-table { min-width: 1120px; }
      .system-logs-time { min-width: 160px; white-space: nowrap; }
      .system-logs-path { min-width: 260px; max-width: 440px; }
@@ -1240,6 +1250,11 @@
       .system-logs-toolbar input, .system-logs-toolbar select, .system-logs-toolbar button { flex-basis: 100%; width: 100%; }
       .system-logs-wrap { max-height: 60vh; }
       .system-logs-pagination { align-items: flex-start; flex-direction: column; }
+      .system-logs-manager-layout { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+      .system-logs-sidebar { min-height: 0; max-height: 250px; }
+      .system-logs-sidebar .subscription-group-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .system-logs-workspace { min-height: 500px; }
+      .system-logs-workspace .system-logs-wrap { max-height: 60vh; }
       body.subscriptions-fullscreen, body.navigation-page-fullscreen { overflow: auto; }
       body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace,
       body.navigation-page-fullscreen #dashboard, body.navigation-page-fullscreen .dashboard-workspace { height: auto; min-height: 100vh; overflow: visible; }
