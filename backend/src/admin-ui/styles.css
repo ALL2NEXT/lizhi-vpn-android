@@ -354,9 +354,10 @@
      .system-log-category.outbound { color: #087e8b; background: #e0f7fa; }
      .system-log-level.warning { color: #a85a00; background: #fff1dc; }
      .system-log-level.error { color: #bd2028; background: #ffe7e8; }
-     .system-logs-path { display: flex; align-items: center; gap: 9px; min-width: 240px; max-width: 420px; }
+     .system-logs-path { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 240px; max-width: 420px; }
      .system-log-method { display: inline-flex; flex: 0 0 auto; align-items: center; padding: 4px 7px; border-radius: 5px; color: #34445b; background: #eef2f7; font-size: 11px; font-weight: 700; }
-     .system-log-path-text, .system-log-ip, .system-log-request-id { display: block; overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
+     .system-log-path-text, .system-log-ip, .system-log-request-id { display: block; min-width: 0; overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
+     .system-log-path-text { flex: 1 1 auto; }
      .system-log-status { display: inline-flex; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
      .system-log-status.success { color: #16824c; background: #e4f6ec; }
      .system-log-status.warning { color: #bd6500; background: #fff1dc; }

@@ -112,7 +112,7 @@ function renderSystemLogs() {
         '<td class="system-logs-time">' + esc(systemLogDateTime(record.occurredAt)) + '</td>' +
         '<td><span class="system-log-category ' + esc(record.category || '') + '">' + esc(systemLogCategoryName(record.category)) + '</span></td>' +
         '<td><span class="system-log-level-badge system-log-level ' + esc(level) + '">' + esc(systemLogLevelName(level)) + '</span></td>' +
-        '<td class="system-logs-path"><span class="system-log-method">' + esc(method) + '</span><span class="system-log-path-text" title="' + esc(path) + '">' + esc(path) + '</span></td>' +
+        '<td><div class="system-logs-path"><span class="system-log-method">' + esc(method) + '</span><span class="system-log-path-text" title="' + esc(path) + '">' + esc(path) + '</span></div></td>' +
         '<td><span class="system-log-status ' + systemLogStatusClass(record.status) + '">' + esc(status) + '</span></td>' +
         '<td class="system-logs-duration ' + (Number(record.durationMs) >= 500 ? 'slow' : '') + '">' + esc(duration) + '</td>' +
         '<td><span class="system-log-ip" title="' + esc(record.ip || '-') + '">' + esc(record.ip || '-') + '</span></td>' +
