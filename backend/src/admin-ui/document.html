@@ -621,6 +621,18 @@
             <label class="system-log-mode-option"><input type="radio" name="systemLogRecordingMode" data-system-log-mode="full" value="full" disabled><span><strong>全量记录</strong><small>保存网络请求的完整 URL、请求头和正文，以及响应头和正文；需开启“网络请求”记录。</small></span></label>
             <p class="system-log-full-warning">全量记录可能包含密码、令牌、Cookie 等敏感信息，并增加数据库占用；仅限可信管理员访问，日志按 30 天周期清理。</p>
           </fieldset>
+          <fieldset class="system-log-schedule-settings">
+            <legend>定时记录</legend>
+            <div class="system-log-schedule-toggle-row">
+              <span><strong>启用定时记录</strong><small>每天仅在设定时间段内记录系统日志。</small></span>
+              <label class="system-log-record-toggle" title="启用定时记录"><input id="systemLogScheduleToggle" type="checkbox" data-system-log-schedule-toggle disabled aria-label="启用定时记录"><i aria-hidden="true"></i></label>
+            </div>
+            <div class="system-log-schedule-range">
+              <label><span>开始时间</span><input type="time" data-system-log-schedule-time="startTime" value="00:00" disabled></label>
+              <label><span>结束时间</span><input type="time" data-system-log-schedule-time="endTime" value="23:59" disabled></label>
+            </div>
+            <p class="system-log-schedule-hint">按北京时间执行；开始时间包含在内，结束时间不包含，支持跨午夜。</p>
+          </fieldset>
           <fieldset class="system-log-category-settings">
             <legend>分类记录开关</legend>
             <div class="system-log-setting-category"><span><i class="system-log-type-mark request" aria-hidden="true"></i>网络请求</span><label class="system-log-record-toggle" title="记录网络请求"><input type="checkbox" data-system-log-recording="request" checked disabled aria-label="记录网络请求"><i aria-hidden="true"></i></label></div>

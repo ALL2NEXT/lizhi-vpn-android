@@ -68,4 +68,5 @@ export interface RouteDependencies {
   readSystemLogRecordingSettings: typeof systemLogs.readSystemLogRecordingSettings;
   updateSystemLogRecordingSetting: typeof systemLogs.updateSystemLogRecordingSetting;
   updateSystemLogRecordingMode: typeof systemLogs.updateSystemLogRecordingMode;
+  updateSystemLogRecordingSchedule: typeof systemLogs.updateSystemLogRecordingSchedule;
 }

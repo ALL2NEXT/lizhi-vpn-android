@@ -147,9 +147,16 @@ export type SystemLogLevel = "info" | "warning" | "error";
 export type SystemLogRecordingMode = "simple" | "full";
 export type SystemLogCategorySettings = Record<SystemLogCategory, boolean>;
 
+export interface SystemLogRecordingSchedule {
+  enabled: boolean;
+  startTime: string;
+  endTime: string;
+}
+
 export interface SystemLogRecordingSettings {
   mode: SystemLogRecordingMode;
   categories: SystemLogCategorySettings;
+  schedule: SystemLogRecordingSchedule;
 }
 
 export interface SystemLogHttpBodyCapture {

@@ -220,10 +220,20 @@ function renderSystemLogRecordingSettings() {
     input.checked = input.dataset.systemLogMode === systemLogRecordingSettings.mode;
     input.disabled = false;
   });
+  const schedule = systemLogRecordingSettings.schedule || {enabled: false, startTime: '00:00', endTime: '23:59'};
+  const scheduleToggle = el('systemLogScheduleToggle');
+  if (scheduleToggle) {
+    scheduleToggle.checked = schedule.enabled === true;
+    scheduleToggle.disabled = false;
+  }
+  document.querySelectorAll('[data-system-log-schedule-time]').forEach(function(input) {
+    input.value = schedule[input.dataset.systemLogScheduleTime] || '';
+    input.disabled = schedule.enabled !== true;
+  });
 }
 
 function disableSystemLogSettingControls(disabled) {
-  document.querySelectorAll('[data-system-log-recording], [data-system-log-mode]').forEach(function(input) {
+  document.querySelectorAll('[data-system-log-recording], [data-system-log-mode], [data-system-log-schedule-toggle], [data-system-log-schedule-time]').forEach(function(input) {
     input.disabled = disabled;
   });
 }
@@ -304,6 +314,45 @@ async function updateSystemLogRecordingMode(input) {
     systemLogRecordingSettings.mode = previous;
     renderSystemLogRecordingSettings();
     show(error.message || '日志记录方式保存失败', true);
+  }
+}
+
+async function updateSystemLogRecordingSchedule() {
+  if (!systemLogRecordingSettings) return;
+  const scheduleToggle = el('systemLogScheduleToggle');
+  const startInput = document.querySelector('[data-system-log-schedule-time="startTime"]');
+  const endInput = document.querySelector('[data-system-log-schedule-time="endTime"]');
+  const schedule = {
+    enabled: scheduleToggle.checked,
+    startTime: startInput.value,
+    endTime: endInput.value
+  };
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.startTime) ||
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.endTime) ||
+      schedule.startTime === schedule.endTime) {
+    renderSystemLogRecordingSettings();
+    show('开始时间和结束时间必须有效且不能相同', true);
+    return;
+  }
+  disableSystemLogSettingControls(true);
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/system-log-settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({schedule: schedule}),
+      cache: 'no-store'
+    });
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok || !data.settings) {
+      throw new Error(adminErrorMessage(data.error, '定时记录设置保存失败'));
+    }
+    systemLogRecordingSettings = data.settings;
+    renderSystemLogRecordingSettings();
+    show(schedule.enabled ? '定时记录已开启' : '定时记录已关闭');
+  } catch (error) {
+    renderSystemLogRecordingSettings();
+    show(error.message || '定时记录设置保存失败', true);
   }
 }
 
@@ -572,6 +621,11 @@ document.querySelectorAll('[data-system-log-mode]').forEach(function(input) {
   input.addEventListener('change', function() {
     if (input.checked) updateSystemLogRecordingMode(input);
   });
+});
+
+el('systemLogScheduleToggle').addEventListener('change', updateSystemLogRecordingSchedule);
+document.querySelectorAll('[data-system-log-schedule-time]').forEach(function(input) {
+  input.addEventListener('change', updateSystemLogRecordingSchedule);
 });
 
 el('systemLogsSettingsButton').addEventListener('click', openSystemLogSettings);

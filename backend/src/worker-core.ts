@@ -85,11 +85,13 @@ import type {
 } from "./types/models.ts";
 import {
   createObservedEnv,
+  isSystemLogScheduleActive,
   pruneSystemLogs,
   readSystemLogPayload,
   readSystemLogs,
   readSystemLogRecordingSettings,
   updateSystemLogRecordingMode,
+  updateSystemLogRecordingSchedule,
   updateSystemLogRecordingSetting,
   writeSystemLogs,
 } from "./services/system-logs.ts";
@@ -152,6 +154,7 @@ const routeDeps = {
   readSystemLogs,
   readSystemLogRecordingSettings,
   updateSystemLogRecordingMode,
+  updateSystemLogRecordingSchedule,
   updateSystemLogRecordingSetting,
 } satisfies RouteDependencies;
 
@@ -347,7 +350,9 @@ const worker = {
       path.endsWith("/api/account/activate-vip") ||
       (isAdminApi && path.endsWith("/api/vip-codes"));
     const captureFullRequest = recordingSettings?.mode === "full" &&
-      recordingSettings.categories.request && !skipFullCapture;
+      recordingSettings.categories.request &&
+      isSystemLogScheduleActive(recordingSettings.schedule, new Date(occurredAt)) &&
+      !skipFullCapture;
     const requestCapturePromise = captureFullRequest
       ? captureRequest(request.clone()).catch(() => null)
       : null;

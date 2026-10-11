@@ -12,6 +12,7 @@ export function createAdminAccessRoutes(deps: Pick<
   | "readSystemLogRecordingSettings"
   | "updateSystemLogRecordingSetting"
   | "updateSystemLogRecordingMode"
+  | "updateSystemLogRecordingSchedule"
 >) {
   const {
     json,
@@ -20,6 +21,7 @@ export function createAdminAccessRoutes(deps: Pick<
     readSystemLogRecordingSettings,
     updateSystemLogRecordingSetting,
     updateSystemLogRecordingMode,
+    updateSystemLogRecordingSchedule,
   } = deps;
 
   return async function handleAdminAccess(path: string, request: Request, env: Env) {
@@ -30,9 +32,11 @@ export function createAdminAccessRoutes(deps: Pick<
     if (path === "/api/system-log-settings" && request.method === "PUT") {
       try {
         const incoming = await readJsonObject(request);
-        const settings = incoming.mode !== undefined
-          ? await updateSystemLogRecordingMode(env, incoming.mode)
-          : await updateSystemLogRecordingSetting(env, incoming.category, incoming.enabled);
+        const settings = incoming.schedule !== undefined
+          ? await updateSystemLogRecordingSchedule(env, incoming.schedule)
+          : incoming.mode !== undefined
+            ? await updateSystemLogRecordingMode(env, incoming.mode)
+            : await updateSystemLogRecordingSetting(env, incoming.category, incoming.enabled);
         return json({ ok: true, settings });
       } catch (error) {
         return json({

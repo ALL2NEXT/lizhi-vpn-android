@@ -4,6 +4,7 @@ import type {
   SystemLogDraft,
   SystemLogHttpCapture,
   SystemLogRecord,
+  SystemLogRecordingSchedule,
   SystemLogRecordingSettings,
   SystemLogRecordingMode,
 } from "../types/models.ts";
@@ -17,9 +18,16 @@ const OUTBOUND_SLOW_MS = 1000;
 const LOG_RETENTION_DAYS = 30;
 const MAX_LOG_DETAILS_LENGTH = 1600;
 const SYSTEM_LOG_CATEGORIES: SystemLogCategory[] = ["request", "operation", "database", "outbound"];
+const BEIJING_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Shanghai",
+  hourCycle: "h23",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 const DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS: SystemLogRecordingSettings = {
   mode: "simple",
   categories: { request: true, operation: true, database: true, outbound: true },
+  schedule: { enabled: false, startTime: "00:00", endTime: "23:59" },
 };
 const preparedMetadata = new WeakMap<object, { raw: D1PreparedStatement; sql: string }>();
 
@@ -30,6 +38,11 @@ function normalizeSystemLogRecordingSettings(value: unknown): SystemLogRecording
   const categories = stored.categories && typeof stored.categories === "object"
     ? stored.categories as Record<string, unknown>
     : stored;
+  const schedule = stored.schedule && typeof stored.schedule === "object"
+    ? stored.schedule as Record<string, unknown>
+    : {};
+  const startTime = validScheduleTime(schedule.startTime) ? schedule.startTime : "00:00";
+  const endTime = validScheduleTime(schedule.endTime) ? schedule.endTime : "23:59";
   return {
     mode: stored.mode === "full" ? "full" : "simple",
     categories: {
@@ -38,7 +51,18 @@ function normalizeSystemLogRecordingSettings(value: unknown): SystemLogRecording
       database: categories.database !== false,
       outbound: categories.outbound !== false,
     },
+    schedule: {
+      enabled: schedule.enabled === true && startTime !== endTime,
+      startTime,
+      endTime,
+    },
   };
+}
+
+function validScheduleTime(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) return false;
+  const [hour, minute] = value.split(":").map(Number);
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }
 
 export async function readSystemLogRecordingSettings(env: Env): Promise<SystemLogRecordingSettings> {
@@ -80,6 +104,56 @@ export async function updateSystemLogRecordingMode(
   const next = { ...settings, mode: mode as SystemLogRecordingMode };
   await env.CONFIG.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify(next));
   return next;
+}
+
+export async function updateSystemLogRecordingSchedule(
+  env: Env,
+  value: unknown,
+): Promise<SystemLogRecordingSettings> {
+  if (!value || typeof value !== "object") {
+    throw new Error("invalid_system_log_recording_schedule");
+  }
+  const schedule = value as Record<string, unknown>;
+  if (typeof schedule.enabled !== "boolean" ||
+    !validScheduleTime(schedule.startTime) || !validScheduleTime(schedule.endTime) ||
+    schedule.startTime === schedule.endTime) {
+    throw new Error("invalid_system_log_recording_schedule");
+  }
+  if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
+  const settings = await readSystemLogRecordingSettings(env);
+  const next = {
+    ...settings,
+    schedule: {
+      enabled: schedule.enabled,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+    },
+  };
+  await env.CONFIG.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function isSystemLogScheduleActive(
+  schedule: SystemLogRecordingSchedule,
+  date = new Date(),
+) {
+  if (!schedule.enabled) return true;
+  if (!Number.isFinite(date.getTime())) return false;
+  if (!validScheduleTime(schedule.startTime) || !validScheduleTime(schedule.endTime) ||
+    schedule.startTime === schedule.endTime) return false;
+
+  const timeParts = BEIJING_TIME_FORMATTER.formatToParts(date);
+  const hour = Number(timeParts.find((part) => part.type === "hour")?.value);
+  const minute = Number(timeParts.find((part) => part.type === "minute")?.value);
+  const currentMinute = hour * 60 + minute;
+  const [startHour, startMinute] = schedule.startTime.split(":").map(Number);
+  const [endHour, endMinute] = schedule.endTime.split(":").map(Number);
+  const start = startHour * 60 + startMinute;
+  const end = endHour * 60 + endMinute;
+
+  return start < end
+    ? currentMinute >= start && currentMinute < end
+    : currentMinute >= start || currentMinute < end;
 }
 
 function truncate(value: unknown, maximum: number) {
@@ -366,7 +440,11 @@ export async function writeSystemLogs(
   if (!entries.length || !env.USERS_DB) return;
   try {
     const settings = recordingSettings || await readSystemLogRecordingSettings(env);
-    const enabledEntries = entries.filter((entry) => settings.categories[entry.category]);
+    const enabledEntries = entries.filter((entry) => {
+      if (!settings.categories[entry.category]) return false;
+      const occurredAt = entry.occurredAt ? new Date(entry.occurredAt) : new Date();
+      return isSystemLogScheduleActive(settings.schedule, occurredAt);
+    });
     if (!enabledEntries.length) return;
     const db = await ensureUserSchema(env);
     const statements = enabledEntries.map((entry) => {
