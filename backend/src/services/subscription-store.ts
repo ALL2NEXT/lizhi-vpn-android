@@ -54,6 +54,12 @@ function parseJsonArray(value: string, allowed: string[]) {
   }
 }
 
+function parseIdentityTypes(value: string): SubscriptionGroup["allowedIdentityTypes"] {
+  const identities = parseJsonArray(value, ["human", "bot", "unknown"])
+    .map((identity) => identity === "unknown" ? "human" : identity);
+  return Array.from(new Set(identities)) as SubscriptionGroup["allowedIdentityTypes"];
+}
+
 function isLocalSource(source: SubscriptionSource) {
   return source.sourceType === "content" || Boolean(source.content);
 }
@@ -164,10 +170,7 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
     enabled: row.enabled === 1,
     allowedStatuses: parseJsonArray(row.allowed_statuses_json, ["normal", "banned"]) as SubscriptionGroup["allowedStatuses"],
     allowedAccountTypes: parseJsonArray(row.allowed_account_types_json, ["guest", "formal"]) as SubscriptionGroup["allowedAccountTypes"],
-    allowedIdentityTypes: parseJsonArray(
-      row.allowed_identity_types_json,
-      ["human", "bot", "unknown"],
-    ) as SubscriptionGroup["allowedIdentityTypes"],
+    allowedIdentityTypes: parseIdentityTypes(row.allowed_identity_types_json),
     allowedMembershipTypes: parseJsonArray(row.allowed_membership_types_json, ["member", "non_member"]) as SubscriptionGroup["allowedMembershipTypes"],
     updateEnabled: row.update_enabled === 1,
     cacheMinutes: row.cache_minutes,

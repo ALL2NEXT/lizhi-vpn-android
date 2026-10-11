@@ -233,7 +233,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
     return {
       accountStatus: "banned",
       accountType: "guest",
-      identityType: "unknown",
+      identityType: "human",
       vipActive: false,
       appVersion: "",
       registered: false,
@@ -247,7 +247,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
     return {
       accountStatus: "banned",
       accountType: "guest",
-      identityType: "unknown",
+      identityType: "human",
       vipActive: false,
       appVersion: "",
       registered: false,
@@ -502,7 +502,7 @@ export async function registerOrTouchUser(env: Env, deviceId: string, profile: D
     uid = randomPublicUid();
     try {
       await db.prepare(
-        "INSERT INTO users_mb (uid, nickname, created_at) VALUES (?, ?, ?)",
+        "INSERT INTO users_mb (uid, nickname, identity_type, created_at) VALUES (?, ?, 'human', ?)",
       ).bind(uid, defaultNickname(uid), seenAt).run();
       created = await db.prepare(
         "SELECT id FROM users_mb WHERE uid = ?",

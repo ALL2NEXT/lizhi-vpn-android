@@ -55,7 +55,7 @@ function adminUserDisplayUid(uid) {
 }
 
 function adminUserIdentityLabel(identityType) {
-  return ({human: '真人', bot: '机器人', unknown: '未标记'})[identityType] || '未标记';
+  return identityType === 'bot' ? '机器人' : '真人';
 }
 
 function adminUserSecurity(user) {
@@ -109,17 +109,17 @@ function adminUserList() {
   const identityFilters = selectedAdminUserFilters('identity');
   const membershipFilters = selectedAdminUserFilters('membership');
   const filtered = users.filter(function(user) {
+    const identityType = user.identityType === 'bot' ? 'bot' : 'human';
     const deviceSearch = adminUserDevices(user).map(function(device) {
       return [device.deviceId, device.brand, device.model, device.androidVersion, device.appVersion].join(' ');
     }).join(' ');
     const searchable = [user.uid, user.nickname, user.email, user.brand, user.model,
-      user.androidVersion, user.appVersion, user.accountType, user.identityType, deviceSearch].join(' ').toLowerCase();
+      user.androidVersion, user.appVersion, user.accountType, identityType, deviceSearch].join(' ').toLowerCase();
     const todayTotal = Number(user.today && user.today.totalMb || 0);
     const monthTotal = Number(user.month && user.month.totalMb || 0);
     const total = Number(user.totalMb || 0);
     const accountLevel = String(user.email || '').trim() ? 'formal' : 'guest';
     const accountStatus = user.accountType === 'banned' ? 'banned' : 'active';
-    const identityType = ['human', 'bot', 'unknown'].includes(user.identityType) ? user.identityType : 'unknown';
     const membership = user.vipActive === true ? 'member' : 'non_member';
     if (search && searchable.indexOf(search) < 0) return false;
     if (!statusFilters.has(accountStatus)) return false;
@@ -245,7 +245,7 @@ function renderAdminUsers() {
     const bannedDeviceCount = Number(security.bannedDeviceCount) || 0;
     const nickname = adminUserDraftValue(user, draft, 'nickname') || '未命名用户';
     const accountLevel = String(user.email || '').trim() ? '正式用户' : '游客';
-    const identityType = ['human', 'bot', 'unknown'].includes(user.identityType) ? user.identityType : 'unknown';
+    const identityType = user.identityType === 'bot' ? 'bot' : 'human';
     const membershipStatus = user.vipActive === true ? '会员' : '非会员';
     const vipExpiresAt = String(user.vipExpiresAt || '')
       .replace('T', ' ')
@@ -318,7 +318,9 @@ function openAdminUserDetail(uid) {
   el('adminUserDetailIdentity').textContent = (user.email || '游客账户') + ' · UID ' + adminUserDisplayUid(uid);
   form.querySelectorAll('[data-admin-user-field]').forEach(function(input) {
     const value = adminUserDraftValue(user, draft, input.dataset.adminUserField);
-    input.value = input.dataset.adminUserField === 'identityType' && !value ? 'unknown' : value;
+    input.value = input.dataset.adminUserField === 'identityType'
+      ? (value === 'bot' ? 'bot' : 'human')
+      : value;
   });
   el('adminUserDetailUsage').textContent = '今日 ' + formatMegabytes(user.today && user.today.totalMb) +
     ' · 本月 ' + formatMegabytes(user.month && user.month.totalMb) + ' · 累计 ' + formatMegabytes(user.totalMb);

@@ -27,9 +27,7 @@ export function normalizeAccountType(value: unknown, fallback: AccountType = ACC
 
 export function normalizeUserIdentityType(value: unknown): UserIdentityType {
   const normalized = cleanText(value);
-  return normalized === "human" || normalized === "bot" || normalized === "unknown"
-    ? normalized
-    : "unknown";
+  return normalized === "bot" ? "bot" : "human";
 }
 
 export function accountTypeRank(value: unknown) {

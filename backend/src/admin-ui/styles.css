@@ -592,7 +592,6 @@
      .user-identity-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap; }
      .user-identity-badge.human { color: #137333; background: #e6f4ea; }
      .user-identity-badge.bot { color: #8a4c00; background: #fff2cf; }
-     .user-identity-badge.unknown { color: #68758a; background: #eef1f5; }
      .user-detail-link { display: block; max-width: 290px; padding: 0; overflow: hidden; color: #202124; background: transparent; font: inherit; font-weight: 700; text-overflow: ellipsis; text-align: left; }
      .user-detail-link:hover { color: #1a73e8; text-decoration: underline; }
      .user-status-badge, .draft-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 12px; }

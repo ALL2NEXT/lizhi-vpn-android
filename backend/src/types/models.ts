@@ -1,5 +1,5 @@
 export type AccountType = "banned" | "guest" | "formal";
-export type UserIdentityType = "human" | "bot" | "unknown";
+export type UserIdentityType = "human" | "bot";
 export type UserStatus = "active" | "banned";
 export type SubscriptionAccountStatus = "normal" | "banned";
 export type SubscriptionMembershipStatus = "member" | "non_member";

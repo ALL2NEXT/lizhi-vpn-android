@@ -46,7 +46,7 @@ Authorization: Bearer <ADMIN_TOKEN>
 
 ## 数据库初始化
 
-首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。当前用户数据库 schema 版本为 `18`。历史经验奖励表与字段已在 schema v11 移除，账号类型由邮箱绑定和封禁状态决定；后台账号身份标记（真人、机器人或未标记）不会下发到客户端。
+首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。当前用户数据库 schema 版本为 `19`。历史经验奖励表与字段已在 schema v11 移除，账号类型由邮箱绑定和封禁状态决定；后台账号身份只有真人和机器人，新账号及历史未标记账号默认按真人处理，身份标记不会下发到客户端。
 
 如果绑定的 D1 已有数据但缺少版本标记，Worker 会拒绝自动覆盖，并返回 `users_db_unversioned_schema_detected`，请先备份并完成迁移。
 
