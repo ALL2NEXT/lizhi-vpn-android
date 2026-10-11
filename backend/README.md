@@ -72,7 +72,7 @@ GET /<ADMIN_PATH>/api/ip-relations?limit=50&offset=0
 
 ## AI 风控分析
 
-后台设置中的“AI 风控”可配置 Google Gemini 模型与 API Key，并手动运行 24 小时、3 天或 7 天分析。当前接入使用 Google Gemini `generateContent` REST API；默认模型为 `gemini-3.8-flash`，模型名称可更改。API Key 保存在服务端 `CONFIG` KV，设置读取接口只返回 `apiKeyConfigured`，不会回传密钥；保存密钥的请求不会进入系统日志完整请求捕获。更换或撤销 Key 后请在后台更新配置。
+后台设置中的“AI 风控”可配置 Google Gemini 模型与最多 20 个 API Key，并手动运行 24 小时、3 天或 7 天分析。多个 Key 用英文逗号或分号分隔，每个 Worker 运行实例内按轮询顺序分配；认证失败、配额限制、服务端错误或某个 Key 无权访问选定模型时，会继续尝试其他 Key。模型目录会分页读取所有 Key 的模型并合并，仅保留 Gemini 对话模型，过滤 TTS、长任务和实时双向模型；后台显示每个模型可用 Key 数、输入/输出 token 上限与思考能力。当前接入使用 Google Gemini REST API；默认模型为 `gemini-3.8-flash`。思考强度可选模型默认、低、中、高；Gemini 3 使用 `thinkingLevel`，Gemini 2.5 映射为 `thinkingBudget`，旧模型使用其默认行为。分析结果会回传 Gemini 的输入、输出和思考 token 用量（若 API 提供）。Key 保存在服务端 `CONFIG` KV，设置读取接口只返回配置数量和是否已配置，不会回传密钥；保存密钥的请求不会进入系统日志完整请求捕获。留空保存会保留当前 Key 列表，替换或撤销 Key 后请在后台更新配置。
 
 分析请求从请求日志和 `user_ip_links_mb` 汇总订阅请求、逐小时活动、错误状态、访问端点与单 IP 账户数。发送给 Google 前，IP 与 UID 会使用本次分析临时密钥替换为伪名引用；不发送请求正文、密码或订阅内容。请求日志遵循系统日志开关、记录时段和 30 天保留期，IP 关联汇总从启用采集后累计。分析只在管理员手动触发时执行，结果需要人工复核，不会自动封禁。
 
@@ -81,6 +81,7 @@ GET /<ADMIN_PATH>/api/ip-relations?limit=50&offset=0
 ```http
 GET  /<ADMIN_PATH>/api/ai-risk/settings
 PUT  /<ADMIN_PATH>/api/ai-risk/settings
+GET  /<ADMIN_PATH>/api/ai-risk/models
 POST /<ADMIN_PATH>/api/ai-risk/test
 GET  /<ADMIN_PATH>/api/ai-risk/data?windowHours=24
 POST /<ADMIN_PATH>/api/ai-risk/analyze

@@ -331,9 +331,16 @@
         <h3 class="settings-section-title">Gemini 配置</h3>
         <p class="settings-section-description">API Key 保存在服务端配置中，读取接口只返回是否已配置，不会回显密钥。</p>
         <label class="ai-risk-toggle"><input id="aiRiskEnabled" type="checkbox"><span>启用 Gemini 风控分析</span></label>
-        <label class="field">模型名称<input id="aiRiskModel" type="text" maxlength="100" value="gemini-3.8-flash" autocomplete="off"><small>默认 gemini-3.8-flash，也可填写 Google AI 支持的其他模型 ID。</small></label>
-        <label class="field">Google AI API Key<input id="aiRiskApiKey" type="password" maxlength="500" autocomplete="new-password" placeholder="未设置"><small id="aiRiskKeyStatus">尚未读取配置</small></label>
-        <label class="ai-risk-toggle"><input id="aiRiskClearKey" type="checkbox"><span>保存时清除已保存的 API Key</span></label>
+        <div class="field ai-risk-model-field">
+          <label for="aiRiskModel">模型名称</label>
+          <div class="ai-risk-model-row"><input id="aiRiskModel" type="text" maxlength="100" list="aiRiskModelOptions" value="gemini-3.8-flash" autocomplete="off"><button id="aiRiskLoadModels" class="secondary" type="button">获取可用模型</button></div>
+          <datalist id="aiRiskModelOptions"></datalist>
+          <small id="aiRiskModelStatus">可手动填写，也可从已配置的 Key 获取支持 generateContent 的模型。</small>
+          <small id="aiRiskModelDetails"></small>
+        </div>
+        <label class="field">思考强度<select id="aiRiskThinkingLevel"><option value="auto">模型默认</option><option value="low">低</option><option value="medium" selected>中</option><option value="high">高</option></select><small>Gemini 3 使用 thinkingLevel，Gemini 2.5 自动映射为 thinkingBudget；其它模型使用自身默认值。</small></label>
+        <label class="field">Google AI API Key<input id="aiRiskApiKeys" type="password" maxlength="10000" autocomplete="new-password" placeholder="未设置"><small id="aiRiskKeyStatus">支持最多 20 个 Key，用英文逗号或分号分隔；留空保留当前配置。</small></label>
+        <label class="ai-risk-toggle"><input id="aiRiskClearKeys" type="checkbox"><span>保存时清除已保存的 API Key</span></label>
         <div class="ai-risk-actions"><button id="aiRiskSave" type="button">保存配置</button><button id="aiRiskTest" class="secondary" type="button">测试 Gemini 连接</button></div>
         <p id="aiRiskSettingsStatus" class="ai-risk-status" role="status" aria-live="polite"></p>
       </section>

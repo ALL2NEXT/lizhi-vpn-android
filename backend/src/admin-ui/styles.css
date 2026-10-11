@@ -901,6 +901,10 @@
     .ai-risk-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
     .ai-risk-layout .settings-section { display: grid; gap: 12px; }
     .ai-risk-layout .settings-section-description, .ai-risk-layout .field { margin: 0; }
+    .ai-risk-model-field > label { display: block; margin-bottom: 6px; color: var(--ink); font-size: 14px; font-weight: 600; }
+    .ai-risk-model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+    .ai-risk-model-row button { margin: 0; white-space: nowrap; }
+    .ai-risk-model-field small { display: block; margin-top: 5px; color: var(--ink-muted); line-height: 1.5; }
     .ai-risk-toggle { display: flex; align-items: center; gap: 9px; color: var(--ink); font-size: 14px; }
     .ai-risk-toggle input { width: 18px; height: 18px; margin: 0; }
     .ai-risk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -922,6 +926,7 @@
     .ai-risk-badge.risk-high { color: #8c1d18; background: #fce8e6; }
     .ai-risk-badge.risk-medium { color: #7a4b00; background: #fef7e0; }
     .ai-risk-badge.risk-low { color: #137333; background: #e6f4ea; }
+    @media (max-width: 520px) { .ai-risk-model-row { grid-template-columns: minmax(0, 1fr); } }
     .traffic-detail-wrap, .security-account-list, .system-logs-wrap,
     .table-wrap, .user-table-scroll, .security-device-wrap {
       background: var(--surface);

@@ -54,6 +54,8 @@ test("AI 风控管理接口鉴权、隐藏密钥并提供脱敏请求数据", as
   await call("/local-admin/api/ai-risk/settings", { status: 401 });
   const initial = await call("/local-admin/api/ai-risk/settings", { admin: true });
   assert.equal(initial.settings.apiKeyConfigured, false);
+  const missingModelKeys = await call("/local-admin/api/ai-risk/models", { admin: true, status: 400 });
+  assert.equal(missingModelKeys.error, "ai_risk_api_key_required");
 
   await config.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify({
     mode: "full",

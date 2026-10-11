@@ -4,6 +4,7 @@ import { readJsonObject } from "../../http/request.ts";
 import {
   AiRiskError,
   analyzeAiRisk,
+  listGeminiModels,
   readAiRiskDataset,
   readAiRiskSettings,
   testGeminiConnection,
@@ -54,6 +55,16 @@ export function createAdminAccessRoutes(deps: Pick<
       } catch (error) {
         const status = error instanceof AiRiskError ? error.status : 500;
         const code = error instanceof AiRiskError ? error.code : "gemini_test_failed";
+        return json({ ok: false, error: code }, status);
+      }
+    }
+
+    if (path === "/api/ai-risk/models" && request.method === "GET") {
+      try {
+        return json({ ok: true, ...await listGeminiModels(env) });
+      } catch (error) {
+        const status = error instanceof AiRiskError ? error.status : 500;
+        const code = error instanceof AiRiskError ? error.code : "gemini_models_list_failed";
         return json({ ok: false, error: code }, status);
       }
     }
