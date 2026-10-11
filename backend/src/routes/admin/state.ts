@@ -16,8 +16,10 @@ import {
 export function createAdminStateRoutes(deps: Pick<
   RouteDependencies,
   | "beijingTimestamp"
+  | "cacheLocallyFetchedSubscription"
   | "json"
   | "normalizeState"
+  | "readExternalSubscription"
   | "readState"
   | "readExternalSubscriptionTraffic"
   | "validateAndWarmSubscriptionSources"
@@ -25,8 +27,10 @@ export function createAdminStateRoutes(deps: Pick<
 >) {
   const {
     beijingTimestamp,
+    cacheLocallyFetchedSubscription,
     json,
     normalizeState,
+    readExternalSubscription,
     readState,
     readExternalSubscriptionTraffic,
     validateAndWarmSubscriptionSources,
@@ -79,11 +83,15 @@ export function createAdminStateRoutes(deps: Pick<
 
     if (path === "/api/subscriptions/traffic" && request.method === "GET") {
       const state = await readState(env);
+      const requestedIds = new URL(request.url).searchParams.getAll("id");
+      const requestedIdSet = new Set(requestedIds);
       const sources = state.subscriptionGroups.flatMap((group) => group.subscriptions.map((source) => ({
         source,
         cacheMinutes: group.cacheMinutes,
         updateEnabled: group.updateEnabled,
-      })));
+      }))).filter(({ source }) =>
+        requestedIds.length === 0 || requestedIdSet.has(source.id)
+      );
       const items = sources.map((source) => ({
         id: source.source.id,
         traffic: null as Awaited<ReturnType<typeof readExternalSubscriptionTraffic>>,
@@ -109,6 +117,79 @@ export function createAdminStateRoutes(deps: Pick<
       }
 
       return json({ ok: true, items });
+    }
+
+    if (path === "/api/subscriptions/refresh" && request.method === "POST") {
+      const incoming = await readJsonObject(request);
+      const requestedIds = new Set(Array.isArray(incoming.ids)
+        ? incoming.ids.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+          .map((id) => id.trim())
+        : []);
+      if (requestedIds.size === 0) return json({ ok: false, error: "subscription_ids_required" }, 400);
+      const state = await readState(env);
+      const sources = state.subscriptionGroups.flatMap((group) =>
+        group.subscriptions.filter((source) =>
+          requestedIds.has(source.id) && source.url && !source.content && source.enabled !== false
+        )
+      );
+      const results: Array<{ id: string; ok: boolean }> = [];
+      for (let index = 0; index < sources.length; index += 4) {
+        const batch = await Promise.all(sources.slice(index, index + 4).map(async (source) => {
+          try {
+            // Explicit admin refresh bypasses the configured cache and update schedule.
+            await readExternalSubscription(env, source, 0, true);
+            return { id: source.id, ok: true };
+          } catch {
+            return { id: source.id, ok: false };
+          }
+        }));
+        results.push(...batch);
+      }
+      const updated = results.filter((result) => result.ok).length;
+      const failed = results.length - updated;
+      return json({
+        ok: failed === 0,
+        attempted: results.length,
+        updated,
+        failed,
+        skipped: requestedIds.size - sources.length,
+        updatedIds: results.filter((result) => result.ok).map((result) => result.id),
+      });
+    }
+
+    if (path === "/api/subscriptions/refresh/local" && request.method === "POST") {
+      try {
+        const incoming = await readJsonObject(request);
+        const sourceId = typeof incoming.id === "string" ? incoming.id.trim() : "";
+        const sourceUrl = typeof incoming.url === "string" ? incoming.url : "";
+        if (!sourceId || !sourceUrl) {
+          return json({ ok: false, error: "invalid_subscription_refresh_request" }, 400);
+        }
+
+        const state = await readState(env);
+        const source = state.subscriptionGroups.flatMap((group) => group.subscriptions)
+          .find((candidate) => candidate.id === sourceId);
+        if (!source) return json({ ok: false, error: "subscription_not_found" }, 404);
+        if (source.enabled === false || !source.url || source.content || source.url !== sourceUrl) {
+          return json({ ok: false, error: "subscription_changed_or_disabled" }, 409);
+        }
+
+        const result = await cacheLocallyFetchedSubscription(
+          env,
+          source,
+          incoming.content,
+          incoming.subscriptionUserInfo,
+        );
+        return json({ ok: true, id: sourceId, nodeCount: result.nodeCount });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const status = message === "managed_subscription_too_large"
+          ? 413
+          : message === "subscription_must_be_plaintext_nodes"
+            ? 422
+            : 400;
+        return json({ ok: false, error: message }, status);
+      }
     }
 
     if (path === "/api/state" && request.method === "GET") {

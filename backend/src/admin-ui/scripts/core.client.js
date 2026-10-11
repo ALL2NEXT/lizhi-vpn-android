@@ -92,6 +92,8 @@
     if (error === 'invalid_min_app_version') return '最低应用版本格式无效，请填写类似 2.40 的数字版本';
    if (error === 'external_subscription_unreachable') return '外部订阅接口无法访问或请求超时';
    if (error === 'local_subscription_cors_or_network_error') return '本地获取失败：浏览器跨域或网络策略阻止访问，可切换为服务器获取';
+    if (error === 'subscription_changed_or_disabled') return '订阅已停用或已修改，请刷新管理页后重试';
+    if (error === 'subscription_not_found') return '订阅已不存在，请刷新管理页后重试';
    if (error === 'invalid_notice_start_at') return '公告开始时间格式无效';
    if (error === 'invalid_notice_end_at') return '公告结束时间格式无效';
    if (error === 'invalid_notice_time_order') return '公告结束时间不能早于开始时间';

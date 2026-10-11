@@ -47,6 +47,7 @@ import { createAdminRoutes } from "./routes/admin.ts";
 import { createClientRoutes } from "./routes/client.ts";
 import {
   autoRenameSubscriptionContent,
+  cacheLocallyFetchedSubscription,
   deduplicateSubscriptionContent,
   isAppVersionAtLeast,
   readExternalSubscription,
@@ -103,6 +104,7 @@ const routeDeps = {
   beijingTimestamp,
   normalizeAccountId,
   isAppVersionAtLeast,
+  cacheLocallyFetchedSubscription,
   readExternalSubscription,
   readExternalSubscriptionTraffic,
   autoRenameSubscriptionContent,

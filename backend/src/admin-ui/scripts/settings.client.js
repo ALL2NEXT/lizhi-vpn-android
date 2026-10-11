@@ -1,4 +1,5 @@
 let subscriptionTrafficRequestId = 0;
+let subscriptionRefreshInFlight = false;
 let activeSubscriptionGroupId = '__all__';
 let activeWebNavigationGroupId = '';
 let selectedSubscriptionRow = null;
@@ -81,6 +82,18 @@ function formatSubscriptionTrafficBytes(value) {
   return amount.toFixed(digits).replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '') + ' ' + units[unitIndex];
 }
 
+function formatSubscriptionResetRemaining(value) {
+  const resetAt = Number(value);
+  if (!Number.isFinite(resetAt) || resetAt <= 0) return '';
+  const remainingMs = resetAt - Date.now();
+  if (remainingMs <= 0) return '重置时间已过';
+  const days = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+  if (days >= 1) return '重置还有 ' + days + ' 天';
+  const hours = Math.ceil(remainingMs / (60 * 60 * 1000));
+  if (hours >= 1) return '重置还有 ' + hours + ' 小时';
+  return '重置还有 ' + Math.ceil(remainingMs / (60 * 1000)) + ' 分钟';
+}
+
 function renderSourceTraffic(row, traffic, unavailable) {
   const sourceUrl = row.querySelector('[data-field="url"]').value.trim();
   const host = row.querySelector('[data-source-traffic]');
@@ -89,18 +102,12 @@ function renderSourceTraffic(row, traffic, unavailable) {
   const track = row.querySelector('[data-source-traffic-track]');
   const fill = row.querySelector('[data-source-traffic-progress]');
   if (!host || !text || !track || !fill) return;
-  row.subscriptionTraffic = traffic || null;
-  row.subscriptionTrafficUnavailable = unavailable === true;
   row.dataset.sourceHealth = traffic && unavailable !== true ? 'normal' : 'unknown';
-  row.dataset.trafficUpdatedAt = new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'
-  }).format(new Date());
   host.dataset.sourceUrl = sourceUrl;
   if (unavailable) {
     setSourceTrafficMessage(row, '流量信息获取失败', true);
     host.dataset.sourceUrl = sourceUrl;
     updateSourceRowsMeta();
-    if (selectedSubscriptionRow === row) updateSubscriptionEditorTraffic(row);
     return;
   }
   if (!traffic) {
@@ -108,19 +115,26 @@ function renderSourceTraffic(row, traffic, unavailable) {
     host.dataset.sourceUrl = sourceUrl;
     row.dataset.sourceHealth = 'unknown';
     updateSourceRowsMeta();
-    if (selectedSubscriptionRow === row) updateSubscriptionEditorTraffic(row);
     return;
   }
 
   const upload = Math.max(0, Number(traffic.uploadBytes) || 0);
   const download = Math.max(0, Number(traffic.downloadBytes) || 0);
-  const used = upload + download;
-  const total = Math.max(0, Number(traffic.totalBytes) || 0);
   const hasUsage = traffic.uploadBytes != null || traffic.downloadBytes != null;
-  text.textContent = total > 0
-    ? '总量 ' + formatSubscriptionTrafficBytes(total) + ' · 已用 ' + formatSubscriptionTrafficBytes(used)
-    : hasUsage ? '已用 ' + formatSubscriptionTrafficBytes(used) : '已获取订阅信息';
-  track.hidden = total <= 0;
+  const remaining = traffic.remainingBytes == null
+    ? null : Math.max(0, Number(traffic.remainingBytes) || 0);
+  const total = Math.max(0, Number(traffic.totalBytes) || 0);
+  const used = hasUsage ? upload + download
+    : total > 0 && remaining !== null ? Math.max(0, total - remaining) : 0;
+  const resetLabel = formatSubscriptionResetRemaining(traffic.resetAtMillis);
+  const usageLabel = remaining !== null
+    ? '剩余流量 ' + formatSubscriptionTrafficBytes(remaining) + (resetLabel ? ' · ' + resetLabel : '')
+    : total > 0
+      ? '总量 ' + formatSubscriptionTrafficBytes(total) + ' · 已用 ' + formatSubscriptionTrafficBytes(used)
+      : hasUsage ? '已用 ' + formatSubscriptionTrafficBytes(used) : '';
+  text.textContent = [usageLabel, remaining === null ? resetLabel : ''].filter(Boolean).join(' · ') ||
+    '已获取订阅信息';
+  track.hidden = total <= 0 || !hasUsage && remaining === null;
   if (total > 0) {
     const ratio = used / total;
     fill.style.width = Math.min(100, Math.max(0, ratio * 100)) + '%';
@@ -128,7 +142,9 @@ function renderSourceTraffic(row, traffic, unavailable) {
       ratio >= 1 ? 'exhausted' : ratio > 0.9 ? 'critical' : ratio > 0.5 ? 'warning' : 'safe'
     );
     track.setAttribute('aria-valuenow', String(Math.min(100, Math.max(0, Math.round(ratio * 100)))));
-    track.title = '上传 ' + formatSubscriptionTrafficBytes(upload) + ' · 下载 ' + formatSubscriptionTrafficBytes(download);
+    track.title = hasUsage
+      ? '上传 ' + formatSubscriptionTrafficBytes(upload) + ' · 下载 ' + formatSubscriptionTrafficBytes(download)
+      : remaining !== null ? '剩余 ' + formatSubscriptionTrafficBytes(remaining) : '';
   } else {
     fill.style.width = '0%';
     fill.className = 'source-traffic-progress';
@@ -146,13 +162,14 @@ function renderSourceTraffic(row, traffic, unavailable) {
   }
   host.dataset.trafficError = 'false';
   updateSourceRowsMeta();
-  if (selectedSubscriptionRow === row) updateSubscriptionEditorTraffic(row);
 }
 
-async function loadSubscriptionTraffic() {
+async function loadSubscriptionTraffic(sourceIds) {
+  const requestedIds = sourceIds ? new Set(sourceIds.map(String)) : null;
   const rows = getSourceRows();
   const activeRows = rows.filter(function(row) {
     return row.dataset.sourceId &&
+      (!requestedIds || requestedIds.has(row.dataset.sourceId)) &&
       row.querySelector('[data-field="sourceType"]').value === 'url' &&
       row.querySelector('[data-field="enabled"]').checked &&
       row.querySelector('[data-field="url"]').value.trim() === row.dataset.persistedUrl;
@@ -163,7 +180,10 @@ async function loadSubscriptionTraffic() {
     setSourceTrafficMessage(row, '正在获取流量信息…');
   });
   try {
-    const response = await fetch(ADMIN_API_BASE + '/subscriptions/traffic', {
+    const query = requestedIds
+      ? '?' + Array.from(requestedIds).map(function(id) { return 'id=' + encodeURIComponent(id); }).join('&')
+      : '';
+    const response = await fetch(ADMIN_API_BASE + '/subscriptions/traffic' + query, {
       method: 'GET',
       headers: headers(),
       cache: 'no-store'
@@ -716,7 +736,6 @@ function selectSubscriptionSource(row) {
   groupSelect.innerHTML = groupsForEditorOptions();
   groupSelect.value = group ? group.dataset.groupId : '';
   updateSubscriptionEditorType(row.querySelector('[data-field="sourceType"]').value);
-  updateSubscriptionEditorTraffic(row);
 }
 
 function openSubscriptionEditor(row) {
@@ -772,46 +791,6 @@ function updateSubscriptionEditorType(type) {
   infoField.placeholder = type === 'content'
     ? 'vless://...\nhy2://...\nss://...'
     : 'https://example.com/sub';
-}
-
-function updateSubscriptionEditorTraffic(row) {
-  const traffic = row && row.subscriptionTraffic;
-  const unavailable = row && row.subscriptionTrafficUnavailable;
-  const state = el('subscriptionEditor').querySelector('[data-editor-traffic-state]');
-  const set = function(name, value) {
-    const target = el('subscriptionEditor').querySelector('[data-editor-traffic-' + name + ']');
-    if (target) target.textContent = value;
-  };
-  const bar = el('subscriptionEditor').querySelector('[data-editor-traffic-progress]');
-  const percent = el('subscriptionEditor').querySelector('[data-editor-traffic-percent]');
-  if (!traffic) {
-    set('used', '—');
-    set('total', '—');
-    set('expiry', '—');
-    set('updated', unavailable ? '读取失败' : '—');
-    if (bar) bar.style.width = '0%';
-    if (percent) percent.textContent = '—';
-    if (state) {
-      state.textContent = row && row.querySelector('[data-field="sourceType"]').value === 'content' ? '本地' : '未知';
-      state.className = 'subscription-state-badge ' + (row && row.querySelector('[data-field="sourceType"]').value === 'content' ? 'local' : 'unknown');
-    }
-    return;
-  }
-  const upload = Math.max(0, Number(traffic.uploadBytes) || 0);
-  const download = Math.max(0, Number(traffic.downloadBytes) || 0);
-  const used = upload + download;
-  const total = Math.max(0, Number(traffic.totalBytes) || 0);
-  const ratio = total > 0 ? Math.min(100, Math.max(0, used / total * 100)) : 0;
-  set('used', formatSubscriptionTrafficBytes(used));
-  set('total', total > 0 ? formatSubscriptionTrafficBytes(total) : '未提供');
-  set('expiry', row.querySelector('[data-source-expiry]').textContent || '—');
-  set('updated', row.dataset.trafficUpdatedAt || '—');
-  if (bar) bar.style.width = ratio + '%';
-  if (percent) percent.textContent = total > 0 ? Math.round(ratio) + '%' : '—';
-  if (state) {
-    state.textContent = '正常';
-    state.className = 'subscription-state-badge normal';
-  }
 }
 
 function applySubscriptionFilters() {
@@ -883,6 +862,9 @@ function applySubscriptionFilters() {
   if (selectedMeta) selectedMeta.textContent = '已选择 ' + selectedSubscriptionRows.size + ' 项';
   const deleteSelectedButton = document.querySelector('[data-action="delete-selected-subscriptions"]');
   if (deleteSelectedButton) deleteSelectedButton.disabled = selectedSubscriptionRows.size === 0;
+  document.querySelectorAll('[data-action="refresh-subscriptions"]').forEach(function(button) {
+    button.disabled = subscriptionRefreshInFlight || selectedSubscriptionRows.size === 0;
+  });
   const workspace = document.querySelector('.subscription-group-workspace');
   if (workspace) workspace.classList.toggle('grid-view', subscriptionView === 'grid');
 }
@@ -908,6 +890,133 @@ function deleteSelectedSubscriptions() {
   groups.forEach(updateSubscriptionSourceOrder);
   updateSourceRowsMeta();
   markSettingsDirty('subscriptions');
+}
+
+function getSelectedPersistedRemoteSources(rows) {
+  const sources = new Map((currentState && Array.isArray(currentState.subscriptionGroups)
+    ? currentState.subscriptionGroups : []).flatMap(function(group) {
+    return Array.isArray(group.subscriptions) ? group.subscriptions : [];
+  }).map(function(source) { return [String(source.id), source]; }));
+  return rows.map(function(row) {
+    const source = sources.get(row.dataset.sourceId);
+    if (!source || !source.url || source.content || source.enabled === false) return null;
+    const sourceType = row.querySelector('[data-field="sourceType"]').value;
+    const url = row.querySelector('[data-field="url"]').value.trim();
+    const enabled = row.querySelector('[data-field="enabled"]').checked;
+    if (sourceType !== 'url' || !enabled || url !== source.url ||
+        url !== row.dataset.persistedUrl || String(enabled) !== row.dataset.persistedEnabled) return null;
+    return source;
+  }).filter(Boolean);
+}
+
+async function updateSubscriptionLocally(source) {
+  let content;
+  let subscriptionUserInfo = null;
+  try {
+    const response = await fetch(source.url, {
+      method: 'GET',
+      headers: {accept: 'text/plain, application/yaml, application/json, */*;q=0.1'},
+      credentials: 'omit',
+      redirect: 'follow'
+    });
+    if (!response.ok) throw new Error('local_subscription_http_' + response.status);
+    content = await readLocalSubscriptionContent(response);
+    subscriptionUserInfo = response.headers.get('subscription-userinfo');
+  } catch (error) {
+    return {id: source.id, ok: false, error: localSubscriptionFetchError(error)};
+  }
+
+  try {
+    const response = await fetch(adminApiUrl('/subscriptions/refresh/local'), {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        id: source.id,
+        url: source.url,
+        content: content,
+        subscriptionUserInfo: subscriptionUserInfo
+      }),
+      cache: 'no-store'
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      return {id: source.id, ok: false, error: adminErrorMessage(data.error, 'local_subscription_upload_failed')};
+    }
+    return {id: source.id, ok: true};
+  } catch (error) {
+    return {id: source.id, ok: false, error: error.message || 'local_subscription_upload_failed'};
+  }
+}
+
+async function updateSubscriptionsLocally(sources, label) {
+  const results = [];
+  for (let start = 0; start < sources.length; start += 3) {
+    const batch = sources.slice(start, start + 3);
+    if (label) label.textContent = '本地拉取并上传 ' + Math.min(start + batch.length, sources.length) + '/' + sources.length;
+    results.push(...await Promise.all(batch.map(updateSubscriptionLocally)));
+  }
+  return results;
+}
+
+async function refreshSubscriptions(button, mode) {
+  Array.from(selectedSubscriptionRows).forEach(function(row) {
+    if (!row.isConnected || !row.classList.contains('source-row')) selectedSubscriptionRows.delete(row);
+  });
+  const selectedRows = Array.from(selectedSubscriptionRows);
+  const remoteSources = getSelectedPersistedRemoteSources(selectedRows);
+  const sourceIds = Array.from(new Set(remoteSources.map(function(source) { return String(source.id); })));
+  if (!sourceIds.length) {
+    show('选中的订阅中没有可更新的已保存远程订阅', true);
+    applySubscriptionFilters();
+    return;
+  }
+  subscriptionRefreshInFlight = true;
+  const label = button.querySelector('[data-refresh-label]');
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  if (label) label.textContent = mode === 'local' ? '本地获取中…' : 'Worker更新中…';
+  try {
+    let results;
+    let skipped = selectedRows.length - sourceIds.length;
+    if (mode === 'local') {
+      results = await updateSubscriptionsLocally(remoteSources, label);
+    } else {
+      const response = await fetch(ADMIN_API_BASE + '/subscriptions/refresh', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ids: sourceIds}),
+        cache: 'no-store'
+      });
+      const data = await response.json();
+      if (!response.ok || typeof data.updated !== 'number' || typeof data.failed !== 'number' ||
+          typeof data.skipped !== 'number' || !Array.isArray(data.updatedIds)) {
+        throw new Error(adminErrorMessage(data.error, '订阅更新失败'));
+      }
+      skipped += data.skipped;
+      results = data.updatedIds.map(function(id) { return {id: String(id), ok: true}; });
+      for (let index = 0; index < data.failed; index++) results.push({ok: false});
+    }
+    const updatedIds = results.filter(function(result) { return result.ok; }).map(function(result) { return result.id; });
+    const updated = updatedIds.length;
+    const failed = results.length - updated;
+    if (updatedIds.length > 0) await loadSubscriptionTraffic(updatedIds);
+    if (updated === 0 && failed === 0) {
+      show('选中的订阅中没有可更新的已保存远程订阅');
+    } else {
+      const method = mode === 'local' ? '本地' : '远程';
+      const summary = method + '更新完成：成功 ' + updated + ' 个，失败 ' + failed + ' 个，跳过 ' + skipped + ' 个';
+      const firstFailure = results.find(function(result) { return !result.ok && result.error; });
+      const detail = firstFailure ? '；' + adminErrorMessage(firstFailure.error, '') : '';
+      show(summary + detail, failed > 0);
+    }
+  } catch (error) {
+    show(error.message || '订阅更新失败，请检查网络后重试', true);
+  } finally {
+    subscriptionRefreshInFlight = false;
+    button.removeAttribute('aria-busy');
+    if (label) label.textContent = mode === 'local' ? '更新订阅(本地)' : '更新订阅(远程)';
+    applySubscriptionFilters();
+  }
 }
 
 function initializeSubscriptionManager() {
@@ -952,6 +1061,11 @@ function initializeSubscriptionManager() {
     openSubscriptionImport(group);
   });
   panel.querySelector('[data-action="delete-selected-subscriptions"]').addEventListener('click', deleteSelectedSubscriptions);
+  panel.querySelectorAll('[data-action="refresh-subscriptions"]').forEach(function(button) {
+    button.addEventListener('click', function(event) {
+      refreshSubscriptions(event.currentTarget, event.currentTarget.dataset.refreshMode);
+    });
+  });
   panel.querySelectorAll('[data-action="close-subscription-editor"]').forEach(function(button) {
     button.addEventListener('click', function() { selectSubscriptionSource(null); });
   });

@@ -64,3 +64,47 @@ export function toStandardUris(input: string | string[], options: { deduplicate?
   const usableUris = uris.filter(isUsableNode);
   return options.deduplicate === false ? usableUris : [...new Set(usableUris)];
 }
+
+export function extractSubscriptionNodeNames(input: string) {
+  const names: string[] = [];
+  const addName = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) names.push(value.trim());
+  };
+  const collect = (value: unknown, depth = 0) => {
+    if (depth > 64 || value === null || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      value.forEach(item => collect(item, depth + 1));
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    for (const key of ["name", "remarks", "ps", "tag"]) addName(record[key]);
+    Object.values(record).forEach(item => collect(item, depth + 1));
+  };
+  const uriName = (uri: string) => {
+    if (/^vmess:\/\//i.test(uri)) {
+      try {
+        const payload = uri.slice(uri.indexOf("://") + 3).split("#", 1)[0];
+        const value = JSON.parse(decodeBase64(payload) || "{}");
+        return String(value.ps || value.name || "");
+      } catch { /* Continue to URI fragment fallback. */ }
+    }
+    const hashIndex = uri.indexOf("#");
+    if (hashIndex < 0) return "";
+    try { return decodeURIComponent(uri.slice(hashIndex + 1)); }
+    catch { return uri.slice(hashIndex + 1); }
+  };
+
+  for (const fragment of subscriptionFragments(input)) {
+    try {
+      if (isJsonContent(fragment)) {
+        collect(JSON.parse(fragment));
+      } else if (isYamlContent(fragment)) {
+        const doc = parseDocument(fragment, { version: "1.1", uniqueKeys: true });
+        if (!doc.errors.length) collect(doc.toJS({ maxAliasCount: 100 }));
+      } else {
+        extractUris(fragment).forEach(uri => addName(uriName(uri)));
+      }
+    } catch { /* Ignore malformed fragments and keep scanning the rest. */ }
+  }
+  return names;
+}
