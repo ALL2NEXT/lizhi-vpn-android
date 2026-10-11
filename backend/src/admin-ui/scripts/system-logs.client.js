@@ -3,6 +3,11 @@ let systemLogsAutoRefreshTimer = null;
 let systemLogsSearchTimer = null;
 let systemLogsRangeTimer = null;
 let systemLogsFilterRevision = 0;
+let systemLogsEndpointPath = '';
+let systemLogsEndpointMethod = '';
+let systemLogEndpointExpanded = false;
+let systemLogEndpointLoading = false;
+let systemLogEndpointError = '';
 let systemLogDetailRecord = null;
 let systemLogDetailTab = 'basic';
 let systemLogRecordingSettings = null;
@@ -24,6 +29,14 @@ function systemLogDateTime(value) {
   if (text.indexOf('T') < 0) return text;
   const parts = text.split('T');
   return parts[0] + ' ' + parts[1].replace(/(?:Z|[+-]\d{2}:\d{2})$/, '');
+}
+
+function systemLogEndpointPathMarkup(path) {
+  const segments = String(path || '/').split('/').slice(1);
+  if (!segments.some(Boolean)) return '<span class="system-log-endpoint-separator">/</span>';
+  return '<span class="system-log-endpoint-separator">/</span>' + segments.map(function(segment, index) {
+    return '<span class="system-log-endpoint-segment level-' + ((index % 6) + 1) + '">' + esc(segment) + '</span>';
+  }).join('<span class="system-log-endpoint-separator">/</span>');
 }
 
 function systemLogStatusClass(status) {
@@ -92,6 +105,7 @@ function renderSystemLogs() {
     ? '显示 ' + (offset + 1) + '–' + Math.min(offset + records.length, total) + ' 条，共 ' + total.toLocaleString() + ' 条'
     : '暂无日志';
   renderSystemLogsPager(page, pageCount, total);
+  renderSystemLogEndpointNavigation(payload.requestEndpoints);
 
   if (!records.length) {
     host.innerHTML = '<div class="system-logs-empty">' + (total ? '当前筛选条件没有日志' : '暂无系统日志') + '</div>';
@@ -155,6 +169,17 @@ async function loadSystemLogs(force) {
   if (search) query.set('q', search);
   if (startDate) query.set('startDate', startDate);
   if (endDate) query.set('endDate', endDate);
+  if (systemLogsEndpointPath) {
+    query.set('endpointPath', systemLogsEndpointPath);
+    query.set('endpointMethod', systemLogsEndpointMethod);
+  }
+  const includeEndpoints = systemLogEndpointExpanded;
+  if (includeEndpoints) {
+    query.set('includeEndpoints', 'true');
+    systemLogEndpointLoading = true;
+    systemLogEndpointError = '';
+    renderSystemLogEndpointNavigation();
+  }
 
   try {
     const response = await fetch(ADMIN_API_BASE + '/system-logs?' + query.toString(), {
@@ -168,6 +193,7 @@ async function loadSystemLogs(force) {
       throw new Error(adminErrorMessage(data.error, '系统日志读取失败（HTTP ' + response.status + '）'));
     }
     if (filterRevision !== systemLogsFilterRevision) return;
+    if (includeEndpoints) systemLogEndpointLoading = false;
     systemLogsData = data;
     renderSystemLogs();
     if (systemLogDetailRecord) {
@@ -178,6 +204,11 @@ async function loadSystemLogs(force) {
       }
     }
   } catch (error) {
+    if (filterRevision === systemLogsFilterRevision && includeEndpoints) {
+      systemLogEndpointLoading = false;
+      systemLogEndpointError = error.message || '端点统计读取失败';
+      renderSystemLogEndpointNavigation();
+    }
     if (filterRevision === systemLogsFilterRevision && host) {
       host.innerHTML = '<div class="error-state">' + esc(error.message || '系统日志读取失败') + '</div>';
     }
@@ -189,6 +220,97 @@ async function loadSystemLogs(force) {
       loadSystemLogs(true);
     }
   }
+}
+
+function setupSystemLogEndpointNavigation() {
+  const categoryButton = document.querySelector('[data-system-log-category="request"]');
+  if (!categoryButton || !categoryButton.parentNode) return;
+
+  const group = document.createElement('div');
+  group.className = 'system-log-endpoint-group';
+  const row = document.createElement('div');
+  row.className = 'system-log-endpoint-nav-row';
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'system-log-endpoint-toggle';
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', 'systemLogEndpointList');
+  toggle.setAttribute('aria-label', '展开网络请求端点');
+  const list = document.createElement('div');
+  list.id = 'systemLogEndpointList';
+  list.className = 'system-log-endpoint-list';
+  list.setAttribute('role', 'group');
+  list.setAttribute('aria-label', '网络请求端点预览');
+  list.hidden = true;
+
+  categoryButton.parentNode.insertBefore(group, categoryButton);
+  group.appendChild(row);
+  row.appendChild(categoryButton);
+  row.appendChild(toggle);
+  group.appendChild(list);
+  toggle.addEventListener('click', function() {
+    systemLogEndpointExpanded = !systemLogEndpointExpanded;
+    systemLogEndpointLoading = systemLogEndpointExpanded;
+    systemLogEndpointError = '';
+    renderSystemLogEndpointNavigation();
+    if (systemLogEndpointExpanded) loadSystemLogs(true);
+  });
+}
+
+function renderSystemLogEndpointNavigation(endpoints) {
+  const toggle = document.querySelector('.system-log-endpoint-toggle');
+  const list = el('systemLogEndpointList');
+  if (!toggle || !list) return;
+  toggle.setAttribute('aria-expanded', String(systemLogEndpointExpanded));
+  toggle.setAttribute('aria-label', systemLogEndpointExpanded ? '折叠网络请求端点' : '展开网络请求端点');
+  list.hidden = !systemLogEndpointExpanded;
+  if (!systemLogEndpointExpanded) return;
+
+  if (systemLogEndpointLoading) {
+    list.innerHTML = '<div class="system-log-endpoint-state">正在统计端点…</div>';
+    return;
+  }
+  if (systemLogEndpointError) {
+    list.innerHTML = '<div class="system-log-endpoint-state error">' + esc(systemLogEndpointError) + '</div>';
+    return;
+  }
+  const rows = Array.isArray(endpoints)
+    ? endpoints
+    : Array.isArray(systemLogsData && systemLogsData.requestEndpoints)
+      ? systemLogsData.requestEndpoints
+      : [];
+  if (!rows.length) {
+    list.innerHTML = '<div class="system-log-endpoint-state">当前范围暂无网络请求</div>';
+    return;
+  }
+
+  list.innerHTML = rows.map(function(endpoint) {
+    const method = String(endpoint.method || '-').toUpperCase();
+    const path = String(endpoint.path || '/');
+    const selected = systemLogsEndpointPath === path && systemLogsEndpointMethod === method;
+    return '<button type="button" class="system-log-endpoint-item' + (selected ? ' active' : '') + '"' +
+      (selected ? ' aria-current="page"' : '') +
+      ' data-system-log-endpoint-method="' + esc(method) + '" data-system-log-endpoint-path="' + esc(path) + '"' +
+      ' title="' + esc(method + ' ' + path) + '"><span class="system-log-endpoint-name">' +
+      '<span class="system-log-endpoint-method">' + esc(method) + '</span><span class="system-log-endpoint-path">' + systemLogEndpointPathMarkup(path) + '</span>' +
+      '</span><span class="system-log-endpoint-count">' + Number(endpoint.requestCount || 0).toLocaleString() + '</span></button>';
+  }).join('');
+
+  list.querySelectorAll('[data-system-log-endpoint-path]').forEach(function(button) {
+    button.addEventListener('click', function() {
+      selectSystemLogEndpoint(button.dataset.systemLogEndpointMethod || '', button.dataset.systemLogEndpointPath || '');
+    });
+  });
+}
+
+function selectSystemLogEndpoint(method, path) {
+  if (!path) return;
+  systemLogsCategory = 'request';
+  systemLogsEndpointMethod = method;
+  systemLogsEndpointPath = path;
+  systemLogEndpointExpanded = true;
+  syncSystemLogCategorySelection();
+  applySystemLogFilters();
 }
 
 function syncSystemLogCategorySelection() {
@@ -203,8 +325,10 @@ function syncSystemLogCategorySelection() {
 function selectSystemLogCategory(category) {
   const allowedCategories = ['', 'request', 'operation', 'database', 'outbound'];
   const selectedCategory = allowedCategories.includes(category) ? category : '';
-  if (selectedCategory === systemLogsCategory) return;
+  if (selectedCategory === systemLogsCategory && !systemLogsEndpointPath) return;
   systemLogsCategory = selectedCategory;
+  systemLogsEndpointPath = '';
+  systemLogsEndpointMethod = '';
   syncSystemLogCategorySelection();
   applySystemLogFilters();
 }
@@ -408,6 +532,8 @@ function resetSystemLogFilters() {
   el('systemLogLevel').value = '';
   el('systemLogStatus').value = '';
   systemLogsCategory = '';
+  systemLogsEndpointPath = '';
+  systemLogsEndpointMethod = '';
   setDefaultSystemLogDateRange();
   syncSystemLogCategorySelection();
   applySystemLogFilters();
@@ -604,6 +730,8 @@ function stopSystemLogAutoRefresh() {
   const toggle = el('systemLogsAutoRefreshToggle');
   if (toggle) toggle.checked = false;
 }
+
+setupSystemLogEndpointNavigation();
 
 document.querySelectorAll('[data-system-log-category]').forEach(function(button) {
   button.addEventListener('click', function() {

@@ -60,6 +60,9 @@ export function createAdminAccessRoutes(deps: Pick<
         startDate: url.searchParams.get("startDate") || undefined,
         endDate: url.searchParams.get("endDate") || undefined,
         query: url.searchParams.get("q") || undefined,
+        endpointPath: url.searchParams.get("endpointPath") || undefined,
+        endpointMethod: url.searchParams.get("endpointMethod") || undefined,
+        includeEndpoints: url.searchParams.get("includeEndpoints") === "true",
         limit: Number(url.searchParams.get("limit")) || 100,
         offset: Number(url.searchParams.get("offset")) || 0,
       }));

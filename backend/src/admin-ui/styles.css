@@ -283,7 +283,7 @@
      .system-logs-stat-card b { color: #172238; font-size: 27px; line-height: 1.1; font-variant-numeric: tabular-nums; }
      .system-logs-stat-card b small { color: #64748b; font-size: 12px; font-weight: 500; }
      .system-logs-stat-card small { color: #8a98ad; font-size: 11px; }
-     .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: 230px minmax(0, 1fr); gap: 10px; min-height: 540px; }
+     .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: 440px minmax(0, 1fr); gap: 10px; min-height: 540px; }
      .system-logs-sidebar { align-self: stretch; }
      .system-logs-sidebar .subscription-group-sidebar-heading h3 { font-size: 15px; }
      .system-log-type-mark { display: inline-block; width: 10px; height: 10px; margin: 0 auto; border-radius: 50%; background: #7c8ba1; }
@@ -292,6 +292,32 @@
      .system-log-type-mark.database { background: #f9ab00; }
      .system-log-type-mark.outbound { background: #20a69a; }
      .system-logs-sidebar .subscription-group-navigation { gap: 3px; }
+     .system-log-endpoint-group { min-width: 0; }
+     .system-log-endpoint-nav-row { display: flex; align-items: center; gap: 2px; }
+     .system-log-endpoint-nav-row > .subscription-group-nav-item { flex: 1 1 auto; width: auto; min-width: 0; grid-template-columns: 10px minmax(0, 1fr); gap: 9px; }
+     .system-log-endpoint-nav-row > .subscription-group-nav-item.active { background: #e5efff; }
+     .system-log-endpoint-toggle { display: grid; flex: 0 0 34px; width: 34px; min-height: 34px; place-items: center; margin: 0; padding: 0; color: #64748b; background: transparent; border: 0; border-radius: 6px; box-shadow: none; }
+     .system-log-endpoint-toggle:hover:not(:disabled), .system-log-endpoint-toggle:focus-visible { color: #174ea6; background: #f3f7fd; box-shadow: none; }
+     .system-log-endpoint-toggle::before { width: 7px; height: 7px; margin-top: -4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; content: ''; transform: rotate(45deg); transition: transform .15s ease, margin .15s ease; }
+     .system-log-endpoint-toggle[aria-expanded="true"]::before { margin-top: 4px; transform: rotate(225deg); }
+     .system-log-endpoint-list { display: grid; gap: 2px; max-height: 260px; padding: 2px 2px 4px 12px; overflow: auto; }
+     .system-log-endpoint-list[hidden] { display: none !important; }
+     .system-log-endpoint-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; min-height: 30px; margin: 0; padding: 5px 7px; color: #526078; background: transparent; border: 0; border-radius: 6px; box-shadow: none; text-align: left; font-size: 11px; font-weight: 500; }
+     .system-log-endpoint-item:hover:not(:disabled), .system-log-endpoint-item:focus-visible { color: #174ea6; background: #f3f7fd; box-shadow: none; }
+     .system-log-endpoint-item.active { color: #0b57d0; background: #e5efff; }
+     .system-log-endpoint-name { display: flex; align-items: center; gap: 5px; min-width: 0; }
+     .system-log-endpoint-method { flex: 0 0 auto; color: #718096; font-size: 9px; font-weight: 750; }
+     .system-log-endpoint-path { display: block; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+     .system-log-endpoint-separator { color: #94a3b8; }
+     .system-log-endpoint-segment.level-1 { color: #2563eb; }
+     .system-log-endpoint-segment.level-2 { color: #0f766e; }
+     .system-log-endpoint-segment.level-3 { color: #7c3aed; }
+     .system-log-endpoint-segment.level-4 { color: #b45309; }
+     .system-log-endpoint-segment.level-5 { color: #be123c; }
+     .system-log-endpoint-segment.level-6 { color: #4d7c0f; }
+     .system-log-endpoint-count { color: #718096; font-size: 10px; font-variant-numeric: tabular-nums; }
+     .system-log-endpoint-state { padding: 7px; color: #718096; font-size: 11px; line-height: 1.45; }
+     .system-log-endpoint-state.error { color: #bd2028; }
      .system-log-record-toggle { position: relative; display: inline-flex; flex: 0 0 36px; align-items: center; justify-content: center; width: 36px; height: 28px; margin: 0; cursor: pointer; }
      .system-log-record-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; }
      .system-log-record-toggle i { position: relative; display: inline-block; width: 32px; height: 18px; border-radius: 99px; background: #c6cfdb; transition: background .15s ease; }

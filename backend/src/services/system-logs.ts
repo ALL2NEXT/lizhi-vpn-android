@@ -507,6 +507,9 @@ export async function readSystemLogs(
     startDate?: string;
     endDate?: string;
     query?: string;
+    endpointPath?: string;
+    endpointMethod?: string;
+    includeEndpoints?: boolean;
     limit?: number;
     offset?: number;
   } = {},
@@ -525,9 +528,22 @@ export async function readSystemLogs(
     return `${date.toISOString().slice(0, 10)}T00:00:00+08:00`;
   };
   const categories: SystemLogCategory[] = ["request", "operation", "database", "outbound"];
-  if (categories.includes(filters.category as SystemLogCategory)) {
+  const endpointPath = truncate(filters.endpointPath, 300);
+  const endpointMethod = truncate(filters.endpointMethod, 16).toUpperCase();
+  if (endpointPath) {
+    conditions.push("category = ?");
+    bindings.push("request");
+  } else if (categories.includes(filters.category as SystemLogCategory)) {
     conditions.push("category = ?");
     bindings.push(filters.category as string);
+  }
+  if (endpointPath) {
+    conditions.push("path = ?");
+    bindings.push(endpointPath);
+    if (endpointMethod) {
+      conditions.push("method = ?");
+      bindings.push(endpointMethod);
+    }
   }
   if (["info", "warning", "error"].includes(String(filters.level))) {
     conditions.push("level = ?");
@@ -567,7 +583,14 @@ export async function readSystemLogs(
   const offset = Math.min(20000, Math.max(0, Math.floor(Number(filters.offset) || 0)));
   const statsConditions: string[] = [];
   const statsBindings: string[] = [];
-  if (categories.includes(filters.category as SystemLogCategory)) {
+  if (endpointPath) {
+    statsConditions.push("category = ?", "path = ?");
+    statsBindings.push("request", endpointPath);
+    if (endpointMethod) {
+      statsConditions.push("method = ?");
+      statsBindings.push(endpointMethod);
+    }
+  } else if (categories.includes(filters.category as SystemLogCategory)) {
     statsConditions.push("category = ?");
     statsBindings.push(filters.category as string);
   }
@@ -584,7 +607,29 @@ export async function readSystemLogs(
     statsBindings.push(beijingTimestamp(new Date(Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)));
   }
   const statsWhere = statsConditions.length ? `WHERE ${statsConditions.join(" AND ")}` : "";
-  const [count, rows, stats] = await Promise.all([
+  const endpointConditions = ["category = 'request'"];
+  const endpointBindings: string[] = [];
+  if (startDate) {
+    endpointConditions.push("occurred_at >= ?");
+    endpointBindings.push(`${startDate}T00:00:00+08:00`);
+  }
+  if (endDate) {
+    endpointConditions.push("occurred_at < ?");
+    endpointBindings.push(nextDate(endDate));
+  }
+  if (!startDate && !endDate) {
+    endpointConditions.push("occurred_at >= ?");
+    endpointBindings.push(beijingTimestamp(new Date(Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)));
+  }
+  const endpointRowsPromise = filters.includeEndpoints
+    ? db.prepare(
+      `SELECT method, path, COUNT(*) AS request_count
+       FROM system_logs_mb WHERE ${endpointConditions.join(" AND ")}
+       GROUP BY method, path
+       ORDER BY request_count DESC, method ASC, path ASC`,
+    ).bind(...endpointBindings).all<Record<string, unknown>>()
+    : Promise.resolve(null);
+  const [count, rows, stats, endpointRows] = await Promise.all([
     db.prepare(`SELECT COUNT(*) AS total FROM system_logs_mb ${where}`)
       .bind(...bindings).first<{ total: number }>(),
     db.prepare(
@@ -600,6 +645,7 @@ export async function readSystemLogs(
         ROUND(AVG(duration_ms)) AS average_duration_ms
        FROM system_logs_mb ${statsWhere}`,
     ).bind(...statsBindings).first<Record<string, number | null>>(),
+    endpointRowsPromise,
   ]);
   const records: SystemLogRecord[] = (rows.results || []).map((row) => ({
     id: Number(row.id),
@@ -623,6 +669,11 @@ export async function readSystemLogs(
     limit,
     offset,
     records,
+    requestEndpoints: (endpointRows?.results || []).map((row) => ({
+      method: String(row.method || "").toUpperCase(),
+      path: String(row.path || ""),
+      requestCount: Number(row.request_count) || 0,
+    })),
     stats: {
       total: Number(stats?.total) || 0,
       errorCount: Number(stats?.error_count) || 0,
