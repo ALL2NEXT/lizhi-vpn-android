@@ -2,7 +2,7 @@ import type { Env } from "../../types/env.ts";
 import type { RouteDependencies } from "../../types/routes.ts";
 
 /*
- * KV-backed application settings and managed subscription configuration.
+ * Application settings in KV and subscription configuration in D1.
  */
 
 import { fetchWebsiteIcon } from "../../services/navigation-icons.ts";

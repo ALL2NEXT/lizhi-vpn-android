@@ -10,7 +10,6 @@ export const LEGACY_STATE_KEY = "fireflyvpn:state:v1";
 export const SYSTEM_LOG_SETTINGS_KEY = "chimera:system-log-settings:v1";
 export const AI_RISK_SETTINGS_KEY = "chimera:ai-risk-settings:v1";
 export const MAX_MANAGED_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
-export const MAX_D1_INLINE_SUBSCRIPTION_BYTES = 1_900_000;
 export const MAX_BATCH_USER_COUNT = 100;
 export const MAX_TRAFFIC_BYTES = 1e15;
 export const SUBSCRIPTION_CACHE_KEY_PREFIX = "chimera:subscription-cache:v1:";

@@ -2,7 +2,6 @@ import type { Env } from "../types/env.ts";
 import type { SubscriptionGroup, SubscriptionSource } from "../types/models.ts";
 
 import {
-  MAX_D1_INLINE_SUBSCRIPTION_BYTES,
   SUBSCRIPTION_CONTENT_KEY_PREFIX,
 } from "../config.ts";
 import { createSubscriptionAssignmentKey } from "./subscription-identity.ts";
@@ -108,8 +107,24 @@ function jsonBatchStatements(
   return statements;
 }
 
-async function subscriptionContentKey(source: SubscriptionSource, content: string) {
-  return `${SUBSCRIPTION_CONTENT_KEY_PREFIX}${source.id}:${await contentHash(content)}`;
+async function subscriptionContentKey(sourceId: string, content: string) {
+  return `${SUBSCRIPTION_CONTENT_KEY_PREFIX}${sourceId}:${await contentHash(content)}`;
+}
+
+async function moveInlineSubscriptionContentToKv(env: Env, db: D1Database) {
+  if (!env.CONFIG) return;
+  const rows = (await db.prepare(
+    `SELECT id, content FROM subscription_sources
+      WHERE source_type = 'content' AND content <> ''`,
+  ).all<{ id: string; content: string }>()).results || [];
+  for (const row of rows) {
+    const contentKey = await subscriptionContentKey(row.id, row.content);
+    await env.CONFIG.put(contentKey, row.content);
+    await db.prepare(
+      `UPDATE subscription_sources SET content = '', content_key = ?
+        WHERE id = ? AND source_type = 'content' AND content = ?`,
+    ).bind(contentKey, row.id, row.content).run();
+  }
 }
 
 export async function hasImportedLegacySubscriptions(env: Env) {
@@ -123,6 +138,7 @@ export async function hasImportedLegacySubscriptions(env: Env) {
 export async function loadSubscriptionGroups(env: Env, includeContent = false): Promise<SubscriptionGroup[] | null> {
   const db = env.SUBSCRIPTIONS_DB;
   if (!db || !(await hasImportedLegacySubscriptions(env))) return null;
+  await moveInlineSubscriptionContentToKv(env, db);
 
   const sourceQuery = includeContent
     ? `SELECT id, group_id, source_order, name, source_type, url, content, content_key,
@@ -236,16 +252,11 @@ async function prepareSources(env: Env, groups: SubscriptionGroup[], importLegac
       if (local && content) {
         assignmentKey = await createSubscriptionAssignmentKey({ ...source, assignmentKey: undefined });
         source.assignmentKey = assignmentKey;
-        if (bytes(content) <= MAX_D1_INLINE_SUBSCRIPTION_BYTES) {
-          contentKey = "";
-          source.contentKey = undefined;
-        } else {
-          contentKey = await subscriptionContentKey(source, content);
-          if (source.contentKey !== contentKey) await config.put(contentKey, content);
-          source.contentKey = contentKey;
-          newKeys.add(contentKey);
-          content = "";
-        }
+        contentKey = await subscriptionContentKey(source.id, content);
+        if (source.contentKey !== contentKey) await config.put(contentKey, content);
+        source.contentKey = contentKey;
+        newKeys.add(contentKey);
+        content = "";
       } else if (local && source.contentKey) {
         contentKey = source.contentKey;
         newKeys.add(contentKey);

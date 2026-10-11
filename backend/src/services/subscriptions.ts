@@ -16,6 +16,10 @@ import {
   toStandardUris,
 } from "../domain/subscription-import/index.ts";
 import { decodeBase64, encodeBase64 } from "../domain/subscription-import/text.ts";
+import {
+  loadSubscriptionCacheMetadata,
+  saveSubscriptionCacheMetadata,
+} from "./subscription-cache-store.ts";
 import { observedFetch } from "./system-logs.ts";
 
 export function normalizeManagedContent(value: unknown) {
@@ -415,35 +419,114 @@ function cachedSubscriptionTraffic(value: unknown): SubscriptionTrafficMetadata 
     : null;
 }
 
+interface LegacySubscriptionCache {
+  url: string;
+  content: string;
+  cachedAt: number;
+  trafficFetched: boolean;
+  traffic: unknown;
+}
+
+function legacySubscriptionCache(value: string): LegacySubscriptionCache | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object") return null;
+    const record = parsed as Record<string, unknown>;
+    if (typeof record.url !== "string" || typeof record.content !== "string") return null;
+    const cachedAt = Number(record.cachedAt);
+    return {
+      url: record.url,
+      content: record.content,
+      cachedAt: Number.isSafeInteger(cachedAt) && cachedAt >= 0 ? cachedAt : Date.now(),
+      trafficFetched: record.trafficFetched === true,
+      traffic: record.traffic,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function readSubscriptionCache(env: Env, source: SubscriptionSource) {
+  if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
+  let metadata = await loadSubscriptionCacheMetadata(env, source.id);
+  let contentValue = await env.CONFIG.get<string>(subscriptionCacheKey(source), "text");
+  let legacyUrl = "";
+  const legacy = typeof contentValue === "string" ? legacySubscriptionCache(contentValue) : null;
+  if (legacy) {
+    const sameUrl = !metadata || metadata.sourceUrl === legacy.url;
+    const legacyIsCurrent = sameUrl && (!metadata?.contentCachedAt ||
+      legacy.cachedAt >= metadata.contentCachedAt);
+    if (legacyIsCurrent) {
+      await saveSubscriptionCacheMetadata(env, source.id, legacy.url, {
+        contentCachedAt: legacy.cachedAt,
+      });
+      if (legacy.trafficFetched) {
+        const storedTrafficAt = metadata?.sourceUrl === legacy.url
+          ? metadata.trafficFetchedAt || 0
+          : 0;
+        if (legacy.cachedAt >= storedTrafficAt) {
+          await saveSubscriptionCacheMetadata(env, source.id, legacy.url, {
+            trafficFetchedAt: legacy.cachedAt,
+            traffic: legacy.traffic,
+          });
+        }
+      }
+      await env.CONFIG.put(subscriptionCacheKey(source), legacy.content);
+      contentValue = legacy.content;
+      legacyUrl = legacy.url;
+    } else {
+      await env.CONFIG.delete(subscriptionCacheKey(source));
+      contentValue = null;
+    }
+    metadata = await loadSubscriptionCacheMetadata(env, source.id);
+  }
+
+  const legacyTrafficValue = await env.CONFIG.get<string>(subscriptionTrafficCacheKey(source), "text");
+  if (typeof legacyTrafficValue === "string") {
+    try {
+      const parsed: unknown = JSON.parse(legacyTrafficValue);
+      if (parsed && typeof parsed === "object") {
+        const record = parsed as Record<string, unknown>;
+        const fetchedAt = Number(record.trafficFetchedAt);
+        if (record.url === source.url && (!metadata || metadata.sourceUrl === source.url) &&
+            Number.isSafeInteger(fetchedAt) && fetchedAt >= 0 &&
+            fetchedAt > (metadata?.trafficFetchedAt || 0)) {
+          await saveSubscriptionCacheMetadata(env, source.id, source.url, {
+            trafficFetchedAt: fetchedAt,
+            traffic: record.traffic,
+          });
+        }
+      }
+    } catch {
+      // Invalid legacy metadata is discarded below.
+    }
+    await env.CONFIG.delete(subscriptionTrafficCacheKey(source));
+  }
+
+  metadata = await loadSubscriptionCacheMetadata(env, source.id);
+  const metadataMatches = metadata?.sourceUrl === source.url;
+  const legacyMatches = legacyUrl === source.url;
+  return {
+    content: (metadataMatches || legacyMatches) && typeof contentValue === "string"
+      ? contentValue
+      : null,
+    metadata,
+  };
+}
+
 async function cacheExternalSubscription(
   env: Env,
   source: SubscriptionSource,
   result: { content: string; traffic: SubscriptionTrafficMetadata | null },
   cachedAt: number,
-  cacheMinutesValue: unknown,
 ) {
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
-  const cacheMinutes = normalizeSubscriptionCacheMinutes(cacheMinutesValue);
-  const writes = [env.CONFIG.put(subscriptionCacheKey(source), JSON.stringify({
-    url: source.url,
-    content: result.content,
-    contentFormat: 2,
-    cachedAt,
-    trafficFetched: true,
+  await env.CONFIG.put(subscriptionCacheKey(source), result.content);
+  await saveSubscriptionCacheMetadata(env, source.id, source.url, {
+    contentCachedAt: cachedAt,
+    trafficFetchedAt: cachedAt,
     traffic: result.traffic,
-  }))];
-  if (cacheMinutes === 0) {
-    writes.push(env.CONFIG.put(
-      subscriptionTrafficCacheKey(source),
-      JSON.stringify({
-        url: source.url,
-        trafficFetchedAt: cachedAt,
-        traffic: result.traffic,
-      }),
-      { expirationTtl: 300 },
-    ));
-  }
-  await Promise.all(writes);
+  });
 }
 
 async function readManagedSubscriptionBody(response: Response) {
@@ -546,27 +629,20 @@ export async function readExternalSubscription(
   if (!source || !source.url) throw new Error("external_subscription_url_required");
 
   const cacheMinutes = normalizeSubscriptionCacheMinutes(cacheMinutesValue);
-  const cacheKey = subscriptionCacheKey(source);
   const now = Date.now();
-  const cached = await env.CONFIG.get<{
-    url: string;
-    content: unknown;
-    contentFormat?: number;
-    cachedAt: unknown;
-  }>(cacheKey, "json");
+  const cached = await readSubscriptionCache(env, source);
   if (!updateEnabled) {
-    if (cached?.url === source.url && typeof cached.content === "string") {
+    if (typeof cached.content === "string") {
       return decodeExternalSubscriptionContent(cached.content, { deduplicate: false });
     }
     throw new Error("subscription_update_disabled_cache_missing");
   }
   if (cacheMinutes > 0) {
-    const cachedAt = Number(cached && cached.cachedAt);
+    const cachedAt = Number(cached.metadata?.contentCachedAt);
     const freshUntil = cachedAt + cacheMinutes * 60 * 1000;
     if (
-      cached &&
-      cached.url === source.url &&
-      (source.deduplicate !== false || cached.contentFormat === 2) &&
+      typeof cached.content === "string" &&
+      cached.metadata?.sourceUrl === source.url &&
       Number.isFinite(cachedAt) &&
       freshUntil > now
     ) {
@@ -575,7 +651,7 @@ export async function readExternalSubscription(
   }
 
   const fetched = await fetchExternalSubscription(source.url, { deduplicate: false, env });
-  await cacheExternalSubscription(env, source, fetched, now, cacheMinutes);
+  await cacheExternalSubscription(env, source, fetched, Date.now());
   return fetched.content;
 }
 
@@ -608,14 +684,13 @@ export async function cacheLocallyFetchedSubscription(
     }
     : null;
   if (!traffic) {
-    const cached = await env.CONFIG.get<{ url: string; traffic?: unknown }>(
-      subscriptionCacheKey(source),
-      "json",
-    );
-    if (cached?.url === source.url) traffic = cachedSubscriptionTraffic(cached.traffic);
+    const cached = await readSubscriptionCache(env, source);
+    if (cached.metadata?.sourceUrl === source.url) {
+      traffic = cachedSubscriptionTraffic(cached.metadata.traffic);
+    }
   }
 
-  await cacheExternalSubscription(env, source, { content, traffic }, Date.now(), 0);
+  await cacheExternalSubscription(env, source, { content, traffic }, Date.now());
   return { nodeCount: content.split("\n").length };
 }
 
@@ -630,37 +705,18 @@ export async function readExternalSubscriptionTraffic(
 
   const cacheMinutes = normalizeSubscriptionCacheMinutes(cacheMinutesValue);
   const now = Date.now();
-  const cached = await env.CONFIG.get<{
-    url: string;
-    cachedAt: number;
-    trafficFetched?: boolean;
-    traffic?: unknown;
-  }>(subscriptionCacheKey(source), "json");
-  if (cached?.url === source.url && cached.trafficFetched === true) {
-    const cachedAt = Number(cached.cachedAt);
-    if (!updateEnabled || (cacheMinutes > 0 && Number.isFinite(cachedAt) &&
-        cachedAt + cacheMinutes * 60 * 1000 > now)) {
-      return cachedSubscriptionTraffic(cached.traffic);
-    }
-  }
-
-  const trafficCache = await env.CONFIG.get<{
-    url: string;
-    trafficFetchedAt: number;
-    traffic?: unknown;
-  }>(subscriptionTrafficCacheKey(source), "json");
-  const trafficFetchedAt = Number(trafficCache?.trafficFetchedAt);
-  if (
-    trafficCache?.url === source.url &&
-    (!updateEnabled || (Number.isFinite(trafficFetchedAt) &&
-      trafficFetchedAt + 5 * 60 * 1000 > now))
-  ) {
-    return cachedSubscriptionTraffic(trafficCache.traffic);
+  const cached = await readSubscriptionCache(env, source);
+  const metadata = cached.metadata?.sourceUrl === source.url ? cached.metadata : null;
+  const trafficFetchedAt = Number(metadata?.trafficFetchedAt);
+  const trafficCacheMinutes = cacheMinutes > 0 ? cacheMinutes : 5;
+  if (metadata && Number.isFinite(trafficFetchedAt) && trafficFetchedAt > 0 &&
+      (!updateEnabled || trafficFetchedAt + trafficCacheMinutes * 60 * 1000 > now)) {
+    return cachedSubscriptionTraffic(metadata.traffic);
   }
   if (!updateEnabled) return null;
 
   const fetched = await fetchExternalSubscription(source.url, { deduplicate: false, env });
-  await cacheExternalSubscription(env, source, fetched, now, cacheMinutes);
+  await cacheExternalSubscription(env, source, fetched, Date.now());
   return fetched.traffic;
 }
 
@@ -672,12 +728,8 @@ export async function validateAndWarmSubscriptionSources(env: Env, groups: Subsc
       if (source.url && !source.content) {
         if (!group.updateEnabled) {
           if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
-          const cacheKey = subscriptionCacheKey(source);
-          const cached = await env.CONFIG.get<{ url: string; content: unknown }>(cacheKey, "json");
-          if (cached?.url === source.url && typeof cached.content === "string") {
-            // 停用更新后保留最近一次订阅快照，不再按原缓存时长过期。
-            await env.CONFIG.put(cacheKey, JSON.stringify(cached));
-          } else {
+          const cached = await readSubscriptionCache(env, source);
+          if (typeof cached.content !== "string") {
             // 尚无可用快照时尝试预热一次；失败不阻止关闭后续更新。
             try {
               await readExternalSubscription(env, source, group.cacheMinutes, true);
