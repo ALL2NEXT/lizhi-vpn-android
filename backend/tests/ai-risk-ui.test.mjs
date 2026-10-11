@@ -39,7 +39,7 @@ function harness() {
 }
 
 test("后台包含 Gemini 风控设置、模型获取与分析入口", () => {
-  for (const id of ["aiRiskEnabled", "aiRiskModel", "aiRiskThinkingLevel", "aiRiskApiKeys", "aiRiskLoadModels", "aiRiskSave", "aiRiskTest", "aiRiskAnalyze", "aiRiskPreview", "aiRiskRefresh", "aiRiskSettingsPanel", "aiRiskSettingsToggle", "aiRiskSearch"]) {
+  for (const id of ["aiRiskEnabled", "aiRiskModel", "aiRiskThinkingLevel", "aiRiskApiKeys", "aiRiskPromptTemplate", "aiRiskPromptReset", "aiRiskLoadModels", "aiRiskSave", "aiRiskTest", "aiRiskAnalyze", "aiRiskPreview", "aiRiskRefresh", "aiRiskSettingsPanel", "aiRiskSettingsToggle", "aiRiskSearch"]) {
     assert.ok(documentHtml.includes(`id="${id}"`), `缺少 ${id}`);
   }
   assert.ok(documentHtml.includes('data-tab="ai-risk"'));
@@ -102,20 +102,30 @@ test("IP 风险卡片使用模型分数，并通过 IP 标识处理展开事件"
 
 test("加载配置不回填 API Key，保存提交多 Key 输入并保留掩码", async () => {
   const h = harness();
-  h.setHandler(async url => {
-    if (url.endsWith("/ai-risk/settings")) return { ok: true, settings: { enabled: true, model: "gemini-3.8-flash", apiKeyConfigured: true, apiKeyCount: 2 } };
-    return { ok: true, settings: { enabled: true, model: "gemini-3.8-flash", apiKeyConfigured: true, apiKeyCount: 2 } };
+  const defaultPrompt = "默认建议 {{DATASET_JSON}}";
+  const savedPrompt = "自定义分析 {{DATASET_JSON}}";
+  h.setHandler(async (url, options) => {
+    if (url.endsWith("/ai-risk/settings") && options.method !== "PUT") return { ok: true, settings: { enabled: true, model: "gemini-3.8-flash", apiKeyConfigured: true, apiKeyCount: 2, promptTemplate: defaultPrompt, defaultPromptTemplate: defaultPrompt } };
+    return { ok: true, settings: { enabled: true, model: "gemini-3.8-flash", apiKeyConfigured: true, apiKeyCount: 2, promptTemplate: savedPrompt, defaultPromptTemplate: defaultPrompt } };
   });
   await h.run("loadAiRiskSettings(true)");
   assert.equal(h.el("aiRiskApiKeys").value, "");
   assert.equal(h.el("aiRiskThinkingLevel").value, "medium");
+  assert.equal(h.el("aiRiskPromptTemplate").value, defaultPrompt);
   assert.match(h.el("aiRiskApiKeys").placeholder, /2 个 Key/);
   h.el("aiRiskApiKeys").value = "new-key-1,new-key-2";
+  h.el("aiRiskPromptTemplate").value = savedPrompt;
   await h.run("saveAiRiskSettings()");
   const body = JSON.parse(h.calls.at(-1).options.body);
   assert.equal(body.apiKeys, "new-key-1,new-key-2");
   assert.equal(body.thinkingLevel, "medium");
+  assert.equal(body.promptTemplate, savedPrompt);
+  assert.equal(h.el("aiRiskPromptTemplate").value, savedPrompt);
   assert.equal(h.el("aiRiskApiKeys").value, "");
+
+  h.el("aiRiskPromptReset").listeners.click();
+  assert.equal(h.el("aiRiskPromptTemplate").value, defaultPrompt);
+  assert.match(h.el("aiRiskSettingsStatus").textContent, /点击“保存配置”后生效/);
 });
 
 test("获取模型前先保存配置，并展示 API 返回的 generateContent 模型", async () => {

@@ -1,6 +1,7 @@
 let aiRiskSettingsLoading = false;
 let aiRiskSettingsLoaded = false;
 let aiRiskOperationInFlight = false;
+let aiRiskDefaultPromptTemplate = '';
 let aiRiskModels = [];
 let aiRiskDashboard = null;
 let aiRiskAnalysis = null;
@@ -41,6 +42,7 @@ function aiRiskErrorText(code) {
     too_many_ai_risk_api_keys: '最多只能保存 20 个 Google AI API Key。',
     ai_risk_disabled: '请先启用 Gemini 风控分析。',
     ai_risk_config_binding_missing: '当前 Worker 未绑定 CONFIG KV。',
+    invalid_ai_risk_prompt_template: '提示词模板必须包含且仅包含一次 {{DATASET_JSON}}，且不能超过 12,000 字符。',
     invalid_ai_risk_model: '模型名称格式无效。',
     invalid_ai_risk_thinking_level: '思考强度设置无效。',
     invalid_ai_risk_window: '分析时间窗无效。',
@@ -82,9 +84,11 @@ async function loadAiRiskSettings(force) {
   try {
     const data = await aiRiskRequest('/ai-risk/settings');
     const settings = data.settings || {};
+    if (typeof settings.defaultPromptTemplate === 'string') aiRiskDefaultPromptTemplate = settings.defaultPromptTemplate;
     el('aiRiskEnabled').checked = settings.enabled === true;
     el('aiRiskModel').value = settings.model || 'gemini-3.8-flash';
     el('aiRiskThinkingLevel').value = settings.thinkingLevel || 'medium';
+    if (typeof settings.promptTemplate === 'string') el('aiRiskPromptTemplate').value = settings.promptTemplate;
     el('aiRiskApiKeys').value = '';
     el('aiRiskApiKeys').placeholder = settings.apiKeyCount ? '已配置 ' + settings.apiKeyCount + ' 个 Key；留空保留' : '请输入 Google AI API Key';
     el('aiRiskKeyStatus').textContent = settings.apiKeyCount ? '已保存 ' + settings.apiKeyCount + ' 个 Key；密钥不会回显。输入新列表将替换现有 Key。' : '支持最多 20 个 Key，用英文逗号或分号分隔；留空保留当前配置。';
@@ -110,6 +114,7 @@ async function saveAiRiskSettings() {
       enabled: el('aiRiskEnabled').checked,
       model: value('aiRiskModel'),
       thinkingLevel: el('aiRiskThinkingLevel').value,
+      promptTemplate: el('aiRiskPromptTemplate').value,
       apiKeys: el('aiRiskApiKeys').value,
       clearApiKeys: el('aiRiskClearKeys').checked,
     };
@@ -117,6 +122,8 @@ async function saveAiRiskSettings() {
     el('aiRiskApiKeys').value = '';
     el('aiRiskClearKeys').checked = false;
     const settings = data.settings || {};
+    if (typeof settings.defaultPromptTemplate === 'string') aiRiskDefaultPromptTemplate = settings.defaultPromptTemplate;
+    if (typeof settings.promptTemplate === 'string') el('aiRiskPromptTemplate').value = settings.promptTemplate;
     el('aiRiskApiKeys').placeholder = settings.apiKeyCount ? '已配置 ' + settings.apiKeyCount + ' 个 Key；留空保留' : '请输入 Google AI API Key';
     el('aiRiskKeyStatus').textContent = settings.apiKeyCount ? '已保存 ' + settings.apiKeyCount + ' 个 Key；密钥不会回显。输入新列表将替换现有 Key。' : '支持最多 20 个 Key，用英文逗号或分号分隔；留空保留当前配置。';
     el('aiRiskClearKeys').disabled = settings.apiKeyConfigured !== true;
@@ -645,6 +652,14 @@ function aiRiskHandlePageClick(event) {
 }
 
 el('aiRiskSave').addEventListener('click', saveAiRiskSettings);
+el('aiRiskPromptReset').addEventListener('click', function() {
+  if (!aiRiskDefaultPromptTemplate) {
+    aiRiskSetStatus('aiRiskSettingsStatus', '默认提示词尚未加载，请先重新读取配置。', true);
+    return;
+  }
+  el('aiRiskPromptTemplate').value = aiRiskDefaultPromptTemplate;
+  aiRiskSetStatus('aiRiskSettingsStatus', '已恢复推荐提示词，点击“保存配置”后生效。', false);
+});
 el('aiRiskTest').addEventListener('click', testAiRiskGemini);
 el('aiRiskLoadModels').addEventListener('click', loadAiRiskModels);
 el('aiRiskAnalyze').addEventListener('click', runAiRiskAnalysis);

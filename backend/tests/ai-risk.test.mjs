@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   AiRiskError,
+  buildAiRiskPrompt,
   buildGeminiGenerationConfig,
+  DEFAULT_AI_RISK_PROMPT_TEMPLATE,
   listGeminiModels,
   readAiRiskSettings,
   testGeminiConnection,
@@ -37,6 +39,8 @@ test("AI 风控设置不会向管理页面回传 API Key，留空时保留密钥
     apiKeyConfigured: true,
     apiKeyCount: 1,
     thinkingLevel: "medium",
+    promptTemplate: DEFAULT_AI_RISK_PROMPT_TEMPLATE,
+    defaultPromptTemplate: DEFAULT_AI_RISK_PROMPT_TEMPLATE,
   });
   assert.equal(JSON.stringify(first).includes("test-secret-key"), false);
 
@@ -44,6 +48,34 @@ test("AI 风控设置不会向管理页面回传 API Key，留空时保留密钥
   assert.equal(second.apiKeyConfigured, true);
   assert.equal(second.apiKeyCount, 1);
   assert.equal((await readAiRiskSettings(env)).model, "gemini-3.5-flash-lite");
+});
+
+test("默认提示词覆盖五类风控行为，模板可保存、恢复且要求唯一数据占位符", async () => {
+  const env = { CONFIG: new MemoryConfig() };
+  const defaults = await readAiRiskSettings(env);
+  for (const phrase of ["24 小时持续获取订阅", "低峰期仍获取订阅", "只访问订阅接口", "单 IP 多账户", "非法请求参数"]) {
+    assert.ok(defaults.promptTemplate.includes(phrase), `默认提示词缺少 ${phrase}`);
+  }
+  assert.equal(defaults.promptTemplate.split("{{DATASET_JSON}}").length - 1, 1);
+  assert.match(defaults.promptTemplate, /无法判断/);
+
+  const custom = "按我的规则分析，不确定就说明无法判断。\n{{DATASET_JSON}}";
+  const saved = await updateAiRiskSettings(env, { promptTemplate: custom });
+  assert.equal(saved.promptTemplate, custom);
+  assert.equal(saved.defaultPromptTemplate, DEFAULT_AI_RISK_PROMPT_TEMPLATE);
+  assert.equal((await updateAiRiskSettings(env, { model: "gemini-3.8-flash" })).promptTemplate, custom);
+
+  for (const invalid of ["缺少占位符", "{{DATASET_JSON}} {{DATASET_JSON}}", "x".repeat(12_001) + "{{DATASET_JSON}}"]){
+    await assert.rejects(
+      updateAiRiskSettings(env, { promptTemplate: invalid }),
+      (error) => error instanceof AiRiskError && error.code === "invalid_ai_risk_prompt_template",
+    );
+  }
+});
+
+test("风控分析提示词将数据集 JSON 插入唯一占位符", () => {
+  const dataset = { subjects: [{ ipRef: "ip-1", requestCount: 2 }] };
+  assert.equal(buildAiRiskPrompt("分析：{{DATASET_JSON}}。", dataset), `分析：${JSON.stringify(dataset)}。`);
 });
 
 test("保存多个 Gemini Key 时去重，空输入保留并允许显式清除", async () => {

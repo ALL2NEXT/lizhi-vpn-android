@@ -387,6 +387,7 @@
             <label class="ai-risk-clear-keys"><input id="aiRiskClearKeys" type="checkbox"><span>保存时清除已保存的 API Key</span></label>
             <button id="aiRiskSave" class="ai-risk-save" type="button">保存配置</button>
           </section>
+          <details class="ai-risk-prompt-editor"><summary>提示词模板</summary><div><label class="field" for="aiRiskPromptTemplate"><span>Gemini 分析提示词</span><textarea id="aiRiskPromptTemplate" maxlength="12000" rows="13" spellcheck="false" placeholder="读取设置后显示当前提示词"></textarea><small>可自行调整风险分析规则；必须保留且仅保留一次 {{DATASET_JSON}}，它会在分析时替换为脱敏遥测数据。最长 12,000 字符，修改后点击“保存配置”生效。</small></label><button id="aiRiskPromptReset" class="secondary" type="button">恢复推荐模板</button></div></details>
           <details class="ai-risk-advanced"><summary>高级设置与数据说明</summary><div><p>分析仅由管理员手动触发，不会定时请求或自动采取封禁操作。</p><p>发送给 Google 的数据会将 IP 和 UID 替换为本次分析专用的随机引用标记，不包含请求正文、密码或订阅内容。</p><p>本地展示的 IP 与账户仅用于后台复核，数据受系统日志开关和保留期影响。</p><button id="aiRiskPreview" class="secondary" type="button">预览发送给 Gemini 的脱敏数据</button></div></details>
         </div>
       </aside>

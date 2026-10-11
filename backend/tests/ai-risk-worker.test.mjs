@@ -55,6 +55,9 @@ test("AI 风控管理接口鉴权、隐藏密钥并提供脱敏请求数据", as
   await call("/local-admin/api/ai-risk/dashboard-data?windowHours=24", { status: 401 });
   const initial = await call("/local-admin/api/ai-risk/settings", { admin: true });
   assert.equal(initial.settings.apiKeyConfigured, false);
+  assert.equal(initial.settings.promptTemplate.split("{{DATASET_JSON}}").length - 1, 1);
+  assert.match(initial.settings.promptTemplate, /低峰期仍获取订阅/);
+  assert.equal(initial.settings.defaultPromptTemplate, initial.settings.promptTemplate);
   const missingModelKeys = await call("/local-admin/api/ai-risk/models", { admin: true, status: 400 });
   assert.equal(missingModelKeys.error, "ai_risk_api_key_required");
 
@@ -63,12 +66,20 @@ test("AI 风控管理接口鉴权、隐藏密钥并提供脱敏请求数据", as
     categories: { request: true, operation: true, database: true, outbound: true },
     schedule: { enabled: false, startTime: "00:00", endTime: "23:59" },
   }));
+  const customPrompt = "人工复核优先；证据不足就说明无法判断。\n{{DATASET_JSON}}";
   const configured = await call("/local-admin/api/ai-risk/settings", {
     method: "PUT", admin: true,
-    body: { enabled: false, model: "gemini-3.8-flash", apiKey: "gemini-secret-test-key" },
+    body: { enabled: false, model: "gemini-3.8-flash", apiKey: "gemini-secret-test-key", promptTemplate: customPrompt },
   });
   assert.equal(configured.settings.apiKeyConfigured, true);
+  assert.equal(configured.settings.promptTemplate, customPrompt);
   assert.equal(JSON.stringify(configured).includes("gemini-secret-test-key"), false);
+  const reread = await call("/local-admin/api/ai-risk/settings", { admin: true });
+  assert.equal(reread.settings.promptTemplate, customPrompt);
+  const invalidPrompt = await call("/local-admin/api/ai-risk/settings", {
+    method: "PUT", admin: true, body: { promptTemplate: "缺少占位符" }, status: 400,
+  });
+  assert.equal(invalidPrompt.error, "invalid_ai_risk_prompt_template");
   await eventually(async () => {
     const row = await db.prepare(
       "SELECT request_id FROM system_logs_mb WHERE path = '/local-admin/api/ai-risk/settings' ORDER BY id DESC LIMIT 1",
@@ -97,6 +108,8 @@ test("AI 风控管理接口鉴权、隐藏密钥并提供脱敏请求数据", as
   assert.equal(data.ok, true);
   assert.ok(data.dataset.subjects.some(subject => subject.userRef));
   assert.ok(data.dataset.ipRelations.some(relation => relation.knownAccountCount >= 1));
+  assert.ok(Array.isArray(data.dataset.systemHourlyActivity));
+  assert.ok(data.dataset.systemHourlyActivity.every(row => row.length === 4 && row.every(Number.isFinite)));
   const serialized = JSON.stringify(data.dataset);
   assert.equal(serialized.includes(clientIp), false, "AI 数据接口不应回传原始 IP");
   assert.equal(serialized.includes(registered.account.uid), false, "AI 数据接口不应回传原始 UID");
