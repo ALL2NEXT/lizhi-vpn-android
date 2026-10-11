@@ -235,6 +235,9 @@
    if (name === 'ip-relations' && !ipRelationsData && !ipRelationsLoading) {
      loadIpRelations();
    }
+   if (name === 'ai-risk' && typeof loadAiRiskSettings === 'function') {
+     loadAiRiskSettings();
+   }
    if (name === 'system-logs') {
      loadSystemLogRecordingSettings();
    }

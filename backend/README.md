@@ -70,6 +70,24 @@ GET /<ADMIN_PATH>/api/ip-relations?limit=50&offset=0
 
 `ip` 和 `uid` 可组合筛选；无效参数返回 `400`。计数从此功能启用后累计，旧日志不做推测性回填。删除用户后保留 UID 与 IP 的历史关联并显示“已删除”。系统日志新增用户 UID、设备 ID 和身份来源，可按 UID 或设备 ID 搜索，详情中可查看这些字段。
 
+## AI 风控分析
+
+后台设置中的“AI 风控”可配置 Google Gemini 模型与 API Key，并手动运行 24 小时、3 天或 7 天分析。当前接入使用 Google Gemini `generateContent` REST API；默认模型为 `gemini-3.8-flash`，模型名称可更改。API Key 保存在服务端 `CONFIG` KV，设置读取接口只返回 `apiKeyConfigured`，不会回传密钥；保存密钥的请求不会进入系统日志完整请求捕获。更换或撤销 Key 后请在后台更新配置。
+
+分析请求从请求日志和 `user_ip_links_mb` 汇总订阅请求、逐小时活动、错误状态、访问端点与单 IP 账户数。发送给 Google 前，IP 与 UID 会使用本次分析临时密钥替换为伪名引用；不发送请求正文、密码或订阅内容。请求日志遵循系统日志开关、记录时段和 30 天保留期，IP 关联汇总从启用采集后累计。分析只在管理员手动触发时执行，结果需要人工复核，不会自动封禁。
+
+管理员 API：
+
+```http
+GET  /<ADMIN_PATH>/api/ai-risk/settings
+PUT  /<ADMIN_PATH>/api/ai-risk/settings
+POST /<ADMIN_PATH>/api/ai-risk/test
+GET  /<ADMIN_PATH>/api/ai-risk/data?windowHours=24
+POST /<ADMIN_PATH>/api/ai-risk/analyze
+```
+
+`windowHours` 支持 1 到 168 小时。数据接口返回按 IP/UID 伪名化的请求行为数据，可在接入 Gemini 前预览；分析接口在服务端调用 Gemini，并仅在本地响应中还原命中的 IP 与 UID，原始标识不会发给 Google。
+
 ## 分组与智能导入
 
 客户端先注册或同步设备信息，再请求 `GET /api/client?deviceId=<设备ID>`。后台使用数据库中的账号状态、邮箱绑定类型、真人/机器人身份、会员状态及设备上报的 App 版本筛选分组，只返回当前设备可访问的订阅名称和下载地址；权限规则及真人/机器人字段均不下发。没有可用订阅时正常返回 `subscriptions: []`，公告、更新和客户端设置仍返回。缺少或无效的设备 ID 返回 401，未注册设备返回 403。

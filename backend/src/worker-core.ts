@@ -354,6 +354,7 @@ const worker = {
     // 日志载荷读取和 VIP 卡密兑换/发放接口不保存正文，避免递归记录或泄露卡密。
     const skipFullCapture =
       (isAdminApi && path.endsWith("/api/system-logs/payload")) ||
+      (isAdminApi && path.endsWith("/api/ai-risk/settings")) ||
       path.endsWith("/api/account/activate-vip") ||
       (isAdminApi && path.endsWith("/api/vip-codes"));
     const captureFullRequest = recordingSettings?.mode === "full" &&
