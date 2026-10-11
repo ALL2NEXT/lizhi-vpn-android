@@ -2,7 +2,7 @@ import type { UserRow } from "../types/database.ts";
 import type { Env } from "../types/env.ts";
 import type { RouteDependencies } from "../types/routes.ts";
 
-import { readJsonObject } from "../http/request.ts";
+import { observeRequestUser, readJsonObject } from "../http/request.ts";
 /*
  * Account routes.
  *
@@ -82,6 +82,7 @@ export function createAccountRoutes(deps: Pick<
         throw new Error("account_create_failed");
       }
       user.deviceBlocked = Boolean(identity.deviceBanned);
+      observeRequestUser(env, identity);
 
       return json({
         ok: true,
@@ -216,6 +217,7 @@ export function createAccountRoutes(deps: Pick<
 
       const attached = await attachDeviceToUser(db, Number(row.id), deviceId, body || {}, true);
       if (!attached) return json({ ok: false, error: "device_banned" }, 403);
+      observeRequestUser(env, { userId: Number(row.id), uid: row.uid, deviceId }, "login");
       return json({
         ok: true,
         account: publicAccount(await readD1UserWithTraffic(env, Number(row.id))),

@@ -2,6 +2,7 @@ import adminDocument from "./admin-ui/document.html";
 import adminStyles from "./admin-ui/styles.css";
 import coreScript from "./admin-ui/scripts/core.client.js";
 import systemLogsScript from "./admin-ui/scripts/system-logs.client.js";
+import ipRelationsScript from "./admin-ui/scripts/ip-relations.client.js";
 import securityScript from "./admin-ui/scripts/security.client.js";
 import userTableScript from "./admin-ui/scripts/user-table.client.js";
 import dashboardChartsScript from "./admin-ui/scripts/dashboard-charts.client.js";
@@ -15,6 +16,7 @@ import subscriptionImportScript from "./admin-ui/scripts/subscription-import.cli
 const adminScript = [
   coreScript,
   systemLogsScript,
+  ipRelationsScript,
   securityScript,
   userTableScript,
   dashboardChartsScript,

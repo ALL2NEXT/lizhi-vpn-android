@@ -80,6 +80,7 @@
               <span class="nav-label"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19.4 13a7.8 7.8 0 0 0 0-2l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1L15 3h-4l-.4 3a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.8 7.8 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 3h4l.4-3a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2.1-1.6zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>后台设置</span><span class="nav-chevron" aria-hidden="true">⌄</span>
             </button>
             <div id="backend-settings-subnav" class="nav-submenu" role="group" aria-label="后台设置子菜单">
+              <button class="tab-button" role="tab" type="button" data-tab="ip-relations"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3 14h7v7H3v-7zm11 0h7v7h-7v-7zm-3-3h2v2h5v2h-2v-1H8v1H6v-2h5v-2z"/></svg><span>IP 与用户</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="system-logs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 3a9 9 0 1 0 8.9 10h-2a7 7 0 1 1-2-6L15 10h7V3l-2.7 2.7A8.9 8.9 0 0 0 13 3zm-1 5v5l4 2.4 1-1.6-3-1.8V8h-2z"/></svg><span>系统日志</span></button>
             </div>
           </div>
@@ -320,6 +321,26 @@
     </dialog>
   </section>
 
+  <section class="card tab-panel" role="tabpanel" data-panel="ip-relations">
+    <div class="dashboard-heading">
+      <div><h2>IP 与用户</h2><p>查看一个 IP 访问过的用户，或一个用户使用过的 IP。</p></div>
+      <button id="ipRelationsRefresh" class="secondary" type="button" onclick="loadIpRelations(true)">刷新数据</button>
+    </div>
+    <form id="ipRelationsForm" class="ip-relations-filters">
+      <label>查询方向<select id="ipRelationsDirection"><option value="ip">IP → 用户</option><option value="user">用户 → IP</option></select></label>
+      <label class="ip-relations-query">查询条件<input id="ipRelationsQuery" type="search" maxlength="64" placeholder="输入完整 IP，留空查看全部关联" aria-label="IP 或用户 UID"></label>
+      <button type="submit">查询</button>
+      <button class="secondary" type="button" onclick="setIpRelationFilter(value('ipRelationsDirection'), '')">重置</button>
+    </form>
+    <p id="ipRelationsSummary" role="status" aria-live="polite">尚未读取关联记录</p>
+    <div id="ipRelationsTable" class="traffic-detail-wrap"><div class="loading-state">正在读取 IP 与用户关联…</div></div>
+    <div class="ip-relations-pagination">
+      <span id="ipRelationsPageStatus"></span>
+      <button id="ipRelationsPrevious" class="secondary" type="button" onclick="changeIpRelationsPage(-1)" disabled>上一页</button>
+      <button id="ipRelationsNext" class="secondary" type="button" onclick="changeIpRelationsPage(1)" disabled>下一页</button>
+    </div>
+    <p class="hint">记录成功业务请求的首次访问、最近访问和累计次数。点击 IP 或用户 UID 可切换查询方向；密码登录次数单独统计。</p>
+  </section>
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <div class="subscription-manager">
       <header class="subscription-manager-header">

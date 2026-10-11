@@ -176,6 +176,7 @@
    accountSecuritySelection.clear();
    deviceRelationsData = null;
    deviceRelationsLoading = false;
+   if (typeof resetIpRelations === 'function') resetIpRelations();
    trafficDetailsData = null;
    closeDeviceRelationDetail();
    if (typeof stopSystemLogAutoRefresh === 'function') stopSystemLogAutoRefresh();
@@ -230,6 +231,9 @@
    }
    if (name === 'system-logs' && !systemLogsData && !systemLogsLoading) {
      loadSystemLogs();
+   }
+   if (name === 'ip-relations' && !ipRelationsData && !ipRelationsLoading) {
+     loadIpRelations();
    }
    if (name === 'system-logs') {
      loadSystemLogRecordingSettings();

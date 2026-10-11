@@ -7,6 +7,7 @@ import type {
   SystemLogRecordingSchedule,
   SystemLogRecordingSettings,
   SystemLogRecordingMode,
+  RequestUserIdentity,
 } from "../types/models.ts";
 
 import { SYSTEM_LOG_SETTINGS_KEY } from "../config.ts";
@@ -308,11 +309,16 @@ function observedDatabase(
   });
 }
 
-export function createObservedEnv(env: Env, sink: (entry: SystemLogDraft) => void): Env {
+export function createObservedEnv(
+  env: Env,
+  sink: (entry: SystemLogDraft) => void,
+  userSink?: (identity: RequestUserIdentity) => void,
+): Env {
   const databases = new Map<PropertyKey, D1Database>();
   return new Proxy(env, {
     get(target, property, receiver) {
       if (property === "__systemLogSink") return sink;
+      if (property === "__requestUserSink" && userSink) return userSink;
       if (property === "USERS_DB" || property === "SUBSCRIPTIONS_DB") {
         const binding = Reflect.get(target, property, receiver) as D1Database | undefined;
         if (!binding) return binding;
@@ -390,6 +396,10 @@ function normalizeDraft(entry: SystemLogDraft) {
     status: Number.isInteger(entry.status) ? Number(entry.status) : null,
     durationMs: Number.isFinite(entry.durationMs) ? Math.max(0, Math.round(Number(entry.durationMs))) : null,
     ip: truncate(entry.ip, 64),
+    userUid: truncate(entry.userUid, 64),
+    deviceId: truncate(entry.deviceId, 64),
+    identitySource: entry.identitySource === "login" || entry.identitySource === "device"
+      ? entry.identitySource : "",
     userAgent: truncate(entry.userAgent, 300),
     message: truncate(entry.message, 300),
     details: truncate(entry.details, MAX_LOG_DETAILS_LENGTH),
@@ -452,12 +462,14 @@ export async function writeSystemLogs(
       return db.prepare(
         `INSERT INTO system_logs_mb (
           occurred_at, category, level, request_id, actor, method, path,
-          status, duration_ms, ip, user_agent, message, details
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          status, duration_ms, ip, user_agent, message, details,
+          user_uid, device_id, identity_source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         value.occurredAt, value.category, value.level, value.requestId,
         value.actor, value.method, value.path, value.status, value.durationMs,
         value.ip, value.userAgent, value.message, value.details,
+        value.userUid, value.deviceId, value.identitySource,
       );
     });
     await db.batch(statements);
@@ -574,39 +586,13 @@ export async function readSystemLogs(
   }
   const query = truncate(filters.query, 100);
   if (query) {
-    conditions.push("(message LIKE ? OR path LIKE ? OR details LIKE ? OR ip LIKE ? OR request_id LIKE ? OR user_agent LIKE ?)");
+    conditions.push("(message LIKE ? OR path LIKE ? OR details LIKE ? OR ip LIKE ? OR request_id LIKE ? OR user_agent LIKE ? OR user_uid LIKE ? OR device_id LIKE ?)");
     const pattern = `%${query}%`;
-    bindings.push(pattern, pattern, pattern, pattern, pattern, pattern);
+    bindings.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern);
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const limit = Math.min(200, Math.max(1, Math.floor(Number(filters.limit) || 100)));
   const offset = Math.min(20000, Math.max(0, Math.floor(Number(filters.offset) || 0)));
-  const statsConditions: string[] = [];
-  const statsBindings: string[] = [];
-  if (endpointPath) {
-    statsConditions.push("category = ?", "path = ?");
-    statsBindings.push("request", endpointPath);
-    if (endpointMethod) {
-      statsConditions.push("method = ?");
-      statsBindings.push(endpointMethod);
-    }
-  } else if (categories.includes(filters.category as SystemLogCategory)) {
-    statsConditions.push("category = ?");
-    statsBindings.push(filters.category as string);
-  }
-  if (startDate) {
-    statsConditions.push("occurred_at >= ?");
-    statsBindings.push(`${startDate}T00:00:00+08:00`);
-  }
-  if (endDate) {
-    statsConditions.push("occurred_at < ?");
-    statsBindings.push(nextDate(endDate));
-  }
-  if (!startDate && !endDate) {
-    statsConditions.push("occurred_at >= ?");
-    statsBindings.push(beijingTimestamp(new Date(Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)));
-  }
-  const statsWhere = statsConditions.length ? `WHERE ${statsConditions.join(" AND ")}` : "";
   const endpointConditions = ["category = 'request'"];
   const endpointBindings: string[] = [];
   if (startDate) {
@@ -634,7 +620,7 @@ export async function readSystemLogs(
       .bind(...bindings).first<{ total: number }>(),
     db.prepare(
       `SELECT id, occurred_at, category, level, request_id, actor, method, path,
-        status, duration_ms, ip, user_agent, message, details
+        status, duration_ms, ip, user_agent, message, details, user_uid, device_id, identity_source
        FROM system_logs_mb ${where}
        ORDER BY occurred_at DESC, id DESC LIMIT ? OFFSET ?`,
     ).bind(...bindings, limit, offset).all<Record<string, unknown>>(),
@@ -643,8 +629,8 @@ export async function readSystemLogs(
         SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) AS error_count,
         SUM(CASE WHEN level = 'warning' THEN 1 ELSE 0 END) AS warning_count,
         ROUND(AVG(duration_ms)) AS average_duration_ms
-       FROM system_logs_mb ${statsWhere}`,
-    ).bind(...statsBindings).first<Record<string, number | null>>(),
+       FROM system_logs_mb ${where}`,
+    ).bind(...bindings).first<Record<string, number | null>>(),
     endpointRowsPromise,
   ]);
   const records: SystemLogRecord[] = (rows.results || []).map((row) => ({
@@ -659,6 +645,9 @@ export async function readSystemLogs(
     status: row.status == null ? null : Number(row.status),
     durationMs: row.duration_ms == null ? null : Number(row.duration_ms),
     ip: String(row.ip || ""),
+    userUid: String(row.user_uid || ""),
+    deviceId: String(row.device_id || ""),
+    identitySource: String(row.identity_source || ""),
     userAgent: String(row.user_agent || ""),
     message: String(row.message || ""),
     details: String(row.details || ""),

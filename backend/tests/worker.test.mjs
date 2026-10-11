@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { createServer } from "node:http";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
+import { USER_SCHEMA_VERSION } from "../src/config.ts";
 
 test("本地 Worker 的账号、订阅和管理接口", async (t) => {
   const buildDir = fileURLToPath(new URL("../.wrangler/build/", import.meta.url));
@@ -47,10 +48,10 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
   const source = "vless://id@example.com:443#test";
   let uid;
 
-  await t.test("健康检查初始化 schema v13，CORS 和管理资源可用", async () => {
+  await t.test("健康检查初始化当前 schema，CORS 和管理资源可用", async () => {
     const { data } = await call("/health");
     assert.equal(data.database.initialized, true);
-    assert.equal(data.database.schemaVersion, 13);
+    assert.equal(data.database.schemaVersion, USER_SCHEMA_VERSION);
     const { response } = await call("/api/client", { method: "OPTIONS", status: 204 });
     assert.equal(response.headers.get("access-control-allow-origin"), "*");
     const html = (await call("/local-admin")).data;

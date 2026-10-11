@@ -104,6 +104,13 @@ export interface DeviceContext {
   appVersion: string;
 }
 
+export interface RequestUserIdentity {
+  userId: number;
+  uid: string;
+  deviceId: string;
+  source: "device" | "login";
+}
+
 export interface SubscriptionAccess {
   accountStatus: SubscriptionAccountStatus;
   accountType: Exclude<AccountType, "banned">;
@@ -193,6 +200,9 @@ export interface SystemLogDraft {
   status?: number | null;
   durationMs?: number | null;
   ip?: string;
+  userUid?: string;
+  deviceId?: string;
+  identitySource?: string;
   userAgent?: string;
   message: string;
   details?: string;

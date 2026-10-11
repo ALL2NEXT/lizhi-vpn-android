@@ -10,21 +10,24 @@ CREATE TABLE users_mb (
   nickname TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'banned')),
+  identity_type TEXT NOT NULL DEFAULT 'human'
+    CHECK (identity_type IN ('human', 'bot')),
   email TEXT COLLATE NOCASE,
   password_hash TEXT NOT NULL DEFAULT '',
+  vip_expires_at TEXT,
   created_at TEXT NOT NULL,
   created_day TEXT GENERATED ALWAYS AS (substr(created_at, 1, 10)) VIRTUAL
 );
 
 CREATE INDEX idx_users_mb_created_at
-  ON users_mb(created_at DESC);
+ON users_mb(created_at DESC);
 
 CREATE INDEX idx_users_mb_created_day
-  ON users_mb(created_day);
+ON users_mb(created_day);
 
 CREATE UNIQUE INDEX idx_users_mb_email
-  ON users_mb(email)
-  WHERE email IS NOT NULL AND email <> '';
+ON users_mb(email)
+WHERE email IS NOT NULL AND email <> '';
 
 CREATE TABLE registration_codes_mb (
   id INTEGER PRIMARY KEY,
@@ -39,7 +42,21 @@ CREATE TABLE registration_codes_mb (
 );
 
 CREATE INDEX idx_registration_codes_mb_status
-  ON registration_codes_mb(use_count, max_uses, created_at DESC, id DESC);
+ON registration_codes_mb(use_count, max_uses, created_at DESC, id DESC);
+
+CREATE TABLE vip_activation_codes_mb (
+  id INTEGER PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  duration_days INTEGER NOT NULL CHECK (duration_days BETWEEN 1 AND 36500),
+  created_at TEXT NOT NULL,
+  used_at TEXT,
+  used_by_user_id INTEGER,
+  used_by_uid TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY (used_by_user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_vip_activation_codes_mb_status
+ON vip_activation_codes_mb(used_at, created_at DESC, id DESC);
 
 CREATE TABLE registration_code_usages_mb (
   id INTEGER PRIMARY KEY,
@@ -54,7 +71,7 @@ CREATE TABLE registration_code_usages_mb (
 );
 
 CREATE INDEX idx_registration_code_usages_mb_code
-  ON registration_code_usages_mb(registration_code_id, use_number);
+ON registration_code_usages_mb(registration_code_id, use_number);
 
 CREATE TRIGGER trg_registration_code_usage_validate_mb
 BEFORE INSERT ON registration_code_usages_mb
@@ -94,7 +111,7 @@ CREATE TABLE user_devices_mb (
 );
 
 CREATE INDEX idx_user_devices_mb_user_seen
-  ON user_devices_mb(user_id, last_seen_at DESC, id DESC);
+ON user_devices_mb(user_id, last_seen_at DESC, id DESC);
 
 CREATE TABLE device_account_links_mb (
   id INTEGER PRIMARY KEY,
@@ -109,8 +126,8 @@ CREATE TABLE device_account_links_mb (
 );
 
 CREATE INDEX idx_device_account_links_mb_user
-  ON device_account_links_mb(user_id, device_row_id)
-  WHERE user_id IS NOT NULL;
+ON device_account_links_mb(user_id, device_row_id)
+WHERE user_id IS NOT NULL;
 
 CREATE TABLE device_bans_mb (
   device_row_id INTEGER NOT NULL,
@@ -123,8 +140,8 @@ CREATE TABLE device_bans_mb (
 );
 
 CREATE INDEX idx_device_bans_mb_active
-  ON device_bans_mb(device_row_id)
-  WHERE lifted_at IS NULL;
+ON device_bans_mb(device_row_id)
+WHERE lifted_at IS NULL;
 
 CREATE TRIGGER trg_users_ban_devices_mb
 AFTER UPDATE OF status ON users_mb
@@ -174,10 +191,10 @@ CREATE TABLE user_usage_mb (
 );
 
 CREATE INDEX idx_user_usage_mb_user_ended
-  ON user_usage_mb(user_id, ended_at DESC);
+ON user_usage_mb(user_id, ended_at DESC);
 
 CREATE INDEX idx_user_usage_mb_day_user
-  ON user_usage_mb(usage_day, user_id);
+ON user_usage_mb(usage_day, user_id);
 
 CREATE TABLE subscription_group_assignments_mb (
   group_id TEXT NOT NULL,
@@ -190,7 +207,71 @@ CREATE TABLE subscription_group_assignments_mb (
 );
 
 CREATE INDEX idx_subscription_group_assignments_capacity_mb
-  ON subscription_group_assignments_mb(group_id, source_key, assigned_at);
+ON subscription_group_assignments_mb(group_id, source_key, assigned_at);
+
+CREATE TABLE system_logs_mb (
+  id INTEGER PRIMARY KEY,
+  occurred_at TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('request', 'operation', 'database', 'outbound')),
+  level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error')),
+  request_id TEXT NOT NULL DEFAULT '',
+  actor TEXT NOT NULL DEFAULT '',
+  method TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL DEFAULT '',
+  status INTEGER,
+  duration_ms INTEGER,
+  ip TEXT NOT NULL DEFAULT '',
+  user_uid TEXT NOT NULL DEFAULT '',
+  device_id TEXT NOT NULL DEFAULT '',
+  identity_source TEXT NOT NULL DEFAULT '',
+  user_agent TEXT NOT NULL DEFAULT '',
+  message TEXT NOT NULL,
+  details TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX idx_system_logs_mb_occurred
+ON system_logs_mb(occurred_at DESC, id DESC);
+
+CREATE INDEX idx_system_logs_mb_category_occurred
+ON system_logs_mb(category, occurred_at DESC, id DESC);
+
+CREATE TABLE system_log_payload_parts_mb (
+  request_id TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  part_index INTEGER NOT NULL CHECK (part_index >= 0),
+  part_count INTEGER NOT NULL CHECK (part_count > 0),
+  content TEXT NOT NULL,
+  PRIMARY KEY (request_id, part_index)
+);
+
+CREATE INDEX idx_system_log_payload_parts_occurred_mb
+ON system_log_payload_parts_mb(occurred_at);
+
+CREATE INDEX idx_system_logs_mb_user_occurred
+ON system_logs_mb(user_uid, occurred_at DESC, id DESC) WHERE user_uid <> '';
+
+CREATE TABLE user_ip_links_mb (
+  user_uid TEXT NOT NULL,
+  ip TEXT NOT NULL,
+  user_id INTEGER,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  last_device_id TEXT NOT NULL,
+  request_count INTEGER NOT NULL DEFAULT 0 CHECK (request_count >= 0),
+  subscription_count INTEGER NOT NULL DEFAULT 0 CHECK (subscription_count >= 0),
+  login_count INTEGER NOT NULL DEFAULT 0 CHECK (login_count >= 0),
+  PRIMARY KEY (user_uid, ip),
+  FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_user_ip_links_mb_ip_seen
+ON user_ip_links_mb(ip, last_seen_at DESC, user_uid);
+
+CREATE INDEX idx_user_ip_links_mb_user_seen
+ON user_ip_links_mb(user_uid, last_seen_at DESC, ip);
+
+CREATE INDEX idx_user_ip_links_mb_seen
+ON user_ip_links_mb(last_seen_at DESC, user_uid, ip);
 
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 13, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 20, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

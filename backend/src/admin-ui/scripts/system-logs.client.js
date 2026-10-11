@@ -664,6 +664,9 @@ function renderSystemLogDetails() {
       systemLogDetailField('状态码', status) +
       systemLogDetailField('耗时', record.durationMs == null ? '-' : Number(record.durationMs).toLocaleString() + ' ms') +
       systemLogDetailField('来源 IP', record.ip, record.ip) +
+      systemLogDetailField('用户 UID', record.userUid, record.userUid) +
+      systemLogDetailField('设备 ID', record.deviceId, record.deviceId) +
+      systemLogDetailField('身份来源', record.identitySource === 'login' ? '密码登录' : record.identitySource === 'device' ? '设备关联' : '-') +
       systemLogDetailField('请求 ID', record.requestId, record.requestId) +
       systemLogDetailField('类型', systemLogCategoryName(record.category)) +
       systemLogDetailField('级别', systemLogLevelName(record.level)) +

@@ -888,6 +888,15 @@
     .traffic-upload i { background: #34a853; }
     .traffic-download i { background: #a142f4; }
     .traffic-total i { background: #f9ab00; }
+    .ip-relations-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
+    .ip-relations-filters label { display: grid; gap: 6px; min-width: 150px; }
+    .ip-relations-filters .ip-relations-query { flex: 1; min-width: 240px; }
+    .ip-relations-filters button { margin: 0; }
+    .ip-relations-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .ip-relations-pagination span { flex: 1; color: var(--muted); font-size: 13px; }
+    .ip-relations-table button.ip-relation-link { margin: 0; padding: 2px 0; border: 0; border-radius: 2px; background: transparent; color: var(--blue-ink); font: inherit; text-align: left; overflow-wrap: anywhere; }
+    .ip-relations-table button.ip-relation-link:hover { background: transparent; text-decoration: underline; }
+    .ip-relation-user-status { margin-left: 8px; color: var(--muted); }
     .traffic-detail-wrap, .security-account-list, .system-logs-wrap,
     .table-wrap, .user-table-scroll, .security-device-wrap {
       background: var(--surface);

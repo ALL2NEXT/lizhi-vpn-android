@@ -30,6 +30,7 @@ import {
 } from "../domain/account.ts";
 import { beijingTimestamp, usagePeriodKeys } from "../domain/time.ts";
 import { cleanText } from "../lib/values.ts";
+import { observeRequestUser } from "../http/request.ts";
 
 let userSchemaReady = false;
 let userSchemaInitialization: Promise<number> | null = null;
@@ -163,10 +164,11 @@ export async function resolveUserIdentity(env: Env, reference: unknown) {
 
 export async function resolveDeviceIdentity(env: Env, value: unknown) {
   const context = await readDeviceContext(env, value);
-  return context && !context.deviceBanned && context.userStatus === "active" &&
-      context.userId > 0
-    ? context
-    : null;
+  if (!context || context.deviceBanned || context.userStatus !== "active" || context.userId <= 0) {
+    return null;
+  }
+  observeRequestUser(env, context);
+  return context;
 }
 
 export async function readDeviceContext(env: Env, value: unknown) {
@@ -253,6 +255,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
       registered: false,
     };
   }
+  observeRequestUser(env, identity);
   return {
     accountStatus: row.status === "banned" || identity.deviceBanned ? "banned" : "normal",
     accountType: cleanText(row.email) ? "formal" : "guest",

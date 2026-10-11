@@ -17,6 +17,7 @@ interface SecurityDevice {
 
 import type { Env } from "../../types/env.ts";
 import type { RouteDependencies } from "../../types/routes.ts";
+import { readUserIpLinks } from "../../services/user-ip-links.ts";
 
 /*
  * Device inventory and account security read routes.
@@ -47,6 +48,22 @@ export function createAdminSecurityRoutes(deps: Pick<
   } = deps;
 
   return async function handleAdminSecurity(path: string, request: Request, env: Env) {
+    if (path === "/api/ip-relations" && request.method === "GET") {
+      const url = new URL(request.url);
+      try {
+        return json(await readUserIpLinks(env, {
+          ip: url.searchParams.get("ip") || undefined,
+          uid: url.searchParams.get("uid") || undefined,
+          limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined,
+          offset: url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : undefined,
+        }));
+      } catch (error) {
+        if (error instanceof Error && (error.message === "invalid_ip" || error.message === "invalid_uid")) {
+          return json({ ok: false, error: error.message }, 400);
+        }
+        throw error;
+      }
+    }
   if (path === "/api/device-relations" && request.method === "GET") {
       const requestUrl = new URL(request.url);
       const requestedLimit = Number(requestUrl.searchParams.get("limit"));

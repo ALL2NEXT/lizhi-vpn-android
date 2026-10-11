@@ -74,7 +74,31 @@ const SYSTEM_LOG_PAYLOADS_SCHEMA = `CREATE TABLE IF NOT EXISTS system_log_payloa
 const SYSTEM_LOG_PAYLOADS_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_log_payload_parts_occurred_mb
   ON system_log_payload_parts_mb(occurred_at)`;
 
-export const USER_SCHEMA_VERSION = 19;
+const USER_IP_LINKS_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS user_ip_links_mb (
+    user_uid TEXT NOT NULL,
+    ip TEXT NOT NULL,
+    user_id INTEGER,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    last_device_id TEXT NOT NULL,
+    request_count INTEGER NOT NULL DEFAULT 0 CHECK (request_count >= 0),
+    subscription_count INTEGER NOT NULL DEFAULT 0 CHECK (subscription_count >= 0),
+    login_count INTEGER NOT NULL DEFAULT 0 CHECK (login_count >= 0),
+    PRIMARY KEY (user_uid, ip),
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_user_ip_links_mb_ip_seen
+    ON user_ip_links_mb(ip, last_seen_at DESC, user_uid)`,
+  `CREATE INDEX IF NOT EXISTS idx_user_ip_links_mb_user_seen
+    ON user_ip_links_mb(user_uid, last_seen_at DESC, ip)`,
+  `CREATE INDEX IF NOT EXISTS idx_user_ip_links_mb_seen
+    ON user_ip_links_mb(last_seen_at DESC, user_uid, ip)`,
+];
+const SYSTEM_LOG_USER_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_user_occurred
+  ON system_logs_mb(user_uid, occurred_at DESC, id DESC) WHERE user_uid <> ''`;
+
+export const USER_SCHEMA_VERSION = 20;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -234,6 +258,9 @@ export const USER_SCHEMA_STATEMENTS = [
     status INTEGER,
     duration_ms INTEGER,
     ip TEXT NOT NULL DEFAULT '',
+    user_uid TEXT NOT NULL DEFAULT '',
+    device_id TEXT NOT NULL DEFAULT '',
+    identity_source TEXT NOT NULL DEFAULT '',
     user_agent TEXT NOT NULL DEFAULT '',
     message TEXT NOT NULL,
     details TEXT NOT NULL DEFAULT ''
@@ -244,6 +271,8 @@ export const USER_SCHEMA_STATEMENTS = [
     ON system_logs_mb(category, occurred_at DESC, id DESC)`,
   SYSTEM_LOG_PAYLOADS_SCHEMA,
   SYSTEM_LOG_PAYLOADS_INDEX,
+  SYSTEM_LOG_USER_INDEX,
+  ...USER_IP_LINKS_SCHEMA_STATEMENTS,
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
@@ -455,6 +484,13 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
   19: [
     `UPDATE users_mb SET identity_type = 'human'
       WHERE identity_type NOT IN ('human', 'bot')`,
+  ],
+  20: [
+    ...USER_IP_LINKS_SCHEMA_STATEMENTS,
+    `ALTER TABLE system_logs_mb ADD COLUMN user_uid TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE system_logs_mb ADD COLUMN device_id TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE system_logs_mb ADD COLUMN identity_source TEXT NOT NULL DEFAULT ''`,
+    SYSTEM_LOG_USER_INDEX,
   ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {

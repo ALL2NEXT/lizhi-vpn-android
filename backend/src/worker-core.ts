@@ -42,6 +42,8 @@ import {
 import { beijingTimestamp, normalizeReportTimestamp, usagePeriodKeys } from "./domain/time.ts";
 import { corsHeaders, isAdmin, json } from "./http/responses.ts";
 import { cleanText } from "./lib/values.ts";
+import { normalizeClientIp } from "./domain/ip.ts";
+import { writeUserIpLink } from "./services/user-ip-links.ts";
 import { createAccountRoutes } from "./routes/account.ts";
 import { createAdminRoutes } from "./routes/admin.ts";
 import { createClientRoutes } from "./routes/client.ts";
@@ -84,6 +86,7 @@ import type {
   SystemLogHttpBodyCapture,
   SystemLogHttpCapture,
   SystemLogRecordingSettings,
+  RequestUserIdentity,
 } from "./types/models.ts";
 import {
   createObservedEnv,
@@ -177,7 +180,7 @@ function safeRequestPath(path: string) {
 }
 
 function requestIp(request: Request) {
-  return String(request.headers.get("CF-Connecting-IP") || "").trim().slice(0, 64);
+  return normalizeClientIp(request.headers.get("CF-Connecting-IP"));
 }
 
 function serializeHeaders(headers: Headers): [string, string][] {
@@ -373,8 +376,18 @@ const worker = {
         occurredAt: entry.occurredAt || beijingTimestamp(),
       });
     };
-    const observedEnv = createObservedEnv(env, sink);
+    const requestContext: { user: RequestUserIdentity | null } = { user: null };
+    const isClientRequest = path === "/api/client" ||
+      path.startsWith("/api/subscription/") || path.startsWith("/api/account/");
+    const observedEnv = createObservedEnv(env, sink, isClientRequest
+      ? (identity) => { requestContext.user = identity; }
+      : undefined);
     const response = await dispatchWorkerRequest(request, observedEnv);
+    const userFields = {
+      userUid: requestContext.user?.uid || "",
+      deviceId: requestContext.user?.deviceId || "",
+      identitySource: requestContext.user?.source || "",
+    };
     const durationMs = Math.round(performance.now() - startedAt);
     const authorizedAdmin = isAdminApi && request.method !== "OPTIONS" && response.status !== 401;
     const level = response.status >= 500 ? "error" : response.status >= 400 ? "warning" : "info";
@@ -384,9 +397,10 @@ const worker = {
         ? "未认证"
         : "";
     const entries: SystemLogDraft[] = [
-      ...diagnostics.map((entry) => ({ ...entry, actor: entry.actor || actor })),
+      ...diagnostics.map((entry) => ({ ...entry, ...userFields, actor: entry.actor || actor })),
       {
         category: "request",
+        ...userFields,
         level,
         requestId,
         actor,
@@ -434,8 +448,14 @@ const worker = {
       }
       await writeSystemLogs(env, entries, recordingSettings);
     })();
-    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(persist);
-    else await persist;
+    const persistAll = Promise.all([
+      persist,
+      writeUserIpLink(env, requestContext.user, {
+        ip: requestIp(request), occurredAt, path, status: response.status,
+      }),
+    ]);
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(persistAll);
+    else await persistAll;
     return response;
   },
   scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
