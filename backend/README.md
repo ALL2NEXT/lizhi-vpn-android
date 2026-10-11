@@ -84,6 +84,7 @@ PUT  /<ADMIN_PATH>/api/ai-risk/settings
 GET  /<ADMIN_PATH>/api/ai-risk/models
 POST /<ADMIN_PATH>/api/ai-risk/test
 GET  /<ADMIN_PATH>/api/ai-risk/data?windowHours=24
+GET  /<ADMIN_PATH>/api/ai-risk/dashboard-data?windowHours=24
 POST /<ADMIN_PATH>/api/ai-risk/analyze
 ```
 

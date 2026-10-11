@@ -39,10 +39,65 @@ function harness() {
 }
 
 test("后台包含 Gemini 风控设置、模型获取与分析入口", () => {
-  for (const id of ["aiRiskEnabled", "aiRiskModel", "aiRiskThinkingLevel", "aiRiskApiKeys", "aiRiskLoadModels", "aiRiskSave", "aiRiskTest", "aiRiskAnalyze", "aiRiskPreview"]) {
+  for (const id of ["aiRiskEnabled", "aiRiskModel", "aiRiskThinkingLevel", "aiRiskApiKeys", "aiRiskLoadModels", "aiRiskSave", "aiRiskTest", "aiRiskAnalyze", "aiRiskPreview", "aiRiskRefresh", "aiRiskSettingsPanel", "aiRiskSettingsToggle", "aiRiskSearch"]) {
     assert.ok(documentHtml.includes(`id="${id}"`), `缺少 ${id}`);
   }
   assert.ok(documentHtml.includes('data-tab="ai-risk"'));
+  assert.ok(documentHtml.includes('data-ai-risk-filter="pending"'));
+});
+
+test("dashboard data route populates the IP risk view", async () => {
+  const h = harness();
+  h.setHandler(async url => {
+    if (url.includes("/ai-risk/dashboard-data")) return {
+      ok: true,
+      dataset: {
+        generatedAt: "2026-10-11T21:00:00+08:00",
+        summary: {requestCount: 12},
+        coverage: {requestRowsTruncated: false},
+        subjects: [{ip: "203.0.113.9", uid: "acct-1", requestCount: 12, subscriptionRequests: 9, successfulSubscriptions: 8, clientErrors: 1, serverErrors: 0, firstSeenAt: "2026-10-11T08:00:00+08:00", lastSeenAt: "2026-10-11T21:00:00+08:00"}],
+        hourlyActivity: [{ip: "203.0.113.9", hours: [[2, 3, 2, 0], [8, 9, 7, 1]]}],
+        endpointActivity: [{ip: "203.0.113.9", method: "GET", path: "/api/subscription/list", requests: 9, successfulRequests: 8, clientErrors: 1, serverErrors: 0}],
+        ipRelations: [{ip: "203.0.113.9", knownAccountCount: 1, users: [{uid: "acct-1", requestCount: 12, subscriptionCount: 9, loginCount: 1, lastSeenAt: "2026-10-11T21:00:00+08:00", accountStatus: "active"}]}],
+      },
+    };
+    return {ok: true};
+  });
+  h.el("aiRiskWindowHours").value = "24";
+  await h.run("loadAiRiskDashboard(false)");
+  assert.ok(h.calls.some(call => call.url.includes("/ai-risk/dashboard-data?windowHours=24")));
+  assert.equal(h.el("aiRiskMetricIps").textContent, "1");
+  assert.equal(h.el("aiRiskMetricRequests").textContent, "12");
+  assert.ok(h.el("aiRiskResults").innerHTML.includes("203.0.113.9"));
+  assert.ok(h.el("aiRiskResults").innerHTML.includes('data-ip="203.0.113.9"'));
+  assert.equal(h.el("aiRiskResults").innerHTML.includes("/api/subscription/list"), false);
+});
+
+test("IP 风险卡片使用模型分数，并通过 IP 标识处理展开事件", () => {
+  const h = harness();
+  h.run(`aiRiskDashboard = {
+    summary: {requestCount: 12}, coverage: {},
+    subjects: [{ip: "203.0.113.9", uid: "acct-1", requestCount: 12, subscriptionRequests: 9, successfulSubscriptions: 8, clientErrors: 1, serverErrors: 0, firstSeenAt: "", lastSeenAt: ""}],
+    hourlyActivity: [], endpointActivity: [],
+    ipRelations: [{ip: "203.0.113.9", knownAccountCount: 1, users: [{uid: "acct-1", requestCount: 12, subscriptionCount: 9, loginCount: 1, lastSeenAt: "", accountStatus: "active"}] }],
+  }; aiRiskAnalysis = {findings: [{ip: "203.0.113.9", uids: ["acct-1"], riskLevel: "medium", riskScore: 65, title: "review", rationale: "reason", evidence: [], recommendation: "review"}]}; aiRiskRenderDashboard()`);
+  let rendered = h.el("aiRiskResults").innerHTML;
+  assert.ok(rendered.includes("65/100"));
+  assert.ok(rendered.includes("建议人工复核"));
+  assert.ok(rendered.includes("<p>reason</p>"));
+  assert.ok(rendered.includes("<p>review</p>"));
+  assert.ok(rendered.includes('data-ip="203.0.113.9"'));
+  h.run("aiRiskAnalysis.findings[0].riskScore = 101; aiRiskRenderDashboard()");
+  rendered = h.el("aiRiskResults").innerHTML;
+  assert.equal(rendered.includes("101/100"), false);
+  assert.ok(rendered.includes("风险级别"));
+  h.run("aiRiskAnalysis.findings[0].riskScore = 65; aiRiskRenderDashboard()");
+  h.run(`aiRiskHandlePageClick({target: {closest: () => ({
+    getAttribute: name => name === "data-ai-risk-action" ? "expand" : name === "aria-expanded" ? "true" : null,
+    closest: () => ({getAttribute: () => "203.0.113.9"}),
+  })}})`);
+  rendered = h.el("aiRiskResults").innerHTML;
+  assert.equal(rendered.includes('class="ai-risk-ip-card risk-border-medium expanded"'), false);
 });
 
 test("加载配置不回填 API Key，保存提交多 Key 输入并保留掩码", async () => {
@@ -91,7 +146,7 @@ test("分析结果转义 IP、UID 与模型文本，且要求人工复核", asyn
   const h = harness();
   h.el("aiRiskEnabled").checked = true;
   h.el("aiRiskWindowHours").value = "24";
-  h.run("aiRiskSettingsLoaded = true");
+  h.run("aiRiskSettingsLoaded = true; aiRiskDashboard = {subjects: [], ipRelations: [], hourlyActivity: [], endpointActivity: [], summary: {requestCount: 0}, coverage: {}}");
   h.setHandler(async () => ({
     ok: true,
     model: "gemini-3.8-flash",
@@ -104,6 +159,7 @@ test("分析结果转义 IP、UID 与模型文本，且要求人工复核", asyn
     }],
   }));
   await h.run("runAiRiskAnalysis()");
+  h.run('aiRiskActiveViews["<img src=x>"] = "accounts"; aiRiskRenderDashboard()');
   const rendered = h.el("aiRiskResults").innerHTML;
   assert.ok(rendered.includes("&lt;img"));
   assert.ok(rendered.includes("&lt;svg"));

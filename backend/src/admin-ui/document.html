@@ -323,37 +323,74 @@
   </section>
 
   <section class="card tab-panel" role="tabpanel" data-panel="ai-risk">
-    <div class="dashboard-heading">
-      <div><h2>AI 风控分析</h2><p>配置 Google Gemini，按需分析请求行为与 IP 关联；分析结果仅供管理员复核，不会自动封禁。</p></div>
-    </div>
-    <div class="ai-risk-layout">
-      <section class="settings-section ai-risk-config">
-        <h3 class="settings-section-title">Gemini 配置</h3>
-        <p class="settings-section-description">API Key 保存在服务端配置中，读取接口只返回是否已配置，不会回显密钥。</p>
-        <label class="ai-risk-toggle"><input id="aiRiskEnabled" type="checkbox"><span>启用 Gemini 风控分析</span></label>
-        <div class="field ai-risk-model-field">
-          <label for="aiRiskModel">模型名称</label>
-          <div class="ai-risk-model-row"><input id="aiRiskModel" type="text" maxlength="100" list="aiRiskModelOptions" value="gemini-3.8-flash" autocomplete="off"><button id="aiRiskLoadModels" class="secondary" type="button">获取可用模型</button></div>
-          <datalist id="aiRiskModelOptions"></datalist>
-          <small id="aiRiskModelStatus">可手动填写，也可从已配置的 Key 获取支持 generateContent 的模型。</small>
-          <small id="aiRiskModelDetails"></small>
+    <div id="aiRiskPage" class="ai-risk-page">
+      <main class="ai-risk-main" aria-labelledby="aiRiskTitle">
+        <header class="ai-risk-header">
+          <div class="ai-risk-title-group">
+            <span class="ai-risk-brand-mark" aria-hidden="true">AI</span>
+            <div><h2 id="aiRiskTitle">AI 风控分析</h2><p>基于日志行为分析，辅助识别异常 IP 与账户模式；分析结果由管理员复核，不会自动封禁。</p></div>
+          </div>
+          <div class="ai-risk-header-meta">
+            <span>最近分析 <strong id="aiRiskLastAnalysis">尚未分析</strong></span>
+            <span>耗时 <strong id="aiRiskAnalysisDuration">—</strong></span>
+            <span>模型 <strong id="aiRiskHeaderModel">Gemini</strong></span>
+            <span id="aiRiskConnectionIndicator" class="ai-risk-connection">未配置</span>
+            <button id="aiRiskSettingsToggle" class="secondary" type="button" aria-controls="aiRiskSettingsPanel" aria-expanded="true">模型设置</button>
+          </div>
+        </header>
+
+        <div class="ai-risk-toolbar">
+          <label class="ai-risk-window-field"><span>分析时间窗</span><select id="aiRiskWindowHours"><option value="24">最近 24 小时</option><option value="72">最近 3 天</option><option value="168">最近 7 天</option></select></label>
+          <div class="ai-risk-toolbar-actions">
+            <button id="aiRiskAnalyze" type="button">运行 AI 风控分析</button>
+            <button id="aiRiskRefresh" class="secondary" type="button">刷新数据</button>
+          </div>
         </div>
-        <label class="field">思考强度<select id="aiRiskThinkingLevel"><option value="auto">模型默认</option><option value="low">低</option><option value="medium" selected>中</option><option value="high">高</option></select><small>Gemini 3 使用 thinkingLevel，Gemini 2.5 自动映射为 thinkingBudget；其它模型使用自身默认值。</small></label>
-        <label class="field">Google AI API Key<input id="aiRiskApiKeys" type="password" maxlength="10000" autocomplete="new-password" placeholder="未设置"><small id="aiRiskKeyStatus">支持最多 20 个 Key，用英文逗号或分号分隔；留空保留当前配置。</small></label>
-        <label class="ai-risk-toggle"><input id="aiRiskClearKeys" type="checkbox"><span>保存时清除已保存的 API Key</span></label>
-        <div class="ai-risk-actions"><button id="aiRiskSave" type="button">保存配置</button><button id="aiRiskTest" class="secondary" type="button">测试 Gemini 连接</button></div>
-        <p id="aiRiskSettingsStatus" class="ai-risk-status" role="status" aria-live="polite"></p>
-      </section>
-      <section class="settings-section ai-risk-run">
-        <h3 class="settings-section-title">风控分析</h3>
-        <p class="settings-section-description">只在手动触发时调用 Gemini，不会定时请求或自动采取封禁操作。</p>
-        <label class="field">分析时间窗<select id="aiRiskWindowHours"><option value="24">最近 24 小时</option><option value="72">最近 3 天</option><option value="168">最近 7 天</option></select></label>
-        <div class="ai-risk-actions"><button id="aiRiskAnalyze" type="button">运行 AI 风控分析</button><button id="aiRiskPreview" class="secondary" type="button">预览脱敏数据</button></div>
-        <p class="ai-risk-privacy">发送给 Google 的数据会将 IP 和 UID 替换为本次分析专用的随机引用标记，不包含请求正文、密码或订阅内容。数据受系统日志记录开关与保留期影响。</p>
+
+        <section class="ai-risk-metrics" aria-label="风险数据摘要">
+          <article class="ai-risk-metric"><span>分析 IP 数量</span><strong id="aiRiskMetricIps">—</strong><small>当前时间窗内有请求的 IP</small></article>
+          <article class="ai-risk-metric risk-high"><span>高风险</span><strong id="aiRiskMetricHigh">0</strong><small>需要优先复核</small></article>
+          <article class="ai-risk-metric risk-medium"><span>中风险</span><strong id="aiRiskMetricMedium">0</strong><small>建议人工复核</small></article>
+          <article class="ai-risk-metric risk-low"><span>低风险</span><strong id="aiRiskMetricLow">0</strong><small>暂未发现明显异常</small></article>
+          <article class="ai-risk-metric"><span>总请求数</span><strong id="aiRiskMetricRequests">—</strong><small id="aiRiskCoverage">统计系统日志记录范围</small></article>
+        </section>
+
+        <div class="ai-risk-list-toolbar">
+          <div class="ai-risk-filter-tabs" role="tablist" aria-label="按风险筛选">
+            <button type="button" role="tab" class="active" aria-selected="true" data-ai-risk-filter="all">全部 IP <span id="aiRiskCountAll">0</span></button>
+            <button type="button" role="tab" aria-selected="false" data-ai-risk-filter="high">高风险 <span id="aiRiskCountHigh">0</span></button>
+            <button type="button" role="tab" aria-selected="false" data-ai-risk-filter="medium">中风险 <span id="aiRiskCountMedium">0</span></button>
+            <button type="button" role="tab" aria-selected="false" data-ai-risk-filter="low">低风险 <span id="aiRiskCountLow">0</span></button>
+            <button type="button" role="tab" aria-selected="false" data-ai-risk-filter="pending">待复核 <span id="aiRiskCountPending">0</span></button>
+          </div>
+          <div class="ai-risk-list-controls">
+            <label><span class="sr-only">排序方式</span><select id="aiRiskSort"><option value="risk">按风险等级排序</option><option value="requests">按请求数排序</option><option value="recent">按最近访问排序</option></select></label>
+            <label><span class="sr-only">搜索 IP 或账户</span><input id="aiRiskSearch" type="search" placeholder="搜索 IP 或账户…" autocomplete="off"></label>
+          </div>
+        </div>
+
         <p id="aiRiskAnalysisStatus" class="ai-risk-status" role="status" aria-live="polite"></p>
         <pre id="aiRiskDataPreview" class="ai-risk-data-preview" hidden></pre>
-        <div id="aiRiskResults" class="ai-risk-results"><div class="loading-state">尚未运行分析</div></div>
-      </section>
+        <div id="aiRiskResults" class="ai-risk-results" aria-live="polite"><div class="loading-state">正在读取风险数据…</div></div>
+      </main>
+
+      <aside id="aiRiskSettingsPanel" class="ai-risk-settings-panel" aria-label="模型设置">
+        <div class="ai-risk-settings-heading"><h3>模型设置</h3><button id="aiRiskSettingsClose" class="ai-risk-icon-button" type="button" aria-label="关闭模型设置">关闭</button></div>
+        <div class="ai-risk-settings-body">
+          <section class="ai-risk-settings-section">
+            <h4>基础配置</h4>
+            <label class="ai-risk-switch-row"><span>启用 Gemini 风控分析</span><input id="aiRiskEnabled" type="checkbox" role="switch"></label>
+            <label class="field ai-risk-model-field"><span>模型名称</span><span class="ai-risk-model-row"><input id="aiRiskModel" type="text" maxlength="100" list="aiRiskModelOptions" value="gemini-3.8-flash" autocomplete="off"><button id="aiRiskLoadModels" class="secondary" type="button">获取模型</button></span><datalist id="aiRiskModelOptions"></datalist><small id="aiRiskModelStatus">可手动填写，也可获取已配置 Key 可用的 Gemini 模型。</small><small id="aiRiskModelDetails"></small></label>
+            <label class="field">Google AI API Key<input id="aiRiskApiKeys" type="password" maxlength="10000" autocomplete="new-password" placeholder="未设置"><small id="aiRiskKeyStatus">支持最多 20 个 Key，用英文逗号或分号分隔；留空保留当前配置。</small></label>
+            <div class="ai-risk-key-actions"><p id="aiRiskSettingsStatus" class="ai-risk-status" role="status" aria-live="polite"></p><button id="aiRiskTest" class="secondary" type="button">测试连接</button></div>
+            <label class="field ai-risk-thinking-field">思考强度<select id="aiRiskThinkingLevel"><option value="auto">模型默认</option><option value="low">低</option><option value="medium" selected>中</option><option value="high">高</option></select><small>Gemini 3 使用 thinkingLevel，Gemini 2.5 映射为 thinkingBudget；其它模型使用默认值。</small></label>
+            <label class="ai-risk-clear-keys"><input id="aiRiskClearKeys" type="checkbox"><span>保存时清除已保存的 API Key</span></label>
+            <button id="aiRiskSave" class="ai-risk-save" type="button">保存配置</button>
+          </section>
+          <details class="ai-risk-advanced"><summary>高级设置与数据说明</summary><div><p>分析仅由管理员手动触发，不会定时请求或自动采取封禁操作。</p><p>发送给 Google 的数据会将 IP 和 UID 替换为本次分析专用的随机引用标记，不包含请求正文、密码或订阅内容。</p><p>本地展示的 IP 与账户仅用于后台复核，数据受系统日志开关和保留期影响。</p><button id="aiRiskPreview" class="secondary" type="button">预览发送给 Gemini 的脱敏数据</button></div></details>
+        </div>
+      </aside>
+      <button id="aiRiskSettingsScrim" class="ai-risk-settings-scrim" type="button" aria-label="关闭模型设置" hidden></button>
     </div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="ip-relations">

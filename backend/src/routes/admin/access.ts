@@ -5,6 +5,7 @@ import {
   AiRiskError,
   analyzeAiRisk,
   listGeminiModels,
+  readAiRiskDashboardData,
   readAiRiskDataset,
   readAiRiskSettings,
   testGeminiConnection,
@@ -76,6 +77,17 @@ export function createAdminAccessRoutes(deps: Pick<
       } catch (error) {
         const status = error instanceof AiRiskError ? error.status : 500;
         const code = error instanceof AiRiskError ? error.code : "ai_risk_data_read_failed";
+        return json({ ok: false, error: code }, status);
+      }
+    }
+
+    if (path === "/api/ai-risk/dashboard-data" && request.method === "GET") {
+      try {
+        const hours = new URL(request.url).searchParams.get("windowHours");
+        return json({ ok: true, dataset: await readAiRiskDashboardData(env, hours === null ? 24 : Number(hours)) });
+      } catch (error) {
+        const status = error instanceof AiRiskError ? error.status : 500;
+        const code = error instanceof AiRiskError ? error.code : "ai_risk_dashboard_data_read_failed";
         return json({ ok: false, error: code }, status);
       }
     }

@@ -84,6 +84,14 @@ test("Gemini 2.5 与 Gemini 3 分别使用兼容的思考参数映射", () => {
 
   assert.equal(gemini3.responseFormat.text.mimeType, "application/json");
   assert.equal(Object.hasOwn(gemini3, "responseMimeType"), false);
+  const findingSchema = gemini3.responseFormat.text.schema.properties.findings.items;
+  assert.deepEqual(findingSchema.properties.riskScore, {
+    type: "INTEGER",
+    minimum: 0,
+    maximum: 100,
+    description: "0 到 100 的风控排查优先级分数，不代表风险发生概率。",
+  });
+  assert.ok(findingSchema.required.includes("riskScore"));
 
   const modelDefault = buildGeminiGenerationConfig("gemini-2.0-flash", true, "auto");
   assert.equal(Object.hasOwn(modelDefault, "thinkingConfig"), false);

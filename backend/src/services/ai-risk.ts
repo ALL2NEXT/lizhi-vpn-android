@@ -477,18 +477,58 @@ export async function readAiRiskDataset(env: Env, windowHours: unknown = 24) {
   return dataset;
 }
 
+/**
+ * 为已鉴权的后台展示聚合风险对象；真实 IP/UID 不会进入发往 Gemini 的脱敏数据。
+ */
+export async function readAiRiskDashboardData(env: Env, windowHours: unknown = 24) {
+  const { dataset, ipByRef, userByRef } = await collectRiskDataset(env, windowHours);
+  const resolveSubject = <T extends { ipRef: string; userRef: string | null }>(subject: T) => {
+    const { ipRef, userRef, ...metrics } = subject;
+    return {
+      ...metrics,
+      ip: ipByRef.get(ipRef) || "",
+      uid: userRef ? userByRef.get(userRef) || "" : "",
+    };
+  };
+
+  return {
+    ...dataset,
+    privacy: "Raw IP and UID values are included for authenticated admin display only; do not forward this dataset to Gemini.",
+    subjects: dataset.subjects.map(resolveSubject),
+    hourlyActivity: dataset.hourlyActivity.map(resolveSubject),
+    endpointActivity: dataset.endpointActivity.map(resolveSubject),
+    ipRelations: dataset.ipRelations.map((relation) => {
+      const { ipRef, users, ...metrics } = relation;
+      return {
+        ...metrics,
+        ip: ipByRef.get(ipRef) || "",
+        users: users.map((user) => {
+          const { userRef, ...account } = user;
+          return { ...account, uid: userByRef.get(userRef) || "" };
+        }),
+      };
+    }),
+  };
+}
+
 const FINDING_SCHEMA = {
   type: "OBJECT",
   properties: {
     ipRef: { type: "STRING" },
     userRefs: { type: "ARRAY", items: { type: "STRING" } },
     riskLevel: { type: "STRING", enum: ["high", "medium", "low"] },
+    riskScore: {
+      type: "INTEGER",
+      minimum: 0,
+      maximum: 100,
+      description: "0 到 100 的风控排查优先级分数，不代表风险发生概率。",
+    },
     title: { type: "STRING" },
     rationale: { type: "STRING" },
     evidence: { type: "ARRAY", items: { type: "STRING" } },
     recommendation: { type: "STRING" },
   },
-  required: ["ipRef", "userRefs", "riskLevel", "title", "rationale", "evidence", "recommendation"],
+  required: ["ipRef", "userRefs", "riskLevel", "riskScore", "title", "rationale", "evidence", "recommendation"],
 };
 
 function responseSchema() {
@@ -780,7 +820,7 @@ export async function analyzeAiRisk(env: Env, requestedWindowHours: unknown = 24
   const generation = await callGemini(
     settings.model,
     settings.apiKeys,
-    `请分析以下 JSON 风控遥测。重点评估订阅请求持续性、逐小时活动、只访问订阅端点的模式、单 IP 多账户，以及 4xx 参数错误线索。hourlyStart 是小时数组的起始小时；hourlyActivity.hours 中每项依次为 [小时偏移, 总请求, 订阅请求, 4xx 请求]。不要把活跃小时数等同于连续在线；共享 NAT 和自动更新客户端可能造成正常高频访问。若事件采样或日志覆盖不完整，降低结论置信度。只返回符合指定结构的 JSON。\n\n${JSON.stringify(collected.dataset)}`,
+    `请分析以下 JSON 风控遥测。重点评估订阅请求持续性、逐小时活动、只访问订阅端点的模式、单 IP 多账户，以及 4xx 参数错误线索。hourlyStart 是小时数组的起始小时；hourlyActivity.hours 中每项依次为 [小时偏移, 总请求, 订阅请求, 4xx 请求]。不要把活跃小时数等同于连续在线；共享 NAT 和自动更新客户端可能造成正常高频访问。若事件采样或日志覆盖不完整，降低结论置信度。riskScore 是 0 到 100 的排查优先级，不是风险概率；请使其与 riskLevel 大致一致（high 通常 70–100，medium 通常 35–69，low 通常 0–34），证据不足时降低分数。只返回符合指定结构的 JSON。\n\n${JSON.stringify(collected.dataset)}`,
     true,
     settings.thinkingLevel,
   );
@@ -802,6 +842,8 @@ export async function analyzeAiRisk(env: Env, requestedWindowHours: unknown = 24
     if (!ip) return [];
     const riskLevel = finding.riskLevel === "high" || finding.riskLevel === "medium" || finding.riskLevel === "low"
       ? finding.riskLevel : "low";
+    const riskScore = Number.isSafeInteger(finding.riskScore) && Number(finding.riskScore) >= 0 && Number(finding.riskScore) <= 100
+      ? Number(finding.riskScore) : null;
     const userRefs = Array.isArray(finding.userRefs) ? finding.userRefs.slice(0, 20) : [];
     const uids = userRefs.flatMap((ref) => {
       const uid = collected.userByRef.get(safeText(ref, 80));
@@ -811,6 +853,7 @@ export async function analyzeAiRisk(env: Env, requestedWindowHours: unknown = 24
       ip,
       uids: Array.from(new Set(uids)),
       riskLevel,
+      riskScore,
       title: safeText(finding.title, 160),
       rationale: safeText(finding.rationale, 1200),
       evidence: Array.isArray(finding.evidence)

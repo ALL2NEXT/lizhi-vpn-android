@@ -237,6 +237,7 @@
    }
    if (name === 'ai-risk' && typeof loadAiRiskSettings === 'function') {
      loadAiRiskSettings();
+     if (typeof loadAiRiskDashboard === 'function') loadAiRiskDashboard(false);
    }
    if (name === 'system-logs') {
      loadSystemLogRecordingSettings();

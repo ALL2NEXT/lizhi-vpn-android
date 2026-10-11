@@ -42,3 +42,15 @@
 - 修正：保留后台左侧菜单，订阅页图标统一改为内联 SVG，并压缩三栏宽度适配侧栏。
 - 复核：Chrome DevTools 本地预览 1536 × 1024；后台菜单可见，47 个图标引用均能找到对应 SVG，未登录后台或保存示例数据。
 - Cloudflare：已部署到 `chimera-tiered`，版本 ID `2e4d5b47-2723-4f4b-922c-d55f8d639862`。
+
+## 本次 AI 风控分析页重排（2026-10-11）
+
+- 参考图：用户在当前对话提供的 1536 × 1024 AI 风控分析与模型设置界面。
+- 预览：Wrangler 本地 Worker，Chrome DevTools 视口 1536 × 1024；浏览器内注入 4 个临时 IP 及分析结果以检查布局，未请求 Gemini、保存配置或写入数据库。
+- 视觉核对：保留后台全局导航，并把设置收进右侧面板；主区展示时间窗、统计卡片、风险筛选、搜索和 IP 风险卡片。展开概览同时呈现逐小时趋势、模型理由、证据和人工建议。未发现遮挡、横向溢出或 P0/P1/P2 视觉差异；受后台导航栏影响，主内容宽度小于参考图。
+- 交互核对：Chrome 页面验证了风险筛选、账户搜索、IP 卡片展开/收起、详情标签切换和标记/撤销；最新 CSS 的趋势图 `overflow-y` 为 `hidden`。标记仅保存在当前浏览器 localStorage。
+- 数据语义：模型分数是 0–100 的排查优先级，不是风险概率；缺少有效分数时只显示风险等级。后台读取真实 IP/UID 的展示接口需要管理员鉴权，发给 Gemini 的数据仍使用脱敏标识。当前没有 GeoIP 数据，因此不显示国家和地区。
+- 截图证据：完成了 Chrome DevTools 内嵌视口截图；浏览器工具拒绝把截图文件保存到仓库路径，随后文件截图调用超时，所以工作区内没有持久截图文件。
+- 检查：`npm run build` 与 `npm run build:tiered` 通过；AI 风控服务、Worker 鉴权和 UI 定向测试 15/15 通过；`git diff --check` 通过。
+- Cloudflare：已部署至 `chimera-tiered`，当前版本 `60ebff10-9a16-46d2-8524-d8cfb67c6ca4`；Worker 地址 `https://chimera-tiered.dwads.workers.dev`，自定义路由 `test.11145149.xyz/*`。
+- final result: passed

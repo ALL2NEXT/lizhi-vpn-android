@@ -52,6 +52,7 @@ test("AI 风控管理接口鉴权、隐藏密钥并提供脱敏请求数据", as
 
   await call("/health");
   await call("/local-admin/api/ai-risk/settings", { status: 401 });
+  await call("/local-admin/api/ai-risk/dashboard-data?windowHours=24", { status: 401 });
   const initial = await call("/local-admin/api/ai-risk/settings", { admin: true });
   assert.equal(initial.settings.apiKeyConfigured, false);
   const missingModelKeys = await call("/local-admin/api/ai-risk/models", { admin: true, status: 400 });
@@ -89,6 +90,10 @@ test("AI 风控管理接口鉴权、隐藏密钥并提供脱敏请求数据", as
   ).bind(registered.account.uid, clientIp).first()));
 
   const data = await call("/local-admin/api/ai-risk/data?windowHours=24", { admin: true });
+  const dashboardData = await call("/local-admin/api/ai-risk/dashboard-data?windowHours=24", { admin: true });
+  assert.match(dashboardData.dataset.privacy, /authenticated admin display only/);
+  assert.ok(dashboardData.dataset.subjects.some(subject => subject.ip === clientIp && subject.uid === registered.account.uid));
+  assert.equal(JSON.stringify(dashboardData.dataset).includes(clientIp), true);
   assert.equal(data.ok, true);
   assert.ok(data.dataset.subjects.some(subject => subject.userRef));
   assert.ok(data.dataset.ipRelations.some(relation => relation.knownAccountCount >= 1));
