@@ -246,7 +246,7 @@ function addSubscriptionGroup(group) {
   row.innerHTML = '<div class="subscription-group-heading">' +
     '<div class="subscription-group-title">' +
       '<span class="subscription-folder-icon" aria-hidden="true">' + subscriptionIcon('folder') + '</span>' +
-      '<label><span class="visually-hidden">分组名称</span><input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label>' +
+      '<h2 class="subscription-group-name" data-group-name-display></h2>' +
       '<small data-group-count>0 条订阅</small>' +
     '</div>' +
     '<input class="subscription-group-enabled-data" data-field="groupEnabled" type="checkbox" ' + (group.enabled === false ? '' : 'checked') + ' hidden>' +
@@ -257,6 +257,9 @@ function addSubscriptionGroup(group) {
       '<button class="secondary" type="button" data-action="permissions-close">关闭</button>' +
     '</div>' +
     '<div class="subscription-group-permissions">' +
+    '<fieldset class="subscription-group-name-setting"><legend>分组名称</legend>' +
+      '<label><span>名称</span><input data-field="groupName" type="text" maxlength="80" placeholder="例如：标准线路"></label>' +
+    '</fieldset>' +
     '<fieldset class="subscription-group-type-setting"><legend>分组类型</legend>' +
       '<label><span>类型</span><select data-field="groupType"><option value="standard">普通常驻分组</option><option value="load_balanced">负载均衡分组</option></select></label>' +
       '<small>普通常驻分组会向客户端提供全部启用订阅；负载均衡分组为每位用户分配其中一条订阅。</small>' +
@@ -326,7 +329,10 @@ function addSubscriptionGroup(group) {
   row.querySelector('[data-field="groupOrder"]').addEventListener('change', function() {
     moveSubscriptionGroupToOrder(row, this.value);
   });
-  row.querySelector('[data-field="groupName"]').addEventListener('input', updateSubscriptionGroupNavigation);
+  row.querySelector('[data-field="groupName"]').addEventListener('input', function() {
+    updateSubscriptionGroupNavigation();
+    markSettingsDirty('subscriptions');
+  });
   const permissionsDialog = row.querySelector('[data-group-permissions-dialog]');
   row.querySelectorAll('[data-action="permissions-close"]').forEach(function(button) {
     button.onclick = function() { permissionsDialog.close(); };
@@ -639,6 +645,8 @@ function updateSubscriptionGroupNavigation() {
     if (!group) return;
     const index = groups.indexOf(group);
     const groupName = group.querySelector('[data-field="groupName"]').value.trim() || '分组' + (index + 1);
+    const nameDisplay = group.querySelector('[data-group-name-display]');
+    if (nameDisplay) nameDisplay.textContent = groupName;
     button.querySelector('.subscription-nav-name').textContent = groupName;
     button.querySelector('.subscription-nav-count').textContent = String(group.querySelectorAll('[data-group-sources] > .source-row').length);
     const enabledInput = Array.from(nav.querySelectorAll('[data-group-enabled-for]')).find(function(input) {
