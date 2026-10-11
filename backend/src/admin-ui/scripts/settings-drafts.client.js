@@ -23,7 +23,14 @@ function updateSettingsSaveControls() {
     }
     if (save) {
       save.disabled = Boolean(settingsSaveInFlight) || !dirty;
-      save.textContent = saving ? '保存中…' : '保存配置';
+      const noticeEnabled = section === 'notice' && el('noticeEnabled') && el('noticeEnabled').checked;
+      const noticeScheduled = section === 'notice' && el('noticeStartScheduled') && el('noticeStartScheduled').checked;
+      const saveLabel = section !== 'notice'
+        ? '保存配置'
+        : noticeEnabled
+          ? noticeScheduled ? '保存定时公告' : '保存并发布'
+          : '保存草稿';
+      save.textContent = saving ? '保存中…' : saveLabel;
     }
     if (discard) discard.disabled = saving || !dirty;
     panel.setAttribute('aria-busy', saving ? 'true' : 'false');
