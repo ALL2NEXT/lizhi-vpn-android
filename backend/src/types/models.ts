@@ -1,4 +1,5 @@
 export type AccountType = "banned" | "guest" | "formal";
+export type UserIdentityType = "human" | "bot" | "unknown";
 export type UserStatus = "active" | "banned";
 export type SubscriptionAccountStatus = "normal" | "banned";
 export type SubscriptionMembershipStatus = "member" | "non_member";
@@ -26,6 +27,7 @@ export interface SubscriptionGroup {
   enabled: boolean;
   allowedStatuses: SubscriptionAccountStatus[];
   allowedAccountTypes: Exclude<AccountType, "banned">[];
+  allowedIdentityTypes: UserIdentityType[];
   allowedMembershipTypes: SubscriptionMembershipStatus[];
   updateEnabled: boolean;
   cacheMinutes: number;
@@ -105,6 +107,7 @@ export interface DeviceContext {
 export interface SubscriptionAccess {
   accountStatus: SubscriptionAccountStatus;
   accountType: Exclude<AccountType, "banned">;
+  identityType: UserIdentityType;
   vipActive: boolean;
   appVersion: string;
   registered: boolean;

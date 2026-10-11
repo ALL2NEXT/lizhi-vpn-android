@@ -236,6 +236,9 @@ function addSubscriptionGroup(group) {
   const allowedAccountTypes = Array.isArray(group.allowedAccountTypes)
     ? group.allowedAccountTypes
     : ['guest', 'formal'];
+  const allowedIdentityTypes = Array.isArray(group.allowedIdentityTypes)
+    ? group.allowedIdentityTypes
+    : ['human', 'bot', 'unknown'];
   const allowedMembershipTypes = Array.isArray(group.allowedMembershipTypes)
     ? group.allowedMembershipTypes
     : ['member', 'non_member'];
@@ -270,6 +273,12 @@ function addSubscriptionGroup(group) {
     '<fieldset><legend>账户类型</legend>' +
       '<label class="check"><input data-field="allowedAccountTypes" type="checkbox" value="guest" ' + (allowedAccountTypes.includes('guest') ? 'checked' : '') + '>游客</label>' +
       '<label class="check"><input data-field="allowedAccountTypes" type="checkbox" value="formal" ' + (allowedAccountTypes.includes('formal') ? 'checked' : '') + '>正式用户</label>' +
+    '</fieldset>' +
+    '<fieldset><legend>账号身份</legend>' +
+      '<label class="check"><input data-field="allowedIdentityTypes" type="checkbox" value="human" ' + (allowedIdentityTypes.includes('human') ? 'checked' : '') + '>真人</label>' +
+      '<label class="check"><input data-field="allowedIdentityTypes" type="checkbox" value="bot" ' + (allowedIdentityTypes.includes('bot') ? 'checked' : '') + '>机器人</label>' +
+      '<label class="check"><input data-field="allowedIdentityTypes" type="checkbox" value="unknown" ' + (allowedIdentityTypes.includes('unknown') ? 'checked' : '') + '>未标记</label>' +
+      '<small>按用户管理中设置的账号身份限制订阅访问。</small>' +
     '</fieldset>' +
     '<fieldset><legend>会员状态</legend>' +
       '<label class="check"><input data-field="allowedMembershipTypes" type="checkbox" value="member" ' + (allowedMembershipTypes.includes('member') ? 'checked' : '') + '>会员</label>' +
@@ -1485,6 +1494,8 @@ function readSubscriptionGroups() {
       allowedStatuses: Array.from(group.querySelectorAll('[data-field="allowedStatuses"]:checked'))
         .map(function(input) { return input.value; }),
       allowedAccountTypes: Array.from(group.querySelectorAll('[data-field="allowedAccountTypes"]:checked'))
+        .map(function(input) { return input.value; }),
+      allowedIdentityTypes: Array.from(group.querySelectorAll('[data-field="allowedIdentityTypes"]:checked'))
         .map(function(input) { return input.value; }),
       allowedMembershipTypes: Array.from(group.querySelectorAll('[data-field="allowedMembershipTypes"]:checked'))
         .map(function(input) { return input.value; }),

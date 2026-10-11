@@ -6,6 +6,7 @@ import type {
   Settings,
   SubscriptionAccountStatus,
   User,
+  UserIdentityType,
 } from "../types/models.ts";
 import type { AccountRow, DeviceContextRow, TrafficFields, UserRow } from "../types/database.ts";
 
@@ -22,6 +23,7 @@ import {
   normalizeAndroidSdk,
   normalizeNickname,
   normalizeStoredUid,
+  normalizeUserIdentityType,
   normalizeUid,
   normalizeUserReference,
   randomPublicUid,
@@ -220,6 +222,7 @@ export async function readDeviceContextFromDb(db: D1Database, deviceId: string) 
 export async function resolveAccountAccess(env: Env, deviceId: string): Promise<{
   accountStatus: SubscriptionAccountStatus;
   accountType: Exclude<AccountType, "banned">;
+  identityType: UserIdentityType;
   vipActive: boolean;
   appVersion: string;
   registered: boolean;
@@ -227,18 +230,33 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
   // 读取原始设备状态，封禁账号仍需根据邮箱类型参与分组的 AND 权限判断。
   const identity = await readDeviceContext(env, deviceId);
   if (!identity || identity.userId <= 0) {
-    return { accountStatus: "banned", accountType: "guest", vipActive: false, appVersion: "", registered: false };
+    return {
+      accountStatus: "banned",
+      accountType: "guest",
+      identityType: "unknown",
+      vipActive: false,
+      appVersion: "",
+      registered: false,
+    };
   }
   const db = await ensureUserSchema(env);
   const row = await db.prepare(
-    "SELECT status, email, vip_expires_at FROM users_mb WHERE id = ?",
-  ).bind(identity.userId).first<Pick<UserRow, "status" | "email" | "vip_expires_at">>();
+    "SELECT status, email, identity_type, vip_expires_at FROM users_mb WHERE id = ?",
+  ).bind(identity.userId).first<Pick<UserRow, "status" | "email" | "identity_type" | "vip_expires_at">>();
   if (!row || !(row.status === "active" || row.status === "banned")) {
-    return { accountStatus: "banned", accountType: "guest", vipActive: false, appVersion: "", registered: false };
+    return {
+      accountStatus: "banned",
+      accountType: "guest",
+      identityType: "unknown",
+      vipActive: false,
+      appVersion: "",
+      registered: false,
+    };
   }
   return {
     accountStatus: row.status === "banned" || identity.deviceBanned ? "banned" : "normal",
     accountType: cleanText(row.email) ? "formal" : "guest",
+    identityType: normalizeUserIdentityType(row.identity_type),
     vipActive: Date.parse(cleanText(row.vip_expires_at)) > Date.now(),
     appVersion: cleanText(identity.appVersion),
     registered: true,
@@ -378,6 +396,7 @@ export function publicAdminUser(row: UserRow, settings?: Settings) {
   const totalDownload = bytesToMegabytes(row.total_download_bytes);
   return {
     ...publicAccount(rowToUser(row, settings)),
+    identityType: normalizeUserIdentityType(row.identity_type),
     createdAt: cleanText(row.created_at),
     lastReportAt: cleanText(row.last_report_at) || null,
     totalUploadMb: totalUpload,

@@ -16,6 +16,7 @@ export function createAdminUserRoutes(deps: Pick<
   | "json"
   | "normalizeBatchUserReferences"
   | "normalizeNickname"
+  | "normalizeUserIdentityType"
   | "publicAccount"
   | "publicAdminUser"
   | "readD1User"
@@ -30,6 +31,7 @@ export function createAdminUserRoutes(deps: Pick<
     json,
     normalizeBatchUserReferences,
     normalizeNickname,
+    normalizeUserIdentityType,
     publicAccount,
     publicAdminUser,
     readD1User,
@@ -210,6 +212,14 @@ export function createAdminUserRoutes(deps: Pick<
         if (!nickname) return json({ ok: false, error: "invalid_nickname" }, 400);
         userAssignments.push("nickname = ?");
         userValues.push(nickname);
+      }
+      if (Object.prototype.hasOwnProperty.call(body || {}, "identityType")) {
+        const identityType = normalizeUserIdentityType(body.identityType);
+        if (identityType !== body.identityType) {
+          return json({ ok: false, error: "invalid_user_identity_type" }, 400);
+        }
+        userAssignments.push("identity_type = ?");
+        userValues.push(identityType);
       }
       const editableTextFields: [string, string, number][] = [
         ["brand", "brand", 80],

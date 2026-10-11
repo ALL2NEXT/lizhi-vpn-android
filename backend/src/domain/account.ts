@@ -1,4 +1,4 @@
-import type { AccountType } from "../types/models.ts";
+import type { AccountType, UserIdentityType } from "../types/models.ts";
 
 import { MAX_TRAFFIC_BYTES, TEXT_ENCODER } from "../config.ts";
 import { cleanText } from "../lib/values.ts";
@@ -23,6 +23,13 @@ export function normalizeAccountType(value: unknown, fallback: AccountType = ACC
   return normalized === ACCOUNT_TYPE_BANNED || normalized === ACCOUNT_TYPE_GUEST || normalized === ACCOUNT_TYPE_FORMAL
     ? normalized
     : fallback;
+}
+
+export function normalizeUserIdentityType(value: unknown): UserIdentityType {
+  const normalized = cleanText(value);
+  return normalized === "human" || normalized === "bot" || normalized === "unknown"
+    ? normalized
+    : "unknown";
 }
 
 export function accountTypeRank(value: unknown) {

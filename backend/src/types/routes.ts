@@ -15,6 +15,7 @@ export interface RouteDependencies {
   resolveAccountAccess: typeof users.resolveAccountAccess;
   beijingTimestamp: typeof time.beijingTimestamp;
   normalizeAccountId: typeof account.normalizeAccountId;
+  normalizeUserIdentityType: typeof account.normalizeUserIdentityType;
   isAppVersionAtLeast: typeof subscriptions.isAppVersionAtLeast;
   readExternalSubscription: typeof subscriptions.readExternalSubscription;
   readExternalSubscriptionTraffic: typeof subscriptions.readExternalSubscriptionTraffic;

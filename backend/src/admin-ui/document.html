@@ -232,6 +232,14 @@
               </div>
             </fieldset>
             <fieldset class="user-admin-filter-section">
+              <legend>账号身份</legend>
+              <div class="user-admin-filter-options" role="group" aria-label="按账号身份筛选">
+                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="identity" value="human" checked onchange="renderAdminUsers()">真人</label>
+                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="identity" value="bot" checked onchange="renderAdminUsers()">机器人</label>
+                <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="identity" value="unknown" checked onchange="renderAdminUsers()">未标记</label>
+              </div>
+            </fieldset>
+            <fieldset class="user-admin-filter-section">
               <legend>会员状态</legend>
               <div class="user-admin-filter-options" role="group" aria-label="按会员状态筛选">
                 <label class="user-admin-filter-option"><input type="checkbox" data-admin-user-filter="membership" value="member" checked onchange="renderAdminUsers()">会员</label>
@@ -300,6 +308,7 @@
         <div class="user-detail-heading"><div><h2 id="adminUserDetailTitle">用户详情</h2><p id="adminUserDetailIdentity"></p></div><button class="secondary" type="button" onclick="document.getElementById('adminUserDetailDialog').close()">关闭</button></div>
         <p id="adminUserDetailUsage" class="user-detail-usage"></p>
         <div class="grid">
+          <label class="field">账号身份<select data-admin-user-field="identityType"><option value="unknown">未标记</option><option value="human">真人</option><option value="bot">机器人</option></select></label>
           <label class="field">昵称<input data-admin-user-field="nickname" type="text" required maxlength="24"></label>
           <label class="field">品牌<input data-admin-user-field="brand" type="text" maxlength="80"></label>
           <label class="field">型号<input data-admin-user-field="model" type="text" maxlength="120"></label>

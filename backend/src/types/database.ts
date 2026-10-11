@@ -1,4 +1,4 @@
-import type { UserStatus } from "./models.ts";
+import type { UserIdentityType, UserStatus } from "./models.ts";
 
 export interface DeviceFields {
   brand: string;
@@ -28,6 +28,7 @@ export interface UserRow extends Partial<DeviceFields>, Partial<TrafficFields> {
   email: string | null;
   password_hash: string;
   vip_expires_at?: string | null;
+  identity_type?: UserIdentityType;
   created_at: string;
   device_brand?: string | null;
   device_model?: string | null;

@@ -54,6 +54,10 @@ function adminUserDisplayUid(uid) {
   return adminUserUidHidden ? '••••••••' : uid;
 }
 
+function adminUserIdentityLabel(identityType) {
+  return ({human: '真人', bot: '机器人', unknown: '未标记'})[identityType] || '未标记';
+}
+
 function adminUserSecurity(user) {
   const accounts = adminUserData && Array.isArray(adminUserData.securityAccounts)
     ? adminUserData.securityAccounts : [];
@@ -102,22 +106,25 @@ function adminUserList() {
   const search = String(value('userAdminSearch') || '').toLowerCase();
   const statusFilters = selectedAdminUserFilters('status');
   const typeFilters = selectedAdminUserFilters('type');
+  const identityFilters = selectedAdminUserFilters('identity');
   const membershipFilters = selectedAdminUserFilters('membership');
   const filtered = users.filter(function(user) {
     const deviceSearch = adminUserDevices(user).map(function(device) {
       return [device.deviceId, device.brand, device.model, device.androidVersion, device.appVersion].join(' ');
     }).join(' ');
     const searchable = [user.uid, user.nickname, user.email, user.brand, user.model,
-      user.androidVersion, user.appVersion, user.accountType, deviceSearch].join(' ').toLowerCase();
+      user.androidVersion, user.appVersion, user.accountType, user.identityType, deviceSearch].join(' ').toLowerCase();
     const todayTotal = Number(user.today && user.today.totalMb || 0);
     const monthTotal = Number(user.month && user.month.totalMb || 0);
     const total = Number(user.totalMb || 0);
     const accountLevel = String(user.email || '').trim() ? 'formal' : 'guest';
     const accountStatus = user.accountType === 'banned' ? 'banned' : 'active';
+    const identityType = ['human', 'bot', 'unknown'].includes(user.identityType) ? user.identityType : 'unknown';
     const membership = user.vipActive === true ? 'member' : 'non_member';
     if (search && searchable.indexOf(search) < 0) return false;
     if (!statusFilters.has(accountStatus)) return false;
     if (!typeFilters.has(accountLevel)) return false;
+    if (!identityFilters.has(identityType)) return false;
     if (!membershipFilters.has(membership)) return false;
     if (adminUserZeroFilters.today && todayTotal === 0) return false;
     if (adminUserZeroFilters.month && monthTotal === 0) return false;
@@ -238,6 +245,7 @@ function renderAdminUsers() {
     const bannedDeviceCount = Number(security.bannedDeviceCount) || 0;
     const nickname = adminUserDraftValue(user, draft, 'nickname') || '未命名用户';
     const accountLevel = String(user.email || '').trim() ? '正式用户' : '游客';
+    const identityType = ['human', 'bot', 'unknown'].includes(user.identityType) ? user.identityType : 'unknown';
     const membershipStatus = user.vipActive === true ? '会员' : '非会员';
     const vipExpiresAt = String(user.vipExpiresAt || '')
       .replace('T', ' ')
@@ -250,6 +258,7 @@ function renderAdminUsers() {
       '<td><span class="user-admin-cell-ellipsis user-admin-uid-value">' + (adminUserUidHidden ? '••••••••' : esc(uid)) + '</span></td>' +
       '<td><span class="user-status-badge ' + (banned ? 'banned' : 'active') + '">' + (banned ? '封禁' : '正常') + '</span></td>' +
       '<td>' + accountLevel + '</td>' +
+      '<td><span class="user-identity-badge ' + identityType + '">' + esc(adminUserIdentityLabel(identityType)) + '</span></td>' +
       '<td><span class="user-admin-membership-badge ' + (user.vipActive === true ? 'active' : 'inactive') + '">' + membershipStatus + '</span></td>' +
       '<td>' + esc(vipExpiresAt || '—') + '</td>' +
       '<td>' + esc(user.brand || '—') + '</td>' +
@@ -265,7 +274,7 @@ function renderAdminUsers() {
       '</tr>';
   }).join('');
   host.innerHTML = '<table class="traffic-detail-table user-admin-table' + (adminUserUidHidden ? ' user-admin-hide-uid' : '') + '" aria-label="用户总表">' +
-    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>账号状态</th><th>账户类型</th><th>会员状态</th><th>VIP 到期时间</th><th>品牌</th><th>型号</th><th>Android 版本</th><th>App 版本</th><th>设备数</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th></tr></thead>' +
+    '<thead><tr><th>选择</th><th>昵称</th><th>邮箱</th><th>UID</th><th>账号状态</th><th>账户类型</th><th>账号身份</th><th>会员状态</th><th>VIP 到期时间</th><th>品牌</th><th>型号</th><th>Android 版本</th><th>App 版本</th><th>设备数</th><th>受限设备数</th><th>今日流量</th><th>本月流量</th><th>累计流量</th><th>最后上报</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>';
   host.querySelectorAll('[data-admin-user-select]').forEach(function(input) {
     input.addEventListener('change', function() {
@@ -308,7 +317,8 @@ function openAdminUserDetail(uid) {
   el('adminUserDetailTitle').textContent = user.nickname || '用户详情';
   el('adminUserDetailIdentity').textContent = (user.email || '游客账户') + ' · UID ' + adminUserDisplayUid(uid);
   form.querySelectorAll('[data-admin-user-field]').forEach(function(input) {
-    input.value = adminUserDraftValue(user, draft, input.dataset.adminUserField);
+    const value = adminUserDraftValue(user, draft, input.dataset.adminUserField);
+    input.value = input.dataset.adminUserField === 'identityType' && !value ? 'unknown' : value;
   });
   el('adminUserDetailUsage').textContent = '今日 ' + formatMegabytes(user.today && user.today.totalMb) +
     ' · 本月 ' + formatMegabytes(user.month && user.month.totalMb) + ' · 累计 ' + formatMegabytes(user.totalMb);
@@ -320,7 +330,7 @@ function openAdminUserDetail(uid) {
 
 const adminUserDetailForm = el('adminUserDetailForm');
 if (adminUserDetailForm) {
-  adminUserDetailForm.addEventListener('input', function(event) {
+  function updateAdminUserDetailDraft(event) {
     if (!event.target.matches('[data-admin-user-field]') || !adminUserDetailUid) return;
     const draft = {};
     adminUserDetailForm.querySelectorAll('[data-admin-user-field]').forEach(function(input) {
@@ -332,6 +342,13 @@ if (adminUserDetailForm) {
     adminUserSelection.add(adminUserDetailUid);
     updateAdminUserDetailControls();
     renderAdminUsers();
+  }
+  adminUserDetailForm.addEventListener('input', function(event) {
+    if (event.target.matches('select[data-admin-user-field]')) return;
+    updateAdminUserDetailDraft(event);
+  });
+  adminUserDetailForm.addEventListener('change', function(event) {
+    if (event.target.matches('select[data-admin-user-field]')) updateAdminUserDetailDraft(event);
   });
   adminUserDetailForm.addEventListener('submit', async function(event) {
     event.preventDefault();
@@ -593,10 +610,10 @@ function exportAdminUsersCsv() {
     show('当前没有可导出的用户', true);
     return;
   }
-  const lines = [['UID', '昵称', '邮箱', '状态', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报']];
+  const lines = [['UID', '昵称', '邮箱', '状态', '账号身份', '历史设备数', '封禁设备数', '品牌', '型号', 'Android', 'App版本', '今日流量MB', '本月流量MB', '累计流量MB', '最后上报']];
   users.forEach(function(user) {
     const security = adminUserSecurity(user);
-    lines.push([user.uid, user.nickname, user.email, user.accountType === 'banned' ? '封禁' : '正常',
+    lines.push([user.uid, user.nickname, user.email, user.accountType === 'banned' ? '封禁' : '正常', adminUserIdentityLabel(user.identityType),
       security.historicalDeviceCount, security.bannedDeviceCount,
       user.brand, user.model, user.androidVersion, user.appVersion,
       user.today && user.today.totalMb, user.month && user.month.totalMb, user.totalMb, user.lastReportAt]);

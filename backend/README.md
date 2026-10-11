@@ -46,7 +46,7 @@ Authorization: Bearer <ADMIN_TOKEN>
 
 ## 数据库初始化
 
-首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。当前用户数据库 schema 版本为 `13`。历史经验奖励表与字段已在 schema v11 移除，账号类型由邮箱绑定和封禁状态决定。
+首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。当前用户数据库 schema 版本为 `18`。历史经验奖励表与字段已在 schema v11 移除，账号类型由邮箱绑定和封禁状态决定；后台账号身份标记（真人、机器人或未标记）不会下发到客户端。
 
 如果绑定的 D1 已有数据但缺少版本标记，Worker 会拒绝自动覆盖，并返回 `users_db_unversioned_schema_detected`，请先备份并完成迁移。
 
@@ -98,11 +98,12 @@ npx.cmd wrangler deploy
 
 ## 独立配置 Worker
 
-隔离部署配置位于 `wrangler.tiered.jsonc`，Worker 名称为 `chimera-tiered`，绑定独立的 `chimera-tiered-config` KV 与 `chimera-tiered-users` D1，不读取或覆盖现有 `chimera` Worker 的数据。后台按分组配置权限；客户端接口返回兼容的平铺订阅列表，并附带分组权限，订阅下载接口会再次校验账号状态、邮箱绑定类型和 App 版本。
+隔离部署配置位于 `wrangler.tiered.jsonc`，Worker 名称为 `chimera-tiered`，绑定独立的 `chimera-tiered-config` KV 与 `chimera-tiered-users` D1，不读取或覆盖现有 `chimera` Worker 的数据。后台按分组配置权限；客户端接口返回兼容的平铺订阅列表和客户端需要的权限提示，订阅下载接口会再次校验账号状态、邮箱绑定类型、后台账号身份和 App 版本。账号身份许可只在服务端校验，不会下发到客户端。
 
 部署此项目：
 
 ```powershell
+npx.cmd wrangler d1 migrations apply chimera-tiered-subscriptions --remote --config wrangler.tiered.jsonc
 npx.cmd wrangler deploy --config wrangler.tiered.jsonc
 npx.cmd wrangler secret put ADMIN_PATH --config wrangler.tiered.jsonc
 npx.cmd wrangler secret put ADMIN_TOKEN --config wrangler.tiered.jsonc
