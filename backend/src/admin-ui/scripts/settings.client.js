@@ -102,7 +102,6 @@ function renderSourceTraffic(row, traffic, unavailable) {
   const track = row.querySelector('[data-source-traffic-track]');
   const fill = row.querySelector('[data-source-traffic-progress]');
   if (!host || !text || !track || !fill) return;
-  row.dataset.sourceHealth = traffic && unavailable !== true ? 'normal' : 'unknown';
   host.dataset.sourceUrl = sourceUrl;
   if (unavailable) {
     setSourceTrafficMessage(row, '流量信息获取失败', true);
@@ -113,7 +112,6 @@ function renderSourceTraffic(row, traffic, unavailable) {
   if (!traffic) {
     setSourceTrafficMessage(row, '上游未提供流量信息');
     host.dataset.sourceUrl = sourceUrl;
-    row.dataset.sourceHealth = 'unknown';
     updateSourceRowsMeta();
     return;
   }
@@ -323,7 +321,7 @@ function addSubscriptionGroup(group) {
       '<button class="secondary" type="button" data-action="permissions-close">完成</button>' +
     '</div>' +
   '</dialog>' +
-  '<div class="source-list-header" aria-hidden="true"><span></span><span></span><span>#</span><span>订阅名称</span><span>流量使用</span><span>到期时间</span><span>备注</span><span>状态</span><span>启用</span><span>设置</span></div>' +
+  '<div class="source-list-header" aria-hidden="true"><span></span><span></span><span>#</span><span>订阅名称</span><span class="source-list-header-remark">备注</span><span class="source-list-header-type">订阅类型</span><span class="source-list-header-traffic">流量使用</span><span class="source-list-header-expiry">到期时间</span><span class="source-list-header-enabled">启用</span><span>设置</span></div>' +
   '<div class="subscription-group-sources" data-group-sources>' +
     '<div class="subscription-group-empty" data-group-subscription-empty hidden>没有符合条件的订阅</div>' +
   '</div>';
@@ -498,11 +496,11 @@ function addSource(groupRow, source, sourceOrderValue) {
   row.innerHTML = subscriptionIcon('grip', 'source-row-drag') +
     '<input class="source-row-select" type="checkbox" data-source-select aria-label="选择订阅：' + esc(source.name || '未命名订阅') + '">' +
     '<div class="source-row-sort-controls"><input data-field="sourceOrder" type="number" min="1" step="1" value="' + row.dataset.sourceOrder + '" aria-label="订阅排序序号"></div>' +
-    '<button class="source-name-cell" type="button" data-action="details" aria-haspopup="dialog" aria-controls="subscriptionEditor" aria-label="编辑订阅：' + esc(source.name || '未命名订阅') + '"><span class="source-name-line"><strong data-source-display-name>' + esc(source.name || '未命名订阅') + '</strong><span class="source-type-badge" data-source-type-label>' + (sourceType === 'content' ? '本地' : 'URL') + '</span></span></button>' +
+    '<span class="source-name-cell"><span class="source-name-line"><strong data-source-display-name>' + esc(source.name || '未命名订阅') + '</strong></span></span>' +
+    '<span class="source-row-remark" data-source-display-remark>' + esc(source.remark || '—') + '</span>' +
+    '<span class="source-type-cell" data-source-display-type>' + (sourceType === 'content' ? '本地订阅' : '远程订阅') + '</span>' +
     '<div class="source-traffic" data-source-traffic aria-live="polite"><div class="source-traffic-line"><span data-source-traffic-text>等待读取流量信息…</span></div><div class="source-traffic-track" data-source-traffic-track role="progressbar" aria-label="订阅流量使用比例" aria-valuemin="0" aria-valuemax="100" hidden><span class="source-traffic-progress" data-source-traffic-progress></span></div></div>' +
     '<div class="source-expiry-cell"><span class="source-expiry" data-source-expiry></span></div>' +
-    '<span class="source-row-remark" data-source-display-remark>' + esc(source.remark || '—') + '</span>' +
-    '<span class="subscription-state-badge source-row-status" data-source-status>' + (sourceType === 'content' ? '本地' : '未知') + '</span>' +
     '<label class="subscription-switch source-enabled-check"><span class="subscription-switch-control"><input data-field="enabled" type="checkbox" aria-label="启用订阅" ' + (source.enabled === false ? '' : 'checked') + '><span class="subscription-switch-track"><span></span></span></span></label>' +
     '<button class="source-settings-button" type="button" data-action="source-settings" aria-haspopup="dialog" aria-controls="subscriptionEditor" aria-label="设置订阅：' + esc(source.name || '未命名订阅') + '" title="设置订阅：' + esc(source.name || '未命名订阅') + '">' + subscriptionIcon('wrench') + '<span>设置</span></button>' +
     '<div class="source-row-fields" hidden>' +
@@ -521,9 +519,6 @@ function addSource(groupRow, source, sourceOrderValue) {
     updateSourceRowPresentation(row);
   });
   row.querySelector('[data-field="name"]').addEventListener('input', updateSourceRowsMeta);
-  row.querySelector('[data-action="details"]').onclick = function() {
-    openSubscriptionEditor(row);
-  };
   row.querySelector('[data-action="source-settings"]').onclick = function() {
     openSubscriptionEditor(row);
   };
@@ -555,26 +550,18 @@ function updateSourceRowsMeta() {
       const nameInput = row.querySelector('[data-field="name"]');
       if (nameInput) nameInput.placeholder = '订阅' + sourceOrder(row);
       const displayName = row.querySelector('[data-source-display-name]');
+      const displayType = row.querySelector('[data-source-display-type]');
       const displayRemark = row.querySelector('[data-source-display-remark]');
       const type = row.querySelector('[data-field="sourceType"]').value;
       const sourceName = nameInput.value.trim() || nameInput.placeholder;
       if (displayName) displayName.textContent = sourceName;
-      const detailsButton = row.querySelector('[data-action="details"]');
-      if (detailsButton) detailsButton.setAttribute('aria-label', '编辑订阅：' + sourceName);
+      if (displayType) displayType.textContent = type === 'content' ? '本地订阅' : '远程订阅';
       const settingsButton = row.querySelector('[data-action="source-settings"]');
       if (settingsButton) {
         settingsButton.setAttribute('aria-label', '设置订阅：' + sourceName);
         settingsButton.title = '设置订阅：' + sourceName;
       }
       if (displayRemark) displayRemark.textContent = row.querySelector('[data-field="remark"]').value.trim() || '—';
-      const typeBadge = row.querySelector('[data-source-type-label]');
-      if (typeBadge) typeBadge.textContent = type === 'content' ? '本地' : 'URL';
-      const status = row.querySelector('[data-source-status]');
-      if (status) {
-        const health = type === 'content' ? 'local' : row.dataset.sourceHealth || 'unknown';
-        status.textContent = health === 'normal' ? '正常' : health === 'local' ? '本地' : '未知';
-        status.className = 'subscription-state-badge source-row-status ' + health;
-      }
       const orderInput = row.querySelector('[data-field="sourceOrder"]');
       if (orderInput) orderInput.value = String(sourceOrder(row));
     });
@@ -798,19 +785,16 @@ function applySubscriptionFilters() {
   const rows = getSourceRows();
   const localSearch = (document.querySelector('[data-source-search]') || {}).value || '';
   const localQuery = localSearch.trim().toLocaleLowerCase();
-  const healthFilter = (document.querySelector('[data-source-health-filter]') || {}).value || 'all';
   const typeFilter = (document.querySelector('[data-source-type-filter]') || {}).value || 'all';
   const sort = (document.querySelector('[data-source-sort]') || {}).value || 'custom';
   const matches = rows.filter(function(row) {
     const group = row.closest('.subscription-group');
     if (activeSubscriptionGroupId !== '__all__' && group.dataset.groupId !== activeSubscriptionGroupId) return false;
     const type = row.querySelector('[data-field="sourceType"]').value;
-    const health = type === 'content' ? 'local' : row.dataset.sourceHealth || 'unknown';
     const text = [row.querySelector('[data-field="name"]').value, row.querySelector('[data-field="remark"]').value,
       row.querySelector('[data-field="url"]').value].join(' ').toLocaleLowerCase();
     return (!localQuery || text.includes(localQuery)) &&
-      (typeFilter === 'all' || type === typeFilter) &&
-      (healthFilter === 'all' || health === healthFilter);
+      (typeFilter === 'all' || type === typeFilter);
   });
   matches.sort(function(left, right) {
     const groupOrder = groups.indexOf(left.closest('.subscription-group')) -
@@ -1076,7 +1060,7 @@ function initializeSubscriptionManager() {
     catch (_) { input.focus(); input.select(); show('无法自动复制，请手动复制订阅信息', true); }
   });
   panel.querySelector('[data-source-search]').addEventListener('input', function() { subscriptionCurrentPage = 1; applySubscriptionFilters(); });
-  ['[data-source-health-filter]', '[data-source-type-filter]', '[data-source-sort]'].forEach(function(selector) {
+  ['[data-source-type-filter]', '[data-source-sort]'].forEach(function(selector) {
     panel.querySelector(selector).addEventListener('change', function() { subscriptionCurrentPage = 1; applySubscriptionFilters(); });
   });
   panel.querySelector('[data-subscription-page-size]').addEventListener('change', function() {

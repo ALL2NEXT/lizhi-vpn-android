@@ -1403,7 +1403,7 @@
     .source-enabled-check { justify-content: flex-start; }
     .source-list-header, .source-row {
       display: grid;
-      grid-template-columns: 52px 63px minmax(220px, 1fr) minmax(240px, 1.2fr) 78px;
+      grid-template-columns: 52px 63px minmax(220px, 1fr) minmax(240px, 1.2fr) minmax(72px, .7fr) 78px;
       align-items: center;
       column-gap: 10px;
     }
@@ -1608,7 +1608,7 @@
     .subscription-group-enabled-data { display: none !important; }
     .source-list-header, .source-row {
       display: grid;
-      grid-template-columns: 16px 20px 30px minmax(90px, 1.25fr) minmax(98px, .95fr) minmax(88px, .85fr) minmax(54px, .55fr) 56px 46px 64px;
+      grid-template-columns: 16px 20px 30px minmax(90px, 1.25fr) minmax(54px, .55fr) minmax(70px, .7fr) minmax(98px, .95fr) minmax(88px, .85fr) 46px 64px;
       align-items: center;
       column-gap: 7px;
     }
@@ -1623,15 +1623,13 @@
     .source-row-select { width: 16px !important; min-height: 16px !important; margin: 0 !important; accent-color: #1a73e8; }
     .source-row-sort-controls { display: flex; align-items: center; }
     .source-row-sort-controls input { box-sizing: border-box; width: 30px; min-height: 28px; padding: 2px; color: #36445a; background: transparent; border-color: transparent; font-size: 13px; text-align: center; }
-    .source-name-cell { display: block; min-width: 0; min-height: 38px; margin: 0; padding: 2px 0; overflow: hidden; color: #111827; background: transparent; border: 0; text-align: left; font-size: 14px; font-weight: 500; }
-    .source-name-cell:hover:not(:disabled) { color: #174ea6; background: transparent; box-shadow: none; }
+    .source-name-cell { display: block; min-width: 0; min-height: 38px; margin: 0; padding: 2px 0; overflow: hidden; color: #111827; text-align: left; font-size: 14px; font-weight: 500; }
     button.source-settings-button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: 64px; min-width: 64px; min-height: 34px; margin: 0; padding: 4px 5px; color: #536178; background: transparent; border: 1px solid transparent; font-size: 12px; font-weight: 500; white-space: nowrap; }
     .source-settings-button .subscription-icon { width: 16px; height: 16px; }
     button.source-settings-button:hover:not(:disabled) { color: #174ea6; background: #f3f7fd; border-color: #d9e5f5; box-shadow: none; }
     .source-name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .source-name-line strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .source-type-badge { flex: 0 0 auto; padding: 4px 9px; color: #1261c9; background: #e8f0fe; border-radius: 999px; font-size: 11px; font-weight: 500; }
-    .source-type-badge:empty { display: none; }
+    .source-type-cell { min-width: 0; overflow: hidden; color: #536178; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
     .source-traffic { display: grid; gap: 5px; min-width: 0; color: #68768b; font-size: 11px; }
     .source-traffic-line { min-width: 0; }
     [data-source-traffic-text] { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1644,9 +1642,6 @@
     .source-expiry { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .source-expiry.expired { color: #d93025; }
     .source-row-remark { overflow: hidden; color: #536178; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-    .subscription-state-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 5px 9px; color: #667085; background: #eef0f3; border-radius: 999px; font-size: 11px; white-space: nowrap; }
-    .subscription-state-badge.normal { color: #16803c; background: #e2f4e8; }
-    .subscription-state-badge.local { color: #1261c9; background: #e8f0fe; }
     .source-enabled-check { display: flex; justify-content: center; padding: 0; }
     .source-row-fields { display: none !important; }
     .subscription-group-workspace.grid-view .source-list-header { display: none; }
@@ -1660,7 +1655,7 @@
     .subscription-group-workspace.grid-view .source-settings-button { grid-area: settings; }
     .subscription-group-workspace.grid-view .source-expiry-cell,
     .subscription-group-workspace.grid-view .source-row-remark,
-    .subscription-group-workspace.grid-view .source-row-status,
+    .subscription-group-workspace.grid-view .source-type-cell,
     .subscription-group-workspace.grid-view .source-enabled-check { display: none; }
     .subscription-list-empty { display: grid; flex: 1 1 auto; min-height: 120px; place-items: center; color: #758198; font-size: 14px; }
     .subscription-list-empty[hidden] { display: none !important; }
@@ -1709,10 +1704,9 @@
       .system-logs-date-filter { flex: 1 1 135px; }
       .system-logs-stats { gap: 10px; }
       .system-logs-stat-card { padding: 14px; }
-      .source-list-header, .source-row { grid-template-columns: 15px 18px 25px minmax(74px, 1.2fr) minmax(76px, 1fr) 46px 42px 64px; }
-      .source-list-header > :nth-child(6), .source-row > .source-expiry-cell,
-      .source-list-header > :nth-child(7), .source-row > .source-row-remark { display: none; }
-      .source-list-header > :nth-child(8) { display: block; }
+      .source-list-header, .source-row { grid-template-columns: 15px 18px 25px minmax(74px, 1.1fr) minmax(68px, .7fr) minmax(76px, 1fr) 42px 64px; }
+      .source-list-header-remark, .source-row > .source-row-remark,
+      .source-list-header-expiry, .source-row > .source-expiry-cell { display: none; }
     }
     @container user-admin-workspace (max-width: 1280px) {
       .user-admin-table { width: max-content; min-width: 1600px; table-layout: auto; }
@@ -1723,7 +1717,7 @@
     @media (max-width: 1050px) {
       .subscription-manager-layout { grid-template-columns: 250px minmax(0, 1fr); }
       .subscription-list-toolbar > select { flex: 1 1 115px; }
-      .source-list-header, .source-row { grid-template-columns: 15px 18px 27px minmax(80px, 1.1fr) minmax(85px, .9fr) 48px 42px 64px; }
+      .source-list-header, .source-row { grid-template-columns: 15px 18px 27px minmax(80px, 1fr) minmax(68px, .7fr) minmax(85px, .9fr) 42px 64px; }
       .user-admin-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
     }
     @media (max-width: 700px) {
@@ -1779,12 +1773,11 @@
       .subscription-editor { width: calc(100vw - 16px); max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
       .subscription-list-toolbar > select { min-width: 100px; }
       .subscription-list-toolbar > select[data-source-sort] { min-width: 128px; }
-      .source-list-header, .source-row { grid-template-columns: 14px 18px 25px minmax(85px, 1fr) 42px 64px; column-gap: 5px; }
-      .source-list-header > :nth-child(5), .source-row > .source-traffic,
-      .source-list-header > :nth-child(6), .source-row > .source-expiry-cell,
-      .source-list-header > :nth-child(7), .source-row > .source-row-remark,
-      .source-list-header > :nth-child(8), .source-row > .source-row-status { display: none; }
-      .source-list-header > :nth-child(9) { display: block; }
+      .source-list-header, .source-row { grid-template-columns: 14px 18px 25px minmax(64px, 1fr) minmax(54px, .75fr) 42px 64px; column-gap: 5px; }
+      .source-list-header-traffic, .source-row > .source-traffic,
+      .source-list-header-expiry, .source-row > .source-expiry-cell,
+      .source-list-header-remark, .source-row > .source-row-remark { display: none; }
+      .source-list-header-enabled { display: block; }
       .subscription-group-title { grid-template-columns: 28px minmax(0, 1fr); gap: 6px; }
       .subscription-group-title small { grid-column: 2; }
       .subscription-folder-icon .subscription-icon { width: 25px; height: 25px; flex-basis: 25px; }
