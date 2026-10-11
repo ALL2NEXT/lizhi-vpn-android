@@ -1569,7 +1569,7 @@ function fillState(state, section) {
   }
   if (!section) resetSettingsDrafts();
   updateSettingsSaveControls();
-  if (section === 'subscriptions') loadSubscriptionTraffic();
+  if (!section || section === 'subscriptions') loadSubscriptionTraffic();
 }
 function noticeDateTimeValue(data) {
   const text = String(data == null ? '' : data).trim();
