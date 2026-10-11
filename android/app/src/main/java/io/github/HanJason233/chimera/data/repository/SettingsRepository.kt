@@ -98,6 +98,7 @@ class SettingsRepository(
         
         // 订阅列表缓存
         private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
+        private val SUBSCRIPTION_LIST_SCOPE = stringPreferencesKey("subscription_list_scope")
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
@@ -366,13 +367,21 @@ class SettingsRepository(
         }
     }
 
-    val subscriptionListJson: Flow<String?> = store.data.map { preferences ->
-        preferences[SUBSCRIPTION_LIST_JSON]
+    fun subscriptionListJson(scope: String): Flow<String?> = store.data.map { preferences ->
+        preferences[SUBSCRIPTION_LIST_JSON].takeIf { preferences[SUBSCRIPTION_LIST_SCOPE] == scope }
     }
 
-    suspend fun setSubscriptionList(json: String) {
+    suspend fun setSubscriptionList(json: String, scope: String) {
         store.edit { preferences ->
             preferences[SUBSCRIPTION_LIST_JSON] = json
+            preferences[SUBSCRIPTION_LIST_SCOPE] = scope
+        }
+    }
+
+    suspend fun clearSubscriptionList() {
+        store.edit { preferences ->
+            preferences.remove(SUBSCRIPTION_LIST_JSON)
+            preferences.remove(SUBSCRIPTION_LIST_SCOPE)
         }
     }
 

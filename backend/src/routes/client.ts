@@ -56,33 +56,36 @@ export function createClientRoutes(deps: Pick<
 
 async function handleClient(request: Request, env: Env) {
   const requestUrl = new URL(request.url);
+  const deviceId = normalizeAccountId(requestUrl.searchParams.get("deviceId"));
+  if (!deviceId) {
+    return json({ ok: false, error: "device_id_required" }, 401);
+  }
+  const access = await resolveAccountAccess(env, deviceId);
+  if (!access.registered) {
+    return json({ ok: false, error: "account_access_denied" }, 403);
+  }
   const origin = requestUrl.origin;
   const state = await readState(env);
-  const groups = state.subscriptionGroups.filter((group) => group.enabled);
+  const groups = state.subscriptionGroups.filter((group) =>
+    subscriptionGroupAccessError(group, access, isAppVersionAtLeast) === null
+  );
 
   return json({
     subscriptions: groups.flatMap((group) => {
-      const sources = group.subscriptions.filter((source) => source.enabled);
+      const sources = group.subscriptions.filter((source) =>
+        source.enabled && hasSubscriptionData(source)
+      );
       if (!sources.length) return [];
-      const access = {
-        enabled: true,
-        minAccountType: legacyMinimumAccountType(group),
-        allowedStatuses: group.allowedStatuses,
-        allowedAccountTypes: group.allowedAccountTypes,
-        allowedMembershipTypes: group.allowedMembershipTypes,
-        minAppVersion: group.minAppVersion,
-        maxAppVersion: group.maxAppVersion,
-      };
       if (group.groupType === "load_balanced") {
         return [{
-          ...access,
+          enabled: true,
           id: `load-balanced:${group.id}`,
           name: group.name,
           url: `${origin}/api/subscription/lb/${encodeURIComponent(group.id)}`,
         }];
       }
       return sources.map((source) => ({
-        ...access,
+        enabled: true,
         id: source.id,
         name: source.name,
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
@@ -269,17 +272,6 @@ async function handleManagedSubscription(path: string, request: Request, env: En
       "cache-control": "no-store",
     },
   });
-}
-
-function legacyMinimumAccountType(group: SubscriptionGroup) {
-  if (group.allowedStatuses.includes("banned")) return "banned" as const;
-  if (
-    group.allowedAccountTypes.includes("formal") &&
-    !group.allowedAccountTypes.includes("guest")
-  ) {
-    return "formal" as const;
-  }
-  return "guest" as const;
 }
 
   return {

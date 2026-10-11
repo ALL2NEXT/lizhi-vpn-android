@@ -30,16 +30,18 @@ class SubscriptionListParser {
             else -> null
         } ?: throw IllegalArgumentException("订阅列表缺少 subscriptions 数组")
 
-        val sources = sourceArray.mapNotNull { parseSource(it) }
+        val parsedSources = sourceArray.mapNotNull { parseSource(it) }
+        require(sourceArray.size() == 0 || parsedSources.isNotEmpty()) { "订阅列表中没有有效线路" }
+        val sources = parsedSources
             .mapIndexed { index, source ->
                 source.copy(
-                    id = (index + 1).toString(),
+                    // 后台筛选后列表顺序会变化，订阅身份不能再取列表下标。
+                    id = source.id.ifBlank { source.url },
                     name = source.name.ifBlank { "线路${index + 1}" }
                 )
             }
             .filter { it.enabled }
 
-        require(sources.isNotEmpty()) { "订阅列表中没有有效线路" }
         SubscriptionList(sources = sources)
     }
 
@@ -70,7 +72,7 @@ class SubscriptionListParser {
         val minAppVersion = readString(source, "minAppVersion")?.trim().orEmpty()
         val maxAppVersion = readString(source, "maxAppVersion")?.trim().orEmpty()
         return SubscriptionSource(
-            id = "",
+            id = readString(source, "id")?.trim().orEmpty(),
             name = name,
             url = url,
             enabled = enabled,

@@ -108,8 +108,8 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
       body: { subscriptions: [{ content: source, name: "formal", minAccountType: "formal", minAppVersion: "1.2" }], settings: { requireAdminRegistrationCode: true } },
     });
     await call(`/api/subscription/1?deviceId=${deviceId}`, { status: 403 });
-    const client = (await call("/api/client")).data;
-    assert.equal(Object.hasOwn(client.subscriptions[0], "encrypted"), false);
+    const client = (await call(`/api/client?deviceId=${deviceId}`)).data;
+    assert.deepEqual(client.subscriptions, []);
   });
 
   await t.test("一次性注册码绑定邮箱，密码登录附加第二台设备", async () => {
@@ -123,6 +123,8 @@ test("本地 Worker 的账号、订阅和管理接口", async (t) => {
     await call("/api/account/login", { method: "POST", body: { ...credentials, deviceId: secondDeviceId, password: "wrong-password" }, status: 401 });
     const loggedIn = await call("/api/account/login", { method: "POST", body: { ...credentials, deviceId: secondDeviceId } });
     assert.equal(loggedIn.data.account.uid, uid);
+    const client = (await call(`/api/client?deviceId=${deviceId}`)).data;
+    assert.equal(Object.hasOwn(client.subscriptions[0], "encrypted"), false);
     const subscription = await call(`/api/subscription/1?deviceId=${deviceId}`);
     assert.equal(subscription.data, source);
     assert.equal(subscription.response.headers.get("x-chimera-client-ip"), null);

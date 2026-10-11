@@ -11,8 +11,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.Dns
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
 import io.github.HanJason233.chimera.data.local.AppDatabase
@@ -20,14 +22,14 @@ import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeSource
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.SubscriptionSource
-import io.github.HanJason233.chimera.data.model.ACCOUNT_TYPE_BANNED
-import io.github.HanJason233.chimera.data.model.canBeRequestedBy
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
 import io.github.HanJason233.chimera.network.account.AccountManager
 import io.github.HanJason233.chimera.network.NetworkClient
 import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
 import io.github.HanJason233.chimera.network.subscription.SubscriptionListParser
 import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
+import io.github.HanJason233.chimera.network.subscription.backendClientUrl
+import io.github.HanJason233.chimera.network.subscription.subscriptionRequestUrl
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
@@ -108,26 +110,12 @@ internal class DisconnectRecoveryManager(
             Log.w(TAG, "Disconnect recovery skipped: current node has no subscription source")
             return false
         }
-        val source = loadSubscriptionSource(sourceId) ?: run {
+        val directClient = createPhysicalNetworkClient()
+        val source = loadSubscriptionSource(sourceId, directClient) ?: run {
             Log.w(TAG, "Disconnect recovery skipped: subscription source $sourceId is unavailable")
             return false
         }
-        val account = accountManager.currentAccount()
-        val accountType = if (account?.email?.isNotBlank() == true) "formal" else "guest"
-        val accountStatus = if (account?.accountType == ACCOUNT_TYPE_BANNED || account?.deviceBlocked == true) {
-            "banned"
-        } else {
-            "normal"
-        }
-        if (!source.canBeRequestedBy(account, io.github.HanJason233.chimera.BuildConfig.VERSION_NAME)) {
-            Log.w(
-                TAG,
-                "Disconnect recovery skipped: $accountStatus/$accountType does not meet subscription group permissions"
-            )
-            return false
-        }
-        val directClient = createPhysicalNetworkClient()
-        val requestUrl = subscriptionRequestUrl(source.url)
+        val requestUrl = subscriptionRequestUrl(source.url, AppConfig.BACKEND_URL, accountManager.accountId())
         var result = subscriptionParser.fetchAndParseWithClient(requestUrl, directClient)
         if (result.isFailure) {
             Log.w(TAG, "Recovery subscription fetch failed, retrying once", result.exceptionOrNull())
@@ -166,28 +154,22 @@ internal class DisconnectRecoveryManager(
         return true
     }
 
-    private suspend fun loadSubscriptionSource(sourceId: String): SubscriptionSource? {
-        val cachedList = settingsRepository.subscriptionListJson.first() ?: return null
-        return subscriptionListParser.parse(cachedList).getOrNull()
-            ?.sources
-            ?.firstOrNull { it.id == sourceId }
-    }
-
-    private fun subscriptionRequestUrl(url: String): String {
-        if (!isWorkerManagedSubscription(url)) return url
-        val separator = if ('?' in url) '&' else '?'
-        val encodedDeviceId = java.net.URLEncoder.encode(
-            accountManager.accountId(),
-            Charsets.UTF_8.name()
-        )
-        return "$url${separator}deviceId=$encodedDeviceId"
-    }
-
-    private fun isWorkerManagedSubscription(url: String): Boolean {
-        val managedPrefix = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/subscription/"
-        return managedPrefix.length > "/api/subscription/".length &&
-            url.startsWith(managedPrefix, ignoreCase = true)
-    }
+    private suspend fun loadSubscriptionSource(sourceId: String, client: OkHttpClient): SubscriptionSource? =
+        withContext(Dispatchers.IO) {
+            // VPN 已断线，通过物理网络查询后台最新权限，避免使用已失效的订阅缓存。
+            runCatching {
+                val request = Request.Builder()
+                    .url(backendClientUrl(AppConfig.BACKEND_URL, accountManager.accountId(), forceRefresh = true))
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    check(response.isSuccessful) { "订阅列表请求返回 HTTP ${response.code}" }
+                    subscriptionListParser.parse(response.body?.string().orEmpty()).getOrThrow()
+                        .sources.firstOrNull { it.id == sourceId }
+                }
+            }.onFailure { error ->
+                Log.w(TAG, "Recovery subscription list fetch failed", error)
+            }.getOrNull()
+        }
 
     private fun createPhysicalNetworkClient(): OkHttpClient {
         val timeoutMs = SUBSCRIPTION_FETCH_TIMEOUT_MS

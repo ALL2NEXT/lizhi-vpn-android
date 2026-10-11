@@ -1,5 +1,6 @@
 package io.github.HanJason233.chimera.network.subscription
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import io.github.HanJason233.chimera.data.model.ACCOUNT_TYPE_FORMAL
 import io.github.HanJason233.chimera.data.model.ACCOUNT_TYPE_GUEST
@@ -54,6 +55,44 @@ class SubscriptionListParserTest {
         ).getOrThrow()
 
         assertEquals(listOf(ACCOUNT_TYPE_FORMAL, ACCOUNT_TYPE_GUEST, ACCOUNT_TYPE_GUEST), result.sources.map { it.minAccountType })
+    }
+
+    @Test
+    fun parseAcceptsEmptyAvailableList() {
+        assertTrue(parser.parse("""{"subscriptions":[],"settings":{},"notice":null}""").getOrThrow().sources.isEmpty())
+        assertTrue(parser.parse("[]").getOrThrow().sources.isEmpty())
+    }
+
+    @Test
+    fun filteredListPreservesBackendIdsRegardlessOfOrder() {
+        val first = parser.parse("""{"subscriptions":[
+            {"id":"42","name":"A","url":"https://worker.example/api/subscription/42"},
+            {"id":"load-balanced:vip","name":"B","url":"https://worker.example/api/subscription/lb/vip"}
+        ]}""").getOrThrow()
+        val filtered = parser.parse("""{"subscriptions":[
+            {"id":"load-balanced:vip","name":"B","url":"https://worker.example/api/subscription/lb/vip"}
+        ]}""").getOrThrow()
+        assertEquals(listOf("42", "load-balanced:vip"), first.sources.map { it.id })
+        assertEquals(first.sources.last().id, filtered.sources.single().id)
+    }
+
+    @Test
+    fun legacySourcesWithoutIdsUseStableUrls() {
+        val first = parser.parse("""[{"url":"https://example.com/a"},{"url":"https://example.com/b"}]""").getOrThrow()
+        val filtered = parser.parse("""[{"url":"https://example.com/b"}]""").getOrThrow()
+        assertEquals(first.sources.last().id, filtered.sources.single().id)
+    }
+
+    @Test
+    fun disabledSourcesCanProduceAnEmptyList() {
+        val result = parser.parse("""{"subscriptions":[{"id":"42","url":"https://example.com/a","enabled":false}]}""")
+        assertTrue(result.getOrThrow().sources.isEmpty())
+    }
+
+    @Test
+    fun malformedListsStillFailInsteadOfClearingCachedNodes() {
+        assertTrue(parser.parse("""{"settings":{}}""").isFailure)
+        assertTrue(parser.parse("""{"subscriptions":[{"url":"javascript:invalid"}]}""").isFailure)
     }
 
 }

@@ -170,6 +170,24 @@ class SelectedNodeGroupSettingsTest {
         }
     }
 
+    @Test
+    fun subscriptionCacheIsIsolatedByScopeAndCanBeCleared() = runBlocking {
+        store.updateData { preferences ->
+            preferences.toMutablePreferences().apply {
+                this[stringPreferencesKey("subscription_list_json")] = "legacy public list"
+            }
+        }
+        assertNull(repository.subscriptionListJson("account-a").first())
+        repository.setSubscriptionList("account A list", "account-a")
+        assertEquals("account A list", repository.subscriptionListJson("account-a").first())
+        assertNull(repository.subscriptionListJson("account-b").first())
+        repository.setSubscriptionList("account B list", "account-b")
+        assertNull(repository.subscriptionListJson("account-a").first())
+        assertEquals("account B list", repository.subscriptionListJson("account-b").first())
+        repository.clearSubscriptionList()
+        assertNull(repository.subscriptionListJson("account-b").first())
+    }
+
     private class TestPreferencesStore : DataStore<Preferences> {
         override val data = MutableStateFlow<Preferences>(emptyPreferences())
         private val mutex = Mutex()

@@ -2981,6 +2981,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     timeoutMs = serviceRequestTimeoutMs.value
                 ).onSuccess {
                     _accountMessage.value = "VIP 激活成功，有效期已更新"
+                    initializeSubscriptionsWithRefreshState(forceRefresh = true)
                 }.onFailure { error ->
                     Log.w(tag, "Failed to activate VIP card", error)
                     _accountMessage.value = accountActionErrorMessage(error)
@@ -3008,6 +3009,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     timeoutMs = serviceRequestTimeoutMs.value
                 ).onSuccess {
                     _accountMessage.value = "账户信息已同步"
+                    initializeSubscriptionsWithRefreshState(forceRefresh = true)
                 }.onFailure { error ->
                     Log.w(tag, "Failed to sync account information", error)
                     _accountMessage.value = accountActionErrorMessage(error)
@@ -3048,6 +3050,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     timeoutMs = serviceRequestTimeoutMs.value
                 ).onSuccess {
                     _accountMessage.value = "绑定成功，已获得绑定经验"
+                    initializeSubscriptionsWithRefreshState(forceRefresh = true)
                 }.onFailure { error ->
                     Log.w(tag, "Failed to bind account credentials", error)
                     _accountMessage.value = accountBindingErrorMessage(error)

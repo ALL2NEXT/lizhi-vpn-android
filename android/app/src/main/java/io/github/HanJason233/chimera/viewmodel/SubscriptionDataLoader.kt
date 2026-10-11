@@ -3,7 +3,10 @@ import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonParser
-import java.net.URLEncoder
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -14,22 +17,25 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import io.github.HanJason233.chimera.AppConfig
+import io.github.HanJason233.chimera.BuildConfig
 import io.github.HanJason233.chimera.data.local.NodeDao
 import io.github.HanJason233.chimera.data.model.BackendAppSettings
-import io.github.HanJason233.chimera.data.model.ACCOUNT_TYPE_BANNED
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeSource
 import io.github.HanJason233.chimera.data.model.NoticeInfo
 import io.github.HanJason233.chimera.data.model.SubscriptionList
 import io.github.HanJason233.chimera.data.model.SubscriptionSource
 import io.github.HanJason233.chimera.data.model.UpdateInfo
-import io.github.HanJason233.chimera.data.model.canBeRequestedBy
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
 import io.github.HanJason233.chimera.network.account.AccountManager
 import io.github.HanJason233.chimera.network.NetworkClient
 import io.github.HanJason233.chimera.network.subscription.SubscriptionListParser
 import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
+import io.github.HanJason233.chimera.network.subscription.backendClientUrl
+import io.github.HanJason233.chimera.network.subscription.subscriptionCacheScope
+import io.github.HanJason233.chimera.network.subscription.subscriptionRequestUrl
 import io.github.HanJason233.chimera.util.NetworkUtils
+import retrofit2.HttpException
 
 /** Owns backend metadata and subscription persistence. */
 internal class SubscriptionDataLoader(
@@ -44,7 +50,6 @@ internal class SubscriptionDataLoader(
     private val subscriptionParser = SubscriptionParser()
     private val subscriptionListParser = SubscriptionListParser()
     private val gson = Gson()
-    private var cachedSubscriptionList: SubscriptionList? = null
 
     private data class SubscriptionFetchResult(
         val nodes: List<Node>,
@@ -65,13 +70,11 @@ internal class SubscriptionDataLoader(
     var lastFetchedNodes: List<Node>? = null
         private set
     suspend fun loadCachedSubscriptionList(): SubscriptionList? {
-        cachedSubscriptionList?.let { return it }
-        val cachedJson = settingsRepository.subscriptionListJson.first() ?: return null
-        val parsed = withContext(Dispatchers.Default) {
+        val cachedJson = settingsRepository.subscriptionListJson(currentCacheScope()).first() ?: return null
+        return withContext(Dispatchers.Default) {
             applyBackendConfig(cachedJson)
             subscriptionListParser.parse(cachedJson).getOrNull()
         }
-        return parsed?.also { cachedSubscriptionList = it }
     }
 
     suspend fun initialize(
@@ -92,9 +95,9 @@ internal class SubscriptionDataLoader(
         sourceId: String? = null,
         shouldRefreshSource: ((String) -> Boolean)? = null
     ): Boolean = coroutineScope {
+        discardCacheForChangedAccount()
         val listRequest = async { fetchSubscriptionList(forceRefresh) }
         val listResult = listRequest.await()
-        val account = accountManager.currentAccount()
         val subscriptionList = listResult.getOrNull()
 
         if (subscriptionList == null) {
@@ -102,32 +105,10 @@ internal class SubscriptionDataLoader(
             return@coroutineScope false
         }
 
-        val accountStatus = if (account?.accountType == ACCOUNT_TYPE_BANNED || account?.deviceBlocked == true) {
-            "banned"
-        } else {
-            "normal"
-        }
-        val accountType = if (account?.email?.isNotBlank() == true) "formal" else "guest"
-        val accessibleSources = subscriptionList.sources.filter { source ->
-            source.canBeRequestedBy(account, io.github.HanJason233.chimera.BuildConfig.VERSION_NAME)
-        }
-        val skippedSources = subscriptionList.sources - accessibleSources.toSet()
-        if (skippedSources.isNotEmpty()) {
-            Log.i(
-                TAG,
-                "Skipped inaccessible subscription sources for $accountStatus/$accountType: " +
-                    skippedSources.joinToString {
-                        "${it.name}(statuses=${it.allowedStatuses}, types=${it.allowedAccountTypes}, memberships=${it.allowedMembershipTypes}, version=${it.minAppVersion}..${it.maxAppVersion})"
-                    }
-            )
-        }
+        // 后台已经按账号、设备和版本筛选；客户端直接使用返回的可用列表。
+        val accessibleSources = subscriptionList.sources
         if (accessibleSources.isEmpty()) {
-            nodeDao().replaceSubscriptionNodes(emptyList())
-            lastFetchedNodes = emptyList()
-            onNodesPersisted(emptyList())
-            if (subscriptionList.sources.isNotEmpty()) {
-                onMessage("当前账号状态为$accountStatus、类型为$accountType，暂无可用线路")
-            }
+            persistNodes(emptyList())
             return@coroutineScope true
         }
 
@@ -143,10 +124,10 @@ internal class SubscriptionDataLoader(
         val cachedAccessibleNodes = cachedNodes.filter {
             it.subscriptionSourceId in accessibleSourceIds
         }
+        // 即使本次下载失败，也不能把已被后台移除的线路继续留在缓存中。
+        if (cachedAccessibleNodes.size != cachedNodes.size) persistNodes(cachedAccessibleNodes)
         if (targetSources.isEmpty()) {
-            nodeDao().replaceSubscriptionNodes(cachedAccessibleNodes)
-            lastFetchedNodes = cachedAccessibleNodes
-            onNodesPersisted(cachedAccessibleNodes)
+            persistNodes(cachedAccessibleNodes)
             return@coroutineScope true
         }
         val fetched = fetchAndPersistNodes(
@@ -162,36 +143,56 @@ internal class SubscriptionDataLoader(
             return Result.failure(IllegalStateException("未配置订阅列表接口"))
         }
 
-        if (!forceRefresh) {
-            loadCachedSubscriptionList()?.let { return Result.success(it) }
-        }
-
         return try {
             // 首次配置请求使用本机超时值，不能依赖本次响应下发的配置。
             val requestTimeoutMs = settingsRepository.serviceRequestTimeoutMs.first()
+            // 先注册或同步设备，确保后台已保存当前客户端版本和设备关联。
+            accountManager.register(requestTimeoutMs).getOrThrow()
+            discardCacheForChangedAccount()
+            val backendUrl = AppConfig.BACKEND_URL
+            val deviceId = accountManager.accountId()
+            val cacheScope = currentCacheScope()
+            // 配置缓存只用于启动预览，实际刷新每次都获取后台最新的权限列表。
             suspend fun request() = withTimeout(requestTimeoutMs) {
-                NetworkClient.apiService.getBackendConfig(backendClientUrl(forceRefresh))
+                NetworkClient.apiService.getBackendConfig(backendClientUrl(backendUrl, deviceId, forceRefresh))
             }
             var response = runCatching { request() }
             if (response.isFailure) response = runCatching { request() }
 
             val raw = response.getOrThrow()
+            check(cacheScope == currentCacheScope()) { "账号或后台已变化，请重新刷新线路" }
             val parsed = withContext(Dispatchers.Default) {
-                applyBackendConfig(raw)
-                subscriptionListParser.parse(raw).getOrThrow()
+                subscriptionListParser.parse(raw).getOrThrow().also { applyBackendConfig(raw) }
             }
-            settingsRepository.setSubscriptionList(raw)
-            cachedSubscriptionList = parsed
+            settingsRepository.setSubscriptionList(raw, cacheScope)
             Result.success(parsed)
         } catch (error: Exception) {
+            if (error is CancellationException &&
+                (error !is TimeoutCancellationException || !currentCoroutineContext().isActive)
+            ) throw error
+            if (error is HttpException && error.code() in setOf(401, 403)) {
+                settingsRepository.clearSubscriptionList()
+                persistNodes(emptyList())
+            }
             Log.e(TAG, "Failed to fetch subscription list", error)
             Result.failure(error)
         }
     }
 
-    private fun backendClientUrl(forceRefresh: Boolean): String {
-        val endpoint = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/client"
-        return if (forceRefresh) "$endpoint?refresh=1" else endpoint
+    private fun currentCacheScope(): String = subscriptionCacheScope(
+        AppConfig.BACKEND_URL, accountManager.accountId(), accountManager.currentAccount(), BuildConfig.VERSION_NAME
+    )
+
+    private suspend fun discardCacheForChangedAccount() {
+        if (settingsRepository.subscriptionListJson(currentCacheScope()).first() != null) return
+        settingsRepository.clearSubscriptionList()
+        persistNodes(emptyList())
+    }
+
+    private suspend fun persistNodes(nodes: List<Node>) {
+        nodeDao().replaceSubscriptionNodes(nodes)
+        lastFetchedNodes = nodes
+        onNodesPersisted(nodes)
     }
 
     private fun applyBackendConfig(raw: String) {
@@ -218,7 +219,9 @@ internal class SubscriptionDataLoader(
         val requestTimeoutMs = settingsRepository.serviceRequestTimeoutMs.first()
         val results = sources.map { subscription ->
             async {
-                val requestUrl = subscriptionRequestUrl(subscription.url)
+                val requestUrl = subscriptionRequestUrl(
+                    subscription.url, AppConfig.BACKEND_URL, accountManager.accountId()
+                )
                 var result = subscriptionParser.fetchAndParse(
                     requestUrl,
                     requestTimeoutMs
@@ -332,7 +335,8 @@ internal class SubscriptionDataLoader(
             }
             val connectedNode = activeNode()?.takeIf { it.source == NodeSource.SUBSCRIPTION }
             val mergedFetchedNodes = (retainedNodes + fetchedNodes).distinctBy(Node::id)
-            val shouldRetainConnectedNode = connectedNode != null && (
+            val shouldRetainConnectedNode = connectedNode != null &&
+                subscriptionList.sources.any { it.id == connectedNode.subscriptionSourceId } && (
                 connectedNode.subscriptionSourceId !in refreshedSourceIds ||
                     connectedNode.subscriptionSourceId in fetchedResult.failedSourceIds
             )
@@ -357,19 +361,6 @@ internal class SubscriptionDataLoader(
         } finally {
             GlobalTestExecution.endFetching()
         }
-    }
-
-    private fun isWorkerManagedSubscription(url: String): Boolean {
-        val managedPrefix = "${AppConfig.BACKEND_URL.trimEnd('/')}/api/subscription/"
-        return managedPrefix.length > "/api/subscription/".length &&
-            url.startsWith(managedPrefix, ignoreCase = true)
-    }
-
-    private fun subscriptionRequestUrl(url: String): String {
-        if (!isWorkerManagedSubscription(url)) return url
-        val separator = if ('?' in url) '&' else '?'
-        val encodedDeviceId = URLEncoder.encode(accountManager.accountId(), Charsets.UTF_8.name())
-        return "$url${separator}deviceId=$encodedDeviceId"
     }
 
     private companion object {
