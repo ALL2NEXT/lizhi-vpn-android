@@ -281,9 +281,6 @@ class MainActivity : ComponentActivity() {
                                         onOpenSpeedTestSchemes = {
                                             navigateTo(AppRoute.SPEED_TEST_SCHEMES)
                                         },
-                                        onOpenAccountSettings = {
-                                            navigateTo(AppRoute.ACCOUNT_SETTINGS)
-                                        },
                                         onOpenSkin = { navigateTo(AppRoute.SKIN) },
                                         onOpenCurrentGroupDetails = { groupKey, groupName ->
                                             if (groupKey == null) {
@@ -390,6 +387,22 @@ class MainActivity : ComponentActivity() {
                                                     selectedDestination = HomeDestination.HOME
                                                 },
                                                 bottomContentPadding = 16.dp
+                                            )
+                                        }
+
+                                    HomeDestination.MY ->
+                                        HomeNavigationLayout(
+                                            selectedDestination = selectedDestination,
+                                            onDestinationSelected =
+                                                onBottomNavigationDestinationSelected,
+                                            navigationStyle = skinSettings.activeScheme.navigationStyle
+                                        ) {
+                                            AccountSettingsScreen(
+                                                viewModel = viewModel,
+                                                onBack = {
+                                                    selectedDestination = HomeDestination.HOME
+                                                },
+                                                onAccountDeleted = { finishAndRemoveTask() }
                                             )
                                         }
                                 }

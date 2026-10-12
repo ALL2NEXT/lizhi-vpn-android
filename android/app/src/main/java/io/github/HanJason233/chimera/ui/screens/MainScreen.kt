@@ -47,7 +47,6 @@ fun MainScreen(
     onOpenCoreRouting: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
     onOpenSpeedTestSchemes: () -> Unit = {},
-    onOpenAccountSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     onOpenCurrentGroupDetails: (NodeGroupKey?, String) -> Unit = { _, _ -> },
     navigationStyle: HomeNavigationStyle = HomeNavigationStyle.CLASSIC,
@@ -92,7 +91,6 @@ fun MainScreen(
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
-    val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
@@ -154,7 +152,6 @@ fun MainScreen(
                     onOpenOutbound = { closeDrawerThen(onOpenOutbound) },
                     onOpenSpeedTestSchemes = { closeDrawerThen(onOpenSpeedTestSchemes) },
                     onOpenCoreRouting = { closeDrawerThen(onOpenCoreRouting) },
-                    onOpenAccountSettings = { closeDrawerThen(onOpenAccountSettings) },
                     onOpenSkin = { closeDrawerThen(onOpenSkin) },
                     onOpenBackendDialog = {
                         closeDrawerThen {
@@ -167,7 +164,6 @@ fun MainScreen(
                     feedbackUrl = backendSettings.feedbackUrl,
                     githubUrl = backendSettings.githubUrl,
                     telegramUrl = backendSettings.telegramUrl,
-                    accountInfo = accountInfo,
                     appDisplayName = LauncherIdentityPresets.find(
                         skinSettings.activeScheme.appIconPresetId
                     ).displayName,

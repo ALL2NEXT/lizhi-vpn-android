@@ -28,10 +28,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.Icon
@@ -55,7 +57,8 @@ enum class HomeDestination {
     // 保留原枚举值，兼容 Activity 保存的旧导航状态；该入口现在固定显示地区分组。
     NODE_GROUPING,
     SUBSCRIPTION_GROUPING,
-    NAVIGATION
+    NAVIGATION,
+    MY
 }
 
 @Composable
@@ -150,6 +153,14 @@ private fun CapsuleHomeNavigationBar(
                     onClick = { onDestinationSelected(HomeDestination.NAVIGATION) },
                     modifier = Modifier.weight(1f)
                 )
+                CapsuleNavigationItem(
+                    selected = selectedDestination == HomeDestination.MY,
+                    selectedIcon = Icons.Rounded.Person,
+                    unselectedIcon = Icons.Outlined.Person,
+                    label = "我的",
+                    onClick = { onDestinationSelected(HomeDestination.MY) },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -188,6 +199,13 @@ private fun NativeHomeNavigationBar(
             unselectedIcon = Icons.Outlined.Explore,
             label = "导航",
             onClick = { onDestinationSelected(HomeDestination.NAVIGATION) }
+        )
+        NativeNavigationItem(
+            selected = selectedDestination == HomeDestination.MY,
+            selectedIcon = Icons.Rounded.Person,
+            unselectedIcon = Icons.Outlined.Person,
+            label = "我的",
+            onClick = { onDestinationSelected(HomeDestination.MY) }
         )
     }
 }
@@ -349,6 +367,13 @@ fun HomeNavigationBar(
                     unselectedIcon = Icons.Outlined.Explore,
                     label = "导航",
                     onClick = { onDestinationSelected(HomeDestination.NAVIGATION) }
+                )
+                HomeNavigationItem(
+                    selected = selectedDestination == HomeDestination.MY,
+                    selectedIcon = Icons.Rounded.Person,
+                    unselectedIcon = Icons.Outlined.Person,
+                    label = "我的",
+                    onClick = { onDestinationSelected(HomeDestination.MY) }
                 )
             }
             Spacer(
