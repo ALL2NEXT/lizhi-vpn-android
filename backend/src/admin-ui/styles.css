@@ -320,26 +320,27 @@
      .system-logs-auto-refresh input:checked + i { background: #1a73e8; }
      .system-logs-auto-refresh input:checked + i::after { transform: translateX(16px); }
      .system-logs-auto-refresh input:focus-visible + i { outline: 2px solid #1a73e8; outline-offset: 2px; }
-     .system-logs-stats { display: grid; flex: 0 0 auto; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 14px 14px 16px; }
-     .system-logs-stat-card { display: flex; align-items: center; gap: 14px; min-width: 0; min-height: 94px; padding: 16px 20px; border: 1px solid #e4eaf2; border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgb(40 62 92 / 3%); }
-     .system-logs-stat-icon { display: grid; flex: 0 0 44px; width: 44px; height: 44px; place-items: center; border-radius: 50%; font-size: 23px; font-weight: 700; }
+     .system-logs-overview { box-sizing: border-box; flex: 0 0 auto; min-width: 0; padding: 12px; border: 1px solid #e1e8f0; border-radius: 12px; background: #fff; box-shadow: 0 2px 8px rgb(40 62 92 / 3%); }
+     .system-logs-overview-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 2px 10px; }
+     .system-logs-overview-heading h3 { margin: 0; color: #33435c; font-size: 14px; font-weight: 700; }
+     .system-logs-overview-heading span { color: #8a98ad; font-size: 10px; }
+     .system-logs-overview .subscription-group-navigation { gap: 3px; margin: 0 0 12px; padding: 0 0 12px; border-bottom: 1px solid #e8edf4; }
+     .system-logs-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+     .system-logs-stat-card { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 76px; padding: 8px; border: 1px solid #e4eaf2; border-radius: 10px; background: #fff; box-shadow: 0 2px 8px rgb(40 62 92 / 3%); }
+     .system-logs-stat-icon { display: grid; flex: 0 0 30px; width: 30px; height: 30px; place-items: center; border-radius: 50%; font-size: 18px; font-weight: 700; }
      .system-logs-stat-icon.blue { color: #1680ed; background: #e8f2ff; }
      .system-logs-stat-icon.red { color: #eb3f49; background: #fff0f1; }
      .system-logs-stat-icon.amber { color: #ee9300; background: #fff4df; }
      .system-logs-stat-card > div { display: grid; min-width: 0; gap: 2px; }
-     .system-logs-stat-card strong { color: #33435c; font-size: 13px; }
-     .system-logs-stat-card b { color: #172238; font-size: 27px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-     .system-logs-stat-card b small { color: #64748b; font-size: 12px; font-weight: 500; }
-     .system-logs-stat-card small { color: #8a98ad; font-size: 11px; }
-     .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: 440px minmax(0, 1fr); gap: 10px; min-height: 540px; }
-     .system-logs-sidebar { align-self: stretch; }
-     .system-logs-sidebar .subscription-group-sidebar-heading h3 { font-size: 15px; }
+     .system-logs-stat-card strong { color: #33435c; font-size: 11px; }
+     .system-logs-stat-card b { color: #172238; font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+     .system-logs-stat-card b small { color: #64748b; font-size: 10px; font-weight: 500; }
+     .system-logs-stat-card small { color: #8a98ad; font-size: 9px; }
+     .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: 300px minmax(0, 1fr); gap: 10px; min-height: 540px; }
+     .system-logs-sidebar { display: flex; flex-direction: column; align-self: stretch; gap: 10px; min-width: 0; min-height: 0; overflow: visible; }
      .system-log-type-mark { display: inline-block; width: 10px; height: 10px; margin: 0 auto; border-radius: 50%; background: #7c8ba1; }
      .system-log-type-mark.request { background: #2584ff; }
-     .system-log-type-mark.operation { background: #8e63ce; }
-     .system-log-type-mark.database { background: #f9ab00; }
      .system-log-type-mark.outbound { background: #20a69a; }
-     .system-logs-sidebar .subscription-group-navigation { gap: 3px; }
      .system-log-endpoint-group { min-width: 0; }
      .system-log-endpoint-nav-row { display: flex; align-items: center; gap: 2px; }
      .system-log-endpoint-nav-row > .subscription-group-nav-item { flex: 1 1 auto; width: auto; min-width: 0; grid-template-columns: 10px minmax(0, 1fr); gap: 9px; }
@@ -432,8 +433,6 @@
      .system-logs-browser .system-logs-wrap { flex: 1 1 auto; min-height: 180px; max-height: calc(100vh - 440px); }
      .system-logs-time { min-width: 92px; color: #5e6e86 !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
      .system-log-category { display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 6px; color: #156cc2; background: #e9f3ff; font-size: 11px; white-space: nowrap; }
-     .system-log-category.operation { color: #6941c6; background: #f0eafe; }
-     .system-log-category.database { color: #9a5b00; background: #fff3d6; }
      .system-log-category.outbound { color: #087e8b; background: #e0f7fa; }
      .system-log-level.warning { color: #a85a00; background: #fff1dc; }
      .system-log-level.error { color: #bd2028; background: #ffe7e8; }
@@ -1702,8 +1701,10 @@
       .system-logs-toolbar input[type="search"] { flex: 1 1 100%; }
       .system-logs-toolbar select { flex: 1 1 130px; }
       .system-logs-date-filter { flex: 1 1 135px; }
-      .system-logs-stats { gap: 10px; }
-      .system-logs-stat-card { padding: 14px; }
+      .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: 270px minmax(0, 1fr); }
+      .system-logs-overview { padding: 10px; }
+      .system-logs-stats { gap: 7px; }
+      .system-logs-stat-card { gap: 6px; padding: 7px; }
       .source-list-header, .source-row { grid-template-columns: 15px 18px 25px minmax(74px, 1.1fr) minmax(68px, .7fr) minmax(76px, 1fr) 42px 64px; }
       .source-list-header-remark, .source-row > .source-row-remark,
       .source-list-header-expiry, .source-row > .source-expiry-cell { display: none; }
@@ -1735,9 +1736,8 @@
       .system-logs-heading { align-items: flex-start; flex-direction: column; }
       .system-logs-heading-actions { width: 100%; justify-content: space-between; }
       .system-logs-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .system-logs-stat-card { min-height: 76px; gap: 10px; padding: 10px; }
-      .system-logs-stat-icon { flex-basis: 36px; width: 36px; height: 36px; font-size: 19px; }
-      .system-logs-stat-card b { font-size: 22px; }
+      .system-logs-overview { margin: 0; padding: 10px; }
+      .system-logs-stat-card { min-height: 76px; gap: 8px; padding: 8px; }
       .system-logs-toolbar { align-items: stretch; flex-wrap: wrap; padding: 12px; }
       .system-logs-toolbar input[type="search"], .system-logs-toolbar select,
       .system-logs-date-filter, .system-logs-toolbar > button { flex: 1 1 100%; width: 100%; }
@@ -1748,8 +1748,9 @@
       .system-logs-page-buttons { flex-wrap: wrap; }
       .system-log-detail-drawer { width: 100vw; min-width: 0; }
       .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: minmax(0, 1fr); min-height: 0; }
-      .system-logs-sidebar { min-height: 0; max-height: 180px; }
-      .system-logs-sidebar .subscription-group-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .system-logs-sidebar { min-height: 0; max-height: none; overflow: visible; }
+      .system-logs-overview { width: 100%; }
+      .system-logs-overview .subscription-group-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .tab-panel[data-panel="system-logs"] .system-logs-workspace { min-height: 500px; padding: 0; }
       body.subscriptions-fullscreen, body.navigation-page-fullscreen { overflow: auto; }
       body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace,

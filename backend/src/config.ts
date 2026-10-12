@@ -249,7 +249,7 @@ export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS system_logs_mb (
     id INTEGER PRIMARY KEY,
     occurred_at TEXT NOT NULL,
-    category TEXT NOT NULL CHECK (category IN ('request', 'operation', 'database', 'outbound')),
+    category TEXT NOT NULL CHECK (category IN ('request', 'outbound')),
     level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error')),
     request_id TEXT NOT NULL DEFAULT '',
     actor TEXT NOT NULL DEFAULT '',
@@ -424,7 +424,7 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
     `CREATE TABLE IF NOT EXISTS system_logs_mb (
       id INTEGER PRIMARY KEY,
       occurred_at TEXT NOT NULL,
-      category TEXT NOT NULL CHECK (category IN ('request', 'operation', 'database', 'outbound')),
+      category TEXT NOT NULL CHECK (category IN ('request', 'outbound')),
       level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error')),
       request_id TEXT NOT NULL DEFAULT '',
       actor TEXT NOT NULL DEFAULT '',

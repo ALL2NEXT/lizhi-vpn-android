@@ -17,7 +17,7 @@ let systemLogPayloadLoading = false;
 let systemLogPayloadError = '';
 
 function systemLogCategoryName(category) {
-  return ({request: '网络请求', operation: '后台操作', database: '数据库', outbound: '出站请求'})[category] || '系统';
+  return ({request: '入站网络', outbound: '出站网络'})[category] || '系统';
 }
 
 function systemLogLevelName(level) {
@@ -108,7 +108,7 @@ function renderSystemLogs() {
   renderSystemLogEndpointNavigation(payload.requestEndpoints);
 
   if (!records.length) {
-    host.innerHTML = '<div class="system-logs-empty">' + (total ? '当前筛选条件没有日志' : '暂无系统日志') + '</div>';
+    host.innerHTML = '<div class="system-logs-empty">' + (total ? '当前筛选条件没有日志' : '暂无网络日志') + '</div>';
     return;
   }
 
@@ -155,7 +155,7 @@ async function loadSystemLogs(force) {
   const host = el('systemLogsTable');
   const filterRevision = systemLogsFilterRevision;
   systemLogsLoading = true;
-  if (host) host.innerHTML = '<div class="loading-state">正在读取系统日志</div>';
+  if (host) host.innerHTML = '<div class="loading-state">正在读取网络日志</div>';
   const pageSize = Number(el('systemLogsPageSize') && el('systemLogsPageSize').value) || 10;
   const query = new URLSearchParams({limit: String(pageSize), offset: String(systemLogsOffset)});
   const level = el('systemLogLevel').value;
@@ -190,7 +190,7 @@ async function loadSystemLogs(force) {
     const responseText = await response.text();
     const data = parseResponseJson(responseText);
     if (!response.ok) {
-      throw new Error(adminErrorMessage(data.error, '系统日志读取失败（HTTP ' + response.status + '）'));
+      throw new Error(adminErrorMessage(data.error, '网络日志读取失败（HTTP ' + response.status + '）'));
     }
     if (filterRevision !== systemLogsFilterRevision) return;
     if (includeEndpoints) systemLogEndpointLoading = false;
@@ -210,7 +210,7 @@ async function loadSystemLogs(force) {
       renderSystemLogEndpointNavigation();
     }
     if (filterRevision === systemLogsFilterRevision && host) {
-      host.innerHTML = '<div class="error-state">' + esc(error.message || '系统日志读取失败') + '</div>';
+      host.innerHTML = '<div class="error-state">' + esc(error.message || '网络日志读取失败') + '</div>';
     }
   } finally {
     systemLogsLoading = false;
@@ -235,12 +235,12 @@ function setupSystemLogEndpointNavigation() {
   toggle.className = 'system-log-endpoint-toggle';
   toggle.setAttribute('aria-expanded', 'false');
   toggle.setAttribute('aria-controls', 'systemLogEndpointList');
-  toggle.setAttribute('aria-label', '展开网络请求端点');
+  toggle.setAttribute('aria-label', '展开入站网络端点');
   const list = document.createElement('div');
   list.id = 'systemLogEndpointList';
   list.className = 'system-log-endpoint-list';
   list.setAttribute('role', 'group');
-  list.setAttribute('aria-label', '网络请求端点预览');
+  list.setAttribute('aria-label', '入站网络端点预览');
   list.hidden = true;
 
   categoryButton.parentNode.insertBefore(group, categoryButton);
@@ -262,7 +262,7 @@ function renderSystemLogEndpointNavigation(endpoints) {
   const list = el('systemLogEndpointList');
   if (!toggle || !list) return;
   toggle.setAttribute('aria-expanded', String(systemLogEndpointExpanded));
-  toggle.setAttribute('aria-label', systemLogEndpointExpanded ? '折叠网络请求端点' : '展开网络请求端点');
+  toggle.setAttribute('aria-label', systemLogEndpointExpanded ? '折叠入站网络端点' : '展开入站网络端点');
   list.hidden = !systemLogEndpointExpanded;
   if (!systemLogEndpointExpanded) return;
 
@@ -280,7 +280,7 @@ function renderSystemLogEndpointNavigation(endpoints) {
       ? systemLogsData.requestEndpoints
       : [];
   if (!rows.length) {
-    list.innerHTML = '<div class="system-log-endpoint-state">当前范围暂无网络请求</div>';
+    list.innerHTML = '<div class="system-log-endpoint-state">当前范围暂无入站网络</div>';
     return;
   }
 
@@ -323,8 +323,8 @@ function syncSystemLogCategorySelection() {
 }
 
 function selectSystemLogCategory(category) {
-  const allowedCategories = ['', 'request', 'operation', 'database', 'outbound'];
-  const selectedCategory = allowedCategories.includes(category) ? category : '';
+  const allowedCategories = ['request', 'outbound'];
+  const selectedCategory = allowedCategories.includes(category) ? category : 'request';
   if (selectedCategory === systemLogsCategory && !systemLogsEndpointPath) return;
   systemLogsCategory = selectedCategory;
   systemLogsEndpointPath = '';
@@ -531,7 +531,7 @@ function resetSystemLogFilters() {
   el('systemLogSearch').value = '';
   el('systemLogLevel').value = '';
   el('systemLogStatus').value = '';
-  systemLogsCategory = '';
+  systemLogsCategory = 'request';
   systemLogsEndpointPath = '';
   systemLogsEndpointMethod = '';
   setDefaultSystemLogDateRange();
@@ -691,7 +691,7 @@ function renderSystemLogDetails() {
   } else if (detail === 'response' && systemLogPayload) {
     content.innerHTML = systemLogPayloadCard('完整响应', 'response');
   } else if (detail === 'response') {
-    content.innerHTML = '<section class="system-log-detail-note"><strong>响应摘要</strong><p>响应正文不会写入系统日志。这里展示当前日志中保留的状态和说明字段。</p>' +
+    content.innerHTML = '<section class="system-log-detail-note"><strong>响应摘要</strong><p>响应正文不会写入网络日志。这里展示当前日志中保留的状态和说明字段。</p>' +
       '<dl><div><dt>状态码</dt><dd>' + esc(status) + '</dd></div><div><dt>说明</dt><dd>' + esc(record.message || '-') + '</dd></div><div><dt>附加详情</dt><dd>' + esc(record.details || '-') + '</dd></div></dl></section>';
   } else {
     const raw = JSON.stringify(record, null, 2);
@@ -738,7 +738,7 @@ setupSystemLogEndpointNavigation();
 
 document.querySelectorAll('[data-system-log-category]').forEach(function(button) {
   button.addEventListener('click', function() {
-    selectSystemLogCategory(button.dataset.systemLogCategory || '');
+    selectSystemLogCategory(button.dataset.systemLogCategory);
   });
 });
 

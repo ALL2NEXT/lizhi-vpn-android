@@ -46,7 +46,7 @@ function aiRiskErrorText(code) {
     invalid_ai_risk_model: '模型名称格式无效。',
     invalid_ai_risk_thinking_level: '思考强度设置无效。',
     invalid_ai_risk_window: '分析时间窗无效。',
-    ai_risk_dashboard_data_read_failed: '读取风控统计失败，请检查系统日志和数据库状态。',
+    ai_risk_dashboard_data_read_failed: '读取风控统计失败，请检查网络日志和数据库状态。',
     gemini_auth_failed: 'Gemini 认证失败，请检查 API Key 和模型权限。',
     gemini_rate_limited: 'Gemini 请求频率受限，请稍后再试。',
     gemini_unavailable: '无法连接 Gemini，请检查网络后重试。',
@@ -285,7 +285,7 @@ function aiRiskUpdateMetrics(rows) {
   el('aiRiskMetricMedium').textContent = aiRiskFormatCount(medium);
   el('aiRiskMetricLow').textContent = aiRiskFormatCount(low);
   el('aiRiskMetricRequests').textContent = aiRiskFormatCount(summary.requestCount);
-  el('aiRiskCoverage').textContent = coverage.requestRowsTruncated ? '展示最近采样的 10,000 条日志' : '统计系统日志记录范围';
+  el('aiRiskCoverage').textContent = coverage.requestRowsTruncated ? '展示最近采样的 10,000 条日志' : '统计网络日志记录范围';
   el('aiRiskCountAll').textContent = aiRiskFormatCount(rows.length);
   el('aiRiskCountHigh').textContent = aiRiskFormatCount(high);
   el('aiRiskCountMedium').textContent = aiRiskFormatCount(medium);
@@ -420,7 +420,7 @@ function aiRiskRenderDashboard() {
   }
   const visible = aiRiskFilteredRows(rows);
   if (!visible.length) {
-    const message = rows.length ? '没有符合当前筛选条件的 IP。' : '当前时间窗内没有可展示的请求记录。请确认系统日志记录已启用。';
+    const message = rows.length ? '没有符合当前筛选条件的 IP。' : '当前时间窗内没有可展示的请求记录。请确认网络日志记录已启用。';
     host.innerHTML += '<div class="ai-risk-empty"><strong>' + message + '</strong>' + (aiRiskAnalysis ? '<p>分析结果仅覆盖当前日志保留范围。</p>' : '<p>运行 AI 风控分析后，可查看风险级别、证据和处置建议。</p>') + '</div>';
     return;
   }

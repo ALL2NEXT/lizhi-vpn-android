@@ -230,34 +230,6 @@ async function captureResponse(response: Response): Promise<SystemLogHttpCapture
   };
 }
 
-function adminOperationLabel(method: string, path: string) {
-  if (path.endsWith("/api/system-log-settings") && method === "PUT") return "修改系统日志记录设置";
-  if (path.endsWith("/api/state") && method === "PUT") return "保存后台配置";
-  if (path.endsWith("/api/registration-codes") && method === "POST") return "生成注册码";
-  if (path.endsWith("/api/vip-codes") && method === "POST") return "发放 VIP 卡密";
-  if (path.includes("/api/users/batch") && method === "DELETE") return "批量删除用户";
-  if (path.includes("/api/users/batch")) return "批量修改用户";
-  if (path.includes("/api/users/") && path.endsWith("/ban")) {
-    return method === "POST" ? "封禁用户" : "解除用户封禁";
-  }
-  if (path.includes("/api/users/") && method === "DELETE") return "删除用户";
-  if (path.includes("/api/users/") && method === "PATCH") return "编辑用户";
-  if (path.includes("/api/security/")) return "修改账户或设备安全设置";
-  return `后台操作 ${method} ${path}`;
-}
-
-function isAdminWriteOperation(method: string, path: string) {
-  if (method === "PUT" && path.endsWith("/api/system-log-settings")) return true;
-  if (method === "PUT" && path.endsWith("/api/state")) return true;
-  if (method === "POST" && path.endsWith("/api/registration-codes")) return true;
-  if (method === "POST" && path.endsWith("/api/vip-codes")) return true;
-  if (path.includes("/api/users/") || path.includes("/api/users/batch")) {
-    return ["PATCH", "POST", "DELETE"].includes(method);
-  }
-  if (path.includes("/api/security/")) return ["POST", "PATCH", "DELETE"].includes(method);
-  return false;
-}
-
 async function dispatchWorkerRequest(request: Request, env: Env) {
   try {
       if (request.method === "OPTIONS") {
@@ -415,22 +387,6 @@ const worker = {
         occurredAt,
       },
     ];
-    if (isAdminApi && authorizedAdmin && isAdminWriteOperation(request.method, path)) {
-      entries.push({
-        category: "operation",
-        level,
-        requestId,
-        actor,
-        method: request.method,
-        path,
-        status: response.status,
-        durationMs,
-        ip: requestIp(request),
-        userAgent: request.headers.get("user-agent") || "",
-        message: adminOperationLabel(request.method, path),
-        occurredAt,
-      });
-    }
     const persist = (async () => {
       if (requestCapturePromise) {
         try {

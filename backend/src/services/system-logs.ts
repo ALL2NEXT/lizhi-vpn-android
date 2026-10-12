@@ -14,11 +14,10 @@ import { SYSTEM_LOG_SETTINGS_KEY } from "../config.ts";
 import { beijingTimestamp } from "../domain/time.ts";
 import { ensureUserSchema } from "./user-store.ts";
 
-const DATABASE_SLOW_MS = 250;
 const OUTBOUND_SLOW_MS = 1000;
 const LOG_RETENTION_DAYS = 30;
 const MAX_LOG_DETAILS_LENGTH = 1600;
-const SYSTEM_LOG_CATEGORIES: SystemLogCategory[] = ["request", "operation", "database", "outbound"];
+const SYSTEM_LOG_CATEGORIES: SystemLogCategory[] = ["request", "outbound"];
 const BEIJING_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Shanghai",
   hourCycle: "h23",
@@ -27,10 +26,9 @@ const BEIJING_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
 });
 const DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS: SystemLogRecordingSettings = {
   mode: "simple",
-  categories: { request: true, operation: true, database: true, outbound: true },
+  categories: { request: true, outbound: true },
   schedule: { enabled: false, startTime: "00:00", endTime: "23:59" },
 };
-const preparedMetadata = new WeakMap<object, { raw: D1PreparedStatement; sql: string }>();
 
 function normalizeSystemLogRecordingSettings(value: unknown): SystemLogRecordingSettings {
   const stored = value && typeof value === "object"
@@ -48,8 +46,6 @@ function normalizeSystemLogRecordingSettings(value: unknown): SystemLogRecording
     mode: stored.mode === "full" ? "full" : "simple",
     categories: {
       request: categories.request !== false,
-      operation: categories.operation !== false,
-      database: categories.database !== false,
       outbound: categories.outbound !== false,
     },
     schedule: {
@@ -161,14 +157,6 @@ function truncate(value: unknown, maximum: number) {
   return String(value == null ? "" : value).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ").trim().slice(0, maximum);
 }
 
-function safeSql(sql: string) {
-  return truncate(sql
-    .replace(/--[^\r\n]*/g, " ")
-    .replace(/'(?:''|[^'])*'/g, "'?'" )
-    .replace(/"(?:""|[^"])*"/g, '"?"')
-    .replace(/\s+/g, " "), 900);
-}
-
 function safeError(error: unknown) {
   const name = error instanceof Error ? error.name : "Error";
   const message = error instanceof Error ? error.message : String(error);
@@ -178,157 +166,15 @@ function safeError(error: unknown) {
     .replace(/'(?:''|[^'])*'/g, "'?'"), 300);
 }
 
-function notify(sink: (entry: SystemLogDraft) => void, entry: SystemLogDraft) {
-  try {
-    sink(entry);
-  } catch {
-    // 诊断日志失败不能影响原请求。
-  }
-}
-
-function measured<T>(
-  sink: (entry: SystemLogDraft) => void,
-  database: string,
-  operation: string,
-  sql: string,
-  run: () => Promise<T>,
-) {
-  const startedAt = performance.now();
-  return run().then((result) => {
-    const durationMs = Math.round(performance.now() - startedAt);
-    if (durationMs >= DATABASE_SLOW_MS) {
-      notify(sink, {
-        category: "database",
-        level: "warning",
-        durationMs,
-        message: `${database} ${operation} 用时 ${durationMs} ms`,
-        details: safeSql(sql),
-      });
-    }
-    return result;
-  }, (error: unknown) => {
-    const durationMs = Math.round(performance.now() - startedAt);
-    notify(sink, {
-      category: "database",
-      level: "error",
-      durationMs,
-      message: `${database} ${operation} 失败`,
-      details: `${safeError(error)}\n${safeSql(sql)}`,
-    });
-    throw error;
-  });
-}
-
-function observedStatement(
-  statement: D1PreparedStatement,
-  sql: string,
-  database: string,
-  sink: (entry: SystemLogDraft) => void,
-) {
-  const wrapped = new Proxy(statement, {
-    get(target, property) {
-      if (property === "bind") {
-        return (...values: unknown[]) => observedStatement(
-          target.bind(...values), sql, database, sink,
-        );
-      }
-      if (property === "run" || property === "first" || property === "all" || property === "raw") {
-        return (...args: unknown[]) => measured(
-          sink,
-          database,
-          String(property).toUpperCase(),
-          sql,
-          () => Reflect.apply(target[property] as (...input: unknown[]) => Promise<unknown>, target, args),
-        );
-      }
-      const value = Reflect.get(target, property, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
-  preparedMetadata.set(statement, { raw: statement, sql });
-  preparedMetadata.set(wrapped, { raw: statement, sql });
-  return wrapped;
-}
-
-function observedSession(
-  session: D1DatabaseSession,
-  database: string,
-  sink: (entry: SystemLogDraft) => void,
-) {
-  return new Proxy(session, {
-    get(target, property) {
-      if (property === "prepare") {
-        return (sql: string) => observedStatement(target.prepare(sql), sql, database, sink);
-      }
-      if (property === "batch") {
-        return (statements: D1PreparedStatement[]) => {
-          const metadata = statements.map((statement) => preparedMetadata.get(statement));
-          const sql = metadata.map((item) => item && safeSql(item.sql)).filter(Boolean).join("; ");
-          const rawStatements = statements.map((statement, index) => metadata[index]?.raw || statement);
-          return measured(sink, database, `BATCH ${statements.length}`, sql, () =>
-            Reflect.apply(target.batch, target, [rawStatements]));
-        };
-      }
-      const value = Reflect.get(target, property, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
-}
-
-function observedDatabase(
-  databaseBinding: D1Database,
-  database: string,
-  sink: (entry: SystemLogDraft) => void,
-) {
-  return new Proxy(databaseBinding, {
-    get(target, property) {
-      if (property === "prepare") {
-        return (sql: string) => observedStatement(target.prepare(sql), sql, database, sink);
-      }
-      if (property === "batch") {
-        return (statements: D1PreparedStatement[]) => {
-          const metadata = statements.map((statement) => preparedMetadata.get(statement));
-          const sql = metadata.map((item) => item && safeSql(item.sql)).filter(Boolean).join("; ");
-          const rawStatements = statements.map((statement, index) => metadata[index]?.raw || statement);
-          return measured(sink, database, `BATCH ${statements.length}`, sql, () =>
-            Reflect.apply(target.batch, target, [rawStatements]));
-        };
-      }
-      if (property === "exec") {
-        return (sql: string) => measured(sink, database, "EXEC", sql, () =>
-          Reflect.apply(target.exec, target, [sql]));
-      }
-      if (property === "withSession") {
-        return (constraint?: D1SessionBookmark | D1SessionConstraint) => observedSession(
-          target.withSession(constraint), database, sink,
-        );
-      }
-      const value = Reflect.get(target, property, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
-}
-
 export function createObservedEnv(
   env: Env,
   sink: (entry: SystemLogDraft) => void,
   userSink?: (identity: RequestUserIdentity) => void,
 ): Env {
-  const databases = new Map<PropertyKey, D1Database>();
   return new Proxy(env, {
     get(target, property, receiver) {
       if (property === "__systemLogSink") return sink;
       if (property === "__requestUserSink" && userSink) return userSink;
-      if (property === "USERS_DB" || property === "SUBSCRIPTIONS_DB") {
-        const binding = Reflect.get(target, property, receiver) as D1Database | undefined;
-        if (!binding) return binding;
-        let wrapped = databases.get(property);
-        if (!wrapped) {
-          wrapped = observedDatabase(binding, String(property), sink);
-          databases.set(property, wrapped);
-        }
-        return wrapped;
-      }
       return Reflect.get(target, property, receiver);
     },
   });
@@ -382,12 +228,10 @@ export async function observedFetch(
 }
 
 function normalizeDraft(entry: SystemLogDraft) {
-  const allowedCategories: SystemLogCategory[] = ["request", "operation", "database", "outbound"];
-  const category = allowedCategories.includes(entry.category) ? entry.category : "request";
   const level = entry.level === "error" || entry.level === "warning" ? entry.level : "info";
   return {
     occurredAt: truncate(entry.occurredAt || beijingTimestamp(), 40),
-    category,
+    category: entry.category,
     level,
     requestId: truncate(entry.requestId, 96),
     actor: truncate(entry.actor, 64),
@@ -451,6 +295,7 @@ export async function writeSystemLogs(
   try {
     const settings = recordingSettings || await readSystemLogRecordingSettings(env);
     const enabledEntries = entries.filter((entry) => {
+      if (!SYSTEM_LOG_CATEGORIES.includes(entry.category)) return false;
       if (!settings.categories[entry.category]) return false;
       const occurredAt = entry.occurredAt ? new Date(entry.occurredAt) : new Date();
       return isSystemLogScheduleActive(settings.schedule, occurredAt);
@@ -539,7 +384,7 @@ export async function readSystemLogs(
     date.setUTCDate(date.getUTCDate() + 1);
     return `${date.toISOString().slice(0, 10)}T00:00:00+08:00`;
   };
-  const categories: SystemLogCategory[] = ["request", "operation", "database", "outbound"];
+  const categories: SystemLogCategory[] = ["request", "outbound"];
   const endpointPath = truncate(filters.endpointPath, 300);
   const endpointMethod = truncate(filters.endpointMethod, 16).toUpperCase();
   if (endpointPath) {
@@ -548,6 +393,8 @@ export async function readSystemLogs(
   } else if (categories.includes(filters.category as SystemLogCategory)) {
     conditions.push("category = ?");
     bindings.push(filters.category as string);
+  } else {
+    conditions.push("category IN ('request', 'outbound')");
   }
   if (endpointPath) {
     conditions.push("path = ?");

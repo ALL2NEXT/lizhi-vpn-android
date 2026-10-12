@@ -212,7 +212,7 @@ ON subscription_group_assignments_mb(group_id, source_key, assigned_at);
 CREATE TABLE system_logs_mb (
   id INTEGER PRIMARY KEY,
   occurred_at TEXT NOT NULL,
-  category TEXT NOT NULL CHECK (category IN ('request', 'operation', 'database', 'outbound')),
+  category TEXT NOT NULL CHECK (category IN ('request', 'outbound')),
   level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error')),
   request_id TEXT NOT NULL DEFAULT '',
   actor TEXT NOT NULL DEFAULT '',

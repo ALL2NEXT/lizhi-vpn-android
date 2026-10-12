@@ -11,7 +11,7 @@
   let systemLogsData = null;
   let systemLogsLoading = false;
   let systemLogsOffset = 0;
-  let systemLogsCategory = '';
+  let systemLogsCategory = 'request';
   let trafficDetailsSortKey = '';
   let trafficDetailsSortDirection = 'asc';
   const trafficZeroFilters = {today: false, month: false, total: false};
@@ -184,7 +184,7 @@
    systemLogsData = null;
    systemLogsLoading = false;
    systemLogsOffset = 0;
-   systemLogsCategory = '';
+   systemLogsCategory = 'request';
    syncSystemLogCategorySelection();
    trafficZeroFilters.today = false;
    trafficZeroFilters.month = false;

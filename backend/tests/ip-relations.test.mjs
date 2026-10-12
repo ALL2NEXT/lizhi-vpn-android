@@ -150,7 +150,7 @@ test("IP 与用户关联按成功请求采集，可双向查询并保留历史",
   await t.test("关闭或按时段停止日志不会停止关联采集；无效 IP 不使用 XFF 猜测", async () => {
     const config = await mf.getKVNamespace("CONFIG");
     await config.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify({
-      categories: { request: false, operation: false, database: false, outbound: false },
+      categories: { request: false, outbound: false },
     }));
     const independentIp = "203.0.113.5";
     await call("/api/client?deviceId=" + deviceA, { ip: independentIp });

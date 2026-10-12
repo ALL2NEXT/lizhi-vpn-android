@@ -82,7 +82,7 @@
             <div id="backend-settings-subnav" class="nav-submenu" role="group" aria-label="后台设置子菜单">
               <button class="tab-button" role="tab" type="button" data-tab="ai-risk"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a7 7 0 0 0-7 7v2a4 4 0 0 0 4 4h1v3h4v-3h1a4 4 0 0 0 4-4V9a7 7 0 0 0-7-7zm-3 8H7V8h2v2zm8 0h-2V8h2v2zM9 21h6v-2H9v2z"/></svg><span>AI 风控</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="ip-relations"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3 14h7v7H3v-7zm11 0h7v7h-7v-7zm-3-3h2v2h5v2h-2v-1H8v1H6v-2h5v-2z"/></svg><span>IP 与用户</span></button>
-              <button class="tab-button" role="tab" type="button" data-tab="system-logs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 3a9 9 0 1 0 8.9 10h-2a7 7 0 1 1-2-6L15 10h7V3l-2.7 2.7A8.9 8.9 0 0 0 13 3zm-1 5v5l4 2.4 1-1.6-3-1.8V8h-2z"/></svg><span>系统日志</span></button>
+              <button class="tab-button" role="tab" type="button" data-tab="system-logs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 3a9 9 0 1 0 8.9 10h-2a7 7 0 1 1-2-6L15 10h7V3l-2.7 2.7A8.9 8.9 0 0 0 13 3zm-1 5v5l4 2.4 1-1.6-3-1.8V8h-2z"/></svg><span>网络日志</span></button>
             </div>
           </div>
        </nav>
@@ -352,7 +352,7 @@
           <article class="ai-risk-metric risk-high"><span>高风险</span><strong id="aiRiskMetricHigh">0</strong><small>需要优先复核</small></article>
           <article class="ai-risk-metric risk-medium"><span>中风险</span><strong id="aiRiskMetricMedium">0</strong><small>建议人工复核</small></article>
           <article class="ai-risk-metric risk-low"><span>低风险</span><strong id="aiRiskMetricLow">0</strong><small>暂未发现明显异常</small></article>
-          <article class="ai-risk-metric"><span>总请求数</span><strong id="aiRiskMetricRequests">—</strong><small id="aiRiskCoverage">统计系统日志记录范围</small></article>
+          <article class="ai-risk-metric"><span>总请求数</span><strong id="aiRiskMetricRequests">—</strong><small id="aiRiskCoverage">统计网络日志记录范围</small></article>
         </section>
 
         <div class="ai-risk-list-toolbar">
@@ -388,7 +388,7 @@
             <button id="aiRiskSave" class="ai-risk-save" type="button">保存配置</button>
           </section>
           <details class="ai-risk-prompt-editor"><summary>提示词模板</summary><div><label class="field" for="aiRiskPromptTemplate"><span>Gemini 分析提示词</span><textarea id="aiRiskPromptTemplate" maxlength="12000" rows="13" spellcheck="false" placeholder="读取设置后显示当前提示词"></textarea><small>可自行调整风险分析规则；必须保留且仅保留一次 {{DATASET_JSON}}，它会在分析时替换为脱敏遥测数据。最长 12,000 字符，修改后点击“保存配置”生效。</small></label><button id="aiRiskPromptReset" class="secondary" type="button">恢复推荐模板</button></div></details>
-          <details class="ai-risk-advanced"><summary>高级设置与数据说明</summary><div><p>分析仅由管理员手动触发，不会定时请求或自动采取封禁操作。</p><p>发送给 Google 的数据会将 IP 和 UID 替换为本次分析专用的随机引用标记，不包含请求正文、密码或订阅内容。</p><p>本地展示的 IP 与账户仅用于后台复核，数据受系统日志开关和保留期影响。</p><button id="aiRiskPreview" class="secondary" type="button">预览发送给 Gemini 的脱敏数据</button></div></details>
+          <details class="ai-risk-advanced"><summary>高级设置与数据说明</summary><div><p>分析仅由管理员手动触发，不会定时请求或自动采取封禁操作。</p><p>发送给 Google 的数据会将 IP 和 UID 替换为本次分析专用的随机引用标记，不包含请求正文、密码或订阅内容。</p><p>本地展示的 IP 与账户仅用于后台复核，数据受网络日志开关和保留期影响。</p><button id="aiRiskPreview" class="secondary" type="button">预览发送给 Gemini 的脱敏数据</button></div></details>
         </div>
       </aside>
       <button id="aiRiskSettingsScrim" class="ai-risk-settings-scrim" type="button" aria-label="关闭模型设置" hidden></button>
@@ -706,34 +706,33 @@
   <section class="card tab-panel" role="tabpanel" data-panel="system-logs">
     <div class="dashboard-heading system-logs-heading">
       <div class="system-logs-title">
-        <h2>系统日志</h2><button id="systemLogsSettingsButton" class="system-logs-settings-button secondary" type="button" aria-label="系统日志设置" title="系统日志设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.7 7.7 0 0 0 .05-.94 7.7 7.7 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.89 2h-3.78a.49.49 0 0 0-.49.42L9.26 4.96a7.3 7.3 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.71 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.7 7.7 0 0 0-.05.94c0 .32.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.39 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.78c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.13-.55 1.63-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>
+        <h2>网络日志</h2><button id="systemLogsSettingsButton" class="system-logs-settings-button secondary" type="button" aria-label="网络日志设置" title="网络日志设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.7 7.7 0 0 0 .05-.94 7.7 7.7 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.89 2h-3.78a.49.49 0 0 0-.49.42L9.26 4.96a7.3 7.3 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.71 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.7 7.7 0 0 0-.05.94c0 .32.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.39 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.78c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.13-.55 1.63-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>
       </div>
       <div class="system-logs-heading-actions">
         <button class="secondary" type="button" onclick="loadSystemLogs(true)">⟳ 刷新</button>
-        <label class="system-logs-auto-refresh"><span>自动刷新</span><span>10s</span><input id="systemLogsAutoRefreshToggle" type="checkbox" aria-label="每 10 秒自动刷新系统日志"><i aria-hidden="true"></i></label>
+        <label class="system-logs-auto-refresh"><span>自动刷新</span><span>10s</span><input id="systemLogsAutoRefreshToggle" type="checkbox" aria-label="每 10 秒自动刷新网络日志"><i aria-hidden="true"></i></label>
       </div>
     </div>
     <div class="subscription-manager-layout system-logs-manager-layout">
-      <aside class="subscription-group-sidebar system-logs-sidebar" aria-label="系统日志类型">
-        <div class="subscription-group-sidebar-heading"><h3>日志类型</h3></div>
-        <nav id="systemLogCategoryNavigation" class="subscription-group-navigation" aria-label="选择日志类型">
-          <button class="subscription-group-nav-item active" type="button" data-system-log-category="" aria-current="page"><span class="system-log-type-mark all" aria-hidden="true"></span><span class="subscription-nav-name">全部日志</span></button>
-          <button class="subscription-group-nav-item" type="button" data-system-log-category="request"><span class="system-log-type-mark request" aria-hidden="true"></span><span class="subscription-nav-name">网络请求</span></button>
-          <button class="subscription-group-nav-item" type="button" data-system-log-category="operation"><span class="system-log-type-mark operation" aria-hidden="true"></span><span class="subscription-nav-name">后台操作</span></button>
-          <button class="subscription-group-nav-item" type="button" data-system-log-category="database"><span class="system-log-type-mark database" aria-hidden="true"></span><span class="subscription-nav-name">数据库</span></button>
-          <button class="subscription-group-nav-item" type="button" data-system-log-category="outbound"><span class="system-log-type-mark outbound" aria-hidden="true"></span><span class="subscription-nav-name">出站请求</span></button>
-        </nav>
+      <aside class="system-logs-sidebar" aria-label="概览">
+        <section class="system-logs-overview" aria-labelledby="systemLogsOverviewTitle">
+          <header class="system-logs-overview-heading"><h3 id="systemLogsOverviewTitle">概览</h3><span>当前筛选范围</span></header>
+          <nav id="systemLogCategoryNavigation" class="subscription-group-navigation" aria-label="选择日志类型">
+            <button class="subscription-group-nav-item active" type="button" data-system-log-category="request" aria-current="page"><span class="system-log-type-mark request" aria-hidden="true"></span><span class="subscription-nav-name">入站网络</span></button>
+            <button class="subscription-group-nav-item" type="button" data-system-log-category="outbound"><span class="system-log-type-mark outbound" aria-hidden="true"></span><span class="subscription-nav-name">出站网络</span></button>
+          </nav>
+          <div class="system-logs-stats" aria-label="当前时间范围日志统计">
+            <article class="system-logs-stat-card"><span class="system-logs-stat-icon blue">▤</span><div><strong>日志总数</strong><b id="systemLogsTotalStat">—</b><small>当前范围</small></div></article>
+            <article class="system-logs-stat-card"><span class="system-logs-stat-icon red">!</span><div><strong>错误数</strong><b id="systemLogsErrorStat">—</b><small>当前范围</small></div></article>
+            <article class="system-logs-stat-card"><span class="system-logs-stat-icon amber">▲</span><div><strong>警告数</strong><b id="systemLogsWarningStat">—</b><small>当前范围</small></div></article>
+            <article class="system-logs-stat-card"><span class="system-logs-stat-icon blue">◷</span><div><strong>平均耗时</strong><b><span id="systemLogsAverageStat">—</span> <small>ms</small></b><small>当前范围</small></div></article>
+          </div>
+        </section>
       </aside>
-      <section class="subscription-group-workspace system-logs-workspace" aria-label="系统日志列表">
-        <div class="system-logs-stats" aria-label="当前时间范围日志统计">
-          <article class="system-logs-stat-card"><span class="system-logs-stat-icon blue">▤</span><div><strong>日志总数</strong><b id="systemLogsTotalStat">—</b><small>当前范围</small></div></article>
-          <article class="system-logs-stat-card"><span class="system-logs-stat-icon red">!</span><div><strong>错误数</strong><b id="systemLogsErrorStat">—</b><small>当前范围</small></div></article>
-          <article class="system-logs-stat-card"><span class="system-logs-stat-icon amber">▲</span><div><strong>警告数</strong><b id="systemLogsWarningStat">—</b><small>当前范围</small></div></article>
-          <article class="system-logs-stat-card"><span class="system-logs-stat-icon blue">◷</span><div><strong>平均耗时</strong><b><span id="systemLogsAverageStat">—</span> <small>ms</small></b><small>当前范围</small></div></article>
-        </div>
-        <section class="system-logs-browser" aria-label="系统日志列表">
+      <section class="subscription-group-workspace system-logs-workspace" aria-label="网络日志列表">
+        <section class="system-logs-browser" aria-label="网络日志列表">
           <div class="system-logs-toolbar">
-            <input id="systemLogSearch" type="search" placeholder="⌕ 搜索路径、说明、IP、请求 ID、User-Agent…" aria-label="搜索系统日志">
+            <input id="systemLogSearch" type="search" placeholder="⌕ 搜索路径、说明、IP、请求 ID、User-Agent…" aria-label="搜索网络日志">
             <select id="systemLogLevel" aria-label="日志级别"><option value="">全部级别</option><option value="error">错误</option><option value="warning">警告</option><option value="info">信息</option></select>
             <select id="systemLogStatus" aria-label="状态码"><option value="">全部状态码</option><option value="success">2xx 成功</option><option value="redirect">3xx 重定向</option><option value="client-error">4xx 客户端错误</option><option value="server-error">5xx 服务端错误</option><option value="none">无状态码</option></select>
             <label class="system-logs-date-filter"><span class="sr-only">开始日期</span><input id="systemLogStartDate" type="date" aria-label="开始日期"></label><span class="system-logs-date-separator">至</span>
@@ -741,7 +740,7 @@
             <button class="secondary" type="button" onclick="resetSystemLogFilters()">重置</button>
           </div>
           <div class="system-logs-table-heading"><span id="systemLogsSummary" role="status" aria-live="polite"></span></div>
-          <div id="systemLogsTable" class="system-logs-wrap"><div class="loading-state">打开此模块后读取系统日志</div></div>
+          <div id="systemLogsTable" class="system-logs-wrap"><div class="loading-state">打开此模块后读取网络日志</div></div>
           <div class="system-logs-pagination">
             <span id="systemLogsPageStatus"></span>
             <nav id="systemLogsPager" class="system-logs-page-buttons" aria-label="日志分页"></nav>
@@ -753,18 +752,18 @@
     <div id="systemLogSettingsModal" class="system-log-settings-modal" hidden>
       <div class="system-log-settings-backdrop" aria-hidden="true"></div>
       <section class="system-log-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="systemLogSettingsTitle">
-        <header class="system-log-settings-header"><h3 id="systemLogSettingsTitle">系统日志设置</h3><button type="button" class="system-log-drawer-close" data-system-log-settings-close aria-label="关闭设置">×</button></header>
+        <header class="system-log-settings-header"><h3 id="systemLogSettingsTitle">网络日志设置</h3><button type="button" class="system-log-drawer-close" data-system-log-settings-close aria-label="关闭设置">×</button></header>
         <div class="system-log-settings-content">
           <fieldset class="system-log-mode-fieldset">
             <legend>记录方式</legend>
             <label class="system-log-mode-option"><input type="radio" name="systemLogRecordingMode" data-system-log-mode="simple" value="simple" checked disabled><span><strong>简易记录</strong><small>记录请求方法、路径、状态码、耗时等概要信息。</small></span></label>
-            <label class="system-log-mode-option"><input type="radio" name="systemLogRecordingMode" data-system-log-mode="full" value="full" disabled><span><strong>全量记录</strong><small>保存网络请求的完整 URL、请求头和正文，以及响应头和正文；需开启“网络请求”记录。</small></span></label>
+            <label class="system-log-mode-option"><input type="radio" name="systemLogRecordingMode" data-system-log-mode="full" value="full" disabled><span><strong>全量记录</strong><small>保存入站网络的完整 URL、请求头和正文，以及响应头和正文；需开启“入站网络”记录。</small></span></label>
             <p class="system-log-full-warning">全量记录可能包含密码、令牌、Cookie 等敏感信息，并增加数据库占用；仅限可信管理员访问，日志按 30 天周期清理。</p>
           </fieldset>
           <fieldset class="system-log-schedule-settings">
             <legend>定时记录</legend>
             <div class="system-log-schedule-toggle-row">
-              <span><strong>启用定时记录</strong><small>每天仅在设定时间段内记录系统日志。</small></span>
+              <span><strong>启用定时记录</strong><small>每天仅在设定时间段内记录网络日志。</small></span>
               <label class="system-log-record-toggle" title="启用定时记录"><input id="systemLogScheduleToggle" type="checkbox" data-system-log-schedule-toggle disabled aria-label="启用定时记录"><i aria-hidden="true"></i></label>
             </div>
             <div class="system-log-schedule-range">
@@ -775,10 +774,8 @@
           </fieldset>
           <fieldset class="system-log-category-settings">
             <legend>分类记录开关</legend>
-            <div class="system-log-setting-category"><span><i class="system-log-type-mark request" aria-hidden="true"></i>网络请求</span><label class="system-log-record-toggle" title="记录网络请求"><input type="checkbox" data-system-log-recording="request" checked disabled aria-label="记录网络请求"><i aria-hidden="true"></i></label></div>
-            <div class="system-log-setting-category"><span><i class="system-log-type-mark operation" aria-hidden="true"></i>后台操作</span><label class="system-log-record-toggle" title="记录后台操作"><input type="checkbox" data-system-log-recording="operation" checked disabled aria-label="记录后台操作"><i aria-hidden="true"></i></label></div>
-            <div class="system-log-setting-category"><span><i class="system-log-type-mark database" aria-hidden="true"></i>数据库</span><label class="system-log-record-toggle" title="记录数据库操作"><input type="checkbox" data-system-log-recording="database" checked disabled aria-label="记录数据库操作"><i aria-hidden="true"></i></label></div>
-            <div class="system-log-setting-category"><span><i class="system-log-type-mark outbound" aria-hidden="true"></i>出站请求</span><label class="system-log-record-toggle" title="记录出站请求"><input type="checkbox" data-system-log-recording="outbound" checked disabled aria-label="记录出站请求"><i aria-hidden="true"></i></label></div>
+            <div class="system-log-setting-category"><span><i class="system-log-type-mark request" aria-hidden="true"></i>入站网络</span><label class="system-log-record-toggle" title="记录入站网络"><input type="checkbox" data-system-log-recording="request" checked disabled aria-label="记录入站网络"><i aria-hidden="true"></i></label></div>
+            <div class="system-log-setting-category"><span><i class="system-log-type-mark outbound" aria-hidden="true"></i>出站网络</span><label class="system-log-record-toggle" title="记录出站网络"><input type="checkbox" data-system-log-recording="outbound" checked disabled aria-label="记录出站网络"><i aria-hidden="true"></i></label></div>
           </fieldset>
         </div>
         <footer class="system-log-settings-footer"><button type="button" class="secondary" data-system-log-settings-close>完成</button></footer>

@@ -63,7 +63,7 @@ test("AI 风控管理接口鉴权、隐藏密钥并提供脱敏请求数据", as
 
   await config.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify({
     mode: "full",
-    categories: { request: true, operation: true, database: true, outbound: true },
+    categories: { request: true, outbound: true },
     schedule: { enabled: false, startTime: "00:00", endTime: "23:59" },
   }));
   const customPrompt = "人工复核优先；证据不足就说明无法判断。\n{{DATASET_JSON}}";
