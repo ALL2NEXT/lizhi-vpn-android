@@ -67,29 +67,63 @@ export async function readUserIpLinks(
     ? Math.min(200, Math.max(1, Math.floor(filters.limit!))) : 50;
   const offset = Number.isFinite(filters.offset)
     ? Math.min(1_000_000, Math.max(0, Math.floor(filters.offset!))) : 0;
-  const conditions: string[] = [];
+  const conditions = [
+    "category = 'request'",
+    "status BETWEEN 200 AND 299",
+    "ip <> ''",
+    "user_uid <> ''",
+    "device_id <> ''",
+  ];
   const bindings: string[] = [];
   if (ip) {
-    conditions.push("l.ip = ?");
+    conditions.push("ip = ?");
     bindings.push(ip);
   }
   if (uid) {
-    conditions.push("l.user_uid = ?");
+    conditions.push("user_uid = ?");
     bindings.push(uid);
   }
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const eligibleLogs = `eligible_logs AS (
+    SELECT id, ip, user_uid, device_id, occurred_at, path, identity_source
+    FROM system_logs_mb
+    WHERE ${conditions.join(" AND ")}
+  )`;
+  const aggregatedLogs = `aggregated_logs AS (
+    SELECT ip, user_uid, MIN(occurred_at) AS first_seen_at,
+      MAX(occurred_at) AS last_seen_at, COUNT(*) AS request_count,
+      SUM(CASE WHEN path LIKE '/api/subscription/%' THEN 1 ELSE 0 END) AS subscription_count,
+      SUM(CASE WHEN identity_source = 'login' THEN 1 ELSE 0 END) AS login_count
+    FROM eligible_logs
+    GROUP BY ip, user_uid
+  )`;
   const db = await ensureUserSchema(env);
   const results = await db.batch([
     db.prepare(
-      `SELECT COUNT(*) AS relation_count, COUNT(DISTINCT l.ip) AS ip_count,
-         COUNT(DISTINCT l.user_uid) AS user_count, SUM(l.request_count) AS request_count
-       FROM user_ip_links_mb l ${where}`,
+      `WITH ${eligibleLogs}, ${aggregatedLogs}
+       SELECT COUNT(*) AS relation_count, COUNT(DISTINCT ip) AS ip_count,
+         COUNT(DISTINCT user_uid) AS user_count, SUM(request_count) AS request_count
+       FROM aggregated_logs`,
     ).bind(...bindings),
     db.prepare(
-      `SELECT l.*, u.nickname, u.status AS account_status
-       FROM user_ip_links_mb l LEFT JOIN users_mb u ON u.id = l.user_id
-       ${where}
-       ORDER BY l.last_seen_at DESC, l.user_uid ASC, l.ip ASC LIMIT ? OFFSET ?`,
+      `WITH ${eligibleLogs}, ${aggregatedLogs}, latest_devices AS (
+         SELECT ip, user_uid, device_id,
+           ROW_NUMBER() OVER (
+             PARTITION BY ip, user_uid ORDER BY occurred_at DESC, id DESC
+           ) AS device_rank
+         FROM eligible_logs
+       )
+       SELECT aggregated_logs.ip, aggregated_logs.user_uid, users_mb.nickname,
+         users_mb.status AS account_status, aggregated_logs.first_seen_at,
+         aggregated_logs.last_seen_at, latest_devices.device_id AS last_device_id,
+         aggregated_logs.request_count, aggregated_logs.subscription_count,
+         aggregated_logs.login_count
+       FROM aggregated_logs
+       LEFT JOIN latest_devices ON latest_devices.ip = aggregated_logs.ip
+         AND latest_devices.user_uid = aggregated_logs.user_uid
+         AND latest_devices.device_rank = 1
+       LEFT JOIN users_mb ON users_mb.uid = aggregated_logs.user_uid
+       ORDER BY aggregated_logs.last_seen_at DESC, aggregated_logs.user_uid ASC,
+         aggregated_logs.ip ASC LIMIT ? OFFSET ?`,
     ).bind(...bindings, limit, offset),
   ]);
   const stats = results[0].results?.[0] as Record<string, number | null> | undefined;

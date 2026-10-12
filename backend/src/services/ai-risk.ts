@@ -314,11 +314,18 @@ async function collectRiskDataset(env: Env, requestedWindowHours: unknown) {
        ORDER BY occurred_at DESC LIMIT ?`,
     ).bind(windowStart, MAX_LOG_ROWS + 1).all<RequestLogRow>(),
     db.prepare(
-      `SELECT l.ip, l.user_uid, l.request_count, l.subscription_count, l.login_count,
-         l.last_seen_at, COALESCE(u.status, 'deleted') AS account_status
-       FROM user_ip_links_mb l LEFT JOIN users_mb u ON u.id = l.user_id
-       ORDER BY l.last_seen_at DESC LIMIT ?`,
-    ).bind(MAX_RELATION_ROWS + 1).all<RelationRow>(),
+      `SELECT l.ip, l.user_uid, COUNT(*) AS request_count,
+         SUM(CASE WHEN l.path LIKE '/api/subscription/%' THEN 1 ELSE 0 END) AS subscription_count,
+         SUM(CASE WHEN l.identity_source = 'login' THEN 1 ELSE 0 END) AS login_count,
+         MAX(l.occurred_at) AS last_seen_at,
+         COALESCE(MAX(u.status), 'deleted') AS account_status
+       FROM system_logs_mb l LEFT JOIN users_mb u ON u.uid = l.user_uid
+       WHERE l.category = 'request' AND l.occurred_at >= ?
+         AND l.status BETWEEN 200 AND 299 AND l.ip <> ''
+         AND l.user_uid <> '' AND l.device_id <> ''
+       GROUP BY l.ip, l.user_uid
+       ORDER BY MAX(l.occurred_at) DESC LIMIT ?`,
+    ).bind(windowStart, MAX_RELATION_ROWS + 1).all<RelationRow>(),
   ]);
   const logRows = logsResult.results || [];
   const relationRows = relationsResult.results || [];
@@ -514,7 +521,7 @@ async function collectRiskDataset(env: Env, requestedWindowHours: unknown) {
       hourlyStart,
       // 每个元素依次表示小时偏移、系统总请求、订阅请求和 4xx 请求；受日志采样范围影响。
       systemHourlyActivity,
-      source: "system_logs_mb and user_ip_links_mb",
+      source: "system_logs_mb",
       privacy: "IP and UID values are replaced with per-request pseudonymous references; request bodies, credentials, and subscription contents are excluded.",
       coverage: {
         requestLogRetentionDays: 30,
@@ -522,7 +529,7 @@ async function collectRiskDataset(env: Env, requestedWindowHours: unknown) {
         requestRowsTruncated: logsTruncated,
         associationRowsSampled: Math.min(relationRows.length, MAX_RELATION_ROWS),
         associationRowsTruncated: relationsTruncated,
-        note: "Only requests retained by current system-log settings are present. Association totals cover successfully identified requests since IP association collection was enabled.",
+        note: "Request and account association data are derived from successful identified request logs in the analysis window and are limited by current system-log settings and retention.",
       },
       summary: {
         requestCount: Math.min(logRows.length, MAX_LOG_ROWS),

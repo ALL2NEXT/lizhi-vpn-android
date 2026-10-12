@@ -43,7 +43,6 @@ import { beijingTimestamp, normalizeReportTimestamp, usagePeriodKeys } from "./d
 import { corsHeaders, isAdmin, json } from "./http/responses.ts";
 import { cleanText } from "./lib/values.ts";
 import { normalizeClientIp } from "./domain/ip.ts";
-import { writeUserIpLink } from "./services/user-ip-links.ts";
 import { createAccountRoutes } from "./routes/account.ts";
 import { createAdminRoutes } from "./routes/admin.ts";
 import { createClientRoutes } from "./routes/client.ts";
@@ -413,14 +412,8 @@ const worker = {
       }
       await writeSystemLogs(env, entries, recordingSettings);
     })();
-    const persistAll = Promise.all([
-      persist,
-      writeUserIpLink(env, requestContext.user, {
-        ip: requestIp(request), occurredAt, path, status: response.status,
-      }),
-    ]);
-    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(persistAll);
-    else await persistAll;
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(persist);
+    else await persist;
     return response;
   },
   scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
