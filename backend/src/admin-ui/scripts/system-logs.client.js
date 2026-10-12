@@ -24,6 +24,10 @@ function systemLogCategoryName(category) {
   return ({request: '入站网络', outbound: '出站网络'})[category] || '系统';
 }
 
+function systemLogIpLabel(category) {
+  return category === 'outbound' ? '触发 IP' : '客户端 IP';
+}
+
 function systemLogDateTime(value) {
   const text = String(value || '-');
   if (text.indexOf('T') < 0) return text;
@@ -132,9 +136,10 @@ function renderSystemLogs() {
     return;
   }
 
+  const ipLabel = systemLogIpLabel(records[0].category);
   host.innerHTML = '<table class="system-logs-table"><thead><tr>' +
     '<th class="system-log-select-cell"><input type="checkbox" class="system-logs-select-checkbox" data-system-log-select-page aria-label="全选当前页网络日志"></th>' +
-    '<th>时间</th><th>类型</th><th>方法 / 路径</th><th>状态</th><th>耗时</th><th>来源 IP</th><th>请求 ID</th><th>操作</th>' +
+    '<th>时间</th><th>类型</th><th>方法 / 路径</th><th>状态</th><th>耗时</th><th>' + esc(ipLabel) + '</th><th>请求 ID</th><th>操作</th>' +
     '</tr></thead><tbody>' + records.map(function(record) {
       const status = record.status == null ? '-' : String(record.status);
       const duration = record.durationMs == null ? '-' : Number(record.durationMs).toLocaleString() + ' ms';
@@ -829,6 +834,7 @@ function renderSystemLogDetails() {
   const method = String(record.method || '-').toUpperCase();
   const status = record.status == null ? '-' : String(record.status);
   const path = record.path || record.message || '-';
+  const ipLabel = systemLogIpLabel(record.category);
   if (summary) summary.innerHTML = '<div class="system-log-drawer-badges"><span class="system-log-category ' + esc(record.category || '') + '">' + esc(systemLogCategoryName(record.category)) + '</span><time>' + esc(systemLogDateTime(record.occurredAt)) + '</time></div>' +
     '<div class="system-log-drawer-route"><span class="system-log-method">' + esc(method) + '</span><strong>' + esc(path) + '</strong></div>';
   const detail = systemLogDetailTab;
@@ -840,7 +846,7 @@ function renderSystemLogDetails() {
     content.innerHTML = '<div class="system-log-detail-fields">' +
       systemLogDetailField('状态码', status) +
       systemLogDetailField('耗时', record.durationMs == null ? '-' : Number(record.durationMs).toLocaleString() + ' ms') +
-      systemLogDetailField('来源 IP', record.ip, record.ip) +
+      systemLogDetailField(ipLabel, record.ip, record.ip) +
       systemLogDetailField('用户 UID', record.userUid, record.userUid) +
       systemLogDetailField('设备 ID', record.deviceId, record.deviceId) +
       systemLogDetailField('身份来源', record.identitySource === 'login' ? '密码登录' : record.identitySource === 'device' ? '设备关联' : '-') +
@@ -858,8 +864,8 @@ function renderSystemLogDetails() {
   } else if (detail === 'request' && systemLogPayload && systemLogPayload.request) {
     content.innerHTML = systemLogPayloadCard('已记录的请求内容', 'request');
   } else if (detail === 'request') {
-    content.innerHTML = '<section class="system-log-detail-note"><strong>已保存的请求信息</strong><p>日志仅保留来源 IP 和 User-Agent，没有保存完整请求头、Cookie 或认证信息。</p>' +
-      '<dl><div><dt>来源 IP</dt><dd>' + esc(record.ip || '-') + '</dd></div><div><dt>User-Agent</dt><dd>' + esc(record.userAgent || '-') + '</dd></div></dl></section>';
+    content.innerHTML = '<section class="system-log-detail-note"><strong>已保存的请求信息</strong><p>日志仅保留' + esc(ipLabel) + ' 和 User-Agent，没有保存完整请求头、Cookie 或认证信息。</p>' +
+      '<dl><div><dt>' + esc(ipLabel) + '</dt><dd>' + esc(record.ip || '-') + '</dd></div><div><dt>User-Agent</dt><dd>' + esc(record.userAgent || '-') + '</dd></div></dl></section>';
   } else if (detail === 'response' && systemLogPayloadLoading) {
     content.innerHTML = '<div class="loading-state">正在读取响应详细内容…</div>';
   } else if (detail === 'response' && systemLogPayloadError) {
