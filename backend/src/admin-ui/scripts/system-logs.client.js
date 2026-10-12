@@ -5,9 +5,11 @@ let systemLogsRangeTimer = null;
 let systemLogsFilterRevision = 0;
 let systemLogsEndpointPath = '';
 let systemLogsEndpointMethod = '';
-let systemLogEndpointExpanded = false;
+let systemLogEndpointExpandedPaths = new Set(['/', '/api']);
 let systemLogEndpointLoading = false;
 let systemLogEndpointError = '';
+let systemLogEndpointRowsCache = null;
+let systemLogEndpointRowsCacheKey = '';
 let systemLogDetailRecord = null;
 let systemLogDetailTab = 'basic';
 let systemLogRecordingSettings = null;
@@ -31,34 +33,12 @@ function systemLogDateTime(value) {
   return parts[0] + ' ' + parts[1].replace(/(?:Z|[+-]\d{2}:\d{2})$/, '');
 }
 
-function systemLogEndpointPathMarkup(path) {
-  const segments = String(path || '/').split('/').slice(1);
-  if (!segments.some(Boolean)) return '<span class="system-log-endpoint-separator">/</span>';
-  return '<span class="system-log-endpoint-separator">/</span>' + segments.map(function(segment, index) {
-    return '<span class="system-log-endpoint-segment level-' + ((index % 6) + 1) + '">' + esc(segment) + '</span>';
-  }).join('<span class="system-log-endpoint-separator">/</span>');
-}
-
 function systemLogStatusClass(status) {
   const code = Number(status);
   if (code >= 500) return 'error';
   if (code >= 400) return 'warning';
   if (code >= 200 && code < 400) return 'success';
   return 'neutral';
-}
-
-function updateSystemLogStats(stats) {
-  const values = stats || {};
-  const fields = [
-    ['systemLogsTotalStat', values.total],
-    ['systemLogsErrorStat', values.errorCount],
-    ['systemLogsWarningStat', values.warningCount],
-    ['systemLogsAverageStat', values.averageDurationMs]
-  ];
-  fields.forEach(function(entry) {
-    const node = el(entry[0]);
-    if (node) node.textContent = Number(entry[1] || 0).toLocaleString();
-  });
 }
 
 function renderSystemLogsPager(page, pageCount, total) {
@@ -99,13 +79,12 @@ function renderSystemLogs() {
   const offset = Number(payload.offset) || 0;
   const page = Math.floor(offset / limit) + 1;
   const pageCount = Math.max(1, Math.ceil(total / limit));
-  updateSystemLogStats(payload.stats);
   if (summary) summary.textContent = '共 ' + total.toLocaleString() + ' 条日志';
   if (pageStatus) pageStatus.textContent = total
     ? '显示 ' + (offset + 1) + '–' + Math.min(offset + records.length, total) + ' 条，共 ' + total.toLocaleString() + ' 条'
     : '暂无日志';
   renderSystemLogsPager(page, pageCount, total);
-  renderSystemLogEndpointNavigation(payload.requestEndpoints);
+  renderSystemLogEndpointNavigation(payload.endpoints);
 
   if (!records.length) {
     host.innerHTML = '<div class="system-logs-empty">' + (total ? '当前筛选条件没有日志' : '暂无网络日志') + '</div>';
@@ -163,6 +142,7 @@ async function loadSystemLogs(force) {
   const search = el('systemLogSearch').value.trim();
   const startDate = el('systemLogStartDate').value;
   const endDate = el('systemLogEndDate').value;
+  const endpointCacheKey = systemLogsCategory + '|' + startDate + '|' + endDate;
   if (systemLogsCategory) query.set('category', systemLogsCategory);
   if (level) query.set('level', level);
   if (status) query.set('status', status);
@@ -173,12 +153,12 @@ async function loadSystemLogs(force) {
     query.set('endpointPath', systemLogsEndpointPath);
     query.set('endpointMethod', systemLogsEndpointMethod);
   }
-  const includeEndpoints = systemLogEndpointExpanded;
+  const includeEndpoints = systemLogsCategory === 'request' || systemLogsCategory === 'outbound';
   if (includeEndpoints) {
     query.set('includeEndpoints', 'true');
-    systemLogEndpointLoading = true;
+    systemLogEndpointLoading = systemLogEndpointRowsCacheKey !== endpointCacheKey || !Array.isArray(systemLogEndpointRowsCache);
     systemLogEndpointError = '';
-    renderSystemLogEndpointNavigation();
+    if (systemLogEndpointLoading) renderSystemLogEndpointNavigation();
   }
 
   try {
@@ -193,7 +173,11 @@ async function loadSystemLogs(force) {
       throw new Error(adminErrorMessage(data.error, '网络日志读取失败（HTTP ' + response.status + '）'));
     }
     if (filterRevision !== systemLogsFilterRevision) return;
-    if (includeEndpoints) systemLogEndpointLoading = false;
+    if (includeEndpoints) {
+      systemLogEndpointRowsCache = Array.isArray(data.endpoints) ? data.endpoints : [];
+      systemLogEndpointRowsCacheKey = endpointCacheKey;
+      systemLogEndpointLoading = false;
+    }
     systemLogsData = data;
     renderSystemLogs();
     if (systemLogDetailRecord) {
@@ -206,7 +190,8 @@ async function loadSystemLogs(force) {
   } catch (error) {
     if (filterRevision === systemLogsFilterRevision && includeEndpoints) {
       systemLogEndpointLoading = false;
-      systemLogEndpointError = error.message || '端点统计读取失败';
+      const hasCurrentEndpointCache = systemLogEndpointRowsCacheKey === endpointCacheKey && Array.isArray(systemLogEndpointRowsCache);
+      systemLogEndpointError = hasCurrentEndpointCache ? '' : error.message || '端点统计读取失败';
       renderSystemLogEndpointNavigation();
     }
     if (filterRevision === systemLogsFilterRevision && host) {
@@ -222,94 +207,151 @@ async function loadSystemLogs(force) {
   }
 }
 
-function setupSystemLogEndpointNavigation() {
-  const categoryButton = document.querySelector('[data-system-log-category="request"]');
-  if (!categoryButton || !categoryButton.parentNode) return;
+function systemLogCreateEndpointNode(name, path) {
+  return {name: name, path: path, requestCount: 0, routes: [], children: new Map()};
+}
 
-  const group = document.createElement('div');
-  group.className = 'system-log-endpoint-group';
-  const row = document.createElement('div');
-  row.className = 'system-log-endpoint-nav-row';
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'system-log-endpoint-toggle';
-  toggle.setAttribute('aria-expanded', 'false');
-  toggle.setAttribute('aria-controls', 'systemLogEndpointList');
-  toggle.setAttribute('aria-label', '展开入站网络端点');
-  const list = document.createElement('div');
-  list.id = 'systemLogEndpointList';
-  list.className = 'system-log-endpoint-list';
-  list.setAttribute('role', 'group');
-  list.setAttribute('aria-label', '入站网络端点预览');
-  list.hidden = true;
+function systemLogBuildEndpointTree(endpoints) {
+  const root = systemLogCreateEndpointNode('/', '/');
+  (Array.isArray(endpoints) ? endpoints : []).forEach(function(endpoint) {
+    const method = String(endpoint.method || '-').toUpperCase();
+    const rawPath = String(endpoint.path || '/');
+    const path = rawPath.charAt(0) === '/' ? rawPath : '/' + rawPath;
+    const route = {method: method, path: path, requestCount: Number(endpoint.requestCount) || 0};
+    const segments = path.split('/').filter(Boolean);
+    let node = root;
+    node.requestCount += route.requestCount;
+    segments.forEach(function(segment) {
+      const childPath = node.path === '/' ? '/' + segment : node.path + '/' + segment;
+      if (!node.children.has(segment)) node.children.set(segment, systemLogCreateEndpointNode(segment, childPath));
+      node = node.children.get(segment);
+      node.requestCount += route.requestCount;
+    });
+    node.routes.push(route);
+  });
+  return root;
+}
 
-  categoryButton.parentNode.insertBefore(group, categoryButton);
-  group.appendChild(row);
-  row.appendChild(categoryButton);
-  row.appendChild(toggle);
-  group.appendChild(list);
-  toggle.addEventListener('click', function() {
-    systemLogEndpointExpanded = !systemLogEndpointExpanded;
-    systemLogEndpointLoading = systemLogEndpointExpanded;
-    systemLogEndpointError = '';
-    renderSystemLogEndpointNavigation();
-    if (systemLogEndpointExpanded) loadSystemLogs(true);
+function systemLogEndpointNodeMatches(node, query) {
+  if (!query) return true;
+  if (node.routes.some(function(route) {
+    return (route.method + ' ' + route.path).toLowerCase().includes(query);
+  })) return true;
+  return Array.from(node.children.values()).some(function(child) {
+    return systemLogEndpointNodeMatches(child, query);
   });
 }
 
-function renderSystemLogEndpointNavigation(endpoints) {
-  const toggle = document.querySelector('.system-log-endpoint-toggle');
-  const list = el('systemLogEndpointList');
-  if (!toggle || !list) return;
-  toggle.setAttribute('aria-expanded', String(systemLogEndpointExpanded));
-  toggle.setAttribute('aria-label', systemLogEndpointExpanded ? '折叠入站网络端点' : '展开入站网络端点');
-  list.hidden = !systemLogEndpointExpanded;
-  if (!systemLogEndpointExpanded) return;
+function systemLogEndpointRouteMarkup(route) {
+  const selected = systemLogsEndpointPath === route.path && systemLogsEndpointMethod === route.method;
+  return '<button type="button" class="system-log-endpoint-item' + (selected ? ' active' : '') + '"' +
+    (selected ? ' aria-current="page"' : '') +
+    ' data-system-log-endpoint-method="' + esc(route.method) + '" data-system-log-endpoint-path="' + esc(route.path) + '"' +
+    ' title="' + esc(route.method + ' ' + route.path) + '"><span class="system-log-endpoint-method">' + esc(route.method) +
+    '</span><span class="system-log-endpoint-path">' + esc(route.path) + '</span><span class="system-log-endpoint-count">' +
+    route.requestCount.toLocaleString() + '</span></button>';
+}
 
+function systemLogEndpointEntriesMarkup(node, query) {
+  const entries = [];
+  node.routes.filter(function(route) {
+    return !query || (route.method + ' ' + route.path).toLowerCase().includes(query);
+  }).forEach(function(route) {
+    entries.push({kind: 'route', count: route.requestCount, name: route.path, markup: systemLogEndpointRouteMarkup(route)});
+  });
+  Array.from(node.children.values()).filter(function(child) {
+    return systemLogEndpointNodeMatches(child, query);
+  }).forEach(function(child) {
+    if (child.children.size) {
+      entries.push({kind: 'folder', count: child.requestCount, name: child.name, node: child});
+    } else {
+      child.routes.filter(function(route) {
+        return !query || (route.method + ' ' + route.path).toLowerCase().includes(query);
+      }).forEach(function(route) {
+        entries.push({kind: 'route', count: route.requestCount, name: route.path, markup: systemLogEndpointRouteMarkup(route)});
+      });
+    }
+  });
+  entries.sort(function(left, right) {
+    return right.count - left.count || left.name.localeCompare(right.name);
+  });
+  return entries.map(function(entry) {
+    return entry.kind === 'folder'
+      ? systemLogEndpointFolderMarkup(entry.node, query, false)
+      : entry.markup;
+  }).join('');
+}
+
+function systemLogEndpointFolderMarkup(node, query, root) {
+  const expanded = Boolean(query) || systemLogEndpointExpandedPaths.has(node.path);
+  const groupId = 'systemLogEndpointChildren_' + encodeURIComponent(node.path).replace(/%/g, '_');
+  const label = root ? '/' : node.name;
+  const folderButton = root
+    ? '<div class="system-log-endpoint-root-row"><button type="button" class="system-log-tree-toggle" data-system-log-tree-toggle="' + esc(node.path) + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '" aria-label="' + (expanded ? '收起' : '展开') + '根目录"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><button type="button" class="system-log-tree-root' + (!systemLogsEndpointPath ? ' active' : '') + '" data-system-log-endpoint-root title="显示全部' + systemLogCategoryName(systemLogsCategory) + '请求"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-all"></use></svg><span>' + label + '</span><span class="system-log-endpoint-count">' + node.requestCount.toLocaleString() + '</span></button></div>'
+    : '<button type="button" class="system-log-tree-folder" data-system-log-tree-toggle="' + esc(node.path) + '" aria-expanded="' + expanded + '" aria-controls="' + groupId + '"><svg class="subscription-icon system-log-tree-caret" aria-hidden="true"><use href="#subscription-icon-next"></use></svg><svg class="subscription-icon system-log-tree-folder-icon" aria-hidden="true"><use href="#subscription-icon-folder"></use></svg><span class="system-log-tree-name" title="' + esc(node.path) + '">' + esc(label) + '</span><span class="system-log-endpoint-count">' + node.requestCount.toLocaleString() + '</span></button>';
+  const entries = systemLogEndpointEntriesMarkup(node, query);
+  return '<div class="system-log-tree-branch' + (root ? ' root' : '') + '">' + folderButton +
+    '<div id="' + groupId + '" class="system-log-tree-children"' + (expanded ? '' : ' hidden') + '>' + entries + '</div></div>';
+}
+
+function renderSystemLogEndpointNavigation(endpoints) {
+  const list = el('systemLogEndpointList');
+  const summary = el('systemLogEndpointSummary');
+  if (!list) return;
   if (systemLogEndpointLoading) {
-    list.innerHTML = '<div class="system-log-endpoint-state">正在统计端点…</div>';
+    if (summary) summary.textContent = '统计中…';
+    list.innerHTML = '<div class="system-log-endpoint-state">正在统计请求端点…</div>';
     return;
   }
   if (systemLogEndpointError) {
+    if (summary) summary.textContent = '';
     list.innerHTML = '<div class="system-log-endpoint-state error">' + esc(systemLogEndpointError) + '</div>';
     return;
   }
-  const rows = Array.isArray(endpoints)
-    ? endpoints
-    : Array.isArray(systemLogsData && systemLogsData.requestEndpoints)
-      ? systemLogsData.requestEndpoints
-      : [];
+  const activeEndpointCacheKey = systemLogsCategory + '|' +
+    (el('systemLogStartDate') && el('systemLogStartDate').value || '') + '|' +
+    (el('systemLogEndDate') && el('systemLogEndDate').value || '');
+  let rows = [];
+  if (Array.isArray(endpoints)) rows = endpoints;
+  else if (systemLogEndpointRowsCacheKey === activeEndpointCacheKey && Array.isArray(systemLogEndpointRowsCache)) {
+    rows = systemLogEndpointRowsCache;
+  } else if (Array.isArray(systemLogsData && systemLogsData.endpoints)) {
+    rows = systemLogsData.endpoints;
+  }
+  const query = String(el('systemLogEndpointSearch') && el('systemLogEndpointSearch').value || '').trim().toLowerCase();
+  const tree = systemLogBuildEndpointTree(rows);
+  const visibleCount = rows.filter(function(route) {
+    return !query || (String(route.method || '') + ' ' + String(route.path || '/')).toLowerCase().includes(query);
+  }).length;
+  const categoryName = systemLogsCategory === 'outbound' ? '出站网络' : '入站网络';
+  if (summary) summary.textContent = categoryName + ' · ' + (query
+    ? visibleCount.toLocaleString() + ' 个匹配端点'
+    : rows.length.toLocaleString() + ' 个端点');
   if (!rows.length) {
-    list.innerHTML = '<div class="system-log-endpoint-state">当前范围暂无入站网络</div>';
+    list.innerHTML = '<div class="system-log-endpoint-state">当前时间范围暂无请求端点</div>';
     return;
   }
-
-  list.innerHTML = rows.map(function(endpoint) {
-    const method = String(endpoint.method || '-').toUpperCase();
-    const path = String(endpoint.path || '/');
-    const selected = systemLogsEndpointPath === path && systemLogsEndpointMethod === method;
-    return '<button type="button" class="system-log-endpoint-item' + (selected ? ' active' : '') + '"' +
-      (selected ? ' aria-current="page"' : '') +
-      ' data-system-log-endpoint-method="' + esc(method) + '" data-system-log-endpoint-path="' + esc(path) + '"' +
-      ' title="' + esc(method + ' ' + path) + '"><span class="system-log-endpoint-name">' +
-      '<span class="system-log-endpoint-method">' + esc(method) + '</span><span class="system-log-endpoint-path">' + systemLogEndpointPathMarkup(path) + '</span>' +
-      '</span><span class="system-log-endpoint-count">' + Number(endpoint.requestCount || 0).toLocaleString() + '</span></button>';
-  }).join('');
-
-  list.querySelectorAll('[data-system-log-endpoint-path]').forEach(function(button) {
-    button.addEventListener('click', function() {
-      selectSystemLogEndpoint(button.dataset.systemLogEndpointMethod || '', button.dataset.systemLogEndpointPath || '');
-    });
-  });
+  if (!visibleCount) {
+    list.innerHTML = '<div class="system-log-endpoint-state">没有匹配的请求端点</div>';
+    return;
+  }
+  list.innerHTML = systemLogEndpointFolderMarkup(tree, query, true);
 }
 
 function selectSystemLogEndpoint(method, path) {
   if (!path) return;
-  systemLogsCategory = 'request';
   systemLogsEndpointMethod = method;
   systemLogsEndpointPath = path;
-  systemLogEndpointExpanded = true;
   syncSystemLogCategorySelection();
+  renderSystemLogEndpointNavigation();
+  applySystemLogFilters();
+}
+
+function selectSystemLogAllEndpoints() {
+  systemLogsEndpointMethod = '';
+  systemLogsEndpointPath = '';
+  syncSystemLogCategorySelection();
+  renderSystemLogEndpointNavigation();
   applySystemLogFilters();
 }
 
@@ -330,6 +372,7 @@ function selectSystemLogCategory(category) {
   systemLogsEndpointPath = '';
   systemLogsEndpointMethod = '';
   syncSystemLogCategorySelection();
+  renderSystemLogEndpointNavigation();
   applySystemLogFilters();
 }
 
@@ -734,12 +777,36 @@ function stopSystemLogAutoRefresh() {
   if (toggle) toggle.checked = false;
 }
 
-setupSystemLogEndpointNavigation();
-
 document.querySelectorAll('[data-system-log-category]').forEach(function(button) {
   button.addEventListener('click', function() {
     selectSystemLogCategory(button.dataset.systemLogCategory);
   });
+});
+
+el('systemLogEndpointList').addEventListener('click', function(event) {
+  const folderToggle = event.target.closest('[data-system-log-tree-toggle]');
+  if (folderToggle) {
+    const path = folderToggle.dataset.systemLogTreeToggle || '/';
+    const expanded = folderToggle.getAttribute('aria-expanded') === 'true';
+    const nextExpanded = !expanded;
+    if (nextExpanded) systemLogEndpointExpandedPaths.add(path);
+    else systemLogEndpointExpandedPaths.delete(path);
+    folderToggle.setAttribute('aria-expanded', String(nextExpanded));
+    folderToggle.setAttribute('aria-label', (nextExpanded ? '收起' : '展开') + (path === '/' ? '根目录' : path));
+    const childGroup = el(folderToggle.getAttribute('aria-controls'));
+    if (childGroup) childGroup.hidden = !nextExpanded;
+    return;
+  }
+  if (event.target.closest('[data-system-log-endpoint-root]')) {
+    selectSystemLogAllEndpoints();
+    return;
+  }
+  const endpoint = event.target.closest('[data-system-log-endpoint-path]');
+  if (endpoint) selectSystemLogEndpoint(endpoint.dataset.systemLogEndpointMethod || '', endpoint.dataset.systemLogEndpointPath || '');
+});
+
+el('systemLogEndpointSearch').addEventListener('input', function() {
+  renderSystemLogEndpointNavigation();
 });
 
 document.querySelectorAll('[data-system-log-recording]').forEach(function(input) {

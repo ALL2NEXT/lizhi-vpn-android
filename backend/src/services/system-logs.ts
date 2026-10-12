@@ -387,12 +387,12 @@ export async function readSystemLogs(
   const categories: SystemLogCategory[] = ["request", "outbound"];
   const endpointPath = truncate(filters.endpointPath, 300);
   const endpointMethod = truncate(filters.endpointMethod, 16).toUpperCase();
-  if (endpointPath) {
-    conditions.push("category = ?");
-    bindings.push("request");
-  } else if (categories.includes(filters.category as SystemLogCategory)) {
+  if (categories.includes(filters.category as SystemLogCategory)) {
     conditions.push("category = ?");
     bindings.push(filters.category as string);
+  } else if (endpointPath) {
+    conditions.push("category = ?");
+    bindings.push("request");
   } else {
     conditions.push("category IN ('request', 'outbound')");
   }
@@ -440,8 +440,12 @@ export async function readSystemLogs(
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const limit = Math.min(200, Math.max(1, Math.floor(Number(filters.limit) || 100)));
   const offset = Math.min(20000, Math.max(0, Math.floor(Number(filters.offset) || 0)));
-  const endpointConditions = ["category = 'request'"];
+  const endpointCategory = categories.includes(filters.category as SystemLogCategory)
+    ? filters.category as SystemLogCategory
+    : "request";
+  const endpointConditions = ["category = ?"];
   const endpointBindings: string[] = [];
+  endpointBindings.push(endpointCategory);
   if (startDate) {
     endpointConditions.push("occurred_at >= ?");
     endpointBindings.push(`${startDate}T00:00:00+08:00`);
@@ -462,7 +466,7 @@ export async function readSystemLogs(
        ORDER BY request_count DESC, method ASC, path ASC`,
     ).bind(...endpointBindings).all<Record<string, unknown>>()
     : Promise.resolve(null);
-  const [count, rows, stats, endpointRows] = await Promise.all([
+  const [count, rows, endpointRows] = await Promise.all([
     db.prepare(`SELECT COUNT(*) AS total FROM system_logs_mb ${where}`)
       .bind(...bindings).first<{ total: number }>(),
     db.prepare(
@@ -471,13 +475,6 @@ export async function readSystemLogs(
        FROM system_logs_mb ${where}
        ORDER BY occurred_at DESC, id DESC LIMIT ? OFFSET ?`,
     ).bind(...bindings, limit, offset).all<Record<string, unknown>>(),
-    db.prepare(
-      `SELECT COUNT(*) AS total,
-        SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) AS error_count,
-        SUM(CASE WHEN level = 'warning' THEN 1 ELSE 0 END) AS warning_count,
-        ROUND(AVG(duration_ms)) AS average_duration_ms
-       FROM system_logs_mb ${where}`,
-    ).bind(...bindings).first<Record<string, number | null>>(),
     endpointRowsPromise,
   ]);
   const records: SystemLogRecord[] = (rows.results || []).map((row) => ({
@@ -505,17 +502,11 @@ export async function readSystemLogs(
     limit,
     offset,
     records,
-    requestEndpoints: (endpointRows?.results || []).map((row) => ({
+    endpoints: (endpointRows?.results || []).map((row) => ({
       method: String(row.method || "").toUpperCase(),
       path: String(row.path || ""),
       requestCount: Number(row.request_count) || 0,
     })),
-    stats: {
-      total: Number(stats?.total) || 0,
-      errorCount: Number(stats?.error_count) || 0,
-      warningCount: Number(stats?.warning_count) || 0,
-      averageDurationMs: Number(stats?.average_duration_ms) || 0,
-    },
   };
 }
 
