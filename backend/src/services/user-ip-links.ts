@@ -6,6 +6,11 @@ import { beijingTimestamp } from "../domain/time.ts";
 import { ensureUserSchema } from "./user-store.ts";
 
 interface UserIpLinkRow {
+  parent_key: string;
+  child_count: number;
+  group_request_count: number;
+  group_first_seen_at: string;
+  group_last_seen_at: string;
   user_uid: string;
   ip: string;
   nickname: string | null;
@@ -57,10 +62,12 @@ export async function writeUserIpLink(
 
 export async function readUserIpLinks(
   env: Env,
-  filters: { ip?: string; uid?: string; limit?: number; offset?: number } = {},
+  filters: { ip?: string; uid?: string; direction?: string; limit?: number; offset?: number } = {},
 ) {
   const ip = normalizeClientIp(filters.ip);
   const uid = normalizeStoredUid(filters.uid);
+  const direction = filters.direction === "user" ? "user" : "ip";
+  const parentKey = direction === "user" ? "user_uid" : "ip";
   if (filters.ip?.trim() && !ip) throw new Error("invalid_ip");
   if (filters.uid?.trim() && !uid) throw new Error("invalid_uid");
   const limit = Number.isFinite(filters.limit)
@@ -96,13 +103,24 @@ export async function readUserIpLinks(
     FROM eligible_logs
     GROUP BY ip, user_uid
   )`;
+  const parentGroups = `parent_groups AS (
+    SELECT ${parentKey} AS parent_key, COUNT(*) AS child_count,
+      SUM(request_count) AS group_request_count,
+      MIN(first_seen_at) AS group_first_seen_at,
+      MAX(last_seen_at) AS group_last_seen_at
+    FROM aggregated_logs
+    GROUP BY ${parentKey}
+  )`;
   const db = await ensureUserSchema(env);
   const results = await db.batch([
     db.prepare(
-      `WITH ${eligibleLogs}, ${aggregatedLogs}
-       SELECT COUNT(*) AS relation_count, COUNT(DISTINCT ip) AS ip_count,
-         COUNT(DISTINCT user_uid) AS user_count, SUM(request_count) AS request_count
-       FROM aggregated_logs`,
+      `WITH ${eligibleLogs}, ${aggregatedLogs}, ${parentGroups}
+       SELECT COUNT(*) AS group_count,
+         (SELECT COUNT(*) FROM aggregated_logs) AS relation_count,
+         (SELECT COUNT(DISTINCT ip) FROM aggregated_logs) AS ip_count,
+         (SELECT COUNT(DISTINCT user_uid) FROM aggregated_logs) AS user_count,
+         (SELECT COALESCE(SUM(request_count), 0) FROM aggregated_logs) AS request_count
+       FROM parent_groups`,
     ).bind(...bindings),
     db.prepare(
       `WITH ${eligibleLogs}, ${aggregatedLogs}, latest_devices AS (
@@ -111,34 +129,61 @@ export async function readUserIpLinks(
              PARTITION BY ip, user_uid ORDER BY occurred_at DESC, id DESC
            ) AS device_rank
          FROM eligible_logs
+       ), ${parentGroups}, page_groups AS (
+         SELECT * FROM parent_groups
+         ORDER BY group_last_seen_at DESC, parent_key ASC LIMIT ? OFFSET ?
        )
-       SELECT aggregated_logs.ip, aggregated_logs.user_uid, users_mb.nickname,
+       SELECT page_groups.parent_key, page_groups.child_count,
+         page_groups.group_request_count, page_groups.group_first_seen_at,
+         page_groups.group_last_seen_at,
+         aggregated_logs.ip, aggregated_logs.user_uid, users_mb.nickname,
          users_mb.status AS account_status, aggregated_logs.first_seen_at,
          aggregated_logs.last_seen_at, latest_devices.device_id AS last_device_id,
          aggregated_logs.request_count, aggregated_logs.subscription_count,
          aggregated_logs.login_count
-       FROM aggregated_logs
+       FROM page_groups
+       JOIN aggregated_logs ON aggregated_logs.${parentKey} = page_groups.parent_key
        LEFT JOIN latest_devices ON latest_devices.ip = aggregated_logs.ip
          AND latest_devices.user_uid = aggregated_logs.user_uid
          AND latest_devices.device_rank = 1
        LEFT JOIN users_mb ON users_mb.uid = aggregated_logs.user_uid
-       ORDER BY aggregated_logs.last_seen_at DESC, aggregated_logs.user_uid ASC,
-         aggregated_logs.ip ASC LIMIT ? OFFSET ?`,
+       ORDER BY page_groups.group_last_seen_at DESC, page_groups.parent_key ASC,
+         aggregated_logs.request_count DESC, aggregated_logs.last_seen_at DESC,
+         aggregated_logs.user_uid ASC, aggregated_logs.ip ASC`,
     ).bind(...bindings, limit, offset),
   ]);
   const stats = results[0].results?.[0] as Record<string, number | null> | undefined;
   const rows = results[1].results as unknown as UserIpLinkRow[] | undefined;
-  return {
-    ok: true,
-    total: Number(stats?.relation_count) || 0,
-    limit,
-    offset,
-    stats: {
-      ipCount: Number(stats?.ip_count) || 0,
-      userCount: Number(stats?.user_count) || 0,
-      requestCount: Number(stats?.request_count) || 0,
-    },
-    relations: (rows || []).map((row) => ({
+  const groups = new Map<string, {
+    key: string;
+    ip: string;
+    userUid: string;
+    nickname: string;
+    accountStatus: string;
+    childCount: number;
+    requestCount: number;
+    firstSeenAt: string;
+    lastSeenAt: string;
+    relations: Array<Record<string, string | number>>;
+  }>();
+  for (const row of rows || []) {
+    let group = groups.get(row.parent_key);
+    if (!group) {
+      group = {
+        key: row.parent_key,
+        ip: direction === "ip" ? row.parent_key : "",
+        userUid: direction === "user" ? row.parent_key : "",
+        nickname: direction === "user" ? row.nickname || "" : "",
+        accountStatus: direction === "user" ? row.account_status || "deleted" : "",
+        childCount: Number(row.child_count) || 0,
+        requestCount: Number(row.group_request_count) || 0,
+        firstSeenAt: row.group_first_seen_at,
+        lastSeenAt: row.group_last_seen_at,
+        relations: [],
+      };
+      groups.set(row.parent_key, group);
+    }
+    group.relations.push({
       ip: row.ip,
       userUid: row.user_uid,
       nickname: row.nickname || "",
@@ -149,7 +194,23 @@ export async function readUserIpLinks(
       requestCount: Number(row.request_count),
       subscriptionCount: Number(row.subscription_count),
       loginCount: Number(row.login_count),
-    })),
+    });
+  }
+  const relations = Array.from(groups.values()).flatMap((group) => group.relations);
+  return {
+    ok: true,
+    direction,
+    total: Number(stats?.group_count) || 0,
+    limit,
+    offset,
+    stats: {
+      ipCount: Number(stats?.ip_count) || 0,
+      userCount: Number(stats?.user_count) || 0,
+      requestCount: Number(stats?.request_count) || 0,
+      relationCount: Number(stats?.relation_count) || 0,
+    },
+    groups: Array.from(groups.values()),
+    relations,
     generatedAt: beijingTimestamp(),
   };
 }

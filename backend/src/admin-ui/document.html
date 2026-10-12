@@ -396,11 +396,11 @@
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="ip-relations">
     <div class="dashboard-heading">
-      <div><h2>IP 与用户</h2><p>查看一个 IP 访问过的用户，或一个用户使用过的 IP。</p></div>
+      <div><h2>IP 与用户</h2><p>按 IP 查看关联账户，或按账户查看使用过的 IP。</p></div>
       <button id="ipRelationsRefresh" class="secondary" type="button" onclick="loadIpRelations(true)">刷新数据</button>
     </div>
     <form id="ipRelationsForm" class="ip-relations-filters">
-      <label>查询方向<select id="ipRelationsDirection"><option value="ip">IP → 用户</option><option value="user">用户 → IP</option></select></label>
+      <label>分组方式<select id="ipRelationsDirection"><option value="ip">按 IP 分组：查看关联账户</option><option value="user">按账户分组：查看关联 IP</option></select></label>
       <label class="ip-relations-query">查询条件<input id="ipRelationsQuery" type="search" maxlength="64" placeholder="输入完整 IP，留空查看全部关联" aria-label="IP 或用户 UID"></label>
       <button type="submit">查询</button>
       <button class="secondary" type="button" onclick="setIpRelationFilter(value('ipRelationsDirection'), '')">重置</button>

@@ -39,50 +39,104 @@ function renderIpRelations() {
   const data = ipRelationsData;
   if (!data) return;
   const stats = data.stats || {};
-  el('ipRelationsSummary').textContent = '关联 ' + Number(data.total || 0).toLocaleString() +
-    ' 组 · IP ' + Number(stats.ipCount || 0).toLocaleString() +
-    ' 个 · 用户 ' + Number(stats.userCount || 0).toLocaleString() +
-    ' 个 · 累计成功请求 ' + Number(stats.requestCount || 0).toLocaleString() + ' 次';
-  const relations = Array.isArray(data.relations) ? data.relations : [];
+  const byIp = data.direction !== 'user';
+  const groups = Array.isArray(data.groups) ? data.groups : buildIpRelationGroups(data.relations, byIp);
+  const relationCount = stats.relationCount == null
+    ? (Array.isArray(data.relations) ? data.relations.length : 0)
+    : Number(stats.relationCount);
+  const groupLabel = byIp ? '个 IP' : '个账户';
+  el('ipRelationsSummary').textContent = '当前 ' + Number(data.total || 0).toLocaleString() + groupLabel +
+    ' · 关联 ' + Number(relationCount || 0).toLocaleString() + ' 组 · IP ' +
+    Number(stats.ipCount || 0).toLocaleString() + ' 个 · 用户 ' + Number(stats.userCount || 0).toLocaleString() +
+    ' 个 · 成功请求 ' + Number(stats.requestCount || 0).toLocaleString() + ' 次';
   const offset = Number(data.offset) || 0;
   const limit = Number(data.limit) || 50;
   el('ipRelationsPageStatus').textContent = data.total
-    ? '显示 ' + (offset + 1) + '–' + (offset + relations.length) + ' 条，共 ' + data.total + ' 条'
+    ? '显示 ' + (offset + 1) + '–' + (offset + groups.length) + ' ' + groupLabel +
+      '，共 ' + Number(data.total).toLocaleString() + ' ' + groupLabel
     : '暂无关联记录';
   el('ipRelationsPrevious').disabled = offset <= 0;
   el('ipRelationsNext').disabled = offset + limit >= Number(data.total || 0);
   const host = el('ipRelationsTable');
-  if (!relations.length) {
+  if (!groups.length) {
     host.innerHTML = '<div class="security-device-empty">没有匹配的 IP 与用户关联</div>';
     return;
   }
-  const byIp = data.direction !== 'user';
-  const rows = relations.map(function(relation) {
-    const status = relation.accountStatus === 'banned' ? '已封禁' :
-      relation.accountStatus === 'deleted' ? '已删除' : '正常';
-    const ipCell = '<td><button type="button" class="ip-relation-link" data-relation-ip="' +
-      esc(relation.ip) + '">' + esc(relation.ip) + '</button></td>';
-    const userCell = '<td><strong>' + esc(relation.nickname || relation.userUid) + '</strong>' +
-      '<small class="ip-relation-user-status">' + esc(status) + '</small><br>' +
-      '<button type="button" class="ip-relation-link" data-relation-uid="' +
-      esc(relation.userUid) + '">' + esc(relation.userUid) + '</button></td>';
-    return '<tr>' + (byIp ? ipCell + userCell : userCell + ipCell) +
-      '<td>' + Number(relation.requestCount || 0).toLocaleString() + '</td>' +
-      '<td>' + Number(relation.subscriptionCount || 0).toLocaleString() + '</td>' +
-      '<td>' + Number(relation.loginCount || 0).toLocaleString() + '</td>' +
-      '<td>' + esc(systemLogDateTime(relation.firstSeenAt)) + '</td>' +
-      '<td>' + esc(systemLogDateTime(relation.lastSeenAt)) + '</td></tr>';
+  const statusLabel = function(status) {
+    return status === 'banned' ? '已封禁' : status === 'deleted' ? '已删除' : '正常';
+  };
+  const groupMarkup = groups.map(function(group) {
+    const parent = byIp
+      ? '<span class="ip-relation-parent-kind">IP</span><button type="button" class="ip-relation-link ip-relation-parent-link" data-relation-ip="' +
+        esc(group.ip || group.key) + '">' + esc(group.ip || group.key) + '</button>'
+      : '<span class="ip-relation-parent-kind">账户</span><div class="ip-relation-parent-account"><strong>' +
+        esc(group.nickname || group.userUid || group.key) + '</strong><span class="ip-relation-user-status">' +
+        esc(statusLabel(group.accountStatus)) + '</span><button type="button" class="ip-relation-link" data-relation-uid="' +
+        esc(group.userUid || group.key) + '">' + esc(group.userUid || group.key) + '</button></div>';
+    const rows = group.relations.map(function(relation) {
+      const identity = byIp
+        ? '<div class="ip-relation-identity"><strong>' + esc(relation.nickname || relation.userUid) +
+          '</strong><span class="ip-relation-user-status">' + esc(statusLabel(relation.accountStatus)) + '</span>' +
+          '<button type="button" class="ip-relation-link" data-relation-uid="' + esc(relation.userUid) + '">' +
+          esc(relation.userUid) + '</button></div>'
+        : '<button type="button" class="ip-relation-link" data-relation-ip="' + esc(relation.ip) + '">' +
+          esc(relation.ip) + '</button>';
+      return '<tr><td>' + identity + '</td><td>' + Number(relation.requestCount || 0).toLocaleString() +
+        '</td><td>' + Number(relation.subscriptionCount || 0).toLocaleString() +
+        '</td><td>' + Number(relation.loginCount || 0).toLocaleString() +
+        '</td><td>' + esc(systemLogDateTime(relation.firstSeenAt)) +
+        '</td><td>' + esc(systemLogDateTime(relation.lastSeenAt)) + '</td></tr>';
+    }).join('');
+    const memberLabel = byIp ? '关联账户' : '关联 IP';
+    return '<section class="ip-relation-group"><header class="ip-relation-group-heading"><div class="ip-relation-parent">' +
+      parent + '</div><div class="ip-relation-group-summary"><span><strong>' +
+      Number(group.childCount || 0).toLocaleString() + '</strong> ' + (byIp ? '个账户' : '个 IP') +
+      '</span><span><strong>' + Number(group.requestCount || 0).toLocaleString() +
+      '</strong> 次成功请求</span><span>最近访问 ' + esc(systemLogDateTime(group.lastSeenAt)) +
+      '</span></div></header><div class="ip-relation-members"><table class="traffic-detail-table ip-relations-table" aria-label="' +
+      memberLabel + '"><thead><tr><th>' + memberLabel + '</th><th>成功请求</th><th>订阅请求</th>' +
+      '<th>密码登录</th><th>首次访问</th><th>最近访问</th></tr></thead><tbody>' + rows +
+      '</tbody></table></div></section>';
   }).join('');
-  host.innerHTML = '<table class="traffic-detail-table ip-relations-table" aria-label="IP 与用户关联">' +
-    '<thead><tr>' + (byIp ? '<th>IP</th><th>用户</th>' : '<th>用户</th><th>IP</th>') +
-    '<th>累计成功请求</th><th>订阅下载</th><th>密码登录</th><th>首次访问</th><th>最近访问</th>' +
-    '</tr></thead><tbody>' + rows + '</tbody></table>';
+  host.innerHTML = '<div class="ip-relation-groups">' + groupMarkup + '</div>';
   host.querySelectorAll('[data-relation-ip]').forEach(function(button) {
     button.onclick = function() { setIpRelationFilter('ip', button.dataset.relationIp); };
   });
   host.querySelectorAll('[data-relation-uid]').forEach(function(button) {
     button.onclick = function() { setIpRelationFilter('user', button.dataset.relationUid); };
   });
+}
+
+function buildIpRelationGroups(relations, byIp) {
+  const groups = new Map();
+  (Array.isArray(relations) ? relations : []).forEach(function(relation) {
+    const key = byIp ? relation.ip : relation.userUid;
+    if (!key) return;
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        key: key,
+        ip: byIp ? key : '',
+        userUid: byIp ? '' : key,
+        nickname: byIp ? '' : relation.nickname || '',
+        accountStatus: byIp ? '' : relation.accountStatus || 'deleted',
+        childCount: 0,
+        requestCount: 0,
+        firstSeenAt: relation.firstSeenAt || '',
+        lastSeenAt: relation.lastSeenAt || '',
+        relations: [],
+      };
+      groups.set(key, group);
+    }
+    group.childCount += 1;
+    group.requestCount += Number(relation.requestCount || 0);
+    if (relation.firstSeenAt && (!group.firstSeenAt || relation.firstSeenAt < group.firstSeenAt)) {
+      group.firstSeenAt = relation.firstSeenAt;
+    }
+    if (relation.lastSeenAt > group.lastSeenAt) group.lastSeenAt = relation.lastSeenAt;
+    group.relations.push(relation);
+  });
+  return Array.from(groups.values());
 }
 
 async function loadIpRelations(force) {
@@ -96,7 +150,7 @@ async function loadIpRelations(force) {
   if (ipRelationsData && (direction !== ipRelationsData.direction || query !== ipRelationsData.query)) {
     ipRelationsOffset = 0;
   }
-  const params = new URLSearchParams({ limit: '50', offset: String(ipRelationsOffset) });
+  const params = new URLSearchParams({ direction: direction, limit: '50', offset: String(ipRelationsOffset) });
   if (query) params.set(direction === 'user' ? 'uid' : 'ip', query);
   ipRelationsLoading = true;
   el('ipRelationsRefresh').disabled = true;
