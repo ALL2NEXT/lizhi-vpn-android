@@ -731,10 +731,10 @@
       <section class="subscription-group-workspace system-logs-workspace" aria-label="网络日志列表">
         <section class="system-logs-browser" aria-label="网络日志列表">
           <div class="system-logs-toolbar">
-            <input id="systemLogSearch" type="search" placeholder="⌕ 搜索路径、说明、IP、请求 ID、User-Agent…" aria-label="搜索网络日志">
+            <input id="systemLogSearch" type="search" placeholder="⌕ 搜索路径、说明、IP、请求关联 ID、User-Agent…" aria-label="搜索网络日志">
             <select id="systemLogStatus" aria-label="状态码"><option value="">全部状态码</option><option value="success">2xx 成功</option><option value="redirect">3xx 重定向</option><option value="client-error">4xx 客户端错误</option><option value="server-error">5xx 服务端错误</option><option value="none">无状态码</option></select>
-            <label class="system-logs-date-filter"><span class="sr-only">开始日期</span><input id="systemLogStartDate" type="date" aria-label="开始日期"></label><span class="system-logs-date-separator">至</span>
-            <label class="system-logs-date-filter"><span class="sr-only">结束日期</span><input id="systemLogEndDate" type="date" aria-label="结束日期"></label>
+            <label class="system-logs-date-filter"><span class="sr-only">开始时间</span><input id="systemLogStartDate" type="datetime-local" step="60" aria-label="开始时间"></label><span class="system-logs-date-separator">至</span>
+            <label class="system-logs-date-filter"><span class="sr-only">结束时间</span><input id="systemLogEndDate" type="datetime-local" step="60" aria-label="结束时间"></label>
             <button class="secondary" type="button" onclick="resetSystemLogFilters()">重置</button>
           </div>
           <div class="system-logs-table-heading">

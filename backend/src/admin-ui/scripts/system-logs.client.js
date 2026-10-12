@@ -139,24 +139,22 @@ function renderSystemLogs() {
   const ipLabel = systemLogIpLabel(records[0].category);
   host.innerHTML = '<table class="system-logs-table"><thead><tr>' +
     '<th class="system-log-select-cell"><input type="checkbox" class="system-logs-select-checkbox" data-system-log-select-page aria-label="全选当前页网络日志"></th>' +
-    '<th>时间</th><th>类型</th><th>方法 / 路径</th><th>状态</th><th>耗时</th><th>' + esc(ipLabel) + '</th><th>请求 ID</th><th>操作</th>' +
+    '<th>时间</th><th>方法</th><th>路径</th><th>状态</th><th>耗时</th><th>' + esc(ipLabel) + '</th><th>更多</th>' +
     '</tr></thead><tbody>' + records.map(function(record) {
       const status = record.status == null ? '-' : String(record.status);
       const duration = record.durationMs == null ? '-' : Number(record.durationMs).toLocaleString() + ' ms';
       const method = String(record.method || '-').toUpperCase();
       const path = String(record.path || record.message || '-');
-      const requestId = String(record.requestId || '-');
       const selected = systemLogDetailRecord && systemLogDetailRecord.id === record.id;
       return '<tr class="' + (selected ? 'selected' : '') + '">' +
         '<td class="system-log-select-cell"><input type="checkbox" class="system-logs-select-checkbox" data-system-log-select-id="' + Number(record.id) + '" aria-label="选择网络日志 ' + Number(record.id) + '"></td>' +
         '<td class="system-logs-time">' + esc(systemLogDateTime(record.occurredAt)) + '</td>' +
-        '<td><span class="system-log-category ' + esc(record.category || '') + '">' + esc(systemLogCategoryName(record.category)) + '</span></td>' +
-        '<td><div class="system-logs-path"><span class="system-log-method">' + esc(method) + '</span><span class="system-log-path-text" title="' + esc(path) + '">' + esc(path) + '</span></div></td>' +
+        '<td><span class="system-log-method">' + esc(method) + '</span></td>' +
+        '<td class="system-logs-path-cell"><span class="system-log-path-text" title="' + esc(path) + '">' + esc(path) + '</span></td>' +
         '<td><span class="system-log-status ' + systemLogStatusClass(record.status) + '">' + esc(status) + '</span></td>' +
         '<td class="system-logs-duration ' + (Number(record.durationMs) >= 500 ? 'slow' : '') + '">' + esc(duration) + '</td>' +
         '<td><span class="system-log-ip" title="' + esc(record.ip || '-') + '">' + esc(record.ip || '-') + '</span></td>' +
-        '<td><code class="system-log-request-id" title="' + esc(requestId) + '">' + esc(requestId.length > 14 ? requestId.slice(0, 12) + '…' : requestId) + '</code></td>' +
-        '<td><button type="button" class="system-log-view-button" data-system-log-record-id="' + Number(record.id) + '">查看 <span aria-hidden="true">›</span></button></td>' +
+        '<td><button type="button" class="system-log-view-button" data-system-log-record-id="' + Number(record.id) + '">更多 <span aria-hidden="true">›</span></button></td>' +
       '</tr>';
     }).join('') + '</tbody></table>';
 
@@ -631,6 +629,16 @@ function systemLogBeijingDate(date) {
   return values.year + '-' + values.month + '-' + values.day;
 }
 
+function systemLogBeijingDateTime(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  }).formatToParts(date);
+  const values = {};
+  parts.forEach(function(part) { values[part.type] = part.value; });
+  return values.year + '-' + values.month + '-' + values.day + 'T' + values.hour + ':' + values.minute;
+}
+
 function shiftSystemLogDate(value, days) {
   const date = new Date(value + 'T00:00:00.000Z');
   date.setUTCDate(date.getUTCDate() + days);
@@ -638,9 +646,11 @@ function shiftSystemLogDate(value, days) {
 }
 
 function setDefaultSystemLogDateRange() {
-  const endDate = systemLogBeijingDate(new Date());
-  el('systemLogEndDate').value = endDate;
-  el('systemLogStartDate').value = shiftSystemLogDate(endDate, -9);
+  const now = new Date();
+  const endDateTime = systemLogBeijingDateTime(now);
+  const startDate = shiftSystemLogDate(systemLogBeijingDate(now), -9);
+  el('systemLogEndDate').value = endDateTime;
+  el('systemLogStartDate').value = startDate + 'T00:00';
 }
 
 function resetSystemLogFilters() {
@@ -841,9 +851,11 @@ function renderSystemLogDetails() {
   if (!content) return;
   if (detail === 'basic') {
     content.innerHTML = '<div class="system-log-detail-fields">' +
+      systemLogDetailField('类型', systemLogCategoryName(record.category)) +
       systemLogDetailField('用户 UID', record.userUid, record.userUid) +
       systemLogDetailField('设备 ID', record.deviceId, record.deviceId) +
       systemLogDetailField('身份来源', record.identitySource === 'login' ? '密码登录' : record.identitySource === 'device' ? '设备关联' : '-') +
+      systemLogDetailField('请求关联 ID', record.requestId, record.requestId) +
       systemLogDetailField('操作者', record.actor) +
       systemLogDetailField('User-Agent', record.userAgent) +
       '</div>';

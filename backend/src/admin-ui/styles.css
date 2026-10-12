@@ -413,7 +413,7 @@
      .system-logs-toolbar input, .system-logs-toolbar select { box-sizing: border-box; min-width: 0; height: 40px; margin: 0; padding: 8px 10px; border-color: #d8e0eb; border-radius: 7px; color: #33435c; background: #fff; font-size: 12px; }
      .system-logs-toolbar input[type="search"] { flex: 1 1 290px; }
      .system-logs-toolbar select { flex: 0 1 140px; }
-     .system-logs-date-filter { flex: 0 1 150px; min-width: 125px; margin: 0; }
+     .system-logs-date-filter { flex: 0 1 205px; min-width: 180px; margin: 0; }
      .system-logs-date-filter input { width: 100%; }
      .system-logs-date-separator { flex: 0 0 auto; color: #8996a9; font-size: 12px; }
      .system-logs-toolbar > button { flex: 0 0 auto; min-height: 40px; margin: 0; padding: 8px 16px; border: 1px solid #d8e0eb; color: #33435c; background: #fff; font-size: 12px; }
@@ -431,9 +431,9 @@
      .system-logs-time { min-width: 92px; color: #5e6e86 !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
      .system-log-category { display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 6px; color: #156cc2; background: #e9f3ff; font-size: 11px; white-space: nowrap; }
      .system-log-category.outbound { color: #087e8b; background: #e0f7fa; }
-     .system-logs-path { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 240px; max-width: 420px; }
      .system-log-method { display: inline-flex; flex: 0 0 auto; align-items: center; padding: 4px 7px; border-radius: 5px; color: #34445b; background: #eef2f7; font-size: 11px; font-weight: 700; }
-     .system-log-path-text, .system-log-ip, .system-log-request-id { display: block; min-width: 0; overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
+     .system-logs-path-cell { min-width: 240px; max-width: 420px; }
+     .system-log-path-text, .system-log-ip { display: block; min-width: 0; overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
      .system-log-path-text { flex: 1 1 auto; }
      .system-log-status { display: inline-flex; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
      .system-log-status.success { color: #16824c; background: #e4f6ec; }

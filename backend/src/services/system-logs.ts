@@ -400,10 +400,18 @@ export async function readSystemLogs(
   const db = await ensureUserSchema(env);
   const conditions: string[] = [];
   const bindings: (string | number)[] = [];
-  const dateFilter = (value: string | undefined) => {
-    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-    const parsed = new Date(`${value}T00:00:00.000Z`);
-    return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value ? null : value;
+  const dateTimeRange = (value: string | undefined) => {
+    if (!value) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return null;
+      return { start: `${value}T00:00:00+08:00`, end: nextDate(value) };
+    }
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+    const parsed = new Date(`${value}:00.000Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 16) !== value) return null;
+    const nextMinute = new Date(parsed.getTime() + 60_000).toISOString().slice(0, 16);
+    return { start: `${value}:00+08:00`, end: `${nextMinute}:00+08:00` };
   };
   const nextDate = (value: string) => {
     const date = new Date(`${value}T00:00:00.000Z`);
@@ -443,15 +451,15 @@ export async function readSystemLogs(
     conditions.push("status BETWEEN ? AND ?");
     bindings.push(minimum, maximum);
   }
-  const startDate = dateFilter(filters.startDate);
-  const endDate = dateFilter(filters.endDate);
-  if (startDate) {
+  const startRange = dateTimeRange(filters.startDate);
+  const endRange = dateTimeRange(filters.endDate);
+  if (startRange) {
     conditions.push("occurred_at >= ?");
-    bindings.push(`${startDate}T00:00:00+08:00`);
+    bindings.push(startRange.start);
   }
-  if (endDate) {
+  if (endRange) {
     conditions.push("occurred_at < ?");
-    bindings.push(nextDate(endDate));
+    bindings.push(endRange.end);
   }
   const query = truncate(filters.query, 100);
   if (query) {
@@ -468,15 +476,15 @@ export async function readSystemLogs(
   const endpointConditions = ["category = ?"];
   const endpointBindings: string[] = [];
   endpointBindings.push(endpointCategory);
-  if (startDate) {
+  if (startRange) {
     endpointConditions.push("occurred_at >= ?");
-    endpointBindings.push(`${startDate}T00:00:00+08:00`);
+    endpointBindings.push(startRange.start);
   }
-  if (endDate) {
+  if (endRange) {
     endpointConditions.push("occurred_at < ?");
-    endpointBindings.push(nextDate(endDate));
+    endpointBindings.push(endRange.end);
   }
-  if (!startDate && !endDate) {
+  if (!startRange && !endRange) {
     endpointConditions.push("occurred_at >= ?");
     endpointBindings.push(beijingTimestamp(new Date(Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)));
   }
