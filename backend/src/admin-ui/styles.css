@@ -754,6 +754,49 @@
       padding-right: clamp(20px, 2.2vw, 48px);
       padding-left: clamp(20px, 2.2vw, 48px);
     }
+    /* 网络日志占满桌面视口，让列表和端点树使用剩余宽高。 */
+    @media (min-width: 701px) {
+      #dashboard:has(.tab-panel[data-panel="system-logs"].active) {
+        height: 100vh;
+        height: 100dvh;
+        min-height: 0;
+        overflow: hidden;
+      }
+      #dashboard:has(.tab-panel[data-panel="system-logs"].active) .dashboard-workspace {
+        height: 100vh;
+        height: 100dvh;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .tab-panel[data-panel="system-logs"].active {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        width: 100%;
+        max-width: none;
+        min-height: 0;
+        padding: clamp(16px, 2vh, 28px) clamp(18px, 2vw, 38px);
+        margin: 0;
+        overflow: hidden;
+      }
+      .tab-panel[data-panel="system-logs"] .dashboard-heading {
+        flex: 0 0 auto;
+        margin-bottom: clamp(12px, 1.4vh, 20px);
+      }
+      .tab-panel[data-panel="system-logs"] .system-logs-manager-layout {
+        grid-template-columns: clamp(240px, 18vw, 340px) minmax(0, 1fr);
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .tab-panel[data-panel="system-logs"] .system-logs-workspace { min-height: 0; }
+      .tab-panel[data-panel="system-logs"] .system-logs-endpoint-panel { min-height: 0; }
+      .tab-panel[data-panel="system-logs"] .system-log-endpoint-tree { min-height: 0; max-height: none; }
+      .tab-panel[data-panel="system-logs"] .system-logs-browser .system-logs-wrap {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+      }
+    }
     .dashboard-heading { align-items: center; margin-bottom: 30px; }
     .dashboard-heading h2 { margin-bottom: 6px; }
     .dashboard-heading p { max-width: 900px; margin-top: 8px; color: var(--ink-muted); font-size: 14px; }
@@ -1696,7 +1739,7 @@
       .system-logs-toolbar input[type="search"] { flex: 1 1 100%; }
       .system-logs-toolbar select { flex: 1 1 130px; }
       .system-logs-date-filter { flex: 1 1 135px; }
-      .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: 270px minmax(0, 1fr); }
+      .tab-panel[data-panel="system-logs"] .system-logs-manager-layout { grid-template-columns: clamp(220px, 23vw, 270px) minmax(0, 1fr); }
       .source-list-header, .source-row { grid-template-columns: 15px 18px 25px minmax(74px, 1.1fr) minmax(68px, .7fr) minmax(76px, 1fr) 42px 64px; }
       .source-list-header-remark, .source-row > .source-row-remark,
       .source-list-header-expiry, .source-row > .source-expiry-cell { display: none; }
