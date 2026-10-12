@@ -28,7 +28,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -180,17 +179,6 @@ fun AboutDialog(
                         text = appDisplayName.trim().ifBlank { "Chimera" },
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(if (isLargeScreen) 20.dp else 12.dp))
-
-                    // 描述
-                    Text(
-                        text = "Chimera 是一款基于 Xray-core 与 sing-box 构建的代理客户端，功能全面，兼具高性能与高兼容性。",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 22.sp
                     )
 
                     if (
