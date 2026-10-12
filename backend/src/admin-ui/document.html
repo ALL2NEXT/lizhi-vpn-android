@@ -396,23 +396,24 @@
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="ip-relations">
     <div class="dashboard-heading">
-      <div><h2>IP 与用户</h2><p>按 IP 查看关联账户，或按账户查看使用过的 IP。</p></div>
+      <div><h2>IP 与用户</h2><p>查询账户与 IP 的关联记录</p></div>
       <button id="ipRelationsRefresh" class="secondary" type="button" onclick="loadIpRelations(true)">刷新数据</button>
     </div>
     <form id="ipRelationsForm" class="ip-relations-filters">
-      <label>分组方式<select id="ipRelationsDirection"><option value="ip">按 IP 分组：查看关联账户</option><option value="user">按账户分组：查看关联 IP</option></select></label>
-      <label class="ip-relations-query">查询条件<input id="ipRelationsQuery" type="search" maxlength="64" placeholder="输入完整 IP，留空查看全部关联" aria-label="IP 或用户 UID"></label>
-      <button type="submit">查询</button>
-      <button class="secondary" type="button" onclick="setIpRelationFilter(value('ipRelationsDirection'), '')">重置</button>
+      <div class="ip-relations-view-toggle" role="group" aria-label="关联记录分组方式">
+        <button id="ipRelationsViewUser" class="active" type="button" aria-pressed="true">按用户</button>
+        <button id="ipRelationsViewIp" type="button" aria-pressed="false">按 IP</button>
+      </div>
+      <label class="ip-relations-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="ipRelationsQuery" type="search" maxlength="100" placeholder="搜索 IP、用户 UID 或账户名称" aria-label="搜索 IP、用户 UID 或账户名称" autocomplete="off"></label>
+      <p id="ipRelationsSummary" role="status" aria-live="polite">尚未读取关联记录</p>
     </form>
-    <p id="ipRelationsSummary" role="status" aria-live="polite">尚未读取关联记录</p>
     <div id="ipRelationsTable" class="traffic-detail-wrap"><div class="loading-state">正在读取 IP 与用户关联…</div></div>
     <div class="ip-relations-pagination">
       <span id="ipRelationsPageStatus"></span>
       <button id="ipRelationsPrevious" class="secondary" type="button" onclick="changeIpRelationsPage(-1)" disabled>上一页</button>
       <button id="ipRelationsNext" class="secondary" type="button" onclick="changeIpRelationsPage(1)" disabled>下一页</button>
     </div>
-    <p class="hint">数据来自网络日志中保留的成功入站请求，受日志记录设置和保留期影响。点击 IP 或用户 UID 可切换查询方向；密码登录次数单独统计。</p>
+    <p class="hint">数据来自保留的成功入站网络日志。展开账户或 IP 可查看关联明细，也可一键复制 UID 或 IP。</p>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="subscriptions">
     <div class="subscription-manager">

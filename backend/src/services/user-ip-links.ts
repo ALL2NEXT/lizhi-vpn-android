@@ -9,6 +9,8 @@ interface UserIpLinkRow {
   parent_key: string;
   child_count: number;
   group_request_count: number;
+  group_subscription_count: number;
+  group_login_count: number;
   group_first_seen_at: string;
   group_last_seen_at: string;
   user_uid: string;
@@ -62,10 +64,11 @@ export async function writeUserIpLink(
 
 export async function readUserIpLinks(
   env: Env,
-  filters: { ip?: string; uid?: string; direction?: string; limit?: number; offset?: number } = {},
+  filters: { ip?: string; uid?: string; q?: string; direction?: string; limit?: number; offset?: number } = {},
 ) {
   const ip = normalizeClientIp(filters.ip);
   const uid = normalizeStoredUid(filters.uid);
+  const search = typeof filters.q === "string" ? filters.q.trim().slice(0, 100) : "";
   const direction = filters.direction === "user" ? "user" : "ip";
   const parentKey = direction === "user" ? "user_uid" : "ip";
   if (filters.ip?.trim() && !ip) throw new Error("invalid_ip");
@@ -90,6 +93,20 @@ export async function readUserIpLinks(
     conditions.push("user_uid = ?");
     bindings.push(uid);
   }
+  if (search) {
+    const escapedSearch = search.replace(/[\\%_]/g, (character) => `\\${character}`);
+    const searchConditions = [
+      "user_uid LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "user_uid IN (SELECT uid FROM users_mb WHERE nickname LIKE ? ESCAPE '\\' COLLATE NOCASE)",
+    ];
+    const normalizedSearchIp = normalizeClientIp(search);
+    if (normalizedSearchIp) {
+      searchConditions.unshift("ip = ?");
+      bindings.push(normalizedSearchIp);
+    }
+    conditions.push(`(${searchConditions.join(" OR ")})`);
+    bindings.push(`%${escapedSearch}%`, `%${escapedSearch}%`);
+  }
   const eligibleLogs = `eligible_logs AS (
     SELECT id, ip, user_uid, device_id, occurred_at, path, identity_source
     FROM system_logs_mb
@@ -106,6 +123,8 @@ export async function readUserIpLinks(
   const parentGroups = `parent_groups AS (
     SELECT ${parentKey} AS parent_key, COUNT(*) AS child_count,
       SUM(request_count) AS group_request_count,
+      SUM(subscription_count) AS group_subscription_count,
+      SUM(login_count) AS group_login_count,
       MIN(first_seen_at) AS group_first_seen_at,
       MAX(last_seen_at) AS group_last_seen_at
     FROM aggregated_logs
@@ -134,7 +153,8 @@ export async function readUserIpLinks(
          ORDER BY group_last_seen_at DESC, parent_key ASC LIMIT ? OFFSET ?
        )
        SELECT page_groups.parent_key, page_groups.child_count,
-         page_groups.group_request_count, page_groups.group_first_seen_at,
+         page_groups.group_request_count, page_groups.group_subscription_count,
+         page_groups.group_login_count, page_groups.group_first_seen_at,
          page_groups.group_last_seen_at,
          aggregated_logs.ip, aggregated_logs.user_uid, users_mb.nickname,
          users_mb.status AS account_status, aggregated_logs.first_seen_at,
@@ -162,6 +182,8 @@ export async function readUserIpLinks(
     accountStatus: string;
     childCount: number;
     requestCount: number;
+    subscriptionCount: number;
+    loginCount: number;
     firstSeenAt: string;
     lastSeenAt: string;
     relations: Array<Record<string, string | number>>;
@@ -177,6 +199,8 @@ export async function readUserIpLinks(
         accountStatus: direction === "user" ? row.account_status || "deleted" : "",
         childCount: Number(row.child_count) || 0,
         requestCount: Number(row.group_request_count) || 0,
+        subscriptionCount: Number(row.group_subscription_count) || 0,
+        loginCount: Number(row.group_login_count) || 0,
         firstSeenAt: row.group_first_seen_at,
         lastSeenAt: row.group_last_seen_at,
         relations: [],

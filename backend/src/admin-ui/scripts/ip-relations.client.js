@@ -2,15 +2,21 @@ let ipRelationsData = null;
 let ipRelationsLoading = false;
 let ipRelationsOffset = 0;
 let ipRelationsRevision = 0;
+let ipRelationsDirection = 'user';
+let ipRelationsSearchTimer = null;
+let ipRelationsExpanded = new Set();
 
 function resetIpRelations() {
   ipRelationsRevision += 1;
   ipRelationsData = null;
   ipRelationsLoading = false;
   ipRelationsOffset = 0;
-  el('ipRelationsDirection').value = 'ip';
+  ipRelationsDirection = 'user';
+  ipRelationsExpanded.clear();
+  if (ipRelationsSearchTimer) clearTimeout(ipRelationsSearchTimer);
+  ipRelationsSearchTimer = null;
   el('ipRelationsQuery').value = '';
-  updateIpRelationsQueryHint();
+  updateIpRelationsViewButtons();
   el('ipRelationsTable').innerHTML = '';
   el('ipRelationsSummary').textContent = '尚未读取关联记录';
   el('ipRelationsPageStatus').textContent = '';
@@ -19,38 +25,108 @@ function resetIpRelations() {
   el('ipRelationsRefresh').disabled = false;
 }
 
-function updateIpRelationsQueryHint() {
-  const byIp = value('ipRelationsDirection') !== 'user';
-  const input = el('ipRelationsQuery');
-  input.placeholder = byIp ? '输入完整 IP，留空查看全部关联' : '输入完整用户 UID，留空查看全部关联';
-  input.setAttribute('aria-label', byIp ? '查询 IP 对应的用户' : '查询用户 UID 对应的 IP');
+function updateIpRelationsViewButtons() {
+  const byUser = ipRelationsDirection === 'user';
+  const userButton = el('ipRelationsViewUser');
+  const ipButton = el('ipRelationsViewIp');
+  userButton.classList.toggle('active', byUser);
+  userButton.setAttribute('aria-pressed', String(byUser));
+  ipButton.classList.toggle('active', !byUser);
+  ipButton.setAttribute('aria-pressed', String(!byUser));
+}
+
+function setIpRelationView(direction) {
+  if (ipRelationsSearchTimer) clearTimeout(ipRelationsSearchTimer);
+  ipRelationsSearchTimer = null;
+  ipRelationsDirection = direction === 'ip' ? 'ip' : 'user';
+  updateIpRelationsViewButtons();
+  ipRelationsOffset = 0;
+  ipRelationsExpanded.clear();
+  loadIpRelations(true);
 }
 
 function setIpRelationFilter(direction, query) {
-  el('ipRelationsDirection').value = direction === 'user' ? 'user' : 'ip';
+  ipRelationsDirection = direction === 'ip' ? 'ip' : 'user';
   el('ipRelationsQuery').value = query || '';
-  updateIpRelationsQueryHint();
+  updateIpRelationsViewButtons();
   ipRelationsOffset = 0;
+  ipRelationsExpanded.clear();
   loadIpRelations(true);
   activateTab('ip-relations');
+}
+
+function toggleIpRelationGroup(key) {
+  if (ipRelationsExpanded.has(key)) ipRelationsExpanded.delete(key);
+  else ipRelationsExpanded.add(key);
+  renderIpRelations();
+}
+
+async function copyIpRelationValue(value, label) {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.clipboard || !navigator.clipboard.writeText) {
+      throw new Error('clipboard_unavailable');
+    }
+    await navigator.clipboard.writeText(value);
+    show(label + '已复制');
+  } catch (_) {
+    show('复制失败，请手动选择内容', true);
+  }
+}
+
+function ipRelationStatusLabel(status) {
+  return status === 'banned' ? '已封禁' : status === 'deleted' ? '已删除' : '正常';
+}
+
+function ipRelationAccountCell(relation) {
+  return '<div class="ip-relation-account"><strong>' + esc(relation.nickname || relation.userUid) +
+    '</strong><small>' + esc(relation.userUid) + '</small><span class="ip-relation-status status-' +
+    esc(relation.accountStatus || 'deleted') + '">' + esc(ipRelationStatusLabel(relation.accountStatus)) + '</span></div>';
+}
+
+function ipRelationCopyButton(value, label) {
+  return '<button class="ip-relation-copy" type="button" data-copy-value="' + esc(value) +
+    '" data-copy-label="' + esc(label) + '" aria-label="复制' + esc(label) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>复制 ' + esc(label) + '</button>';
+}
+
+function ipRelationExpandedMarkup(group, byIp) {
+  const rows = group.relations.map(function(relation) {
+    if (byIp) {
+      return '<tr><td>' + ipRelationAccountCell(relation) + '</td><td>' +
+        Number(relation.requestCount || 0).toLocaleString() + '</td><td>' +
+        Number(relation.subscriptionCount || 0).toLocaleString() + '</td><td>' +
+        Number(relation.loginCount || 0).toLocaleString() + '</td><td>' +
+        esc(systemLogDateTime(relation.firstSeenAt)) + '</td><td>' +
+        esc(systemLogDateTime(relation.lastSeenAt)) + '</td><td>' +
+        ipRelationCopyButton(relation.userUid, 'UID') + '</td></tr>';
+    }
+    return '<tr><td><code>' + esc(relation.ip) + '</code></td><td>' +
+      Number(relation.requestCount || 0).toLocaleString() + '</td><td>' +
+      Number(relation.subscriptionCount || 0).toLocaleString() + '</td><td>' +
+      esc(systemLogDateTime(relation.firstSeenAt)) + '</td><td>' +
+      esc(systemLogDateTime(relation.lastSeenAt)) + '</td><td>' +
+      ipRelationCopyButton(relation.ip, 'IP') + '</td></tr>';
+  }).join('');
+  const headers = byIp
+    ? '<th>关联账户</th><th>成功请求</th><th>订阅请求</th><th>密码登录</th><th>首次访问</th><th>最近访问</th><th>操作</th>'
+    : '<th>IP 地址</th><th>成功请求</th><th>订阅请求</th><th>首次访问</th><th>最近访问</th><th>操作</th>';
+  return '<tr class="ip-relation-expanded-row"><td colspan="6"><div class="ip-relation-expanded-content"><h3>' +
+    (byIp ? '关联账户（' + group.relations.length + ' 个）' : '关联 IP（' + group.relations.length + ' 个）') +
+    '</h3><div class="ip-relation-expanded-table-wrap"><table class="ip-relation-detail-table"><thead><tr>' +
+    headers + '</tr></thead><tbody>' + rows + '</tbody></table></div></div></td></tr>';
 }
 
 function renderIpRelations() {
   const data = ipRelationsData;
   if (!data) return;
   const stats = data.stats || {};
-  const byIp = data.direction !== 'user';
-  const groups = Array.isArray(data.groups) ? data.groups : buildIpRelationGroups(data.relations, byIp);
-  const relationCount = stats.relationCount == null
-    ? (Array.isArray(data.relations) ? data.relations.length : 0)
-    : Number(stats.relationCount);
-  const groupLabel = byIp ? '个 IP' : '个账户';
-  el('ipRelationsSummary').textContent = '当前 ' + Number(data.total || 0).toLocaleString() + groupLabel +
-    ' · 关联 ' + Number(relationCount || 0).toLocaleString() + ' 组 · IP ' +
-    Number(stats.ipCount || 0).toLocaleString() + ' 个 · 用户 ' + Number(stats.userCount || 0).toLocaleString() +
-    ' 个 · 成功请求 ' + Number(stats.requestCount || 0).toLocaleString() + ' 次';
+  const byIp = data.direction === 'ip';
+  const groups = Array.isArray(data.groups) ? data.groups : [];
+  el('ipRelationsSummary').textContent = Number(stats.userCount || 0).toLocaleString() + ' 个用户 · ' +
+    Number(stats.ipCount || 0).toLocaleString() + ' 个 IP · ' +
+    Number(stats.requestCount || 0).toLocaleString() + ' 次成功请求';
   const offset = Number(data.offset) || 0;
   const limit = Number(data.limit) || 50;
+  const groupLabel = byIp ? '个 IP' : '个用户';
   el('ipRelationsPageStatus').textContent = data.total
     ? '显示 ' + (offset + 1) + '–' + (offset + groups.length) + ' ' + groupLabel +
       '，共 ' + Number(data.total).toLocaleString() + ' ' + groupLabel
@@ -62,96 +138,70 @@ function renderIpRelations() {
     host.innerHTML = '<div class="security-device-empty">没有匹配的 IP 与用户关联</div>';
     return;
   }
-  const statusLabel = function(status) {
-    return status === 'banned' ? '已封禁' : status === 'deleted' ? '已删除' : '正常';
-  };
-  const groupMarkup = groups.map(function(group) {
-    const parent = byIp
-      ? '<span class="ip-relation-parent-kind">IP</span><button type="button" class="ip-relation-link ip-relation-parent-link" data-relation-ip="' +
-        esc(group.ip || group.key) + '">' + esc(group.ip || group.key) + '</button>'
-      : '<span class="ip-relation-parent-kind">账户</span><div class="ip-relation-parent-account"><strong>' +
-        esc(group.nickname || group.userUid || group.key) + '</strong><span class="ip-relation-user-status">' +
-        esc(statusLabel(group.accountStatus)) + '</span><button type="button" class="ip-relation-link" data-relation-uid="' +
-        esc(group.userUid || group.key) + '">' + esc(group.userUid || group.key) + '</button></div>';
-    const rows = group.relations.map(function(relation) {
-      const identity = byIp
-        ? '<div class="ip-relation-identity"><strong>' + esc(relation.nickname || relation.userUid) +
-          '</strong><span class="ip-relation-user-status">' + esc(statusLabel(relation.accountStatus)) + '</span>' +
-          '<button type="button" class="ip-relation-link" data-relation-uid="' + esc(relation.userUid) + '">' +
-          esc(relation.userUid) + '</button></div>'
-        : '<button type="button" class="ip-relation-link" data-relation-ip="' + esc(relation.ip) + '">' +
-          esc(relation.ip) + '</button>';
-      return '<tr><td>' + identity + '</td><td>' + Number(relation.requestCount || 0).toLocaleString() +
-        '</td><td>' + Number(relation.subscriptionCount || 0).toLocaleString() +
-        '</td><td>' + Number(relation.loginCount || 0).toLocaleString() +
-        '</td><td>' + esc(systemLogDateTime(relation.firstSeenAt)) +
-        '</td><td>' + esc(systemLogDateTime(relation.lastSeenAt)) + '</td></tr>';
-    }).join('');
-    const memberLabel = byIp ? '关联账户' : '关联 IP';
-    return '<section class="ip-relation-group"><header class="ip-relation-group-heading"><div class="ip-relation-parent">' +
-      parent + '</div><div class="ip-relation-group-summary"><span><strong>' +
-      Number(group.childCount || 0).toLocaleString() + '</strong> ' + (byIp ? '个账户' : '个 IP') +
-      '</span><span><strong>' + Number(group.requestCount || 0).toLocaleString() +
-      '</strong> 次成功请求</span><span>最近访问 ' + esc(systemLogDateTime(group.lastSeenAt)) +
-      '</span></div></header><div class="ip-relation-members"><table class="traffic-detail-table ip-relations-table" aria-label="' +
-      memberLabel + '"><thead><tr><th>' + memberLabel + '</th><th>成功请求</th><th>订阅请求</th>' +
-      '<th>密码登录</th><th>首次访问</th><th>最近访问</th></tr></thead><tbody>' + rows +
-      '</tbody></table></div></section>';
-  }).join('');
-  host.innerHTML = '<div class="ip-relation-groups">' + groupMarkup + '</div>';
-  host.querySelectorAll('[data-relation-ip]').forEach(function(button) {
-    button.onclick = function() { setIpRelationFilter('ip', button.dataset.relationIp); };
-  });
-  host.querySelectorAll('[data-relation-uid]').forEach(function(button) {
-    button.onclick = function() { setIpRelationFilter('user', button.dataset.relationUid); };
-  });
-}
 
-function buildIpRelationGroups(relations, byIp) {
-  const groups = new Map();
-  (Array.isArray(relations) ? relations : []).forEach(function(relation) {
-    const key = byIp ? relation.ip : relation.userUid;
-    if (!key) return;
-    let group = groups.get(key);
-    if (!group) {
-      group = {
-        key: key,
-        ip: byIp ? key : '',
-        userUid: byIp ? '' : key,
-        nickname: byIp ? '' : relation.nickname || '',
-        accountStatus: byIp ? '' : relation.accountStatus || 'deleted',
-        childCount: 0,
-        requestCount: 0,
-        firstSeenAt: relation.firstSeenAt || '',
-        lastSeenAt: relation.lastSeenAt || '',
-        relations: [],
-      };
-      groups.set(key, group);
+  const rows = groups.map(function(group) {
+    const groupKey = data.direction + ':' + group.key;
+    const expanded = ipRelationsExpanded.has(groupKey);
+    const expandButton = '<button class="ip-relation-expand" type="button" data-expand-group="' +
+      esc(groupKey) + '" aria-expanded="' + expanded + '" aria-label="' + (expanded ? '收起' : '展开') +
+      '关联详情"><span aria-hidden="true">' + (expanded ? '⌄' : '›') + '</span></button>';
+    let identity;
+    let secondary;
+    let copyValue;
+    let copyLabel;
+    if (byIp) {
+      const previews = group.relations.slice(0, 2).map(function(relation) {
+        return '<span class="ip-relation-account-preview"><strong>' + esc(relation.nickname || relation.userUid) +
+          '</strong><small>' + esc(relation.userUid) + '</small></span>';
+      }).join('');
+      identity = '<code>' + esc(group.ip || group.key) + '</code>';
+      secondary = '<div class="ip-relation-account-list">' + previews +
+        (group.childCount > 2 ? '<span class="ip-relation-more">+' + (group.childCount - 2) + ' 个账户</span>' : '') + '</div>';
+      copyValue = group.ip || group.key;
+      copyLabel = 'IP';
+    } else {
+      identity = '<div class="ip-relation-main-account"><strong>' + esc(group.nickname || group.userUid || group.key) +
+        '</strong><small>' + esc(group.userUid || group.key) + '</small></div>';
+      secondary = Number(group.childCount || 0).toLocaleString();
+      copyValue = group.userUid || group.key;
+      copyLabel = 'UID';
     }
-    group.childCount += 1;
-    group.requestCount += Number(relation.requestCount || 0);
-    if (relation.firstSeenAt && (!group.firstSeenAt || relation.firstSeenAt < group.firstSeenAt)) {
-      group.firstSeenAt = relation.firstSeenAt;
-    }
-    if (relation.lastSeenAt > group.lastSeenAt) group.lastSeenAt = relation.lastSeenAt;
-    group.relations.push(relation);
+    const parentRow = '<tr class="ip-relation-parent-row' + (expanded ? ' expanded' : '') + '"><td><div class="ip-relation-row-identity">' +
+      expandButton + '<div>' + identity + '</div></div></td><td>' +
+      (byIp ? secondary : secondary + ' 个') + '</td><td>' + Number(group.requestCount || 0).toLocaleString() +
+      '</td><td>' + Number(group.subscriptionCount || 0).toLocaleString() + '</td><td>' +
+      esc(systemLogDateTime(group.lastSeenAt)) + '</td><td>' + ipRelationCopyButton(copyValue, copyLabel) + '</td></tr>';
+    return parentRow + (expanded ? ipRelationExpandedMarkup(group, byIp) : '');
+  }).join('');
+  const firstHeader = byIp ? 'IP 地址' : '账户';
+  const secondHeader = byIp ? '关联账户' : 'IP 数';
+  host.innerHTML = '<div class="ip-relation-table-wrap"><table class="ip-relation-table" aria-label="IP 与账户关联">' +
+    '<thead><tr><th>' + firstHeader + '</th><th>' + secondHeader + '</th><th>成功请求</th><th>订阅请求</th><th>最近访问</th><th>操作</th></tr></thead><tbody>' +
+    rows + '</tbody></table></div>';
+  host.querySelectorAll('[data-expand-group]').forEach(function(button) {
+    button.onclick = function() { toggleIpRelationGroup(button.dataset.expandGroup); };
   });
-  return Array.from(groups.values());
+  host.querySelectorAll('[data-copy-value]').forEach(function(button) {
+    button.onclick = function() { copyIpRelationValue(button.dataset.copyValue, button.dataset.copyLabel); };
+  });
 }
 
 async function loadIpRelations(force) {
+  if (force && ipRelationsSearchTimer) clearTimeout(ipRelationsSearchTimer);
+  if (force) ipRelationsSearchTimer = null;
   if (!force && (ipRelationsLoading || ipRelationsData)) {
     if (ipRelationsData) renderIpRelations();
     return;
   }
   const revision = ++ipRelationsRevision;
-  const direction = value('ipRelationsDirection') === 'user' ? 'user' : 'ip';
+  const direction = ipRelationsDirection;
   const query = value('ipRelationsQuery');
   if (ipRelationsData && (direction !== ipRelationsData.direction || query !== ipRelationsData.query)) {
     ipRelationsOffset = 0;
+    ipRelationsExpanded.clear();
   }
   const params = new URLSearchParams({ direction: direction, limit: '50', offset: String(ipRelationsOffset) });
-  if (query) params.set(direction === 'user' ? 'uid' : 'ip', query);
+  if (query) params.set('q', query);
   ipRelationsLoading = true;
   el('ipRelationsRefresh').disabled = true;
   el('ipRelationsPrevious').disabled = true;
@@ -162,8 +212,7 @@ async function loadIpRelations(force) {
     const data = parseResponseJson(await response.text());
     if (revision !== ipRelationsRevision) return;
     if (!response.ok) {
-      throw new Error(({ invalid_ip: '请输入有效的完整 IP 地址', invalid_uid: '请输入有效的完整用户 UID' })[data.error] ||
-        data.error || ('HTTP ' + response.status));
+      throw new Error(data.error || ('HTTP ' + response.status));
     }
     ipRelationsOffset = Number(data.offset) || 0;
     ipRelationsData = Object.assign({}, data, { direction: direction, query: query });
@@ -191,11 +240,22 @@ function changeIpRelationsPage(delta) {
   loadIpRelations(true);
 }
 
+el('ipRelationsViewUser').addEventListener('click', function() { setIpRelationView('user'); });
+el('ipRelationsViewIp').addEventListener('click', function() { setIpRelationView('ip'); });
 el('ipRelationsForm').addEventListener('submit', function(event) {
   event.preventDefault();
+  if (ipRelationsSearchTimer) clearTimeout(ipRelationsSearchTimer);
+  ipRelationsSearchTimer = null;
   ipRelationsOffset = 0;
+  ipRelationsExpanded.clear();
   loadIpRelations(true);
 });
-el('ipRelationsDirection').addEventListener('change', function() {
-  setIpRelationFilter(value('ipRelationsDirection'), '');
+el('ipRelationsQuery').addEventListener('input', function() {
+  if (ipRelationsSearchTimer) clearTimeout(ipRelationsSearchTimer);
+  ipRelationsSearchTimer = setTimeout(function() {
+    ipRelationsSearchTimer = null;
+    ipRelationsOffset = 0;
+    ipRelationsExpanded.clear();
+    loadIpRelations(true);
+  }, 300);
 });

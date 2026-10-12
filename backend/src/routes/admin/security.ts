@@ -54,6 +54,7 @@ export function createAdminSecurityRoutes(deps: Pick<
         return json(await readUserIpLinks(env, {
           ip: url.searchParams.get("ip") || undefined,
           uid: url.searchParams.get("uid") || undefined,
+          q: url.searchParams.get("q") || undefined,
           direction: url.searchParams.get("direction") || undefined,
           limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined,
           offset: url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : undefined,
