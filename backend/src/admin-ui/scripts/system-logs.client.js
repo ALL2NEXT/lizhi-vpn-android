@@ -790,8 +790,12 @@ function systemLogDetailField(label, value, copyValue) {
   const shown = value == null || value === '' ? '-' : String(value);
   const copy = copyValue == null ? shown : String(copyValue);
   return '<div class="system-log-detail-field"><span>' + esc(label) + '</span><div><strong>' + esc(shown) + '</strong>' +
-    (copy !== '-' ? '<button type="button" class="system-log-copy-inline" data-system-log-copy="' + esc(copy) + '" aria-label="复制' + esc(label) + '">▢</button>' : '') +
+    (copy !== '-' ? '<button type="button" class="system-log-copy-inline" data-system-log-copy="' + esc(copy) + '" aria-label="复制' + esc(label) + '" title="复制' + esc(label) + '">' + systemLogCopyIcon() + '</button>' : '') +
     '</div></div>';
+}
+
+function systemLogCopyIcon() {
+  return '<svg class="system-log-copy-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>';
 }
 
 function systemLogPayloadText(kind) {
@@ -829,14 +833,7 @@ function systemLogPayloadCard(title, kind) {
 function renderSystemLogDetails() {
   const record = systemLogDetailRecord;
   if (!record) return;
-  const summary = el('systemLogDrawerSummary');
   const content = el('systemLogDrawerContent');
-  const method = String(record.method || '-').toUpperCase();
-  const status = record.status == null ? '-' : String(record.status);
-  const path = record.path || record.message || '-';
-  const ipLabel = systemLogIpLabel(record.category);
-  if (summary) summary.innerHTML = '<div class="system-log-drawer-badges"><span class="system-log-category ' + esc(record.category || '') + '">' + esc(systemLogCategoryName(record.category)) + '</span><time>' + esc(systemLogDateTime(record.occurredAt)) + '</time></div>' +
-    '<div class="system-log-drawer-route"><span class="system-log-method">' + esc(method) + '</span><strong>' + esc(path) + '</strong></div>';
   const detail = systemLogDetailTab;
   document.querySelectorAll('[data-system-log-detail-tab]').forEach(function(button) {
     button.classList.toggle('active', button.dataset.systemLogDetailTab === detail);
@@ -844,18 +841,11 @@ function renderSystemLogDetails() {
   if (!content) return;
   if (detail === 'basic') {
     content.innerHTML = '<div class="system-log-detail-fields">' +
-      systemLogDetailField('状态码', status) +
-      systemLogDetailField('耗时', record.durationMs == null ? '-' : Number(record.durationMs).toLocaleString() + ' ms') +
-      systemLogDetailField(ipLabel, record.ip, record.ip) +
       systemLogDetailField('用户 UID', record.userUid, record.userUid) +
       systemLogDetailField('设备 ID', record.deviceId, record.deviceId) +
       systemLogDetailField('身份来源', record.identitySource === 'login' ? '密码登录' : record.identitySource === 'device' ? '设备关联' : '-') +
-      systemLogDetailField('请求 ID', record.requestId, record.requestId) +
-      systemLogDetailField('类型', systemLogCategoryName(record.category)) +
-      systemLogDetailField('时间', systemLogDateTime(record.occurredAt)) +
       systemLogDetailField('操作者', record.actor) +
       systemLogDetailField('User-Agent', record.userAgent) +
-      systemLogDetailField('请求路径', record.path) +
       '</div>';
   } else if (detail === 'request' && systemLogPayloadLoading) {
     content.innerHTML = '<div class="loading-state">正在读取请求详细内容…</div>';
@@ -864,8 +854,8 @@ function renderSystemLogDetails() {
   } else if (detail === 'request' && systemLogPayload && systemLogPayload.request) {
     content.innerHTML = systemLogPayloadCard('已记录的请求内容', 'request');
   } else if (detail === 'request') {
-    content.innerHTML = '<section class="system-log-detail-note"><strong>已保存的请求信息</strong><p>日志仅保留' + esc(ipLabel) + ' 和 User-Agent，没有保存完整请求头、Cookie 或认证信息。</p>' +
-      '<dl><div><dt>' + esc(ipLabel) + '</dt><dd>' + esc(record.ip || '-') + '</dd></div><div><dt>User-Agent</dt><dd>' + esc(record.userAgent || '-') + '</dd></div></dl></section>';
+    content.innerHTML = '<section class="system-log-detail-note"><strong>请求摘要</strong><p>完整请求内容未单独保存；以下仅展示 User-Agent。</p>' +
+      '<dl><div><dt>User-Agent</dt><dd>' + esc(record.userAgent || '-') + '</dd></div></dl></section>';
   } else if (detail === 'response' && systemLogPayloadLoading) {
     content.innerHTML = '<div class="loading-state">正在读取响应详细内容…</div>';
   } else if (detail === 'response' && systemLogPayloadError) {
@@ -873,11 +863,11 @@ function renderSystemLogDetails() {
   } else if (detail === 'response' && systemLogPayload && systemLogPayload.response) {
     content.innerHTML = systemLogPayloadCard('已记录的响应内容', 'response');
   } else if (detail === 'response') {
-    content.innerHTML = '<section class="system-log-detail-note"><strong>响应摘要</strong><p>当前日志没有保存响应详细内容。这里展示日志中保留的状态和说明字段。</p>' +
-      '<dl><div><dt>状态码</dt><dd>' + esc(status) + '</dd></div><div><dt>说明</dt><dd>' + esc(record.message || '-') + '</dd></div><div><dt>附加详情</dt><dd>' + esc(record.details || '-') + '</dd></div></dl></section>';
+    content.innerHTML = '<section class="system-log-detail-note"><strong>响应摘要</strong><p>完整响应内容未单独保存，以下为日志中额外保留的说明字段。</p>' +
+      '<dl><div><dt>说明</dt><dd>' + esc(record.message || '-') + '</dd></div><div><dt>附加详情</dt><dd>' + esc(record.details || '-') + '</dd></div></dl></section>';
   } else {
     const raw = JSON.stringify(record, null, 2);
-    content.innerHTML = '<section class="system-log-json-card"><div class="system-log-json-heading"><strong>原始日志 (JSON)</strong><button type="button" class="secondary" data-system-log-copy="' + esc(raw) + '">▢ 复制</button></div><pre>' + esc(raw) + '</pre></section>';
+    content.innerHTML = '<section class="system-log-json-card"><div class="system-log-json-heading"><strong>原始日志 (JSON)</strong><button type="button" class="secondary" data-system-log-copy="' + esc(raw) + '" aria-label="复制原始日志" title="复制原始日志">' + systemLogCopyIcon() + ' 复制</button></div><pre>' + esc(raw) + '</pre></section>';
   }
   content.querySelectorAll('[data-system-log-copy]').forEach(function(button) {
     button.addEventListener('click', function() { copySystemLogText(button.dataset.systemLogCopy || ''); });

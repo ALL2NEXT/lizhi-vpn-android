@@ -458,11 +458,6 @@
      .system-log-drawer-header h3 { margin: 0; color: #172238; font-size: 18px; }
      .system-log-drawer-close { display: grid; width: 34px; min-height: 34px; place-items: center; margin: 0; padding: 0; color: #526078; background: transparent; font-size: 24px; font-weight: 400; }
      .system-log-drawer-close:hover:not(:disabled) { color: #172238; background: #f1f4f8; box-shadow: none; }
-     .system-log-drawer-summary { flex: 0 0 auto; padding: 14px 20px 4px; }
-     .system-log-drawer-badges { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-     .system-log-drawer-badges time { color: #526078; font-size: 12px; }
-     .system-log-drawer-route { display: flex; align-items: flex-start; gap: 12px; color: #152238; }
-     .system-log-drawer-route strong { min-width: 0; overflow-wrap: anywhere; font-size: 16px; font-weight: 600; }
      .system-log-detail-tabs { display: flex; flex: 0 0 auto; gap: 18px; padding: 0 20px; margin-top: 10px; border-bottom: 1px solid #e7edf4; }
      .system-log-detail-tabs button { position: relative; min-height: 42px; margin: 0; padding: 0 2px; color: #5e6d83; background: transparent; font-size: 12px; font-weight: 500; }
      .system-log-detail-tabs button.active { color: #176fe0; }
@@ -474,8 +469,9 @@
      .system-log-detail-field > span { color: #70809a; font-size: 12px; }
      .system-log-detail-field > div { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
      .system-log-detail-field strong { min-width: 0; color: #34445b; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
-     .system-log-copy-inline { flex: 0 0 auto; min-height: 18px; margin: 0; padding: 0 3px; color: #66758b; background: transparent; font-size: 13px; }
+     .system-log-copy-inline { display: inline-grid; flex: 0 0 24px; width: 24px; height: 24px; min-height: 24px; place-items: center; margin: 0; padding: 4px; color: #66758b; background: transparent; border-radius: 5px; }
      .system-log-copy-inline:hover:not(:disabled) { color: #176fe0; background: transparent; box-shadow: none; }
+     .system-log-copy-icon { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
      .system-log-detail-note, .system-log-json-card { padding: 13px; border: 1px solid #e4eaf2; border-radius: 10px; background: #fff; }
      .system-log-detail-note > strong, .system-log-json-heading > strong { color: #26364d; font-size: 13px; }
      .system-log-detail-note p { margin: 8px 0 12px; color: #718099; font-size: 12px; }
