@@ -288,12 +288,14 @@ function systemLogCreateEndpointNode(name, path) {
   return {name: name, path: path, requestCount: 0, routes: [], children: new Map()};
 }
 
-function systemLogBuildEndpointTree(endpoints) {
+function systemLogBuildEndpointTree(endpoints, category) {
   const root = systemLogCreateEndpointNode('/', '/');
   (Array.isArray(endpoints) ? endpoints : []).forEach(function(endpoint) {
     const method = String(endpoint.method || '-').toUpperCase();
     const rawPath = String(endpoint.path || '/');
-    const path = rawPath.charAt(0) === '/' ? rawPath : '/' + rawPath;
+    const path = category === 'outbound'
+      ? rawPath
+      : (rawPath.charAt(0) === '/' ? rawPath : '/' + rawPath);
     const route = {method: method, path: path, requestCount: Number(endpoint.requestCount) || 0};
     const segments = path.split('/').filter(Boolean);
     let node = root;
@@ -417,7 +419,7 @@ function renderSystemLogEndpointNavigation(endpointGroups) {
       list.innerHTML = '<div class="system-log-endpoint-state">没有匹配的端点</div>';
       return;
     }
-    list.innerHTML = systemLogEndpointFolderMarkup(systemLogBuildEndpointTree(rows), query, true, item.key);
+    list.innerHTML = systemLogEndpointFolderMarkup(systemLogBuildEndpointTree(rows, item.key), query, true, item.key);
   });
 }
 
