@@ -133,7 +133,6 @@ export function createAdminAccessRoutes(deps: Pick<
       const url = new URL(request.url);
       return json(await readSystemLogs(env, {
         category: url.searchParams.get("category") || undefined,
-        level: url.searchParams.get("level") || undefined,
         status: url.searchParams.get("status") || undefined,
         startDate: url.searchParams.get("startDate") || undefined,
         endDate: url.searchParams.get("endDate") || undefined,

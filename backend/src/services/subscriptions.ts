@@ -449,7 +449,7 @@ function legacySubscriptionCache(value: string): LegacySubscriptionCache | null 
 async function readSubscriptionCache(env: Env, source: SubscriptionSource) {
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
   let metadata = await loadSubscriptionCacheMetadata(env, source.id);
-  let contentValue = await env.CONFIG.get<string>(subscriptionCacheKey(source), "text");
+  let contentValue = await env.CONFIG.get(subscriptionCacheKey(source));
   let legacyUrl = "";
   const legacy = typeof contentValue === "string" ? legacySubscriptionCache(contentValue) : null;
   if (legacy) {
@@ -481,7 +481,7 @@ async function readSubscriptionCache(env: Env, source: SubscriptionSource) {
     metadata = await loadSubscriptionCacheMetadata(env, source.id);
   }
 
-  const legacyTrafficValue = await env.CONFIG.get<string>(subscriptionTrafficCacheKey(source), "text");
+  const legacyTrafficValue = await env.CONFIG.get(subscriptionTrafficCacheKey(source));
   if (typeof legacyTrafficValue === "string") {
     try {
       const parsed: unknown = JSON.parse(legacyTrafficValue);

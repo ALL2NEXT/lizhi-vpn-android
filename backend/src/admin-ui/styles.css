@@ -301,10 +301,6 @@
      .system-logs-table tbody tr { cursor: default; }
      .system-logs-table tbody tr:hover td, .system-logs-table tbody tr.selected td { background: #eef5ff; }
      .system-logs-table code { color: #50627f; font: inherit; }
-     .system-log-level-badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 750; line-height: 1; white-space: nowrap; }
-     .system-log-level-badge.info { color: #1260b4; background: #e7f1ff; }
-     .system-log-level-badge.warning { color: #a85a00; background: #fff1dc; }
-     .system-log-level-badge.error { color: #bd2028; background: #ffe7e8; }
      .system-logs-empty { padding: 48px 22px; color: #687890; text-align: center; }
      .system-logs-heading { align-items: center; }
      .system-logs-title { display: flex; align-items: center; gap: 10px; }
@@ -426,8 +422,6 @@
      .system-logs-time { min-width: 92px; color: #5e6e86 !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
      .system-log-category { display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 6px; color: #156cc2; background: #e9f3ff; font-size: 11px; white-space: nowrap; }
      .system-log-category.outbound { color: #087e8b; background: #e0f7fa; }
-     .system-log-level.warning { color: #a85a00; background: #fff1dc; }
-     .system-log-level.error { color: #bd2028; background: #ffe7e8; }
      .system-logs-path { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 240px; max-width: 420px; }
      .system-log-method { display: inline-flex; flex: 0 0 auto; align-items: center; padding: 4px 7px; border-radius: 5px; color: #34445b; background: #eef2f7; font-size: 11px; font-weight: 700; }
      .system-log-path-text, .system-log-ip, .system-log-request-id { display: block; min-width: 0; overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
@@ -1151,8 +1145,8 @@
     .device-relation-modal-card { border-color: var(--line); box-shadow: 0 8px 28px rgb(60 64 67 / 20%); }
     .source-settings-dialog-header, .source-settings-dialog-actions { border-color: var(--line); }
     .source-settings-dialog-header h3, .device-relation-modal-header h3 { color: var(--ink); }
-    .system-log-level-badge.success, .security-badge, .user-status-badge.active { color: #137333; background: #e6f4ea; }
-    .system-log-level-badge.failed, .security-badge.banned, .user-status-badge.banned { color: var(--red); background: #fce8e6; }
+    .security-badge, .user-status-badge.active { color: #137333; background: #e6f4ea; }
+    .security-badge.banned, .user-status-badge.banned { color: var(--red); background: #fce8e6; }
     .login-gate { width: min(430px, calc(100% - 32px)); margin-top: max(8vh, 48px); }
     .login-gate .card { padding: 28px; border-color: #e3e9f1; border-radius: 16px; box-shadow: 0 2px 10px rgb(60 64 67 / 7%); }
 
@@ -1188,7 +1182,7 @@
     .security-device-wrap { border-right: 0; border-bottom: 0; border-left: 0; border-radius: 0; }
     .subscription-import-item { padding: 12px 4px; border: 0; border-bottom: 1px solid #e7edf4; border-radius: 0; }
     .device-relation-chip { border-color: #dfe6ee; border-radius: 8px; background: #fff; }
-    .system-log-level-badge, .security-badge, .user-status-badge, .draft-badge { border-radius: 8px; font-size: 13px; }
+    .security-badge, .user-status-badge, .draft-badge { border-radius: 8px; font-size: 13px; }
     .user-draft-count, .user-detail-heading p { font-size: 14px; }
     .settings-save-bar {
       padding: 12px 16px;

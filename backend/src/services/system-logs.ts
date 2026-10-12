@@ -14,7 +14,6 @@ import { SYSTEM_LOG_SETTINGS_KEY } from "../config.ts";
 import { beijingTimestamp } from "../domain/time.ts";
 import { ensureUserSchema } from "./user-store.ts";
 
-const OUTBOUND_SLOW_MS = 1000;
 const LOG_RETENTION_DAYS = 30;
 const MAX_LOG_DETAILS_LENGTH = 1600;
 const SYSTEM_LOG_CATEGORIES: SystemLogCategory[] = ["request", "outbound"];
@@ -200,23 +199,19 @@ export async function observedFetch(
   try {
     const response = await fetch(input, init);
     const durationMs = Math.round(performance.now() - startedAt);
-    if (!response.ok || durationMs >= OUTBOUND_SLOW_MS) {
-      env?.__systemLogSink?.({
-        category: "outbound",
-        level: response.ok ? "warning" : "error",
-        method,
-        path: host,
-        status: response.status,
-        durationMs,
-        message: `${method} ${host} 返回 HTTP ${response.status}`,
-      });
-    }
+    env?.__systemLogSink?.({
+      category: "outbound",
+      method,
+      path: host,
+      status: response.status,
+      durationMs,
+      message: `${method} ${host} 返回 HTTP ${response.status}`,
+    });
     return response;
   } catch (error) {
     const durationMs = Math.round(performance.now() - startedAt);
     env?.__systemLogSink?.({
       category: "outbound",
-      level: "error",
       method,
       path: host,
       durationMs,
@@ -228,11 +223,9 @@ export async function observedFetch(
 }
 
 function normalizeDraft(entry: SystemLogDraft) {
-  const level = entry.level === "error" || entry.level === "warning" ? entry.level : "info";
   return {
     occurredAt: truncate(entry.occurredAt || beijingTimestamp(), 40),
     category: entry.category,
-    level,
     requestId: truncate(entry.requestId, 96),
     actor: truncate(entry.actor, 64),
     method: truncate(entry.method, 16).toUpperCase(),
@@ -306,13 +299,13 @@ export async function writeSystemLogs(
       const value = normalizeDraft(entry);
       return db.prepare(
         `INSERT INTO system_logs_mb (
-          occurred_at, category, level, request_id, actor, method, path,
+          occurred_at, category, request_id, actor, method, path,
           status, duration_ms, ip, user_agent, message, details,
           user_uid, device_id, identity_source
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
-        value.occurredAt, value.category, value.level, value.requestId,
-        value.actor, value.method, value.path, value.status, value.durationMs,
+        value.occurredAt, value.category, value.requestId, value.actor,
+        value.method, value.path, value.status, value.durationMs,
         value.ip, value.userAgent, value.message, value.details,
         value.userUid, value.deviceId, value.identitySource,
       );
@@ -359,7 +352,6 @@ export async function readSystemLogs(
   env: Env,
   filters: {
     category?: string;
-    level?: string;
     status?: string;
     startDate?: string;
     endDate?: string;
@@ -403,10 +395,6 @@ export async function readSystemLogs(
       conditions.push("method = ?");
       bindings.push(endpointMethod);
     }
-  }
-  if (["info", "warning", "error"].includes(String(filters.level))) {
-    conditions.push("level = ?");
-    bindings.push(String(filters.level));
   }
   const statusRanges: Record<string, [number, number]> = {
     success: [200, 299],
@@ -470,7 +458,7 @@ export async function readSystemLogs(
     db.prepare(`SELECT COUNT(*) AS total FROM system_logs_mb ${where}`)
       .bind(...bindings).first<{ total: number }>(),
     db.prepare(
-      `SELECT id, occurred_at, category, level, request_id, actor, method, path,
+      `SELECT id, occurred_at, category, request_id, actor, method, path,
         status, duration_ms, ip, user_agent, message, details, user_uid, device_id, identity_source
        FROM system_logs_mb ${where}
        ORDER BY occurred_at DESC, id DESC LIMIT ? OFFSET ?`,
@@ -481,7 +469,6 @@ export async function readSystemLogs(
     id: Number(row.id),
     occurredAt: String(row.occurred_at || ""),
     category: row.category as SystemLogCategory,
-    level: row.level as SystemLogRecord["level"],
     requestId: String(row.request_id || ""),
     actor: String(row.actor || ""),
     method: String(row.method || ""),

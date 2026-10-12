@@ -153,7 +153,6 @@ export interface User {
 export type PublicAccount = Omit<User, "createdAt"> & { deviceBlocked: boolean };
 
 export type SystemLogCategory = "request" | "outbound";
-export type SystemLogLevel = "info" | "warning" | "error";
 export type SystemLogRecordingMode = "simple" | "full";
 export type SystemLogCategorySettings = Record<SystemLogCategory, boolean>;
 
@@ -192,7 +191,6 @@ export interface SystemLogHttpCapture {
 
 export interface SystemLogDraft {
   category: SystemLogCategory;
-  level: SystemLogLevel;
   requestId?: string;
   actor?: string;
   method?: string;

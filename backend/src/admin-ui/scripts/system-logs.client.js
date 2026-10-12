@@ -22,10 +22,6 @@ function systemLogCategoryName(category) {
   return ({request: '入站网络', outbound: '出站网络'})[category] || '系统';
 }
 
-function systemLogLevelName(level) {
-  return ({error: 'ERROR', warning: 'WARN', info: 'INFO'})[level] || String(level || '-').toUpperCase();
-}
-
 function systemLogDateTime(value) {
   const text = String(value || '-');
   if (text.indexOf('T') < 0) return text;
@@ -92,9 +88,8 @@ function renderSystemLogs() {
   }
 
   host.innerHTML = '<table class="system-logs-table"><thead><tr>' +
-    '<th>时间</th><th>类型</th><th>级别</th><th>方法 / 路径</th><th>状态</th><th>耗时</th><th>来源 IP</th><th>请求 ID</th><th>操作</th>' +
+    '<th>时间</th><th>类型</th><th>方法 / 路径</th><th>状态</th><th>耗时</th><th>来源 IP</th><th>请求 ID</th><th>操作</th>' +
     '</tr></thead><tbody>' + records.map(function(record) {
-      const level = String(record.level || 'info');
       const status = record.status == null ? '-' : String(record.status);
       const duration = record.durationMs == null ? '-' : Number(record.durationMs).toLocaleString() + ' ms';
       const method = String(record.method || '-').toUpperCase();
@@ -104,7 +99,6 @@ function renderSystemLogs() {
       return '<tr class="' + (selected ? 'selected' : '') + '">' +
         '<td class="system-logs-time">' + esc(systemLogDateTime(record.occurredAt)) + '</td>' +
         '<td><span class="system-log-category ' + esc(record.category || '') + '">' + esc(systemLogCategoryName(record.category)) + '</span></td>' +
-        '<td><span class="system-log-level-badge system-log-level ' + esc(level) + '">' + esc(systemLogLevelName(level)) + '</span></td>' +
         '<td><div class="system-logs-path"><span class="system-log-method">' + esc(method) + '</span><span class="system-log-path-text" title="' + esc(path) + '">' + esc(path) + '</span></div></td>' +
         '<td><span class="system-log-status ' + systemLogStatusClass(record.status) + '">' + esc(status) + '</span></td>' +
         '<td class="system-logs-duration ' + (Number(record.durationMs) >= 500 ? 'slow' : '') + '">' + esc(duration) + '</td>' +
@@ -137,14 +131,12 @@ async function loadSystemLogs(force) {
   if (host) host.innerHTML = '<div class="loading-state">正在读取网络日志</div>';
   const pageSize = Number(el('systemLogsPageSize') && el('systemLogsPageSize').value) || 10;
   const query = new URLSearchParams({limit: String(pageSize), offset: String(systemLogsOffset)});
-  const level = el('systemLogLevel').value;
   const status = el('systemLogStatus').value;
   const search = el('systemLogSearch').value.trim();
   const startDate = el('systemLogStartDate').value;
   const endDate = el('systemLogEndDate').value;
   const endpointCacheKey = systemLogsCategory + '|' + startDate + '|' + endDate;
   if (systemLogsCategory) query.set('category', systemLogsCategory);
-  if (level) query.set('level', level);
   if (status) query.set('status', status);
   if (search) query.set('q', search);
   if (startDate) query.set('startDate', startDate);
@@ -572,7 +564,6 @@ function setDefaultSystemLogDateRange() {
 
 function resetSystemLogFilters() {
   el('systemLogSearch').value = '';
-  el('systemLogLevel').value = '';
   el('systemLogStatus').value = '';
   systemLogsCategory = 'request';
   systemLogsEndpointPath = '';
@@ -695,7 +686,7 @@ function renderSystemLogDetails() {
   const method = String(record.method || '-').toUpperCase();
   const status = record.status == null ? '-' : String(record.status);
   const path = record.path || record.message || '-';
-  if (summary) summary.innerHTML = '<div class="system-log-drawer-badges"><span class="system-log-level-badge system-log-level ' + esc(record.level || 'info') + '">' + esc(systemLogLevelName(record.level)) + '</span><time>' + esc(systemLogDateTime(record.occurredAt)) + '</time></div>' +
+  if (summary) summary.innerHTML = '<div class="system-log-drawer-badges"><span class="system-log-category ' + esc(record.category || '') + '">' + esc(systemLogCategoryName(record.category)) + '</span><time>' + esc(systemLogDateTime(record.occurredAt)) + '</time></div>' +
     '<div class="system-log-drawer-route"><span class="system-log-method">' + esc(method) + '</span><strong>' + esc(path) + '</strong></div>';
   const detail = systemLogDetailTab;
   document.querySelectorAll('[data-system-log-detail-tab]').forEach(function(button) {
@@ -712,7 +703,6 @@ function renderSystemLogDetails() {
       systemLogDetailField('身份来源', record.identitySource === 'login' ? '密码登录' : record.identitySource === 'device' ? '设备关联' : '-') +
       systemLogDetailField('请求 ID', record.requestId, record.requestId) +
       systemLogDetailField('类型', systemLogCategoryName(record.category)) +
-      systemLogDetailField('级别', systemLogLevelName(record.level)) +
       systemLogDetailField('时间', systemLogDateTime(record.occurredAt)) +
       systemLogDetailField('操作者', record.actor) +
       systemLogDetailField('User-Agent', record.userAgent) +
@@ -853,9 +843,7 @@ el('systemLogSearch').addEventListener('input', function() {
   systemLogsSearchTimer = setTimeout(applySystemLogFilters, 350);
 });
 
-['systemLogLevel', 'systemLogStatus'].forEach(function(id) {
-  el(id).addEventListener('change', applySystemLogFilters);
-});
+el('systemLogStatus').addEventListener('change', applySystemLogFilters);
 
 function scheduleSystemLogRangeUpdate() {
   if (systemLogsRangeTimer) clearTimeout(systemLogsRangeTimer);

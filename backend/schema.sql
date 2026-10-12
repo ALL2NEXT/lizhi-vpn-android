@@ -213,7 +213,6 @@ CREATE TABLE system_logs_mb (
   id INTEGER PRIMARY KEY,
   occurred_at TEXT NOT NULL,
   category TEXT NOT NULL CHECK (category IN ('request', 'outbound')),
-  level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error')),
   request_id TEXT NOT NULL DEFAULT '',
   actor TEXT NOT NULL DEFAULT '',
   method TEXT NOT NULL DEFAULT '',

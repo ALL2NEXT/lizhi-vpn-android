@@ -363,7 +363,6 @@ const worker = {
     };
     const durationMs = Math.round(performance.now() - startedAt);
     const authorizedAdmin = isAdminApi && request.method !== "OPTIONS" && response.status !== 401;
-    const level = response.status >= 500 ? "error" : response.status >= 400 ? "warning" : "info";
     const actor = authorizedAdmin
       ? "管理员"
       : isAdminApi && response.status === 401
@@ -374,7 +373,6 @@ const worker = {
       {
         category: "request",
         ...userFields,
-        level,
         requestId,
         actor,
         method: request.method,
