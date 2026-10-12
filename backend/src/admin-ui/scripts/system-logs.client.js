@@ -112,10 +112,10 @@ function renderSystemLogs() {
   const pageStatus = el('systemLogsPageStatus');
   if (!host) return;
 
-  const payload = systemLogsData || {records: [], total: 0, limit: 10, offset: systemLogsOffset};
+  const payload = systemLogsData || {records: [], total: 0, limit: 20, offset: systemLogsOffset};
   const records = Array.isArray(payload.records) ? payload.records : [];
   const total = Number(payload.total) || 0;
-  const limit = Number(payload.limit) || 10;
+  const limit = Number(payload.limit) || 20;
   const offset = Number(payload.offset) || 0;
   const page = Math.floor(offset / limit) + 1;
   const pageCount = Math.max(1, Math.ceil(total / limit));
@@ -198,7 +198,7 @@ async function loadSystemLogs(force) {
   systemLogsLoading = true;
   updateSystemLogSelectionControls(systemLogsData && systemLogsData.records || []);
   if (host) host.innerHTML = '<div class="loading-state">正在读取网络日志</div>';
-  const pageSize = Number(el('systemLogsPageSize') && el('systemLogsPageSize').value) || 10;
+  const pageSize = Number(el('systemLogsPageSize') && el('systemLogsPageSize').value) || 20;
   const query = new URLSearchParams({limit: String(pageSize), offset: String(systemLogsOffset)});
   const status = el('systemLogStatus').value;
   const search = el('systemLogSearch').value.trim();
@@ -651,7 +651,7 @@ function resetSystemLogFilters() {
 
 function changeSystemLogsPage(page) {
   const total = Number(systemLogsData && systemLogsData.total) || 0;
-  const limit = Number(systemLogsData && systemLogsData.limit) || 10;
+  const limit = Number(systemLogsData && systemLogsData.limit) || 20;
   const pageCount = Math.max(1, Math.ceil(total / limit));
   const nextPage = Math.max(1, Math.min(pageCount, Number(page) || 1));
   if (nextPage === Math.floor(systemLogsOffset / limit) + 1) return;
@@ -690,7 +690,7 @@ async function deleteSelectedSystemLogs() {
     systemLogSelectedIds.clear();
     systemLogEndpointRowsCache = null;
     systemLogEndpointRowsCacheKey = '';
-    const pageSize = Number(el('systemLogsPageSize').value) || 10;
+    const pageSize = Number(el('systemLogsPageSize').value) || 20;
     const remaining = Math.max(0, (Number(systemLogsData && systemLogsData.total) || 0) - deletedCount);
     const lastPageOffset = Math.max(0, (Math.ceil(remaining / pageSize) - 1) * pageSize);
     systemLogsOffset = Math.min(systemLogsOffset, lastPageOffset);
