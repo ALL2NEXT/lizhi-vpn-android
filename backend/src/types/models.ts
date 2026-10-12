@@ -153,8 +153,16 @@ export interface User {
 export type PublicAccount = Omit<User, "createdAt"> & { deviceBlocked: boolean };
 
 export type SystemLogCategory = "request" | "outbound";
-export type SystemLogRecordingMode = "simple" | "full";
 export type SystemLogCategorySettings = Record<SystemLogCategory, boolean>;
+
+export type SystemLogDetailKey =
+  | "requestUrl"
+  | "requestHeaders"
+  | "requestBody"
+  | "responseHeaders"
+  | "responseBody";
+
+export type SystemLogDetailSettings = Record<SystemLogDetailKey, boolean>;
 
 export interface SystemLogRecordingSchedule {
   enabled: boolean;
@@ -163,8 +171,8 @@ export interface SystemLogRecordingSchedule {
 }
 
 export interface SystemLogRecordingSettings {
-  mode: SystemLogRecordingMode;
   categories: SystemLogCategorySettings;
+  details: SystemLogDetailSettings;
   schedule: SystemLogRecordingSchedule;
 }
 
@@ -175,17 +183,17 @@ export interface SystemLogHttpBodyCapture {
 }
 
 export interface SystemLogHttpCapture {
-  request: {
+  request?: {
     method: string;
-    url: string;
-    headers: [string, string][];
-    body: SystemLogHttpBodyCapture;
+    url?: string;
+    headers?: [string, string][];
+    body?: SystemLogHttpBodyCapture;
   };
-  response: {
+  response?: {
     status: number;
-    statusText: string;
-    headers: [string, string][];
-    body: SystemLogHttpBodyCapture;
+    statusText?: string;
+    headers?: [string, string][];
+    body?: SystemLogHttpBodyCapture;
   };
 }
 
@@ -204,11 +212,11 @@ export interface SystemLogDraft {
   userAgent?: string;
   message: string;
   details?: string;
-  fullCapture?: SystemLogHttpCapture;
+  capture?: SystemLogHttpCapture;
   occurredAt?: string;
 }
 
-export interface SystemLogRecord extends Required<Omit<SystemLogDraft, "occurredAt" | "status" | "durationMs" | "fullCapture">> {
+export interface SystemLogRecord extends Required<Omit<SystemLogDraft, "occurredAt" | "status" | "durationMs" | "capture">> {
   id: number;
   occurredAt: string;
   status: number | null;

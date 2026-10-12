@@ -21,7 +21,7 @@ export function createAdminAccessRoutes(deps: Pick<
   | "readSystemLogPayload"
   | "readSystemLogRecordingSettings"
   | "updateSystemLogRecordingSetting"
-  | "updateSystemLogRecordingMode"
+  | "updateSystemLogDetailSetting"
   | "updateSystemLogRecordingSchedule"
 >) {
   const {
@@ -30,7 +30,7 @@ export function createAdminAccessRoutes(deps: Pick<
     readSystemLogPayload,
     readSystemLogRecordingSettings,
     updateSystemLogRecordingSetting,
-    updateSystemLogRecordingMode,
+    updateSystemLogDetailSetting,
     updateSystemLogRecordingSchedule,
   } = deps;
 
@@ -112,8 +112,8 @@ export function createAdminAccessRoutes(deps: Pick<
         const incoming = await readJsonObject(request);
         const settings = incoming.schedule !== undefined
           ? await updateSystemLogRecordingSchedule(env, incoming.schedule)
-          : incoming.mode !== undefined
-            ? await updateSystemLogRecordingMode(env, incoming.mode)
+          : incoming.detail !== undefined
+            ? await updateSystemLogDetailSetting(env, incoming.detail, incoming.enabled)
             : await updateSystemLogRecordingSetting(env, incoming.category, incoming.enabled);
         return json({ ok: true, settings });
       } catch (error) {

@@ -375,8 +375,9 @@ function renderSystemLogRecordingSettings() {
     input.checked = systemLogRecordingSettings.categories[category] !== false;
     input.disabled = false;
   });
-  document.querySelectorAll('[data-system-log-mode]').forEach(function(input) {
-    input.checked = input.dataset.systemLogMode === systemLogRecordingSettings.mode;
+  document.querySelectorAll('[data-system-log-detail]').forEach(function(input) {
+    const detail = input.dataset.systemLogDetail;
+    input.checked = systemLogRecordingSettings.details[detail] === true;
     input.disabled = false;
   });
   const schedule = systemLogRecordingSettings.schedule || {enabled: false, startTime: '00:00', endTime: '23:59'};
@@ -392,7 +393,7 @@ function renderSystemLogRecordingSettings() {
 }
 
 function disableSystemLogSettingControls(disabled) {
-  document.querySelectorAll('[data-system-log-recording], [data-system-log-mode], [data-system-log-schedule-toggle], [data-system-log-schedule-time]').forEach(function(input) {
+  document.querySelectorAll('[data-system-log-recording], [data-system-log-detail], [data-system-log-schedule-toggle], [data-system-log-schedule-time]').forEach(function(input) {
     input.disabled = disabled;
   });
 }
@@ -449,30 +450,32 @@ async function updateSystemLogRecordingSetting(input) {
   }
 }
 
-async function updateSystemLogRecordingMode(input) {
+async function updateSystemLogDetailSetting(input) {
   if (!systemLogRecordingSettings) return;
-  const previous = systemLogRecordingSettings.mode;
-  const mode = input.dataset.systemLogMode;
+  const detail = input.dataset.systemLogDetail;
+  if (!detail) return;
+  const previous = systemLogRecordingSettings.details[detail] === true;
+  const enabled = input.checked;
   disableSystemLogSettingControls(true);
   try {
     const response = await fetch(ADMIN_API_BASE + '/system-log-settings', {
       method: 'PUT',
       headers: headers(),
-      body: JSON.stringify({mode: mode}),
+      body: JSON.stringify({detail: detail, enabled: enabled}),
       cache: 'no-store'
     });
     const responseText = await response.text();
     const data = parseResponseJson(responseText);
     if (!response.ok || !data.settings) {
-      throw new Error(adminErrorMessage(data.error, '日志记录方式保存失败'));
+      throw new Error(adminErrorMessage(data.error, '详细记录设置保存失败'));
     }
     systemLogRecordingSettings = data.settings;
     renderSystemLogRecordingSettings();
-    show(mode === 'full' ? '已切换到全量记录' : '已切换到简易记录');
+    show(enabled ? '已开启该项详细记录' : '已关闭该项详细记录');
   } catch (error) {
-    systemLogRecordingSettings.mode = previous;
+    systemLogRecordingSettings.details[detail] = previous;
     renderSystemLogRecordingSettings();
-    show(error.message || '日志记录方式保存失败', true);
+    show(error.message || '详细记录设置保存失败', true);
   }
 }
 
@@ -659,17 +662,27 @@ function systemLogDetailField(label, value, copyValue) {
 function systemLogPayloadText(kind) {
   if (!systemLogPayload || !systemLogPayload[kind]) return '';
   const message = systemLogPayload[kind];
-  const headers = (message.headers || []).map(function(header) {
-    return String(header[0] || '') + ': ' + String(header[1] || '');
-  }).join('\n');
-  const body = message.body || {contentType: '', encoding: 'utf-8', data: ''};
   const lines = [];
   if (kind === 'request') {
-    lines.push(String(message.method || '-') + ' ' + String(message.url || '-'));
+    lines.push(String(message.method || '-') + ' ' + String(message.url || '(URL 未记录)'));
   } else {
     lines.push('HTTP ' + String(message.status || '-') + ' ' + String(message.statusText || ''));
   }
-  lines.push('', 'Headers:', headers || '(none)', '', 'Body (' + String(body.contentType || 'unknown content type') + '; ' + String(body.encoding || 'utf-8') + '):', String(body.data || ''));
+  lines.push('', 'Headers:');
+  if (Array.isArray(message.headers)) {
+    const headers = message.headers.map(function(header) {
+      return String(header[0] || '') + ': ' + String(header[1] || '');
+    }).join('\n');
+    lines.push(headers || '(empty)');
+  } else {
+    lines.push('(未记录)');
+  }
+  lines.push('');
+  if (message.body) {
+    lines.push('Body (' + String(message.body.contentType || 'unknown content type') + '; ' + String(message.body.encoding || 'utf-8') + '):', String(message.body.data || ''));
+  } else {
+    lines.push('Body: (未记录)');
+  }
   return lines.join('\n');
 }
 
@@ -709,22 +722,22 @@ function renderSystemLogDetails() {
       systemLogDetailField('请求路径', record.path) +
       '</div>';
   } else if (detail === 'request' && systemLogPayloadLoading) {
-    content.innerHTML = '<div class="loading-state">正在读取完整请求记录…</div>';
+    content.innerHTML = '<div class="loading-state">正在读取请求详细内容…</div>';
   } else if (detail === 'request' && systemLogPayloadError) {
     content.innerHTML = '<div class="error-state">' + esc(systemLogPayloadError) + '</div>';
-  } else if (detail === 'request' && systemLogPayload) {
-    content.innerHTML = systemLogPayloadCard('完整请求', 'request');
+  } else if (detail === 'request' && systemLogPayload && systemLogPayload.request) {
+    content.innerHTML = systemLogPayloadCard('已记录的请求内容', 'request');
   } else if (detail === 'request') {
     content.innerHTML = '<section class="system-log-detail-note"><strong>已保存的请求信息</strong><p>日志仅保留来源 IP 和 User-Agent，没有保存完整请求头、Cookie 或认证信息。</p>' +
       '<dl><div><dt>来源 IP</dt><dd>' + esc(record.ip || '-') + '</dd></div><div><dt>User-Agent</dt><dd>' + esc(record.userAgent || '-') + '</dd></div></dl></section>';
   } else if (detail === 'response' && systemLogPayloadLoading) {
-    content.innerHTML = '<div class="loading-state">正在读取完整响应记录…</div>';
+    content.innerHTML = '<div class="loading-state">正在读取响应详细内容…</div>';
   } else if (detail === 'response' && systemLogPayloadError) {
     content.innerHTML = '<div class="error-state">' + esc(systemLogPayloadError) + '</div>';
-  } else if (detail === 'response' && systemLogPayload) {
-    content.innerHTML = systemLogPayloadCard('完整响应', 'response');
+  } else if (detail === 'response' && systemLogPayload && systemLogPayload.response) {
+    content.innerHTML = systemLogPayloadCard('已记录的响应内容', 'response');
   } else if (detail === 'response') {
-    content.innerHTML = '<section class="system-log-detail-note"><strong>响应摘要</strong><p>响应正文不会写入网络日志。这里展示当前日志中保留的状态和说明字段。</p>' +
+    content.innerHTML = '<section class="system-log-detail-note"><strong>响应摘要</strong><p>当前日志没有保存响应详细内容。这里展示日志中保留的状态和说明字段。</p>' +
       '<dl><div><dt>状态码</dt><dd>' + esc(status) + '</dd></div><div><dt>说明</dt><dd>' + esc(record.message || '-') + '</dd></div><div><dt>附加详情</dt><dd>' + esc(record.details || '-') + '</dd></div></dl></section>';
   } else {
     const raw = JSON.stringify(record, null, 2);
@@ -805,9 +818,9 @@ document.querySelectorAll('[data-system-log-recording]').forEach(function(input)
   });
 });
 
-document.querySelectorAll('[data-system-log-mode]').forEach(function(input) {
+document.querySelectorAll('[data-system-log-detail]').forEach(function(input) {
   input.addEventListener('change', function() {
-    if (input.checked) updateSystemLogRecordingMode(input);
+    updateSystemLogDetailSetting(input);
   });
 });
 

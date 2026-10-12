@@ -2,11 +2,11 @@ import type { Env } from "../types/env.ts";
 import type {
   SystemLogCategory,
   SystemLogDraft,
+  SystemLogDetailKey,
   SystemLogHttpCapture,
   SystemLogRecord,
   SystemLogRecordingSchedule,
   SystemLogRecordingSettings,
-  SystemLogRecordingMode,
   RequestUserIdentity,
 } from "../types/models.ts";
 
@@ -17,6 +17,13 @@ import { ensureUserSchema } from "./user-store.ts";
 const LOG_RETENTION_DAYS = 30;
 const MAX_LOG_DETAILS_LENGTH = 1600;
 const SYSTEM_LOG_CATEGORIES: SystemLogCategory[] = ["request", "outbound"];
+const SYSTEM_LOG_DETAIL_KEYS: SystemLogDetailKey[] = [
+  "requestUrl",
+  "requestHeaders",
+  "requestBody",
+  "responseHeaders",
+  "responseBody",
+];
 const BEIJING_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Shanghai",
   hourCycle: "h23",
@@ -24,8 +31,14 @@ const BEIJING_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   minute: "2-digit",
 });
 const DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS: SystemLogRecordingSettings = {
-  mode: "simple",
   categories: { request: true, outbound: true },
+  details: {
+    requestUrl: false,
+    requestHeaders: false,
+    requestBody: false,
+    responseHeaders: false,
+    responseBody: false,
+  },
   schedule: { enabled: false, startTime: "00:00", endTime: "23:59" },
 };
 
@@ -39,13 +52,23 @@ function normalizeSystemLogRecordingSettings(value: unknown): SystemLogRecording
   const schedule = stored.schedule && typeof stored.schedule === "object"
     ? stored.schedule as Record<string, unknown>
     : {};
+  const details = stored.details && typeof stored.details === "object"
+    ? stored.details as Record<string, unknown>
+    : {};
+  const legacyFullMode = stored.mode === "full";
   const startTime = validScheduleTime(schedule.startTime) ? schedule.startTime : "00:00";
   const endTime = validScheduleTime(schedule.endTime) ? schedule.endTime : "23:59";
   return {
-    mode: stored.mode === "full" ? "full" : "simple",
     categories: {
       request: categories.request !== false,
       outbound: categories.outbound !== false,
+    },
+    details: {
+      requestUrl: typeof details.requestUrl === "boolean" ? details.requestUrl : legacyFullMode,
+      requestHeaders: typeof details.requestHeaders === "boolean" ? details.requestHeaders : legacyFullMode,
+      requestBody: typeof details.requestBody === "boolean" ? details.requestBody : legacyFullMode,
+      responseHeaders: typeof details.responseHeaders === "boolean" ? details.responseHeaders : legacyFullMode,
+      responseBody: typeof details.responseBody === "boolean" ? details.responseBody : legacyFullMode,
     },
     schedule: {
       enabled: schedule.enabled === true && startTime !== endTime,
@@ -62,7 +85,14 @@ function validScheduleTime(value: unknown): value is string {
 }
 
 export async function readSystemLogRecordingSettings(env: Env): Promise<SystemLogRecordingSettings> {
-  if (!env.CONFIG) return { ...DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS };
+  if (!env.CONFIG) {
+    return {
+      ...DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS,
+      categories: { ...DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS.categories },
+      details: { ...DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS.details },
+      schedule: { ...DEFAULT_SYSTEM_LOG_RECORDING_SETTINGS.schedule },
+    };
+  }
   const stored = await env.CONFIG.get<unknown>(SYSTEM_LOG_SETTINGS_KEY, "json");
   return normalizeSystemLogRecordingSettings(stored);
 }
@@ -88,16 +118,23 @@ export async function updateSystemLogRecordingSetting(
   return next;
 }
 
-export async function updateSystemLogRecordingMode(
+export async function updateSystemLogDetailSetting(
   env: Env,
-  mode: unknown,
+  key: unknown,
+  enabled: unknown,
 ): Promise<SystemLogRecordingSettings> {
-  if (mode !== "simple" && mode !== "full") {
-    throw new Error("invalid_system_log_recording_mode");
+  if (!SYSTEM_LOG_DETAIL_KEYS.includes(key as SystemLogDetailKey)) {
+    throw new Error("invalid_system_log_detail");
+  }
+  if (typeof enabled !== "boolean") {
+    throw new Error("invalid_system_log_recording_state");
   }
   if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
   const settings = await readSystemLogRecordingSettings(env);
-  const next = { ...settings, mode: mode as SystemLogRecordingMode };
+  const next = {
+    ...settings,
+    details: { ...settings.details, [key as SystemLogDetailKey]: enabled },
+  };
   await env.CONFIG.put(SYSTEM_LOG_SETTINGS_KEY, JSON.stringify(next));
   return next;
 }
@@ -156,13 +193,10 @@ function truncate(value: unknown, maximum: number) {
   return String(value == null ? "" : value).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ").trim().slice(0, maximum);
 }
 
-function safeError(error: unknown) {
+function formatError(error: unknown) {
   const name = error instanceof Error ? error.name : "Error";
   const message = error instanceof Error ? error.message : String(error);
-  return truncate(`${name}: ${message}`
-    .replace(/https?:\/\/[^\s'"<>]+/gi, "[url]")
-    .replace(/\b(token|key|password|secret)=([^&\s]+)/gi, "$1=[redacted]")
-    .replace(/'(?:''|[^'])*'/g, "'?'"), 300);
+  return truncate(`${name}: ${message}`, 300);
 }
 
 export function createObservedEnv(
@@ -216,7 +250,7 @@ export async function observedFetch(
       path: host,
       durationMs,
       message: `${method} ${host} 请求失败`,
-      details: safeError(error),
+      details: formatError(error),
     });
     throw error;
   }
@@ -312,14 +346,14 @@ export async function writeSystemLogs(
     });
     await db.batch(statements);
     for (const entry of enabledEntries) {
-      if (entry.category === "request" && entry.fullCapture) {
-        await writeSystemLogPayload(db, entry.requestId || "", entry.occurredAt || beijingTimestamp(), entry.fullCapture);
+      if (entry.category === "request" && entry.capture) {
+        await writeSystemLogPayload(db, entry.requestId || "", entry.occurredAt || beijingTimestamp(), entry.capture);
       }
     }
   } catch (error) {
     console.error(JSON.stringify({
       message: "system_log_write_failed",
-      error: safeError(error),
+      error: formatError(error),
     }));
   }
 }

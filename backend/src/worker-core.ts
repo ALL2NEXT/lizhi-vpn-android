@@ -83,6 +83,7 @@ import {
 import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.ts";
 import type {
   SystemLogDraft,
+  SystemLogDetailSettings,
   SystemLogHttpBodyCapture,
   SystemLogHttpCapture,
   SystemLogRecordingSettings,
@@ -95,7 +96,7 @@ import {
   readSystemLogPayload,
   readSystemLogs,
   readSystemLogRecordingSettings,
-  updateSystemLogRecordingMode,
+  updateSystemLogDetailSetting,
   updateSystemLogRecordingSchedule,
   updateSystemLogRecordingSetting,
   writeSystemLogs,
@@ -160,7 +161,7 @@ const routeDeps = {
   readSystemLogPayload,
   readSystemLogs,
   readSystemLogRecordingSettings,
-  updateSystemLogRecordingMode,
+  updateSystemLogDetailSetting,
   updateSystemLogRecordingSchedule,
   updateSystemLogRecordingSetting,
 } satisfies RouteDependencies;
@@ -172,12 +173,6 @@ const {
 } = createClientRoutes(routeDeps);
 const { handleAccount } = createAccountRoutes(routeDeps);
 const { handleAdmin } = createAdminRoutes(routeDeps);
-
-function safeRequestPath(path: string) {
-  return path
-    .replace(/(\/api\/subscription\/debug\/)[^/]+/i, "$1[redacted]")
-    .slice(0, 300);
-}
 
 function requestIp(request: Request) {
   return normalizeClientIp(request.headers.get("CF-Connecting-IP"));
@@ -212,21 +207,26 @@ async function captureBody(message: Request | Response): Promise<SystemLogHttpBo
   return { contentType, encoding: "base64", data: base64FromBytes(bytes) };
 }
 
-async function captureRequest(request: Request): Promise<SystemLogHttpCapture["request"]> {
+async function captureRequest(
+  request: Request,
+  details: SystemLogDetailSettings,
+): Promise<NonNullable<SystemLogHttpCapture["request"]>> {
   return {
     method: request.method,
-    url: request.url,
-    headers: serializeHeaders(request.headers),
-    body: await captureBody(request),
+    ...(details.requestUrl ? { url: request.url } : {}),
+    ...(details.requestHeaders ? { headers: serializeHeaders(request.headers) } : {}),
+    ...(details.requestBody ? { body: await captureBody(request) } : {}),
   };
 }
 
-async function captureResponse(response: Response): Promise<SystemLogHttpCapture["response"]> {
+async function captureResponse(
+  response: Response,
+  details: SystemLogDetailSettings,
+): Promise<NonNullable<SystemLogHttpCapture["response"]>> {
   return {
     status: response.status,
-    statusText: response.statusText,
-    headers: serializeHeaders(response.headers),
-    body: await captureBody(response),
+    ...(details.responseHeaders ? { statusText: response.statusText, headers: serializeHeaders(response.headers) } : {}),
+    ...(details.responseBody ? { body: await captureBody(response) } : {}),
   };
 }
 
@@ -313,7 +313,7 @@ const worker = {
     const startedAt = performance.now();
     const occurredAt = beijingTimestamp();
     const url = new URL(request.url);
-    const path = safeRequestPath(url.pathname.replace(/\/+$/, "") || "/");
+    const path = url.pathname.replace(/\/+$/, "") || "/";
     const adminBasePath = resolveAdminBasePath(env.ADMIN_PATH);
     const isAdminApi = Boolean(adminBasePath && path.startsWith(`${adminBasePath}/api/`));
     const requestId = request.headers.get("cf-ray") || crypto.randomUUID();
@@ -323,18 +323,21 @@ const worker = {
     } catch {
       recordingSettings = undefined;
     }
-    // 日志载荷读取和 VIP 卡密兑换/发放接口不保存正文，避免递归记录或泄露卡密。
-    const skipFullCapture =
-      (isAdminApi && path.endsWith("/api/system-logs/payload")) ||
-      (isAdminApi && path.endsWith("/api/ai-risk/settings")) ||
-      path.endsWith("/api/account/activate-vip") ||
-      (isAdminApi && path.endsWith("/api/vip-codes"));
-    const captureFullRequest = recordingSettings?.mode === "full" &&
-      recordingSettings.categories.request &&
-      isSystemLogScheduleActive(recordingSettings.schedule, new Date(occurredAt)) &&
-      !skipFullCapture;
-    const requestCapturePromise = captureFullRequest
-      ? captureRequest(request.clone()).catch(() => null)
+    // 入站详细内容遵循入站分类开关和记录时段。
+    const details = recordingSettings?.details;
+    const captureDetails = Boolean(
+      recordingSettings?.categories.request &&
+      details &&
+      isSystemLogScheduleActive(recordingSettings.schedule, new Date(occurredAt))
+    );
+    const captureRequestDetails = captureDetails && Boolean(
+      details?.requestUrl || details?.requestHeaders || details?.requestBody
+    );
+    const captureResponseDetails = captureDetails && Boolean(
+      details?.responseHeaders || details?.responseBody
+    );
+    const requestCapturePromise = captureRequestDetails && details
+      ? captureRequest(request.clone(), details).catch(() => null)
       : null;
     const diagnostics: SystemLogDraft[] = [];
     const sink = (entry: SystemLogDraft) => {
@@ -386,16 +389,21 @@ const worker = {
       },
     ];
     const persist = (async () => {
-      if (requestCapturePromise) {
+      if (requestCapturePromise || (captureResponseDetails && details)) {
         try {
-          const responseCapturePromise = captureResponse(response.clone());
+          const responseCapturePromise = captureResponseDetails && details
+            ? captureResponse(response.clone(), details).catch(() => null)
+            : null;
           const [capturedRequest, capturedResponse] = await Promise.all([
-            requestCapturePromise,
-            responseCapturePromise,
+            requestCapturePromise || Promise.resolve(null),
+            responseCapturePromise || Promise.resolve(null),
           ]);
           const requestEntry = entries.find((entry) => entry.category === "request");
-          if (capturedRequest && capturedResponse && requestEntry) {
-            requestEntry.fullCapture = { request: capturedRequest, response: capturedResponse };
+          if ((capturedRequest || capturedResponse) && requestEntry) {
+            requestEntry.capture = {
+              ...(capturedRequest ? { request: capturedRequest } : {}),
+              ...(capturedResponse ? { response: capturedResponse } : {}),
+            };
           }
         } catch {
           // Payload capture failures do not interfere with the original Worker response.
