@@ -12,6 +12,8 @@ let systemLogEndpointRowsCache = null;
 let systemLogEndpointRowsCacheKey = '';
 let systemLogDetailRecord = null;
 let systemLogDetailTab = 'basic';
+let systemLogSelectedIds = new Set();
+let systemLogsDeleting = false;
 let systemLogRecordingSettings = null;
 let systemLogRecordingSettingsLoading = false;
 let systemLogPayload = null;
@@ -35,6 +37,48 @@ function systemLogStatusClass(status) {
   if (code >= 400) return 'warning';
   if (code >= 200 && code < 400) return 'success';
   return 'neutral';
+}
+
+function updateSystemLogSelectionControls(records) {
+  const rows = Array.isArray(records) ? records : [];
+  const rowIds = new Set(rows.map(function(record) { return Number(record.id); }));
+  systemLogSelectedIds.forEach(function(id) {
+    if (!rowIds.has(id)) systemLogSelectedIds.delete(id);
+  });
+  const selectedCount = systemLogSelectedIds.size;
+  const selectedOnPage = rows.reduce(function(count, record) {
+    return count + (systemLogSelectedIds.has(Number(record.id)) ? 1 : 0);
+  }, 0);
+  const allSelected = rows.length > 0 && selectedOnPage === rows.length;
+  const busy = systemLogsLoading || systemLogsDeleting;
+  const selectionSummary = el('systemLogsSelectionSummary');
+  const selectPageButton = el('systemLogsSelectPageButton');
+  const deleteButton = el('systemLogsDeleteSelectedButton');
+  const pageCheckbox = document.querySelector('[data-system-log-select-page]');
+
+  if (selectionSummary) selectionSummary.textContent = selectedCount ? '已选 ' + selectedCount + ' 条' : '未选择日志';
+  if (selectPageButton) {
+    selectPageButton.disabled = busy || rows.length === 0;
+    selectPageButton.textContent = allSelected ? '取消本页全选' : '全选当前页';
+  }
+  if (deleteButton) {
+    deleteButton.disabled = busy || selectedCount === 0;
+    deleteButton.textContent = selectedCount ? '删除所选（' + selectedCount + '）' : '删除所选';
+  }
+  if (pageCheckbox) {
+    pageCheckbox.checked = allSelected;
+    pageCheckbox.indeterminate = selectedOnPage > 0 && !allSelected;
+    pageCheckbox.disabled = busy || rows.length === 0;
+  }
+  document.querySelectorAll('[data-system-log-select-id]').forEach(function(checkbox) {
+    checkbox.checked = systemLogSelectedIds.has(Number(checkbox.dataset.systemLogSelectId));
+    checkbox.disabled = busy;
+  });
+}
+
+function clearSystemLogSelection() {
+  systemLogSelectedIds.clear();
+  updateSystemLogSelectionControls(systemLogsData && systemLogsData.records || []);
 }
 
 function renderSystemLogsPager(page, pageCount, total) {
@@ -84,10 +128,12 @@ function renderSystemLogs() {
 
   if (!records.length) {
     host.innerHTML = '<div class="system-logs-empty">' + (total ? '当前筛选条件没有日志' : '暂无网络日志') + '</div>';
+    updateSystemLogSelectionControls(records);
     return;
   }
 
   host.innerHTML = '<table class="system-logs-table"><thead><tr>' +
+    '<th class="system-log-select-cell"><input type="checkbox" class="system-logs-select-checkbox" data-system-log-select-page aria-label="全选当前页网络日志"></th>' +
     '<th>时间</th><th>类型</th><th>方法 / 路径</th><th>状态</th><th>耗时</th><th>来源 IP</th><th>请求 ID</th><th>操作</th>' +
     '</tr></thead><tbody>' + records.map(function(record) {
       const status = record.status == null ? '-' : String(record.status);
@@ -97,6 +143,7 @@ function renderSystemLogs() {
       const requestId = String(record.requestId || '-');
       const selected = systemLogDetailRecord && systemLogDetailRecord.id === record.id;
       return '<tr class="' + (selected ? 'selected' : '') + '">' +
+        '<td class="system-log-select-cell"><input type="checkbox" class="system-logs-select-checkbox" data-system-log-select-id="' + Number(record.id) + '" aria-label="选择网络日志 ' + Number(record.id) + '"></td>' +
         '<td class="system-logs-time">' + esc(systemLogDateTime(record.occurredAt)) + '</td>' +
         '<td><span class="system-log-category ' + esc(record.category || '') + '">' + esc(systemLogCategoryName(record.category)) + '</span></td>' +
         '<td><div class="system-logs-path"><span class="system-log-method">' + esc(method) + '</span><span class="system-log-path-text" title="' + esc(path) + '">' + esc(path) + '</span></div></td>' +
@@ -113,9 +160,30 @@ function renderSystemLogs() {
       openSystemLogDetailsById(button.dataset.systemLogRecordId);
     });
   });
+  host.querySelectorAll('[data-system-log-select-id]').forEach(function(checkbox) {
+    checkbox.addEventListener('change', function() {
+      const id = Number(checkbox.dataset.systemLogSelectId);
+      if (checkbox.checked) systemLogSelectedIds.add(id);
+      else systemLogSelectedIds.delete(id);
+      updateSystemLogSelectionControls(records);
+    });
+  });
+  const pageCheckbox = host.querySelector('[data-system-log-select-page]');
+  if (pageCheckbox) {
+    pageCheckbox.addEventListener('change', function() {
+      records.forEach(function(record) {
+        const id = Number(record.id);
+        if (pageCheckbox.checked) systemLogSelectedIds.add(id);
+        else systemLogSelectedIds.delete(id);
+      });
+      updateSystemLogSelectionControls(records);
+    });
+  }
+  updateSystemLogSelectionControls(records);
 }
 
 async function loadSystemLogs(force) {
+  if (systemLogsDeleting) return;
   if (systemLogsLoading) {
     if (force) systemLogsReloadQueued = true;
     return;
@@ -128,6 +196,7 @@ async function loadSystemLogs(force) {
   const host = el('systemLogsTable');
   const filterRevision = systemLogsFilterRevision;
   systemLogsLoading = true;
+  updateSystemLogSelectionControls(systemLogsData && systemLogsData.records || []);
   if (host) host.innerHTML = '<div class="loading-state">正在读取网络日志</div>';
   const pageSize = Number(el('systemLogsPageSize') && el('systemLogsPageSize').value) || 10;
   const query = new URLSearchParams({limit: String(pageSize), offset: String(systemLogsOffset)});
@@ -188,6 +257,7 @@ async function loadSystemLogs(force) {
     }
     if (filterRevision === systemLogsFilterRevision && host) {
       host.innerHTML = '<div class="error-state">' + esc(error.message || '网络日志读取失败') + '</div>';
+      updateSystemLogSelectionControls([]);
     }
   } finally {
     systemLogsLoading = false;
@@ -195,6 +265,8 @@ async function loadSystemLogs(force) {
       systemLogsReloadQueued = false;
       systemLogsData = null;
       loadSystemLogs(true);
+    } else {
+      updateSystemLogSelectionControls(systemLogsData && systemLogsData.records || []);
     }
   }
 }
@@ -537,6 +609,7 @@ function closeSystemLogSettings() {
 }
 
 function applySystemLogFilters() {
+  clearSystemLogSelection();
   systemLogsFilterRevision += 1;
   if (systemLogDetailRecord) closeSystemLogDetails();
   systemLogsOffset = 0;
@@ -582,11 +655,68 @@ function changeSystemLogsPage(page) {
   const pageCount = Math.max(1, Math.ceil(total / limit));
   const nextPage = Math.max(1, Math.min(pageCount, Number(page) || 1));
   if (nextPage === Math.floor(systemLogsOffset / limit) + 1) return;
+  clearSystemLogSelection();
   systemLogsFilterRevision += 1;
   if (systemLogDetailRecord) closeSystemLogDetails();
   systemLogsOffset = (nextPage - 1) * limit;
   systemLogsData = null;
   loadSystemLogs(true);
+}
+
+async function deleteSelectedSystemLogs() {
+  const currentRecords = systemLogsData && Array.isArray(systemLogsData.records) ? systemLogsData.records : [];
+  const ids = currentRecords.map(function(record) { return Number(record.id); })
+    .filter(function(id) { return systemLogSelectedIds.has(id); });
+  if (!ids.length || systemLogsDeleting || systemLogsLoading) return;
+  if (!window.confirm('确认删除选中的 ' + ids.length + ' 条网络日志及其请求/响应详细内容？此操作不可撤销。')) return;
+
+  systemLogsDeleting = true;
+  updateSystemLogSelectionControls(currentRecords);
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/system-logs', {
+      method: 'DELETE',
+      headers: headers(),
+      body: JSON.stringify({ids: ids}),
+      cache: 'no-store'
+    });
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok || data.ok === false) {
+      throw new Error(adminErrorMessage(data.error, '网络日志删除失败（HTTP ' + response.status + '）'));
+    }
+
+    const deletedCount = Math.max(0, Number(data.deleted) || 0);
+    if (systemLogDetailRecord && ids.includes(Number(systemLogDetailRecord.id))) closeSystemLogDetails();
+    systemLogSelectedIds.clear();
+    systemLogEndpointRowsCache = null;
+    systemLogEndpointRowsCacheKey = '';
+    const pageSize = Number(el('systemLogsPageSize').value) || 10;
+    const remaining = Math.max(0, (Number(systemLogsData && systemLogsData.total) || 0) - deletedCount);
+    const lastPageOffset = Math.max(0, (Math.ceil(remaining / pageSize) - 1) * pageSize);
+    systemLogsOffset = Math.min(systemLogsOffset, lastPageOffset);
+    systemLogsData = null;
+    systemLogsDeleting = false;
+    await loadSystemLogs(true);
+    show('已删除 ' + deletedCount + ' 条网络日志');
+  } catch (error) {
+    show(error.message || '网络日志删除失败', true);
+  } finally {
+    systemLogsDeleting = false;
+    updateSystemLogSelectionControls(systemLogsData && systemLogsData.records || []);
+  }
+}
+
+function toggleSystemLogPageSelection() {
+  if (systemLogsDeleting || systemLogsLoading) return;
+  const records = systemLogsData && Array.isArray(systemLogsData.records) ? systemLogsData.records : [];
+  if (!records.length) return;
+  const allSelected = records.every(function(record) { return systemLogSelectedIds.has(Number(record.id)); });
+  records.forEach(function(record) {
+    const id = Number(record.id);
+    if (allSelected) systemLogSelectedIds.delete(id);
+    else systemLogSelectedIds.add(id);
+  });
+  updateSystemLogSelectionControls(records);
 }
 
 function openSystemLogDetailsById(id) {
@@ -850,6 +980,9 @@ el('systemLogsPager').addEventListener('click', function(event) {
   const button = event.target.closest('[data-system-log-page]');
   if (button && !button.disabled) changeSystemLogsPage(button.dataset.systemLogPage);
 });
+
+el('systemLogsSelectPageButton').addEventListener('click', toggleSystemLogPageSelection);
+el('systemLogsDeleteSelectedButton').addEventListener('click', deleteSelectedSystemLogs);
 
 el('systemLogSearch').addEventListener('input', function() {
   if (systemLogsSearchTimer) clearTimeout(systemLogsSearchTimer);

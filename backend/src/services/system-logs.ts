@@ -531,6 +531,28 @@ export async function readSystemLogs(
   };
 }
 
+export async function deleteSystemLogs(env: Env, rawIds: unknown) {
+  if (!Array.isArray(rawIds) || rawIds.length < 1 || rawIds.length > 50 ||
+    !rawIds.every((id) => typeof id === "number" && Number.isSafeInteger(id) && id > 0)) {
+    throw new Error("invalid_system_log_ids");
+  }
+  if (!env.USERS_DB) return 0;
+
+  const ids = [...new Set(rawIds as number[])];
+  const placeholders = ids.map(() => "?").join(", ");
+  const db = await ensureUserSchema(env);
+  const results = await db.batch([
+    db.prepare(`DELETE FROM system_logs_mb WHERE id IN (${placeholders})`).bind(...ids),
+    db.prepare(
+      `DELETE FROM system_log_payload_parts_mb
+       WHERE NOT EXISTS (
+         SELECT 1 FROM system_logs_mb WHERE system_logs_mb.request_id = system_log_payload_parts_mb.request_id
+       )`,
+    ),
+  ]);
+  return Number(results[0]?.meta?.changes) || 0;
+}
+
 export async function pruneSystemLogs(env: Env) {
   if (!env.USERS_DB) return 0;
   const db = await ensureUserSchema(env);

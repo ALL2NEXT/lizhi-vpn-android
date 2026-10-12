@@ -737,7 +737,14 @@
             <label class="system-logs-date-filter"><span class="sr-only">结束日期</span><input id="systemLogEndDate" type="date" aria-label="结束日期"></label>
             <button class="secondary" type="button" onclick="resetSystemLogFilters()">重置</button>
           </div>
-          <div class="system-logs-table-heading"><span id="systemLogsSummary" role="status" aria-live="polite"></span></div>
+          <div class="system-logs-table-heading">
+            <span id="systemLogsSummary" role="status" aria-live="polite"></span>
+            <div class="system-logs-selection-actions">
+              <span id="systemLogsSelectionSummary" aria-live="polite"></span>
+              <button id="systemLogsSelectPageButton" class="secondary" type="button" disabled>全选当前页</button>
+              <button id="systemLogsDeleteSelectedButton" class="system-logs-delete-button" type="button" disabled>删除所选</button>
+            </div>
+          </div>
           <div id="systemLogsTable" class="system-logs-wrap"><div class="loading-state">打开此模块后读取网络日志</div></div>
           <div class="system-logs-pagination">
             <span id="systemLogsPageStatus"></span>
