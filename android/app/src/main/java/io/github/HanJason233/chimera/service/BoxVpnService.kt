@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.service
 
 import android.content.Intent
 import android.net.VpnService
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
@@ -22,6 +23,7 @@ import io.github.HanJason233.chimera.platform.AndroidVpnHost
 class BoxVpnService : VpnService() {
     companion object {
         private const val TAG = "BoxVpnService"
+        private const val TRAFFIC_REPORT_INTERVAL_MS = 30L * 60L * 1000L
         private val operations = Mutex()
         @Volatile private var owner: BoxVpnService? = null
         const val ACTION_START = "io.github.HanJason233.chimera.START_VPN"
@@ -171,10 +173,18 @@ class BoxVpnService : VpnService() {
                         }
                         TrafficReporter.reportPendingAsync(applicationContext, "vpn_connect")
                         trafficJob = serviceScope.launch {
+                            var nextReportAt = SystemClock.elapsedRealtime() + TRAFFIC_REPORT_INTERVAL_MS
                             while (isActive && controller.isCurrent(ticket)) {
                                 delay(1000)
                                 updateTraffic(controller.current?.traffic())
-                                persistTraffic(false)
+                                val reportDue = SystemClock.elapsedRealtime() >= nextReportAt
+                                persistTraffic(force = reportDue)
+                                if (reportDue) {
+                                    if (isOfficialSourceNode(activeNode)) {
+                                        TrafficReporter.reportPendingAsync(applicationContext, "vpn_periodic_30m")
+                                    }
+                                    nextReportAt = SystemClock.elapsedRealtime() + TRAFFIC_REPORT_INTERVAL_MS
+                                }
                             }
                         }
                         recovery.start()
