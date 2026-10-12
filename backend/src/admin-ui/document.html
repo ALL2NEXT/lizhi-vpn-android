@@ -715,17 +715,19 @@
     </div>
     <div class="subscription-manager-layout system-logs-manager-layout">
       <aside class="system-logs-sidebar" aria-label="网络日志导航">
-        <section class="system-logs-category-panel" aria-labelledby="systemLogCategoryTitle">
-          <header class="system-logs-panel-heading"><h3 id="systemLogCategoryTitle">日志类型</h3></header>
-          <nav id="systemLogCategoryNavigation" class="system-logs-category-navigation" aria-label="选择日志类型">
-            <button class="subscription-group-nav-item active" type="button" data-system-log-category="request" aria-current="page"><span class="system-log-type-mark request" aria-hidden="true"></span><span class="subscription-nav-name">入站网络</span></button>
-            <button class="subscription-group-nav-item" type="button" data-system-log-category="outbound"><span class="system-log-type-mark outbound" aria-hidden="true"></span><span class="subscription-nav-name">出站网络</span></button>
-          </nav>
-        </section>
         <section id="systemLogEndpointPanel" class="system-logs-endpoint-panel" aria-labelledby="systemLogEndpointTitle">
-          <header class="system-logs-panel-heading"><h3 id="systemLogEndpointTitle">请求端点</h3><span id="systemLogEndpointSummary"></span></header>
-          <label class="subscription-list-search system-logs-endpoint-search"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-search"></use></svg><input id="systemLogEndpointSearch" type="search" placeholder="搜索请求路径…" aria-label="搜索请求端点"></label>
-          <nav id="systemLogEndpointList" class="system-log-endpoint-tree" aria-label="请求端点层级"><div class="system-log-endpoint-state">正在读取端点统计…</div></nav>
+          <header class="system-logs-panel-heading"><h3 id="systemLogEndpointTitle">请求端点</h3></header>
+          <label class="subscription-list-search system-logs-endpoint-search"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-search"></use></svg><input id="systemLogEndpointSearch" type="search" placeholder="搜索端点路径…" aria-label="搜索入站和出站端点"></label>
+          <div id="systemLogEndpointGroups" class="system-log-endpoint-groups">
+            <section class="system-log-endpoint-group" aria-labelledby="systemLogInboundEndpointTitle">
+              <header class="system-log-endpoint-group-heading"><h4 id="systemLogInboundEndpointTitle">入站端点</h4><span id="systemLogInboundEndpointSummary"></span></header>
+              <nav id="systemLogInboundEndpointList" class="system-log-endpoint-tree" aria-label="入站端点层级"><div class="system-log-endpoint-state">正在读取端点统计…</div></nav>
+            </section>
+            <section class="system-log-endpoint-group" aria-labelledby="systemLogOutboundEndpointTitle">
+              <header class="system-log-endpoint-group-heading"><h4 id="systemLogOutboundEndpointTitle">出站端点</h4><span id="systemLogOutboundEndpointSummary"></span></header>
+              <nav id="systemLogOutboundEndpointList" class="system-log-endpoint-tree" aria-label="出站端点层级"><div class="system-log-endpoint-state">正在读取端点统计…</div></nav>
+            </section>
+          </div>
         </section>
       </aside>
       <section class="subscription-group-workspace system-logs-workspace" aria-label="网络日志列表">

@@ -185,7 +185,6 @@
    systemLogsLoading = false;
    systemLogsOffset = 0;
    systemLogsCategory = 'request';
-   syncSystemLogCategorySelection();
    trafficZeroFilters.today = false;
    trafficZeroFilters.month = false;
    trafficZeroFilters.total = false;

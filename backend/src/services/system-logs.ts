@@ -470,12 +470,8 @@ export async function readSystemLogs(
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const limit = Math.min(200, Math.max(1, Math.floor(Number(filters.limit) || 100)));
   const offset = Math.min(20000, Math.max(0, Math.floor(Number(filters.offset) || 0)));
-  const endpointCategory = categories.includes(filters.category as SystemLogCategory)
-    ? filters.category as SystemLogCategory
-    : "request";
-  const endpointConditions = ["category = ?"];
+  const endpointConditions = ["category IN ('request', 'outbound')"];
   const endpointBindings: string[] = [];
-  endpointBindings.push(endpointCategory);
   if (startRange) {
     endpointConditions.push("occurred_at >= ?");
     endpointBindings.push(startRange.start);
@@ -490,10 +486,10 @@ export async function readSystemLogs(
   }
   const endpointRowsPromise = filters.includeEndpoints
     ? db.prepare(
-      `SELECT method, path, COUNT(*) AS request_count
+      `SELECT category, method, path, COUNT(*) AS request_count
        FROM system_logs_mb WHERE ${endpointConditions.join(" AND ")}
-       GROUP BY method, path
-       ORDER BY request_count DESC, method ASC, path ASC`,
+       GROUP BY category, method, path
+       ORDER BY category ASC, request_count DESC, method ASC, path ASC`,
     ).bind(...endpointBindings).all<Record<string, unknown>>()
     : Promise.resolve(null);
   const [count, rows, endpointRows] = await Promise.all([
@@ -525,17 +521,29 @@ export async function readSystemLogs(
     message: String(row.message || ""),
     details: String(row.details || ""),
   }));
+  const endpointsByCategory: Record<SystemLogCategory, { method: string; path: string; requestCount: number }[]> = {
+    request: [],
+    outbound: [],
+  };
+  (endpointRows?.results || []).forEach((row) => {
+    const category = row.category === "outbound" ? "outbound" : "request";
+    endpointsByCategory[category].push({
+      method: String(row.method || "").toUpperCase(),
+      path: String(row.path || ""),
+      requestCount: Number(row.request_count) || 0,
+    });
+  });
+  const selectedEndpointCategory = categories.includes(filters.category as SystemLogCategory)
+    ? filters.category as SystemLogCategory
+    : "request";
   return {
     ok: true,
     total: Number(count?.total) || 0,
     limit,
     offset,
     records,
-    endpoints: (endpointRows?.results || []).map((row) => ({
-      method: String(row.method || "").toUpperCase(),
-      path: String(row.path || ""),
-      requestCount: Number(row.request_count) || 0,
-    })),
+    endpoints: endpointsByCategory[selectedEndpointCategory],
+    endpointsByCategory,
   };
 }
 
