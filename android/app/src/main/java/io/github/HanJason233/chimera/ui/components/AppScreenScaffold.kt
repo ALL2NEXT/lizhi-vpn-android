@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,6 +45,7 @@ fun AppScreenScaffold(
     showBackNavigation: Boolean = true,
     onBackBlocked: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
+    containerColor: Color = MaterialTheme.colorScheme.surface,
     contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
     contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
     content: @Composable () -> Unit
@@ -68,7 +70,7 @@ fun AppScreenScaffold(
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = containerColor,
             contentWindowInsets = contentWindowInsets,
             topBar = {
                 TopAppBar(
@@ -108,7 +110,7 @@ fun AppScreenScaffold(
                     },
                     actions = actions,
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        containerColor = containerColor
                     )
                 )
             }

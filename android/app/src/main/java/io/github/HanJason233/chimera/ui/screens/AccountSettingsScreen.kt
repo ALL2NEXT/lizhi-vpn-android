@@ -1,6 +1,8 @@
 package io.github.HanJason233.chimera.ui.screens
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -10,10 +12,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import androidx.compose.material3.Icon
@@ -30,25 +28,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.HanJason233.chimera.data.model.AccountInfo
-import io.github.HanJason233.chimera.data.model.AccountTrafficInfo
-import io.github.HanJason233.chimera.data.model.AccountTrafficPeriod
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
-import io.github.HanJason233.chimera.util.TrafficUsageFormatter
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
+
+enum class AccountSettingsPage(val routeKey: String, val title: String) {
+    OVERVIEW("overview", "账户设置"),
+    ACCOUNT_INFO("account", "账户信息"),
+    VIP("vip", "VIP 会员"),
+    TRAFFIC("traffic", "流量信息"),
+    CLIENT_INFO("client", "客户端信息")
+}
 
 @Composable
 fun AccountSettingsScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit,
-    onAccountDeleted: () -> Unit
+    onAccountDeleted: () -> Unit,
+    page: AccountSettingsPage = AccountSettingsPage.OVERVIEW,
+    onOpenPage: (AccountSettingsPage) -> Unit = {}
 ) {
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
@@ -164,17 +166,21 @@ fun AccountSettingsScreen(
         !isDeletingAccount &&
         !isSwitchingAccount
     AppScreenScaffold(
-        title = "账户设置",
+        title = page.title,
         onBack = onBack,
+        containerColor = accountSettingsBackground,
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         actions = {
-            IconButton(
-                onClick = { viewModel.syncCurrentAccount() },
-                enabled = canSyncAccount
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "刷新账户信息"
-                )
+            if (page == AccountSettingsPage.OVERVIEW || page == AccountSettingsPage.TRAFFIC) {
+                IconButton(
+                    onClick = { viewModel.syncCurrentAccount() },
+                    enabled = canSyncAccount
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "刷新账户信息"
+                    )
+                }
             }
         }
     ) {
@@ -182,7 +188,7 @@ fun AccountSettingsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             accountMessage?.let { message ->
                 Text(
@@ -200,12 +206,7 @@ fun AccountSettingsScreen(
                 )
             }
             if (account == null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
+                AccountSettingsCard {
                     Text(
                         text = "账户信息同步中…",
                         modifier = Modifier.padding(18.dp),
@@ -213,199 +214,55 @@ fun AccountSettingsScreen(
                     )
                 }
             } else {
-                AccountSettingsSection(title = "账户信息") {
-                    AccountInfoRowWithIconAction(
-                        label = "昵称",
-                        value = account.nickname.displayOrUnknown(),
-                        actionEnabled = account.accountType != "banned" && !isUpdatingNickname,
-                        onAction = {
+                when (page) {
+                    AccountSettingsPage.OVERVIEW -> AccountSettingsOverviewContent(
+                        account = account,
+                        isSwitchingAccount = isSwitchingAccount,
+                        isDeletingAccount = isDeletingAccount,
+                        canStartDeleteAccount = canStartDeleteAccount,
+                        onOpenAccountInfo = { onOpenPage(AccountSettingsPage.ACCOUNT_INFO) },
+                        onOpenVip = { onOpenPage(AccountSettingsPage.VIP) },
+                        onOpenTraffic = { onOpenPage(AccountSettingsPage.TRAFFIC) },
+                        onOpenClientInfo = { onOpenPage(AccountSettingsPage.CLIENT_INFO) },
+                        onSwitchAccount = {
+                            switchEmail = ""
+                            switchPassword = ""
+                            showSwitchDialog = true
+                        },
+                        onDeleteAccount = { showDeleteConfirmation = true }
+                    )
+                    AccountSettingsPage.ACCOUNT_INFO -> AccountInfoDetailContent(
+                        account = account,
+                        registrationEnabled = backendSettings.registrationEnabled,
+                        canOpenBindDialog = canOpenBindDialog,
+                        isUpdatingNickname = isUpdatingNickname,
+                        onEditNickname = {
                             nickname = account.nickname
                             showNicknameDialog = true
-                        }
-                    )
-                    AccountInfoRow(
-                        label = "账户身份",
-                        value = accountIdentityText(account)
-                    )
-                    AccountInfoRow(label = "UID", value = account.uid)
-                    AccountInfoRowWithAction(
-                        label = "邮箱",
-                        value = account.email.displayOrUnknown(),
-                        actionLabel = if (backendSettings.registrationEnabled) "注册正式用户" else "正式注册未开放",
-                        showAction = account.email.isBlank(),
-                        actionEnabled = canOpenBindDialog,
-                        onAction = {
+                        },
+                        onRegisterAccount = {
                             email = ""
                             password = ""
                             confirmPassword = ""
                             showBindDialog = true
                         }
                     )
-                    AccountInfoRow(
-                        label = "账户类型",
-                        value = accountIdentityText(account)
-                    )
-                }
-                AccountSettingsSection(title = "VIP 会员") {
-                    val vipExpiry = account.vipExpiresAt
-                    val formattedVipExpiry = vipExpiry
-                        ?.replace('T', ' ')
-                        ?.substringBefore('+')
-                        ?.take(19)
-                        ?.takeIf { it.isNotBlank() }
-                    AccountInfoRow(
-                        label = "会员状态",
-                        value = when {
-                            account.vipActive -> "VIP 已开通"
-                            formattedVipExpiry != null -> "VIP 已过期"
-                            else -> "未开通"
-                        }
-                    )
-                    if (formattedVipExpiry != null) {
-                        AccountInfoRow(label = "有效期至", value = formattedVipExpiry)
-                    }
-                    Text(
-                        text = if (account.vipActive) {
-                            "兑换卡密会在当前有效期后继续增加 VIP 时长。"
-                        } else {
-                            "输入管理员发放的 VIP 卡密，即可为当前账户开通会员。"
-                        },
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    OutlinedTextField(
-                        value = vipCode,
-                        onValueChange = { value ->
+                    AccountSettingsPage.VIP -> VipDetailContent(
+                        account = account,
+                        vipCode = vipCode,
+                        isActivatingVip = isActivatingVip,
+                        canActivateVip = canActivateVip,
+                        onVipCodeChange = { value ->
                             vipCode = value.uppercase().filterNot { it.isWhitespace() || it == '-' }.take(15)
                         },
-                        label = { Text("VIP 卡密") },
-                        singleLine = true,
-                        enabled = account.accountType != "banned" && !isActivatingVip,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                        modifier = Modifier.fillMaxWidth()
+                        onActivate = { viewModel.activateVipCard(normalizedVipCode) }
                     )
-                    Button(
-                        onClick = { viewModel.activateVipCard(normalizedVipCode) },
-                        enabled = canActivateVip,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text(if (isActivatingVip) "兑换中…" else "激活 VIP")
-                    }
-                }
-                AccountSettingsSection(title = "流量信息") {
-                    val traffic = account.traffic ?: AccountTrafficInfo()
-                    AccountInfoRow(
-                        label = "今日流量",
-                        value = trafficPeriodText(traffic.today)
-                    )
-                    AccountInfoRow(
-                        label = "本月流量",
-                        value = trafficPeriodText(traffic.month)
-                    )
-                    AccountInfoRow(
-                        label = "累计流量",
-                        value = trafficPeriodText(traffic.total)
-                    )
-                    AccountInfoRow(
-                        label = "更新时间",
-                        value = TrafficUsageFormatter.formatTimestamp(traffic.lastReportAt)
-                    )
-                    Text(
-                        text = "这里显示后台已接收的 VPN 流量，点击右上角刷新可获取最新统计。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                AccountSettingsSection(title = "客户端信息") {
-                    AccountInfoRow(
-                        label = "设备厂商",
-                        value = account.brand.displayOrUnknown()
-                    )
-                    AccountInfoRow(
-                        label = "设备型号",
-                        value = account.model.displayOrUnknown()
-                    )
-                    AccountInfoRow(
-                        label = "Android 版本",
-                        value = account.androidVersion.displayOrUnknown()
-                    )
-                    AccountInfoRow(
-                        label = "Android SDK",
-                        value = account.androidSdk.takeIf { it > 0 }?.toString()
-                            ?: "未登记"
-                    )
-                    AccountInfoRow(
-                        label = "App 版本",
-                        value = account.appVersion.displayOrUnknown()
-                    )
-                }
-
-                AccountSettingsSection(title = "账户操作") {
-                    Text(
-                        text = "切换账户或注销账户时，点击对应按钮后再输入所需信息。操作前请先断开 VPN。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Button(
-                        onClick = {
-                            switchEmail = ""
-                            switchPassword = ""
-                            showSwitchDialog = true
-                        },
-                        enabled = !isSwitchingAccount && !isDeletingAccount,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        if (isSwitchingAccount) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.padding(end = 8.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                        }
-                        Text(if (isSwitchingAccount) "切换中…" else "切换账户")
-                    }
-
-                    Text(
-                        text = if (account.deviceBlocked) {
-                            "当前设备已被封禁，不能切换或注销账户。"
-                        } else if (account.accountType == "banned") {
-                            "当前账户已被封禁，不能注销账户。"
-                        } else {
-                            "注销账户会永久删除账户、邮箱绑定和全部流量记录，操作不可恢复。"
-                        },
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Button(
-                        onClick = { showDeleteConfirmation = true },
-                        enabled = canStartDeleteAccount,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError
-                        ),
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        if (isDeletingAccount) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.padding(end = 8.dp),
-                                color = MaterialTheme.colorScheme.onError,
-                                strokeWidth = 2.dp
-                            )
-                        }
-                        Text(
-                            when {
-                                account.deviceBlocked -> "封禁设备不可注销"
-                                account.accountType == "banned" -> "封禁账户不可注销"
-                                isDeletingAccount -> "注销中…"
-                                else -> "注销账户并清除数据后退出"
-                            }
-                        )
-                    }
+                    AccountSettingsPage.TRAFFIC -> TrafficDetailContent(account = account)
+                    AccountSettingsPage.CLIENT_INFO -> ClientInfoDetailContent(account = account)
                 }
             }
         }
     }
-
     if (showNicknameDialog && account != null) {
         AppAlertDialog(
             onDismissRequest = { if (!isUpdatingNickname) showNicknameDialog = false },
@@ -620,165 +477,3 @@ fun AccountSettingsScreen(
         )
     }
 }
-
-@Composable
-private fun AccountSettingsSection(
-    title: String,
-    content: @Composable () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            content()
-        }
-    }
-}
-
-@Composable
-private fun AccountInfoRow(
-    label: String,
-    value: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(0.34f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp
-        )
-        Text(
-            text = value,
-            modifier = Modifier.weight(0.66f),
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 14.sp,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun AccountInfoRowWithAction(
-    label: String,
-    value: String,
-    actionLabel: String,
-    showAction: Boolean,
-    actionEnabled: Boolean,
-    onAction: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(0.34f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp
-        )
-        Row(
-            modifier = Modifier.weight(0.66f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = value,
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 14.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (showAction) {
-                TextButton(
-                    onClick = onAction,
-                    enabled = actionEnabled
-                ) {
-                    Text(actionLabel)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AccountInfoRowWithIconAction(
-    label: String,
-    value: String,
-    actionEnabled: Boolean,
-    onAction: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(0.34f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 13.sp
-        )
-        Row(
-            modifier = Modifier.weight(0.66f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = value,
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 14.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            IconButton(
-                onClick = onAction,
-                enabled = actionEnabled
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "修改昵称"
-                )
-            }
-        }
-    }
-}
-
-private fun accountIdentityText(accountInfo: AccountInfo): String {
-    return when {
-        accountInfo.deviceBlocked || accountInfo.accountType == "banned" -> "被封禁用户"
-        accountInfo.accountType == "formal" -> "正式用户"
-        else -> "游客"
-    }
-}
-
-private fun trafficPeriodText(period: AccountTrafficPeriod): String {
-    val upload = period.uploadBytes.coerceAtLeast(0L)
-    val download = period.downloadBytes.coerceAtLeast(0L)
-    val calculatedTotal = if (upload > Long.MAX_VALUE - download) Long.MAX_VALUE else upload + download
-    val total = period.totalBytes.coerceAtLeast(calculatedTotal)
-    return "${TrafficUsageFormatter.formatBytes(total)}\n" +
-        "上行 ${TrafficUsageFormatter.formatBytes(upload)} · " +
-        "下行 ${TrafficUsageFormatter.formatBytes(download)}"
-}
-
-private fun String.displayOrUnknown(): String = trim().ifBlank { "未登记" }

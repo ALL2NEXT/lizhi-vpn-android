@@ -46,6 +46,7 @@ import io.github.HanJason233.chimera.ui.components.HomeNavigationLayout
 import io.github.HanJason233.chimera.ui.components.HomeDestination
 import io.github.HanJason233.chimera.ui.navigation.AppRoute
 import io.github.HanJason233.chimera.ui.screens.AccountSettingsScreen
+import io.github.HanJason233.chimera.ui.screens.AccountSettingsPage
 import io.github.HanJason233.chimera.ui.screens.MainScreen
 import io.github.HanJason233.chimera.ui.screens.OtherConfigScreen
 import io.github.HanJason233.chimera.ui.screens.InboundScreen
@@ -391,20 +392,17 @@ class MainActivity : ComponentActivity() {
                                         }
 
                                     HomeDestination.MY ->
-                                        HomeNavigationLayout(
-                                            selectedDestination = selectedDestination,
-                                            onDestinationSelected =
-                                                onBottomNavigationDestinationSelected,
-                                            navigationStyle = skinSettings.activeScheme.navigationStyle
-                                        ) {
-                                            AccountSettingsScreen(
-                                                viewModel = viewModel,
-                                                onBack = {
-                                                    selectedDestination = HomeDestination.HOME
-                                                },
-                                                onAccountDeleted = { finishAndRemoveTask() }
-                                            )
-                                        }
+                                        AccountSettingsScreen(
+                                            viewModel = viewModel,
+                                            onBack = {
+                                                selectedDestination = HomeDestination.HOME
+                                            },
+                                            onAccountDeleted = { finishAndRemoveTask() },
+                                            page = AccountSettingsPage.OVERVIEW,
+                                            onOpenPage = { page ->
+                                                navigateTo(AppRoute.accountSettingsDetail(page.routeKey))
+                                            }
+                                        )
                                 }
                             }
 
@@ -476,7 +474,24 @@ class MainActivity : ComponentActivity() {
                                 AccountSettingsScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() },
-                                    onAccountDeleted = { finishAndRemoveTask() }
+                                    onAccountDeleted = { finishAndRemoveTask() },
+                                    page = AccountSettingsPage.OVERVIEW,
+                                    onOpenPage = { page ->
+                                        navigateTo(AppRoute.accountSettingsDetail(page.routeKey))
+                                    }
+                                )
+                            }
+
+                            composable(AppRoute.ACCOUNT_SETTINGS_DETAIL) { backStackEntry ->
+                                val pageKey = backStackEntry.arguments?.getString("page")
+                                val page = AccountSettingsPage.values()
+                                    .firstOrNull { it.routeKey == pageKey }
+                                    ?: AccountSettingsPage.ACCOUNT_INFO
+                                AccountSettingsScreen(
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() },
+                                    onAccountDeleted = { finishAndRemoveTask() },
+                                    page = page
                                 )
                             }
 
