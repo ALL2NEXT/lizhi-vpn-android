@@ -66,12 +66,14 @@ internal fun CountryGroupingDestination(
     val personalGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val allSubscriptionNodes by viewModel.allSubscriptionNodes.collectAsStateWithLifecycle()
     val selectedSourceIds by viewModel.countryGroupingSourceIds.collectAsStateWithLifecycle()
-    val subscriptionNodeCounts = allSubscriptionNodes
-        .asSequence()
-        .filter { it.source == NodeSource.SUBSCRIPTION }
-        .mapNotNull { node -> node.subscriptionSourceId }
-        .groupingBy { it }
-        .eachCount()
+    val subscriptionNodeCounts = remember(allSubscriptionNodes) {
+        allSubscriptionNodes
+            .asSequence()
+            .filter { it.source == NodeSource.SUBSCRIPTION }
+            .mapNotNull { node -> node.subscriptionSourceId }
+            .groupingBy { it }
+            .eachCount()
+    }
     val sourceOptions = buildList {
         subscriptionGroups.forEach { group ->
             add(
@@ -124,7 +126,9 @@ private fun CountryGroupingScreen(
 ) {
     var sourceDialogVisible by rememberSaveable { mutableStateOf(false) }
     var draftSourceIds by remember { mutableStateOf(emptySet<String>()) }
-    val availableSourceIds = sourceOptions.mapTo(mutableSetOf()) { it.id }
+    val availableSourceIds = remember(sourceOptions) {
+        sourceOptions.mapTo(mutableSetOf()) { it.id }
+    }
     val isAllSourcesSelected = selectedSourceIds == null ||
         selectedSourceIds.containsAll(availableSourceIds)
 

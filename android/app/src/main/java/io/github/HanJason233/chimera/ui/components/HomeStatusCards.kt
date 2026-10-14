@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.R
@@ -34,6 +36,7 @@ import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkIpAddress
 import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
 import io.github.HanJason233.chimera.viewmodel.UnlockTestUiState
+import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
 
 @Composable
@@ -133,12 +136,13 @@ internal fun HomeTestsCard(
     node: Node?,
     isTesting: Boolean,
     isHysteriaBandwidthAdapting: Boolean,
-    progress: SpeedTestProgress?,
+    progressFlow: StateFlow<SpeedTestProgress?>,
     ipTestState: UnlockTestUiState,
     linkTypeResult: LinkTypeTestResult,
     onInterruptTests: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val progress by progressFlow.collectAsStateWithLifecycle()
     val activeTestLabel = when {
         ipTestState.isRunning -> ipTestState.message.ifBlank { "IP 与服务测试进行中" }
         linkTypeResult.state == LinkTypeTestState.TESTING ->

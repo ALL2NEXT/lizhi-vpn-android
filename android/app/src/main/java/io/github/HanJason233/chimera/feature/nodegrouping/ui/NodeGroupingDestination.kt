@@ -5,6 +5,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -36,6 +38,40 @@ private sealed interface NodeGroupingDetail {
         val groupName: String
     ) : NodeGroupingDetail
 }
+
+private val NodeGroupingDetailSaver = listSaver<NodeGroupingDetail?, String>(
+    save = { detail ->
+        when (detail) {
+            is NodeGroupingDetail.Country ->
+                listOf("country", detail.countryCode, detail.countryName)
+            is NodeGroupingDetail.Subscription ->
+                listOf("subscription", detail.sourceId, detail.sourceName)
+            is NodeGroupingDetail.UserGroup ->
+                listOf("user", detail.groupId, detail.groupName)
+            null -> emptyList()
+        }
+    },
+    restore = { saved ->
+        when (saved.firstOrNull()) {
+            "country" -> if (saved.size >= 3) {
+                NodeGroupingDetail.Country(saved[1], saved[2])
+            } else {
+                null
+            }
+            "subscription" -> if (saved.size >= 3) {
+                NodeGroupingDetail.Subscription(saved[1], saved[2])
+            } else {
+                null
+            }
+            "user" -> if (saved.size >= 3) {
+                NodeGroupingDetail.UserGroup(saved[1], saved[2])
+            } else {
+                null
+            }
+            else -> null
+        }
+    }
+)
 
 /**
  * 节点分组的统一页面入口，根据底部导航显示地区组或仓库源。
@@ -69,7 +105,10 @@ fun NodeGroupingDestination(
     val countryGroupingNodes by viewModel.countryGroupingNodes.collectAsStateWithLifecycle()
     val warehouseGroupingCountryCodes by viewModel.warehouseGroupingCountryCodes
         .collectAsStateWithLifecycle()
-    var detail by remember(groupingMode) { mutableStateOf<NodeGroupingDetail?>(null) }
+    var detail by rememberSaveable(
+        groupingMode,
+        stateSaver = NodeGroupingDetailSaver
+    ) { mutableStateOf<NodeGroupingDetail?>(null) }
     LaunchedEffect(detailRequest, groupingMode) {
         val request = detailRequest ?: return@LaunchedEffect
         detail = when (val groupKey = request.groupKey) {
@@ -92,8 +131,10 @@ fun NodeGroupingDestination(
     // 线路详情标题显示当前分组名称，测速阶段状态不再替换标题栏副标题。
     when (val currentDetail = detail) {
         is NodeGroupingDetail.Country -> {
-            val countryNodes = countryGroupingNodes.filter {
-                it.getCountryCode() == currentDetail.countryCode
+            val countryNodes = remember(countryGroupingNodes, currentDetail.countryCode) {
+                countryGroupingNodes.filter {
+                    it.getCountryCode() == currentDetail.countryCode
+                }
             }
             SubscriptionGroupingDestination(
                 viewModel = viewModel,
@@ -107,12 +148,18 @@ fun NodeGroupingDestination(
         }
 
         is NodeGroupingDetail.Subscription -> {
-            val subscriptionNodes = allSubscriptionNodes
-                .filter { it.subscriptionSourceId == currentDetail.sourceId }
-                .filter { node ->
-                    warehouseGroupingCountryCodes == null ||
-                        warehouseGroupingCountryCodes?.contains(node.getCountryCode()) == true
-                }
+            val subscriptionNodes = remember(
+                allSubscriptionNodes,
+                warehouseGroupingCountryCodes,
+                currentDetail.sourceId
+            ) {
+                allSubscriptionNodes
+                    .filter { it.subscriptionSourceId == currentDetail.sourceId }
+                    .filter { node ->
+                        warehouseGroupingCountryCodes == null ||
+                            warehouseGroupingCountryCodes?.contains(node.getCountryCode()) == true
+                    }
+            }
             SubscriptionGroupingDestination(
                 viewModel = viewModel,
                 nodesOverride = subscriptionNodes,

@@ -88,7 +88,6 @@ fun MainScreen(
     val userSubscriptionGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
-    val testProgress by viewModel.speedTestProgress.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
@@ -295,7 +294,7 @@ fun MainScreen(
                             node = homeTestNode,
                             isTesting = isTesting,
                             isHysteriaBandwidthAdapting = isHysteriaBandwidthAdapting,
-                            progress = testProgress,
+                            progressFlow = viewModel.speedTestProgress,
                             ipTestState = unlockTestState,
                             linkTypeResult = linkTypeTestResult,
                             onInterruptTests = viewModel::forceCancelAllTests,

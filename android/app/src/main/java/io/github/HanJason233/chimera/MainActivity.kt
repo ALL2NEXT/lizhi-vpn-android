@@ -35,6 +35,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.PersonalSourceUserAgentMode
@@ -250,6 +251,7 @@ class MainActivity : ComponentActivity() {
                                 var selectedDestination by rememberSaveable {
                                     mutableStateOf(HomeDestination.HOME)
                                 }
+                                val destinationStateHolder = rememberSaveableStateHolder()
                                 var selectedGroupDetailRequest by remember {
                                     mutableStateOf<NodeGroupingDetailRequest?>(null)
                                 }
@@ -258,6 +260,9 @@ class MainActivity : ComponentActivity() {
                                         // 浏览分组页面不改写用户实际选中的节点组。
                                         selectedDestination = destination
                                     }
+                                destinationStateHolder.SaveableStateProvider(
+                                    key = selectedDestination.name
+                                ) {
                                 when (selectedDestination) {
                                     HomeDestination.HOME -> MainScreen(
                                         viewModel = viewModel,
@@ -411,6 +416,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             )
                                         }
+                                }
                                 }
                             }
 
