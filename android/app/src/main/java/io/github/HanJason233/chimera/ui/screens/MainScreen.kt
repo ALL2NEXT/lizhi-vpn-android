@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
@@ -141,6 +142,7 @@ fun MainScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
+                drawerShape = RectangleShape,
                 drawerContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                 windowInsets = WindowInsets(0, 0, 0, 0)
             ) {
