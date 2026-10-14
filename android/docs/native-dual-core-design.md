@@ -37,7 +37,7 @@
 
 - sing-box：`af6e64c3b69e6132ebaee0e1a3d24e93903f6709`，`v1.14.2`。
 - sing-box-lx：`d78104d5c76a5ec6d880c0a1b12b3477b53ee865`，`v1.14.3-lx.20`；其 sing-tun、gVisor、uTLS 和 WireGuard 依赖固定为 LX 仓库内的递归子模块。
-- Xray：`d2758a023cd7f4174a5a5fa4ff66e487d4342ba0`，`v1.260327.0`。
+- Xray：`701af60772cda123492f86e383e1fdba066614a9`，官方稳定版 `v26.10.10`。
 - sing-box runner 依赖 `github.com/sagernet/sing` `v0.9.6-0.20260922013354-87c33f17688f` 与 `github.com/sagernet/sing-tun` `v0.9.6-0.20260924001923-ddaa4ca25e3b`；Xray runner 继续依赖 `github.com/sagernet/sing` `v0.5.1`，维持独立 Go 构建。
 
 `libsingbox.so`、`libsingboxlx.so` 和 `libxray.so` 都是打包到 `nativeLibraryDir` 的 Android PIE 可执行文件，通过

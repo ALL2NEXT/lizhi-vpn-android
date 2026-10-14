@@ -48,13 +48,16 @@ sing-box-lx 增加了原版没有的节点能力：XHTTP、VLESS `encryption`、
 ClientHello 分片、AmneziaWG 2/3 扩展参数和 MASQUE。XHTTP 也可选择 Xray；MASQUE、AmneziaWG
 以及 LX 专属参数需要为对应协议选择 sing-box-lx。
 
+Xray-core `v26.10.10` 上游已加入 MASQUE outbound 和 Cloudflare WARP 支持。本次只升级核心版本；
+应用内的 MASQUE URI 转换和 Xray 后端分派仍需单独接入，当前 MASQUE 节点继续由 sing-box-lx 处理。
+
 Xray `v26.3.27` 已移除 `allowInsecure`。带自签名证书的 Hysteria2/HTTPS 节点如需
 使用 Xray，应由服务端链接提供 `pcs` 或 `pinSHA256`（SHA-256 证书指纹）；否则
 配置会在启动前被明确拒绝，而不会静默关闭证书校验。
 
 ## 构建
 
-Xray-core 以 Git submodule 固定在官方稳定版 `v26.3.27`。Android Gradle 构建只为
+Xray-core 以 Git submodule 固定在官方稳定版 `v26.10.10`。Android Gradle 构建只为
 `arm64-v8a`（64 位 ARM / V8）生成 `libxray.so` 可执行 PIE，并随对应的 split APK 打包。
 
 首次拉取仓库后执行：
@@ -63,7 +66,7 @@ Xray-core 以 Git submodule 固定在官方稳定版 `v26.3.27`。Android Gradle
 git submodule update --init --recursive
 ```
 
-构建环境需要 JDK 17、Go 1.26+ 和项目指定的 Android NDK。可单独
+构建环境需要 JDK 17、Go 1.27+ 和项目指定的 Android NDK。可单独
 验证 Xray 构建：
 
 ```powershell

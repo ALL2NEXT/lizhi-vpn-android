@@ -1,6 +1,6 @@
 module xyz.a202132/mobile/xrayrunner
 
-go 1.26
+go 1.27
 
 require (
 	github.com/sagernet/sing v0.5.1
