@@ -49,7 +49,7 @@ function singBox(node: NodeMap): string[] {
   const raw = text(node, "type");
   const type = raw === "shadowsocks" ? "ss" : raw === "socks" ? text(node, "version") === "4" ? "socks4" : text(node, "version") === "4a" ? "socks4a" : "socks5" : raw;
   const proxy: NodeMap = { type, name: name(node, type) };
-  copy(node, proxy, ["server", "server_port:port", "uuid", "password", "username", "method:cipher", "security:cipher", "alter_id:alterId", "flow", "packet_encoding:packet-encoding", "congestion_control", "udp_relay_mode", "zero_rtt_handshake:reduce-rtt", "mtu", "idle_session_check_interval:idle-session-check-interval", "idle_session_timeout:idle-session-timeout", "min_idle_session:min-idle-session"]);
+  copy(node, proxy, ["server", "server_port:port", "uuid", "password", "username", "method:cipher", "security:cipher", "alter_id:alterId", "flow", "packet_encoding:packet-encoding", "congestion_control", "udp_relay_mode", "zero_rtt_handshake:reduce-rtt", "mtu", "idle_session_check_interval:idle-session-check-interval", "idle_session_timeout:idle-session-timeout", "min_idle_session:min-idle-session", "profile", "vhttp", "private_key:private-key", "public_key:public-key", "ip", "ipv6", "uri", "idle_timeout:idle-timeout", "keep_alive_period:keep-alive-period", "network_list:network-list"]);
   if (node.plugin) proxy.plugin = text(node, "plugin") + (text(node, "plugin_opts") ? ";" + text(node, "plugin_opts") : "");
   const tls = map(node.tls);
   proxy.tls = bool(tls.enabled) || false;

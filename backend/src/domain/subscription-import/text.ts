@@ -1,5 +1,6 @@
 // 与 Android SubscriptionTextNormalizer 保持一致：配置内的 URL 和编码字段不参与展开。
-const URI = /(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive(?:\+https)?|wireguard|ss|socks(?:4a|4|5)?|https?)\\?:\/\/[^\s<>"`]+/gi;
+const URI = /(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive(?:\+https)?|wireguard|masque|ss|socks(?:4a|4|5)?|https?)\\?:\/\/[^\s<>"`]+/gi;
+const URI_LIST_SEPARATOR = /[,;，；](?=(?:https?|vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive(?:\+https)?|wireguard|masque|ss|socks(?:4a|4|5)?)\\?:\/\/)/gi;
 const YAML_KEY = /^[A-Za-z_][A-Za-z0-9_-]*\s*:(?:\s.*|$)/;
 const YAML_LIST = /^-\s+(?:[A-Za-z_][A-Za-z0-9_-]*\s*:.*|\{.*)/;
 const ENCODED_TOKEN = /(?<!\S)(?:base64:)?[A-Za-z0-9+/_=-]{8,}(?!\S)/g;
@@ -44,10 +45,10 @@ export function isYamlContent(value: string) {
 }
 
 export function extractUris(value: string) {
-  const markdown = value.replace(/\[[^\]]*\]\(([^)\s]+)\)/g, "$1");
+  const markdown = value.replace(/\[[^\]]*\]\(([^)\s]+)\)/g, "$1").replace(URI_LIST_SEPARATOR, "\n");
   return Array.from(markdown.matchAll(URI)).flatMap(({ 0: uri }) => {
     if (/^https?:\/\//i.test(uri)) {
-      return Array.from(uri.replace(/[,;，；](?=(?:https?|vless|vmess|trojan):\/\/)/gi, "\n").matchAll(URI), m => m[0]);
+      return Array.from(uri.replace(URI_LIST_SEPARATOR, "\n").matchAll(URI), m => m[0]);
     }
     return [uri];
   }).map(uri => uri.replace(/\\:\/\//g, "://").replace(/\\@/g, "@"));

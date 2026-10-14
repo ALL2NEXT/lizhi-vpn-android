@@ -148,7 +148,7 @@ const COUNTRY_BY_CODE = new Map(
 const COUNTRY_ALIASES = COUNTRY_DEFINITIONS
   .flatMap(([code, name, aliases]) => aliases.map((alias) => ({ code, name, alias })));
 const UNKNOWN_COUNTRY = { code: "UN", name: "未知" };
-const NODE_LINK_PATTERN = /^(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive|naive\+https|wireguard|ss|socks|socks5|socks4|socks4a|https?):\/\/\S+$/i;
+const NODE_LINK_PATTERN = /^(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive|naive\+https|wireguard|masque|ss|socks|socks5|socks4|socks4a|https?):\/\/\S+$/i;
 
 function normalizeNodeName(value: unknown) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();

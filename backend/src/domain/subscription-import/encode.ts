@@ -188,6 +188,24 @@ export function encodeNode(proxy: NodeMap, globalFingerprint = ""): string | nul
       put(query, "mtu", field(proxy, "mtu")); put(query, "reserved", list(field(proxy, "reserved")).join(","));
       return finish("wireguard", privateKey);
     }
+    case "masque": {
+      const profile = text(proxy, "profile") || "cloudflare";
+      const privateKey = text(proxy, "private-key", "private_key");
+      const publicKey = text(proxy, "public-key", "public_key");
+      const ip = text(proxy, "ip"), ipv6 = text(proxy, "ipv6");
+      if (profile !== "standard" && (!privateKey || !publicKey)) return null;
+      if (!ip && !ipv6) return null;
+      query.profile = profile;
+      put(query, "vhttp", field(proxy, "vhttp") || "auto");
+      put(query, "public_key", publicKey);
+      put(query, "ip", ip); put(query, "ipv6", ipv6); put(query, "uri", field(proxy, "uri"));
+      put(query, "mtu", field(proxy, "mtu"));
+      put(query, "idle_timeout", field(proxy, "idle_timeout", "idle-timeout"));
+      put(query, "keep_alive_period", field(proxy, "keep_alive_period", "keep-alive-period"));
+      put(query, "network_list", list(field(proxy, "network_list", "network-list")).join(","));
+      addTls();
+      return finish("masque", privateKey);
+    }
     default: return null;
   }
 }
