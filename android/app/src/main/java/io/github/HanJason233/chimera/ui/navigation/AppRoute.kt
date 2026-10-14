@@ -9,6 +9,7 @@ object AppRoute {
     const val OUTBOUND = "outbound"
     const val SPEED_TEST_SCHEMES = "speed_test_schemes"
     const val SPEED_TEST_SCHEME_EDITOR = "speed_test_scheme_editor/{schemeId}"
+    const val ACCOUNT_SETTINGS = "account_settings"
     const val ACCOUNT_SETTINGS_DETAIL = "account_settings_detail/{page}"
     const val SKIN = "skin"
     const val SKIN_EDITOR = "skin_editor/{schemeId}"
