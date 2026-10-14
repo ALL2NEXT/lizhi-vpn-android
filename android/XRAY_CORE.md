@@ -45,11 +45,11 @@ AnyTLS、TUIC、Naive 由两个 sing-box 变体处理，Xray 不提供这些协�
 选择会覆盖默认值。修改核心选择后，正在运行的 VPN 会自动重连。
 
 sing-box-lx 增加了原版没有的节点能力：XHTTP、VLESS `encryption`、REALITY `key_share`、TLS
-ClientHello 分片、AmneziaWG 2/3 扩展参数和 MASQUE。XHTTP 也可选择 Xray；MASQUE、AmneziaWG
-以及 LX 专属参数需要为对应协议选择 sing-box-lx。
+ClientHello 分片和 AmneziaWG 2/3 扩展参数。XHTTP 和 Cloudflare WARP MASQUE 可选择 Xray；
+AmneziaWG 与 LX 专属参数仍需为对应协议选择 sing-box-lx。
 
-Xray-core `v26.10.10` 上游已加入 MASQUE outbound 和 Cloudflare WARP 支持。本次只升级核心版本；
-应用内的 MASQUE URI 转换和 Xray 后端分派仍需单独接入，当前 MASQUE 节点继续由 sing-box-lx 处理。
+Xray-core `v26.10.10` 支持 Cloudflare WARP MASQUE。当前应用可将 `masque://` URI 转成 Xray
+outbound；MASQUE 默认仍选 sing-box-lx，可在“协议核心”设置中切换到 Xray。
 
 Xray `v26.3.27` 已移除 `allowInsecure`。带自签名证书的 Hysteria2/HTTPS 节点如需
 使用 Xray，应由服务端链接提供 `pcs` 或 `pinSHA256`（SHA-256 证书指纹）；否则

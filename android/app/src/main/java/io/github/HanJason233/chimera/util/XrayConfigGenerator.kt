@@ -140,6 +140,7 @@ class XrayConfigGenerator {
             hysteriaDownMbps
         )
         NodeType.WIREGUARD -> createWireGuardOutbound(node, tag)
+        NodeType.MASQUE -> createMasqueOutbound(node, tag)
         NodeType.SHADOWSOCKS -> createShadowsocksOutbound(node, tag)
         NodeType.SOCKS -> createSocksOutbound(node, tag)
         NodeType.HTTP -> createHttpOutbound(node, tag)
@@ -374,6 +375,56 @@ class XrayConfigGenerator {
                             ?.let { allowed ->
                                 add("allowedIPs", JsonArray().apply { allowed.forEach(::add) })
                             }
+                    })
+                })
+            })
+        }
+    }
+
+    private fun createMasqueOutbound(node: Node, tag: String): JsonObject {
+        val uri = Uri.parse(node.getRawLinkPlain())
+        val profile = queryParamFirst(uri, "profile")?.lowercase() ?: "cloudflare"
+        require(profile == "cloudflare") { "Xray 目前只支持 Cloudflare WARP MASQUE 配置" }
+
+        val privateKey = uri.userInfo?.trim()?.takeIf(String::isNotEmpty)
+            ?: queryParamFirst(uri, "private_key", "privateKey")
+        val publicKey = queryParamFirst(uri, "public_key", "publicKey")
+        val addresses = buildList {
+            parseCsvParams(queryParamFirst(uri, "ip")).forEach(::add)
+            parseCsvParams(queryParamFirst(uri, "ipv6", "ip6")).forEach(::add)
+        }
+        require(!privateKey.isNullOrBlank()) { "MASQUE WARP 私钥为空" }
+        require(!publicKey.isNullOrBlank()) { "MASQUE WARP 服务端公钥为空" }
+        require(addresses.isNotEmpty()) { "MASQUE WARP 至少需要一个客户端 IP" }
+
+        val serverName = queryParamFirst(uri, "sni", "serverName") ?: DEFAULT_MASQUE_SNI
+        val tlsSettings = createUriTlsSettings(uri, serverName).apply {
+            // `host` configures the MASQUE HTTP host and must not override TLS SNI.
+            addProperty("serverName", serverName)
+        }
+        val remoteDns = parseCsvParams(queryParamFirst(uri, "remoteDNS", "remote_dns"))
+
+        return JsonObject().apply {
+            addProperty("protocol", "masque")
+            addProperty("tag", tag)
+            add("settings", JsonObject().apply {
+                addProperty("address", node.server)
+                addProperty("port", node.port)
+                if (remoteDns.isNotEmpty()) {
+                    add("remoteDNS", JsonArray().apply { remoteDns.forEach(::add) })
+                }
+            })
+            add("streamSettings", JsonObject().apply {
+                addProperty("network", "masque")
+                addProperty("security", "tls")
+                add("tlsSettings", tlsSettings)
+                add("masqueSettings", JsonObject().apply {
+                    queryParamFirst(uri, "host")?.let { addProperty("host", it) }
+                    queryParamFirst(uri, "path")?.let { addProperty("path", it) }
+                    add("warp", JsonObject().apply {
+                        addProperty("privateKey", privateKey)
+                        addProperty("publicKey", publicKey)
+                        add("address", JsonArray().apply { addresses.forEach(::add) })
                     })
                 })
             })
@@ -766,6 +817,7 @@ class XrayConfigGenerator {
 
     companion object {
         val XRAY_SUPPORTED_TYPES: Set<NodeType> = ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS.toSet()
+        private const val DEFAULT_MASQUE_SNI = "www.cloudflare.com"
         private const val DIRECT_TAG = "direct"
         private const val BLOCK_TAG = "block"
     }

@@ -49,9 +49,12 @@ internal object SingBoxLxCompatibility {
     }
 
     fun requiresLxOnlyFeature(node: Node): Boolean {
-        if (node.type == NodeType.MASQUE) return true
         val rawLink = node.getRawLinkPlain()
         val uri = Uri.parse(rawLink)
+        if (node.type == NodeType.MASQUE) {
+            val profile = queryParamFirst(uri, "profile")?.lowercase() ?: "cloudflare"
+            return profile != "cloudflare"
+        }
         if (node.type in tlsCapableTypes && tlsExtensionParameters.any { queryParamFirst(uri, it) != null }) return true
         if (node.type == NodeType.VMESS && hasVmessTlsExtension(vmessConfig(node))) return true
         if (node.type == NodeType.WIREGUARD) {

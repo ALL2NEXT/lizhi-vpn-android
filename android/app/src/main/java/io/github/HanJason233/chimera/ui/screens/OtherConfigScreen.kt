@@ -108,7 +108,7 @@ fun OtherConfigScreen(
                 initiallyExpanded = false
             ) {
                 Text(
-                    text = "可为支持的协议选择官方 sing-box、sing-box-lx 或 Xray。XHTTP 可用 LX 或 Xray；MASQUE、AmneziaWG 和 LX 专属扩展需要选择 sing-box-lx。",
+                    text = "可为支持的协议选择官方 sing-box、sing-box-lx 或 Xray。XHTTP 和 Cloudflare WARP MASQUE 可用 LX 或 Xray；AmneziaWG 和 LX 专属扩展仍需选择 sing-box-lx。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )

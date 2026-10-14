@@ -32,6 +32,7 @@ data class ProtocolCoreSettings(
             NodeType.VMESS,
             NodeType.TROJAN,
             NodeType.HYSTERIA2,
+            NodeType.MASQUE,
             NodeType.WIREGUARD,
             NodeType.SHADOWSOCKS,
             NodeType.SOCKS,

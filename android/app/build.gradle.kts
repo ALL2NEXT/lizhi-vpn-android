@@ -284,7 +284,7 @@ val buildXrayCore = tasks.register("buildXrayCore") {
                     "-trimpath",
                     "-buildvcs=false",
                     "-buildmode=pie",
-                    "-ldflags=-s -w -buildid=",
+                    "-ldflags=-s -w -buildid= -checklinkname=0",
                     "-o",
                     output.absolutePath,
                     "."
