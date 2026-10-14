@@ -3,7 +3,6 @@ package io.github.HanJason233.chimera.data.model
 /** Android 上用于处理代理协议的运行核心。 */
 enum class ProxyCore(val displayName: String) {
     SING_BOX("sing-box"),
-    SING_BOX_LX("sing-box-lx"),
     XRAY("Xray")
 }
 
@@ -15,7 +14,7 @@ data class ProtocolCoreSettings(
 ) {
     fun coreFor(type: NodeType): ProxyCore =
         assignments[type] ?: when (type) {
-            NodeType.MASQUE -> ProxyCore.SING_BOX_LX
+            NodeType.MASQUE -> ProxyCore.XRAY
             else -> ProxyCore.SING_BOX
         }
 

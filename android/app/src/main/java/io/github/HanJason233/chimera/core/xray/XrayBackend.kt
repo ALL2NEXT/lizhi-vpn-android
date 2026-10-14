@@ -9,7 +9,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.core.*
-import io.github.HanJason233.chimera.core.singbox.SingBoxLxCompatibility
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.core.route.CoreRuleRepository
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
@@ -26,7 +25,7 @@ internal class XrayBackend : CoreBackend {
     override val capabilities = CoreCapabilities(ProtocolCoreSettings.XRAY_CAPABLE_PROTOCOLS.toSet())
 
     override fun supports(node: Node): Boolean =
-        node.type in capabilities.protocols && !SingBoxLxCompatibility.requiresLxOnlyFeature(node)
+        node.type in capabilities.protocols && CoreCompatibility.xraySupports(node)
 
     override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = withContext(Dispatchers.IO) {
         val smartRulesEnabled = request.settings?.let {

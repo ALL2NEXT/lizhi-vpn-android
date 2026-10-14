@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.core.CoreBackend
 import io.github.HanJason233.chimera.core.CoreCapabilities
+import io.github.HanJason233.chimera.core.CoreCompatibility
 import io.github.HanJason233.chimera.core.CoreRequest
 import io.github.HanJason233.chimera.core.CoreSession
 import io.github.HanJason233.chimera.core.PreparedCore
@@ -29,7 +30,9 @@ internal class SingBoxBackend : CoreBackend {
     )
 
     override fun supports(node: io.github.HanJason233.chimera.data.model.Node): Boolean =
-        node.type in capabilities.protocols && !SingBoxLxCompatibility.requiresLx(node)
+        node.type in capabilities.protocols &&
+            !CoreCompatibility.requiresXray(node) &&
+            !CoreCompatibility.hasUnsupportedSpecialFeatures(node)
 
     override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = withContext(Dispatchers.IO) {
         val config = SingBoxConfigGenerator().let { generator ->

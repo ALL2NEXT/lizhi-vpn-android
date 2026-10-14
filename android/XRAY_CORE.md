@@ -1,6 +1,6 @@
-# Android 三核心架构
+# Android 双核心架构
 
-Android 端采用 HEV 统一 TUN 数据面 + 官方 sing-box、sing-box-lx、Xray 协议核心的架构：
+Android 使用 HEV 处理 TUN 流量，由官方 sing-box 或 Xray 提供代理协议：
 
 ```text
 Android VpnService / TUN
@@ -12,53 +12,22 @@ HEV tun2socks
 核心 loopback SOCKS5
         |
         +-- 官方 sing-box -> 服务器
-        +-- sing-box-lx -> 服务器
         `-- Xray -> 服务器
 ```
 
-## 三个核心都采用独立 PIE 子进程
+## 独立 PIE 子进程
 
-三个核心都编译为 Android PIE，并以独立进程运行。这样 Kotlin 控制层
-只负责配置、启动/停止和故障回收，各 Go runtime 不会进入 Android 应用进程：
+sing-box 和 Xray 都编译为 Android PIE 可执行文件，在独立进程中运行。HEV 独占 Android TUN；核心只提供本地 SOCKS5 入站。核心进程崩溃时，应用服务会检测退出并回收会话。
 
-- HEV 是唯一的 TUN 所有者，不会发生多个核心抢占 VPN fd；
-- 任一核心崩溃都与 UI、VPN 控制层隔离，服务会检测退出并安全断开；
-- 三个核心可在同一节点列表中按协议设置使用；
-- 三种核心的配置在启动前分别由各自核心校验；
-- 配置读取完成后会从应用私有目录删除，减少凭据落盘时间。
+普通协议默认使用官方 sing-box。Cloudflare WARP MASQUE 默认使用 Xray；XHTTP 和 VLESS `encryption` 等 Xray 支持的扩展参数也会选择 Xray。AmneziaWG 参数、非 Cloudflare MASQUE profile，以及当前两个核心均不支持的 TLS 扩展会在连接前被拒绝。
 
-## 支持范围
+Xray-core `v26.10.10` 支持 Cloudflare WARP MASQUE。应用将 `masque://` URI 转成 Xray outbound 配置，并从 URI 读取密钥、客户端地址、服务器、公钥、SNI 和传输选项。
 
-“核心路由 -> 协议核心”目前可配置：
-
-- VLESS
-- VMess
-- Trojan
-- Hysteria2（含 salamander 混淆、端口跳跃和带宽参数）
-- WireGuard
-- Shadowsocks（不含 SIP003 插件节点）
-- SOCKS5（SOCKS4/4a 仍由 sing-box 处理）
-- HTTP/HTTPS
-
-AnyTLS、TUIC、Naive 由两个 sing-box 变体处理，Xray 不提供这些协议。首次安装或尚未
-保存核心设置时，普通协议默认使用官方 sing-box；MASQUE 默认使用 sing-box-lx。用户后续
-选择会覆盖默认值。修改核心选择后，正在运行的 VPN 会自动重连。
-
-sing-box-lx 增加了原版没有的节点能力：XHTTP、VLESS `encryption`、REALITY `key_share`、TLS
-ClientHello 分片和 AmneziaWG 2/3 扩展参数。XHTTP 和 Cloudflare WARP MASQUE 可选择 Xray；
-AmneziaWG 与 LX 专属参数仍需为对应协议选择 sing-box-lx。
-
-Xray-core `v26.10.10` 支持 Cloudflare WARP MASQUE。当前应用可将 `masque://` URI 转成 Xray
-outbound；MASQUE 默认仍选 sing-box-lx，可在“协议核心”设置中切换到 Xray。
-
-Xray `v26.3.27` 已移除 `allowInsecure`。带自签名证书的 Hysteria2/HTTPS 节点如需
-使用 Xray，应由服务端链接提供 `pcs` 或 `pinSHA256`（SHA-256 证书指纹）；否则
-配置会在启动前被明确拒绝，而不会静默关闭证书校验。
+Xray `v26.3.27` 已移除 `allowInsecure`。带自签名证书的 Hysteria2/HTTPS 节点如需使用 Xray，应由服务端链接提供 `pcs` 或 `pinSHA256`（SHA-256 证书指纹）；否则配置会在启动前被明确拒绝，而不会静默关闭证书校验。
 
 ## 构建
 
-Xray-core 以 Git submodule 固定在官方稳定版 `v26.10.10`。Android Gradle 构建只为
-`arm64-v8a`（64 位 ARM / V8）生成 `libxray.so` 可执行 PIE，并随对应的 split APK 打包。
+Android Gradle 构建为 `arm64-v8a` 生成 `libsingbox.so` 和 `libxray.so`，并随对应 split APK 打包。sing-box 与 Xray 源码分别由根目录的 Git submodule 固定版本。
 
 首次拉取仓库后执行：
 
@@ -66,18 +35,13 @@ Xray-core 以 Git submodule 固定在官方稳定版 `v26.10.10`。Android Gradl
 git submodule update --init --recursive
 ```
 
-构建环境需要 JDK 17、Go 1.27+ 和项目指定的 Android NDK。可单独
-验证 Xray 构建：
+构建环境需要 JDK 17、Go 1.27+、Android SDK 和项目指定的 NDK。可单独构建 Xray：
 
 ```powershell
 cd android
 .\gradlew.bat :app:buildXrayCore
 ```
 
-sing-box-lx 使用固定递归子模块构建，可单独运行 `:app:buildSingBoxLxCore`；任务会生成
-`libsingboxlx.so` 并将 XHTTP、AmneziaWG 等功能编入 Android PIE runner。
-
 ## 运行时保护
 
-Xray 与应用共享 UID。VPN Builder 会始终把本应用排除在 TUN 捕获范围之外，防止
-Xray 的上游连接再次进入 sing-box 并形成路由环。
+Xray 与应用共享 UID。VPN Builder 会将本应用排除在 TUN 捕获范围之外，防止 Xray 的上游连接再次进入 VPN 并形成路由环。

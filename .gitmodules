@@ -7,6 +7,3 @@
 [submodule "hev-socks5-tunnel"]
 	path = hev-socks5-tunnel
 	url = https://github.com/heiher/hev-socks5-tunnel.git
-[submodule "core/sing-box-lx"]
-	path = core/sing-box-lx
-	url = https://github.com/Leadaxe/sing-box-lx.git

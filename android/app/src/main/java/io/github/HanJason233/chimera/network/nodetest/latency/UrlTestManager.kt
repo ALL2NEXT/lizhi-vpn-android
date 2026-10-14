@@ -85,7 +85,6 @@ object UrlTestManager {
             ProxyCore.XRAY -> active.xray?.let {
                 return@withContext it.testNode(node, url, warmupTimeoutMs, measurementTimeoutMs)
             }
-            ProxyCore.SING_BOX_LX -> Unit
         }
 
         perNodeRuntimePermits.withPermit {

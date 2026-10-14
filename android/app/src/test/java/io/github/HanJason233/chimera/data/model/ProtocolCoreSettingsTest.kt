@@ -7,11 +7,12 @@ import org.junit.Test
 
 class ProtocolCoreSettingsTest {
     @Test
-    fun defaultsEveryProtocolToSingBox() {
+    fun defaultsMasqueToXrayAndOtherProtocolsToSingBox() {
         val settings = ProtocolCoreSettings()
 
         ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
-            assertEquals(ProxyCore.SING_BOX, settings.coreFor(nodeType))
+            val expected = if (nodeType == NodeType.MASQUE) ProxyCore.XRAY else ProxyCore.SING_BOX
+            assertEquals(expected, settings.coreFor(nodeType))
         }
     }
 
@@ -28,6 +29,7 @@ class ProtocolCoreSettingsTest {
                 NodeType.VMESS,
                 NodeType.TROJAN,
                 NodeType.HYSTERIA2,
+                NodeType.MASQUE,
                 NodeType.WIREGUARD,
                 NodeType.SHADOWSOCKS,
                 NodeType.SOCKS,
