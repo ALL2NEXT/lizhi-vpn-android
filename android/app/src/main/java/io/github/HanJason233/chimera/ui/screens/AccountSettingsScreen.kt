@@ -168,6 +168,7 @@ fun AccountSettingsScreen(
     AppScreenScaffold(
         title = page.title,
         onBack = onBack,
+        showBackNavigation = page != AccountSettingsPage.OVERVIEW,
         containerColor = accountSettingsBackground,
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         actions = {

@@ -392,17 +392,25 @@ class MainActivity : ComponentActivity() {
                                         }
 
                                     HomeDestination.MY ->
-                                        AccountSettingsScreen(
-                                            viewModel = viewModel,
-                                            onBack = {
-                                                selectedDestination = HomeDestination.HOME
-                                            },
-                                            onAccountDeleted = { finishAndRemoveTask() },
-                                            page = AccountSettingsPage.OVERVIEW,
-                                            onOpenPage = { page ->
-                                                navigateTo(AppRoute.accountSettingsDetail(page.routeKey))
-                                            }
-                                        )
+                                        HomeNavigationLayout(
+                                            selectedDestination = selectedDestination,
+                                            onDestinationSelected =
+                                                onBottomNavigationDestinationSelected,
+                                            navigationStyle = skinSettings.activeScheme.navigationStyle
+                                        ) {
+                                            // “我的”总览直接作为底部标签页内容展示。
+                                            AccountSettingsScreen(
+                                                viewModel = viewModel,
+                                                onBack = {
+                                                    selectedDestination = HomeDestination.HOME
+                                                },
+                                                onAccountDeleted = { finishAndRemoveTask() },
+                                                page = AccountSettingsPage.OVERVIEW,
+                                                onOpenPage = { page ->
+                                                    navigateTo(AppRoute.accountSettingsDetail(page.routeKey))
+                                                }
+                                            )
+                                        }
                                 }
                             }
 
@@ -467,18 +475,6 @@ class MainActivity : ComponentActivity() {
                                     viewModel = viewModel,
                                     schemeId = backStackEntry.arguments?.getString("schemeId").orEmpty(),
                                     onBack = { navController.popBackStack() }
-                                )
-                            }
-
-                            composable(AppRoute.ACCOUNT_SETTINGS) {
-                                AccountSettingsScreen(
-                                    viewModel = viewModel,
-                                    onBack = { navController.popBackStack() },
-                                    onAccountDeleted = { finishAndRemoveTask() },
-                                    page = AccountSettingsPage.OVERVIEW,
-                                    onOpenPage = { page ->
-                                        navigateTo(AppRoute.accountSettingsDetail(page.routeKey))
-                                    }
                                 )
                             }
 
