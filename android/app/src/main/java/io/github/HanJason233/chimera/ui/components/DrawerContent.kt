@@ -1,9 +1,11 @@
 package io.github.HanJason233.chimera.ui.components
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -13,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -24,7 +25,7 @@ import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.R
 import io.github.HanJason233.chimera.ui.dialogs.AboutDialog
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun DrawerContent(
     onCheckUpdate: () -> Unit,
@@ -61,7 +62,20 @@ fun DrawerContent(
         ) {
             // 菜单项
 
-             DrawerMenuItem(
+            Text(
+                text = appDisplayName,
+                modifier = Modifier.padding(
+                    start = 24.dp,
+                    end = 24.dp,
+                    top = 12.dp,
+                    bottom = 12.dp
+                ),
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium
+            )
+
+            DrawerMenuItem(
                 icon = Icons.Outlined.Tune,
                 title = "设置",
                 onClick = {
@@ -151,35 +165,18 @@ private fun DrawerMenuItem(
     subtitle: String? = null,
     onClick: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        color = androidx.compose.ui.graphics.Color.Transparent
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
-            )
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    NavigationDrawerItem(
+        label = {
             Column {
                 Text(
                     text = title,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onBackground
+                    fontWeight = FontWeight.Medium
                 )
-                
+
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
@@ -188,6 +185,26 @@ private fun DrawerMenuItem(
                     )
                 }
             }
-        }
-    }
+        },
+        selected = isPressed,
+        onClick = onClick,
+        modifier = Modifier.padding(horizontal = 12.dp),
+        icon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+            )
+        },
+        shape = RoundedCornerShape(50),
+        colors = NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            unselectedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unselectedTextColor = MaterialTheme.colorScheme.onBackground
+        ),
+        interactionSource = interactionSource
+    )
 }
