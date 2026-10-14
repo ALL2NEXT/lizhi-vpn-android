@@ -5,6 +5,7 @@ import android.util.Base64
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 
 internal fun queryParamEnabled(uri: Uri, vararg names: String): Boolean = names.any { name ->
     when (uri.getQueryParameter(name)?.trim()?.lowercase()) {
@@ -125,18 +126,18 @@ internal fun parseShadowsocksMethodPassword(linkContent: String): String {
 }
 
 /** Normalizes subscription transport aliases to values supported by sing-box. */
-internal fun normalizeTransportType(type: String?): String = when (type?.trim()?.lowercase()) {
+internal fun normalizeTransportType(type: String?, allowLxExtensions: Boolean = false): String = when (type?.trim()?.lowercase()) {
     null, "", "tcp", "raw" -> "tcp"
     "h2" -> "http"
     "websocket" -> "ws"
     "gun" -> "grpc"
     "http-upgrade" -> "httpupgrade"
-    "splithttp", "split-http", "xhttp" -> "unsupported"
+    "splithttp", "split-http", "xhttp" -> if (allowLxExtensions) "xhttp" else "unsupported"
     else -> type.trim().lowercase()
 }
 
-internal fun resolveUriTransportType(uri: Uri): String {
-    val transport = normalizeTransportType(queryParamFirst(uri, "type", "network"))
+internal fun resolveUriTransportType(uri: Uri, allowLxExtensions: Boolean = false): String {
+    val transport = normalizeTransportType(queryParamFirst(uri, "type", "network"), allowLxExtensions)
     if (transport == "tcp" || transport == "none") {
         val headerType = queryParamFirst(uri, "headerType", "header_type")
         if (headerType.equals("http", ignoreCase = true)) return "http"
@@ -144,9 +145,10 @@ internal fun resolveUriTransportType(uri: Uri): String {
     return transport
 }
 
-internal fun resolveVmessTransportType(config: JsonObject): String {
+internal fun resolveVmessTransportType(config: JsonObject, allowLxExtensions: Boolean = false): String {
     val network = normalizeTransportType(
-        parseJsonString(config.get("net")) ?: parseJsonString(config.get("network"))
+        parseJsonString(config.get("net")) ?: parseJsonString(config.get("network")),
+        allowLxExtensions
     )
     if (network == "tcp" || network == "none") {
         val headerType = parseJsonString(config.get("headerType"))
@@ -156,18 +158,18 @@ internal fun resolveVmessTransportType(config: JsonObject): String {
     return network
 }
 
-internal fun isSupportedTransport(type: String): Boolean =
+internal fun isSupportedTransport(type: String, allowLxExtensions: Boolean = false): Boolean =
     type == "ws" || type == "grpc" || type == "http" ||
-        type == "httpupgrade" || type == "quic"
+        type == "httpupgrade" || type == "quic" || (allowLxExtensions && type == "xhttp")
 
-internal fun checkedSingBoxTransport(type: String): String {
-    require(type == "tcp" || type == "none" || isSupportedTransport(type)) {
-        "sing-box 不支持此节点的传输类型，请为该协议选择 Xray"
+internal fun checkedSingBoxTransport(type: String, allowLxExtensions: Boolean = false): String {
+    require(type == "tcp" || type == "none" || isSupportedTransport(type, allowLxExtensions)) {
+        "sing-box 不支持此节点的传输类型，请选择 sing-box-lx 或 Xray"
     }
     return type
 }
 
-internal fun createTransport(type: String, uri: Uri): JsonObject {
+internal fun createTransport(type: String, uri: Uri, allowLxExtensions: Boolean = false): JsonObject {
     val hostValues = parseCsvParams(queryParamFirst(uri, "host"))
     return JsonObject().apply {
         addProperty("type", type)
@@ -212,11 +214,35 @@ internal fun createTransport(type: String, uri: Uri): JsonObject {
                 addProperty("path", uri.getQueryParameter("path") ?: "/")
                 hostValues.firstOrNull()?.let { addProperty("host", it) }
             }
+            "xhttp" -> {
+                require(allowLxExtensions) { "XHTTP 需要选择 sing-box-lx 或 Xray" }
+                queryParamFirst(uri, "mode")?.let { addProperty("mode", it) }
+                queryParamFirst(uri, "path")?.let { addProperty("path", it) }
+                hostValues.firstOrNull()?.let { addProperty("host", it) }
+                queryParamFirst(uri, "xhttpOptions", "xhttp_options")?.let { raw ->
+                    val options = JsonParser.parseString(raw).takeIf { it.isJsonObject }?.asJsonObject
+                        ?: throw IllegalArgumentException("XHTTP 参数必须是 JSON 对象")
+                    options.entrySet().forEach { (key, value) ->
+                        if (!has(key)) add(key, value.deepCopy())
+                    }
+                }
+                queryParamFirst(uri, "extra")?.let { raw ->
+                    val extra = JsonParser.parseString(raw).takeIf { it.isJsonObject }?.asJsonObject
+                        ?: throw IllegalArgumentException("XHTTP extra 参数必须是 JSON 对象")
+                    extra.entrySet().forEach { (key, value) ->
+                        if (!has(key)) add(key, value.deepCopy())
+                    }
+                }
+            }
         }
     }
 }
 
-internal fun createVmessTransport(network: String, config: JsonObject): JsonObject {
+internal fun createVmessTransport(
+    network: String,
+    config: JsonObject,
+    allowLxExtensions: Boolean = false
+): JsonObject {
     val hostValues = parseJsonStringList(config.get("host"))
     return JsonObject().apply {
         addProperty("type", network)
@@ -258,6 +284,23 @@ internal fun createVmessTransport(network: String, config: JsonObject): JsonObje
             "httpupgrade" -> {
                 addProperty("path", config.get("path")?.asString ?: "/")
                 hostValues.firstOrNull()?.let { addProperty("host", it) }
+            }
+            "xhttp" -> {
+                require(allowLxExtensions) { "XHTTP 需要选择 sing-box-lx 或 Xray" }
+                parseJsonString(config.get("mode"))?.let { addProperty("mode", it) }
+                parseJsonString(config.get("path"))?.let { addProperty("path", it) }
+                hostValues.firstOrNull()?.let { addProperty("host", it) }
+                config.get("xhttpOptions")?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()?.forEach { (key, value) ->
+                    if (!has(key)) add(key, value.deepCopy())
+                }
+                config.get("extra")?.let { raw ->
+                    val extra = runCatching {
+                        if (raw.isJsonPrimitive) JsonParser.parseString(raw.asString) else raw
+                    }.getOrNull()?.takeIf { it.isJsonObject }?.asJsonObject
+                    extra?.entrySet()?.forEach { (key, value) ->
+                        if (!has(key)) add(key, value.deepCopy())
+                    }
+                }
             }
         }
     }

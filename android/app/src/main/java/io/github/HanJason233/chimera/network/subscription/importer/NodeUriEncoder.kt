@@ -1,5 +1,6 @@
 package io.github.HanJason233.chimera.network.subscription.importer
 
+import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -46,6 +47,7 @@ internal object NodeUriEncoder {
             "tuic" -> tuicUri(proxy, server, port, name)
             "naive" -> naiveUri(proxy, server, port, name)
             "wireguard", "wg" -> wireGuardUri(proxy, server, port, name)
+            "masque" -> masqueUri(proxy, server, port, name)
             else -> null
         }
     }
@@ -143,6 +145,7 @@ internal object NodeUriEncoder {
             transport.serviceName?.let { addProperty("serviceName", it) }
             transport.maxEarlyData?.let { addProperty("maxEarlyData", it) }
             transport.earlyDataHeaderName?.let { addProperty("earlyDataHeaderName", it) }
+            transport.xhttpOptions?.let { add("xhttpOptions", Gson().toJsonTree(it)) }
             if (proxy.bool("tls") == true) addProperty("tls", "tls")
             proxy.text("sni", "servername")?.let { addProperty("sni", it) }
             proxy.stringList("alpn").takeIf { it.isNotEmpty() }?.let { values ->
@@ -180,6 +183,7 @@ internal object NodeUriEncoder {
         }
         query["security"] = security
         proxy.text("flow")?.let { query["flow"] = it }
+        proxy.text("encryption")?.let { query["encryption"] = it }
         proxy.text("sni", "servername")?.let { query["sni"] = it }
         proxy.stringList("alpn").takeIf { it.isNotEmpty() }?.let { query["alpn"] = it.joinToString(",") }
         (proxy.text("client-fingerprint")
@@ -191,6 +195,7 @@ internal object NodeUriEncoder {
             ?.let { query["packetEncoding"] = it }
         reality?.text("public-key", "public_key")?.let { query["pbk"] = it }
         reality?.text("short-id", "short_id")?.let { query["sid"] = it }
+        reality?.text("key_share", "key-share", "keyShare")?.let { query["key_share"] = it }
         applyTransportQuery(query, transport)
 
         return buildUri(
@@ -311,14 +316,55 @@ internal object NodeUriEncoder {
         proxy.text("pre-shared-key", "preshared-key", "pre_shared_key")
             ?.let { query["presharedkey"] = it }
         val addresses = buildList {
-            addAll(proxy.stringList("ip", "address"))
+            addAll(proxy.stringList("ip", "address").filterNot {
+                it.lowercase() in setOf("quic", "dns", "stun", "sip")
+            })
             addAll(proxy.stringList("ipv6"))
         }
         if (addresses.isNotEmpty()) query["address"] = addresses.joinToString(",")
         proxy.int("mtu")?.let { query["mtu"] = it.toString() }
         proxy.stringList("reserved").takeIf { it.isNotEmpty() }
             ?.let { query["reserved"] = it.joinToString(",") }
+        proxy.text("persistent_keepalive_interval", "persistent-keepalive-interval")
+            ?.let { query["persistent_keepalive_interval"] = it }
+        listOf("jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4",
+            "i1", "i2", "i3", "i4", "i5", "id", "header_protection_key",
+            "content_padding_addition", "rekey_after_time", "rekey_timeout", "reject_after_time",
+            "keepalive_timeout", "max_handshake_attempts", "random_trailers", "disable_cookies")
+            .forEach { key -> proxy.text(key)?.let { query[key] = it } }
+        proxy.text("ip")?.takeIf { it.lowercase() in setOf("quic", "dns", "stun", "sip") }
+            ?.let { query["ip"] = it }
         return buildUri("wireguard", privateKey, server, port.toString(), query, name)
+    }
+
+    private fun masqueUri(
+        proxy: Map<String, Any?>,
+        server: String,
+        port: Int,
+        name: String
+    ): String? {
+        val profile = proxy.text("profile") ?: "cloudflare"
+        val privateKey = proxy.text("private_key", "private-key")
+        val publicKey = proxy.text("public_key", "public-key")
+        val ip = proxy.text("ip")
+        val ipv6 = proxy.text("ipv6")
+        if (profile != "standard" && (privateKey.isNullOrBlank() || publicKey.isNullOrBlank())) return null
+        if (ip.isNullOrBlank() && ipv6.isNullOrBlank()) return null
+        val query = linkedMapOf<String, String>()
+        query["profile"] = profile
+        proxy.text("vhttp")?.let { query["vhttp"] = it }
+        publicKey?.let { query["public_key"] = it }
+        ip?.let { query["ip"] = it }
+        ipv6?.let { query["ipv6"] = it }
+        proxy.text("uri")?.let { query["uri"] = it }
+        proxy.int("mtu")?.let { query["mtu"] = it.toString() }
+        proxy.text("idle_timeout")?.let { query["idle_timeout"] = it }
+        proxy.text("keep_alive_period")?.let { query["keep_alive_period"] = it }
+        proxy.stringList("network_list").takeIf { it.isNotEmpty() }
+            ?.let { query["network_list"] = it.joinToString(",") }
+        applyTlsQuery(query, proxy)
+        proxy.text("server_name", "sni")?.let { query["sni"] = it }
+        return buildUri("masque", privateKey, server, port.toString(), query, name)
     }
 
     private data class Transport(
@@ -327,7 +373,8 @@ internal object NodeUriEncoder {
         val hosts: List<String> = emptyList(),
         val serviceName: String? = null,
         val maxEarlyData: Int? = null,
-        val earlyDataHeaderName: String? = null
+        val earlyDataHeaderName: String? = null,
+        val xhttpOptions: Map<String, Any?>? = null
     )
 
     private fun transport(proxy: Map<String, Any?>): Transport {
@@ -379,9 +426,10 @@ internal object NodeUriEncoder {
                 )
             }
             "xhttp" -> {
-                val options = proxy.map("xhttp-opts")
+                val options = proxy.map("xhttp-opts", "xhttp_opts")
                 Transport(type = type, path = options?.text("path"),
-                    hosts = options?.stringList("host").orEmpty())
+                    hosts = options?.stringList("host").orEmpty(),
+                    xhttpOptions = options)
             }
             else -> Transport(type = type)
         }
@@ -394,6 +442,7 @@ internal object NodeUriEncoder {
         transport.serviceName?.let { query["serviceName"] = it }
         transport.maxEarlyData?.let { query["ed"] = it.toString() }
         transport.earlyDataHeaderName?.let { query["eh"] = it }
+        transport.xhttpOptions?.let { query["xhttpOptions"] = Gson().toJson(it) }
     }
 
     private fun applyTlsQuery(query: MutableMap<String, String>, proxy: Map<String, Any?>) {
@@ -403,6 +452,10 @@ internal object NodeUriEncoder {
             ech.text("query-server-name", "query_server_name")?.let { query["echQueryServerName"] = it }
         }
         proxy.text("certificate", "cert")?.let { query["certificate"] = it }
+        proxy.bool("fragment")?.let { query["fragment"] = it.toString() }
+        proxy.text("fragment_fallback_delay", "fragment-fallback-delay")
+            ?.let { query["fragment_fallback_delay"] = it }
+        proxy.bool("record_fragment", "record-fragment")?.let { query["record_fragment"] = it.toString() }
         proxy.text("fingerprint")?.let { query["pinSHA256"] = it }
         proxy.stringList("certificate-public-key-sha256", "certificate_public_key_sha256")
             .takeIf { it.isNotEmpty() }?.let { query["certificate_public_key_sha256"] = it.joinToString(",") }

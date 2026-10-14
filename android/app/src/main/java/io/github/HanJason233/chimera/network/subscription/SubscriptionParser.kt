@@ -162,6 +162,7 @@ class SubscriptionParser {
                 lowerLink.startsWith("tuic://") -> parseTuicLink(normalizedLink)
                 lowerLink.startsWith("naive://") || lowerLink.startsWith("naive+https://") -> parseNaiveLink(normalizedLink)
                 lowerLink.startsWith("wireguard://") -> parseWireGuardLink(normalizedLink)
+                lowerLink.startsWith("masque://") -> parseMasqueLink(normalizedLink)
                 lowerLink.startsWith("ss://") -> parseShadowsocksLink(normalizedLink)
                 lowerLink.startsWith("socks://") || lowerLink.startsWith("socks5://") || lowerLink.startsWith("socks4://") || lowerLink.startsWith("socks4a://") -> parseSocksLink(normalizedLink)
                 lowerLink.startsWith("http://") || lowerLink.startsWith("https://") -> parseHttpLink(normalizedLink)
@@ -338,6 +339,21 @@ class SubscriptionParser {
             type = NodeType.WIREGUARD,
             server = server,
             port = port,
+            rawLink = link
+        )
+    }
+
+    private fun parseMasqueLink(link: String): Node {
+        val url = link.replaceFirst(Regex("(?i)^masque://"), "https://").toHttpUrlOrNull()
+            ?: throw IllegalArgumentException("Invalid MASQUE URI")
+        require(url.host.isNotBlank()) { "MASQUE URI is missing its server" }
+        val name = url.fragment?.takeIf(String::isNotBlank) ?: "MASQUE Node"
+        return Node(
+            id = generateId(link),
+            name = name,
+            type = NodeType.MASQUE,
+            server = url.host,
+            port = url.port,
             rawLink = link
         )
     }

@@ -12,6 +12,7 @@ enum class NodeType(val protocol: String) {
     TUIC("tuic"),
     NAIVE("naive"),
     WIREGUARD("wireguard"),
+    MASQUE("masque"),
     SHADOWSOCKS("ss"),
     SOCKS("socks"),
     HTTP("http"),

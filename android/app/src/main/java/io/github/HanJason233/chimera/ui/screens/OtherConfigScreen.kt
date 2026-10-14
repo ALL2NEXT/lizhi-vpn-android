@@ -108,7 +108,7 @@ fun OtherConfigScreen(
                 initiallyExpanded = false
             ) {
                 Text(
-                    text = "可为支持的协议选择 sing-box 或 Xray，修改后会在下次连接时生效。",
+                    text = "可为支持的协议选择官方 sing-box、sing-box-lx 或 Xray。XHTTP 可用 LX 或 Xray；MASQUE、AmneziaWG 和 LX 专属扩展需要选择 sing-box-lx。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
@@ -120,6 +120,11 @@ fun OtherConfigScreen(
                         onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
                     )
                 }
+                Text(
+                    text = "内置 sing-box-lx ${BuildConfig.SING_BOX_LX_CORE_VERSION}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
                 Text(
                     text = "内置 Xray ${BuildConfig.XRAY_CORE_VERSION}",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -259,6 +264,7 @@ private fun NodeType.displayName(): String = when (this) {
     NodeType.TUIC -> "TUIC"
     NodeType.NAIVE -> "Naive"
     NodeType.WIREGUARD -> "WireGuard"
+    NodeType.MASQUE -> "MASQUE"
     NodeType.SHADOWSOCKS -> "Shadowsocks"
     NodeType.SOCKS -> "SOCKS"
     NodeType.HTTP -> "HTTP"

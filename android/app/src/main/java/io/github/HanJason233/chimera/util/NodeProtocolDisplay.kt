@@ -24,6 +24,7 @@ internal fun Node.protocolDisplayLabel(
         NodeType.TUIC -> "tuic"
         NodeType.NAIVE -> "naive"
         NodeType.WIREGUARD -> "wg"
+        NodeType.MASQUE -> "masque"
         NodeType.SHADOWSOCKS -> "ss"
         NodeType.SOCKS -> socksProtocolLabel(rawLink)
         NodeType.HTTP -> "http"
@@ -49,6 +50,7 @@ internal fun Node.protocolDisplayLabel(
             transport = if (queryFlag(rawLink, "quic")) "quic" else "h2"
         )
         NodeType.WIREGUARD -> DisplayLayers(transport = "udp")
+        NodeType.MASQUE -> DisplayLayers(security = "tls", transport = "quic")
         NodeType.SHADOWSOCKS -> shadowsocksLayers(rawLink)
         NodeType.SOCKS -> DisplayLayers(security = "none", transport = "tcp")
         NodeType.HTTP -> DisplayLayers(
@@ -68,6 +70,7 @@ internal fun Node.protocolDisplayLabel(
 
 private fun ProxyCore.displayLabel(): String = when (this) {
     ProxyCore.SING_BOX -> "sing-box"
+    ProxyCore.SING_BOX_LX -> "sing-box-lx"
     ProxyCore.XRAY -> "xray"
 }
 

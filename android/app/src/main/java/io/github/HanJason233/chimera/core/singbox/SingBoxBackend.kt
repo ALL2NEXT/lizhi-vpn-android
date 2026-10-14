@@ -24,7 +24,12 @@ import java.util.concurrent.TimeUnit
 
 internal class SingBoxBackend : CoreBackend {
     override val id = ProxyCore.SING_BOX
-    override val capabilities = CoreCapabilities(NodeType.entries.filterNot { it == NodeType.UNKNOWN }.toSet())
+    override val capabilities = CoreCapabilities(
+        NodeType.entries.filterNot { it == NodeType.UNKNOWN || it == NodeType.MASQUE }.toSet()
+    )
+
+    override fun supports(node: io.github.HanJason233.chimera.data.model.Node): Boolean =
+        node.type in capabilities.protocols && !SingBoxLxCompatibility.requiresLx(node)
 
     override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = withContext(Dispatchers.IO) {
         val config = SingBoxConfigGenerator().let { generator ->

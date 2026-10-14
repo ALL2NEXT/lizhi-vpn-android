@@ -85,6 +85,7 @@ object UrlTestManager {
             ProxyCore.XRAY -> active.xray?.let {
                 return@withContext it.testNode(node, url, warmupTimeoutMs, measurementTimeoutMs)
             }
+            ProxyCore.SING_BOX_LX -> Unit
         }
 
         perNodeRuntimePermits.withPermit {
@@ -132,7 +133,7 @@ object UrlTestManager {
         active?.xray?.close()
     }
 
-    /** 双核心统一使用暖连接测速、相同截止时间和相同 HTTP 状态判定。 */
+    /** 所有核心统一使用暖连接测速、相同截止时间和相同 HTTP 状态判定。 */
     internal fun probeEndpoint(
         endpoint: LocalSocksEndpoint,
         url: String,

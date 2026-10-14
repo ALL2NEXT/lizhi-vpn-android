@@ -66,6 +66,7 @@ internal object JsonSubscriptionParser {
         outbound.copyTo(proxy,
             "server" to "server", "server_port" to "port",
             "uuid" to "uuid", "password" to "password", "username" to "username",
+            "encryption" to "encryption",
             "method" to "cipher", "security" to "cipher", "alter_id" to "alterId",
             "flow" to "flow", "packet_encoding" to "packet-encoding",
             "congestion_control" to "congestion_control", "udp_relay_mode" to "udp_relay_mode",
@@ -73,6 +74,15 @@ internal object JsonSubscriptionParser {
             "idle_session_check_interval" to "idle-session-check-interval",
             "idle_session_timeout" to "idle-session-timeout", "min_idle_session" to "min-idle-session"
         )
+        if (type == "masque") {
+            outbound.copyTo(proxy,
+                "private_key" to "private_key", "public_key" to "public_key",
+                "ip" to "ip", "ipv6" to "ipv6", "profile" to "profile",
+                "vhttp" to "vhttp", "uri" to "uri", "mtu" to "mtu",
+                "idle_timeout" to "idle_timeout", "keep_alive_period" to "keep_alive_period",
+                "network_list" to "network_list"
+            )
+        }
         if (outbound.has("plugin")) {
             proxy["plugin"] = outbound.text("plugin") +
                 outbound.text("plugin_opts")?.let { ";" + it }.orEmpty()
@@ -81,13 +91,18 @@ internal object JsonSubscriptionParser {
             proxy["tls"] = tls.boolean("enabled") ?: false
             tls.copyTo(proxy, "server_name" to "sni", "insecure" to "skip-cert-verify",
                 "alpn" to "alpn", "min_version" to "min_version", "max_version" to "max_version",
-                "certificate_public_key_sha256" to "certificate_public_key_sha256")
+                "certificate_public_key_sha256" to "certificate_public_key_sha256",
+                "fragment" to "fragment", "fragment_fallback_delay" to "fragment_fallback_delay",
+                "record_fragment" to "record_fragment")
             tls.get("certificate")?.let { proxy["certificate"] = it.textLines() }
             tls.obj("utls")?.takeIf { it.boolean("enabled") == true }?.let {
                 proxy["client-fingerprint"] = it.text("fingerprint")
             }
             tls.obj("reality")?.takeIf { it.boolean("enabled") == true }?.let {
-                proxy["reality-opts"] = mapOf("public-key" to it.text("public_key"), "short-id" to it.text("short_id"))
+                proxy["reality-opts"] = mapOf(
+                    "public-key" to it.text("public_key"), "short-id" to it.text("short_id"),
+                    "key_share" to it.text("key_share")
+                )
             }
             tls.obj("ech")?.let {
                 proxy["ech-opts"] = mapOf("enabled" to it.boolean("enabled"), "config" to it.get("config")?.textLines())
@@ -100,6 +115,7 @@ internal object JsonSubscriptionParser {
             transport.copyTo(opts, "path" to "path", "host" to "host", "headers" to "headers",
                 "service_name" to "grpc-service-name", "max_early_data" to "max-early-data",
                 "early_data_header_name" to "early-data-header-name")
+            if (network == "xhttp") transport.toMap().forEach { (key, value) -> opts[key] = value }
             proxy[transportOptions(network)] = opts
         }
         outbound.obj("obfs")?.let {
@@ -112,6 +128,19 @@ internal object JsonSubscriptionParser {
         if (type == "wireguard") {
             outbound.copyTo(proxy, "private_key" to "private-key", "local_address" to "address",
                 "address" to "address")
+            outbound.copyTo(proxy,
+                "jc" to "jc", "jmin" to "jmin", "jmax" to "jmax",
+                "s1" to "s1", "s2" to "s2", "s3" to "s3", "s4" to "s4",
+                "h1" to "h1", "h2" to "h2", "h3" to "h3", "h4" to "h4",
+                "i1" to "i1", "i2" to "i2", "i3" to "i3", "i4" to "i4", "i5" to "i5",
+                "id" to "id", "ip" to "ip", "ib" to "ib",
+                "header_protection_key" to "header_protection_key",
+                "content_padding_addition" to "content_padding_addition",
+                "rekey_after_time" to "rekey_after_time", "rekey_timeout" to "rekey_timeout",
+                "reject_after_time" to "reject_after_time", "keepalive_timeout" to "keepalive_timeout",
+                "max_handshake_attempts" to "max_handshake_attempts",
+                "random_trailers" to "random_trailers", "disable_cookies" to "disable_cookies"
+            )
             return outbound.objects("peers").mapNotNull { peer ->
                 val copy = proxy.toMutableMap()
                 peer.copyTo(copy, "address" to "server", "port" to "port", "public_key" to "public-key",

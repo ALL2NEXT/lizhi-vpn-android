@@ -83,7 +83,8 @@ internal fun createSingBoxTls(
     parameters: JsonObject,
     server: String,
     reality: Boolean = false,
-    allowUtls: Boolean = true
+    allowUtls: Boolean = true,
+    allowLxExtensions: Boolean = false
 ): JsonObject = JsonObject().apply {
     addProperty("enabled", true)
     addProperty("server_name", parameters.firstString("sni", "serverName", "server_name")
@@ -109,11 +110,20 @@ internal fun createSingBoxTls(
     }
     parameters.firstString("minVersion", "min_version")?.let { addProperty("min_version", it) }
     parameters.firstString("maxVersion", "max_version")?.let { addProperty("max_version", it) }
+    if (allowLxExtensions) {
+        parameters.firstBoolean("fragment")?.let { addProperty("fragment", it) }
+        parameters.firstString("fragment_fallback_delay", "fragmentFallbackDelay")
+            ?.let { addProperty("fragment_fallback_delay", it) }
+        parameters.firstBoolean("record_fragment", "recordFragment")?.let { addProperty("record_fragment", it) }
+    }
     if (reality) {
         add("reality", JsonObject().apply {
             addProperty("enabled", true)
             addProperty("public_key", parameters.firstString("pbk", "publicKey", "public_key") ?: "")
             addProperty("short_id", parameters.firstString("sid", "shortId", "short_id") ?: "")
+            if (allowLxExtensions) {
+                parameters.firstString("key_share", "keyShare")?.let { addProperty("key_share", it) }
+            }
         })
     }
     parseSubscriptionEch(parameters)?.let { ech ->

@@ -16,7 +16,7 @@ internal object SubscriptionTextNormalizer {
     private val yamlList = Regex("""-\s+(?:[A-Za-z_][A-Za-z0-9_-]*\s*:.*|\{.*)""")
     private val yamlMarker = Regex("""(?m)^(?:-\s+)?[A-Za-z_][A-Za-z0-9_-]*\s*:(?:\s|$)|^-\s+\{""")
     private val uri = Regex(
-        """(?i)(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive(?:\+https)?|wireguard|ss|socks(?:4a|4|5)?|https?)\\?://[^\s<>"\x60]+"""
+        """(?i)(?:vless|vmess|trojan|hysteria2|hy2|anytls|tuic|naive(?:\+https)?|wireguard|masque|ss|socks(?:4a|4|5)?|https?)\\?://[^\s<>"\x60]+"""
     )
     private const val CODE_FENCE = "\u0060\u0060\u0060"
     private val markdownLink = Regex("""\[[^]]*]\(([^)\s]+)\)""")

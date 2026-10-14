@@ -24,7 +24,7 @@ import android.net.Uri
 /**
  * sing-box 配置生成器
  */
-class SingBoxConfigGenerator {
+class SingBoxConfigGenerator(private val allowLxExtensions: Boolean = false) {
     private companion object {
         val IPV4_ADDRESS = Regex(
             "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}" +
@@ -295,8 +295,8 @@ class SingBoxConfigGenerator {
     /**
      * 生成一个进程承载多个独立 SOCKS 入站的批量测速配置。
      *
-     * 每个入站固定路由到同下标节点。应用层因此可以让 sing-box 与 Xray 共用同一套
-     * SOCKS/HTTP 探测逻辑，避免 Clash API 修改 HTTP 测试地址而造成双核心口径不一致。
+     * 每个入站固定路由到同下标节点。应用层的各核心共用一套 SOCKS/HTTP 探测逻辑，
+     * 避免 Clash API 修改 HTTP 测试地址而造成不同核心的测速口径不一致。
      */
     fun generateUrlTestBatchConfig(
         nodes: List<Node>,
@@ -676,6 +676,7 @@ class SingBoxConfigGenerator {
             NodeType.TUIC -> createTuicOutbound(node)
             NodeType.NAIVE -> createNaiveOutbound(node)
             NodeType.WIREGUARD -> createWireGuardOutbound(node)
+            NodeType.MASQUE -> createMasqueOutbound(node)
             NodeType.SHADOWSOCKS -> createShadowsocksOutbound(node)
             NodeType.SOCKS -> createSocksOutbound(node)
             NodeType.HTTP -> createHttpOutbound(node)
@@ -746,12 +747,21 @@ class SingBoxConfigGenerator {
             
             val security = queryParamFirst(uri, "security")?.lowercase()
             if (security == "tls" || security == "reality") {
-                add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, reality = security == "reality"))
+                add("tls", createSingBoxTls(
+                    uriTlsParameters(uri), node.server,
+                    reality = security == "reality", allowLxExtensions = allowLxExtensions
+                ))
             }
-            
-            val transport = checkedSingBoxTransport(resolveUriTransportType(uri))
-            if (isSupportedTransport(transport)) {
-                add("transport", createTransport(transport, uri))
+
+            queryParamFirst(uri, "encryption")
+                ?.takeIf { allowLxExtensions && it.isNotBlank() && !it.equals("none", true) }
+                ?.let { addProperty("encryption", it) }
+
+            val transport = checkedSingBoxTransport(
+                resolveUriTransportType(uri, allowLxExtensions), allowLxExtensions
+            )
+            if (isSupportedTransport(transport, allowLxExtensions)) {
+                add("transport", createTransport(transport, uri, allowLxExtensions))
             }
         }
     }
@@ -776,12 +786,14 @@ class SingBoxConfigGenerator {
             
             val tls = parseJsonString(vmessConfig.get("tls"))?.lowercase()
             if (tls == "tls") {
-                add("tls", createSingBoxTls(vmessConfig, node.server))
+                add("tls", createSingBoxTls(vmessConfig, node.server, allowLxExtensions = allowLxExtensions))
             }
-            
-            val network = checkedSingBoxTransport(resolveVmessTransportType(vmessConfig))
-            if (isSupportedTransport(network)) {
-                add("transport", createVmessTransport(network, vmessConfig))
+
+            val network = checkedSingBoxTransport(
+                resolveVmessTransportType(vmessConfig, allowLxExtensions), allowLxExtensions
+            )
+            if (isSupportedTransport(network, allowLxExtensions)) {
+                add("transport", createVmessTransport(network, vmessConfig, allowLxExtensions))
             }
         }
     }
@@ -797,11 +809,13 @@ class SingBoxConfigGenerator {
             addProperty("server_port", node.port)
             addProperty("password", uri.userInfo ?: "")
             
-            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server))
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowLxExtensions = allowLxExtensions))
             
-            val transport = checkedSingBoxTransport(resolveUriTransportType(uri))
-            if (isSupportedTransport(transport)) {
-                add("transport", createTransport(transport, uri))
+            val transport = checkedSingBoxTransport(
+                resolveUriTransportType(uri, allowLxExtensions), allowLxExtensions
+            )
+            if (isSupportedTransport(transport, allowLxExtensions)) {
+                add("transport", createTransport(transport, uri, allowLxExtensions))
             }
         }
     }
@@ -836,7 +850,7 @@ class SingBoxConfigGenerator {
             }
             queryParamFirst(uri, "network")?.let { addProperty("network", it) }
             
-            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowUtls = false))
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowUtls = false, allowLxExtensions = allowLxExtensions))
             
             val obfsType = queryParamFirst(uri, "obfs")
             val obfsPassword = queryParamFirst(uri, "obfs-password", "obfs_password", "obfsPassword")
@@ -869,7 +883,7 @@ class SingBoxConfigGenerator {
             idleSessionCheckInterval?.let { addProperty("idle_session_check_interval", it) }
             idleSessionTimeout?.let { addProperty("idle_session_timeout", it) }
             minIdleSession?.let { addProperty("min_idle_session", it) }
-            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server))
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowLxExtensions = allowLxExtensions))
         }
     }
 
@@ -892,7 +906,7 @@ class SingBoxConfigGenerator {
             if (password.isNotEmpty()) {
                 addProperty("password", password)
             }
-            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowUtls = false))
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowUtls = false, allowLxExtensions = allowLxExtensions))
 
             queryParamFirst(uri, "congestion_control", "cc")?.let { addProperty("congestion_control", it) }
             uri.getQueryParameter("udp_relay_mode")?.let { addProperty("udp_relay_mode", it) }
@@ -934,7 +948,7 @@ class SingBoxConfigGenerator {
             if (queryParamEnabled(uri, "udp_over_tcp", "udp-over-tcp", "uot")) {
                 addProperty("udp_over_tcp", true)
             }
-            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowUtls = false))
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowUtls = false, allowLxExtensions = allowLxExtensions))
         }
     }
 
@@ -957,6 +971,10 @@ class SingBoxConfigGenerator {
                     addProperty("public_key", publicKey)
                     queryParamFirst(uri, "presharedkey", "pre_shared_key", "preSharedKey")
                         ?.let { addProperty("pre_shared_key", it) }
+                    if (allowLxExtensions) {
+                        queryParamFirst(uri, "persistent_keepalive_interval", "persistent-keepalive-interval")
+                            ?.let { addProperty("persistent_keepalive_interval", it) }
+                    }
                     add("allowed_ips", JsonArray().apply { add("0.0.0.0/0"); add("::/0") })
                     parseWireGuardReserved(queryParamFirst(uri, "reserved"))?.let { reserved ->
                         require(reserved.all { it in 0..255 }) { "WireGuard reserved ???????" }
@@ -964,6 +982,50 @@ class SingBoxConfigGenerator {
                     }
                 })
             })
+            if (allowLxExtensions) {
+                listOf("jc", "jmin", "jmax", "s1", "s2", "s3", "s4").forEach { key ->
+                    queryParamFirst(uri, key)?.toLongOrNull()?.let { addProperty(key, it) }
+                }
+                listOf(
+                    "h1", "h2", "h3", "h4", "i1", "i2", "i3", "i4", "i5",
+                    "id", "ip", "ib", "header_protection_key", "content_padding_addition",
+                    "rekey_after_time", "rekey_timeout", "reject_after_time", "keepalive_timeout",
+                    "max_handshake_attempts"
+                ).forEach { key -> queryParamFirst(uri, key)?.let { addProperty(key, it) } }
+                listOf("random_trailers", "disable_cookies").forEach { key ->
+                    queryParamFirst(uri, key)?.let { value ->
+                        when (value.lowercase()) {
+                            "true", "1", "yes", "on" -> addProperty(key, true)
+                            "false", "0", "no", "off" -> addProperty(key, false)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun createMasqueOutbound(node: Node): JsonObject {
+        require(allowLxExtensions) { "MASQUE 需要选择 sing-box-lx" }
+        val uri = Uri.parse(node.getRawLinkPlain())
+        return JsonObject().apply {
+            addProperty("type", "masque")
+            addProperty("server", node.server)
+            addProperty("server_port", node.port)
+            addProperty("profile", queryParamFirst(uri, "profile") ?: "cloudflare")
+            addProperty("vhttp", queryParamFirst(uri, "vhttp", "http_version") ?: "auto")
+            (uri.userInfo ?: queryParamFirst(uri, "private_key", "privateKey"))
+                ?.let { addProperty("private_key", it) }
+            queryParamFirst(uri, "public_key", "publickey", "publicKey")?.let { addProperty("public_key", it) }
+            queryParamFirst(uri, "ip")?.let { addProperty("ip", it) }
+            queryParamFirst(uri, "ipv6")?.let { addProperty("ipv6", it) }
+            queryParamFirst(uri, "uri")?.let { addProperty("uri", it) }
+            queryParamFirst(uri, "mtu")?.toIntOrNull()?.let { addProperty("mtu", it) }
+            queryParamFirst(uri, "idle_timeout", "idleTimeout")?.let { addProperty("idle_timeout", it) }
+            queryParamFirst(uri, "keep_alive_period", "keepAlivePeriod")?.let { addProperty("keep_alive_period", it) }
+            queryParamFirst(uri, "network_list", "networkList")?.let { value ->
+                add("network_list", JsonArray().apply { parseCsvParams(value).forEach(::add) })
+            }
+            add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowLxExtensions = true))
         }
     }
     
@@ -1053,7 +1115,7 @@ class SingBoxConfigGenerator {
                 add("headers", JsonObject().apply { addProperty("Host", host) })
             }
             if (useTls) {
-                add("tls", createSingBoxTls(uriTlsParameters(uri), node.server))
+                add("tls", createSingBoxTls(uriTlsParameters(uri), node.server, allowLxExtensions = allowLxExtensions))
             }
         }
     }

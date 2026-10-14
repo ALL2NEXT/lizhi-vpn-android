@@ -18,6 +18,16 @@ val singBoxSourceDir = rootProject.file("../core/sing-box")
 val singBoxRunnerDir = rootProject.file("native/singbox-runner")
 val generatedSingBoxJniDir = layout.buildDirectory.dir("generated/singbox/jniLibs")
 val singBoxCoreVersion = "1.14.2"
+val singBoxLxSourceDir = rootProject.file("../core/sing-box-lx")
+val singBoxLxRunnerDir = rootProject.file("native/singbox-lx-runner")
+val generatedSingBoxLxJniDir = layout.buildDirectory.dir("generated/singbox-lx/jniLibs")
+val singBoxLxCoreVersion = "1.14.3-lx.20"
+// 构建标签必须覆盖适配层生成的扩展；缺少 with_clash_api 会导致 clash-server 配置校验失败。
+val singBoxLxBuildTags = listOf(
+    "with_gvisor", "with_quic", "with_wireguard", "with_utls",
+    "with_naive_outbound", "with_clash_api", "with_xhttp", "with_awg",
+    "badlinkname", "tfogo_checklinkname0"
+).joinToString(",")
 val xraySourceDir = rootProject.file("../core/xray-core")
 val xrayRunnerDir = rootProject.file("native/xray-runner")
 val generatedXrayJniDir = layout.buildDirectory.dir("generated/xray/jniLibs")
@@ -109,6 +119,96 @@ val buildSingBoxCore = tasks.register("buildSingBoxCore") {
                     "-tags", tags,
                     "-buildmode=pie",
                     "-ldflags=-X github.com/sagernet/sing-box/constant.Version=$singBoxCoreVersion -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0",
+                    "-o", output.absolutePath,
+                    "."
+                )
+            }
+        }
+    }
+}
+
+// sing-box-lx is built as an independent PIE runner. Its module replacements
+// point at the fork's pinned transport/runtime submodules, keeping it isolated
+// from the official sing-box source and dependency graph.
+val buildSingBoxLxCore = tasks.register("buildSingBoxLxCore") {
+    group = "sing-box"
+    description = "Build the pinned sing-box-lx source for the Android ABIs"
+
+    inputs.files(fileTree(singBoxLxSourceDir) {
+        exclude(".git/**")
+        exclude("build/**")
+        exclude("bin/**")
+        exclude("dist/**")
+    })
+    inputs.files(fileTree(singBoxLxRunnerDir) { exclude("*.exe") })
+    inputs.property("version", singBoxLxCoreVersion)
+    inputs.property("buildTags", singBoxLxBuildTags)
+    inputs.property("ndkVersion", singBoxNdkVersion)
+    inputs.property("androidApi", 24)
+    outputs.files(targetAbis.map { generatedSingBoxLxJniDir.map { dir -> dir.file("$it/libsingboxlx.so") } })
+
+    doLast {
+        val goExecutable = if (System.getProperty("os.name").startsWith("Windows")) "go.exe" else "go"
+        check(singBoxLxSourceDir.resolve("go.mod").isFile) {
+            "sing-box-lx source is missing at ${singBoxLxSourceDir.absolutePath}. " +
+                "Run `git submodule update --init --recursive`."
+        }
+        check(singBoxLxRunnerDir.resolve("go.mod").isFile) {
+            "sing-box-lx runner is missing at ${singBoxLxRunnerDir.absolutePath}."
+        }
+        listOf("sing-tun", "gvisor", "utls", "wireguard-go").forEach { dependency ->
+            check(singBoxLxSourceDir.resolve("submodules/$dependency/go.mod").isFile) {
+                "sing-box-lx $dependency source is missing. Run `git submodule update --init --recursive`."
+            }
+        }
+
+        val localProperties = Properties()
+        rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use {
+            localProperties.load(it)
+        }
+        val sdkPath = localProperties.getProperty("sdk.dir")
+            ?: System.getenv("ANDROID_HOME")
+            ?: error("Android SDK not found. Set sdk.dir in android/local.properties or ANDROID_HOME.")
+        val hostTag = when {
+            System.getProperty("os.name").startsWith("Windows") -> "windows-x86_64"
+            System.getProperty("os.name").startsWith("Mac") -> "darwin-x86_64"
+            else -> "linux-x86_64"
+        }
+        val clangSuffix = if (hostTag.startsWith("windows")) ".cmd" else ""
+        val clangBin = File(sdkPath).resolve("ndk/$singBoxNdkVersion/toolchains/llvm/prebuilt/$hostTag/bin")
+        check(clangBin.isDirectory) { "Android NDK toolchain not found at ${clangBin.absolutePath}" }
+
+        data class SingBoxLxAbi(
+            val androidAbi: String,
+            val goArch: String,
+            val clangTarget: String,
+            val goArm: String? = null
+        )
+        val abis = listOf(
+            SingBoxLxAbi("armeabi-v7a", "arm", "armv7a-linux-androideabi", "7"),
+            SingBoxLxAbi("arm64-v8a", "arm64", "aarch64-linux-android")
+        ).filter { it.androidAbi in targetAbis }
+        val tags = singBoxLxBuildTags
+        abis.forEach { abi ->
+            val output = generatedSingBoxLxJniDir.get().file("${abi.androidAbi}/libsingboxlx.so").asFile
+            output.parentFile.mkdirs()
+            val clang = clangBin.resolve("${abi.clangTarget}24-clang$clangSuffix")
+            check(clang.isFile) { "Android clang not found at ${clang.absolutePath}" }
+            exec {
+                workingDir(singBoxLxRunnerDir)
+                environment("GOOS", "android")
+                environment("GOARCH", abi.goArch)
+                environment("CGO_ENABLED", "1")
+                environment("CC", clang.absolutePath)
+                if (abi.goArm != null) environment("GOARM", abi.goArm)
+                commandLine(
+                    goExecutable,
+                    "build",
+                    "-trimpath",
+                    "-buildvcs=false",
+                    "-tags", tags,
+                    "-buildmode=pie",
+                    "-ldflags=-X github.com/sagernet/sing-box/constant.Version=$singBoxLxCoreVersion -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0",
                     "-o", output.absolutePath,
                     "."
                 )
@@ -297,6 +397,7 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
 tasks.configureEach {
     if (name.startsWith("merge") && name.endsWith("JniLibFolders")) {
         dependsOn(buildSingBoxCore)
+        dependsOn(buildSingBoxLxCore)
         dependsOn(buildXrayCore)
         dependsOn(buildHevTunnel)
     }
@@ -313,6 +414,7 @@ android {
         versionCode = 23
         versionName = "1.0.0"
         buildConfigField("String", "XRAY_CORE_VERSION", "\"$xrayCoreVersion\"")
+        buildConfigField("String", "SING_BOX_LX_CORE_VERSION", "\"$singBoxLxCoreVersion\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -406,6 +508,7 @@ android {
 
     sourceSets.getByName("main").jniLibs.srcDir(generatedXrayJniDir)
     sourceSets.getByName("main").jniLibs.srcDir(generatedSingBoxJniDir)
+    sourceSets.getByName("main").jniLibs.srcDir(generatedSingBoxLxJniDir)
     sourceSets.getByName("main").jniLibs.srcDir(generatedHevJniDir)
 
     externalNativeBuild {

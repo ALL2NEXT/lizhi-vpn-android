@@ -414,7 +414,7 @@ class SettingsRepository(
                 preferences[IPV6_ROUTING_MODE],
                 IPv6RoutingMode.DISABLED
             ),
-            // 关闭 Hy2 带宽参数时必须向两个核心都传 0，避免运行时仍启用 Brutal。
+            // 关闭 Hy2 带宽参数时必须向所有核心都传 0，避免运行时仍启用 Brutal。
             hysteriaUpMbps = if (hysteriaBandwidthEnabled) {
                 (preferences[HYSTERIA_UP_MBPS]
                     ?: io.github.HanJason233.chimera.AppConfig.HYSTERIA_UP_MBPS).coerceAtLeast(0)

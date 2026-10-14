@@ -12,6 +12,8 @@
 
 Clash `fingerprint` 是证书指纹，`client-fingerprint` 才是浏览器指纹。两者分别保存在 URI 中。当前固定的 sing-box 1.14.2 支持证书 PEM 和公钥 SHA-256，整张证书 SHA-256 固定明确提示使用 Xray；不会把它错误映射为公钥指纹。
 
+内核按协议设置，可选择官方 sing-box、Xray 或 sing-box-lx。LX 适配保留它独有的 XHTTP `extra`/模式参数、VLESS `encryption`、REALITY `key_share`、TLS 分片参数、AmneziaWG 扩展字段和 MASQUE outbound。XHTTP 也可由 Xray 处理；MASQUE、AmneziaWG 及 LX 专属 TLS/VLESS 扩展要求选择 sing-box-lx。若所选内核不能处理节点携带的扩展，启动前会给出切换内核的提示。
+
 更新 APK 后，需要刷新或重新导入带 ECH 的 YAML 订阅，以补回旧版本导入时丢失的字段。
 
 ## 验证
@@ -29,4 +31,4 @@ go test -count=1 -tags with_gvisor,with_quic,with_wireguard,with_utls,with_clash
 go test -count=1 ./...
 ```
 
-真实订阅当前的 141 个 SS 节点已逐一检查凭据转换，并通过本机内核的三类配置启动测试。额外用合成节点验证 ECH、Reality、VMess、Trojan、Hysteria2、AnyTLS、TUIC、WireGuard、SOCKS 和 HTTPS。Android JVM 测试共 122 项通过，包含 17 项 URI/配置转换测试；两个 ABI 的 Debug APK 已构建。当前未连接 Android 测试设备，手机 VPN 建立与节点实际连通性仍需实机测试。
+以下是 LX 接入前的双核心验证记录：真实订阅当前的 141 个 SS 节点已逐一检查凭据转换，并通过本机内核的三类配置启动测试。额外用合成节点验证 ECH、Reality、VMess、Trojan、Hysteria2、AnyTLS、TUIC、WireGuard、SOCKS 和 HTTPS。Android JVM 测试共 122 项通过，包含 17 项 URI/配置转换测试；两个 ABI 的 Debug APK 已构建。本轮新增的 sing-box-lx 转换和原生构建没有运行测试或构建；手机 VPN 建立与节点实际连通性仍需实机测试。

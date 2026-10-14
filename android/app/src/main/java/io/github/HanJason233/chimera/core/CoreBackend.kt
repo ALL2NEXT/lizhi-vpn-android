@@ -12,6 +12,7 @@ import io.github.HanJason233.chimera.platform.UnderlayController
 internal interface CoreBackend {
     val id: ProxyCore
     val capabilities: CoreCapabilities
+    fun supports(node: Node): Boolean = node.type in capabilities.protocols
     suspend fun prepare(context: Context, request: CoreRequest): PreparedCore
     suspend fun start(
         context: Context,
@@ -114,9 +115,20 @@ internal class CoreRegistry(backends: List<CoreBackend>) {
     fun availableFor(type: NodeType): List<ProxyCore> = entries.values
         .filter { type in it.capabilities.protocols }.map { it.id }
 
-    fun resolve(id: ProxyCore, node: Node): CoreBackend = backend(id).also {
-        require(node.type in it.capabilities.protocols) {
-            "${id.displayName} 不支持 ${node.type.protocol} 协议"
+    fun resolve(id: ProxyCore, node: Node): CoreBackend {
+        val selected = backend(id)
+        val compatible = entries.values
+            .filter { it.id != id && it.supports(node) }
+            .map { it.id.displayName }
+        val suggestion = compatible.takeIf { it.isNotEmpty() }
+            ?.joinToString(prefix = "；请改选 ")
+            .orEmpty()
+        require(node.type in selected.capabilities.protocols) {
+            "${id.displayName} 不支持 ${node.type.protocol} 协议$suggestion"
         }
+        require(selected.supports(node)) {
+            "${id.displayName} 不支持该节点的扩展参数$suggestion"
+        }
+        return selected
     }
 }
