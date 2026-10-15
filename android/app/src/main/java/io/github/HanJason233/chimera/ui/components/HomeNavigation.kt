@@ -26,12 +26,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Subscriptions
-import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Public
@@ -57,7 +55,7 @@ enum class HomeDestination {
     // 保留原枚举值，兼容 Activity 保存的旧导航状态；该入口现在固定显示地区分组。
     NODE_GROUPING,
     SUBSCRIPTION_GROUPING,
-    NAVIGATION,
+    NAVIGATION, // Legacy value for saved Activity state migration.
     MY
 }
 
@@ -146,14 +144,6 @@ private fun CapsuleHomeNavigationBar(
                     modifier = Modifier.weight(1f)
                 )
                 CapsuleNavigationItem(
-                    selected = selectedDestination == HomeDestination.NAVIGATION,
-                    selectedIcon = Icons.Rounded.Explore,
-                    unselectedIcon = Icons.Outlined.Explore,
-                    label = "导航",
-                    onClick = { onDestinationSelected(HomeDestination.NAVIGATION) },
-                    modifier = Modifier.weight(1f)
-                )
-                CapsuleNavigationItem(
                     selected = selectedDestination == HomeDestination.MY,
                     selectedIcon = Icons.Rounded.Person,
                     unselectedIcon = Icons.Outlined.Person,
@@ -192,13 +182,6 @@ private fun NativeHomeNavigationBar(
             unselectedIcon = Icons.Outlined.Subscriptions,
             label = "仓库源",
             onClick = { onDestinationSelected(HomeDestination.SUBSCRIPTION_GROUPING) }
-        )
-        NativeNavigationItem(
-            selected = selectedDestination == HomeDestination.NAVIGATION,
-            selectedIcon = Icons.Rounded.Explore,
-            unselectedIcon = Icons.Outlined.Explore,
-            label = "导航",
-            onClick = { onDestinationSelected(HomeDestination.NAVIGATION) }
         )
         NativeNavigationItem(
             selected = selectedDestination == HomeDestination.MY,
@@ -360,13 +343,6 @@ fun HomeNavigationBar(
                     unselectedIcon = Icons.Outlined.Subscriptions,
                     label = "仓库源",
                     onClick = { onDestinationSelected(HomeDestination.SUBSCRIPTION_GROUPING) }
-                )
-                HomeNavigationItem(
-                    selected = selectedDestination == HomeDestination.NAVIGATION,
-                    selectedIcon = Icons.Rounded.Explore,
-                    unselectedIcon = Icons.Outlined.Explore,
-                    label = "导航",
-                    onClick = { onDestinationSelected(HomeDestination.NAVIGATION) }
                 )
                 HomeNavigationItem(
                     selected = selectedDestination == HomeDestination.MY,

@@ -5,7 +5,6 @@ import type { RouteDependencies } from "../../types/routes.ts";
  * Application settings in KV and subscription configuration in D1.
  */
 
-import { fetchWebsiteIcon } from "../../services/navigation-icons.ts";
 import { readJsonObject } from "../../http/request.ts";
 import {
   importSubscriptionSources,
@@ -61,23 +60,6 @@ export function createAdminStateRoutes(deps: Pick<
         return json({ ok: result.sources.length > 0, ...result }, result.sources.length ? 200 : 422);
       } catch (error) {
         return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-      }
-    }
-
-    if (path === "/api/navigation-icon" && request.method === "POST") {
-      try {
-        const incoming = await readJsonObject(request);
-        return json(await fetchWebsiteIcon(env, typeof incoming.url === "string" ? incoming.url.trim() : ""));
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const status = message === "navigation_icon_not_found"
-          ? 404
-          : message.startsWith("invalid_navigation_icon") || message === "navigation_icon_redirect_blocked"
-            ? 400
-            : message === "navigation_icon_site_challenge" || message === "navigation_icon_unsupported_format"
-              ? 422
-            : 502;
-        return json({ error: message }, status);
       }
     }
 

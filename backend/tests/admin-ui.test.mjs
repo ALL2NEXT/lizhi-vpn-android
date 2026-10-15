@@ -28,7 +28,7 @@ function harness() {
     return elements.get(id);
   };
   const panels = new Map();
-  for (const section of ['subscriptions', 'navigation-page', 'about-page', 'registration-control', 'notice']) {
+  for (const section of ['subscriptions', 'about-page', 'registration-control', 'notice']) {
     const panel = element();
     panel.dataset.panel = section;
     const controls = new Map(['[data-settings-save-status]', '[data-settings-save]', '[data-settings-discard]'].map(selector => [selector, element()]));

@@ -2,7 +2,6 @@ import type { Env } from "../types/env.ts";
 import type {
   AppState,
   JsonObject,
-  NavigationGroup,
   Notice,
   Settings,
   SubscriptionAccountStatus,
@@ -323,15 +322,8 @@ export function normalizeSettings(value: unknown): Settings {
   const hasRegistrationControl =
     Object.prototype.hasOwnProperty.call(settings, "registrationEnabled") ||
     Object.prototype.hasOwnProperty.call(settings, "formalRegistrationEnabled");
-  const webNavigationGroups = settings.webNavigationGroups == null
-    ? DEFAULT_STATE.settings.webNavigationGroups.map((group) => ({
-      title: group.title,
-      items: group.items.map((item) => ({ ...item })),
-    }))
-    : normalizeWebNavigationGroups(settings.webNavigationGroups);
   return {
     websiteUrl: cleanText(settings.websiteUrl),
-    webNavigationGroups,
     feedbackEmail: cleanText(settings.feedbackEmail),
     feedbackUrl: cleanText(settings.feedbackUrl),
     githubUrl: cleanText(settings.githubUrl),
@@ -345,69 +337,6 @@ export function normalizeSettings(value: unknown): Settings {
       false,
     ),
   };
-}
-
-function normalizeWebNavigationGroups(value: unknown): NavigationGroup[] {
-  if (!Array.isArray(value) || value.length > 50) {
-    throw new Error("invalid_web_navigation_groups");
-  }
-
-  let itemCount = 0;
-  // 图标直接随 KV 配置保存，限制总 Base64 体积以避免配置过大。
-  let iconTotalSize = 0;
-  const groups: unknown[] = value;
-  return groups.map((rawGroup) => {
-    if (!plainObject(rawGroup)) {
-      throw new Error("invalid_web_navigation_group");
-    }
-    const title = cleanText(rawGroup.title);
-    if (!title || title.length > 60 || !Array.isArray(rawGroup.items)) {
-      throw new Error("invalid_web_navigation_group");
-    }
-
-    const rawItems: unknown[] = rawGroup.items;
-    const items = rawItems.map((rawItem) => {
-      if (!plainObject(rawItem)) {
-        throw new Error("invalid_web_navigation_item");
-      }
-      const itemTitle = cleanText(rawItem.title);
-      const url = cleanText(rawItem.url);
-      const iconBase64 = cleanText(rawItem.iconBase64);
-      const iconMimeType = cleanText(rawItem.iconMimeType).toLowerCase();
-      let parsedUrl;
-      try {
-        parsedUrl = new URL(url);
-      } catch {
-        throw new Error("invalid_web_navigation_url");
-      }
-      if (
-        !itemTitle || itemTitle.length > 80 || url.length > 2048 ||
-        !["http:", "https:"].includes(parsedUrl.protocol) ||
-        parsedUrl.username || parsedUrl.password
-      ) {
-        throw new Error("invalid_web_navigation_item");
-      }
-      if (iconBase64 && (
-        iconBase64.length > 180000 ||
-        !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(iconBase64) ||
-        !["image/png", "image/jpeg", "image/webp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon"].includes(iconMimeType)
-      )) {
-        throw new Error("invalid_web_navigation_icon");
-      }
-      if (!iconBase64 && iconMimeType) {
-        throw new Error("invalid_web_navigation_icon");
-      }
-      iconTotalSize += iconBase64.length;
-      if (iconTotalSize > 4 * 1024 * 1024) {
-        throw new Error("web_navigation_icons_too_large");
-      }
-      itemCount += 1;
-      if (itemCount > 250) throw new Error("too_many_web_navigation_items");
-      return { title: itemTitle, url, iconBase64, iconMimeType };
-    });
-
-    return { title, items };
-  });
 }
 
 export function publicClientSettings(settings: Settings) {

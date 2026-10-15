@@ -268,26 +268,6 @@
     .registration-mode-option span { display: flex; min-height: 40px; align-items: center; justify-content: center; padding: 0 10px; border-radius: 999px; font-weight: 500; text-align: center; transition: color .16s ease; pointer-events: none; }
     .registration-mode-option input:checked + span { color: var(--blue-ink); font-weight: 650; }
     .registration-mode-option input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 1px; }
-    .web-nav-groups { display: grid; gap: 12px; margin: 12px 0; }
-    .web-nav-group { min-width: 0; padding: 14px; background: #ffffff; border: 1px solid #dadce0; border-radius: 10px; }
-    .web-nav-group-heading { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #dadce0; }
-    .web-nav-group-name { display: flex; flex: 1 1 240px; flex-direction: column; gap: 6px; min-width: 0; color: #5f6368; font-size: 12px; }
-    .web-nav-group-name input { min-height: 38px; }
-    .web-nav-controls, .web-nav-item-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-    .web-nav-controls button, .web-nav-item-controls button { min-width: 38px; margin: 0; padding: 8px 10px; }
-    .web-nav-controls .danger, .web-nav-item-controls .danger { min-width: auto; }
-    .web-nav-items { display: grid; gap: 10px; }
-    .web-nav-item { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(220px, 1.5fr) auto; align-items: end; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #dadce0; }
-    .web-nav-item label { display: flex; flex-direction: column; gap: 6px; color: #5f6368; font-size: 12px; }
-    .web-nav-icon-editor { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
-    .web-nav-icon-preview { display: grid; width: 48px; height: 48px; place-items: center; overflow: hidden; background: #f8fafd; border: 1px solid #dadce0; border-radius: 9px; }
-    .web-nav-icon-preview[hidden] { display: none !important; }
-    .web-nav-icon-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .web-nav-icon-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-    .web-nav-icon-actions button { margin: 0; }
-    .web-nav-icon-editor small { flex-basis: 100%; margin: 0; color: #5f6368; }
-    .web-nav-item-controls { padding-bottom: 1px; }
-    .web-nav-add-site { margin: 12px 0 0; }
      .settings-section-description { margin: 0 0 12px; color: #5f6368; font-size: 12px; }
      .settings-section .grid { margin-top: 0; }
      .app-info-icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
@@ -865,7 +845,7 @@
     .settings-section-title { margin-bottom: 8px; font-size: 18px; }
     .settings-section-description { margin-bottom: 16px; font-size: 13px; }
     .source-row { background: transparent; border-color: transparent; border-top: 1px solid #e3e9f1; border-radius: 0; padding: 16px 0; margin: 0; }
-    .web-nav-group, .subscription-group { background: #f8fafd; border-color: #e2e9f1; border-radius: 12px; }
+    .subscription-group { background: #f8fafd; border-color: #e2e9f1; border-radius: 12px; }
     .source-section { padding: 12px 0; background: transparent; border: 0; border-radius: 0; }
     .user-admin-device-detail, .device-relation-detail-item,
     .security-batch-toolbar { background: var(--surface-soft); }
@@ -1245,8 +1225,7 @@
     .user-table-card { padding: 20px; }
     .user-table-scroll { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
     .growth-range-field, .subscription-version-range label,
-    .subscription-group-permissions legend, .source-row-heading label,
-    .web-nav-group-name, .web-nav-item label { font-size: 13px; }
+    .subscription-group-permissions legend, .source-row-heading label { font-size: 13px; }
     .settings-section-description, .traffic-detail-summary,
     .security-selection-count, .user-table-meta, .user-admin-device-detail span,
     .device-relation-detail-item span { font-size: 13px; }
@@ -1298,80 +1277,6 @@
 
     /* 关于页链接使用两列，给长网址留出可读空间。 */
     .about-links-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-    /* 导航条目默认只显示摘要，编辑和图标维护按需展开。 */
-    .web-nav-group-heading { align-items: center; }
-    .web-nav-group-count { color: var(--ink-muted); font-size: 13px; white-space: nowrap; }
-    .web-nav-item { display: block; padding: 0; border-bottom-color: var(--line); }
-    .web-nav-item-summary {
-      display: flex;
-      min-height: 66px;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-    .web-nav-item-identity { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; gap: 12px; }
-    .web-nav-item-icon-fallback, .web-nav-icon-preview {
-      box-sizing: border-box;
-      display: grid;
-      flex: 0 0 36px;
-      width: 36px;
-      height: 36px;
-      place-items: center;
-      overflow: hidden;
-      color: var(--blue-ink);
-      background: var(--surface-soft);
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .web-nav-item-icon-fallback[hidden] { display: none !important; }
-    .web-nav-icon-preview[hidden] { display: none !important; }
-    .web-nav-icon-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .web-nav-item-copy { display: grid; flex: 1 1 auto; min-width: 0; gap: 4px; }
-    .web-nav-item-copy strong, .web-nav-item-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .web-nav-item-copy strong { color: var(--ink); font-size: 14px; font-weight: 600; }
-    .web-nav-item-copy span { color: var(--ink-muted); font-size: 12px; }
-    .web-nav-item-controls { flex: 0 0 auto; align-items: center; padding: 0; }
-    .web-nav-item-controls button { margin: 0; }
-    .web-nav-item-actions { position: relative; }
-    .web-nav-item-actions > summary {
-      display: grid;
-      min-height: 38px;
-      padding: 8px 12px;
-      place-items: center;
-      color: var(--ink);
-      background: var(--surface-soft);
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 13px;
-      list-style: none;
-      white-space: nowrap;
-    }
-    .web-nav-item-actions > summary::-webkit-details-marker { display: none; }
-    .web-nav-item-actions:not([open]) > .web-nav-item-action-menu { display: none; }
-    .web-nav-item-action-menu {
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
-      z-index: 20;
-      display: grid;
-      width: 132px;
-      gap: 4px;
-      padding: 6px;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      box-shadow: 0 8px 24px rgb(32 33 36 / 16%);
-    }
-    .web-nav-item-action-menu button { width: 100%; text-align: left; }
-    .web-nav-item-editor { padding: 0 0 14px 48px; }
-    .web-nav-item-editor[hidden] { display: none !important; }
-    .web-nav-item-fields { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.5fr); gap: 12px; }
-    .web-nav-item-editor .web-nav-icon-editor { padding-top: 12px; }
-    .web-nav-item-editor .web-nav-icon-actions { gap: 8px; }
-    .web-nav-item-editor .web-nav-icon-actions button { margin: 0; }
 
     /* 订阅分组按状态摘要、订阅表头和逐行编辑分层展示。 */
     .tab-panel[data-panel="subscriptions"] { padding: 16px 24px 16px 16px; background: var(--surface-page); }
@@ -1517,23 +1422,12 @@
     }
     button.secondary.subscription-group-add:hover:not(:disabled) { color: var(--blue-ink); background: #f5f8fc; border-color: #a8c7fa; }
 
-    /* 订阅管理和导航页共用左侧分组导航与右侧工作区布局。 */
-    body.subscriptions-fullscreen, body.navigation-page-fullscreen { overflow: hidden; background: #eef2f8; }
-    body.subscriptions-fullscreen main, body.navigation-page-fullscreen main { min-width: 0; }
-    body.subscriptions-fullscreen #dashboard, body.navigation-page-fullscreen #dashboard { display: grid; grid-template-columns: 256px minmax(0, 1fr); width: 100%; height: 100vh; min-height: 0; }
-    body.subscriptions-fullscreen .dashboard-sidebar, body.navigation-page-fullscreen .dashboard-sidebar { display: flex; }
-    body.subscriptions-fullscreen .dashboard-workspace, body.navigation-page-fullscreen .dashboard-workspace { width: auto; min-width: 0; height: 100vh; min-height: 0; overflow: hidden; background: #eef2f8; }
+    body.subscriptions-fullscreen { overflow: hidden; background: #eef2f8; }
+    body.subscriptions-fullscreen main { min-width: 0; }
+    body.subscriptions-fullscreen #dashboard { display: grid; grid-template-columns: 256px minmax(0, 1fr); width: 100%; height: 100vh; min-height: 0; }
+    body.subscriptions-fullscreen .dashboard-sidebar { display: flex; }
+    body.subscriptions-fullscreen .dashboard-workspace { width: auto; min-width: 0; height: 100vh; min-height: 0; overflow: hidden; background: #eef2f8; }
     body.subscriptions-fullscreen .tab-panel[data-panel="subscriptions"].active {
-      display: flex;
-      box-sizing: border-box;
-      width: 100%;
-      height: 100vh;
-      min-height: 0;
-      padding: 10px;
-      overflow: hidden;
-      background: #eef2f8;
-    }
-    body.navigation-page-fullscreen .tab-panel[data-panel="navigation-page"].active {
       display: flex;
       box-sizing: border-box;
       width: 100%;
@@ -1565,22 +1459,6 @@
     .subscription-manager-save-status { min-height: 14px; font-size: 11px; text-align: right; }
     .subscription-manager-save-actions { flex-wrap: nowrap; }
     .subscription-manager-save-actions button { min-height: 36px; padding: 8px 14px; }
-    .navigation-group-workspace { position: relative; }
-    .web-nav-groups { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; margin: 0; overflow-y: auto; scrollbar-width: thin; }
-    .web-nav-groups[hidden] { display: none !important; }
-    .navigation-group-workspace .web-nav-group { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 100%; padding: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
-    .navigation-group-workspace .web-nav-group[hidden] { display: none !important; }
-    .navigation-group-workspace .web-nav-group-heading { flex: 0 0 auto; min-height: 68px; padding: 0 0 12px; margin: 0 0 10px; border-bottom-color: #e4eaf2; }
-    .navigation-group-workspace .web-nav-group-name { max-width: 520px; color: #64748b; }
-    .navigation-group-workspace .web-nav-group-empty { display: grid; flex: 1 1 auto; min-height: 120px; place-items: center; color: #758198; font-size: 14px; }
-    .navigation-group-workspace .web-nav-group-empty[hidden] { display: none !important; }
-    .navigation-group-workspace .web-nav-items { display: grid; flex: 0 0 auto; gap: 0; }
-    .navigation-group-workspace .web-nav-add-site { align-self: flex-start; margin: 12px 0 0; }
-    .web-nav-workspace-empty { display: grid; flex: 1 1 auto; align-content: center; justify-items: center; gap: 12px; color: #758198; text-align: center; }
-    .web-nav-workspace-empty[hidden] { display: none !important; }
-    .web-nav-workspace-empty p { margin: 0; }
-    .web-nav-workspace-note { flex: 0 0 auto; margin-top: 12px; padding-top: 10px; color: #718096; border-top: 1px solid #e7edf4; font-size: 12px; line-height: 1.6; }
-    .web-nav-group-nav-item { text-align: left; }
     .subscription-list-search {
       box-sizing: border-box;
       display: flex;
@@ -1822,11 +1700,9 @@
       .system-logs-sidebar { min-height: 0; max-height: none; overflow: visible; }
       .system-logs-endpoint-panel { min-height: 460px; }
       .tab-panel[data-panel="system-logs"] .system-logs-workspace { min-height: 500px; padding: 0; }
-      body.subscriptions-fullscreen, body.navigation-page-fullscreen { overflow: auto; }
-      body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace,
-      body.navigation-page-fullscreen #dashboard, body.navigation-page-fullscreen .dashboard-workspace { height: auto; min-height: 100vh; overflow: visible; }
+      body.subscriptions-fullscreen { overflow: auto; }
+      body.subscriptions-fullscreen #dashboard, body.subscriptions-fullscreen .dashboard-workspace { height: auto; min-height: 100vh; overflow: visible; }
       body.subscriptions-fullscreen .tab-panel[data-panel="subscriptions"].active { min-height: 100vh; height: auto; overflow: visible; padding: 8px; }
-      body.navigation-page-fullscreen .tab-panel[data-panel="navigation-page"].active { min-height: 100vh; height: auto; overflow: visible; padding: 8px; }
       .subscription-manager { min-height: calc(100vh - 16px); }
       .subscription-manager-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title status"; gap: 12px; padding: 14px; }
       .subscription-manager-title h2 { font-size: 24px; }
@@ -1836,11 +1712,6 @@
       .subscription-group-navigation { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
       .subscription-group-sidebar-heading { padding-bottom: 6px; }
       .subscription-group-workspace { min-height: 520px; padding: 10px; }
-      .navigation-group-workspace { min-height: 520px; padding: 10px; }
-      .web-nav-groups { overflow: visible; }
-      .navigation-group-workspace .web-nav-group-heading { align-items: flex-start; flex-direction: column; }
-      .navigation-group-workspace .web-nav-group-name { width: 100%; max-width: none; }
-      .navigation-group-workspace .web-nav-item-fields { grid-template-columns: minmax(0, 1fr); }
       .subscription-editor { width: calc(100vw - 16px); max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
       .subscription-list-toolbar > select { min-width: 100px; }
       .subscription-list-toolbar > select[data-source-sort] { min-width: 128px; }

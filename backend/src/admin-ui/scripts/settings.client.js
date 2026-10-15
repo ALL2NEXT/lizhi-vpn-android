@@ -1,7 +1,6 @@
 let subscriptionTrafficRequestId = 0;
 let subscriptionRefreshInFlight = false;
 let activeSubscriptionGroupId = '__all__';
-let activeWebNavigationGroupId = '';
 let selectedSubscriptionRow = null;
 const selectedSubscriptionRows = new Set();
 let subscriptionCurrentPage = 1;
@@ -1137,377 +1136,6 @@ function updateSourceMode(row) {
     });
   });
 }
-
-// 后台用可视化表单维护导航配置，分组与网站顺序对应客户端显示顺序。
-function addWebNavigationGroup(group) {
-  const isNewGroup = !group;
-  group = group || {};
-  const row = document.createElement('section');
-  row.className = 'web-nav-group';
-  row.dataset.webNavGroupId = crypto.randomUUID();
-  row.innerHTML = '<div class="web-nav-group-heading">' +
-    '<label class="web-nav-group-name">分组名称<input data-field="title" type="text" placeholder="例如：国内测速"></label>' +
-    '<div class="web-nav-controls" role="group" aria-label="分组排序和删除操作">' +
-      '<span class="web-nav-group-count" data-group-count>0 个网站</span>' +
-      '<button class="secondary" type="button" data-action="group-up" aria-label="上移分组" title="上移分组">↑</button>' +
-      '<button class="secondary" type="button" data-action="group-down" aria-label="下移分组" title="下移分组">↓</button>' +
-      '<button class="danger" type="button" data-action="group-delete">删除分组</button>' +
-    '</div>' +
-  '</div>' +
-  '<div class="web-nav-items"></div>' +
-  '<div class="web-nav-group-empty" data-group-empty hidden>该分组还没有网站入口。</div>' +
-  '<button class="secondary web-nav-add-site" type="button" data-action="add-site">添加网站</button>';
-  row.querySelector('[data-field="title"]').value = String(group.title || '');
-  const container = el('webNavigationGroups');
-  container.appendChild(row);
-  if (isNewGroup) activeWebNavigationGroupId = row.dataset.webNavGroupId;
-  const items = Array.isArray(group.items) ? group.items : [{}];
-  items.forEach(function(item) { addWebNavigationItem(row, item); });
-  row.querySelector('[data-field="title"]').addEventListener('input', renderWebNavigationGroupNavigation);
-  row.querySelector('[data-action="group-up"]').onclick = function() {
-    moveWebNavigationRow(row, -1);
-  };
-  row.querySelector('[data-action="group-down"]').onclick = function() {
-    moveWebNavigationRow(row, 1);
-  };
-  row.querySelector('[data-action="group-delete"]').onclick = function() {
-    const groupRows = getWebNavigationGroupRows();
-    const groupIndex = groupRows.indexOf(row);
-    const wasActive = row.dataset.webNavGroupId === activeWebNavigationGroupId;
-    row.remove();
-    if (wasActive) {
-      const remainingGroups = getWebNavigationGroupRows();
-      const nextGroup = remainingGroups[Math.min(groupIndex, remainingGroups.length - 1)];
-      activeWebNavigationGroupId = nextGroup ? nextGroup.dataset.webNavGroupId : '';
-    }
-    updateWebNavigationControls();
-    markSettingsDirty('navigation-page');
-  };
-  row.querySelector('[data-action="add-site"]').onclick = function() {
-    addWebNavigationItem(row, {});
-  };
-  updateWebNavigationControls();
-  markSettingsDirty('navigation-page');
-}
-
-function addWebNavigationItem(groupRow, item) {
-  item = item || {};
-  const isBlank = !String(item.title || '').trim() && !String(item.url || '').trim();
-  const row = document.createElement('div');
-  row.className = 'web-nav-item';
-  const editorId = 'web-nav-item-editor-' + crypto.randomUUID();
-  row.innerHTML = '<div class="web-nav-item-summary">' +
-      '<div class="web-nav-item-identity">' +
-        '<span class="web-nav-item-icon-fallback" data-role="icon-fallback" aria-hidden="true">站</span>' +
-        '<div class="web-nav-icon-preview" data-role="icon-preview" hidden><img alt=""></div>' +
-        '<div class="web-nav-item-copy"><strong data-role="summary-title">未命名网站</strong><span data-role="summary-url">请填写网站地址</span></div>' +
-      '</div>' +
-      '<div class="web-nav-item-controls" role="group" aria-label="网站操作">' +
-        '<button class="secondary" type="button" data-action="edit-site" aria-expanded="' + (isBlank ? 'true' : 'false') + '" aria-controls="' + editorId + '">' + (isBlank ? '收起' : '编辑') + '</button>' +
-        '<details class="web-nav-item-actions"><summary aria-label="网站排序和删除操作">更多</summary>' +
-          '<div class="web-nav-item-action-menu" role="group" aria-label="网站排序和删除操作">' +
-            '<button class="secondary" type="button" data-action="item-up" aria-label="上移网站">上移</button>' +
-            '<button class="secondary" type="button" data-action="item-down" aria-label="下移网站">下移</button>' +
-            '<button class="danger" type="button" data-action="item-delete">删除</button>' +
-          '</div>' +
-        '</details>' +
-      '</div>' +
-    '</div>' +
-    '<div class="web-nav-item-editor" id="' + editorId + '" data-role="editor"' + (isBlank ? '' : ' hidden') + '>' +
-      '<div class="web-nav-item-fields">' +
-        '<label>网站名称<input data-field="title" type="text" placeholder="例如：中科大测速"></label>' +
-        '<label>网站网址<input data-field="url" type="url" placeholder="https://example.com"></label>' +
-      '</div>' +
-      '<div class="web-nav-icon-editor">' +
-      '<div class="web-nav-icon-actions">' +
-        '<input data-field="icon-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon" hidden>' +
-        '<button class="secondary" type="button" data-action="icon-upload">上传图标</button>' +
-        '<button class="secondary" type="button" data-action="icon-fetch">从网站获取</button>' +
-        '<button class="secondary" type="button" data-action="icon-clear">清除图标</button>' +
-      '</div>' +
-      '</div>' +
-    '</div>';
-  row.querySelector('[data-field="title"]').value = String(item.title || '');
-  row.querySelector('[data-field="url"]').value = String(item.url || '');
-  setWebNavigationIcon(row, item.iconBase64 || '', item.iconMimeType || '');
-  updateWebNavigationItemSummary(row);
-  groupRow.querySelector('.web-nav-items').appendChild(row);
-  row.querySelector('[data-action="edit-site"]').onclick = function() {
-    const editor = row.querySelector('[data-role="editor"]');
-    const expanded = editor.hidden;
-    editor.hidden = !expanded;
-    this.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    this.textContent = expanded ? '收起' : '编辑';
-  };
-  ['title', 'url'].forEach(function(field) {
-    row.querySelector('[data-field="' + field + '"]').addEventListener('input', function() {
-      updateWebNavigationItemSummary(row);
-    });
-  });
-  const fileInput = row.querySelector('[data-field="icon-file"]');
-  row.querySelector('[data-action="icon-upload"]').onclick = function() { fileInput.click(); };
-  fileInput.onchange = function() { readWebNavigationIconFile(row, fileInput); };
-  row.querySelector('[data-action="icon-fetch"]').onclick = function() { fetchWebNavigationIcon(row); };
-  row.querySelector('[data-action="icon-clear"]').onclick = function() {
-    setWebNavigationIcon(row, '', '');
-    fileInput.value = '';
-    show('已清除网站图标，推送应用设置后生效');
-  };
-  row.querySelector('[data-action="item-up"]').onclick = function() {
-    moveWebNavigationRow(row, -1);
-  };
-  row.querySelector('[data-action="item-down"]').onclick = function() {
-    moveWebNavigationRow(row, 1);
-  };
-  row.querySelector('[data-action="item-delete"]').onclick = function() {
-    row.remove();
-    updateWebNavigationControls();
-    markSettingsDirty('navigation-page');
-  };
-  updateWebNavigationControls();
-  markSettingsDirty('navigation-page');
-}
-
-// 后台上传和抓取的图标统一保存为 MIME 类型加原始 Base64 数据。
-function setWebNavigationIcon(row, iconBase64, iconMimeType) {
-  markSettingsDirty('navigation-page');
-  row.dataset.iconBase64 = String(iconBase64 || '');
-  row.dataset.iconMimeType = String(iconMimeType || '');
-  const preview = row.querySelector('[data-role="icon-preview"]');
-  const fallback = row.querySelector('[data-role="icon-fallback"]');
-  const image = preview.querySelector('img');
-  const hasIcon = Boolean(row.dataset.iconBase64 && row.dataset.iconMimeType);
-  preview.hidden = !hasIcon;
-  fallback.hidden = hasIcon;
-  image.src = hasIcon
-    ? 'data:' + row.dataset.iconMimeType + ';base64,' + row.dataset.iconBase64
-    : '';
-}
-
-function updateWebNavigationItemSummary(row) {
-  const title = row.querySelector('[data-field="title"]').value.trim();
-  const url = row.querySelector('[data-field="url"]').value.trim();
-  const titleSummary = row.querySelector('[data-role="summary-title"]');
-  const urlSummary = row.querySelector('[data-role="summary-url"]');
-  titleSummary.textContent = title || '未命名网站';
-  titleSummary.title = title;
-  urlSummary.textContent = url || '请填写网站地址';
-  urlSummary.title = url;
-}
-
-function readWebNavigationIconFile(row, input) {
-  const file = input.files && input.files[0];
-  if (!file) return;
-  const supportedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon'];
-  if (!supportedTypes.includes(file.type)) {
-    input.value = '';
-    return show('图标格式需为 PNG、JPEG、WebP、GIF 或 ICO', true);
-  }
-  if (file.size > 128 * 1024) {
-    input.value = '';
-    return show('单张网站图标不能超过 128 KB', true);
-  }
-  const reader = new FileReader();
-  reader.onload = function() {
-    const dataUrl = String(reader.result || '');
-    const encoded = dataUrl.match(/^data:(image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon));base64,([A-Za-z0-9+/=]+)$/);
-    if (!encoded) return show('无法读取该图标文件', true);
-    setWebNavigationIcon(row, encoded[2], encoded[1]);
-    show('图标已载入，推送应用设置后生效');
-  };
-  reader.onerror = function() { show('读取图标文件失败', true); };
-  reader.readAsDataURL(file);
-}
-
-async function fetchWebNavigationIcon(row) {
-  const url = row.querySelector('[data-field="url"]').value.trim();
-  if (!url) return show('请先填写网站网址', true);
-  let parsedUrl;
-  try { parsedUrl = new URL(url); } catch (_) { return show('网站网址格式无效', true); }
-  if (!['http:', 'https:'].includes(parsedUrl.protocol)) return show('网站网址需使用 http:// 或 https://', true);
-
-  const button = row.querySelector('[data-action="icon-fetch"]');
-  button.disabled = true;
-  const originalText = button.textContent;
-  button.textContent = '获取中…';
-  try {
-    const response = await fetch(ADMIN_API_BASE + '/navigation-icon', {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({url: url})
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || '网站图标获取失败');
-    setWebNavigationIcon(row, data.iconBase64, data.iconMimeType);
-    show('网站图标已获取，推送应用设置后生效');
-  } catch (error) {
-    const errorCode = error && error.message ? error.message : '';
-    const errorMessages = {
-      invalid_navigation_icon_url: '只支持获取公网网站的图标，请检查网址',
-      navigation_icon_redirect_blocked: '网站跳转到了受限制的地址，后台已停止获取',
-      navigation_icon_not_found: '目标网站没有提供图标，请尝试上传图片',
-      navigation_icon_site_challenge: '目标网站启用了机器人验证，后台无法自动读取，请上传图标',
-      navigation_icon_unsupported_format: '目标网站返回了暂不支持的图标格式，请上传 PNG、JPEG、WebP、GIF 或 ICO 图片'
-    };
-    show(errorMessages[errorCode] || '网站图标获取失败，请检查网址后重试', true);
-  } finally {
-    button.disabled = false;
-    button.textContent = originalText;
-  }
-}
-
-function moveWebNavigationRow(row, direction) {
-  const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
-  if (!sibling) return;
-  if (direction < 0) row.parentElement.insertBefore(row, sibling);
-  else row.parentElement.insertBefore(sibling, row);
-  updateWebNavigationControls();
-  markSettingsDirty('navigation-page');
-}
-
-function updateWebNavigationControls() {
-  const groups = getWebNavigationGroupRows();
-  groups.forEach(function(group, groupIndex) {
-    const groupUp = group.querySelector('[data-action="group-up"]');
-    const groupDown = group.querySelector('[data-action="group-down"]');
-    if (groupUp) groupUp.disabled = groupIndex === 0;
-    if (groupDown) groupDown.disabled = groupIndex === groups.length - 1;
-    const items = Array.from(group.querySelector('.web-nav-items').children);
-    const count = group.querySelector('[data-group-count]');
-    if (count) count.textContent = items.length + ' 个网站';
-    const empty = group.querySelector('[data-group-empty]');
-    if (empty) empty.hidden = items.length > 0;
-    items.forEach(function(item, itemIndex) {
-      const itemUp = item.querySelector('[data-action="item-up"]');
-      const itemDown = item.querySelector('[data-action="item-down"]');
-      if (itemUp) itemUp.disabled = itemIndex === 0;
-      if (itemDown) itemDown.disabled = itemIndex === items.length - 1;
-    });
-  });
-  renderWebNavigationGroupNavigation();
-}
-
-function getWebNavigationGroupRows() {
-  const host = el('webNavigationGroups');
-  return host ? Array.from(host.children).filter(function(group) {
-    return group.classList.contains('web-nav-group');
-  }) : [];
-}
-
-function renderWebNavigationGroupNavigation() {
-  const nav = el('webNavigationGroupNavigation');
-  const host = el('webNavigationGroups');
-  const empty = el('webNavigationEmpty');
-  const groups = getWebNavigationGroupRows();
-  if (!nav || !host) return;
-  if (!groups.some(function(group) { return group.dataset.webNavGroupId === activeWebNavigationGroupId; })) {
-    activeWebNavigationGroupId = groups.length ? groups[0].dataset.webNavGroupId : '';
-  }
-  nav.innerHTML = groups.map(function(group, index) {
-    const title = group.querySelector('[data-field="title"]').value.trim() || '未命名分组';
-    const count = group.querySelectorAll('.web-nav-item').length;
-    return '<button class="subscription-group-nav-item web-nav-group-nav-item" type="button" data-web-nav-group-id="' +
-      esc(group.dataset.webNavGroupId) + '" aria-label="' + esc(title) + '，' + count + ' 个网站，第 ' + (index + 1) + ' 组">' +
-      '<span class="subscription-nav-icon" aria-hidden="true">' + subscriptionIcon('folder') + '</span>' +
-      '<span class="subscription-nav-name">' + esc(title) + '</span>' +
-      '<span class="subscription-nav-count">' + count + '</span>' +
-    '</button>';
-  }).join('');
-  host.hidden = groups.length === 0;
-  if (empty) empty.hidden = groups.length > 0;
-  selectWebNavigationGroup(activeWebNavigationGroupId);
-}
-
-function selectWebNavigationGroup(groupId) {
-  const groups = getWebNavigationGroupRows();
-  const activeGroup = groups.find(function(group) { return group.dataset.webNavGroupId === groupId; }) || null;
-  activeWebNavigationGroupId = activeGroup ? activeGroup.dataset.webNavGroupId : '';
-  groups.forEach(function(group) {
-    const active = group === activeGroup;
-    group.hidden = !active;
-    group.classList.toggle('active', active);
-  });
-  const nav = el('webNavigationGroupNavigation');
-  if (nav) nav.querySelectorAll('[data-web-nav-group-id]').forEach(function(button) {
-    const active = button.dataset.webNavGroupId === activeWebNavigationGroupId;
-    button.classList.toggle('active', active);
-    if (active) button.setAttribute('aria-current', 'page');
-    else button.removeAttribute('aria-current');
-  });
-}
-
-function initializeWebNavigationManager() {
-  const panel = document.querySelector('[data-panel="navigation-page"]');
-  if (!panel) return;
-  panel.querySelectorAll('[data-action="add-web-navigation-group"]').forEach(function(button) {
-    button.addEventListener('click', function() { addWebNavigationGroup(); });
-  });
-  const nav = el('webNavigationGroupNavigation');
-  nav.addEventListener('click', function(event) {
-    const button = event.target.closest('[data-web-nav-group-id]');
-    if (!button || !nav.contains(button)) return;
-    selectWebNavigationGroup(button.dataset.webNavGroupId);
-  });
-}
-
-function readWebNavigationGroups() {
-  return Array.from(el('webNavigationGroups').children).map(function(group) {
-    return {
-      title: group.querySelector('[data-field="title"]').value.trim(),
-      items: Array.from(group.querySelector('.web-nav-items').children).map(function(item) {
-        return {
-          title: item.querySelector('[data-field="title"]').value.trim(),
-          url: item.querySelector('[data-field="url"]').value.trim(),
-          iconBase64: item.dataset.iconBase64 || '',
-          iconMimeType: item.dataset.iconMimeType || ''
-        };
-      })
-    };
-  });
-}
-
-// 推送前校验必填项和网址格式，避免错误配置下发到客户端。
-function validateWebNavigationGroups(groups) {
-  if (groups.length > 50) return '导航网站分组最多 50 个';
-  let itemCount = 0;
-  let iconTotalSize = 0;
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-    const group = groups[groupIndex];
-    if (!group.title || group.title.length > 60) {
-      return '第 ' + (groupIndex + 1) + ' 个分组请填写名称（最多 60 个字符）';
-    }
-    for (let itemIndex = 0; itemIndex < group.items.length; itemIndex += 1) {
-      const item = group.items[itemIndex];
-      if (!item.title || item.title.length > 80) {
-        return '“' + group.title + '”中的第 ' + (itemIndex + 1) + ' 个网站请填写名称（最多 80 个字符）';
-      }
-      if (!item.url || item.url.length > 2048) {
-        return '请填写“' + item.title + '”的网址（最多 2048 个字符）';
-      }
-      let parsedUrl;
-      try {
-        parsedUrl = new URL(item.url);
-      } catch (_) {
-        return '“' + item.title + '”的网址格式无效';
-      }
-      if (!['http:', 'https:'].includes(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password) {
-        return '“' + item.title + '”的网址需使用 http:// 或 https://，且不能包含账号密码';
-      }
-      const iconBase64 = item.iconBase64 || '';
-      const iconMimeType = item.iconMimeType || '';
-      if (iconBase64 && (iconBase64.length > 180000 || !['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon'].includes(iconMimeType))) {
-        return '“' + item.title + '”的网站图标格式无效或超过 128 KB';
-      }
-      if (!iconBase64 && iconMimeType) return '“' + item.title + '”的网站图标数据不完整';
-      iconTotalSize += iconBase64.length;
-      if (iconTotalSize > 4 * 1024 * 1024) return '导航网站图标数据总量不能超过 4 MB';
-      itemCount += 1;
-      if (itemCount > 250) return '导航网站最多 250 个';
-    }
-  }
-  return '';
-}
-
 function fillState(state, section) {
   currentState = state || {};
   settingsFilling = true;
@@ -1515,13 +1143,6 @@ function fillState(state, section) {
     const settings = currentState.settings || {};
     if (!section || section === 'subscriptions') {
       renderSubscriptionGroups(Array.isArray(currentState.subscriptionGroups) ? currentState.subscriptionGroups : []);
-    }
-    if (!section || section === 'navigation-page') {
-      el('webNavigationGroups').innerHTML = '';
-      el('webNavigationGroupNavigation').innerHTML = '';
-      activeWebNavigationGroupId = '';
-      (Array.isArray(settings.webNavigationGroups) ? settings.webNavigationGroups : []).forEach(addWebNavigationGroup);
-      updateWebNavigationControls();
     }
     if (!section || section === 'about-page') {
       setValue('websiteUrl', settings.websiteUrl);
@@ -1757,13 +1378,12 @@ function formState() {
     subscriptionGroups: subscriptionGroups,
     settings: {
       websiteUrl: value('websiteUrl'),
-      webNavigationGroups: readWebNavigationGroups(),
       feedbackEmail: value('feedbackEmail'),
-       feedbackUrl: value('feedbackUrl'),
-       githubUrl: value('githubUrl'),
-       telegramUrl: value('telegramUrl'),
-       registrationEnabled: registrationMode !== 'closed',
-       requireAdminRegistrationCode: registrationMode === 'code',
+      feedbackUrl: value('feedbackUrl'),
+      githubUrl: value('githubUrl'),
+      telegramUrl: value('telegramUrl'),
+      registrationEnabled: registrationMode !== 'closed',
+      requireAdminRegistrationCode: registrationMode === 'code',
       },
     notice: notice,
     appUpdate: appUpdate
@@ -1979,19 +1599,11 @@ async function pushSection(section) {
         setValue('noticeId', form.notice.noticeId);
       }
     }
-    if (section === 'navigation-page') {
-      const validationError = validateWebNavigationGroups(form.settings.webNavigationGroups);
-      if (validationError) throw new Error(validationError);
-    }
     if (section === 'subscriptions') {
       const versionError = validateSubscriptionGroupVersions(form.subscriptionGroups);
       if (versionError) throw new Error(versionError);
     }
-    const settings = section === 'navigation-page'
-        ? Object.assign({}, currentState.settings, {
-          webNavigationGroups: form.settings.webNavigationGroups
-        })
-      : section === 'about-page'
+    const settings = section === 'about-page'
         ? Object.assign({}, currentState.settings, {
           websiteUrl: form.settings.websiteUrl,
           feedbackEmail: form.settings.feedbackEmail,
@@ -2048,7 +1660,6 @@ initializeGrowthRange();
 initializeActivityRange();
 initializeTrafficRange();
 initializeSubscriptionManager();
-initializeWebNavigationManager();
 initializeSettingsDrafts();
 initializeNoticeSettings();
 const subscriptionTabButton = document.querySelector('[data-tab="subscriptions"]');

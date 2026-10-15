@@ -59,7 +59,6 @@ import io.github.HanJason233.chimera.ui.screens.SkinSchemeEditorScreen
 import io.github.HanJason233.chimera.ui.screens.StartupAccountScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemeEditorScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemesScreen
-import io.github.HanJason233.chimera.ui.screens.WebNavigationScreen
 import io.github.HanJason233.chimera.ui.theme.ChimeraTheme
 import io.github.HanJason233.chimera.platform.LauncherIdentityManager
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
@@ -380,21 +379,10 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
 
-                                    HomeDestination.NAVIGATION ->
-                                        HomeNavigationLayout(
-                                            selectedDestination = selectedDestination,
-                                            onDestinationSelected =
-                                                onBottomNavigationDestinationSelected,
-                                            navigationStyle = skinSettings.activeScheme.navigationStyle
-                                        ) {
-                                            WebNavigationScreen(
-                                                websiteGroups = backendSettings.webNavigationGroups,
-                                                onBack = {
-                                                    selectedDestination = HomeDestination.HOME
-                                                },
-                                                bottomContentPadding = 16.dp
-                                            )
-                                        }
+                                    HomeDestination.NAVIGATION -> {
+                                        // Old saved destination IDs are redirected to Home.
+                                        selectedDestination = HomeDestination.HOME
+                                    }
 
                                     HomeDestination.MY ->
                                         HomeNavigationLayout(

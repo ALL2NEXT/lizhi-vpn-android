@@ -113,12 +113,11 @@ test("旧 KV 字段可迁移，内联订阅不会自动重命名", () =>", () =>
   assert.equal(normalizeState(null).subscriptionGroups.length, 0);
 });
 
-test("公告时间校验和导航配置校验继续生效", () => {
+test("公告时间校验继续生效", () => {
   const state = normalizeState({ notice: { hasNotice: true, startAt: "2026-10-07T09:00", endAt: "2026-10-07T11:00" } });
   assert.equal(visibleNotice(state.notice, now.getTime()), state.notice);
   assert.equal(visibleNotice(state.notice, now.getTime() + 7200000), null);
   assert.throws(() => normalizeState({ notice: { startAt: "2026-10-08", endAt: "2026-10-07" } }), /invalid_notice_time_order/);
-  assert.throws(() => normalizeState({ settings: { webNavigationGroups: [{ title: "bad", items: [{ title: "bad", url: "javascript:alert(1)" }] }] } }), /invalid_web_navigation_item/);
 });
 
 test("KV 使用较新的旧键数据并同步双写", async () => {

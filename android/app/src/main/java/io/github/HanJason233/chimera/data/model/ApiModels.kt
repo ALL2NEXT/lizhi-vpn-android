@@ -50,9 +50,6 @@ data class BackendAppSettings(
     @SerializedName("websiteUrl")
     val websiteUrl: String = "",
 
-    @SerializedName("webNavigationGroups")
-    val webNavigationGroups: List<BackendWebNavigationGroup> = emptyList(),
-
     @SerializedName("feedbackEmail")
     val feedbackEmail: String = "",
 
@@ -71,28 +68,6 @@ data class BackendAppSettings(
     @SerializedName("requireAdminRegistrationCode")
     val requireAdminRegistrationCode: Boolean = false,
 
-)
-
-data class BackendWebNavigationGroup(
-    @SerializedName("title")
-    val title: String,
-
-    @SerializedName("items")
-    val items: List<BackendWebNavigationItem> = emptyList()
-)
-
-data class BackendWebNavigationItem(
-    @SerializedName("title")
-    val title: String,
-
-    @SerializedName("url")
-    val url: String,
-
-    @SerializedName("iconBase64")
-    val iconBase64: String? = null,
-
-    @SerializedName("iconMimeType")
-    val iconMimeType: String? = null
 )
 
 data class AccountRegisterRequest(

@@ -509,22 +509,6 @@ export const DEFAULT_STATE: AppState = {
   appUpdate: null,
   settings: {
     websiteUrl: "",
-    webNavigationGroups: [
-      {
-        title: "国内测速",
-        items: [
-          { title: "中科大测速", url: "https://test.ustc.edu.cn/" },
-          { title: "南大测速", url: "https://test.nju.edu.cn/" },
-        ],
-      },
-      {
-        title: "国际测速",
-        items: [
-          { title: "奈飞测速", url: "https://fast.com/" },
-          { title: "Google 测速", url: "https://fiber.google.com/speedtest/" },
-        ],
-      },
-    ],
     feedbackEmail: "",
     feedbackUrl: "",
     githubUrl: "",

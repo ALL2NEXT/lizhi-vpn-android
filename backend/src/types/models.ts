@@ -48,21 +48,8 @@ export interface Notice {
   endAt: string;
 }
 
-export interface NavigationItem {
-  title: string;
-  url: string;
-  iconBase64?: string;
-  iconMimeType?: string;
-}
-
-export interface NavigationGroup {
-  title: string;
-  items: NavigationItem[];
-}
-
 export interface Settings {
   websiteUrl: string;
-  webNavigationGroups: NavigationGroup[];
   feedbackEmail: string;
   feedbackUrl: string;
   githubUrl: string;
