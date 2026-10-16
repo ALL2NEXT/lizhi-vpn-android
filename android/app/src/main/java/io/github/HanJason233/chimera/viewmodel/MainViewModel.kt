@@ -266,6 +266,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val backendSettings = subscriptionDataLoader.backendSettings
 
     val accountInfo = accountManager.accountInfo
+    private val _offlineModeEnabled = MutableStateFlow(accountManager.isOfflineMode())
+    val offlineModeEnabled = _offlineModeEnabled.asStateFlow()
     private val _isActivatingVip = MutableStateFlow(false)
     val isActivatingVip = _isActivatingVip.asStateFlow()
     private val _isUpdatingNickname = MutableStateFlow(false)
@@ -275,7 +277,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isSyncingAccount = _isSyncingAccount.asStateFlow()
     private val _isStartupAccountActionInProgress = MutableStateFlow(false)
     val isStartupAccountActionInProgress = _isStartupAccountActionInProgress.asStateFlow()
-    private val _startupAccountAuthenticated = MutableStateFlow(accountManager.currentAccount() != null)
+    private val _startupAccountAuthenticated = MutableStateFlow(
+        accountManager.currentAccount() != null || accountManager.isOfflineMode()
+    )
     val startupAccountAuthenticated = _startupAccountAuthenticated.asStateFlow()
     private val _isBindingAccount = MutableStateFlow(false)
     val isBindingAccount = _isBindingAccount.asStateFlow()
@@ -683,10 +687,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // data should not blank and rewrite DataStore on every launch.
                 _isInitialized.value = true
 
-                // 无本地账户时只读缓存；已有账户直接恢复订阅数据，不再要求重新选择登录方式。
+                // 离线模式只读本地缓存；在线账户才执行启动时的后台同步。
 
                 subscriptionDataLoader.loadCachedSubscriptionList()
-                if (_startupAccountAuthenticated.value) {
+                if (accountManager.currentAccount() != null && !accountManager.isOfflineMode()) {
                     loadStartupDataAfterAuthentication()
                 }
             } catch (error: Exception) {
@@ -2720,6 +2724,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun checkNotice() {
+        if (accountManager.isOfflineMode()) return
         val result = subscriptionDataLoader.noticeConfig?.let { Result.success(it) }
             ?: Result.failure<NoticeInfo>(IllegalStateException("backend config unavailable"))
         result.onSuccess { noticeInfo ->
@@ -2760,6 +2765,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun checkUpdateInternal(
         isAuto: Boolean
     ) {
+        if (accountManager.isOfflineMode()) {
+            if (!isAuto) _error.value = "离线模式下无法检查后台更新"
+            return
+        }
         if (subscriptionDataLoader.updateInfo == null) {
             return
         }
@@ -3106,6 +3115,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun continueOfflineAtStartup() {
+        if (_isStartupAccountActionInProgress.value || _startupAccountAuthenticated.value) return
+        // 仅保存本地状态并进入主界面，不调用注册、登录或启动后台刷新流程。
+        accountManager.setOfflineMode(true)
+        _offlineModeEnabled.value = true
+        _accountMessage.value = null
+        _startupAccountAuthenticated.value = true
+    }
+
+    fun exitOfflineMode() {
+        if (!accountManager.isOfflineMode()) return
+        accountManager.setOfflineMode(false)
+        _offlineModeEnabled.value = false
+        _startupAccountAuthenticated.value = false
+    }
+
     private fun runStartupAccountAction(action: suspend () -> AccountInfo) {
         if (_isStartupAccountActionInProgress.value || _startupAccountAuthenticated.value) return
         viewModelScope.launch {
@@ -3113,6 +3138,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _accountMessage.value = null
             try {
                 action()
+                _offlineModeEnabled.value = accountManager.isOfflineMode()
                 _startupAccountAuthenticated.value = true
                 viewModelScope.launch { loadStartupDataAfterAuthentication() }
             } catch (cancelled: CancellationException) {
@@ -3127,6 +3153,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun loadStartupDataAfterAuthentication() {
+        if (accountManager.isOfflineMode() || accountManager.currentAccount() == null) return
         try {
             val autoRefreshOverrides = settingsRepository.autoRefreshOnStartupOverrides.first()
             if (!initializeSubscriptionsWithRefreshState(
@@ -3261,6 +3288,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun accountActionErrorMessage(error: Throwable): String {
         return when (error.message) {
+            "offline_mode_enabled" -> "离线模式下无法访问后台服务"
             "backend_url_missing" -> "未配置服务地址"
             "invalid_login_credentials" -> "邮箱或密码错误"
             "invalid_account_password" -> "当前账户密码错误"
@@ -3474,6 +3502,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sourceId: String? = null,
         shouldRefreshSource: ((String) -> Boolean)? = null
     ): Boolean {
+        if (accountManager.isOfflineMode()) {
+            _error.value = "离线模式下不会连接 Chimera 后台刷新线路"
+            return false
+        }
         val isRefreshAll = sourceId.isNullOrBlank()
         if (isRefreshAll) _isRefreshingAllSubscriptions.value = true
         return try {

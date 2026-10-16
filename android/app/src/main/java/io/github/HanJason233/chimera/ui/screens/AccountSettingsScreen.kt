@@ -61,6 +61,7 @@ fun AccountSettingsScreen(
     val isDeletingAccount by viewModel.isDeletingAccount.collectAsStateWithLifecycle()
     val accountMessage by viewModel.accountMessage.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
+    val offlineModeEnabled by viewModel.offlineModeEnabled.collectAsStateWithLifecycle()
     val account = accountInfo
     var nickname by remember(accountInfo?.uid, accountInfo?.nickname) {
         mutableStateOf(accountInfo?.nickname.orEmpty())
@@ -172,7 +173,9 @@ fun AccountSettingsScreen(
         containerColor = accountSettingsBackground,
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         actions = {
-            if (page == AccountSettingsPage.OVERVIEW || page == AccountSettingsPage.TRAFFIC) {
+            if (!offlineModeEnabled &&
+                (page == AccountSettingsPage.OVERVIEW || page == AccountSettingsPage.TRAFFIC)
+            ) {
                 IconButton(
                     onClick = { viewModel.syncCurrentAccount() },
                     enabled = canSyncAccount
@@ -208,11 +211,24 @@ fun AccountSettingsScreen(
             }
             if (account == null) {
                 AccountSettingsCard {
-                    Text(
-                        text = "账户信息同步中…",
+                    Column(
                         modifier = Modifier.padding(18.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = if (offlineModeEnabled) {
+                                "已开启离线模式，账户和后台同步功能已停用。"
+                            } else {
+                                "账户信息同步中…"
+                            },
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (offlineModeEnabled) {
+                            TextButton(onClick = viewModel::exitOfflineMode) {
+                                Text("切换到在线登录")
+                            }
+                        }
+                    }
                 }
             } else {
                 when (page) {

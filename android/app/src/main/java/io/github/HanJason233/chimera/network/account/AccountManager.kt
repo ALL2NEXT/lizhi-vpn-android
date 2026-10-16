@@ -37,9 +37,20 @@ class AccountManager(private val context: Context) {
     private val _accountInfo = MutableStateFlow(loadPersistedAccount())
     val accountInfo = _accountInfo.asStateFlow()
     fun currentAccount(): AccountInfo? = _accountInfo.value
+
+    /** 离线选择只保存在本机；开启后账户相关请求都会在本地拦截。 */
+    fun isOfflineMode(): Boolean = preferences.getBoolean(OFFLINE_MODE_KEY, false)
+
+    fun setOfflineMode(enabled: Boolean) {
+        preferences.edit().putBoolean(OFFLINE_MODE_KEY, enabled).apply()
+    }
+
     fun accountId(): String = deviceKey()
 
     suspend fun register(timeoutMs: Long = 25000L): Result<AccountInfo> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
         if (AppConfig.BACKEND_URL.isBlank()) {
             return Result.failure(IllegalStateException("backend_url_missing"))
         }
@@ -69,6 +80,9 @@ class AccountManager(private val context: Context) {
         register(timeoutMs)
 
     suspend fun activateVipCard(code: String, timeoutMs: Long = 10000L): Result<AccountInfo> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
         if (currentAccount() == null) {
             return Result.failure(IllegalStateException("account_not_synced"))
         }
@@ -98,6 +112,9 @@ class AccountManager(private val context: Context) {
     }
 
     suspend fun updateNickname(nickname: String, timeoutMs: Long = 10000L): Result<AccountInfo> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
         if (currentAccount() == null) {
             return Result.failure(IllegalStateException("account_not_synced"))
         }
@@ -125,6 +142,9 @@ class AccountManager(private val context: Context) {
         password: String,
         timeoutMs: Long = 10000L
     ): Result<AccountInfo> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
         val normalizedEmail = email.trim().lowercase()
         if (!android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches()) {
             return Result.failure(IllegalArgumentException("invalid_email"))
@@ -162,6 +182,9 @@ class AccountManager(private val context: Context) {
         registrationCode: String = "",
         timeoutMs: Long = 10000L
     ): Result<AccountInfo> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
         val registered = currentAccount()
             ?: return Result.failure(IllegalStateException("account_not_synced"))
         val normalizedEmail = email.trim().lowercase()
@@ -202,6 +225,9 @@ class AccountManager(private val context: Context) {
         downloadBytes: Long,
         timeoutMs: Long = 10000L
     ): Result<TrafficReportResponse> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
         val registered = currentAccount()
             ?: return Result.failure(IllegalStateException("account_not_registered"))
         if (registered.accountType == "banned") {
@@ -228,6 +254,9 @@ class AccountManager(private val context: Context) {
     }
 
     suspend fun deleteAccount(password: String, timeoutMs: Long = 10000L): Result<Unit> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
         val registered = currentAccount()
             ?: return Result.failure(IllegalStateException("account_not_synced"))
         if (registered.email.isNotBlank() && password.length !in 8..128) {
@@ -320,6 +349,7 @@ class AccountManager(private val context: Context) {
             .putTrafficPeriod(TRAFFIC_MONTH_PREFIX, traffic.month)
             .putTrafficPeriod(TRAFFIC_TOTAL_PREFIX, traffic.total)
             .putString(TRAFFIC_LAST_REPORT_AT_KEY, traffic.lastReportAt.orEmpty())
+            .putBoolean(OFFLINE_MODE_KEY, false)
             .apply()
     }
 
@@ -343,6 +373,7 @@ class AccountManager(private val context: Context) {
 
     private companion object {
         const val ACCOUNT_ID_KEY = "account_id"
+        const val OFFLINE_MODE_KEY = "offline_mode_enabled"
         const val ACCOUNT_NICKNAME_KEY = "account_nickname"
         const val ACCOUNT_TYPE_KEY = "account_type"
         const val ACCOUNT_EMAIL_KEY = "account_email"

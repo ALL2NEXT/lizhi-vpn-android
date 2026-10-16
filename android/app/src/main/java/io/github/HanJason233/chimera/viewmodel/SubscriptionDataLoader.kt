@@ -82,6 +82,10 @@ internal class SubscriptionDataLoader(
         sourceId: String? = null,
         shouldRefreshSource: ((String) -> Boolean)? = null
     ): Boolean {
+        if (accountManager.isOfflineMode()) {
+            onMessage("离线模式下不会连接 Chimera 后台刷新线路")
+            return false
+        }
         _isLoading.value = true
         return try {
             initializeInternal(forceRefresh, sourceId, shouldRefreshSource)

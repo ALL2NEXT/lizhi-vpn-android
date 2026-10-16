@@ -34,5 +34,6 @@
     <string name="per_app_inbound_invert_selection">反选</string>
     <string name="per_app_inbound_auto_select">从网络获取配置</string>
     <string name="per_app_inbound_auto_select_failed">获取应用列表失败，请检查后台连接</string>
+    <string name="per_app_inbound_offline_mode">离线模式下无法从后台获取应用列表</string>
     <string name="per_app_inbound_load_failed">无法加载已安装的应用</string>
 </resources>

@@ -64,7 +64,8 @@ fun StartupAccountScreen(
     message: String?,
     onLogin: (email: String, password: String) -> Unit,
     onRegister: (email: String, password: String, registrationCode: String) -> Unit,
-    onGuestLogin: () -> Unit
+    onGuestLogin: () -> Unit,
+    onOfflineUse: () -> Unit
 ) {
     var isRegistration by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
@@ -305,6 +306,28 @@ fun StartupAccountScreen(
                             fontSize = 16.sp
                         )
                     }
+
+                    OutlinedButton(
+                        onClick = onOfflineUse,
+                        enabled = !isBusy,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(28.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Text(
+                            text = "仅本地使用（离线模式）",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 16.sp
+                        )
+                    }
+                    Text(
+                        text = "跳过登录与注册，使用本机保存的数据，不连接 Chimera 后台。",
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp
+                    )
                 }
 
                 AuthModeFooter(

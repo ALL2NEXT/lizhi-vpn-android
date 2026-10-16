@@ -101,6 +101,10 @@ internal class DisconnectRecoveryManager(
     }
 
     private suspend fun recoverCurrentNode(): Boolean {
+        if (accountManager.isOfflineMode()) {
+            Log.i(TAG, "Disconnect recovery skipped in offline mode")
+            return false
+        }
         if (!settingsRepository.disconnectRecoveryEnabled.first() || !isVpnRunning()) return false
         val disconnectedNode = ServiceManager.currentNode.value ?: run {
             Log.w(TAG, "Disconnect recovery skipped: current node is unavailable")

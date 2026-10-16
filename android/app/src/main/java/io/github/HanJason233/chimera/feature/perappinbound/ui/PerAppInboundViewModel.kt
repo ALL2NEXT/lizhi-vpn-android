@@ -32,6 +32,7 @@ import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
+import io.github.HanJason233.chimera.network.account.AccountManager
 import io.github.HanJason233.chimera.service.ServiceManager
 import java.text.Collator
 import java.util.concurrent.TimeUnit
@@ -44,6 +45,7 @@ data class InstalledInboundApp(
 
 class PerAppInboundViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsRepository = SettingsRepository(application)
+    private val accountManager = AccountManager(application)
     private val settingsMutex = Mutex()
     private val _allApps = MutableStateFlow<List<InstalledInboundApp>>(emptyList())
     private val _query = MutableStateFlow("")
@@ -152,6 +154,12 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
 
     fun selectProxyAppsAutomatically(mode: ProxyMode) {
         if (_isLoading.value) return
+        if (accountManager.isOfflineMode()) {
+            viewModelScope.launch {
+                _messages.emit(R.string.per_app_inbound_offline_mode)
+            }
+            return
+        }
         viewModelScope.launch {
             _isLoading.value = true
             try {
