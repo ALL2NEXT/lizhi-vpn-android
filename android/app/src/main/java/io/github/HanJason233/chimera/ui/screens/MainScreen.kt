@@ -43,6 +43,8 @@ fun MainScreen(
     viewModel: MainViewModel = viewModel(),
     onStartVpn: (action: () -> Unit) -> Unit,
     onOpenOtherConfig: () -> Unit = {},
+    onOpenRoutingAssets: () -> Unit = {},
+    onOpenRegionLookupSettings: () -> Unit = {},
     onOpenSplitRoutingSettings: () -> Unit = {},
     onOpenInbound: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
@@ -147,6 +149,10 @@ fun MainScreen(
                 DrawerContent(
                     onCheckUpdate = { closeDrawerThen { viewModel.checkUpdate() } },
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
+                    onOpenRoutingAssets = { closeDrawerThen(onOpenRoutingAssets) },
+                    onOpenRegionLookupSettings = {
+                        closeDrawerThen(onOpenRegionLookupSettings)
+                    },
                     onOpenSplitRoutingSettings = { closeDrawerThen(onOpenSplitRoutingSettings) },
                     onOpenInbound = { closeDrawerThen(onOpenInbound) },
                     onOpenOutbound = { closeDrawerThen(onOpenOutbound) },

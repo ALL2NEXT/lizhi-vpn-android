@@ -29,6 +29,8 @@ import io.github.HanJason233.chimera.ui.dialogs.AboutDialog
 fun DrawerContent(
     onCheckUpdate: () -> Unit,
     onOpenOtherConfig: () -> Unit,
+    onOpenRoutingAssets: () -> Unit = {},
+    onOpenRegionLookupSettings: () -> Unit = {},
     onOpenSplitRoutingSettings: () -> Unit = {},
     onOpenInbound: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
@@ -79,6 +81,18 @@ fun DrawerContent(
                 onClick = {
                     onOpenOtherConfig()
                 }
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.FolderOpen,
+                title = "资源文件",
+                onClick = onOpenRoutingAssets
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.Public,
+                title = "地区组查询",
+                onClick = onOpenRegionLookupSettings
             )
 
             DrawerMenuItem(

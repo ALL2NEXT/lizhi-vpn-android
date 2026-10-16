@@ -51,6 +51,7 @@ import io.github.HanJason233.chimera.ui.screens.AccountSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.AccountSettingsPage
 import io.github.HanJason233.chimera.ui.screens.MainScreen
 import io.github.HanJason233.chimera.ui.screens.OtherConfigScreen
+import io.github.HanJason233.chimera.ui.screens.RegionLookupSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.InboundScreen
 import io.github.HanJason233.chimera.ui.screens.OutboundScreen
 import io.github.HanJason233.chimera.ui.screens.CoreRoutingScreen
@@ -279,6 +280,12 @@ class MainActivity : ComponentActivity() {
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
                                         },
+                                        onOpenRoutingAssets = {
+                                            navigateTo(AppRoute.ROUTING_ASSETS)
+                                        },
+                                        onOpenRegionLookupSettings = {
+                                            navigateTo(AppRoute.REGION_LOOKUP_SETTINGS)
+                                        },
                                         onOpenSplitRoutingSettings = {
                                             navigateTo(AppRoute.SPLIT_ROUTING_SETTINGS)
                                         },
@@ -440,8 +447,17 @@ class MainActivity : ComponentActivity() {
                             composable(AppRoute.OTHER_CONFIG) {
                                 OtherConfigScreen(
                                     viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.REGION_LOOKUP_SETTINGS) {
+                                RegionLookupSettingsScreen(
+                                    viewModel = viewModel,
                                     onBack = { navController.popBackStack() },
-                                    onOpenRoutingAssets = { navigateTo(AppRoute.ROUTING_ASSETS) }
+                                    onOpenRoutingAssets = {
+                                        navigateTo(AppRoute.ROUTING_ASSETS)
+                                    }
                                 )
                             }
 

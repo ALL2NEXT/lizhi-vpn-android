@@ -3,6 +3,7 @@ package io.github.HanJason233.chimera.ui.navigation
 object AppRoute {
     const val MAIN = "main"
     const val OTHER_CONFIG = "other_config"
+    const val REGION_LOOKUP_SETTINGS = "region_lookup_settings"
     const val SPLIT_ROUTING_SETTINGS = "split_routing_settings"
     const val PER_APP_INBOUND = "per_app_inbound/{mode}"
     const val INBOUND = "inbound"
