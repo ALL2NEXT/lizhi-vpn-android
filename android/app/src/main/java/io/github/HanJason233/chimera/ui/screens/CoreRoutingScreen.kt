@@ -7,18 +7,20 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
@@ -35,8 +37,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -47,12 +49,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -60,7 +66,6 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.github.HanJason233.chimera.data.model.SmartRoutingDomainStrategy
 import io.github.HanJason233.chimera.data.model.SmartRoutingPreset
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
-import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
 import io.github.HanJason233.chimera.data.model.SmartRoutingRulesCodec
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
@@ -93,6 +98,12 @@ fun CoreRoutingScreen(
     var strategyMenuExpanded by remember { mutableStateOf(false) }
     var showPresets by rememberSaveable { mutableStateOf(false) }
     var qrRulesText by remember { mutableStateOf<String?>(null) }
+    val listState = rememberLazyListState()
+    var draggedRuleId by remember { mutableStateOf<String?>(null) }
+    var lastMovedTargetId by remember { mutableStateOf<String?>(null) }
+    var draggedItemTop by remember { mutableFloatStateOf(0f) }
+    var draggedItemHeight by remember { mutableFloatStateOf(1f) }
+    var dragDistance by remember { mutableFloatStateOf(0f) }
     val editingRule = smartRoutingSettings.rules.firstOrNull { it.id == editingRuleId }
 
     fun importRules(json: String) {
@@ -168,83 +179,103 @@ fun CoreRoutingScreen(
             }
         }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            item(key = "routing_header") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "域名策略",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        TextButton(onClick = { strategyMenuExpanded = true }) {
+                            Text(smartRoutingSettings.domainStrategy.title)
+                        }
+                        DropdownMenu(
+                            expanded = strategyMenuExpanded,
+                            onDismissRequest = { strategyMenuExpanded = false }
+                        ) {
+                            SmartRoutingDomainStrategy.entries.forEach { strategy ->
+                                DropdownMenuItem(
+                                    text = { Text(strategy.title) },
+                                    onClick = {
+                                        strategyMenuExpanded = false
+                                        viewModel.setSmartRoutingDomainStrategy(strategy)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Text("路由规则", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        text = "域名策略",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Xray 核心使用此策略；sing-box 按规则中的域名和 IP 条件处理",
-                        fontSize = 12.sp,
+                        text = "按列表顺序匹配。长按拖动规则可调整顺序；锁定规则会在导入时保留。",
+                        fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                TextButton(onClick = { strategyMenuExpanded = true }) {
-                    Text(smartRoutingSettings.domainStrategy.title)
-                }
-                DropdownMenu(
-                    expanded = strategyMenuExpanded,
-                    onDismissRequest = { strategyMenuExpanded = false }
-                ) {
-                    SmartRoutingDomainStrategy.entries.forEach { strategy ->
-                        DropdownMenuItem(
-                            text = { Text(strategy.title) },
-                            onClick = {
-                                strategyMenuExpanded = false
-                                viewModel.setSmartRoutingDomainStrategy(strategy)
+            }
+            itemsIndexed(
+                items = smartRoutingSettings.rules,
+                key = { _, rule -> "rule:${rule.id}" }
+            ) { _, rule ->
+                RoutingRuleItem(
+                    rule = rule,
+                    onEdit = { editingRuleId = rule.id },
+                    onEnabledChange = { enabled ->
+                        viewModel.setSmartRoutingRuleEnabled(rule.id, enabled)
+                    },
+                    dragHandleModifier = Modifier.pointerInput(rule.id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                val info = listState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.key == "rule:${rule.id}" }
+                                draggedRuleId = rule.id
+                                lastMovedTargetId = rule.id
+                                draggedItemTop = info?.offset?.toFloat() ?: 0f
+                                draggedItemHeight = info?.size?.toFloat() ?: 1f
+                                dragDistance = 0f
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                dragDistance += amount.y
+                                val fingerCenter = draggedItemTop + draggedItemHeight / 2f + dragDistance
+                                val target = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                                    fingerCenter >= it.offset && fingerCenter <= it.offset + it.size
+                                }
+                                val targetId = (target?.key as? String)
+                                    ?.takeIf { it.startsWith("rule:") }
+                                    ?.removePrefix("rule:")
+                                val sourceId = draggedRuleId
+                                if (
+                                    targetId != null && sourceId != null &&
+                                    targetId != sourceId && targetId != lastMovedTargetId
+                                ) {
+                                    viewModel.moveSmartRoutingRule(sourceId, targetId)
+                                    lastMovedTargetId = targetId
+                                }
+                            },
+                            onDragEnd = {
+                                draggedRuleId = null
+                                lastMovedTargetId = null
+                            },
+                            onDragCancel = {
+                                draggedRuleId = null
+                                lastMovedTargetId = null
                             }
                         )
                     }
-                }
-            }
-            Text(
-                text = "规则列表",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "规则可通过编辑调整条件和出口，也可启停或移动顺序。进程条件会随规则导入导出。",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            smartRoutingSettings.rules.forEachIndexed { index, rule ->
-                key(rule.id) {
-                    RoutingRuleItem(
-                        rule = rule,
-                        canMoveUp = index > 0,
-                        canMoveDown = index < smartRoutingSettings.rules.lastIndex,
-                        onEdit = { editingRuleId = rule.id },
-                        onEnabledChange = { enabled ->
-                            viewModel.setSmartRoutingRuleEnabled(rule.id, enabled)
-                        },
-                        onMoveUp = {
-                            viewModel.moveSmartRoutingRule(
-                                fromRuleId = rule.id,
-                                toRuleId = smartRoutingSettings.rules[index - 1].id
-                            )
-                        },
-                        onMoveDown = {
-                            viewModel.moveSmartRoutingRule(
-                                fromRuleId = rule.id,
-                                toRuleId = smartRoutingSettings.rules[index + 1].id
-                            )
-                        }
-                    )
-                }
+                )
             }
         }
     }
@@ -386,12 +417,9 @@ private fun createRoutingQrCode(json: String): ImageBitmap {
 @Composable
 private fun RoutingRuleItem(
     rule: SmartRoutingRule,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
     onEdit: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    dragHandleModifier: Modifier
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -409,7 +437,7 @@ private fun RoutingRuleItem(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable(enabled = !rule.locked, onClick = onEdit)
+                        .clickable(onClick = onEdit)
                         .padding(vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
@@ -431,7 +459,7 @@ private fun RoutingRuleItem(
                         }
                     }
                     Text(
-                        text = "${rule.action.displayName()} · ${rule.matchSummary()}",
+                        text = "${rule.outboundTag} · ${rule.matchSummary()}",
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 12.sp,
@@ -442,20 +470,18 @@ private fun RoutingRuleItem(
                     checked = rule.enabled,
                     onCheckedChange = onEnabledChange
                 )
-                IconButton(onClick = onEdit, enabled = !rule.locked) {
+                IconButton(onClick = onEdit) {
                     Icon(Icons.Outlined.Edit, contentDescription = "编辑${rule.name}")
                 }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                    Icon(Icons.Outlined.ArrowUpward, contentDescription = "上移${rule.name}")
-                }
-                IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                    Icon(Icons.Outlined.ArrowDownward, contentDescription = "下移${rule.name}")
+                androidx.compose.foundation.layout.Box(
+                    modifier = dragHandleModifier.size(48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.DragHandle,
+                        contentDescription = "拖动排序 ${rule.name}",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -469,8 +495,6 @@ private fun SmartRoutingRule.matchSummary(): String = buildList {
     val ruleIps = ips.ifEmpty {
         if (type == SmartRoutingRuleType.CUSTOM_IP) values else emptyList()
     }
-    if (type == SmartRoutingRuleType.DOMESTIC_DOMAIN) add("国内域名")
-    if (type == SmartRoutingRuleType.DOMESTIC_IP) add("国内 IP")
     if (ruleDomains.isNotEmpty()) add("域名：${ruleDomains.joinToString()}")
     if (ruleIps.isNotEmpty()) add("IP：${ruleIps.joinToString()}")
     if (processes.isNotEmpty()) add("进程：${processes.joinToString()}")
@@ -478,9 +502,3 @@ private fun SmartRoutingRule.matchSummary(): String = buildList {
     if (protocols.isNotEmpty()) add("协议：${protocols.joinToString()}")
     if (network.isNotBlank()) add("网络：$network")
 }.joinToString("；").ifBlank { "未配置匹配条件" }
-
-private fun SmartRoutingRuleAction.displayName(): String = when (this) {
-    SmartRoutingRuleAction.DIRECT -> "直连"
-    SmartRoutingRuleAction.PROXY -> "代理"
-    SmartRoutingRuleAction.BLOCK -> "阻断"
-}

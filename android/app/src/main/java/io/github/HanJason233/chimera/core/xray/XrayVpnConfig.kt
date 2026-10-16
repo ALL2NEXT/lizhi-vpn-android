@@ -11,12 +11,12 @@ import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
 import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
-import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
+import io.github.HanJason233.chimera.data.model.effectiveOutboundTag
 import io.github.HanJason233.chimera.util.XrayConfigGenerator
 
 internal object XrayVpnConfig {
-    fun generate(request: CoreRequest, cnRules: JsonObject? = null): String {
+    fun generate(request: CoreRequest): String {
         val base = JsonParser.parseString(XrayConfigGenerator().generateCoreConfig(
             request.node,
             request.endpoint,
@@ -24,7 +24,7 @@ internal object XrayVpnConfig {
             request.hysteriaDownMbps,
             request.settings?.lanInbound ?: io.github.HanJason233.chimera.data.model.LanInboundSettings()
         )).asJsonObject
-        return compose(base, request, cnRules)
+        return compose(base, request)
     }
 
     /** 将多个单节点配置合并为一个 Xray 进程，每个 SOCKS 入站只允许命中对应节点。 */
@@ -71,7 +71,7 @@ internal object XrayVpnConfig {
         }.toString()
     }
 
-    internal fun compose(base: JsonObject, request: CoreRequest, cnRules: JsonObject? = null): String {
+    internal fun compose(base: JsonObject, request: CoreRequest): String {
         val inbound = base.getAsJsonArray("inbounds")[0].asJsonObject
         inbound.addProperty("tag", "internal-socks-in")
         base.getAsJsonArray("outbounds")[0].asJsonObject.addProperty("tag", "proxy")
@@ -171,39 +171,11 @@ internal object XrayVpnConfig {
                 fun scopedSmartRule(outbound: String) = rule(outbound).apply {
                     add("inboundTag", strings(*smartInboundTags.toTypedArray()))
                 }
-                val enabledSmartRules = settings.smartRoutingSettings.rules.filter { it.enabled }
-                val needsDomesticRules = enabledSmartRules.any {
-                    it.type == SmartRoutingRuleType.DOMESTIC_DOMAIN ||
-                        it.type == SmartRoutingRuleType.DOMESTIC_IP
-                }
-                val domesticDomains: JsonArray?
-                val domesticIps: JsonArray?
-                if (needsDomesticRules) {
-                    require(cnRules?.get("schema")?.asInt == 1) { "Missing routing rules" }
-                    val snapshot = requireNotNull(cnRules)
-                    domesticDomains = snapshot.getAsJsonArray("domains")
-                    domesticIps = snapshot.getAsJsonArray("ips")
-                    require(domesticDomains.size() > 0 && domesticIps.size() > 0)
-                } else {
-                    domesticDomains = null
-                    domesticIps = null
-                }
-                enabledSmartRules.forEach { smartRule ->
+                settings.smartRoutingSettings.rules.filter { it.enabled }.forEach { smartRule ->
                     when (smartRule.type) {
-                        SmartRoutingRuleType.DOMESTIC_DOMAIN -> {
-                            val domains = requireNotNull(domesticDomains)
-                            rules.add(scopedSmartRule(smartRule.action.configTag).apply {
-                                add("domain", domains.deepCopy())
-                            })
-                            if (smartRule.action == SmartRoutingRuleAction.DIRECT) {
-                                domains.forEach { localDomains.add(it.deepCopy()) }
-                            }
-                        }
-                        SmartRoutingRuleType.DOMESTIC_IP -> {
-                            rules.add(scopedSmartRule(smartRule.action.configTag).apply {
-                                add("ip", requireNotNull(domesticIps).deepCopy())
-                            })
-                        }
+                        // 旧版 Chimera 注入的国内规则仅用于存储迁移，不再参与路由。
+                        SmartRoutingRuleType.DOMESTIC_DOMAIN,
+                        SmartRoutingRuleType.DOMESTIC_IP -> Unit
                         SmartRoutingRuleType.CUSTOM_DOMAIN,
                         SmartRoutingRuleType.CUSTOM_IP,
                         SmartRoutingRuleType.CUSTOM_RULE -> {
@@ -217,27 +189,26 @@ internal object XrayVpnConfig {
                                     smartRule.values
                                 } else emptyList()
                             }
-                            val hasNonProcessCondition = domains.isNotEmpty() || ips.isNotEmpty() ||
-                                smartRule.ports.isNotBlank() || smartRule.network.isNotBlank() ||
-                                smartRule.protocols.isNotEmpty()
-                            if (hasNonProcessCondition) {
-                                rules.add(scopedSmartRule(smartRule.action.configTag).apply {
-                                    if (domains.isNotEmpty()) {
-                                        add(
-                                            "domain",
-                                            strings(*domains.map(::normalizeXrayDomain).toTypedArray())
-                                        )
-                                    }
-                                    if (ips.isNotEmpty()) add("ip", strings(*ips.toTypedArray()))
-                                    if (smartRule.ports.isNotBlank()) addProperty("port", smartRule.ports)
-                                    if (smartRule.network.isNotBlank()) addProperty("network", smartRule.network)
-                                    if (smartRule.protocols.isNotEmpty()) {
-                                        add("protocol", strings(*smartRule.protocols.toTypedArray()))
-                                    }
-                                })
-                            }
+                            // 与 v2rayNG 一样保留规则原顺序；HEV 不支持进程匹配，
+                            // 因此 process 字段不下发，但其余条件仍按原规则生成。
+                            rules.add(scopedSmartRule(smartRule.effectiveOutboundTag).apply {
+                                if (domains.isNotEmpty()) {
+                                    add(
+                                        "domain",
+                                        strings(*domains.map(::normalizeXrayDomain).toTypedArray())
+                                    )
+                                }
+                                if (ips.isNotEmpty()) {
+                                    add("ip", strings(*ips.map(::normalizeXrayIp).toTypedArray()))
+                                }
+                                if (smartRule.ports.isNotBlank()) addProperty("port", smartRule.ports)
+                                if (smartRule.network.isNotBlank()) addProperty("network", smartRule.network)
+                                if (smartRule.protocols.isNotEmpty()) {
+                                    add("protocol", strings(*smartRule.protocols.toTypedArray()))
+                                }
+                            })
                             if (
-                                smartRule.action == SmartRoutingRuleAction.DIRECT &&
+                                smartRule.effectiveOutboundTag == "direct" &&
                                 ips.isEmpty() && smartRule.ports.isBlank() &&
                                 smartRule.network.isBlank() && smartRule.protocols.isEmpty()
                             ) {
@@ -320,6 +291,13 @@ internal object XrayVpnConfig {
         } else {
             "domain:$normalized"
         }
+    }
+
+    private fun normalizeXrayIp(value: String): String = when (value.trim().lowercase()) {
+        // v2rayNG 将这两个常用标签指向体积更小的专用数据库文件。
+        "geoip:cn" -> "ext:geoip-only-cn-private.dat:cn"
+        "geoip:private" -> "ext:geoip-only-cn-private.dat:private"
+        else -> value.trim()
     }
 
     private fun firstDnsAddress(value: String, fallback: String): String =

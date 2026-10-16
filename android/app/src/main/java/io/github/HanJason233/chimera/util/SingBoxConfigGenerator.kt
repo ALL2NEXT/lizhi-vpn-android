@@ -17,6 +17,7 @@ import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
 import io.github.HanJason233.chimera.data.model.SmartRoutingSettings
+import io.github.HanJason233.chimera.data.model.effectiveOutboundTag
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import android.net.Uri
@@ -1116,24 +1117,23 @@ class SingBoxConfigGenerator {
         
         val requiredRuleSetTags = linkedSetOf<String>()
         if (smartInboundTags.isNotEmpty()) {
-            fun addRuleSetRule(tag: String, action: SmartRoutingRuleAction) {
+            fun addRuleSetRule(tag: String, outbound: String) {
                 rules.add(JsonObject().apply {
                     add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
                     add("rule_set", JsonArray().apply { add(tag) })
-                    addProperty("outbound", action.configTag)
+                    addProperty("outbound", outbound)
                 })
                 requiredRuleSetTags += tag
             }
 
             smartRoutingSettings.rules.filter { it.enabled }.forEach { smartRule ->
                 when (smartRule.type) {
-                    SmartRoutingRuleType.DOMESTIC_DOMAIN ->
-                        addRuleSetRule("geosite-cn", smartRule.action)
-                    SmartRoutingRuleType.DOMESTIC_IP ->
-                        addRuleSetRule("geoip-cn", smartRule.action)
+                    SmartRoutingRuleType.DOMESTIC_DOMAIN,
+                    SmartRoutingRuleType.DOMESTIC_IP -> Unit
                     SmartRoutingRuleType.CUSTOM_DOMAIN,
                     SmartRoutingRuleType.CUSTOM_IP,
                     SmartRoutingRuleType.CUSTOM_RULE -> {
+                        val outbound = smartRule.effectiveOutboundTag
                         val domains = routingRuleDomains(smartRule)
                         val ips = routingRuleIps(smartRule)
                         val exactDomains = mutableListOf<String>()
@@ -1176,48 +1176,43 @@ class SingBoxConfigGenerator {
                         val (singlePorts, portRanges) = parseRoutingPorts(smartRule.ports)
                         val networks = smartRule.network.split(',').map(String::trim)
                             .filter(String::isNotBlank).distinct()
-                        val hasConditions = exactDomains.isNotEmpty() || suffixDomains.isNotEmpty() ||
-                            keywordDomains.isNotEmpty() || regexpDomains.isNotEmpty() ||
-                            ipCidrs.isNotEmpty() || isPrivateIp.isNotEmpty() || ruleSetTags.isNotEmpty() ||
-                            singlePorts.isNotEmpty() || portRanges.isNotEmpty() || networks.isNotEmpty() ||
-                            smartRule.protocols.isNotEmpty()
-                        if (hasConditions) {
-                            rules.add(JsonObject().apply {
-                                add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
-                                if (exactDomains.isNotEmpty()) add("domain", JsonArray().apply {
-                                    exactDomains.forEach(::add)
-                                })
-                                if (suffixDomains.isNotEmpty()) add("domain_suffix", JsonArray().apply {
-                                    suffixDomains.forEach(::add)
-                                })
-                                if (keywordDomains.isNotEmpty()) add("domain_keyword", JsonArray().apply {
-                                    keywordDomains.forEach(::add)
-                                })
-                                if (regexpDomains.isNotEmpty()) add("domain_regex", JsonArray().apply {
-                                    regexpDomains.forEach(::add)
-                                })
-                                if (ipCidrs.isNotEmpty()) add("ip_cidr", JsonArray().apply {
-                                    ipCidrs.forEach(::add)
-                                })
-                                if (isPrivateIp.isNotEmpty()) addProperty("ip_is_private", true)
-                                if (ruleSetTags.isNotEmpty()) add("rule_set", JsonArray().apply {
-                                    ruleSetTags.forEach(::add)
-                                })
-                                if (singlePorts.isNotEmpty()) add("port", JsonArray().apply {
-                                    singlePorts.forEach(::add)
-                                })
-                                if (portRanges.isNotEmpty()) add("port_range", JsonArray().apply {
-                                    portRanges.forEach(::add)
-                                })
-                                if (networks.isNotEmpty()) add("network", JsonArray().apply {
-                                    networks.forEach(::add)
-                                })
-                                if (smartRule.protocols.isNotEmpty()) add("protocol", JsonArray().apply {
-                                    smartRule.protocols.forEach(::add)
-                                })
-                                addProperty("outbound", smartRule.action.configTag)
+                        // 源项目在不支持 process 时移除进程条件后仍保留原规则。
+                        // 因此即使规则没有其他匹配条件，也不能静默丢弃它。
+                        rules.add(JsonObject().apply {
+                            add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
+                            if (exactDomains.isNotEmpty()) add("domain", JsonArray().apply {
+                                exactDomains.forEach(::add)
                             })
-                        }
+                            if (suffixDomains.isNotEmpty()) add("domain_suffix", JsonArray().apply {
+                                suffixDomains.forEach(::add)
+                            })
+                            if (keywordDomains.isNotEmpty()) add("domain_keyword", JsonArray().apply {
+                                keywordDomains.forEach(::add)
+                            })
+                            if (regexpDomains.isNotEmpty()) add("domain_regex", JsonArray().apply {
+                                regexpDomains.forEach(::add)
+                            })
+                            if (ipCidrs.isNotEmpty()) add("ip_cidr", JsonArray().apply {
+                                ipCidrs.forEach(::add)
+                            })
+                            if (isPrivateIp.isNotEmpty()) addProperty("ip_is_private", true)
+                            if (ruleSetTags.isNotEmpty()) add("rule_set", JsonArray().apply {
+                                ruleSetTags.forEach(::add)
+                            })
+                            if (singlePorts.isNotEmpty()) add("port", JsonArray().apply {
+                                singlePorts.forEach(::add)
+                            })
+                            if (portRanges.isNotEmpty()) add("port_range", JsonArray().apply {
+                                portRanges.forEach(::add)
+                            })
+                            if (networks.isNotEmpty()) add("network", JsonArray().apply {
+                                networks.forEach(::add)
+                            })
+                            if (smartRule.protocols.isNotEmpty()) add("protocol", JsonArray().apply {
+                                smartRule.protocols.forEach(::add)
+                            })
+                            addProperty("outbound", outbound)
+                        })
                     }
                 }
             }

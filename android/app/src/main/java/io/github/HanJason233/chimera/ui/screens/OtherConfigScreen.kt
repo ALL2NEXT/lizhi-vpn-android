@@ -57,7 +57,8 @@ import io.github.HanJason233.chimera.viewmodel.MainViewModel
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 fun OtherConfigScreen(
     viewModel: MainViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenRoutingAssets: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
@@ -103,6 +104,20 @@ fun OtherConfigScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             RoutingConnectionSettings(viewModel = viewModel)
+
+            OtherConfigSection(title = "路由资源文件") {
+                Text(
+                    text = "管理 geosite.dat、geoip.dat 等路由数据库，供 geosite: 和 geoip: 规则使用。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                OutlinedButton(
+                    onClick = onOpenRoutingAssets,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("管理资源文件")
+                }
+            }
 
             OtherConfigSection(
                 title = "协议核心",

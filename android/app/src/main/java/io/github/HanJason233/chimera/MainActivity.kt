@@ -53,6 +53,7 @@ import io.github.HanJason233.chimera.ui.screens.OtherConfigScreen
 import io.github.HanJason233.chimera.ui.screens.InboundScreen
 import io.github.HanJason233.chimera.ui.screens.OutboundScreen
 import io.github.HanJason233.chimera.ui.screens.CoreRoutingScreen
+import io.github.HanJason233.chimera.ui.screens.RoutingAssetsScreen
 import io.github.HanJason233.chimera.ui.screens.QrScannerScreen
 import io.github.HanJason233.chimera.ui.screens.SkinScreen
 import io.github.HanJason233.chimera.ui.screens.SkinSchemeEditorScreen
@@ -62,6 +63,7 @@ import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemesScreen
 import io.github.HanJason233.chimera.ui.theme.ChimeraTheme
 import io.github.HanJason233.chimera.platform.LauncherIdentityManager
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
+import io.github.HanJason233.chimera.viewmodel.RoutingAssetsViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -110,7 +112,9 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     var scannedSubscriptionText by rememberSaveable { mutableStateOf<String?>(null) }
                     var scannedRoutingRulesText by rememberSaveable { mutableStateOf<String?>(null) }
+                    var scannedRoutingAssetUrl by rememberSaveable { mutableStateOf<String?>(null) }
                     var routingQrScanTarget by rememberSaveable { mutableStateOf(false) }
+                    var routingAssetQrScanTarget by rememberSaveable { mutableStateOf(false) }
                     val navigateTo: (String) -> Unit = { route ->
                             navController.navigate(route) {
                                 launchSingleTop = true
@@ -415,15 +419,19 @@ class MainActivity : ComponentActivity() {
                                 QrScannerScreen(
                                     onBack = {
                                         routingQrScanTarget = false
+                                        routingAssetQrScanTarget = false
                                         navController.popBackStack()
                                     },
                                     onQrCodeScanned = { text, onComplete ->
                                         if (routingQrScanTarget) {
                                             scannedRoutingRulesText = text
+                                        } else if (routingAssetQrScanTarget) {
+                                            scannedRoutingAssetUrl = text
                                         } else {
                                             scannedSubscriptionText = text
                                         }
                                         routingQrScanTarget = false
+                                        routingAssetQrScanTarget = false
                                         onComplete(true)
                                         navController.popBackStack()
                                     }
@@ -433,7 +441,8 @@ class MainActivity : ComponentActivity() {
                             composable(AppRoute.OTHER_CONFIG) {
                                 OtherConfigScreen(
                                     viewModel = viewModel,
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onOpenRoutingAssets = { navigateTo(AppRoute.ROUTING_ASSETS) }
                                 )
                             }
 
@@ -455,6 +464,21 @@ class MainActivity : ComponentActivity() {
                                     scannedRulesText = scannedRoutingRulesText,
                                     onScannedRulesTextConsumed = {
                                         scannedRoutingRulesText = null
+                                    }
+                                )
+                            }
+
+                            composable(AppRoute.ROUTING_ASSETS) {
+                                RoutingAssetsScreen(
+                                    viewModel = viewModel<RoutingAssetsViewModel>(),
+                                    onBack = { navController.popBackStack() },
+                                    onScanQrCode = {
+                                        routingAssetQrScanTarget = true
+                                        navigateTo(AppRoute.QR_SCANNER)
+                                    },
+                                    scannedAssetUrl = scannedRoutingAssetUrl,
+                                    onScannedAssetUrlConsumed = {
+                                        scannedRoutingAssetUrl = null
                                     }
                                 )
                             }

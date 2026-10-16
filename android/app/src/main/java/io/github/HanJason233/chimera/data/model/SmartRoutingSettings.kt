@@ -11,15 +11,23 @@ enum class SmartRoutingRuleType {
 }
 
 enum class SmartRoutingDomainStrategy(val xrayValue: String, val title: String) {
-    AS_IS("AsIs", "按原样"),
-    IP_IF_NON_MATCH("IPIfNonMatch", "未匹配域名规则时解析 IP"),
-    IP_ON_DEMAND("IPOnDemand", "需要 IP 条件时解析")
+    AS_IS("AsIs", "AsIs"),
+    IP_IF_NON_MATCH("IPIfNonMatch", "IPIfNonMatch"),
+    IP_ON_DEMAND("IPOnDemand", "IPOnDemand")
 }
 
 enum class SmartRoutingRuleAction(val configTag: String) {
     DIRECT("direct"),
     PROXY("proxy"),
-    BLOCK("block")
+    BLOCK("block");
+
+    companion object {
+        fun fromOutboundTag(tag: String): SmartRoutingRuleAction = when (tag) {
+            "direct" -> DIRECT
+            "block" -> BLOCK
+            else -> PROXY
+        }
+    }
 }
 
 data class SmartRoutingRule(
@@ -35,36 +43,23 @@ data class SmartRoutingRule(
     val ports: String = "",
     val network: String = "",
     val protocols: List<String> = emptyList(),
-    val processes: List<String> = emptyList()
+    val processes: List<String> = emptyList(),
+    /** 保留 v2rayNG 的原始出口标签，未知标签会由核心按源项目规则回退到 proxy。 */
+    val outboundTag: String = action.configTag
 )
 
+/** 当前运行核心支持的出口标签；原始标签仍由规则编解码器保留。 */
+val SmartRoutingRule.effectiveOutboundTag: String
+    get() = when (outboundTag) {
+        "direct", "proxy", "block" -> outboundTag
+        else -> SmartRoutingRuleAction.PROXY.configTag
+    }
+
 data class SmartRoutingSettings(
-    val rules: List<SmartRoutingRule> = defaultRules(),
-    val domainStrategy: SmartRoutingDomainStrategy = SmartRoutingDomainStrategy.IP_IF_NON_MATCH
+    val rules: List<SmartRoutingRule> = emptyList(),
+    val domainStrategy: SmartRoutingDomainStrategy = SmartRoutingDomainStrategy.AS_IS
 ) {
     companion object {
-        const val DOMESTIC_DOMAIN_RULE_ID = "builtin_smart_domestic_domain"
-        const val DOMESTIC_IP_RULE_ID = "builtin_smart_domestic_ip"
-
-        fun defaultRules(): List<SmartRoutingRule> = listOf(
-            SmartRoutingRule(
-                id = DOMESTIC_DOMAIN_RULE_ID,
-                name = "国内域名（内置）",
-                type = SmartRoutingRuleType.DOMESTIC_DOMAIN,
-                action = SmartRoutingRuleAction.DIRECT,
-                enabled = true,
-                locked = true
-            ),
-            SmartRoutingRule(
-                id = DOMESTIC_IP_RULE_ID,
-                name = "国内 IP",
-                type = SmartRoutingRuleType.DOMESTIC_IP,
-                action = SmartRoutingRuleAction.DIRECT,
-                enabled = true,
-                locked = true
-            )
-        )
-
         fun custom(
             name: String,
             type: SmartRoutingRuleType,

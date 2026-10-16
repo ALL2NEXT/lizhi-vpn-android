@@ -10,8 +10,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -22,6 +25,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDropDown
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
@@ -50,10 +55,11 @@ internal fun SmartRoutingRuleEditorDialog(
     var protocolsText by rememberSaveable(initialRule?.id) {
         mutableStateOf(initialRule?.protocols?.joinToString("\n").orEmpty())
     }
-    var action by rememberSaveable(initialRule?.id) {
-        mutableStateOf(initialRule?.action ?: SmartRoutingRuleAction.PROXY)
+    var outboundTag by rememberSaveable(initialRule?.id) {
+        mutableStateOf(initialRule?.outboundTag ?: SmartRoutingRuleAction.PROXY.configTag)
     }
-    var actionMenuExpanded by remember { mutableStateOf(false) }
+    var locked by rememberSaveable(initialRule?.id) { mutableStateOf(initialRule?.locked ?: false) }
+    var outboundMenuExpanded by remember { mutableStateOf(false) }
     var networkMenuExpanded by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
@@ -64,10 +70,11 @@ internal fun SmartRoutingRuleEditorDialog(
             id = initialRule?.id ?: UUID.randomUUID().toString(),
             name = name.trim(),
             type = SmartRoutingRuleType.CUSTOM_RULE,
-            action = action,
+            action = SmartRoutingRuleAction.fromOutboundTag(outboundTag.trim()),
+            outboundTag = outboundTag.trim().ifBlank { SmartRoutingRuleAction.PROXY.configTag },
             values = domains.ifEmpty { ips },
             enabled = initialRule?.enabled ?: true,
-            locked = initialRule?.locked ?: false,
+            locked = locked,
             domains = domains,
             ips = ips,
             ports = ports.trim(),
@@ -95,6 +102,13 @@ internal fun SmartRoutingRuleEditorDialog(
                     label = { Text("备注") },
                     singleLine = true
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text("锁定规则", modifier = Modifier.weight(1f))
+                    Switch(checked = locked, onCheckedChange = { locked = it })
+                }
                 OutlinedTextField(
                     value = domainsText,
                     onValueChange = { domainsText = it },
@@ -151,26 +165,34 @@ internal fun SmartRoutingRuleEditorDialog(
                             }
                         }
                     }
-                    Column(modifier = Modifier.weight(2f)) {
-                        Text("出口", style = MaterialTheme.typography.labelMedium)
-                        TextButton(onClick = { actionMenuExpanded = true }) {
-                            Text(action.title())
-                        }
-                        DropdownMenu(
-                            expanded = actionMenuExpanded,
-                            onDismissRequest = { actionMenuExpanded = false }
-                        ) {
-                            SmartRoutingRuleAction.entries.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option.title()) },
-                                    onClick = {
-                                        action = option
-                                        actionMenuExpanded = false
-                                    }
-                                )
+                    OutlinedTextField(
+                        value = outboundTag,
+                        onValueChange = { outboundTag = it },
+                        modifier = Modifier.weight(2f),
+                        label = { Text("出口标签") },
+                        supportingText = { Text("未知标签会按 v2rayNG 规则回退到 proxy") },
+                        trailingIcon = {
+                            IconButton(onClick = { outboundMenuExpanded = true }) {
+                                Icon(Icons.Outlined.ArrowDropDown, contentDescription = "出口标签建议")
                             }
-                        }
-                    }
+                            DropdownMenu(
+                                expanded = outboundMenuExpanded,
+                                onDismissRequest = { outboundMenuExpanded = false }
+                            ) {
+                                (listOf("proxy", "direct", "block") + listOfNotNull(initialRule?.outboundTag))
+                                    .distinct().forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option) },
+                                            onClick = {
+                                                outboundTag = option
+                                                outboundMenuExpanded = false
+                                            }
+                                        )
+                                    }
+                            }
+                        },
+                        singleLine = true
+                    )
                 }
                 OutlinedTextField(
                     value = protocolsText,
@@ -190,7 +212,7 @@ internal fun SmartRoutingRuleEditorDialog(
         },
         dismissButton = {
             Row {
-                if (initialRule != null && !initialRule.locked) {
+                if (initialRule != null) {
                     TextButton(onClick = { onDelete(initialRule.id) }) { Text("删除") }
                 }
                 TextButton(onClick = onDismiss) { Text("取消") }
@@ -211,10 +233,4 @@ private fun SmartRoutingRule.effectiveDomains(): List<String> = domains.ifEmpty 
 
 private fun SmartRoutingRule.effectiveIps(): List<String> = ips.ifEmpty {
     if (type == SmartRoutingRuleType.CUSTOM_IP) values else emptyList()
-}
-
-private fun SmartRoutingRuleAction.title(): String = when (this) {
-    SmartRoutingRuleAction.DIRECT -> "直连"
-    SmartRoutingRuleAction.PROXY -> "代理"
-    SmartRoutingRuleAction.BLOCK -> "阻断"
 }

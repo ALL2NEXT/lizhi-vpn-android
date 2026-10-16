@@ -38,19 +38,13 @@ object SmartRoutingRulesCodec {
             put(JSONObject().apply {
                 put("id", rule.id)
                 put("remarks", rule.name)
-                put("outboundTag", rule.action.configTag)
-                put("domain", JSONArray().apply {
-                    domains.forEach(::put)
-                    if (rule.type == SmartRoutingRuleType.DOMESTIC_DOMAIN) put("geosite:cn")
-                })
-                put("ip", JSONArray().apply {
-                    ips.forEach(::put)
-                    if (rule.type == SmartRoutingRuleType.DOMESTIC_IP) put("geoip:cn")
-                })
-                put("process", JSONArray().apply { rule.processes.forEach(::put) })
-                put("port", rule.ports)
-                put("network", rule.network)
-                put("protocol", JSONArray().apply { rule.protocols.forEach(::put) })
+                put("outboundTag", rule.outboundTag)
+                if (domains.isNotEmpty()) put("domain", JSONArray().apply { domains.forEach(::put) })
+                if (ips.isNotEmpty()) put("ip", JSONArray().apply { ips.forEach(::put) })
+                if (rule.processes.isNotEmpty()) put("process", JSONArray().apply { rule.processes.forEach(::put) })
+                if (rule.ports.isNotBlank()) put("port", rule.ports)
+                if (rule.network.isNotBlank()) put("network", rule.network)
+                if (rule.protocols.isNotEmpty()) put("protocol", JSONArray().apply { rule.protocols.forEach(::put) })
                 put("enabled", rule.enabled)
                 put("locked", rule.locked)
             })
@@ -80,13 +74,12 @@ object SmartRoutingRulesCodec {
         val type = runCatching { SmartRoutingRuleType.valueOf(rawType) }
             .getOrDefault(SmartRoutingRuleType.CUSTOM_RULE)
         val rawAction = item.optString("action")
-        val action = runCatching { SmartRoutingRuleAction.valueOf(rawAction) }.getOrElse {
-            when (item.optString("outboundTag").lowercase()) {
-                "direct" -> SmartRoutingRuleAction.DIRECT
-                "block" -> SmartRoutingRuleAction.BLOCK
-                else -> SmartRoutingRuleAction.PROXY
-            }
-        }
+        val outboundTag = item.optString("outboundTag")
+            .takeUnless { it.isBlank() || it == "null" }
+            ?: runCatching { SmartRoutingRuleAction.valueOf(rawAction).configTag }
+                .getOrDefault(SmartRoutingRuleAction.PROXY.configTag)
+        val action = runCatching { SmartRoutingRuleAction.valueOf(rawAction) }
+            .getOrElse { SmartRoutingRuleAction.fromOutboundTag(outboundTag) }
         val domains = readList("domains", "domain")
         val ips = readList("ips", "ip")
         val legacyValues = readList("values")
@@ -109,6 +102,7 @@ object SmartRoutingRulesCodec {
             name = name,
             type = type,
             action = action,
+            outboundTag = outboundTag,
             values = legacyValues.ifEmpty { resolvedDomains.ifEmpty { resolvedIps } },
             enabled = item.optBoolean("enabled", true),
             locked = item.optBoolean("locked", false),

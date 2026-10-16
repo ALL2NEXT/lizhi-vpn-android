@@ -72,10 +72,15 @@ internal class NativeCoreSession(
                 "--token", token
             )
             arguments += extraArguments
-            val started = ProcessBuilder(arguments)
+            val processBuilder = ProcessBuilder(arguments)
                 .directory(context.filesDir)
                 .redirectErrorStream(true)
-                .start()
+            if (core == ProxyCore.XRAY) {
+                // Xray 从 v2rayNG 兼容的应用私有资源目录读取 geosite.dat / geoip.dat。
+                processBuilder.environment()["XRAY_LOCATION_ASSET"] =
+                    context.getDir("assets", Context.MODE_PRIVATE).absolutePath
+            }
+            val started = processBuilder.start()
             process = started
             scope.launch {
                 val readError = output.read(started.inputStream) { line ->
