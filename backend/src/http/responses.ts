@@ -1,6 +1,6 @@
 import type { Env } from "../types/env.ts";
 
-import { cleanText } from "../lib/values.ts";
+import { cleanText, constantTimeBytesEqual } from "../lib/values.ts";
 
 export async function isAdmin(request: Request, env: Env) {
   const token = cleanText(env.ADMIN_TOKEN);
@@ -12,7 +12,7 @@ export async function isAdmin(request: Request, env: Env) {
     crypto.subtle.digest("SHA-256", encoder.encode(authorization)),
     crypto.subtle.digest("SHA-256", encoder.encode(`Bearer ${token}`)),
   ]);
-  return crypto.subtle.timingSafeEqual(providedHash, expectedHash);
+  return constantTimeBytesEqual(new Uint8Array(providedHash), new Uint8Array(expectedHash));
 }
 
 export function corsHeaders(): Record<string, string> {

@@ -17,6 +17,8 @@ out/
 .wrangler-dry-run/
 backend/.wrangler/
 backend/node_modules/
+backend/dist/
+backend/data/linux/
 backend/worker-startup.cpuprofile
 
 # Gradle files

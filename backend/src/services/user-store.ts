@@ -1,4 +1,5 @@
 import type { Env } from "../types/env.ts";
+import type { Database } from "../storage/contracts.ts";
 import type {
   AccountType,
   DeviceProfile,
@@ -63,7 +64,7 @@ export async function initializeUserSchema(env: Env) {
   }
 }
 
-export async function initializeUserSchemaDatabase(db: D1Database) {
+export async function initializeUserSchemaDatabase(db: Database) {
   await restoreUsageCompatibilityColumns(db);
 
   let schema;
@@ -122,7 +123,7 @@ export async function initializeUserSchemaDatabase(db: D1Database) {
   return Number(initialized.version);
 }
 
-async function restoreUsageCompatibilityColumns(db: D1Database) {
+async function restoreUsageCompatibilityColumns(db: Database) {
   const tableInfo = await db.prepare("PRAGMA table_info(user_usage_mb)").all<{ name: string }>();
   const columns = new Set((tableInfo.results || []).map((row) => String(row.name || "")));
   if (columns.size === 0) return;
@@ -177,7 +178,7 @@ export async function readDeviceContext(env: Env, value: unknown) {
   return readDeviceContextFromDb(await ensureUserSchema(env), deviceId);
 }
 
-export async function readDeviceContextFromDb(db: D1Database, deviceId: string) {
+export async function readDeviceContextFromDb(db: Database, deviceId: string) {
   const row = await db.prepare(
     `SELECT
        d.id AS device_row_id,
@@ -266,7 +267,7 @@ export async function resolveAccountAccess(env: Env, deviceId: string): Promise<
   };
 }
 
-export async function readD1User(env: Env, userId: number, settings?: Settings) {
+export async function readUser(env: Env, userId: number, settings?: Settings) {
   const db = await ensureUserSchema(env);
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
@@ -282,7 +283,7 @@ export async function readD1User(env: Env, userId: number, settings?: Settings) 
   return row ? rowToUser(row, settings) : null;
 }
 
-export async function readD1UserWithTraffic(env: Env, userId: number, settings?: Settings, now = new Date()) {
+export async function readUserWithTraffic(env: Env, userId: number, settings?: Settings, now = new Date()) {
   const db = await ensureUserSchema(env);
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
@@ -420,7 +421,7 @@ export function publicAdminUser(row: UserRow, settings?: Settings) {
   };
 }
 
-export async function attachDeviceToUser(db: D1Database, userId: number, deviceId: string, profile: DeviceProfile, allowTransfer = false) {
+export async function attachDeviceToUser(db: Database, userId: number, deviceId: string, profile: DeviceProfile, allowTransfer = false) {
   const brand = cleanText(profile && profile.brand).slice(0, 80);
   const model = cleanText(profile && profile.model).slice(0, 120);
   const androidVersion = cleanText(profile && profile.androidVersion).slice(0, 80);

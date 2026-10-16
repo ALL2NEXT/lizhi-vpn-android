@@ -32,8 +32,8 @@ export interface RouteDependencies {
   ensureUserSchema: typeof users.ensureUserSchema;
   resolveDeviceIdentity: typeof users.resolveDeviceIdentity;
   readDeviceContextFromDb: typeof users.readDeviceContextFromDb;
-  readD1User: typeof users.readD1User;
-  readD1UserWithTraffic: typeof users.readD1UserWithTraffic;
+  readUser: typeof users.readUser;
+  readUserWithTraffic: typeof users.readUserWithTraffic;
   attachDeviceToUser: typeof users.attachDeviceToUser;
   registerOrTouchUser: typeof users.registerOrTouchUser;
   publicAccount: typeof users.publicAccount;

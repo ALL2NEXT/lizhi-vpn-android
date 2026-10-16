@@ -16,8 +16,8 @@ export function createAccountRoutes(deps: Pick<
   | "ensureUserSchema"
   | "resolveDeviceIdentity"
   | "readDeviceContextFromDb"
-  | "readD1User"
-  | "readD1UserWithTraffic"
+  | "readUser"
+  | "readUserWithTraffic"
   | "attachDeviceToUser"
   | "registerOrTouchUser"
   | "normalizeNickname"
@@ -42,8 +42,8 @@ export function createAccountRoutes(deps: Pick<
     ensureUserSchema,
     resolveDeviceIdentity,
     readDeviceContextFromDb,
-    readD1User,
-    readD1UserWithTraffic,
+    readUser,
+    readUserWithTraffic,
     attachDeviceToUser,
     registerOrTouchUser,
     normalizeNickname,
@@ -73,7 +73,7 @@ export function createAccountRoutes(deps: Pick<
       await ensureUserSchema(env);
       const identity = await registerOrTouchUser(env, deviceId, body || {}, now);
       const user = identity && identity.userId > 0
-        ? await readD1UserWithTraffic(env, identity.userId, undefined, now)
+        ? await readUserWithTraffic(env, identity.userId, undefined, now)
         : null;
       if (!user || !identity) {
         if (identity && identity.deviceBanned) {
@@ -118,7 +118,7 @@ export function createAccountRoutes(deps: Pick<
       if (state.settings.requireAdminRegistrationCode && !registrationCode) {
         return json({ ok: false, error: "registration_code_required" }, 400);
       }
-      const user = await readD1User(env, identity.userId);
+      const user = await readUser(env, identity.userId);
       if (!user) return json({ ok: false, error: "account_not_found" }, 404);
       if (user.accountType === "banned") {
         return json({ ok: false, error: "account_banned" }, 403);
@@ -186,7 +186,7 @@ export function createAccountRoutes(deps: Pick<
         return json({ ok: false, error: "invalid_registration_code" }, 409);
       }
 
-      const updated = await readD1UserWithTraffic(env, identity.userId);
+      const updated = await readUserWithTraffic(env, identity.userId);
       return json({ ok: true, account: publicAccount(updated) });
     }
 
@@ -220,7 +220,7 @@ export function createAccountRoutes(deps: Pick<
       observeRequestUser(env, { userId: Number(row.id), uid: row.uid, deviceId }, "login");
       return json({
         ok: true,
-        account: publicAccount(await readD1UserWithTraffic(env, Number(row.id))),
+        account: publicAccount(await readUserWithTraffic(env, Number(row.id))),
       });
     }
 
@@ -276,7 +276,7 @@ export function createAccountRoutes(deps: Pick<
 
       return json({
         ok: true,
-        account: publicAccount(await readD1UserWithTraffic(env, identity.userId)),
+        account: publicAccount(await readUserWithTraffic(env, identity.userId)),
         addedDays: Number(card.duration_days),
       });
     }
@@ -293,7 +293,7 @@ export function createAccountRoutes(deps: Pick<
       if (!identity || (requestedUid && requestedUid !== identity.uid)) {
         return json({ ok: false, error: "account_not_found" }, 404);
       }
-      const user = await readD1User(env, identity.userId);
+      const user = await readUser(env, identity.userId);
       if (!user) return json({ ok: false, error: "account_not_found" }, 404);
       if (user.accountType === "banned") {
         return json({ ok: false, error: "account_banned" }, 403);
@@ -330,7 +330,7 @@ export function createAccountRoutes(deps: Pick<
       }
       return json({
         ok: true,
-        account: publicAccount(await readD1UserWithTraffic(env, identity.userId)),
+        account: publicAccount(await readUserWithTraffic(env, identity.userId)),
       });
     }
 
@@ -341,7 +341,7 @@ export function createAccountRoutes(deps: Pick<
       const identity = await resolveDeviceIdentity(env, deviceId);
       if (!identity || !sessionId) return json({ ok: false, error: "invalid_report" }, 400);
 
-      const user = await readD1User(env, identity.userId);
+      const user = await readUser(env, identity.userId);
       if (!user) return json({ ok: false, error: "account_not_found" }, 404);
       if (user.accountType === "banned") {
         return json({ ok: false, error: "account_banned" }, 403);

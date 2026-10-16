@@ -1,7 +1,7 @@
 import type { AppState } from "./types/models.ts";
 
 /*
- * Runtime configuration and D1 bootstrap schema.
+ * Runtime configuration and database bootstrap schema.
  * Keep deployment-independent values here so route code stays focused on behavior.
  */
 

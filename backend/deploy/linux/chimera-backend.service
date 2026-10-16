@@ -1,0 +1,25 @@
+[Unit]
+Description=Chimera Linux backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chimera
+Group=chimera
+WorkingDirectory=/opt/chimera/backend
+EnvironmentFile=/etc/chimera/backend.env
+ExecStart=/usr/local/bin/node /opt/chimera/backend/dist/linux/server.mjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+StateDirectory=chimera
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/chimera
+
+[Install]
+WantedBy=multi-user.target

@@ -2,7 +2,7 @@ import type { Env } from "./types/env.ts";
 import type { RouteDependencies } from "./types/routes.ts";
 
 /*
- * Chimera Cloudflare Worker composition root.
+ * Chimera shared backend composition root.
  *
  * Domain logic lives in focused modules. This file only wires route
  * dependencies and dispatches incoming requests.
@@ -67,8 +67,8 @@ import {
   attachDeviceToUser,
   ensureUserSchema,
   initializeUserSchema,
-  readD1User,
-  readD1UserWithTraffic,
+  readUser,
+  readUserWithTraffic,
   readDeviceContextFromDb,
   registerOrTouchUser,
   publicAccount,
@@ -123,8 +123,8 @@ const routeDeps = {
   ensureUserSchema,
   resolveDeviceIdentity,
   readDeviceContextFromDb,
-  readD1User,
-  readD1UserWithTraffic,
+  readUser,
+  readUserWithTraffic,
   attachDeviceToUser,
   registerOrTouchUser,
   // 账户注册成功后需要用统一格式返回账户信息。
@@ -251,7 +251,7 @@ async function dispatchWorkerRequest(request: Request, env: Env) {
           : null;
         return json({
           ok: true,
-          service: "chimera-worker",
+          service: env.SERVICE_NAME || "chimera-worker",
           bindings: {
             config: Boolean(env.CONFIG),
             usersDb: Boolean(env.USERS_DB),
@@ -309,8 +309,15 @@ async function dispatchWorkerRequest(request: Request, env: Env) {
     }
 }
 
-const worker = {
-  async fetch(request: Request, env: Env, ctx?: ExecutionContext) {
+export interface BackendExecutionContext {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+export async function fetchBackend(
+  request: Request,
+  env: Env,
+  ctx?: BackendExecutionContext,
+) {
     const startedAt = performance.now();
     const occurredAt = beijingTimestamp();
     const url = new URL(request.url);
@@ -407,7 +414,7 @@ const worker = {
             };
           }
         } catch {
-          // Payload capture failures do not interfere with the original Worker response.
+          // Payload capture failures do not interfere with the original response.
         }
       }
       await writeSystemLogs(env, entries, recordingSettings);
@@ -415,10 +422,8 @@ const worker = {
     if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(persist);
     else await persist;
     return response;
-  },
-  scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(pruneSystemLogs(env));
-  },
-} satisfies ExportedHandler<Env>;
+}
 
-export default worker;
+export function scheduledBackend(env: Env, ctx: BackendExecutionContext) {
+  ctx.waitUntil(pruneSystemLogs(env));
+}

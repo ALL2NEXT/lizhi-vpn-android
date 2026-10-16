@@ -1,4 +1,5 @@
 import type { Env } from "../types/env.ts";
+import type { Database } from "../storage/contracts.ts";
 import type {
   SystemLogCategory,
   SystemLogDraft,
@@ -293,7 +294,7 @@ function splitPayload(serialized: string) {
 }
 
 async function writeSystemLogPayload(
-  db: D1Database,
+  db: Database,
   requestId: string,
   occurredAt: string,
   capture: SystemLogHttpCapture,

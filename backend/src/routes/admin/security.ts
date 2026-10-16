@@ -1,4 +1,5 @@
 import type { DeviceRelationRow, DeviceInventoryRow, DeviceLinkRow, SecurityAccountRow } from "../../types/database.ts";
+import type { DatabaseResult } from "../../storage/contracts.ts";
 
 interface SecurityDevice {
   deviceId: string;
@@ -253,9 +254,11 @@ export function createAdminSecurityRoutes(deps: Pick<
            WHERE l.user_id IS NOT NULL
            ORDER BY l.last_bound_at DESC, d.id DESC`,
         ),
-      ]) as [D1Result<SecurityAccountRow>, D1Result<DeviceLinkRow>];
+      ]);
+      const accountResult = results[0] as DatabaseResult<SecurityAccountRow>;
+      const deviceResult = results[1] as DatabaseResult<DeviceLinkRow>;
       const devicesByUser = new Map<number, SecurityDevice[]>();
-      for (const row of results[1].results || []) {
+      for (const row of deviceResult.results) {
         const userId = Number(row.user_id);
         const devices = devicesByUser.get(userId) || [];
         devices.push({
@@ -276,7 +279,7 @@ export function createAdminSecurityRoutes(deps: Pick<
       }
       return json({
         ok: true,
-        accounts: (results[0].results || []).map((row) => {
+        accounts: accountResult.results.map((row) => {
           const user = rowToUser(row, state.settings);
           return {
             uid: user.uid,

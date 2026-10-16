@@ -1,6 +1,7 @@
 {
   "devDependencies": {
     "@types/node": "^24.19.1",
+    "esbuild": "^0.28.1",
     "miniflare": "5.20260811.1-alpha",
     "typescript": "^5.9.3",
     "wrangler": "^4.123.0"
@@ -15,6 +16,8 @@
     "typecheck": "npm run types && tsc --noEmit",
     "build": "npm run typecheck && wrangler deploy --dry-run --outdir .wrangler/build",
     "build:tiered": "npm run typecheck && wrangler deploy --dry-run --config wrangler.tiered.jsonc --outdir .wrangler/build-tiered",
+    "linux:build": "npm run typecheck && node scripts/build-linux.mjs",
+    "linux:start": "node dist/linux/server.mjs",
     "dev": "npm run types && wrangler dev --local",
     "test": "npm run build && node --test tests/*.test.mjs"
   },

@@ -19,7 +19,7 @@ export function createAdminUserRoutes(deps: Pick<
   | "normalizeUserIdentityType"
   | "publicAccount"
   | "publicAdminUser"
-  | "readD1User"
+  | "readUser"
   | "resolveUserIdentity"
   | "usagePeriodKeys"
 >) {
@@ -34,7 +34,7 @@ export function createAdminUserRoutes(deps: Pick<
     normalizeUserIdentityType,
     publicAccount,
     publicAdminUser,
-    readD1User,
+    readUser,
     resolveUserIdentity,
     usagePeriodKeys,
   } = deps;
@@ -261,7 +261,7 @@ export function createAdminUserRoutes(deps: Pick<
       }
       return json({
         ok: true,
-        user: publicAccount(await readD1User(env, identity.userId)),
+        user: publicAccount(await readUser(env, identity.userId)),
       });
     }
 

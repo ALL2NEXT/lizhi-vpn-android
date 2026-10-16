@@ -1,7 +1,8 @@
 import type { AccountType, UserIdentityType } from "../types/models.ts";
 
 import { MAX_TRAFFIC_BYTES, TEXT_ENCODER } from "../config.ts";
-import { cleanText } from "../lib/values.ts";
+import { cleanText, constantTimeBytesEqual } from "../lib/values.ts";
+export { constantTimeBytesEqual } from "../lib/values.ts";
 
 const REGISTRATION_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -177,10 +178,6 @@ export function base64DecodeBytes(value: string) {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
-}
-
-export function constantTimeBytesEqual(left: Uint8Array, right: Uint8Array) {
-  return left.length === right.length && crypto.subtle.timingSafeEqual(left, right);
 }
 
 export function normalizeUid(value: unknown) {

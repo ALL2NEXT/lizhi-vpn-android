@@ -1,5 +1,6 @@
 import type { Env } from "../types/env.ts";
 import type { SubscriptionGroup, SubscriptionSource } from "../types/models.ts";
+import type { Database, PreparedStatement } from "../storage/contracts.ts";
 
 import {
   SUBSCRIPTION_CONTENT_KEY_PREFIX,
@@ -73,12 +74,12 @@ async function contentHash(value: string) {
 }
 
 function jsonBatchStatements(
-  db: D1Database,
+  db: Database,
   sql: string,
   rows: Array<Record<string, string | number>>,
-  directStatement?: (row: Record<string, string | number>) => D1PreparedStatement,
+  directStatement?: (row: Record<string, string | number>) => PreparedStatement,
 ) {
-  const statements: D1PreparedStatement[] = [];
+  const statements: PreparedStatement[] = [];
   let currentRows: Array<Record<string, string | number>> = [];
   let currentBytes = 2;
   const flush = () => {
@@ -111,7 +112,7 @@ async function subscriptionContentKey(sourceId: string, content: string) {
   return `${SUBSCRIPTION_CONTENT_KEY_PREFIX}${sourceId}:${await contentHash(content)}`;
 }
 
-async function moveInlineSubscriptionContentToKv(env: Env, db: D1Database) {
+async function moveInlineSubscriptionContentToKv(env: Env, db: Database) {
   if (!env.CONFIG) return;
   const rows = (await db.prepare(
     `SELECT id, content FROM subscription_sources
@@ -201,7 +202,7 @@ export async function loadSubscriptionGroups(env: Env, includeContent = false): 
       .filter((source) => source.sourceType === "content" && source.contentKey);
     for (let offset = 0; offset < keyedSources.length; offset += 40) {
       await Promise.all(keyedSources.slice(offset, offset + 40).map(async (source) => {
-        const content = await env.CONFIG!.get<string>(source.contentKey!);
+        const content = await env.CONFIG!.get(source.contentKey!);
         if (typeof content !== "string") throw new Error("subscription_content_unavailable");
         source.content = content;
       }));
@@ -391,7 +392,7 @@ export async function readSubscriptionContent(env: Env, source: SubscriptionSour
     throw new Error("subscription_content_unavailable");
   }
   if (source.contentKey) {
-    const content = await env.CONFIG?.get<string>(source.contentKey);
+    const content = await env.CONFIG?.get(source.contentKey);
     if (typeof content === "string") return content;
     throw new Error("subscription_content_unavailable");
   }

@@ -1,20 +1,23 @@
-# Chimera Cloudflare Worker 后端
+# Chimera 后端
 
-这是 Chimera 的 Cloudflare Worker 后端。服务端业务实现使用 TypeScript 严格模式，部署入口保持为 `serverless.js`。迁移范围和选择依据见 [TypeScript 迁移分析](docs/typescript-migration.md)。
+这是 Chimera 的后端，服务端业务实现使用 TypeScript 严格模式，可部署到 Cloudflare Workers 或独立 Linux/Node.js。Worker 部署入口保持为 `serverless.js`。迁移范围和选择依据见 [TypeScript 迁移分析](docs/typescript-migration.md)。
 
 ## 目录结构
 
-- `serverless.js`：Cloudflare Worker 稳定入口，仅负责导出运行时。
-- `src/worker-core.ts`：Worker 组合根，只负责依赖装配、入口分发和统一异常日志。
-- `src/config.ts`：运行时常量、默认状态和 D1 初始化 schema。
+- `serverless.js`、`src/worker/entry.ts`：Cloudflare Worker 稳定入口和绑定适配器。
+- `src/worker-core.ts`：Worker 与 Linux 共用的路由组合、请求分发和统一异常日志。
+- `src/storage/contracts.ts`：共享业务层使用的平台无关数据库和配置存储接口。
+- `src/storage/cloudflare.ts`：Cloudflare D1/KV 绑定适配器。
+- `src/linux/`：Node.js HTTP 入口和 SQLite 存储适配器；仅 Linux 构建会包含 Node.js 运行时模块。
+- `src/config.ts`：运行时常量、默认状态和用户数据库初始化 schema。
 - `src/domain/`：账号字段、时间周期和统计聚合等纯业务规则。
-- `src/services/`：D1 用户仓储、订阅、KV 状态、导航图标、后台访问记录和蜜罐服务。
+- `src/services/`：用户数据库仓储、订阅、配置状态、导航图标、后台访问记录和蜜罐服务。
 - `src/http/`、`src/lib/`：HTTP 响应、安全校验和通用值处理。
 - `src/routes/client.ts`：客户端配置、订阅中转路由。
 - `src/routes/account.ts`：注册、绑定、登录、账户维护和流量上报路由。
 - `src/routes/admin.ts`：管理 API 组合器，具体路由按安全、统计、用户和状态拆在 `src/routes/admin/`。
 - `src/admin-ui.ts`：管理页资源组合器；HTML、CSS 和浏览器脚本位于 `src/admin-ui/`，浏览器脚本继续使用 JavaScript。
-- `src/types/`：运行环境、业务模型、D1 查询行和路由依赖类型。
+- `src/types/`：运行环境、业务模型、查询行和路由依赖类型。
 - `tests/`：核心规则测试和使用本地 D1/KV 的 Worker 集成测试。
 - `schema.sql`：D1 schema 的可读副本。
 
@@ -46,7 +49,7 @@ Authorization: Bearer <ADMIN_TOKEN>
 
 ## 数据库初始化
 
-首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。当前用户数据库 schema 版本为 `20`。历史经验奖励表与字段已在 schema v11 移除，账号类型由邮箱绑定和封禁状态决定；后台账号身份只有真人和机器人，新账号及历史未标记账号默认按真人处理，身份标记不会下发到客户端。
+首次访问 `/health` 或任意账户接口时，Worker 会检查并初始化 D1 schema。当前用户数据库 schema 版本为 `21`。历史经验奖励表与字段已在 schema v11 移除，账号类型由邮箱绑定和封禁状态决定；后台账号身份只有真人和机器人，新账号及历史未标记账号默认按真人处理，身份标记不会下发到客户端。
 
 如果绑定的 D1 已有数据但缺少版本标记，Worker 会拒绝自动覆盖，并返回 `users_db_unversioned_schema_detected`，请先备份并完成迁移。
 
@@ -150,3 +153,36 @@ npx.cmd wrangler deploy --config wrangler.tiered.jsonc
 npx.cmd wrangler secret put ADMIN_PATH --config wrangler.tiered.jsonc
 npx.cmd wrangler secret put ADMIN_TOKEN --config wrangler.tiered.jsonc
 ```
+
+## Linux 独立部署
+
+Linux 版使用 Node.js 运行同一套路由、管理后台和业务代码，数据保存在本机 SQLite，与 Cloudflare Worker 的 D1/KV 完全分开。首次启动会初始化用户 schema，并将 `migrations/subscriptions/` 中的订阅数据库迁移按序应用到本机数据库；它不会自动导入 Worker 里的用户、订阅或后台配置。
+
+需要 Linux x64/ARM64 上可用的 Node.js `22.18.0` 或更新版本。Linux 构建会将服务入口和后台页面资源打包为 `dist/linux/server.mjs`：
+
+```sh
+cd backend
+npm ci
+npm run linux:build
+```
+
+部署时把完整的 `dist/linux/` 目录复制到服务器的 `/opt/chimera/backend/dist/linux/`；该目录同时包含运行入口和订阅迁移 SQL。
+
+准备环境变量后可直接启动：
+
+```sh
+export ADMIN_PATH='替换成随机后台路径'
+export ADMIN_TOKEN='替换成高强度管理令牌'
+export HOST='127.0.0.1'
+export PORT='8788'
+export LINUX_DATA_DIR='/var/lib/chimera'
+npm run linux:start
+```
+
+`ADMIN_PATH` 只允许 1 到 128 位字母、数字、下划线或连字符；未设置有效后台路径或 `ADMIN_TOKEN` 时服务会拒绝启动。SQLite 数据目录中会生成 `users.sqlite`、`subscriptions.sqlite` 和 `config.sqlite`。默认开发数据目录为 `backend/data/linux`，正式部署建议设置为专用持久化目录并纳入备份。
+
+项目提供了 systemd 单元模板 `deploy/linux/chimera-backend.service`。把它安装为 `/etc/systemd/system/chimera-backend.service`，创建运行用户 `chimera`，将后端部署到 `/opt/chimera/backend`，并创建权限为 `600` 的 `/etc/chimera/backend.env`。环境文件至少包含 `ADMIN_PATH`、`ADMIN_TOKEN`、`HOST=127.0.0.1`、`PORT=8788` 和 `LINUX_DATA_DIR=/var/lib/chimera`；确认目录归运行用户所有后，运行 `systemctl enable --now chimera-backend`。
+
+默认监听地址是 `127.0.0.1:8788`，适合由 Nginx 反向代理。若需要在管理后台保留客户端真实 IP，代理需设置可信的 `CF-Connecting-IP` 请求头。Linux 版会按 Worker 的每日 `19:00 UTC` 定时规则清理系统日志。
+
+Linux 版使用 Node.js 内置的 `node:sqlite`，该 API 在 Node.js 文档中仍标记为实验性；升级 Node.js 前应先在备份数据上验证兼容性，参见 [Node.js SQLite 文档](https://nodejs.org/api/sqlite.html)。Cloudflare Worker 的 `serverless.js`、Wrangler 配置和部署方式继续用于原有 Worker 环境。
