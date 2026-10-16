@@ -81,9 +81,10 @@ internal object XrayVpnConfig {
         if (request.isVpn) {
             val settings = request.settings!!
             val dnsSettings = settings.dnsSettings
-            val smartInboundTags = buildList {
-                if (settings.proxyMode == ProxyMode.SMART) add("internal-socks-in")
-                if (settings.lanInbound.enabled && settings.lanInbound.proxyMode == ProxyMode.SMART) {
+            // 全局与智能模式使用各自的规则集，均需作用于 VPN 的 SOCKS 入站。
+            val routingInboundTags = buildList {
+                add("internal-socks-in")
+                if (settings.lanInbound.enabled && settings.lanInbound.proxyMode == settings.proxyMode) {
                     add("lan-socks-in")
                 }
             }
@@ -169,9 +170,9 @@ internal object XrayVpnConfig {
                     "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10"))
             })
             val localDomains = strings("full:${request.node.server}")
-            if (smartInboundTags.isNotEmpty()) {
-                fun scopedSmartRule(outbound: String) = rule(outbound).apply {
-                    add("inboundTag", strings(*smartInboundTags.toTypedArray()))
+            if (routingInboundTags.isNotEmpty()) {
+                fun scopedRoutingRule(outbound: String) = rule(outbound).apply {
+                    add("inboundTag", strings(*routingInboundTags.toTypedArray()))
                 }
                 settings.smartRoutingSettings.rules.filter { it.enabled }.forEach { smartRule ->
                     when (smartRule.type) {
@@ -193,7 +194,7 @@ internal object XrayVpnConfig {
                             }.flatMap(::decodeRoutingRuleValues)
                             // 与 v2rayNG 一样保留规则原顺序；HEV 不支持进程匹配，
                             // 因此 process 字段不下发，但其余条件仍按原规则生成。
-                            rules.add(scopedSmartRule(smartRule.effectiveOutboundTag).apply {
+                            rules.add(scopedRoutingRule(smartRule.effectiveOutboundTag).apply {
                                 if (domains.isNotEmpty()) {
                                     add(
                                         "domain",

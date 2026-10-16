@@ -69,6 +69,7 @@ import io.github.HanJason233.chimera.data.model.SmartRoutingPreset
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
 import io.github.HanJason233.chimera.data.model.SmartRoutingRulesCodec
+import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
@@ -86,13 +87,15 @@ private enum class RoutingMenuAction(val title: String) {
 @Composable
 fun CoreRoutingScreen(
     viewModel: MainViewModel,
+    mode: ProxyMode,
     onBack: () -> Unit,
     onScanQrCode: () -> Unit,
     scannedRulesText: String?,
     onScannedRulesTextConsumed: () -> Unit
 ) {
     val context = LocalContext.current
-    val smartRoutingSettings by viewModel.smartRoutingSettings.collectAsStateWithLifecycle()
+    val settingsFlow = remember(viewModel, mode) { viewModel.routingSettings(mode) }
+    val routingSettings by settingsFlow.collectAsStateWithLifecycle()
     var editingRuleId by rememberSaveable { mutableStateOf<String?>(null) }
     var addingRule by rememberSaveable { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -105,10 +108,10 @@ fun CoreRoutingScreen(
     var draggedItemTop by remember { mutableFloatStateOf(0f) }
     var draggedItemHeight by remember { mutableFloatStateOf(1f) }
     var dragDistance by remember { mutableFloatStateOf(0f) }
-    val editingRule = smartRoutingSettings.rules.firstOrNull { it.id == editingRuleId }
+    val editingRule = routingSettings.rules.firstOrNull { it.id == editingRuleId }
 
     fun importRules(json: String) {
-        viewModel.importSmartRoutingRules(json) { success ->
+        viewModel.importSmartRoutingRules(json, mode) { success ->
             Toast.makeText(
                 context,
                 if (success) "路由规则已导入" else "导入失败，请检查规则 JSON",
@@ -126,7 +129,7 @@ fun CoreRoutingScreen(
     }
 
     AppScreenScaffold(
-        title = "路由设置",
+        title = if (mode == ProxyMode.GLOBAL) "全局路由规则" else "智能路由规则",
         onBack = onBack,
         contentPadding = PaddingValues(0.dp),
         actions = {
@@ -165,13 +168,13 @@ fun CoreRoutingScreen(
                                     clipboard?.setPrimaryClip(
                                         ClipData.newPlainText(
                                             "Chimera 路由规则",
-                                            SmartRoutingRulesCodec.encode(smartRoutingSettings.rules)
+                                            SmartRoutingRulesCodec.encode(routingSettings.rules)
                                         )
                                     )
                                     Toast.makeText(context, "路由规则已复制", Toast.LENGTH_SHORT).show()
                                 }
                                 RoutingMenuAction.EXPORT_QR -> {
-                                    qrRulesText = SmartRoutingRulesCodec.encode(smartRoutingSettings.rules)
+                                    qrRulesText = SmartRoutingRulesCodec.encode(routingSettings.rules)
                                 }
                             }
                         }
@@ -199,7 +202,7 @@ fun CoreRoutingScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = smartRoutingSettings.domainStrategy.title,
+                            text = routingSettings.domainStrategy.title,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -213,7 +216,7 @@ fun CoreRoutingScreen(
                                 text = { Text(strategy.title) },
                                 onClick = {
                                     strategyMenuExpanded = false
-                                    viewModel.setSmartRoutingDomainStrategy(strategy)
+                                    viewModel.setSmartRoutingDomainStrategy(strategy, mode)
                                 }
                             )
                         }
@@ -234,7 +237,7 @@ fun CoreRoutingScreen(
                 )
             }
             itemsIndexed(
-                items = smartRoutingSettings.rules,
+                items = routingSettings.rules,
                 key = { _, rule -> "rule:${rule.id}" }
             ) { _, rule ->
                 Column {
@@ -242,7 +245,7 @@ fun CoreRoutingScreen(
                         rule = rule,
                         onEdit = { editingRuleId = rule.id },
                         onEnabledChange = { enabled ->
-                            viewModel.setSmartRoutingRuleEnabled(rule.id, enabled)
+                            viewModel.setSmartRoutingRuleEnabled(rule.id, enabled, mode)
                         },
                         // 保持 v2rayNG 的无拖动柄样式，长按整行可调整规则顺序。
                         dragModifier = Modifier.pointerInput(rule.id) {
@@ -271,7 +274,7 @@ fun CoreRoutingScreen(
                                         targetId != null && sourceId != null &&
                                         targetId != sourceId && targetId != lastMovedTargetId
                                     ) {
-                                        viewModel.moveSmartRoutingRule(sourceId, targetId)
+                                        viewModel.moveSmartRoutingRule(sourceId, targetId, mode)
                                         lastMovedTargetId = targetId
                                     }
                                 },
@@ -303,12 +306,12 @@ fun CoreRoutingScreen(
                 editingRuleId = null
             },
             onSave = { rule ->
-                viewModel.saveSmartRoutingRule(rule)
+                viewModel.saveSmartRoutingRule(rule, mode)
                 addingRule = false
                 editingRuleId = null
             },
             onDelete = { ruleId ->
-                viewModel.deleteSmartRoutingRule(ruleId)
+                viewModel.deleteSmartRoutingRule(ruleId, mode)
                 addingRule = false
                 editingRuleId = null
             }

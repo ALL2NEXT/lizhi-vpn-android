@@ -84,6 +84,10 @@ class SettingsRepository(
         private val PER_APP_INBOUND_ENABLED = booleanPreferencesKey("per_app_proxy_enabled")
         private val PER_APP_INBOUND_BYPASS_MODE = booleanPreferencesKey("per_app_proxy_bypass_mode")
         private val PER_APP_INBOUND_PACKAGES = stringSetPreferencesKey("per_app_proxy_packages")
+        // 旧版分应用范围作为智能模式配置保留，全局模式另存一份。
+        private val GLOBAL_PER_APP_INBOUND_ENABLED = booleanPreferencesKey("global_per_app_proxy_enabled")
+        private val GLOBAL_PER_APP_INBOUND_BYPASS_MODE = booleanPreferencesKey("global_per_app_proxy_bypass_mode")
+        private val GLOBAL_PER_APP_INBOUND_PACKAGES = stringSetPreferencesKey("global_per_app_proxy_packages")
         private val LAN_INBOUND_ENABLED = booleanPreferencesKey("lan_inbound_enabled")
         private val LAN_INBOUND_PORT = intPreferencesKey("lan_inbound_port")
         private val LAN_INBOUND_USERNAME = stringPreferencesKey("lan_inbound_username")
@@ -124,6 +128,9 @@ class SettingsRepository(
         private val SMART_ROUTING_RULES_JSON = stringPreferencesKey("smart_routing_rules_json")
         private val SMART_ROUTING_DOMAIN_STRATEGY =
             stringPreferencesKey("smart_routing_domain_strategy")
+        private val GLOBAL_ROUTING_RULES_JSON = stringPreferencesKey("global_routing_rules_json")
+        private val GLOBAL_ROUTING_DOMAIN_STRATEGY =
+            stringPreferencesKey("global_routing_domain_strategy")
         
         // 自动化测试设置
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
@@ -184,12 +191,12 @@ class SettingsRepository(
         }
     }
 
-    val perAppInboundSettings: Flow<PerAppInboundSettings> = store.data.map { preferences ->
-        PerAppInboundSettings(
-            enabled = preferences[PER_APP_INBOUND_ENABLED] ?: false,
-            bypassMode = preferences[PER_APP_INBOUND_BYPASS_MODE] ?: false,
-            selectedPackages = preferences[PER_APP_INBOUND_PACKAGES]?.toSet() ?: emptySet()
-        )
+    val perAppInboundSettings: Flow<PerAppInboundSettings> = perAppInboundSettings(ProxyMode.SMART)
+    val globalPerAppInboundSettings: Flow<PerAppInboundSettings> = perAppInboundSettings(ProxyMode.GLOBAL)
+
+    /** 按全局/智能模式分别读取 VPN 作用范围。 */
+    fun perAppInboundSettings(mode: ProxyMode): Flow<PerAppInboundSettings> = store.data.map { preferences ->
+        decodePerAppInboundSettings(preferences, mode)
     }
 
     /** 用户保存的测速方案；首次使用时提供一套当前组内置方案。 */
@@ -418,10 +425,11 @@ class SettingsRepository(
     /** Reads all settings needed for one VPN start from a single DataStore snapshot. */
     suspend fun getVpnRuntimeSettings(): VpnRuntimeSettings {
         val preferences = store.data.first()
+        val mode = enumValueOrDefault(preferences[PROXY_MODE], ProxyMode.SMART)
         val hysteriaBandwidthEnabled = preferences[HYSTERIA_BANDWIDTH_ENABLED]
             ?: io.github.HanJason233.chimera.AppConfig.HYSTERIA_BANDWIDTH_ENABLED
         return VpnRuntimeSettings(
-            proxyMode = enumValueOrDefault(preferences[PROXY_MODE], ProxyMode.SMART),
+            proxyMode = mode,
             ipv6RoutingMode = enumValueOrDefault(
                 preferences[IPV6_ROUTING_MODE],
                 IPv6RoutingMode.DISABLED
@@ -442,30 +450,62 @@ class SettingsRepository(
             protocolCoreSettings = decodeProtocolCoreSettings(preferences[CORE_ASSIGNMENTS]),
             lanInbound = decodeLanInboundSettings(preferences),
             dnsSettings = decodeDnsSettings(preferences),
-            smartRoutingSettings = decodeSmartRoutingSettings(preferences),
-            perAppInboundSettings = PerAppInboundSettings(
-                enabled = preferences[PER_APP_INBOUND_ENABLED] ?: false,
-                bypassMode = preferences[PER_APP_INBOUND_BYPASS_MODE] ?: false,
-                selectedPackages = preferences[PER_APP_INBOUND_PACKAGES]?.toSet() ?: emptySet()
-            ),
+            // VPN 启动时原子读取当前模式对应的规则与应用范围。
+            smartRoutingSettings = decodeSmartRoutingSettings(preferences, mode),
+            perAppInboundSettings = decodePerAppInboundSettings(preferences, mode),
         )
     }
 
-    suspend fun setPerAppInboundSettings(settings: PerAppInboundSettings) {
+    suspend fun setPerAppInboundSettings(
+        settings: PerAppInboundSettings,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
+        val enabledKey = perAppEnabledKey(mode)
+        val bypassModeKey = perAppBypassModeKey(mode)
+        val packagesKey = perAppPackagesKey(mode)
         store.edit { preferences ->
-            preferences[PER_APP_INBOUND_ENABLED] = settings.enabled
-            preferences[PER_APP_INBOUND_BYPASS_MODE] = settings.bypassMode
+            preferences[enabledKey] = settings.enabled
+            preferences[bypassModeKey] = settings.bypassMode
             val cleanPackages = settings.selectedPackages.asSequence()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
                 .toSet()
             if (cleanPackages.isEmpty()) {
-                preferences.remove(PER_APP_INBOUND_PACKAGES)
+                preferences.remove(packagesKey)
             } else {
-                preferences[PER_APP_INBOUND_PACKAGES] = cleanPackages
+                preferences[packagesKey] = cleanPackages
             }
         }
     }
+
+    private fun decodePerAppInboundSettings(
+        preferences: Preferences,
+        mode: ProxyMode
+    ): PerAppInboundSettings {
+        // 首次升级时旧版范围同时用于两种模式；全局配置首次保存后即与智能配置分离。
+        val hasGlobalProfile = preferences[GLOBAL_PER_APP_INBOUND_ENABLED] != null ||
+            preferences[GLOBAL_PER_APP_INBOUND_BYPASS_MODE] != null ||
+            preferences[GLOBAL_PER_APP_INBOUND_PACKAGES] != null
+        val storageMode = if (mode == ProxyMode.GLOBAL && !hasGlobalProfile) {
+            ProxyMode.SMART
+        } else {
+            mode
+        }
+        return PerAppInboundSettings(
+            enabled = preferences[perAppEnabledKey(storageMode)] ?: false,
+            bypassMode = preferences[perAppBypassModeKey(storageMode)] ?: false,
+            selectedPackages = preferences[perAppPackagesKey(storageMode)]?.toSet() ?: emptySet()
+        )
+    }
+
+    private fun perAppEnabledKey(mode: ProxyMode) =
+        if (mode == ProxyMode.GLOBAL) GLOBAL_PER_APP_INBOUND_ENABLED else PER_APP_INBOUND_ENABLED
+
+    private fun perAppBypassModeKey(mode: ProxyMode) =
+        if (mode == ProxyMode.GLOBAL) GLOBAL_PER_APP_INBOUND_BYPASS_MODE else PER_APP_INBOUND_BYPASS_MODE
+
+    private fun perAppPackagesKey(mode: ProxyMode) =
+        if (mode == ProxyMode.GLOBAL) GLOBAL_PER_APP_INBOUND_PACKAGES else PER_APP_INBOUND_PACKAGES
 
     val protocolCoreSettings: Flow<ProtocolCoreSettings> = store.data.map { preferences ->
         decodeProtocolCoreSettings(preferences[CORE_ASSIGNMENTS])
@@ -523,8 +563,13 @@ class SettingsRepository(
         fakeDnsEnabled = preferences[DNS_FAKE_ENABLED] ?: true
     )
 
-    private fun decodeSmartRoutingSettings(preferences: Preferences): SmartRoutingSettings {
-        val rawRules = preferences[SMART_ROUTING_RULES_JSON]
+    private fun decodeSmartRoutingSettings(
+        preferences: Preferences,
+        mode: ProxyMode = ProxyMode.SMART
+    ): SmartRoutingSettings {
+        val rulesKey = routingRulesKey(mode)
+        val strategyKey = routingStrategyKey(mode)
+        val rawRules = preferences[rulesKey]
         val stored = rawRules?.takeIf(String::isNotBlank)?.let(::decodeSmartRoutingRules)
         // Remove the old Chimera-only injected domestic rules. When they were the
         // entire stored list, migrate to v2rayNG's default white-list preset.
@@ -535,13 +580,13 @@ class SettingsRepository(
                 it.id == "builtin_smart_domestic_ip"
         }
         val rules = when {
-            rawRules.isNullOrBlank() -> initialRoutingRules
-            stored == null -> initialRoutingRules
+            rawRules.isNullOrBlank() -> if (mode == ProxyMode.SMART) initialRoutingRules else emptyList()
+            stored == null -> if (mode == ProxyMode.SMART) initialRoutingRules else emptyList()
             stored.isEmpty() -> emptyList()
-            migratedRules.isNullOrEmpty() -> initialRoutingRules
+            migratedRules.isNullOrEmpty() -> if (mode == ProxyMode.SMART) initialRoutingRules else emptyList()
             else -> migratedRules
         }
-        val rawStrategy = preferences[SMART_ROUTING_DOMAIN_STRATEGY]
+        val rawStrategy = preferences[strategyKey]
         return SmartRoutingSettings(
             rules = rules,
             domainStrategy = SmartRoutingDomainStrategy.entries.firstOrNull {
@@ -549,6 +594,12 @@ class SettingsRepository(
             } ?: SmartRoutingDomainStrategy.AS_IS
         )
     }
+
+    private fun routingRulesKey(mode: ProxyMode) =
+        if (mode == ProxyMode.GLOBAL) GLOBAL_ROUTING_RULES_JSON else SMART_ROUTING_RULES_JSON
+
+    private fun routingStrategyKey(mode: ProxyMode) =
+        if (mode == ProxyMode.GLOBAL) GLOBAL_ROUTING_DOMAIN_STRATEGY else SMART_ROUTING_DOMAIN_STRATEGY
 
     private fun decodeSmartRoutingRules(json: String): List<SmartRoutingRule>? = runCatching {
         val array = JSONArray(json)
@@ -878,15 +929,19 @@ class SettingsRepository(
     }
 
     val smartRoutingSettings: Flow<SmartRoutingSettings> = store.data.map { preferences ->
-        decodeSmartRoutingSettings(preferences)
+        decodeSmartRoutingSettings(preferences, ProxyMode.SMART)
+    }
+    val globalRoutingSettings: Flow<SmartRoutingSettings> = store.data.map { preferences ->
+        decodeSmartRoutingSettings(preferences, ProxyMode.GLOBAL)
     }
 
     suspend fun setSmartRoutingDomains(
         action: SmartRoutingRuleAction,
-        values: List<String>
+        values: List<String>,
+        mode: ProxyMode = ProxyMode.SMART
     ) {
         store.edit { preferences ->
-            val current = decodeSmartRoutingSettings(preferences).rules
+            val current = decodeSmartRoutingSettings(preferences, mode).rules
             val normalizedValues = values
                 .flatMap { it.split(',', '\n') }
                 .map(String::trim)
@@ -909,15 +964,18 @@ class SettingsRepository(
                     )
                 ) + remaining
             }
-            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(updated)
+            preferences[routingRulesKey(mode)] = encodeSmartRoutingRules(updated)
         }
     }
 
-    suspend fun setSmartRoutingDomainStrategy(strategy: SmartRoutingDomainStrategy) {
-        store.edit { preferences -> preferences[SMART_ROUTING_DOMAIN_STRATEGY] = strategy.xrayValue }
+    suspend fun setSmartRoutingDomainStrategy(
+        strategy: SmartRoutingDomainStrategy,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
+        store.edit { preferences -> preferences[routingStrategyKey(mode)] = strategy.xrayValue }
     }
 
-    suspend fun saveSmartRoutingRule(rule: SmartRoutingRule) {
+    suspend fun saveSmartRoutingRule(rule: SmartRoutingRule, mode: ProxyMode = ProxyMode.SMART) {
         if (rule.name.isBlank()) return
         val domains = normalizeRoutingValues(rule.domains)
         val ips = normalizeRoutingValues(rule.ips)
@@ -935,42 +993,49 @@ class SettingsRepository(
             processes = processes
         )
         store.edit { preferences ->
-            val rules = decodeSmartRoutingSettings(preferences).rules
+            val rules = decodeSmartRoutingSettings(preferences, mode).rules
             val currentIndex = rules.indexOfFirst { it.id == rule.id }
             val updated = if (currentIndex >= 0) {
                 rules.toMutableList().apply { this[currentIndex] = normalized }
             } else {
                 rules.toMutableList().apply { add(0, normalized) }
             }
-            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(updated)
+            preferences[routingRulesKey(mode)] = encodeSmartRoutingRules(updated)
         }
     }
 
-    suspend fun deleteSmartRoutingRule(ruleId: String) {
+    suspend fun deleteSmartRoutingRule(ruleId: String, mode: ProxyMode = ProxyMode.SMART) {
         store.edit { preferences ->
-            val rules = decodeSmartRoutingSettings(preferences).rules
+            val rules = decodeSmartRoutingSettings(preferences, mode).rules
             if (rules.none { it.id == ruleId }) return@edit
-            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(
+            preferences[routingRulesKey(mode)] = encodeSmartRoutingRules(
                 rules.filterNot { it.id == ruleId }
             )
         }
     }
 
-    suspend fun setSmartRoutingRuleEnabled(ruleId: String, enabled: Boolean) {
+    suspend fun setSmartRoutingRuleEnabled(
+        ruleId: String,
+        enabled: Boolean,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
         store.edit { preferences ->
-            val rules = decodeSmartRoutingSettings(preferences).rules
+            val rules = decodeSmartRoutingSettings(preferences, mode).rules
             if (rules.none { it.id == ruleId }) return@edit
-            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(
+            preferences[routingRulesKey(mode)] = encodeSmartRoutingRules(
                 rules.map { if (it.id == ruleId) it.copy(enabled = enabled) else it }
             )
         }
     }
 
     /** 对齐 v2rayNG：重置时先保留旧列表的锁定项，再追加导入规则。 */
-    suspend fun replaceSmartRoutingRules(importedRules: List<SmartRoutingRule>) {
+    suspend fun replaceSmartRoutingRules(
+        importedRules: List<SmartRoutingRule>,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
         if (importedRules.isEmpty()) return
         store.edit { preferences ->
-            val current = decodeSmartRoutingSettings(preferences).rules
+            val current = decodeSmartRoutingSettings(preferences, mode).rules
             val imported = importedRules
                 .map { rule ->
                     val domains = normalizeRoutingValues(rule.domains.ifEmpty {
@@ -995,22 +1060,26 @@ class SettingsRepository(
                     )
                 }
             val keptLocked = current.filter { it.locked }
-            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(
+            preferences[routingRulesKey(mode)] = encodeSmartRoutingRules(
                 keptLocked + imported
             )
         }
     }
 
-    suspend fun moveSmartRoutingRule(fromRuleId: String, toRuleId: String) {
+    suspend fun moveSmartRoutingRule(
+        fromRuleId: String,
+        toRuleId: String,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
         if (fromRuleId == toRuleId) return
         store.edit { preferences ->
-            val rules = decodeSmartRoutingSettings(preferences).rules.toMutableList()
+            val rules = decodeSmartRoutingSettings(preferences, mode).rules.toMutableList()
             val fromIndex = rules.indexOfFirst { it.id == fromRuleId }
             val toIndex = rules.indexOfFirst { it.id == toRuleId }
             if (fromIndex < 0 || toIndex < 0) return@edit
             val moved = rules.removeAt(fromIndex)
             rules.add(toIndex, moved)
-            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(rules)
+            preferences[routingRulesKey(mode)] = encodeSmartRoutingRules(rules)
         }
     }
 

@@ -43,9 +43,8 @@ fun MainScreen(
     viewModel: MainViewModel = viewModel(),
     onStartVpn: (action: () -> Unit) -> Unit,
     onOpenOtherConfig: () -> Unit = {},
-    onOpenPerAppInbound: () -> Unit = {},
+    onOpenSplitRoutingSettings: () -> Unit = {},
     onOpenInbound: () -> Unit = {},
-    onOpenCoreRouting: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
     onOpenSpeedTestSchemes: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
@@ -148,11 +147,10 @@ fun MainScreen(
                 DrawerContent(
                     onCheckUpdate = { closeDrawerThen { viewModel.checkUpdate() } },
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
-                    onOpenPerAppInbound = { closeDrawerThen(onOpenPerAppInbound) },
+                    onOpenSplitRoutingSettings = { closeDrawerThen(onOpenSplitRoutingSettings) },
                     onOpenInbound = { closeDrawerThen(onOpenInbound) },
                     onOpenOutbound = { closeDrawerThen(onOpenOutbound) },
                     onOpenSpeedTestSchemes = { closeDrawerThen(onOpenSpeedTestSchemes) },
-                    onOpenCoreRouting = { closeDrawerThen(onOpenCoreRouting) },
                     onOpenSkin = { closeDrawerThen(onOpenSkin) },
                     onOpenBackendDialog = {
                         closeDrawerThen {

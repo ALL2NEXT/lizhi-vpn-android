@@ -39,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.PersonalSourceUserAgentMode
+import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.feature.nodegrouping.ui.NodeGroupingDestination
 import io.github.HanJason233.chimera.feature.nodegrouping.ui.NodeGroupingDetailRequest
 import io.github.HanJason233.chimera.feature.perappinbound.ui.PerAppInboundScreen
@@ -53,6 +54,7 @@ import io.github.HanJason233.chimera.ui.screens.OtherConfigScreen
 import io.github.HanJason233.chimera.ui.screens.InboundScreen
 import io.github.HanJason233.chimera.ui.screens.OutboundScreen
 import io.github.HanJason233.chimera.ui.screens.CoreRoutingScreen
+import io.github.HanJason233.chimera.ui.screens.SplitRoutingSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.RoutingAssetsScreen
 import io.github.HanJason233.chimera.ui.screens.QrScannerScreen
 import io.github.HanJason233.chimera.ui.screens.SkinScreen
@@ -277,14 +279,11 @@ class MainActivity : ComponentActivity() {
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
                                         },
-                                        onOpenPerAppInbound = {
-                                            navigateTo(AppRoute.PER_APP_INBOUND)
+                                        onOpenSplitRoutingSettings = {
+                                            navigateTo(AppRoute.SPLIT_ROUTING_SETTINGS)
                                         },
                                         onOpenInbound = {
                                             navigateTo(AppRoute.INBOUND)
-                                        },
-                                        onOpenCoreRouting = {
-                                            navigateTo(AppRoute.CORE_ROUTING)
                                         },
                                         onOpenOutbound = {
                                             navigateTo(AppRoute.OUTBOUND)
@@ -446,6 +445,19 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            composable(AppRoute.SPLIT_ROUTING_SETTINGS) {
+                                SplitRoutingSettingsScreen(
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() },
+                                    onOpenPerAppInbound = { mode ->
+                                        navigateTo(AppRoute.perAppInbound(mode.name))
+                                    },
+                                    onOpenRoutingRules = { mode ->
+                                        navigateTo(AppRoute.coreRouting(mode.name))
+                                    }
+                                )
+                            }
+
                             composable(AppRoute.INBOUND) {
                                 InboundScreen(
                                     viewModel = viewModel,
@@ -453,9 +465,13 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            composable(AppRoute.CORE_ROUTING) {
+                            composable(AppRoute.CORE_ROUTING) { backStackEntry ->
+                                val mode = backStackEntry.arguments?.getString("mode")
+                                    ?.let { runCatching { ProxyMode.valueOf(it) }.getOrNull() }
+                                    ?: ProxyMode.SMART
                                 CoreRoutingScreen(
                                     viewModel = viewModel,
+                                    mode = mode,
                                     onBack = { navController.popBackStack() },
                                     onScanQrCode = {
                                         routingQrScanTarget = true
@@ -490,9 +506,13 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            composable(AppRoute.PER_APP_INBOUND) {
+                            composable(AppRoute.PER_APP_INBOUND) { backStackEntry ->
+                                val mode = backStackEntry.arguments?.getString("mode")
+                                    ?.let { runCatching { ProxyMode.valueOf(it) }.getOrNull() }
+                                    ?: ProxyMode.SMART
                                 PerAppInboundScreen(
                                     viewModel = viewModel<PerAppInboundViewModel>(),
+                                    mode = mode,
                                     onBack = { navController.popBackStack() }
                                 )
                             }

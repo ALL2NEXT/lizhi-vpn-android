@@ -570,6 +570,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         SmartRoutingSettings()
     )
+    val globalRoutingSettings = settingsRepository.globalRoutingSettings.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SmartRoutingSettings()
+    )
+
+    /** 路由规则页面按用户正在编辑的模式选择独立配置。 */
+    fun routingSettings(mode: ProxyMode): StateFlow<SmartRoutingSettings> =
+        if (mode == ProxyMode.GLOBAL) globalRoutingSettings else smartRoutingSettings
     
     // 自动化测试设置
     val serviceRequestTimeoutMs = settingsRepository.serviceRequestTimeoutMs.stateIn(
@@ -2686,7 +2695,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * 重启 VPN 如果正在运行 (用于应用设置变更)
      */
-    fun restartVpnIfNeeded() {
+    fun restartVpnIfNeeded(changedMode: ProxyMode? = null) {
+        // 修改未运行的另一模式时不重启当前 VPN。
+        if (changedMode != null && proxyMode.value != changedMode) return
         if (vpnState.value == VpnState.CONNECTED) {
             currentNode.value?.let { node ->
                 Log.i(tag, "Settings changed, restarting VPN to apply...")
@@ -3344,28 +3355,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setSmartRoutingDomains(action: SmartRoutingRuleAction, domains: List<String>) {
+    fun setSmartRoutingDomains(
+        action: SmartRoutingRuleAction,
+        domains: List<String>,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
         viewModelScope.launch {
-            settingsRepository.setSmartRoutingDomains(action, domains)
-            restartVpnIfNeeded()
+            settingsRepository.setSmartRoutingDomains(action, domains, mode)
+            restartVpnIfNeeded(mode)
         }
     }
 
-    fun saveSmartRoutingRule(rule: SmartRoutingRule) {
+    fun saveSmartRoutingRule(rule: SmartRoutingRule, mode: ProxyMode = ProxyMode.SMART) {
         viewModelScope.launch {
-            settingsRepository.saveSmartRoutingRule(rule)
-            restartVpnIfNeeded()
+            settingsRepository.saveSmartRoutingRule(rule, mode)
+            restartVpnIfNeeded(mode)
         }
     }
 
-    fun setSmartRoutingDomainStrategy(strategy: SmartRoutingDomainStrategy) {
+    fun setSmartRoutingDomainStrategy(
+        strategy: SmartRoutingDomainStrategy,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
         viewModelScope.launch {
-            settingsRepository.setSmartRoutingDomainStrategy(strategy)
-            restartVpnIfNeeded()
+            settingsRepository.setSmartRoutingDomainStrategy(strategy, mode)
+            restartVpnIfNeeded(mode)
         }
     }
 
-    fun importSmartRoutingRules(json: String, onResult: (Boolean) -> Unit) {
+    fun importSmartRoutingRules(
+        json: String,
+        mode: ProxyMode = ProxyMode.SMART,
+        onResult: (Boolean) -> Unit
+    ) {
         viewModelScope.launch {
             val decoded = runCatching {
                 withContext(Dispatchers.Default) { SmartRoutingRulesCodec.decode(json) }
@@ -3374,30 +3396,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onResult(false)
                 return@launch
             }
-            settingsRepository.replaceSmartRoutingRules(decoded)
-            restartVpnIfNeeded()
+            settingsRepository.replaceSmartRoutingRules(decoded, mode)
+            restartVpnIfNeeded(mode)
             onResult(true)
         }
     }
 
-    fun deleteSmartRoutingRule(ruleId: String) {
+    fun deleteSmartRoutingRule(ruleId: String, mode: ProxyMode = ProxyMode.SMART) {
         viewModelScope.launch {
-            settingsRepository.deleteSmartRoutingRule(ruleId)
-            restartVpnIfNeeded()
+            settingsRepository.deleteSmartRoutingRule(ruleId, mode)
+            restartVpnIfNeeded(mode)
         }
     }
 
-    fun setSmartRoutingRuleEnabled(ruleId: String, enabled: Boolean) {
+    fun setSmartRoutingRuleEnabled(
+        ruleId: String,
+        enabled: Boolean,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
         viewModelScope.launch {
-            settingsRepository.setSmartRoutingRuleEnabled(ruleId, enabled)
-            restartVpnIfNeeded()
+            settingsRepository.setSmartRoutingRuleEnabled(ruleId, enabled, mode)
+            restartVpnIfNeeded(mode)
         }
     }
 
-    fun moveSmartRoutingRule(fromRuleId: String, toRuleId: String) {
+    fun moveSmartRoutingRule(
+        fromRuleId: String,
+        toRuleId: String,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
         viewModelScope.launch {
-            settingsRepository.moveSmartRoutingRule(fromRuleId, toRuleId)
-            restartVpnIfNeeded()
+            settingsRepository.moveSmartRoutingRule(fromRuleId, toRuleId, mode)
+            restartVpnIfNeeded(mode)
         }
     }
 

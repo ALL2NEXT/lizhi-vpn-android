@@ -64,6 +64,11 @@ class SingBoxConfigGenerator {
             if (proxyMode == ProxyMode.SMART) add("internal-socks-in")
             if (lanInbound.enabled && lanInbound.proxyMode == ProxyMode.SMART) add("lan-socks-in")
         }
+        // 用户路由规则始终作用于 VPN 流量；智能 LAN 入站仅在跟随当前模式时共享规则。
+        val routingInboundTags = buildList {
+            add("internal-socks-in")
+            if (lanInbound.enabled && lanInbound.proxyMode == proxyMode) add("lan-socks-in")
+        }
 
         val config = JsonObject().apply {
             // 从节点中提取唯一域名（忽略 IP 地址），以防止路由环路/DNS 死锁
@@ -102,7 +107,8 @@ class SingBoxConfigGenerator {
                     nodeIPs,
                     smartRoutingSettings,
                     dnsSettings.dnsRoutingEnabled,
-                    smartInboundTags
+                    smartInboundTags,
+                    routingInboundTags
                 )
             )
             add("experimental", createExperimental())
@@ -1081,7 +1087,8 @@ class SingBoxConfigGenerator {
         nodeIPs: List<String>,
         smartRoutingSettings: SmartRoutingSettings,
         dnsRoutingEnabled: Boolean,
-        smartInboundTags: List<String>
+        smartInboundTags: List<String>,
+        routingInboundTags: List<String>
     ): JsonObject {
         val rules = JsonArray()
         
@@ -1117,10 +1124,10 @@ class SingBoxConfigGenerator {
         }
         
         val requiredRuleSetTags = linkedSetOf<String>()
-        if (smartInboundTags.isNotEmpty()) {
+        if (routingInboundTags.isNotEmpty()) {
             fun addRuleSetRule(tag: String, outbound: String) {
                 rules.add(JsonObject().apply {
-                    add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
+                    add("inbound", JsonArray().apply { routingInboundTags.forEach(::add) })
                     add("rule_set", JsonArray().apply { add(tag) })
                     addProperty("outbound", outbound)
                 })
@@ -1180,7 +1187,7 @@ class SingBoxConfigGenerator {
                         // 源项目在不支持 process 时移除进程条件后仍保留原规则。
                         // 因此即使规则没有其他匹配条件，也不能静默丢弃它。
                         rules.add(JsonObject().apply {
-                            add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
+                            add("inbound", JsonArray().apply { routingInboundTags.forEach(::add) })
                             if (exactDomains.isNotEmpty()) add("domain", JsonArray().apply {
                                 exactDomains.forEach(::add)
                             })

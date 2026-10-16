@@ -3,9 +3,10 @@ package io.github.HanJason233.chimera.ui.navigation
 object AppRoute {
     const val MAIN = "main"
     const val OTHER_CONFIG = "other_config"
-    const val PER_APP_INBOUND = "per_app_inbound"
+    const val SPLIT_ROUTING_SETTINGS = "split_routing_settings"
+    const val PER_APP_INBOUND = "per_app_inbound/{mode}"
     const val INBOUND = "inbound"
-    const val CORE_ROUTING = "core_routing"
+    const val CORE_ROUTING = "core_routing/{mode}"
     const val ROUTING_ASSETS = "routing_assets"
     const val OUTBOUND = "outbound"
     const val SPEED_TEST_SCHEMES = "speed_test_schemes"
@@ -16,6 +17,10 @@ object AppRoute {
     const val QR_SCANNER = "qr_scanner"
 
     fun skinEditor(schemeId: String): String = "skin_editor/$schemeId"
+
+    fun perAppInbound(mode: String): String = "per_app_inbound/$mode"
+
+    fun coreRouting(mode: String): String = "core_routing/$mode"
 
     fun speedTestSchemeEditor(schemeId: String): String = "speed_test_scheme_editor/$schemeId"
 

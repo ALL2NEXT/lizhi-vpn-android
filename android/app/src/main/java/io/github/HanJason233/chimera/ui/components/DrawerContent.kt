@@ -17,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,11 +29,10 @@ import io.github.HanJason233.chimera.ui.dialogs.AboutDialog
 fun DrawerContent(
     onCheckUpdate: () -> Unit,
     onOpenOtherConfig: () -> Unit,
-    onOpenPerAppInbound: () -> Unit = {},
+    onOpenSplitRoutingSettings: () -> Unit = {},
     onOpenInbound: () -> Unit = {},
     onOpenOutbound: () -> Unit = {},
     onOpenSpeedTestSchemes: () -> Unit = {},
-    onOpenCoreRouting: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     onOpenBackendDialog: () -> Unit = {},
     websiteUrl: String = "",
@@ -84,21 +82,15 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Android,
-                title = stringResource(R.string.per_app_inbound_settings),
-                onClick = onOpenPerAppInbound
+                icon = Icons.Outlined.Route,
+                title = "分流设置",
+                onClick = onOpenSplitRoutingSettings
             )
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Login,
                 title = "入站",
                 onClick = onOpenInbound
-            )
-
-            DrawerMenuItem(
-                icon = Icons.Outlined.Route,
-                title = "路由规则",
-                onClick = onOpenCoreRouting
             )
 
             DrawerMenuItem(

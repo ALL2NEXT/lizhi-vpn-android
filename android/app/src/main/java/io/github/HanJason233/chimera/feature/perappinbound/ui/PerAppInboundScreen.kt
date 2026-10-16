@@ -75,17 +75,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.R
+import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.ui.components.SegmentedToggle
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PerAppInboundScreen(
     viewModel: PerAppInboundViewModel,
+    mode: ProxyMode,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val apps by viewModel.displayedApps.collectAsStateWithLifecycle()
+    val settingsFlow = remember(viewModel, mode) { viewModel.settings(mode) }
+    val appsFlow = remember(viewModel, mode) { viewModel.displayedApps(mode) }
+    val settings by settingsFlow.collectAsStateWithLifecycle()
+    val apps by appsFlow.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     var searchActive by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -104,7 +108,9 @@ fun PerAppInboundScreen(
             TopAppBar(
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility),
                 windowInsets = WindowInsets(0),
-                title = { Text(stringResource(R.string.per_app_inbound_settings)) },
+                title = {
+                    Text("${if (mode == ProxyMode.GLOBAL) "全局" else "智能"} VPN 作用范围")
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -149,17 +155,17 @@ fun PerAppInboundScreen(
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.per_app_inbound_select_all)) },
                             enabled = !isLoading && apps.isNotEmpty(),
-                            onClick = { showMenu = false; viewModel.selectAll() }
+                            onClick = { showMenu = false; viewModel.selectAll(mode) }
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.per_app_inbound_invert_selection)) },
                             enabled = !isLoading && apps.isNotEmpty(),
-                            onClick = { showMenu = false; viewModel.invertSelection() }
+                            onClick = { showMenu = false; viewModel.invertSelection(mode) }
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.per_app_inbound_auto_select)) },
                             enabled = !isLoading,
-                            onClick = { showMenu = false; viewModel.selectProxyAppsAutomatically() }
+                            onClick = { showMenu = false; viewModel.selectProxyAppsAutomatically(mode) }
                         )
                     }
                 },
@@ -226,7 +232,7 @@ fun PerAppInboundScreen(
                     Switch(
                         checked = settings.enabled,
                         modifier = Modifier.scale(0.72f),
-                        onCheckedChange = viewModel::setPerAppInboundEnabled,
+                        onCheckedChange = { viewModel.setPerAppInboundEnabled(it, mode) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
                             checkedTrackColor = MaterialTheme.colorScheme.secondary
@@ -244,7 +250,7 @@ fun PerAppInboundScreen(
                     secondLabel = stringResource(R.string.per_app_inbound_blacklist_option),
                     selectedFirst = !settings.bypassMode,
                     onSelectionChange = { isWhitelist ->
-                        viewModel.setBypassMode(!isWhitelist)
+                        viewModel.setBypassMode(!isWhitelist, mode)
                     }
                 )
                 IconButton(onClick = { showInformation = true }) {
@@ -282,7 +288,7 @@ fun PerAppInboundScreen(
                         checked = checked,
                         selectedLabel = stringResource(R.string.per_app_inbound_selected),
                         notSelectedLabel = stringResource(R.string.per_app_inbound_not_selected),
-                        onClick = { viewModel.toggle(app.packageName) }
+                        onClick = { viewModel.toggle(app.packageName, mode) }
                     )
                     Divider(modifier = Modifier.padding(horizontal = 16.dp))
                 }

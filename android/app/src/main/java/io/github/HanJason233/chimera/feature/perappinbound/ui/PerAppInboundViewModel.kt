@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -28,6 +29,7 @@ import okhttp3.Request
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.R
 import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
+import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
 import io.github.HanJason233.chimera.service.ServiceManager
@@ -50,14 +52,31 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
     private var loadJob: Job? = null
     private var appsLoaded = false
 
-    val settings = settingsRepository.perAppInboundSettings.stateIn(
+    private val smartSettings = settingsRepository.perAppInboundSettings(ProxyMode.SMART).stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        PerAppInboundSettings()
+    )
+    private val globalSettings = settingsRepository.perAppInboundSettings(ProxyMode.GLOBAL).stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         PerAppInboundSettings()
     )
     val isLoading = _isLoading.asStateFlow()
     val messages = _messages.asSharedFlow()
-    val displayedApps = combine(_allApps, _query, settings) { apps, query, perAppSettings ->
+    private val smartDisplayedApps = createDisplayedApps(smartSettings)
+    private val globalDisplayedApps = createDisplayedApps(globalSettings)
+
+    fun settings(mode: ProxyMode): StateFlow<PerAppInboundSettings> =
+        if (mode == ProxyMode.GLOBAL) globalSettings else smartSettings
+
+    fun displayedApps(mode: ProxyMode): StateFlow<List<InstalledInboundApp>> =
+        if (mode == ProxyMode.GLOBAL) globalDisplayedApps else smartDisplayedApps
+
+    private fun createDisplayedApps(
+        selectedSettings: StateFlow<PerAppInboundSettings>
+    ): StateFlow<List<InstalledInboundApp>> = combine(_allApps, _query, selectedSettings) {
+            apps, query, perAppSettings ->
         val collator = Collator.getInstance()
         apps.asSequence()
             .filter {
@@ -90,26 +109,26 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
         _query.value = query
     }
 
-    fun setPerAppInboundEnabled(enabled: Boolean) {
-        updateSettings { it.copy(enabled = enabled) }
+    fun setPerAppInboundEnabled(enabled: Boolean, mode: ProxyMode) {
+        updateSettings(mode) { it.copy(enabled = enabled) }
     }
 
-    fun setBypassMode(enabled: Boolean) {
-        updateSettings { it.copy(bypassMode = enabled) }
+    fun setBypassMode(enabled: Boolean, mode: ProxyMode) {
+        updateSettings(mode) { it.copy(bypassMode = enabled) }
     }
 
-    fun toggle(packageName: String) {
-        updateSettings { current ->
+    fun toggle(packageName: String, mode: ProxyMode) {
+        updateSettings(mode) { current ->
             val selected = current.selectedPackages.toMutableSet()
             if (!selected.add(packageName)) selected.remove(packageName)
             current.copy(selectedPackages = selected)
         }
     }
 
-    fun selectAll() {
-        val packageNames = displayedApps.value.map { it.packageName }
+    fun selectAll(mode: ProxyMode) {
+        val packageNames = displayedApps(mode).value.map { it.packageName }
         if (packageNames.isEmpty()) return
-        updateSettings { current ->
+        updateSettings(mode) { current ->
             val allSelected = packageNames.all { it in current.selectedPackages }
             val selected = current.selectedPackages.toMutableSet()
             packageNames.forEach { packageName ->
@@ -119,10 +138,10 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    fun invertSelection() {
-        val packageNames = displayedApps.value.map { it.packageName }
+    fun invertSelection(mode: ProxyMode) {
+        val packageNames = displayedApps(mode).value.map { it.packageName }
         if (packageNames.isEmpty()) return
-        updateSettings { current ->
+        updateSettings(mode) { current ->
             val selected = current.selectedPackages.toMutableSet()
             packageNames.forEach { packageName ->
                 if (!selected.add(packageName)) selected.remove(packageName)
@@ -131,18 +150,18 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    fun selectProxyAppsAutomatically() {
+    fun selectProxyAppsAutomatically(mode: ProxyMode) {
         if (_isLoading.value) return
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 val proxyList = downloadProxyAppList()
                 val packages = _allApps.value.map { it.packageName }
-                val current = settingsRepository.perAppInboundSettings.first()
+                val current = settingsRepository.perAppInboundSettings(mode).first()
                 val selected = withContext(Dispatchers.Default) {
                     selectFromProxyList(packages, proxyList, current.bypassMode, forceGoogleApps = true)
                 }
-                updateSettings { it.copy(enabled = true, selectedPackages = selected) }
+                updateSettings(mode) { it.copy(enabled = true, selectedPackages = selected) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -207,22 +226,26 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    private fun updateSettings(transform: (PerAppInboundSettings) -> PerAppInboundSettings) {
+    private fun updateSettings(
+        mode: ProxyMode,
+        transform: (PerAppInboundSettings) -> PerAppInboundSettings
+    ) {
         viewModelScope.launch {
             settingsMutex.withLock {
-                val current = settingsRepository.perAppInboundSettings.first()
+                val current = settingsRepository.perAppInboundSettings(mode).first()
                 val updated = transform(current)
                 if (updated == current) return@withLock
-                settingsRepository.setPerAppInboundSettings(updated)
-                restartVpnIfConnected()
+                settingsRepository.setPerAppInboundSettings(updated, mode)
+                restartVpnIfConnected(mode)
             }
         }
     }
 
-    private suspend fun restartVpnIfConnected() {
+    private suspend fun restartVpnIfConnected(changedMode: ProxyMode) {
         if (ServiceManager.vpnState.value != VpnState.CONNECTED) return
         val node = ServiceManager.currentNode.value ?: return
         val mode = settingsRepository.proxyMode.first()
+        if (mode != changedMode) return
         ServiceManager.startVpn(getApplication(), node, mode)
     }
 
