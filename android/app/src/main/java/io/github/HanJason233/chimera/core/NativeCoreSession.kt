@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import io.github.HanJason233.chimera.data.model.ProxyCore
+import io.github.HanJason233.chimera.data.repository.RoutingAssetsRepository
 import io.github.HanJason233.chimera.platform.awaitExit
 import io.github.HanJason233.chimera.platform.isRunningCompat
 import io.github.HanJason233.chimera.platform.terminateCompat
@@ -76,9 +77,9 @@ internal class NativeCoreSession(
                 .directory(context.filesDir)
                 .redirectErrorStream(true)
             if (core == ProxyCore.XRAY) {
-                // Xray 从 v2rayNG 兼容的应用私有资源目录读取 geosite.dat / geoip.dat。
+                // Xray 与 v2rayNG 一样从应用 files/assets 目录读取 Geo 数据库。
                 processBuilder.environment()["XRAY_LOCATION_ASSET"] =
-                    context.getDir("assets", Context.MODE_PRIVATE).absolutePath
+                    RoutingAssetsRepository.assetDirectory(context).absolutePath
             }
             val started = processBuilder.start()
             process = started

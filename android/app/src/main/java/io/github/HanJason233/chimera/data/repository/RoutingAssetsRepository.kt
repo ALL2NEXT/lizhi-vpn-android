@@ -34,7 +34,18 @@ internal data class RoutingAssetDownloadResult(
 internal class RoutingAssetsRepository(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-    val directory: File = appContext.getDir(ASSET_DIRECTORY, Context.MODE_PRIVATE).apply { mkdirs() }
+    private val legacyDirectory = appContext.getDir(ASSET_DIRECTORY, Context.MODE_PRIVATE)
+    val directory: File = assetDirectory(appContext).apply { mkdirs() }
+
+    init {
+        // 迁移早期版本保存在应用私有目录中的 Geo 文件，路径对齐 v2rayNG 的 files/assets。
+        if (directory.canonicalFile != legacyDirectory.canonicalFile) {
+            legacyDirectory.listFiles().orEmpty().filter(File::isFile).forEach { oldFile ->
+                val newFile = File(directory, oldFile.name)
+                if (!newFile.exists()) runCatching { oldFile.copyTo(newFile) }
+            }
+        }
+    }
 
     fun load(): RoutingAssetsSnapshot {
         val source = preferences.getString(KEY_GEO_SOURCE, GEO_SOURCES.first())
@@ -150,25 +161,41 @@ internal class RoutingAssetsRepository(context: Context) {
         if (name.isBlank()) return false
         val target = File(directory, name)
         val temporary = File(directory, "$name.download")
-        var connection: HttpURLConnection? = null
-        return try {
-            connection = URL(asset.url).openConnection() as HttpURLConnection
-            connection.connectTimeout = DOWNLOAD_TIMEOUT_MS
-            connection.readTimeout = DOWNLOAD_TIMEOUT_MS
-            connection.instanceFollowRedirects = true
-            connection.connect()
-            check(connection.responseCode in 200..299) { "HTTP ${connection.responseCode}" }
-            connection.inputStream.use { input -> temporary.outputStream().use(input::copyTo) }
-            check(temporary.length() > 0L) { "下载文件为空" }
-            if (target.exists() && !target.delete()) error("无法替换旧资源")
-            check(temporary.renameTo(target)) { "无法保存下载文件" }
-            true
-        } catch (_: Exception) {
-            temporary.delete()
-            false
-        } finally {
-            connection?.disconnect()
+        val urls = buildList {
+            if (asset.locked) {
+                val mirror = when (name) {
+                    "geosite.dat", "geoip.dat" ->
+                        "https://cdn.jsdelivr.net/gh/${load().source}@release/$name"
+                    GEOIP_CN_PRIVATE ->
+                        "https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/$name"
+                    else -> null
+                }
+                // v2rayNG README 将 jsDelivr 列为 GitHub 不可达时的镜像，优先使用该镜像减少连接等待。
+                mirror?.let(::add)
+            }
+            add(asset.url)
+        }.distinct()
+        for (url in urls) {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = URL(url).openConnection() as HttpURLConnection
+                connection.connectTimeout = CONNECT_TIMEOUT_MS
+                connection.readTimeout = DOWNLOAD_TIMEOUT_MS
+                connection.instanceFollowRedirects = true
+                connection.connect()
+                check(connection.responseCode in 200..299) { "HTTP ${connection.responseCode}" }
+                connection.inputStream.use { input -> temporary.outputStream().use(input::copyTo) }
+                check(temporary.length() > 0L) { "下载文件为空" }
+                if (target.exists() && !target.delete()) error("无法替换旧资源")
+                check(temporary.renameTo(target)) { "无法保存下载文件" }
+                return true
+            } catch (_: Exception) {
+                temporary.delete()
+            } finally {
+                connection?.disconnect()
+            }
         }
+        return false
     }
 
     private fun readSavedAssets(): List<RoutingAssetRecord> = runCatching {
@@ -225,7 +252,12 @@ internal class RoutingAssetsRepository(context: Context) {
         private const val PREFERENCES_NAME = "routing_assets"
         private const val KEY_ASSETS = "assets_json"
         private const val KEY_GEO_SOURCE = "geo_source"
-        private const val DOWNLOAD_TIMEOUT_MS = 15_000
+        private const val CONNECT_TIMEOUT_MS = 15_000
+        private const val DOWNLOAD_TIMEOUT_MS = 90_000
         private val BUILTIN_FILES = listOf("geosite.dat", "geoip.dat", GEOIP_CN_PRIVATE)
+
+        fun assetDirectory(context: Context): File =
+            context.applicationContext.getExternalFilesDir(ASSET_DIRECTORY)
+                ?: context.applicationContext.getDir(ASSET_DIRECTORY, Context.MODE_PRIVATE)
     }
 }
