@@ -4,6 +4,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -34,6 +39,7 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,9 +47,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,10 +61,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -74,6 +89,8 @@ import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 
 private enum class RoutingMenuAction(val title: String) {
@@ -85,6 +102,7 @@ private enum class RoutingMenuAction(val title: String) {
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun CoreRoutingScreen(
     viewModel: MainViewModel,
     mode: ProxyMode,
@@ -103,12 +121,189 @@ fun CoreRoutingScreen(
     var showPresets by rememberSaveable { mutableStateOf(false) }
     var qrRulesText by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
+    val hapticFeedback = LocalHapticFeedback.current
+    var displayedRules by remember { mutableStateOf(routingSettings.rules) }
     var draggedRuleId by remember { mutableStateOf<String?>(null) }
-    var lastMovedTargetId by remember { mutableStateOf<String?>(null) }
+    var isMoveLayoutPending by remember { mutableStateOf(false) }
+    var pendingLayoutIndex by remember { mutableIntStateOf(-1) }
+    var predictedDraggedItemTop by remember { mutableFloatStateOf(0f) }
+    var isDropPending by remember { mutableStateOf(false) }
+    var settlingRuleId by remember { mutableStateOf<String?>(null) }
+    var pendingSettleOffset by remember { mutableFloatStateOf(0f) }
     var draggedItemTop by remember { mutableFloatStateOf(0f) }
     var draggedItemHeight by remember { mutableFloatStateOf(1f) }
     var dragDistance by remember { mutableFloatStateOf(0f) }
+    var autoScrollAmount by remember { mutableFloatStateOf(0f) }
+    val settleOffsetAnimation = remember { Animatable(0f) }
+    val density = LocalDensity.current
+    val autoScrollThreshold = with(density) { 56.dp.toPx() }
+    val maxAutoScrollPerFrame = with(density) { 12.dp.toPx() }
     val editingRule = routingSettings.rules.firstOrNull { it.id == editingRuleId }
+
+    LaunchedEffect(routingSettings.rules) {
+        val latestRules = routingSettings.rules
+        if (draggedRuleId == null) {
+            displayedRules = latestRules
+        } else {
+            // 拖动期间保留当前排序，同时同步规则内容的外部更新。
+            val latestById = latestRules.associateBy(SmartRoutingRule::id)
+            val displayedIds = displayedRules.map(SmartRoutingRule::id).toSet()
+            displayedRules = displayedRules.mapNotNull { latestById[it.id] } +
+                latestRules.filterNot { it.id in displayedIds }
+        }
+    }
+
+    val updateAutoScrollAmount = rememberUpdatedState<() -> Unit>(
+        newValue = {
+            val layoutInfo = listState.layoutInfo
+            val dragTop = draggedItemTop + dragDistance
+            val dragBottom = dragTop + draggedItemHeight
+            val distanceFromTop = dragTop - layoutInfo.viewportStartOffset
+            val distanceFromBottom = layoutInfo.viewportEndOffset - dragBottom
+            autoScrollAmount = when {
+                distanceFromTop < autoScrollThreshold ->
+                    -maxAutoScrollPerFrame *
+                        ((autoScrollThreshold - distanceFromTop) / autoScrollThreshold).coerceIn(0f, 1f)
+                distanceFromBottom < autoScrollThreshold ->
+                    maxAutoScrollPerFrame *
+                        ((autoScrollThreshold - distanceFromBottom) / autoScrollThreshold).coerceIn(0f, 1f)
+                else -> 0f
+            }
+        }
+    )
+
+    val moveDraggedRule = rememberUpdatedState<(String) -> Unit>(
+        newValue = { activeRuleId ->
+            if (!isMoveLayoutPending) {
+                val visibleItems = listState.layoutInfo.visibleItemsInfo
+                val dragTop = draggedItemTop + dragDistance
+                val dragBottom = dragTop + draggedItemHeight
+                val targetInfo = visibleItems.firstOrNull { item ->
+                    val targetId = (item.key as? String)
+                        ?.takeIf { it.startsWith("rule:") }
+                        ?.removePrefix("rule:")
+                    val targetCenter = item.offset + item.size / 2f
+                    targetId != null && targetId != activeRuleId &&
+                        targetCenter >= dragTop && targetCenter <= dragBottom
+                }
+                val targetId = (targetInfo?.key as? String)
+                    ?.takeIf { it.startsWith("rule:") }
+                    ?.removePrefix("rule:")
+                val sourceIndex = displayedRules.indexOfFirst { it.id == activeRuleId }
+                val targetIndex = displayedRules.indexOfFirst { it.id == targetId }
+
+                if (
+                    targetId != null && targetInfo != null &&
+                    sourceIndex >= 0 && targetIndex >= 0 && sourceIndex != targetIndex
+                ) {
+                    // 每次换位后等待 LazyColumn 完成布局，再处理下一次换位。
+                    predictedDraggedItemTop = if (targetIndex > sourceIndex) {
+                        (targetInfo.offset + targetInfo.size - draggedItemHeight).toFloat()
+                    } else {
+                        targetInfo.offset.toFloat()
+                    }
+                    pendingLayoutIndex = targetInfo.index
+                    isMoveLayoutPending = true
+                    displayedRules = displayedRules.toMutableList().apply {
+                        add(targetIndex, removeAt(sourceIndex))
+                    }
+                }
+            }
+        }
+    )
+
+    LaunchedEffect(isMoveLayoutPending, pendingLayoutIndex, draggedRuleId) {
+        val activeRuleId = draggedRuleId
+        val expectedIndex = pendingLayoutIndex
+        if (!isMoveLayoutPending || activeRuleId == null || expectedIndex < 0) {
+            return@LaunchedEffect
+        }
+
+        withTimeoutOrNull(1_000L) {
+            snapshotFlow {
+                listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.key == "rule:$activeRuleId" }
+                    ?.index
+            }.first { it == expectedIndex }
+        }
+        if (draggedRuleId == activeRuleId && pendingLayoutIndex == expectedIndex) {
+            isMoveLayoutPending = false
+        }
+    }
+
+    val finishRuleDrag = rememberUpdatedState<() -> Unit>(
+        newValue = {
+            val activeRuleId = draggedRuleId
+            val activeItemOffset = activeRuleId?.let { id ->
+                val activeItemInfo = listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.key == "rule:$id" }
+                if (
+                    isMoveLayoutPending ||
+                    (pendingLayoutIndex >= 0 && activeItemInfo?.index != pendingLayoutIndex)
+                ) {
+                    predictedDraggedItemTop
+                } else {
+                    activeItemInfo?.offset?.toFloat()
+                }
+            }
+            if (activeRuleId != null && activeItemOffset != null) {
+                val currentTranslation = draggedItemTop + dragDistance - activeItemOffset
+                if (kotlin.math.abs(currentTranslation) > 0.5f) {
+                    pendingSettleOffset = currentTranslation
+                    settlingRuleId = activeRuleId
+                }
+            }
+            val orderedIds = displayedRules.map(SmartRoutingRule::id)
+            if (orderedIds != routingSettings.rules.map(SmartRoutingRule::id)) {
+                // 松手后一次性保存顺序，避免拖动经过每条规则时都重启代理。
+                viewModel.reorderSmartRoutingRules(orderedIds, mode)
+            }
+            draggedRuleId = null
+            isMoveLayoutPending = false
+            pendingLayoutIndex = -1
+            isDropPending = false
+            autoScrollAmount = 0f
+        }
+    )
+
+    val requestFinishRuleDrag = rememberUpdatedState<() -> Unit>(
+        newValue = {
+            if (isMoveLayoutPending) {
+                isDropPending = true
+            } else {
+                finishRuleDrag.value()
+            }
+        }
+    )
+
+    LaunchedEffect(isDropPending, isMoveLayoutPending, draggedRuleId) {
+        if (isDropPending && !isMoveLayoutPending && draggedRuleId != null) {
+            finishRuleDrag.value()
+        }
+    }
+
+    LaunchedEffect(draggedRuleId) {
+        if (draggedRuleId == null) return@LaunchedEffect
+        while (true) {
+            val scrollDelta = autoScrollAmount
+            if (scrollDelta != 0f) {
+                listState.scroll { scrollBy(scrollDelta) }
+                val activeRuleId = draggedRuleId ?: break
+                moveDraggedRule.value(activeRuleId)
+            }
+            withFrameNanos { }
+        }
+    }
+
+    LaunchedEffect(settlingRuleId) {
+        val ruleId = settlingRuleId ?: return@LaunchedEffect
+        settleOffsetAnimation.snapTo(pendingSettleOffset)
+        settleOffsetAnimation.animateTo(
+            targetValue = 0f,
+            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+        )
+        if (settlingRuleId == ruleId) settlingRuleId = null
+    }
 
     fun importRules(json: String) {
         viewModel.importSmartRoutingRules(json, mode) { success ->
@@ -237,55 +432,75 @@ fun CoreRoutingScreen(
                 )
             }
             itemsIndexed(
-                items = routingSettings.rules,
+                items = displayedRules,
                 key = { _, rule -> "rule:${rule.id}" }
             ) { _, rule ->
-                Column {
+                Column(
+                    modifier = Modifier
+                        .zIndex(if (draggedRuleId == rule.id || settlingRuleId == rule.id) 1f else 0f)
+                        .then(
+                            if (draggedRuleId == rule.id || settlingRuleId == rule.id) {
+                                val itemOffset = if (
+                                    draggedRuleId == rule.id && isMoveLayoutPending
+                                ) {
+                                    predictedDraggedItemTop
+                                } else {
+                                    listState.layoutInfo.visibleItemsInfo
+                                        .firstOrNull { it.key == "rule:${rule.id}" }
+                                        ?.offset
+                                        ?.toFloat() ?: draggedItemTop
+                                }
+                                Modifier.graphicsLayer {
+                                    translationY = if (draggedRuleId == rule.id) {
+                                        draggedItemTop + dragDistance - itemOffset
+                                    } else {
+                                        settleOffsetAnimation.value
+                                    }
+                                }
+                            } else {
+                                Modifier.animateItemPlacement()
+                            }
+                        )
+                ) {
                     RoutingRuleItem(
                         rule = rule,
+                        isDragging = draggedRuleId == rule.id,
                         onEdit = { editingRuleId = rule.id },
                         onEnabledChange = { enabled ->
                             viewModel.setSmartRoutingRuleEnabled(rule.id, enabled, mode)
                         },
-                        // 保持 v2rayNG 的无拖动柄样式，长按整行可调整规则顺序。
+                        // 整行作为长按拖动区域，保持与 v2rayNG 路由列表一致的操作方式。
                         dragModifier = Modifier.pointerInput(rule.id) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = {
+                                    // 长按后抬起当前项，并给出触觉提示。
+                                    hapticFeedback.performHapticFeedback(
+                                        HapticFeedbackType.LongPress
+                                    )
+                                    settlingRuleId = null
                                     val info = listState.layoutInfo.visibleItemsInfo
                                         .firstOrNull { it.key == "rule:${rule.id}" }
+                                    isMoveLayoutPending = false
+                                    pendingLayoutIndex = -1
+                                    isDropPending = false
                                     draggedRuleId = rule.id
-                                    lastMovedTargetId = rule.id
                                     draggedItemTop = info?.offset?.toFloat() ?: 0f
                                     draggedItemHeight = info?.size?.toFloat() ?: 1f
+                                    predictedDraggedItemTop = draggedItemTop
                                     dragDistance = 0f
+                                    updateAutoScrollAmount.value()
                                 },
                                 onDrag = { change, amount ->
                                     change.consume()
                                     dragDistance += amount.y
-                                    val fingerCenter = draggedItemTop + draggedItemHeight / 2f + dragDistance
-                                    val target = listState.layoutInfo.visibleItemsInfo.firstOrNull {
-                                        fingerCenter >= it.offset && fingerCenter <= it.offset + it.size
-                                    }
-                                    val targetId = (target?.key as? String)
-                                        ?.takeIf { it.startsWith("rule:") }
-                                        ?.removePrefix("rule:")
                                     val sourceId = draggedRuleId
-                                    if (
-                                        targetId != null && sourceId != null &&
-                                        targetId != sourceId && targetId != lastMovedTargetId
-                                    ) {
-                                        viewModel.moveSmartRoutingRule(sourceId, targetId, mode)
-                                        lastMovedTargetId = targetId
+                                    if (sourceId != null) {
+                                        updateAutoScrollAmount.value()
+                                        moveDraggedRule.value(sourceId)
                                     }
                                 },
-                                onDragEnd = {
-                                    draggedRuleId = null
-                                    lastMovedTargetId = null
-                                },
-                                onDragCancel = {
-                                    draggedRuleId = null
-                                    lastMovedTargetId = null
-                                }
+                                onDragEnd = { requestFinishRuleDrag.value() },
+                                onDragCancel = { requestFinishRuleDrag.value() }
                             )
                         }
                     )
@@ -435,71 +650,83 @@ private fun createRoutingQrCode(json: String): ImageBitmap {
 @Composable
 private fun RoutingRuleItem(
     rule: SmartRoutingRule,
+    isDragging: Boolean,
     onEdit: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     dragModifier: Modifier
 ) {
-    Row(
+    val elevation by animateDpAsState(
+        targetValue = if (isDragging) 4.dp else 0.dp,
+        label = "RoutingRuleDragElevation"
+    )
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .then(dragModifier)
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .zIndex(if (isDragging) 1f else 0f),
+        shadowElevation = elevation
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = rule.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (rule.locked) {
-                    androidx.compose.foundation.layout.Spacer(Modifier.size(4.dp))
-                    Icon(
-                        imageVector = Icons.Outlined.Lock,
-                        contentDescription = "锁定规则",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(dragModifier)
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = rule.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (rule.locked) {
+                        androidx.compose.foundation.layout.Spacer(Modifier.size(4.dp))
+                        Icon(
+                            imageVector = Icons.Outlined.Lock,
+                            contentDescription = "锁定规则",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                rule.listDisplaySummary().takeIf(String::isNotBlank)?.let { summary ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (rule.outboundTag.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = rule.outboundTag,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFFF97910)
                     )
                 }
             }
-            rule.listDisplaySummary().takeIf(String::isNotBlank)?.let { summary ->
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Outlined.Edit, contentDescription = "编辑${rule.name}")
+                }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = summary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                Switch(
+                    checked = rule.enabled,
+                    onCheckedChange = onEnabledChange,
+                    modifier = Modifier.scale(0.7f),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
+                        checkedTrackColor = MaterialTheme.colorScheme.secondary
+                    )
                 )
             }
-            if (rule.outboundTag.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = rule.outboundTag,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFFF97910)
-                )
-            }
-        }
-        Column(
-            horizontalAlignment = Alignment.End,
-            modifier = Modifier.padding(start = 8.dp)
-        ) {
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Outlined.Edit, contentDescription = "编辑${rule.name}")
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Switch(
-                checked = rule.enabled,
-                onCheckedChange = onEnabledChange,
-                modifier = Modifier.scale(0.7f),
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
-                    checkedTrackColor = MaterialTheme.colorScheme.secondary
-                )
-            )
         }
     }
 }

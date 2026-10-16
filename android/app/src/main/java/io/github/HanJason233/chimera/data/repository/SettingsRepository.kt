@@ -1083,6 +1083,24 @@ class SettingsRepository(
         }
     }
 
+    // 按界面传入的规则 ID 顺序重排，确认规则集合一致后再保存。
+    suspend fun reorderSmartRoutingRules(
+        orderedRuleIds: List<String>,
+        mode: ProxyMode = ProxyMode.SMART
+    ) {
+        store.edit { preferences ->
+            val rules = decodeSmartRoutingSettings(preferences, mode).rules
+            val rulesById = rules.associateBy(SmartRoutingRule::id)
+            if (orderedRuleIds.size != rules.size || orderedRuleIds.toSet() != rulesById.keys) {
+                return@edit
+            }
+            val reorderedRules = orderedRuleIds.map(rulesById::getValue)
+            if (reorderedRules != rules) {
+                preferences[routingRulesKey(mode)] = encodeSmartRoutingRules(reorderedRules)
+            }
+        }
+    }
+
     private fun normalizeRoutingValues(values: List<String>): List<String> = values
         .flatMap(::decodeRoutingRuleValues)
         .filter(String::isNotBlank)

@@ -3459,6 +3459,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // 拖动结束时保存规则顺序，并按当前模式更新 VPN 配置。
+    fun reorderSmartRoutingRules(orderedRuleIds: List<String>, mode: ProxyMode = ProxyMode.SMART) {
+        viewModelScope.launch {
+            settingsRepository.reorderSmartRoutingRules(orderedRuleIds, mode)
+            restartVpnIfNeeded(mode)
+        }
+    }
+
     /** Refresh all subscriptions when no source is specified, otherwise only the selected source. */
     fun refreshNodes(sourceId: String? = null) {
         refreshSubscriptions(sourceId, onResult = null)
