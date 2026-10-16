@@ -97,12 +97,6 @@ object AppConfig {
     const val URL_TEST_RECHECK_TOP_COUNT = 5 // 首轮最快节点进入稳态复测的数量
     const val URL_TEST_RECHECK_ATTEMPTS = 2 // 每个优胜节点额外执行暖连接复测的次数
 
-    // VPN 断线恢复，默认关闭，由设置页面控制
-    const val DISCONNECT_RECOVERY_ENABLED = false
-    const val DISCONNECT_RECOVERY_CHECK_INTERVAL_MS = 5000L
-    const val DISCONNECT_RECOVERY_CONFIRM_INTERVAL_MS = 1000L
-    const val DISCONNECT_RECOVERY_CONFIRM_ATTEMPTS = 3
-
     // Hysteria2 最大带宽（Mbps），设为0表示不设置，使用 BBR 拥塞控制
     const val HYSTERIA_BANDWIDTH_ENABLED = true
     const val HYSTERIA_UP_MBPS = 1000

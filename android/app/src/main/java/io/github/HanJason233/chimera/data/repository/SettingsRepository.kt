@@ -149,7 +149,6 @@ class SettingsRepository(
         private val SPEED_TEST_DURATION_MS = longPreferencesKey("speed_test_duration_ms")
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
-        private val DISCONNECT_RECOVERY_ENABLED = booleanPreferencesKey("disconnect_recovery_enabled")
         private val REGION_LOOKUP_METHODS = stringPreferencesKey("region_lookup_methods")
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
@@ -1226,16 +1225,6 @@ class SettingsRepository(
     suspend fun setNodeGroupingMode(mode: NodeGroupingMode) {
         store.edit { preferences ->
             preferences[NODE_GROUPING_MODE] = mode.name
-        }
-    }
-
-    val disconnectRecoveryEnabled: Flow<Boolean> = store.data.map { preferences ->
-        preferences[DISCONNECT_RECOVERY_ENABLED] ?: io.github.HanJason233.chimera.AppConfig.DISCONNECT_RECOVERY_ENABLED
-    }
-
-    suspend fun setDisconnectRecoveryEnabled(enabled: Boolean) {
-        store.edit { preferences ->
-            preferences[DISCONNECT_RECOVERY_ENABLED] = enabled
         }
     }
 

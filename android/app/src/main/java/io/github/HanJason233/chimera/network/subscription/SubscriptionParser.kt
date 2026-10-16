@@ -10,8 +10,6 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeType
 import android.net.Uri
@@ -104,27 +102,6 @@ class SubscriptionParser {
         return Result.failure(error)
     }
 
-    /** 使用指定网络客户端拉取订阅，供 VPN 断线后通过物理网络刷新当前订阅。 */
-    suspend fun fetchAndParseWithClient(
-        url: String,
-        client: OkHttpClient
-    ): Result<List<Node>> = withContext(Dispatchers.IO) {
-        try {
-            val request = Request.Builder().url(url).get().build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("订阅接口返回 HTTP ${response.code}")
-                }
-                val raw = response.body?.string()
-                    ?: throw IllegalStateException("订阅接口返回空内容")
-                Result.success(parseSubscription(raw))
-            }
-        } catch (e: Exception) {
-            Log.e(tag, "Failed to fetch subscription with custom client", e)
-            Result.failure(e)
-        }
-    }
-    
     /**
      * 解析订阅内容
      */

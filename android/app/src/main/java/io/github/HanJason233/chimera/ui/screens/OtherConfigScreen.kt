@@ -60,7 +60,6 @@ fun OtherConfigScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val disconnectRecoveryEnabled by viewModel.disconnectRecoveryEnabled.collectAsStateWithLifecycle()
     val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val serviceRequestTimeoutMs by viewModel.serviceRequestTimeoutMs.collectAsStateWithLifecycle()
@@ -203,17 +202,6 @@ fun OtherConfigScreen(
                     }
                 }
             }
-
-            OtherConfigSection(
-                title = "断线恢复",
-                titleAction = {
-                    Switch(
-                        checked = disconnectRecoveryEnabled,
-                        onCheckedChange = { viewModel.setDisconnectRecoveryEnabled(it) },
-                        colors = visibleSwitchColors()
-                    )
-                }
-            ) {}
 
         }
     }

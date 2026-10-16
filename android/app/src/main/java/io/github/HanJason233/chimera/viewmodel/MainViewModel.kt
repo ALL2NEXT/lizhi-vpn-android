@@ -605,7 +605,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         AppConfig.BANDWIDTH_TEST_CONCURRENCY
     )
-    val disconnectRecoveryEnabled = settingsRepository.disconnectRecoveryEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.DISCONNECT_RECOVERY_ENABLED)
     val updateDownloadDirectoryUri = settingsRepository.updateDownloadDirectoryUri.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -1519,13 +1518,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setBandwidthTestConcurrency(value: Int) {
         viewModelScope.launch {
             settingsRepository.setBandwidthTestConcurrency(value)
-        }
-    }
-
-    fun setDisconnectRecoveryEnabled(enabled: Boolean) {
-
-        viewModelScope.launch {
-            settingsRepository.setDisconnectRecoveryEnabled(enabled)
         }
     }
 

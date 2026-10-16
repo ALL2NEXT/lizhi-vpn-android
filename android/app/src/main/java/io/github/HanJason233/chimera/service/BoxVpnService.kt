@@ -65,7 +65,6 @@ class BoxVpnService : VpnService() {
     private var trafficJob: Job? = null
     private var host: AndroidVpnHost? = null
     private var activeNode: Node? = null
-    private lateinit var recovery: DisconnectRecoveryManager
     private var persistedUpload = 0L
     private var persistedDownload = 0L
     private var lastPersistAt = 0L
@@ -74,12 +73,6 @@ class BoxVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         notificationFactory.createChannel()
-        recovery = DisconnectRecoveryManager(applicationContext, serviceScope,
-            socksEndpointProvider = { internalSocksEndpoint?.takeIf { isRunning } },
-            physicalNetworkProvider = { host?.currentNetwork }, isVpnRunning = { isRunning },
-            reconnect = { node, mode -> withContext(Dispatchers.Main) {
-                ServiceManager.startVpn(applicationContext, node, mode)
-            } })
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -94,6 +87,7 @@ class BoxVpnService : VpnService() {
             }
             ACTION_RESTART -> restart(null)
             ACTION_SET_PROXY_MODE -> parseMode(intent.getStringExtra(EXTRA_PROXY_MODE))?.let(::restart)
+            // Android 通过 sticky/always-on 机制重建服务时，恢复 VPN 前台会话。
             null, SERVICE_INTERFACE -> {
                 foreground("恢复连接...", null, ProxyMode.SMART)
                 connect("", "自动选择", null)
@@ -187,7 +181,6 @@ class BoxVpnService : VpnService() {
                                 }
                             }
                         }
-                        recovery.start()
                         Log.i(TAG, "Native VPN started: core=" + prepared.selectedCore)
                     } finally {
                         prepared.close()
@@ -282,7 +275,6 @@ class BoxVpnService : VpnService() {
 
     private suspend fun cleanup() {
         if (owner !== this) return
-        recovery.stop()
         trafficJob?.cancelAndJoin()
         trafficJob = null
         val previous = controller.current
