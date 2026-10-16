@@ -1,7 +1,9 @@
 package io.github.HanJason233.chimera.network.location
 
+import io.github.HanJason233.chimera.data.model.Node
+import io.github.HanJason233.chimera.data.model.RegionLookupMode
 import io.github.HanJason233.chimera.network.NetworkClient
-
+import io.github.HanJason233.chimera.util.CountryCodeResolver
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -11,14 +13,13 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import io.github.HanJason233.chimera.data.model.Node
-import io.github.HanJason233.chimera.util.CountryCodeResolver
-import java.net.InetAddress
+import java.io.File
 import java.net.Inet6Address
+import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-/** Adds a country code to nodes that do not expose one in their name. */
+/** 按设置的查询方式补充节点缺失的国家代码。 */
 object NodeLocationResolver {
     private const val GEO_LOOKUP_HOST = "ipwho.is"
     private const val MAX_CONCURRENCY = 8
@@ -30,23 +31,32 @@ object NodeLocationResolver {
         .callTimeout(5, TimeUnit.SECONDS)
         .build()
 
-    private val countryCache = ConcurrentHashMap<String, String>()
+    private val remoteCountryCache = ConcurrentHashMap<String, String>()
 
-    suspend fun enrichNodes(nodes: List<Node>): List<Node> {
+    suspend fun enrichNodes(
+        nodes: List<Node>,
+        mode: RegionLookupMode,
+        geoIpDatabase: File
+    ): List<Node> {
         return nodes.chunked(MAX_CONCURRENCY).flatMap { batch ->
             coroutineScope {
                 batch.map { node ->
-                    async(Dispatchers.IO) { enrichNode(node) }
+                    async(Dispatchers.IO) { enrichNode(node, mode, geoIpDatabase) }
                 }.awaitAll()
             }
         }
     }
 
-    private suspend fun enrichNode(node: Node): Node {
+    private suspend fun enrichNode(
+        node: Node,
+        mode: RegionLookupMode,
+        geoIpDatabase: File
+    ): Node {
         val knownCountry = CountryCodeResolver.normalizeCountryCode(node.country)
             ?: CountryCodeResolver.fromNodeName(node.name)
             ?: CountryCodeResolver.fromNodeName(node.countryName)
-        val resolvedCountry = knownCountry ?: resolveServerCountry(node.server)
+        val resolvedCountry = knownCountry
+            ?: resolveServerCountry(node.server, mode, geoIpDatabase)
         if (resolvedCountry == null) return node
 
         val resolvedName = CountryCodeResolver.displayName(resolvedCountry)
@@ -56,9 +66,28 @@ object NodeLocationResolver {
         )
     }
 
-    private suspend fun resolveServerCountry(server: String): String? {
-        val ip = resolvePublicIp(server) ?: return null
-        countryCache[ip]?.let { return it }
+    private suspend fun resolveServerCountry(
+        server: String,
+        mode: RegionLookupMode,
+        geoIpDatabase: File
+    ): String? {
+        val addresses = resolvePublicAddresses(server)
+        if (addresses.isEmpty()) return null
+
+        return when (mode) {
+            RegionLookupMode.LOCAL -> addresses.firstNotNullOfOrNull {
+                XrayGeoIpDatabase.lookup(geoIpDatabase, it)
+            }
+            RegionLookupMode.REMOTE -> resolveRemoteCountry(addresses.first())
+            RegionLookupMode.HYBRID -> addresses.firstNotNullOfOrNull {
+                XrayGeoIpDatabase.lookup(geoIpDatabase, it)
+            } ?: resolveRemoteCountry(addresses.first())
+        }
+    }
+
+    private suspend fun resolveRemoteCountry(address: InetAddress): String? {
+        val ip = address.hostAddress?.substringBefore('%') ?: return null
+        remoteCountryCache[ip]?.let { return it }
 
         return runCatching {
             val url = HttpUrl.Builder()
@@ -75,21 +104,22 @@ object NodeLocationResolver {
                     json.get("country_code")?.asString
                 )
             }
-        }.getOrNull()?.also { countryCache[ip] = it }
+        }.getOrNull()?.also { remoteCountryCache[ip] = it }
     }
 
-    private suspend fun resolvePublicIp(server: String): String? = withContext(Dispatchers.IO) {
-        val host = server.trim().removePrefix("[").removeSuffix("]")
-        if (host.isBlank()) return@withContext null
+    private suspend fun resolvePublicAddresses(server: String): List<InetAddress> =
+        withContext(Dispatchers.IO) {
+            val host = server.trim().removePrefix("[").removeSuffix("]")
+            if (host.isBlank()) return@withContext emptyList()
 
-        runCatching {
-            InetAddress.getAllByName(host)
-                .asSequence()
-                .filter(::isPublicAddress)
-                .mapNotNull { it.hostAddress?.substringBefore('%') }
-                .firstOrNull()
-        }.getOrNull()
-    }
+            runCatching {
+                InetAddress.getAllByName(host)
+                    .asSequence()
+                    .filter(::isPublicAddress)
+                    .distinctBy { it.hostAddress?.substringBefore('%') }
+                    .toList()
+            }.getOrDefault(emptyList())
+        }
 
     private fun isPublicAddress(address: InetAddress): Boolean {
         if (

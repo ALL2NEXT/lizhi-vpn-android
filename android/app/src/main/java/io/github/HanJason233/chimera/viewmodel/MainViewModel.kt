@@ -30,6 +30,7 @@ import io.github.HanJason233.chimera.data.local.NodeLocationUpdate
 import io.github.HanJason233.chimera.data.local.NodeDao
 import io.github.HanJason233.chimera.data.model.*
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
+import io.github.HanJason233.chimera.data.repository.RoutingAssetsRepository
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingStrategy
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingSourceResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.NodeTestResultOrdering
@@ -590,6 +591,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         SettingsRepository.DEFAULT_SERVICE_REQUEST_TIMEOUT_MS
     )
+    val regionLookupMode = settingsRepository.regionLookupMode.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        RegionLookupMode.REMOTE
+    )
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
     val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
     val speedTestDurationMs = settingsRepository.speedTestDurationMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.AUTO_TEST_BANDWIDTH_DURATION_MS)
@@ -680,6 +686,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     ?: UnlockTestUiState()
             }
         }
+        // 离线模式不调用 Chimera 后台；本机节点缺少地区信息时仍查询 IP 归属地。
+        viewModelScope.launch {
+            offlineModeEnabled.flatMapLatest { isOffline ->
+                if (isOffline) {
+                    nodeDaoFlow.flatMapLatest { dao -> dao.getAllNodes() }
+                } else {
+                    flowOf(emptyList())
+                }
+            }
+                .map { nodes -> nodes.filter { it.getCountryCode() == null } }
+                .distinctUntilChangedBy { nodes -> nodes.associate { it.id to it.server } }
+                .collect { nodes -> scheduleNodeLocationEnrichment(nodes) }
+        }
+        viewModelScope.launch {
+            settingsRepository.regionLookupMode.drop(1).collect {
+                val nodes = nodeDao().getAllNodes().first()
+                    .filter { it.getCountryCode() == null }
+                scheduleNodeLocationEnrichment(nodes)
+            }
+        }
         // 链路类型结果属于节点的历史检测数据，VPN 断开后仍保留并在首页展示。
         viewModelScope.launch {
             try {
@@ -687,10 +713,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // data should not blank and rewrite DataStore on every launch.
                 _isInitialized.value = true
 
-                // 离线模式只读本地缓存；在线账户才执行启动时的后台同步。
+                // 离线模式不执行 Chimera 后台同步；在线账户才启动后台同步。
 
                 subscriptionDataLoader.loadCachedSubscriptionList()
-                if (accountManager.currentAccount() != null && !accountManager.isOfflineMode()) {
+                if (!accountManager.isOfflineMode() && accountManager.currentAccount() != null) {
                     loadStartupDataAfterAuthentication()
                 }
             } catch (error: Exception) {
@@ -711,7 +737,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun scheduleNodeLocationEnrichment(nodes: List<Node>) {
-        if (nodes.isEmpty()) return
+        if (nodes.isEmpty()) {
+            nodeLocationEnrichmentJob?.cancel()
+            nodeLocationEnrichmentJob = null
+            return
+        }
         nodeLocationEnrichmentJob?.cancel()
         nodeLocationEnrichmentJob = viewModelScope.launch(Dispatchers.IO) {
             delay(1_500)
@@ -721,7 +751,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun enrichAndPersistNodeLocations(nodes: List<Node>) {
         val sourceById = nodes.associateBy(Node::id)
-        val updates = NodeLocationResolver.enrichNodes(nodes).mapNotNull { enrichedNode ->
+        val geoIpDatabase = File(
+            RoutingAssetsRepository.assetDirectory(getApplication()),
+            "geoip.dat"
+        )
+        val updates = NodeLocationResolver.enrichNodes(
+            nodes = nodes,
+            mode = regionLookupMode.value,
+            geoIpDatabase = geoIpDatabase
+        ).mapNotNull { enrichedNode ->
             val sourceNode = sourceById[enrichedNode.id] ?: return@mapNotNull null
             if (
                 sourceNode.country == enrichedNode.country &&
@@ -1446,6 +1484,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setServiceRequestTimeoutMs(value: Long) {
         viewModelScope.launch {
             settingsRepository.setServiceRequestTimeoutMs(value)
+        }
+    }
+
+    fun setRegionLookupMode(mode: RegionLookupMode) {
+        viewModelScope.launch { settingsRepository.setRegionLookupMode(mode) }
+    }
+
+    /** 数据库下载或导入后，手动重试仍未识别地区的节点。 */
+    fun refreshMissingNodeLocations() {
+        viewModelScope.launch {
+            val nodes = nodeDao().getAllNodes().first()
+                .filter { it.getCountryCode() == null }
+            scheduleNodeLocationEnrichment(nodes)
         }
     }
 
@@ -3117,7 +3168,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun continueOfflineAtStartup() {
         if (_isStartupAccountActionInProgress.value || _startupAccountAuthenticated.value) return
-        // 仅保存本地状态并进入主界面，不调用注册、登录或启动后台刷新流程。
+        // 仅保存本地状态并进入主界面，不调用账户或订阅后台端点。
         accountManager.setOfflineMode(true)
         _offlineModeEnabled.value = true
         _accountMessage.value = null

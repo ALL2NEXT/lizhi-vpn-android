@@ -50,6 +50,7 @@ import io.github.HanJason233.chimera.BuildConfig
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.data.model.ProxyCore
+import io.github.HanJason233.chimera.data.model.RegionLookupMode
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
@@ -65,6 +66,7 @@ fun OtherConfigScreen(
     val updateDownloadDirectoryUri by viewModel.updateDownloadDirectoryUri.collectAsStateWithLifecycle()
     val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val serviceRequestTimeoutMs by viewModel.serviceRequestTimeoutMs.collectAsStateWithLifecycle()
+    val regionLookupMode by viewModel.regionLookupMode.collectAsStateWithLifecycle()
     var serviceRequestTimeoutSecondsInput by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(serviceRequestTimeoutMs) {
         serviceRequestTimeoutSecondsInput = (serviceRequestTimeoutMs / 1000L).toString()
@@ -116,6 +118,39 @@ fun OtherConfigScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("管理资源文件")
+                }
+            }
+
+            OtherConfigSection(title = "地区组查询方式") {
+                Text(
+                    text = regionLookupMode.description,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    RegionLookupMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = regionLookupMode == mode,
+                            onClick = { viewModel.setRegionLookupMode(mode) },
+                            label = { Text(mode.title) }
+                        )
+                    }
+                }
+                if (regionLookupMode != RegionLookupMode.REMOTE) {
+                    Text(
+                        text = "本地查询使用设置中的 geoip.dat；可在上方“路由资源文件”中下载或导入。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                }
+                OutlinedButton(
+                    onClick = viewModel::refreshMissingNodeLocations,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("重新查询未识别地区")
                 }
             }
 

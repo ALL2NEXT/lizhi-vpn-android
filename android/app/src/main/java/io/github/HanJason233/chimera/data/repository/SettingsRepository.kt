@@ -24,6 +24,7 @@ import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.data.model.ProxyCore
 import io.github.HanJason233.chimera.data.model.ProxyMode
+import io.github.HanJason233.chimera.data.model.RegionLookupMode
 import io.github.HanJason233.chimera.data.model.SkinScheme
 import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.SkinThemeMode
@@ -149,6 +150,7 @@ class SettingsRepository(
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
         private val DISCONNECT_RECOVERY_ENABLED = booleanPreferencesKey("disconnect_recovery_enabled")
+        private val REGION_LOOKUP_MODE = stringPreferencesKey("region_lookup_mode")
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
@@ -1113,6 +1115,16 @@ class SettingsRepository(
     val serviceRequestTimeoutMs: Flow<Long> = store.data.map { preferences ->
         (preferences[SERVICE_REQUEST_TIMEOUT_MS] ?: DEFAULT_SERVICE_REQUEST_TIMEOUT_MS)
             .coerceIn(MIN_SERVICE_REQUEST_TIMEOUT_MS, MAX_SERVICE_REQUEST_TIMEOUT_MS)
+    }
+
+    /** 地区组归属地查询模式默认沿用旧版远程查询行为。 */
+    val regionLookupMode: Flow<RegionLookupMode> = store.data.map { preferences ->
+        runCatching { RegionLookupMode.valueOf(preferences[REGION_LOOKUP_MODE].orEmpty()) }
+            .getOrDefault(RegionLookupMode.REMOTE)
+    }
+
+    suspend fun setRegionLookupMode(mode: RegionLookupMode) {
+        store.edit { preferences -> preferences[REGION_LOOKUP_MODE] = mode.name }
     }
 
     suspend fun setServiceRequestTimeoutMs(value: Long) {
