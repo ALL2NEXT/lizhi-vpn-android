@@ -1,5 +1,6 @@
 package io.github.HanJason233.chimera.data.model
 
+import org.json.JSONArray
 import java.util.UUID
 
 enum class SmartRoutingRuleType {
@@ -28,6 +29,60 @@ enum class SmartRoutingRuleAction(val configTag: String) {
             else -> PROXY
         }
     }
+}
+
+/** 清理导入规则项两端误带的引号、转义符和不成对数组括号。 */
+internal fun normalizeRoutingRuleValue(value: String): String {
+    var normalized = value.trim()
+    repeat(4) {
+        val previous = normalized
+        normalized = normalized.trim('"', '\'', '\\').trim()
+        val openingBrackets = normalized.count { it == '[' }
+        val closingBrackets = normalized.count { it == ']' }
+        normalized = when {
+            openingBrackets > closingBrackets && normalized.startsWith("[") ->
+                normalized.removePrefix("[")
+            closingBrackets > openingBrackets && normalized.endsWith("]") ->
+                normalized.removeSuffix("]")
+            else -> normalized
+        }.trim().trim('"', '\'', '\\').trim()
+        if (normalized == previous) return normalized
+    }
+    return normalized
+}
+
+/** 解析标准数组及旧版把 JSON 数组保存成字符串的路由条件。 */
+internal fun decodeRoutingRuleValues(value: String): List<String> {
+    val source = value.trim()
+    if (source.isBlank()) return emptyList()
+    val jsonArray = runCatching { JSONArray(source) }.getOrNull()
+    if (jsonArray != null) {
+        return buildList {
+            for (index in 0 until jsonArray.length()) {
+                addAll(decodeRoutingRuleValues(jsonArray.optString(index)))
+            }
+        }.distinct()
+    }
+
+    val unquoted = normalizeRoutingRuleValue(source)
+    if (unquoted != source && unquoted.startsWith("[") && unquoted.endsWith("]")) {
+        return decodeRoutingRuleValues(unquoted)
+    }
+    val listContent = if (source.startsWith("[") && source.endsWith("]")) {
+        source.substring(1, source.lastIndex)
+    } else {
+        source
+    }
+    val parts = listContent.split(',', '\n')
+    val wholeListQuoted = parts.size > 1 &&
+        source.length >= 2 && source.first() == source.last() &&
+        source.first() in setOf('"', '\'') &&
+        !(parts.first().trim().let { it.firstOrNull() == source.first() && it.lastOrNull() == source.first() } &&
+            parts.last().trim().let { it.firstOrNull() == source.last() && it.lastOrNull() == source.last() })
+    if (wholeListQuoted) return decodeRoutingRuleValues(unquoted)
+    return parts.map(::normalizeRoutingRuleValue)
+        .filter(String::isNotBlank)
+        .distinct()
 }
 
 data class SmartRoutingRule(

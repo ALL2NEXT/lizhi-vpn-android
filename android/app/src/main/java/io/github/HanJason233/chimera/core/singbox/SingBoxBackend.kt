@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.core.singbox
 
 import android.content.Context
 import android.util.Log
+import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,6 +74,7 @@ internal class SingBoxBackend : CoreBackend {
 
     private fun validate(context: Context, config: String) {
         val file = File(context.cacheDir, "sing-box-check-${UUID.randomUUID()}.json")
+        val outputFile = File(context.cacheDir, "sing-box-check-${UUID.randomUUID()}.log")
         var process: Process? = null
         try {
             file.writeText(config, Charsets.UTF_8)
@@ -83,18 +85,26 @@ internal class SingBoxBackend : CoreBackend {
                 "--check",
                 "--config", file.absolutePath,
                 "--directory", context.filesDir.absolutePath
-            ).directory(context.filesDir).redirectErrorStream(true).start()
+            ).directory(context.filesDir)
+                .redirectErrorStream(true)
+                // 校验失败时保留核心输出，便于定位具体配置字段。
+                .redirectOutput(outputFile)
+                .start()
             val finished = process.awaitExit(15, TimeUnit.SECONDS)
             val exitCode = if (finished) process.exitValue() else null
-            val output = if (finished) {
-                process.inputStream.bufferedReader().use { it.readText() }.trim()
-            } else {
-                ""
-            }
+            val output = outputFile.takeIf(File::isFile)
+                ?.readText(Charsets.UTF_8)
+                ?.trim()
+                .orEmpty()
             if (!finished || exitCode != 0) {
-                val detail = output.takeLast(2000).ifBlank { "<no runner output>" }
+                // 核心优先输出 JSON 日志，提取 message 后展示关键失败原因。
+                val detail = output.lineSequence().mapNotNull { line ->
+                    runCatching {
+                        JSONObject(line).optString("message").takeIf(String::isNotBlank)
+                    }.getOrNull()
+                }.firstOrNull() ?: output.takeLast(2000).ifBlank { "<no runner output>" }
                 Log.e(TAG, "sing-box config validation failed: finished=$finished exit=$exitCode output=$detail")
-                error("sing-box 配置校验失败，请检查节点协议与传输参数")
+                error("sing-box 配置校验失败：${detail.take(240)}")
             }
         } finally {
             process?.let {
@@ -104,6 +114,7 @@ internal class SingBoxBackend : CoreBackend {
                 }
             }
             file.delete()
+            outputFile.delete()
         }
     }
 

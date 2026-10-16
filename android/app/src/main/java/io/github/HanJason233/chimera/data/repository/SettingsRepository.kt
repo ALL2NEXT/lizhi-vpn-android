@@ -35,6 +35,7 @@ import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
 import io.github.HanJason233.chimera.data.model.SmartRoutingDomainStrategy
 import io.github.HanJason233.chimera.data.model.SmartRoutingSettings
 import io.github.HanJason233.chimera.data.model.SmartRoutingRulesCodec
+import io.github.HanJason233.chimera.data.model.decodeRoutingRuleValues
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
@@ -570,13 +571,11 @@ class SettingsRepository(
                         val array = item.optJSONArray(key)
                         if (array != null) return buildList {
                             for (valueIndex in 0 until array.length()) {
-                                array.optString(valueIndex).trim()
-                                    .takeIf(String::isNotBlank)?.let(::add)
+                                addAll(decodeRoutingRuleValues(array.optString(valueIndex)))
                             }
                         }.distinct()
                         val value = item.optString(key).takeUnless { it == "null" }.orEmpty()
-                        if (value.isNotBlank()) return value.split(',', '\n')
-                            .map(String::trim).filter(String::isNotBlank).distinct()
+                        if (value.isNotBlank()) return decodeRoutingRuleValues(value)
                     }
                     return emptyList()
                 }
@@ -1016,8 +1015,7 @@ class SettingsRepository(
     }
 
     private fun normalizeRoutingValues(values: List<String>): List<String> = values
-        .flatMap { it.split(',', '\n') }
-        .map(String::trim)
+        .flatMap(::decodeRoutingRuleValues)
         .filter(String::isNotBlank)
         .distinct()
 

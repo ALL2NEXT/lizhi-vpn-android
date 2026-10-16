@@ -12,7 +12,9 @@ import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
+import io.github.HanJason233.chimera.data.model.decodeRoutingRuleValues
 import io.github.HanJason233.chimera.data.model.effectiveOutboundTag
+import io.github.HanJason233.chimera.data.model.normalizeRoutingRuleValue
 import io.github.HanJason233.chimera.util.XrayConfigGenerator
 
 internal object XrayVpnConfig {
@@ -183,12 +185,12 @@ internal object XrayVpnConfig {
                                 if (smartRule.type == SmartRoutingRuleType.CUSTOM_DOMAIN) {
                                     smartRule.values
                                 } else emptyList()
-                            }
+                            }.flatMap(::decodeRoutingRuleValues)
                             val ips = smartRule.ips.ifEmpty {
                                 if (smartRule.type == SmartRoutingRuleType.CUSTOM_IP) {
                                     smartRule.values
                                 } else emptyList()
-                            }
+                            }.flatMap(::decodeRoutingRuleValues)
                             // 与 v2rayNG 一样保留规则原顺序；HEV 不支持进程匹配，
                             // 因此 process 字段不下发，但其余条件仍按原规则生成。
                             rules.add(scopedSmartRule(smartRule.effectiveOutboundTag).apply {
@@ -282,7 +284,7 @@ internal object XrayVpnConfig {
     private fun strings(vararg values: String) = JsonArray().apply { values.forEach(::add) }
 
     private fun normalizeXrayDomain(value: String): String {
-        val normalized = value.trim()
+        val normalized = normalizeRoutingRuleValue(value)
         return if (normalized.substringBefore(':').lowercase() in setOf(
                 "domain", "full", "regexp", "keyword", "geosite"
             )
@@ -293,11 +295,14 @@ internal object XrayVpnConfig {
         }
     }
 
-    private fun normalizeXrayIp(value: String): String = when (value.trim().lowercase()) {
-        // v2rayNG 将这两个常用标签指向体积更小的专用数据库文件。
-        "geoip:cn" -> "ext:geoip-only-cn-private.dat:cn"
-        "geoip:private" -> "ext:geoip-only-cn-private.dat:private"
-        else -> value.trim()
+    private fun normalizeXrayIp(value: String): String {
+        val normalized = normalizeRoutingRuleValue(value)
+        return when (normalized.lowercase()) {
+            // v2rayNG 将这两个常用标签指向体积更小的专用数据库文件。
+            "geoip:cn" -> "ext:geoip-only-cn-private.dat:cn"
+            "geoip:private" -> "ext:geoip-only-cn-private.dat:private"
+            else -> normalized
+        }
     }
 
     private fun firstDnsAddress(value: String, fallback: String): String =

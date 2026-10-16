@@ -53,21 +53,19 @@ object SmartRoutingRulesCodec {
 
     private fun decodeRule(item: JSONObject): SmartRoutingRule {
         fun readList(arrayKey: String, stringKey: String = arrayKey): List<String> {
+            // v2rayNG 使用单数键保存数组，并兼容历史上被再次序列化的数组字符串。
             val array = item.optJSONArray(arrayKey)
+                ?: if (stringKey != arrayKey) item.optJSONArray(stringKey) else null
             if (array != null) {
                 return buildList {
                     for (index in 0 until array.length()) {
-                        array.optString(index).trim().takeIf(String::isNotBlank)?.let(::add)
+                        addAll(decodeRoutingRuleValues(array.optString(index)))
                     }
                 }.distinct()
             }
-            return item.optString(stringKey)
+            return decodeRoutingRuleValues(item.optString(stringKey)
                 .takeUnless { it == "null" }
-                .orEmpty()
-                .split(',', '\n')
-                .map(String::trim)
-                .filter(String::isNotBlank)
-                .distinct()
+                .orEmpty())
         }
 
         val rawType = item.optString("type")

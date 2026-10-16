@@ -18,6 +18,7 @@ import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
 import io.github.HanJason233.chimera.data.model.SmartRoutingSettings
 import io.github.HanJason233.chimera.data.model.effectiveOutboundTag
+import io.github.HanJason233.chimera.data.model.decodeRoutingRuleValues
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import android.net.Uri
@@ -1291,13 +1292,15 @@ class SingBoxConfigGenerator {
         .trimEnd('.')
         .lowercase()
 
-    private fun routingRuleDomains(rule: SmartRoutingRule): List<String> = rule.domains.ifEmpty {
-        if (rule.type == SmartRoutingRuleType.CUSTOM_DOMAIN) rule.values else emptyList()
-    }
+    private fun routingRuleDomains(rule: SmartRoutingRule): List<String> =
+        (rule.domains.ifEmpty {
+            if (rule.type == SmartRoutingRuleType.CUSTOM_DOMAIN) rule.values else emptyList()
+        }).flatMap(::decodeRoutingRuleValues)
     
-    private fun routingRuleIps(rule: SmartRoutingRule): List<String> = rule.ips.ifEmpty {
-        if (rule.type == SmartRoutingRuleType.CUSTOM_IP) rule.values else emptyList()
-    }
+    private fun routingRuleIps(rule: SmartRoutingRule): List<String> =
+        (rule.ips.ifEmpty {
+            if (rule.type == SmartRoutingRuleType.CUSTOM_IP) rule.values else emptyList()
+        }).flatMap(::decodeRoutingRuleValues)
 
     private fun String.toRuleSetTag(prefix: String): String? {
         val name = trim().lowercase()
