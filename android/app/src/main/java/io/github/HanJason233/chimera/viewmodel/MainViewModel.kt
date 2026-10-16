@@ -3351,6 +3351,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun saveSmartRoutingRule(rule: SmartRoutingRule) {
+        viewModelScope.launch {
+            settingsRepository.saveSmartRoutingRule(rule)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setSmartRoutingDomainStrategy(strategy: SmartRoutingDomainStrategy) {
+        viewModelScope.launch {
+            settingsRepository.setSmartRoutingDomainStrategy(strategy)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun importSmartRoutingRules(json: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val decoded = runCatching {
+                withContext(Dispatchers.Default) { SmartRoutingRulesCodec.decode(json) }
+            }.getOrNull()
+            if (decoded == null) {
+                onResult(false)
+                return@launch
+            }
+            settingsRepository.replaceSmartRoutingRules(decoded)
+            restartVpnIfNeeded()
+            onResult(true)
+        }
+    }
+
+    fun deleteSmartRoutingRule(ruleId: String) {
+        viewModelScope.launch {
+            settingsRepository.deleteSmartRoutingRule(ruleId)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun setSmartRoutingRuleEnabled(ruleId: String, enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSmartRoutingRuleEnabled(ruleId, enabled)
+            restartVpnIfNeeded()
+        }
+    }
+
+    fun moveSmartRoutingRule(fromRuleId: String, toRuleId: String) {
+        viewModelScope.launch {
+            settingsRepository.moveSmartRoutingRule(fromRuleId, toRuleId)
+            restartVpnIfNeeded()
+        }
+    }
+
     /** Refresh all subscriptions when no source is specified, otherwise only the selected source. */
     fun refreshNodes(sourceId: String? = null) {
         refreshSubscriptions(sourceId, onResult = null)

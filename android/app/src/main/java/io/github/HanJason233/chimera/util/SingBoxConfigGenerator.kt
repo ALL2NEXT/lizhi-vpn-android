@@ -448,20 +448,26 @@ class SingBoxConfigGenerator {
             val overriddenDomains = smartRoutingSettings.rules
                 .filter {
                     it.enabled &&
-                        it.type == SmartRoutingRuleType.CUSTOM_DOMAIN &&
+                        routingRuleDomains(it).isNotEmpty() &&
+                        routingRuleIps(it).isEmpty() &&
+                        it.ports.isBlank() && it.network.isBlank() && it.protocols.isEmpty() &&
                         (it.action == SmartRoutingRuleAction.PROXY ||
                             it.action == SmartRoutingRuleAction.BLOCK)
                 }
-                .flatMap { it.values }
+                .flatMap(::routingRuleDomains)
+                .filterNot { it.startsWith("geosite:", ignoreCase = true) }
                 .map(::routingDomainKey)
                 .toSet()
             val customDirectDomains = smartRoutingSettings.rules
                 .filter {
                     it.enabled &&
-                        it.type == SmartRoutingRuleType.CUSTOM_DOMAIN &&
+                        routingRuleDomains(it).isNotEmpty() &&
+                        routingRuleIps(it).isEmpty() &&
+                        it.ports.isBlank() && it.network.isBlank() && it.protocols.isEmpty() &&
                         it.action == SmartRoutingRuleAction.DIRECT
                 }
-                .flatMap { it.values }
+                .flatMap(::routingRuleDomains)
+                .filterNot { it.startsWith("geosite:", ignoreCase = true) }
                 .filterNot { routingDomainKey(it) in overriddenDomains }
                 .distinct()
             if (customDirectDomains.isNotEmpty()) {
@@ -1108,6 +1114,7 @@ class SingBoxConfigGenerator {
             })
         }
         
+        val requiredRuleSetTags = linkedSetOf<String>()
         if (smartInboundTags.isNotEmpty()) {
             fun addRuleSetRule(tag: String, action: SmartRoutingRuleAction) {
                 rules.add(JsonObject().apply {
@@ -1115,36 +1122,105 @@ class SingBoxConfigGenerator {
                     add("rule_set", JsonArray().apply { add(tag) })
                     addProperty("outbound", action.configTag)
                 })
+                requiredRuleSetTags += tag
             }
 
-            fun addValueRule(key: String, values: List<String>, action: SmartRoutingRuleAction) {
-                if (values.isEmpty()) return
-                rules.add(JsonObject().apply {
-                    add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
-                    add(key, JsonArray().apply { values.forEach(::add) })
-                    addProperty("outbound", action.configTag)
-                })
-            }
+            smartRoutingSettings.rules.filter { it.enabled }.forEach { smartRule ->
+                when (smartRule.type) {
+                    SmartRoutingRuleType.DOMESTIC_DOMAIN ->
+                        addRuleSetRule("geosite-cn", smartRule.action)
+                    SmartRoutingRuleType.DOMESTIC_IP ->
+                        addRuleSetRule("geoip-cn", smartRule.action)
+                    SmartRoutingRuleType.CUSTOM_DOMAIN,
+                    SmartRoutingRuleType.CUSTOM_IP,
+                    SmartRoutingRuleType.CUSTOM_RULE -> {
+                        val domains = routingRuleDomains(smartRule)
+                        val ips = routingRuleIps(smartRule)
+                        val exactDomains = mutableListOf<String>()
+                        val suffixDomains = mutableListOf<String>()
+                        val keywordDomains = mutableListOf<String>()
+                        val regexpDomains = mutableListOf<String>()
+                        val ipCidrs = mutableListOf<String>()
+                        val isPrivateIp = mutableListOf<Boolean>()
+                        val ruleSetTags = mutableListOf<String>()
 
-            smartRoutingSettings.rules
-                .filter { it.enabled }
-                .sortedBy(::smartRulePriority)
-                .forEach { smartRule ->
-                    when (smartRule.type) {
-                        SmartRoutingRuleType.DOMESTIC_DOMAIN ->
-                            addRuleSetRule("geosite-cn", smartRule.action)
-                        SmartRoutingRuleType.DOMESTIC_IP ->
-                            addRuleSetRule("geoip-cn", smartRule.action)
-                        SmartRoutingRuleType.CUSTOM_DOMAIN ->
-                            addValueRule("domain", smartRule.values, smartRule.action)
-                        SmartRoutingRuleType.CUSTOM_IP ->
-                            addValueRule(
-                                "ip_cidr",
-                                smartRule.values.map(::normalizeIpCidr),
-                                smartRule.action
-                            )
+                        domains.forEach { raw ->
+                            val value = raw.trim()
+                            when {
+                                value.startsWith("geosite:", ignoreCase = true) ->
+                                    value.substringAfter(':').toRuleSetTag("geosite-")
+                                        ?.let(ruleSetTags::add)
+                                value.startsWith("full:", ignoreCase = true) ->
+                                    exactDomains += value.substringAfter(':')
+                                value.startsWith("domain:", ignoreCase = true) ->
+                                    suffixDomains += value.substringAfter(':')
+                                value.startsWith("keyword:", ignoreCase = true) ->
+                                    keywordDomains += value.substringAfter(':')
+                                value.startsWith("regexp:", ignoreCase = true) ->
+                                    regexpDomains += value.substringAfter(':')
+                                else -> suffixDomains += value
+                            }
+                        }
+                        ips.forEach { raw ->
+                            val value = raw.trim()
+                            if (value.startsWith("geoip:", ignoreCase = true)) {
+                                val tag = value.substringAfter(':').lowercase()
+                                if (tag == "private") isPrivateIp += true
+                                else tag.toRuleSetTag("geoip-")?.let(ruleSetTags::add)
+                            } else {
+                                ipCidrs += normalizeIpCidr(value)
+                            }
+                        }
+                        requiredRuleSetTags += ruleSetTags
+
+                        val (singlePorts, portRanges) = parseRoutingPorts(smartRule.ports)
+                        val networks = smartRule.network.split(',').map(String::trim)
+                            .filter(String::isNotBlank).distinct()
+                        val hasConditions = exactDomains.isNotEmpty() || suffixDomains.isNotEmpty() ||
+                            keywordDomains.isNotEmpty() || regexpDomains.isNotEmpty() ||
+                            ipCidrs.isNotEmpty() || isPrivateIp.isNotEmpty() || ruleSetTags.isNotEmpty() ||
+                            singlePorts.isNotEmpty() || portRanges.isNotEmpty() || networks.isNotEmpty() ||
+                            smartRule.protocols.isNotEmpty()
+                        if (hasConditions) {
+                            rules.add(JsonObject().apply {
+                                add("inbound", JsonArray().apply { smartInboundTags.forEach(::add) })
+                                if (exactDomains.isNotEmpty()) add("domain", JsonArray().apply {
+                                    exactDomains.forEach(::add)
+                                })
+                                if (suffixDomains.isNotEmpty()) add("domain_suffix", JsonArray().apply {
+                                    suffixDomains.forEach(::add)
+                                })
+                                if (keywordDomains.isNotEmpty()) add("domain_keyword", JsonArray().apply {
+                                    keywordDomains.forEach(::add)
+                                })
+                                if (regexpDomains.isNotEmpty()) add("domain_regex", JsonArray().apply {
+                                    regexpDomains.forEach(::add)
+                                })
+                                if (ipCidrs.isNotEmpty()) add("ip_cidr", JsonArray().apply {
+                                    ipCidrs.forEach(::add)
+                                })
+                                if (isPrivateIp.isNotEmpty()) addProperty("ip_is_private", true)
+                                if (ruleSetTags.isNotEmpty()) add("rule_set", JsonArray().apply {
+                                    ruleSetTags.forEach(::add)
+                                })
+                                if (singlePorts.isNotEmpty()) add("port", JsonArray().apply {
+                                    singlePorts.forEach(::add)
+                                })
+                                if (portRanges.isNotEmpty()) add("port_range", JsonArray().apply {
+                                    portRanges.forEach(::add)
+                                })
+                                if (networks.isNotEmpty()) add("network", JsonArray().apply {
+                                    networks.forEach(::add)
+                                })
+                                if (smartRule.protocols.isNotEmpty()) add("protocol", JsonArray().apply {
+                                    smartRule.protocols.forEach(::add)
+                                })
+                                addProperty("outbound", smartRule.action.configTag)
+                            })
+                        }
                     }
                 }
+            }
         }
         
         // 6. 代理服务器 IP -> 直接连接 (在所有模式下都需要，避免路由死循环)
@@ -1169,32 +1245,30 @@ class SingBoxConfigGenerator {
             add("rules", rules)
             
             // rule_set 声明（智能分流模式需要）
-            val hasDomesticDomainRule = smartInboundTags.isNotEmpty() &&
-                smartRoutingSettings.rules.any {
-                    it.enabled && it.type == SmartRoutingRuleType.DOMESTIC_DOMAIN
-                }
-            val hasDomesticIpRule = smartInboundTags.isNotEmpty() &&
-                smartRoutingSettings.rules.any {
-                    it.enabled && it.type == SmartRoutingRuleType.DOMESTIC_IP
-                }
-            if (smartInboundTags.isNotEmpty() && (
-                    hasDomesticDomainRule || hasDomesticIpRule || dnsRoutingEnabled
-                )) {
+            if (smartInboundTags.isNotEmpty() && dnsRoutingEnabled) {
+                requiredRuleSetTags += "geosite-cn"
+            }
+            if (requiredRuleSetTags.isNotEmpty()) {
                 add("rule_set", JsonArray().apply {
-                    if (hasDomesticDomainRule || dnsRoutingEnabled) {
+                    requiredRuleSetTags.forEach { tag ->
                         add(JsonObject().apply {
-                            addProperty("tag", "geosite-cn")
-                            addProperty("type", "local")
+                            addProperty("tag", tag)
                             addProperty("format", "binary")
-                            addProperty("path", "geosite-cn.srs")
-                        })
-                    }
-                    if (hasDomesticIpRule) {
-                        add(JsonObject().apply {
-                            addProperty("tag", "geoip-cn")
-                            addProperty("type", "local")
-                            addProperty("format", "binary")
-                            addProperty("path", "geoip-cn.srs")
+                            when (tag) {
+                                "geosite-cn", "geoip-cn" -> {
+                                    addProperty("type", "local")
+                                    addProperty("path", "$tag.srs")
+                                }
+                                else -> {
+                                    addProperty("type", "remote")
+                                    val family = if (tag.startsWith("geosite-")) "sing-geosite" else "sing-geoip"
+                                    addProperty(
+                                        "url",
+                                        "https://testingcf.jsdelivr.net/gh/SagerNet/$family@rule-set/$tag.srs"
+                                    )
+                                    addProperty("download_detour", "direct")
+                                }
+                            }
                         })
                     }
                 })
@@ -1222,16 +1296,42 @@ class SingBoxConfigGenerator {
         .trimEnd('.')
         .lowercase()
 
-    private fun smartRulePriority(rule: SmartRoutingRule): Int = when {
-        rule.action == SmartRoutingRuleAction.BLOCK -> 0
-        rule.action == SmartRoutingRuleAction.PROXY -> 1
-        rule.type == SmartRoutingRuleType.CUSTOM_DOMAIN -> 2
-        rule.type == SmartRoutingRuleType.DOMESTIC_DOMAIN -> 3
-        rule.type == SmartRoutingRuleType.DOMESTIC_IP -> 4
-        else -> 5
+    private fun routingRuleDomains(rule: SmartRoutingRule): List<String> = rule.domains.ifEmpty {
+        if (rule.type == SmartRoutingRuleType.CUSTOM_DOMAIN) rule.values else emptyList()
     }
     
+    private fun routingRuleIps(rule: SmartRoutingRule): List<String> = rule.ips.ifEmpty {
+        if (rule.type == SmartRoutingRuleType.CUSTOM_IP) rule.values else emptyList()
+    }
 
+    private fun String.toRuleSetTag(prefix: String): String? {
+        val name = trim().lowercase()
+        if (name.isEmpty() || !name.matches(Regex("[a-z0-9_-]+"))) return null
+        return "$prefix$name"
+    }
+
+    private fun parseRoutingPorts(value: String): Pair<List<Int>, List<String>> {
+        val ports = mutableListOf<Int>()
+        val ranges = mutableListOf<String>()
+        value.split(',', '\n').map(String::trim).filter(String::isNotBlank).forEach { part ->
+            val separator = when {
+                '-' in part -> '-'
+                ':' in part -> ':'
+                else -> null
+            }
+            if (separator == null) {
+                part.toIntOrNull()?.takeIf { it in 0..65_535 }?.let(ports::add)
+            } else {
+                val bounds = part.split(separator, limit = 2)
+                val start = bounds.getOrNull(0)?.toIntOrNull()
+                val end = bounds.getOrNull(1)?.toIntOrNull()
+                if (start != null && end != null && start in 0..65_535 && end in start..65_535) {
+                    ranges += "$start:$end"
+                }
+            }
+        }
+        return ports.distinct() to ranges.distinct()
+    }
     
     private fun createExperimental(): JsonObject {
         return JsonObject().apply {

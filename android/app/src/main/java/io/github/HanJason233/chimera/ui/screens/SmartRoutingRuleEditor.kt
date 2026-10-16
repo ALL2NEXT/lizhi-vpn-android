@@ -1,8 +1,15 @@
 package io.github.HanJason233.chimera.ui.screens
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import io.github.HanJason233.chimera.ui.components.AppAlertDialog
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -11,81 +18,202 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
+import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
+import io.github.HanJason233.chimera.ui.components.AppAlertDialog
+import java.util.UUID
 
 @Composable
-internal fun SmartRoutingCategory(
-    title: String,
-    onSet: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f),
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        TextButton(onClick = onSet) {
-            Text("设置")
-        }
-    }
-}
-
-@Composable
-internal fun SmartRoutingDomainSettingsDialog(
-    action: SmartRoutingRuleAction,
-    initialDomains: List<String>,
+internal fun SmartRoutingRuleEditorDialog(
+    initialRule: SmartRoutingRule?,
     onDismiss: () -> Unit,
-    onSave: (List<String>) -> Unit
+    onSave: (SmartRoutingRule) -> Unit,
+    onDelete: (String) -> Unit
 ) {
-    var domainsText by remember(action, initialDomains) {
-        mutableStateOf(initialDomains.joinToString("\n"))
+    var name by rememberSaveable(initialRule?.id) { mutableStateOf(initialRule?.name.orEmpty()) }
+    var domainsText by rememberSaveable(initialRule?.id) {
+        mutableStateOf(initialRule?.effectiveDomains()?.joinToString("\n").orEmpty())
     }
-    val domains = remember(domainsText) { parseSmartRuleValues(domainsText) }
+    var ipsText by rememberSaveable(initialRule?.id) {
+        mutableStateOf(initialRule?.effectiveIps()?.joinToString("\n").orEmpty())
+    }
+    var processesText by rememberSaveable(initialRule?.id) {
+        mutableStateOf(initialRule?.processes?.joinToString("\n").orEmpty())
+    }
+    var ports by rememberSaveable(initialRule?.id) { mutableStateOf(initialRule?.ports.orEmpty()) }
+    var network by rememberSaveable(initialRule?.id) { mutableStateOf(initialRule?.network.orEmpty()) }
+    var protocolsText by rememberSaveable(initialRule?.id) {
+        mutableStateOf(initialRule?.protocols?.joinToString("\n").orEmpty())
+    }
+    var action by rememberSaveable(initialRule?.id) {
+        mutableStateOf(initialRule?.action ?: SmartRoutingRuleAction.PROXY)
+    }
+    var actionMenuExpanded by remember { mutableStateOf(false) }
+    var networkMenuExpanded by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+
+    fun buildRule(): SmartRoutingRule {
+        val domains = parseRuleValues(domainsText)
+        val ips = parseRuleValues(ipsText)
+        return SmartRoutingRule(
+            id = initialRule?.id ?: UUID.randomUUID().toString(),
+            name = name.trim(),
+            type = SmartRoutingRuleType.CUSTOM_RULE,
+            action = action,
+            values = domains.ifEmpty { ips },
+            enabled = initialRule?.enabled ?: true,
+            locked = initialRule?.locked ?: false,
+            domains = domains,
+            ips = ips,
+            ports = ports.trim(),
+            network = network.trim(),
+            protocols = parseRuleValues(protocolsText),
+            processes = parseRuleValues(processesText)
+        )
+    }
 
     AppAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("设置${action.displayName()}域") },
+        title = { Text(if (initialRule == null) "添加路由规则" else "编辑路由规则") },
         text = {
-            OutlinedTextField(
-                value = domainsText,
-                onValueChange = { domainsText = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("域名列表") },
-                supportingText = { Text("每行一个域名，也支持使用逗号分隔；留空可清除") },
-                minLines = 5
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(domains) }) {
-                Text("保存")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("备注") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = domainsText,
+                    onValueChange = { domainsText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("域名") },
+                    supportingText = { Text("每行一项；支持 geosite:、domain:、full:、keyword:、regexp:") },
+                    minLines = 2
+                )
+                OutlinedTextField(
+                    value = ipsText,
+                    onValueChange = { ipsText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("IP / CIDR") },
+                    supportingText = { Text("支持 geoip: 标签；每行一项，也可用逗号分隔") },
+                    minLines = 2
+                )
+                OutlinedTextField(
+                    value = processesText,
+                    onValueChange = { processesText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("进程 / 应用包名") },
+                    enabled = false,
+                    supportingText = {
+                        Text("HEV TUN 模式不支持按应用进程匹配；导入导出会保留此字段")
+                    },
+                    minLines = 1
+                )
+                OutlinedTextField(
+                    value = ports,
+                    onValueChange = { ports = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("端口") },
+                    placeholder = { Text("80, 443, 1000-2000") },
+                    singleLine = true
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("网络", style = MaterialTheme.typography.labelMedium)
+                        TextButton(onClick = { networkMenuExpanded = true }) {
+                            Text(network.ifBlank { "不限" })
+                        }
+                        DropdownMenu(
+                            expanded = networkMenuExpanded,
+                            onDismissRequest = { networkMenuExpanded = false }
+                        ) {
+                            listOf("", "tcp", "udp", "tcp,udp").forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.ifBlank { "不限" }) },
+                                    onClick = {
+                                        network = option
+                                        networkMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Column(modifier = Modifier.weight(2f)) {
+                        Text("出口", style = MaterialTheme.typography.labelMedium)
+                        TextButton(onClick = { actionMenuExpanded = true }) {
+                            Text(action.title())
+                        }
+                        DropdownMenu(
+                            expanded = actionMenuExpanded,
+                            onDismissRequest = { actionMenuExpanded = false }
+                        ) {
+                            SmartRoutingRuleAction.entries.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.title()) },
+                                    onClick = {
+                                        action = option
+                                        actionMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = protocolsText,
+                    onValueChange = { protocolsText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("协议") },
+                    placeholder = { Text("bittorrent、http、tls") },
+                    minLines = 2
+                )
             }
         },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(buildRule()) },
+                enabled = name.isNotBlank()
+            ) { Text("保存") }
+        },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+            Row {
+                if (initialRule != null && !initialRule.locked) {
+                    TextButton(onClick = { onDelete(initialRule.id) }) { Text("删除") }
+                }
+                TextButton(onClick = onDismiss) { Text("取消") }
             }
         }
     )
 }
 
-private fun parseSmartRuleValues(value: String): List<String> = value
+private fun parseRuleValues(value: String): List<String> = value
     .split(',', '\n')
     .map(String::trim)
     .filter(String::isNotBlank)
     .distinct()
 
-private fun SmartRoutingRuleAction.displayName(): String = when (this) {
+private fun SmartRoutingRule.effectiveDomains(): List<String> = domains.ifEmpty {
+    if (type == SmartRoutingRuleType.CUSTOM_DOMAIN) values else emptyList()
+}
+
+private fun SmartRoutingRule.effectiveIps(): List<String> = ips.ifEmpty {
+    if (type == SmartRoutingRuleType.CUSTOM_IP) values else emptyList()
+}
+
+private fun SmartRoutingRuleAction.title(): String = when (this) {
     SmartRoutingRuleAction.DIRECT -> "直连"
     SmartRoutingRuleAction.PROXY -> "代理"
     SmartRoutingRuleAction.BLOCK -> "阻断"

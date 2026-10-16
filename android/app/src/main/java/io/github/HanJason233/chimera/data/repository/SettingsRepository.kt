@@ -32,6 +32,7 @@ import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
+import io.github.HanJason233.chimera.data.model.SmartRoutingDomainStrategy
 import io.github.HanJason233.chimera.data.model.SmartRoutingSettings
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
@@ -112,6 +113,8 @@ class SettingsRepository(
         private val DNS_ROUTING_ENABLED = booleanPreferencesKey("dns_routing_enabled")
         private val DNS_FAKE_ENABLED = booleanPreferencesKey("dns_fake_enabled")
         private val SMART_ROUTING_RULES_JSON = stringPreferencesKey("smart_routing_rules_json")
+        private val SMART_ROUTING_DOMAIN_STRATEGY =
+            stringPreferencesKey("smart_routing_domain_strategy")
         
         // 自动化测试设置
         private val SELECTED_SUBSCRIPTION_SOURCE_ID = stringPreferencesKey("selected_subscription_source_id")
@@ -515,11 +518,15 @@ class SettingsRepository(
         val stored = preferences[SMART_ROUTING_RULES_JSON]
             ?.takeIf(String::isNotBlank)
             ?.let(::decodeSmartRoutingRules)
-        if (stored != null) {
-            return SmartRoutingSettings(ensureBuiltInSmartRules(stored))
-        }
-
-        return SmartRoutingSettings()
+        return SmartRoutingSettings(
+            rules = ensureBuiltInSmartRules(stored ?: SmartRoutingSettings.defaultRules()),
+            domainStrategy = runCatching {
+                SmartRoutingDomainStrategy.valueOf(
+                    preferences[SMART_ROUTING_DOMAIN_STRATEGY]
+                        ?: SmartRoutingDomainStrategy.IP_IF_NON_MATCH.name
+                )
+            }.getOrDefault(SmartRoutingDomainStrategy.IP_IF_NON_MATCH)
+        )
     }
 
     private fun decodeSmartRoutingRules(json: String): List<SmartRoutingRule>? = runCatching {
@@ -536,8 +543,8 @@ class SettingsRepository(
                     SmartRoutingRuleAction.valueOf(item.optString("action"))
                 }.getOrNull() ?: continue
                 if (id.isBlank() || name.isBlank()) continue
-                val values = buildList {
-                    item.optJSONArray("values")?.let { valueArray ->
+                fun readValues(key: String): List<String> = buildList {
+                    item.optJSONArray(key)?.let { valueArray ->
                         for (valueIndex in 0 until valueArray.length()) {
                             valueArray.optString(valueIndex)
                                 .trim()
@@ -546,6 +553,7 @@ class SettingsRepository(
                         }
                     }
                 }
+                val values = readValues("values")
                 add(
                     SmartRoutingRule(
                         id = id,
@@ -558,7 +566,17 @@ class SettingsRepository(
                             "locked",
                             type == SmartRoutingRuleType.DOMESTIC_DOMAIN ||
                                 type == SmartRoutingRuleType.DOMESTIC_IP
-                        )
+                        ),
+                        domains = if (item.has("domains")) readValues("domains") else {
+                            if (type == SmartRoutingRuleType.CUSTOM_DOMAIN) values else emptyList()
+                        },
+                        ips = if (item.has("ips")) readValues("ips") else {
+                            if (type == SmartRoutingRuleType.CUSTOM_IP) values else emptyList()
+                        },
+                        ports = item.optString("ports").takeUnless { it == "null" }.orEmpty(),
+                        network = item.optString("network").takeUnless { it == "null" }.orEmpty(),
+                        protocols = readValues("protocols"),
+                        processes = readValues("process")
                     )
                 )
             }
@@ -567,12 +585,18 @@ class SettingsRepository(
 
     private fun ensureBuiltInSmartRules(rules: List<SmartRoutingRule>): List<SmartRoutingRule> {
         val defaults = SmartRoutingSettings.defaultRules()
+        val existingDomain = rules.firstOrNull {
+            it.id == SmartRoutingSettings.DOMESTIC_DOMAIN_RULE_ID
+        }
+        val existingIp = rules.firstOrNull {
+            it.id == SmartRoutingSettings.DOMESTIC_IP_RULE_ID
+        }
         val defaultDomain = defaults
             .first { it.id == SmartRoutingSettings.DOMESTIC_DOMAIN_RULE_ID }
-            .copy(name = "国内域名（内置）", enabled = true)
+            .copy(name = "国内域名（内置）", enabled = existingDomain?.enabled ?: true)
         val defaultIp = defaults
             .first { it.id == SmartRoutingSettings.DOMESTIC_IP_RULE_ID }
-            .copy(enabled = true)
+            .copy(enabled = existingIp?.enabled ?: true)
         var domainPresent = false
         var ipPresent = false
 
@@ -591,8 +615,11 @@ class SettingsRepository(
                             ipPresent = true
                         }
                     }
-                    else -> if (rule.type == SmartRoutingRuleType.CUSTOM_DOMAIN) {
-                        add(rule.copy(locked = false))
+                    else -> if (
+                        rule.type != SmartRoutingRuleType.DOMESTIC_DOMAIN &&
+                        rule.type != SmartRoutingRuleType.DOMESTIC_IP
+                    ) {
+                        add(rule)
                     }
                 }
             }
@@ -610,6 +637,12 @@ class SettingsRepository(
                     put("type", rule.type.name)
                     put("action", rule.action.name)
                     put("values", JSONArray().apply { rule.values.forEach(::put) })
+                    put("domains", JSONArray().apply { rule.domains.forEach(::put) })
+                    put("ips", JSONArray().apply { rule.ips.forEach(::put) })
+                    put("ports", rule.ports)
+                    put("network", rule.network)
+                    put("protocols", JSONArray().apply { rule.protocols.forEach(::put) })
+                    put("process", JSONArray().apply { rule.processes.forEach(::put) })
                     put("enabled", rule.enabled)
                     put("locked", rule.locked)
                 })
@@ -889,13 +922,126 @@ class SettingsRepository(
                         name = action.name,
                         type = SmartRoutingRuleType.CUSTOM_DOMAIN,
                         action = action,
-                        values = normalizedValues
+                        values = normalizedValues,
+                        domains = normalizedValues
                     )
                 ) + remaining
             }
             preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(updated)
         }
     }
+
+    suspend fun setSmartRoutingDomainStrategy(strategy: SmartRoutingDomainStrategy) {
+        store.edit { preferences -> preferences[SMART_ROUTING_DOMAIN_STRATEGY] = strategy.name }
+    }
+
+    suspend fun saveSmartRoutingRule(rule: SmartRoutingRule) {
+        if (rule.name.isBlank()) return
+        val domains = normalizeRoutingValues(rule.domains)
+        val ips = normalizeRoutingValues(rule.ips)
+        val protocols = normalizeRoutingValues(rule.protocols)
+        val processes = normalizeRoutingValues(rule.processes)
+        val normalized = rule.copy(
+            name = rule.name.trim(),
+            values = if (domains.isNotEmpty()) domains else ips,
+            domains = domains,
+            ips = ips,
+            ports = rule.ports.trim(),
+            network = rule.network.trim(),
+            protocols = protocols,
+            processes = processes
+        )
+        store.edit { preferences ->
+            val rules = decodeSmartRoutingSettings(preferences).rules
+            val currentIndex = rules.indexOfFirst { it.id == rule.id }
+            if (currentIndex >= 0 && rules[currentIndex].locked) return@edit
+            val updated = if (currentIndex >= 0) {
+                rules.toMutableList().apply { this[currentIndex] = normalized }
+            } else {
+                val firstLockedIndex = rules.indexOfFirst(SmartRoutingRule::locked)
+                    .takeIf { it >= 0 } ?: rules.size
+                rules.toMutableList().apply { add(firstLockedIndex, normalized) }
+            }
+            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(updated)
+        }
+    }
+
+    suspend fun deleteSmartRoutingRule(ruleId: String) {
+        store.edit { preferences ->
+            val rules = decodeSmartRoutingSettings(preferences).rules
+            val rule = rules.firstOrNull { it.id == ruleId } ?: return@edit
+            if (rule.locked) return@edit
+            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(
+                rules.filterNot { it.id == ruleId }
+            )
+        }
+    }
+
+    suspend fun setSmartRoutingRuleEnabled(ruleId: String, enabled: Boolean) {
+        store.edit { preferences ->
+            val rules = decodeSmartRoutingSettings(preferences).rules
+            if (rules.none { it.id == ruleId }) return@edit
+            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(
+                rules.map { if (it.id == ruleId) it.copy(enabled = enabled) else it }
+            )
+        }
+    }
+
+    /** 导入路由时保留锁定规则，并将用户导入项放在前面以维持首条命中语义。 */
+    suspend fun replaceSmartRoutingRules(importedRules: List<SmartRoutingRule>) {
+        if (importedRules.isEmpty()) return
+        store.edit { preferences ->
+            val current = decodeSmartRoutingSettings(preferences).rules
+            val protectedIds = current.filter(SmartRoutingRule::locked).mapTo(mutableSetOf()) {
+                it.id
+            }
+            val imported = importedRules
+                .filterNot { it.id in protectedIds }
+                .map { rule ->
+                    val domains = normalizeRoutingValues(rule.domains.ifEmpty {
+                        if (rule.type == SmartRoutingRuleType.CUSTOM_DOMAIN) rule.values else emptyList()
+                    })
+                    val ips = normalizeRoutingValues(rule.ips.ifEmpty {
+                        if (rule.type == SmartRoutingRuleType.CUSTOM_IP) rule.values else emptyList()
+                    })
+                    rule.copy(
+                        id = rule.id.takeIf(String::isNotBlank) ?: UUID.randomUUID().toString(),
+                        name = rule.name.trim().ifBlank { "导入规则" },
+                        values = if (domains.isNotEmpty()) domains else ips,
+                        domains = domains,
+                        ips = ips,
+                        ports = rule.ports.trim(),
+                        network = rule.network.trim(),
+                        protocols = normalizeRoutingValues(rule.protocols),
+                        processes = normalizeRoutingValues(rule.processes)
+                    )
+                }
+                .distinctBy(SmartRoutingRule::id)
+            val keptLocked = current.filter { it.locked }
+            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(
+                ensureBuiltInSmartRules(imported + keptLocked)
+            )
+        }
+    }
+
+    suspend fun moveSmartRoutingRule(fromRuleId: String, toRuleId: String) {
+        if (fromRuleId == toRuleId) return
+        store.edit { preferences ->
+            val rules = decodeSmartRoutingSettings(preferences).rules.toMutableList()
+            val fromIndex = rules.indexOfFirst { it.id == fromRuleId }
+            val toIndex = rules.indexOfFirst { it.id == toRuleId }
+            if (fromIndex < 0 || toIndex < 0) return@edit
+            val moved = rules.removeAt(fromIndex)
+            rules.add(toIndex, moved)
+            preferences[SMART_ROUTING_RULES_JSON] = encodeSmartRoutingRules(rules)
+        }
+    }
+
+    private fun normalizeRoutingValues(values: List<String>): List<String> = values
+        .flatMap { it.split(',', '\n') }
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .distinct()
 
     val tcpingTestTimeoutMs: Flow<Long> = store.data.map { preferences ->
         (preferences[TCPING_TEST_TIMEOUT_MS] ?: io.github.HanJason233.chimera.AppConfig.TCPING_TEST_TIMEOUT).coerceAtLeast(500L)

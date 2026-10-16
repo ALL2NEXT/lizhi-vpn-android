@@ -188,7 +188,7 @@ internal object XrayVpnConfig {
                     domesticDomains = null
                     domesticIps = null
                 }
-                enabledSmartRules.sortedBy(::smartRulePriority).forEach { smartRule ->
+                enabledSmartRules.forEach { smartRule ->
                     when (smartRule.type) {
                         SmartRoutingRuleType.DOMESTIC_DOMAIN -> {
                             val domains = requireNotNull(domesticDomains)
@@ -204,26 +204,44 @@ internal object XrayVpnConfig {
                                 add("ip", requireNotNull(domesticIps).deepCopy())
                             })
                         }
-                        SmartRoutingRuleType.CUSTOM_DOMAIN -> {
-                            if (smartRule.values.isNotEmpty()) {
-                                rules.add(scopedSmartRule(smartRule.action.configTag).apply {
-                                    add(
-                                        "domain",
-                                        strings(*smartRule.values.map(::normalizeXrayDomain).toTypedArray())
-                                    )
-                                })
-                                if (smartRule.action == SmartRoutingRuleAction.DIRECT) {
-                                    smartRule.values.forEach {
-                                        localDomains.add(normalizeXrayDomain(it))
-                                    }
-                                }
+                        SmartRoutingRuleType.CUSTOM_DOMAIN,
+                        SmartRoutingRuleType.CUSTOM_IP,
+                        SmartRoutingRuleType.CUSTOM_RULE -> {
+                            val domains = smartRule.domains.ifEmpty {
+                                if (smartRule.type == SmartRoutingRuleType.CUSTOM_DOMAIN) {
+                                    smartRule.values
+                                } else emptyList()
                             }
-                        }
-                        SmartRoutingRuleType.CUSTOM_IP -> {
-                            if (smartRule.values.isNotEmpty()) {
+                            val ips = smartRule.ips.ifEmpty {
+                                if (smartRule.type == SmartRoutingRuleType.CUSTOM_IP) {
+                                    smartRule.values
+                                } else emptyList()
+                            }
+                            val hasNonProcessCondition = domains.isNotEmpty() || ips.isNotEmpty() ||
+                                smartRule.ports.isNotBlank() || smartRule.network.isNotBlank() ||
+                                smartRule.protocols.isNotEmpty()
+                            if (hasNonProcessCondition) {
                                 rules.add(scopedSmartRule(smartRule.action.configTag).apply {
-                                    add("ip", strings(*smartRule.values.toTypedArray()))
+                                    if (domains.isNotEmpty()) {
+                                        add(
+                                            "domain",
+                                            strings(*domains.map(::normalizeXrayDomain).toTypedArray())
+                                        )
+                                    }
+                                    if (ips.isNotEmpty()) add("ip", strings(*ips.toTypedArray()))
+                                    if (smartRule.ports.isNotBlank()) addProperty("port", smartRule.ports)
+                                    if (smartRule.network.isNotBlank()) addProperty("network", smartRule.network)
+                                    if (smartRule.protocols.isNotEmpty()) {
+                                        add("protocol", strings(*smartRule.protocols.toTypedArray()))
+                                    }
                                 })
+                            }
+                            if (
+                                smartRule.action == SmartRoutingRuleAction.DIRECT &&
+                                ips.isEmpty() && smartRule.ports.isBlank() &&
+                                smartRule.network.isBlank() && smartRule.protocols.isEmpty()
+                            ) {
+                                domains.forEach { localDomains.add(normalizeXrayDomain(it)) }
                             }
                         }
                     }
@@ -277,7 +295,10 @@ internal object XrayVpnConfig {
         // The first outbound is the default proxy. A catch-all rule here would
         // prevent IPIfNonMatch from resolving domains for the SMART geo-IP rules.
         base.add("routing", JsonObject().apply {
-            addProperty("domainStrategy", if (request.isVpn) "IPIfNonMatch" else "AsIs")
+            addProperty(
+                "domainStrategy",
+                request.settings?.smartRoutingSettings?.domainStrategy?.xrayValue ?: "AsIs"
+            )
             add("rules", rules)
         })
         return base.toString()
@@ -288,15 +309,6 @@ internal object XrayVpnConfig {
         addProperty("outboundTag", outbound)
     }
     private fun strings(vararg values: String) = JsonArray().apply { values.forEach(::add) }
-
-    private fun smartRulePriority(rule: SmartRoutingRule): Int = when {
-        rule.action == SmartRoutingRuleAction.BLOCK -> 0
-        rule.action == SmartRoutingRuleAction.PROXY -> 1
-        rule.type == SmartRoutingRuleType.CUSTOM_DOMAIN -> 2
-        rule.type == SmartRoutingRuleType.DOMESTIC_DOMAIN -> 3
-        rule.type == SmartRoutingRuleType.DOMESTIC_IP -> 4
-        else -> 5
-    }
 
     private fun normalizeXrayDomain(value: String): String {
         val normalized = value.trim()

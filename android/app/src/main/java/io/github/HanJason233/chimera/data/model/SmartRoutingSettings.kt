@@ -6,7 +6,14 @@ enum class SmartRoutingRuleType {
     DOMESTIC_DOMAIN,
     DOMESTIC_IP,
     CUSTOM_DOMAIN,
-    CUSTOM_IP
+    CUSTOM_IP,
+    CUSTOM_RULE
+}
+
+enum class SmartRoutingDomainStrategy(val xrayValue: String, val title: String) {
+    AS_IS("AsIs", "按原样"),
+    IP_IF_NON_MATCH("IPIfNonMatch", "未匹配域名规则时解析 IP"),
+    IP_ON_DEMAND("IPOnDemand", "需要 IP 条件时解析")
 }
 
 enum class SmartRoutingRuleAction(val configTag: String) {
@@ -22,11 +29,18 @@ data class SmartRoutingRule(
     val action: SmartRoutingRuleAction,
     val values: List<String> = emptyList(),
     val enabled: Boolean = true,
-    val locked: Boolean = false
+    val locked: Boolean = false,
+    val domains: List<String> = if (type == SmartRoutingRuleType.CUSTOM_DOMAIN) values else emptyList(),
+    val ips: List<String> = if (type == SmartRoutingRuleType.CUSTOM_IP) values else emptyList(),
+    val ports: String = "",
+    val network: String = "",
+    val protocols: List<String> = emptyList(),
+    val processes: List<String> = emptyList()
 )
 
 data class SmartRoutingSettings(
-    val rules: List<SmartRoutingRule> = defaultRules()
+    val rules: List<SmartRoutingRule> = defaultRules(),
+    val domainStrategy: SmartRoutingDomainStrategy = SmartRoutingDomainStrategy.IP_IF_NON_MATCH
 ) {
     companion object {
         const val DOMESTIC_DOMAIN_RULE_ID = "builtin_smart_domestic_domain"
