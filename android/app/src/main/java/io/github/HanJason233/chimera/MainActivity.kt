@@ -447,7 +447,6 @@ class MainActivity : ComponentActivity() {
 
                             composable(AppRoute.SPLIT_ROUTING_SETTINGS) {
                                 SplitRoutingSettingsScreen(
-                                    viewModel = viewModel,
                                     onBack = { navController.popBackStack() },
                                     onOpenPerAppInbound = { mode ->
                                         navigateTo(AppRoute.perAppInbound(mode.name))
