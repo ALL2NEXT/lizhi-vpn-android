@@ -5,7 +5,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
@@ -17,7 +16,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,13 +23,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
-import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.VpnState
-import io.github.HanJason233.chimera.network.NetworkClient
 import io.github.HanJason233.chimera.ui.components.*
 import io.github.HanJason233.chimera.ui.dialogs.*
 import io.github.HanJason233.chimera.ui.theme.*
@@ -57,8 +53,6 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var showBackendDialog by remember { mutableStateOf(false) }
-    var backendUrlDraft by remember { mutableStateOf(AppConfig.BACKEND_URL) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val drawerAnimationSpec = remember {
         tween<Float>(durationMillis = 250, easing = FastOutSlowInEasing)
@@ -90,9 +84,7 @@ fun MainScreen(
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
-    val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
 
@@ -120,14 +112,6 @@ fun MainScreen(
     val longPressScheme = speedTestSchemes.firstOrNull { it.id == homeLongPressSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
 
-    // 显示错误Toast
-    LaunchedEffect(error) {
-        error?.let { errorMessage ->
-            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
-            viewModel.clearError()
-        }
-    }
-
     // 移动网络提醒
     val cellularWarning by io.github.HanJason233.chimera.service.ServiceManager.cellularWarning.collectAsStateWithLifecycle()
     LaunchedEffect(cellularWarning) {
@@ -147,7 +131,6 @@ fun MainScreen(
                 windowInsets = WindowInsets(0, 0, 0, 0)
             ) {
                 DrawerContent(
-                    onCheckUpdate = { closeDrawerThen { viewModel.checkUpdate() } },
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
                     onOpenRoutingAssets = { closeDrawerThen(onOpenRoutingAssets) },
                     onOpenRegionLookupSettings = {
@@ -158,23 +141,9 @@ fun MainScreen(
                     onOpenOutbound = { closeDrawerThen(onOpenOutbound) },
                     onOpenSpeedTestSchemes = { closeDrawerThen(onOpenSpeedTestSchemes) },
                     onOpenSkin = { closeDrawerThen(onOpenSkin) },
-                    onOpenBackendDialog = {
-                        closeDrawerThen {
-                            backendUrlDraft = AppConfig.BACKEND_URL
-                            showBackendDialog = true
-                        }
-                    },
-                    websiteUrl = backendSettings.websiteUrl,
-                    feedbackEmail = backendSettings.feedbackEmail,
-                    feedbackUrl = backendSettings.feedbackUrl,
-                    githubUrl = backendSettings.githubUrl,
-                    telegramUrl = backendSettings.telegramUrl,
                     appDisplayName = LauncherIdentityPresets.find(
                         skinSettings.activeScheme.appIconPresetId
                     ).displayName,
-                    appIconResourceId = LauncherIdentityPresets.find(
-                        skinSettings.activeScheme.appIconPresetId
-                    ).previewIconResource
                 )
             }
         },
@@ -392,49 +361,6 @@ fun MainScreen(
     }
 
     // 节点列表弹窗
-    if (showBackendDialog) {
-        AppAlertDialog(
-            onDismissRequest = { showBackendDialog = false },
-            title = { Text("切换后台") },
-            text = {
-                OutlinedTextField(
-                    value = backendUrlDraft,
-                    onValueChange = { backendUrlDraft = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("后端地址") },
-                    placeholder = { Text("https://example.com") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (!AppConfig.updateBackendUrl(context, backendUrlDraft)) {
-                            Toast.makeText(
-                                context,
-                                "后端地址无效，请输入域名或 http(s) 地址",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        } else {
-                            NetworkClient.reloadBackend()
-                            showBackendDialog = false
-                            Toast.makeText(context, "后端地址已切换，正在刷新订阅", Toast.LENGTH_SHORT).show()
-                            viewModel.refreshNodes()
-                        }
-                    }
-                ) {
-                    Text("保存并切换")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBackendDialog = false }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-
     infoDialogMessage?.let { message ->
         AppAlertDialog(
             onDismissRequest = { viewModel.clearInfoDialogMessage() },
@@ -456,119 +382,6 @@ fun MainScreen(
         )
     }
 
-    // 更新弹窗
-    if (updateInfo != null) {
-        UpdateDialog(
-            version = updateInfo?.version ?: "",
-            changelog = updateInfo?.changelog ?: "",
-            isForce = updateInfo?.isForce == 1,
-            onUpdate = { viewModel.openDownloadUrl() },
-            onSkip = { ignoreCurrentVersion ->
-                viewModel.skipUpdate(ignoreCurrentVersion)
-            },
-            onDismiss = { viewModel.dismissUpdate() }
-        )
-    }
-
-    // 下载状态监听
-    val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
-
-    // 下载完成后自动安装
-    LaunchedEffect(downloadState.status) {
-        if (downloadState.status == io.github.HanJason233.chimera.network.download.DownloadStatus.COMPLETED) {
-            viewModel.installApk()
-        }
-    }
-
-    // 下载弹窗
-    if (downloadState.status == io.github.HanJason233.chimera.network.download.DownloadStatus.DOWNLOADING ||
-        downloadState.status == io.github.HanJason233.chimera.network.download.DownloadStatus.PAUSED ||
-        downloadState.status == io.github.HanJason233.chimera.network.download.DownloadStatus.ERROR) {
-        DownloadDialog(
-            progress = downloadState.progress,
-            speed = downloadState.speed,
-            status = downloadState.status,
-            errorMessage = downloadState.error,
-            onPause = { viewModel.pauseDownload() },
-            onResume = { viewModel.resumeDownload() },
-            onCancel = { viewModel.cancelDownload() },
-            onRetry = { viewModel.retryDownload() }
-        )
-    }
-
-    // 连续下载失败后提示从官网下载
-    var showWebsiteFallback by remember { mutableStateOf(false) }
-    val websiteUrl = backendSettings.websiteUrl
-
-    LaunchedEffect(downloadState.consecutiveFailures) {
-        if (downloadState.consecutiveFailures >= 3 && websiteUrl.isNotBlank()) {
-            showWebsiteFallback = true
-        }
-    }
-
-    if (showWebsiteFallback) {
-        Dialog(onDismissRequest = { showWebsiteFallback = false }) {
-            AppDialogSurface(
-                m3Shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "下载失败",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "APP已连续 ${downloadState.consecutiveFailures} 次下载失败，是否选择从官网下载？",
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        lineHeight = 22.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { showWebsiteFallback = false },
-                            modifier = Modifier.weight(1f),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
-                        ) {
-                            Text("继续重试")
-                        }
-
-                        Button(
-                            onClick = {
-                                showWebsiteFallback = false
-                                viewModel.cancelDownload()
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(websiteUrl))
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Text("去官网")
-                        }
-                    }
-                }
-            }
-        }
-    }
+    UpdateFlowHost(viewModel = viewModel, websiteUrl = backendSettings.websiteUrl)
 
 }

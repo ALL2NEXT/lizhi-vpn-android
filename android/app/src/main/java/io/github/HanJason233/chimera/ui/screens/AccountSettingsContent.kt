@@ -24,8 +24,10 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.Button
@@ -77,6 +79,9 @@ internal fun AccountSettingsOverviewContent(
     onOpenVip: () -> Unit,
     onOpenTraffic: () -> Unit,
     onOpenClientInfo: () -> Unit,
+    canCheckUpdate: Boolean,
+    onCheckUpdate: () -> Unit,
+    onAbout: () -> Unit,
     onSwitchAccount: () -> Unit,
     onDeleteAccount: () -> Unit
 ) {
@@ -171,6 +176,30 @@ internal fun AccountSettingsOverviewContent(
         }
 
         Text(
+            text = "应用信息",
+            modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 1.dp),
+            color = settingsMutedColor,
+            fontSize = 13.sp
+        )
+        AccountSettingsCard {
+            if (canCheckUpdate) {
+                SettingsLinkRow(
+                    icon = Icons.Outlined.SystemUpdate,
+                    title = "检查更新",
+                    subtitle = "检查客户端新版本",
+                    onClick = onCheckUpdate
+                )
+                SettingsDivider(startInset = 54.dp)
+            }
+            SettingsLinkRow(
+                icon = Icons.Outlined.Info,
+                title = "关于",
+                subtitle = "应用版本、官网与反馈方式",
+                onClick = onAbout
+            )
+        }
+
+        Text(
             text = "账户操作",
             modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 1.dp),
             color = settingsMutedColor,
@@ -192,6 +221,101 @@ internal fun AccountSettingsOverviewContent(
                 loading = isDeletingAccount,
                 danger = true,
                 onClick = onDeleteAccount
+            )
+        }
+    }
+}
+
+@Composable
+internal fun OfflineAccountSettingsOverviewContent(
+    onSwitchToOnline: () -> Unit,
+    onAbout: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, settingsBorderColor),
+            colors = CardDefaults.cardColors(containerColor = settingsCardColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 82.dp)
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(54.dp),
+                    shape = CircleShape,
+                    color = Color(0xFFE7EAF1)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(34.dp),
+                            tint = Color(0xFF747E91)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = "离线用户",
+                        color = settingsTextColor,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "仅使用本地功能",
+                        color = settingsMutedColor,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = "应用信息",
+            modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 1.dp),
+            color = settingsMutedColor,
+            fontSize = 13.sp
+        )
+        AccountSettingsCard {
+            SettingsLinkRow(
+                icon = Icons.Outlined.SystemUpdate,
+                title = "检查更新",
+                subtitle = "离线模式下不可用",
+                enabled = false,
+                onClick = {}
+            )
+            SettingsDivider(startInset = 54.dp)
+            SettingsLinkRow(
+                icon = Icons.Outlined.Info,
+                title = "关于",
+                subtitle = "应用版本、官网与反馈方式",
+                onClick = onAbout
+            )
+        }
+
+        Text(
+            text = "账户操作",
+            modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 1.dp),
+            color = settingsMutedColor,
+            fontSize = 13.sp
+        )
+        AccountSettingsCard {
+            SettingsOperationRow(
+                icon = Icons.Outlined.Sync,
+                title = "切换到在线登录",
+                enabled = true,
+                loading = false,
+                onClick = onSwitchToOnline
             )
         }
     }
@@ -410,27 +534,38 @@ private fun SettingsLinkRow(
     title: String,
     subtitle: String,
     iconTint: Color = settingsMutedColor,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 70.dp)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(23.dp))
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = iconTint.copy(alpha = if (enabled) 1f else 0.5f),
+            modifier = Modifier.size(23.dp)
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 14.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            Text(title, color = settingsTextColor, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                title,
+                color = settingsTextColor.copy(alpha = if (enabled) 1f else 0.55f),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold
+            )
             Text(
                 subtitle,
-                color = settingsMutedColor,
+                color = settingsMutedColor.copy(alpha = if (enabled) 1f else 0.65f),
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -439,7 +574,7 @@ private fun SettingsLinkRow(
         Icon(
             imageVector = Icons.Outlined.ChevronRight,
             contentDescription = null,
-            tint = settingsMutedColor,
+            tint = settingsMutedColor.copy(alpha = if (enabled) 1f else 0.5f),
             modifier = Modifier.size(21.dp)
         )
     }

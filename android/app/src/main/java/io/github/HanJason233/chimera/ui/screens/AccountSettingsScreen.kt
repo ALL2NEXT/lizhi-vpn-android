@@ -1,5 +1,6 @@
 package io.github.HanJason233.chimera.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,14 +31,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
+import io.github.HanJason233.chimera.ui.components.UpdateFlowHost
+import io.github.HanJason233.chimera.ui.dialogs.AboutDialog
+import io.github.HanJason233.chimera.AppConfig
+import io.github.HanJason233.chimera.network.NetworkClient
+import io.github.HanJason233.chimera.platform.LauncherIdentityPresets
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
 enum class AccountSettingsPage(val routeKey: String, val title: String) {
-    OVERVIEW("overview", "账户设置"),
+    OVERVIEW("overview", "我的"),
     ACCOUNT_INFO("account", "账户信息"),
     VIP("vip", "VIP 会员"),
     TRAFFIC("traffic", "流量信息"),
@@ -52,6 +59,7 @@ fun AccountSettingsScreen(
     page: AccountSettingsPage = AccountSettingsPage.OVERVIEW,
     onOpenPage: (AccountSettingsPage) -> Unit = {}
 ) {
+    val context = LocalContext.current
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val isSyncingAccount by viewModel.isSyncingAccount.collectAsStateWithLifecycle()
@@ -62,6 +70,10 @@ fun AccountSettingsScreen(
     val accountMessage by viewModel.accountMessage.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
     val offlineModeEnabled by viewModel.offlineModeEnabled.collectAsStateWithLifecycle()
+    val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showBackendDialog by remember { mutableStateOf(false) }
+    var backendUrlDraft by remember { mutableStateOf(AppConfig.BACKEND_URL) }
     val account = accountInfo
     var nickname by remember(accountInfo?.uid, accountInfo?.nickname) {
         mutableStateOf(accountInfo?.nickname.orEmpty())
@@ -167,9 +179,9 @@ fun AccountSettingsScreen(
         !isDeletingAccount &&
         !isSwitchingAccount
     AppScreenScaffold(
-        title = page.title,
+        title = if (offlineModeEnabled) "我的" else page.title,
         onBack = onBack,
-        showBackNavigation = page != AccountSettingsPage.OVERVIEW,
+        showBackNavigation = !offlineModeEnabled && page != AccountSettingsPage.OVERVIEW,
         containerColor = accountSettingsBackground,
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         actions = {
@@ -209,25 +221,21 @@ fun AccountSettingsScreen(
                     fontSize = 13.sp
                 )
             }
-            if (account == null) {
+            if (offlineModeEnabled) {
+                OfflineAccountSettingsOverviewContent(
+                    onSwitchToOnline = viewModel::exitOfflineMode,
+                    onAbout = { showAboutDialog = true }
+                )
+            } else if (account == null) {
                 AccountSettingsCard {
                     Column(
                         modifier = Modifier.padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = if (offlineModeEnabled) {
-                                "已开启离线模式，账户和后台同步功能已停用。"
-                            } else {
-                                "账户信息同步中…"
-                            },
+                            text = "账户信息同步中…",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        if (offlineModeEnabled) {
-                            TextButton(onClick = viewModel::exitOfflineMode) {
-                                Text("切换到在线登录")
-                            }
-                        }
                     }
                 }
             } else {
@@ -241,6 +249,9 @@ fun AccountSettingsScreen(
                         onOpenVip = { onOpenPage(AccountSettingsPage.VIP) },
                         onOpenTraffic = { onOpenPage(AccountSettingsPage.TRAFFIC) },
                         onOpenClientInfo = { onOpenPage(AccountSettingsPage.CLIENT_INFO) },
+                        canCheckUpdate = AppConfig.BACKEND_URL.isNotBlank(),
+                        onCheckUpdate = { viewModel.checkUpdate() },
+                        onAbout = { showAboutDialog = true },
                         onSwitchAccount = {
                             switchEmail = ""
                             switchPassword = ""
@@ -279,6 +290,68 @@ fun AccountSettingsScreen(
                 }
             }
         }
+    }
+    if (!offlineModeEnabled) {
+        UpdateFlowHost(viewModel = viewModel, websiteUrl = backendSettings.websiteUrl)
+    }
+    if (showAboutDialog) {
+        val appIdentity = LauncherIdentityPresets.find(skinSettings.activeScheme.appIconPresetId)
+        AboutDialog(
+            githubUrl = backendSettings.githubUrl,
+            websiteUrl = backendSettings.websiteUrl,
+            feedbackEmail = backendSettings.feedbackEmail,
+            feedbackUrl = backendSettings.feedbackUrl,
+            telegramUrl = backendSettings.telegramUrl,
+            appDisplayName = appIdentity.displayName,
+            appIconResourceId = appIdentity.previewIconResource,
+            onOpenBackendDialog = {
+                backendUrlDraft = AppConfig.BACKEND_URL
+                showBackendDialog = true
+            },
+            onDismiss = { showAboutDialog = false }
+        )
+    }
+    if (showBackendDialog) {
+        AppAlertDialog(
+            onDismissRequest = { showBackendDialog = false },
+            title = { Text("切换后台") },
+            text = {
+                OutlinedTextField(
+                    value = backendUrlDraft,
+                    onValueChange = { backendUrlDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("后端地址") },
+                    placeholder = { Text("https://example.com") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (!AppConfig.updateBackendUrl(context, backendUrlDraft)) {
+                            Toast.makeText(
+                                context,
+                                "后端地址无效，请输入域名或 http(s) 地址",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            NetworkClient.reloadBackend()
+                            showBackendDialog = false
+                            Toast.makeText(context, "后端地址已切换，正在刷新订阅", Toast.LENGTH_SHORT).show()
+                            viewModel.refreshNodes()
+                        }
+                    }
+                ) {
+                    Text("保存并切换")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackendDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
     if (showNicknameDialog && account != null) {
         AppAlertDialog(
