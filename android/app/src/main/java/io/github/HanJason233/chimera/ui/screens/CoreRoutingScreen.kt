@@ -12,15 +12,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
@@ -29,9 +30,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,16 +47,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -125,9 +126,9 @@ fun CoreRoutingScreen(
     }
 
     AppScreenScaffold(
-        title = "路由规则",
-        subtitle = "按列表顺序匹配，首条命中后使用对应出口",
+        title = "路由设置",
         onBack = onBack,
+        contentPadding = PaddingValues(0.dp),
         actions = {
             IconButton(onClick = { addingRule = true }) {
                 Icon(Icons.Outlined.Add, contentDescription = "添加路由规则")
@@ -182,100 +183,114 @@ fun CoreRoutingScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(bottom = 20.dp)
         ) {
-            item(key = "routing_header") {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+            item(key = "domain_strategy") {
+                androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { strategyMenuExpanded = true }
+                            .padding(16.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "域名策略",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                        Text(
+                            text = "域名策略",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = smartRoutingSettings.domainStrategy.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = strategyMenuExpanded,
+                        onDismissRequest = { strategyMenuExpanded = false }
+                    ) {
+                        SmartRoutingDomainStrategy.entries.forEach { strategy ->
+                            DropdownMenuItem(
+                                text = { Text(strategy.title) },
+                                onClick = {
+                                    strategyMenuExpanded = false
+                                    viewModel.setSmartRoutingDomainStrategy(strategy)
+                                }
                             )
                         }
-                        TextButton(onClick = { strategyMenuExpanded = true }) {
-                            Text(smartRoutingSettings.domainStrategy.title)
-                        }
-                        DropdownMenu(
-                            expanded = strategyMenuExpanded,
-                            onDismissRequest = { strategyMenuExpanded = false }
-                        ) {
-                            SmartRoutingDomainStrategy.entries.forEach { strategy ->
-                                DropdownMenuItem(
-                                    text = { Text(strategy.title) },
-                                    onClick = {
-                                        strategyMenuExpanded = false
-                                        viewModel.setSmartRoutingDomainStrategy(strategy)
-                                    }
-                                )
-                            }
-                        }
                     }
-                    Text("路由规则", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = "按列表顺序匹配。长按拖动规则可调整顺序；锁定规则会在导入时保留。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
+            }
+            item(key = "routing_rules_title") {
+                Text(
+                    text = "路由规则设置",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                )
+                Divider(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
             }
             itemsIndexed(
                 items = smartRoutingSettings.rules,
                 key = { _, rule -> "rule:${rule.id}" }
             ) { _, rule ->
-                RoutingRuleItem(
-                    rule = rule,
-                    onEdit = { editingRuleId = rule.id },
-                    onEnabledChange = { enabled ->
-                        viewModel.setSmartRoutingRuleEnabled(rule.id, enabled)
-                    },
-                    dragHandleModifier = Modifier.pointerInput(rule.id) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {
-                                val info = listState.layoutInfo.visibleItemsInfo
-                                    .firstOrNull { it.key == "rule:${rule.id}" }
-                                draggedRuleId = rule.id
-                                lastMovedTargetId = rule.id
-                                draggedItemTop = info?.offset?.toFloat() ?: 0f
-                                draggedItemHeight = info?.size?.toFloat() ?: 1f
-                                dragDistance = 0f
-                            },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                dragDistance += amount.y
-                                val fingerCenter = draggedItemTop + draggedItemHeight / 2f + dragDistance
-                                val target = listState.layoutInfo.visibleItemsInfo.firstOrNull {
-                                    fingerCenter >= it.offset && fingerCenter <= it.offset + it.size
+                Column {
+                    RoutingRuleItem(
+                        rule = rule,
+                        onEdit = { editingRuleId = rule.id },
+                        onEnabledChange = { enabled ->
+                            viewModel.setSmartRoutingRuleEnabled(rule.id, enabled)
+                        },
+                        // 保持 v2rayNG 的无拖动柄样式，长按整行可调整规则顺序。
+                        dragModifier = Modifier.pointerInput(rule.id) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    val info = listState.layoutInfo.visibleItemsInfo
+                                        .firstOrNull { it.key == "rule:${rule.id}" }
+                                    draggedRuleId = rule.id
+                                    lastMovedTargetId = rule.id
+                                    draggedItemTop = info?.offset?.toFloat() ?: 0f
+                                    draggedItemHeight = info?.size?.toFloat() ?: 1f
+                                    dragDistance = 0f
+                                },
+                                onDrag = { change, amount ->
+                                    change.consume()
+                                    dragDistance += amount.y
+                                    val fingerCenter = draggedItemTop + draggedItemHeight / 2f + dragDistance
+                                    val target = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                                        fingerCenter >= it.offset && fingerCenter <= it.offset + it.size
+                                    }
+                                    val targetId = (target?.key as? String)
+                                        ?.takeIf { it.startsWith("rule:") }
+                                        ?.removePrefix("rule:")
+                                    val sourceId = draggedRuleId
+                                    if (
+                                        targetId != null && sourceId != null &&
+                                        targetId != sourceId && targetId != lastMovedTargetId
+                                    ) {
+                                        viewModel.moveSmartRoutingRule(sourceId, targetId)
+                                        lastMovedTargetId = targetId
+                                    }
+                                },
+                                onDragEnd = {
+                                    draggedRuleId = null
+                                    lastMovedTargetId = null
+                                },
+                                onDragCancel = {
+                                    draggedRuleId = null
+                                    lastMovedTargetId = null
                                 }
-                                val targetId = (target?.key as? String)
-                                    ?.takeIf { it.startsWith("rule:") }
-                                    ?.removePrefix("rule:")
-                                val sourceId = draggedRuleId
-                                if (
-                                    targetId != null && sourceId != null &&
-                                    targetId != sourceId && targetId != lastMovedTargetId
-                                ) {
-                                    viewModel.moveSmartRoutingRule(sourceId, targetId)
-                                    lastMovedTargetId = targetId
-                                }
-                            },
-                            onDragEnd = {
-                                draggedRuleId = null
-                                lastMovedTargetId = null
-                            },
-                            onDragCancel = {
-                                draggedRuleId = null
-                                lastMovedTargetId = null
-                            }
-                        )
-                    }
-                )
+                            )
+                        }
+                    )
+                    Divider(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                }
             }
         }
     }
@@ -419,86 +434,86 @@ private fun RoutingRuleItem(
     rule: SmartRoutingRule,
     onEdit: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
-    dragHandleModifier: Modifier
+    dragModifier: Modifier
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(dragModifier)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable(onClick = onEdit)
-                        .padding(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = rule.name,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        if (rule.locked) {
-                            Icon(
-                                imageVector = Icons.Outlined.Lock,
-                                contentDescription = "锁定规则",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Text(
-                        text = "${rule.outboundTag} · ${rule.matchSummary()}",
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = rule.enabled,
-                    onCheckedChange = onEnabledChange
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = rule.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                IconButton(onClick = onEdit) {
-                    Icon(Icons.Outlined.Edit, contentDescription = "编辑${rule.name}")
-                }
-                androidx.compose.foundation.layout.Box(
-                    modifier = dragHandleModifier.size(48.dp),
-                    contentAlignment = Alignment.Center
-                ) {
+                if (rule.locked) {
+                    androidx.compose.foundation.layout.Spacer(Modifier.size(4.dp))
                     Icon(
-                        imageVector = Icons.Outlined.DragHandle,
-                        contentDescription = "拖动排序 ${rule.name}",
+                        imageVector = Icons.Outlined.Lock,
+                        contentDescription = "锁定规则",
+                        modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
+            rule.listDisplaySummary().takeIf(String::isNotBlank)?.let { summary ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (rule.outboundTag.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = rule.outboundTag,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFFF97910)
+                )
+            }
+        }
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier.padding(start = 8.dp)
+        ) {
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Outlined.Edit, contentDescription = "编辑${rule.name}")
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Switch(
+                checked = rule.enabled,
+                onCheckedChange = onEnabledChange,
+                modifier = Modifier.scale(0.7f),
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
+                    checkedTrackColor = MaterialTheme.colorScheme.secondary
+                )
+            )
         }
     }
 }
 
-private fun SmartRoutingRule.matchSummary(): String = buildList {
+private fun SmartRoutingRule.listDisplaySummary(): String {
     val ruleDomains = domains.ifEmpty {
         if (type == SmartRoutingRuleType.CUSTOM_DOMAIN) values else emptyList()
     }
     val ruleIps = ips.ifEmpty {
         if (type == SmartRoutingRuleType.CUSTOM_IP) values else emptyList()
     }
-    if (ruleDomains.isNotEmpty()) add("域名：${ruleDomains.joinToString()}")
-    if (ruleIps.isNotEmpty()) add("IP：${ruleIps.joinToString()}")
-    if (processes.isNotEmpty()) add("进程：${processes.joinToString()}")
-    if (ports.isNotBlank()) add("端口：$ports")
-    if (protocols.isNotEmpty()) add("协议：${protocols.joinToString()}")
-    if (network.isNotBlank()) add("网络：$network")
-}.joinToString("；").ifBlank { "未配置匹配条件" }
+    return when {
+        ruleDomains.isNotEmpty() -> ruleDomains.toString()
+        ruleIps.isNotEmpty() -> ruleIps.toString()
+        processes.isNotEmpty() -> processes.toString()
+        ports.isNotBlank() -> ports
+        values.isNotEmpty() -> values.toString()
+        else -> ""
+    }
+}

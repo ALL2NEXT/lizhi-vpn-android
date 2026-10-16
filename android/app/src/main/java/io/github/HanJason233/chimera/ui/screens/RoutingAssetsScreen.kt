@@ -4,26 +4,30 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.CloudDownload
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +50,7 @@ import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.RoutingAssetsViewModel
 import java.text.DateFormat
 import java.util.Date
+import java.util.Locale
 
 private data class RoutingAssetDraft(val id: String?, val name: String, val url: String)
 
@@ -97,8 +102,8 @@ internal fun RoutingAssetsScreen(
 
     AppScreenScaffold(
         title = "资源文件",
-        subtitle = "管理 Xray 路由规则使用的 GeoSite 与 GeoIP 数据库",
         onBack = onBack,
+        contentPadding = PaddingValues(0.dp),
         actions = {
             IconButton(onClick = { addMenuExpanded = true }) {
                 Icon(Icons.Outlined.Add, contentDescription = "添加资源文件")
@@ -134,53 +139,76 @@ internal fun RoutingAssetsScreen(
                 },
                 enabled = !state.loading
             ) {
-                Icon(Icons.Outlined.CloudDownload, contentDescription = "更新所有资源文件")
+                Icon(Icons.Filled.CloudDownload, contentDescription = "更新所有资源文件")
             }
         }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Geo 文件源", style = MaterialTheme.typography.titleSmall)
-                OutlinedButton(onClick = { sourceMenuExpanded = true }) {
-                    Text(snapshot.source, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                DropdownMenu(
-                    expanded = sourceMenuExpanded,
-                    onDismissRequest = { sourceMenuExpanded = false }
-                ) {
-                    RoutingAssetsRepository.GEO_SOURCES.forEach { source ->
-                        DropdownMenuItem(
-                            text = { Text(source) },
-                            onClick = {
-                                sourceMenuExpanded = false
-                                viewModel.saveSource(source)
-                            }
+            item(key = "geo_source") {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { sourceMenuExpanded = true }
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            "Geo 文件来源（可选）",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            snapshot.source,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+                    DropdownMenu(
+                        expanded = sourceMenuExpanded,
+                        onDismissRequest = { sourceMenuExpanded = false }
+                    ) {
+                        RoutingAssetsRepository.GEO_SOURCES.forEach { source ->
+                            DropdownMenuItem(
+                                text = { Text(source) },
+                                onClick = {
+                                    sourceMenuExpanded = false
+                                    viewModel.saveSource(source)
+                                }
+                            )
+                        }
+                    }
                 }
+            }
+            item(key = "asset_heading") {
                 Text(
-                    "镜像用于 geosite.dat 和 geoip.dat；geoip-only-cn-private.dat 使用 v2rayNG 相同的固定地址。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "资源文件",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
                 )
             }
-
-            Text("已添加的资源", style = MaterialTheme.typography.titleMedium)
-            snapshot.assets.forEach { asset ->
+            items(snapshot.assets, key = RoutingAssetRecord::id) { asset ->
                 val info = snapshot.files[asset.id]
-                RoutingAssetRow(
-                    asset = asset,
-                    fileInfo = info,
-                    onEdit = {
-                        assetDraft = RoutingAssetDraft(asset.id, asset.name, asset.url)
-                    },
-                    onDelete = { deleteTarget = asset }
-                )
+                Column {
+                    RoutingAssetRow(
+                        asset = asset,
+                        fileInfo = info,
+                        onEdit = {
+                            assetDraft = RoutingAssetDraft(asset.id, asset.name, asset.url)
+                        },
+                        onDelete = { deleteTarget = asset }
+                    )
+                    Divider(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                }
             }
         }
     }
@@ -234,31 +262,39 @@ private fun RoutingAssetRow(
             "${fileInfo.length.toAssetSize()} · $date"
         }
     }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.large
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(8.dp)
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(asset.name, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
-                Text(
-                    details,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Text(
+                asset.name,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                details,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (!asset.locked && asset.url != RoutingAssetsRepository.LOCAL_FILE_URL) {
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Outlined.Edit, contentDescription = "编辑 ${asset.name}")
             }
-            if (!asset.locked && asset.url != RoutingAssetsRepository.LOCAL_FILE_URL) {
-                IconButton(onClick = onEdit) {
-                    Icon(Icons.Outlined.Edit, contentDescription = "编辑 ${asset.name}")
-                }
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Outlined.Delete, contentDescription = "删除 ${asset.name}")
-            }
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Filled.DeleteForever, contentDescription = "删除 ${asset.name}")
         }
     }
 }
@@ -312,5 +348,5 @@ private fun isValidAssetUrl(value: String): Boolean =
 private fun Long.toAssetSize(): String = when {
     this < 1024L -> "$this B"
     this < 1024L * 1024L -> "${this / 1024L} KB"
-    else -> "${this / (1024L * 1024L)} MB"
+    else -> String.format(Locale.getDefault(), "%.2f MB", this / (1024.0 * 1024.0))
 }
