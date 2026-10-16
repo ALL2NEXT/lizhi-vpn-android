@@ -24,7 +24,7 @@ import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.data.model.ProxyCore
 import io.github.HanJason233.chimera.data.model.ProxyMode
-import io.github.HanJason233.chimera.data.model.RegionLookupMode
+import io.github.HanJason233.chimera.data.model.RegionLookupMethod
 import io.github.HanJason233.chimera.data.model.SkinScheme
 import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.SkinThemeMode
@@ -150,7 +150,7 @@ class SettingsRepository(
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
         private val DISCONNECT_RECOVERY_ENABLED = booleanPreferencesKey("disconnect_recovery_enabled")
-        private val REGION_LOOKUP_MODE = stringPreferencesKey("region_lookup_mode")
+        private val REGION_LOOKUP_METHODS = stringPreferencesKey("region_lookup_methods")
         private val HYSTERIA_BANDWIDTH_ENABLED = booleanPreferencesKey("hysteria_bandwidth_enabled")
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
@@ -1117,15 +1117,30 @@ class SettingsRepository(
             .coerceIn(MIN_SERVICE_REQUEST_TIMEOUT_MS, MAX_SERVICE_REQUEST_TIMEOUT_MS)
     }
 
-    /** 地区组归属地查询模式默认沿用旧版远程查询行为。 */
-    val regionLookupMode: Flow<RegionLookupMode> = store.data.map { preferences ->
-        runCatching { RegionLookupMode.valueOf(preferences[REGION_LOOKUP_MODE].orEmpty()) }
-            .getOrDefault(RegionLookupMode.REMOTE)
+    /** 地区组查询规则按卡片顺序保存在本机。 */
+    val regionLookupMethods: Flow<List<RegionLookupMethod>> = store.data.map { preferences ->
+        if (preferences.contains(REGION_LOOKUP_METHODS)) {
+            decodeRegionLookupMethods(preferences[REGION_LOOKUP_METHODS].orEmpty())
+        } else {
+            RegionLookupMethod.defaultRules
+        }
     }
 
-    suspend fun setRegionLookupMode(mode: RegionLookupMode) {
-        store.edit { preferences -> preferences[REGION_LOOKUP_MODE] = mode.name }
+    suspend fun setRegionLookupMethods(methods: List<RegionLookupMethod>) {
+        val normalizedMethods = methods.distinct()
+        store.edit { preferences ->
+            preferences[REGION_LOOKUP_METHODS] = normalizedMethods.joinToString(",") {
+                it.name
+            }
+        }
     }
+
+    private fun decodeRegionLookupMethods(serialized: String): List<RegionLookupMethod> =
+        serialized.split(',')
+            .mapNotNull { value ->
+                RegionLookupMethod.entries.firstOrNull { it.name == value }
+            }
+            .distinct()
 
     suspend fun setServiceRequestTimeoutMs(value: Long) {
         store.edit { preferences ->

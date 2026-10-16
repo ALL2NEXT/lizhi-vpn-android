@@ -591,10 +591,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         SettingsRepository.DEFAULT_SERVICE_REQUEST_TIMEOUT_MS
     )
-    val regionLookupMode = settingsRepository.regionLookupMode.stateIn(
+    val regionLookupMethods = settingsRepository.regionLookupMethods.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        RegionLookupMode.REMOTE
+        RegionLookupMethod.defaultRules
     )
     val tcpingTestTimeoutMs = settingsRepository.tcpingTestTimeoutMs.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.TCPING_TEST_TIMEOUT)
     val speedTestDownloadUrl = settingsRepository.speedTestDownloadUrl.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.SPEED_TEST_DOWNLOAD_URL)
@@ -686,24 +686,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     ?: UnlockTestUiState()
             }
         }
-        // 离线模式不调用 Chimera 后台；本机节点缺少地区信息时仍查询 IP 归属地。
+        // 地区查询只使用用户配置的三种方式，不依赖 Chimera 后台端点。
         viewModelScope.launch {
-            offlineModeEnabled.flatMapLatest { isOffline ->
-                if (isOffline) {
-                    nodeDaoFlow.flatMapLatest { dao -> dao.getAllNodes() }
-                } else {
-                    flowOf(emptyList())
-                }
-            }
-                .map { nodes -> nodes.filter { it.getCountryCode() == null } }
+            nodeDaoFlow.flatMapLatest { dao -> dao.getAllNodes() }
+                .map { nodes -> nodes.filter { it.country == null } }
                 .distinctUntilChangedBy { nodes -> nodes.associate { it.id to it.server } }
                 .collect { nodes -> scheduleNodeLocationEnrichment(nodes) }
         }
         viewModelScope.launch {
-            settingsRepository.regionLookupMode.drop(1).collect {
+            settingsRepository.regionLookupMethods.drop(1).collect {
                 val nodes = nodeDao().getAllNodes().first()
-                    .filter { it.getCountryCode() == null }
-                scheduleNodeLocationEnrichment(nodes)
+                if (nodes.isNotEmpty()) {
+                    // 旧查询结果不能挡住新的卡片顺序，因此先清空再完整重查。
+                    nodeLocationEnrichmentJob?.cancel()
+                    nodeLocationEnrichmentJob = null
+                    nodeDao().clearNodeLocations()
+                    scheduleNodeLocationEnrichment(
+                        nodes.map { it.copy(country = null, countryName = null) }
+                    )
+                }
             }
         }
         // 链路类型结果属于节点的历史检测数据，VPN 断开后仍保留并在首页展示。
@@ -757,7 +758,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
         val updates = NodeLocationResolver.enrichNodes(
             nodes = nodes,
-            mode = regionLookupMode.value,
+            methods = regionLookupMethods.value,
             geoIpDatabase = geoIpDatabase
         ).mapNotNull { enrichedNode ->
             val sourceNode = sourceById[enrichedNode.id] ?: return@mapNotNull null
@@ -1487,17 +1488,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setRegionLookupMode(mode: RegionLookupMode) {
-        viewModelScope.launch { settingsRepository.setRegionLookupMode(mode) }
-    }
-
-    /** 数据库下载或导入后，手动重试仍未识别地区的节点。 */
-    fun refreshMissingNodeLocations() {
-        viewModelScope.launch {
-            val nodes = nodeDao().getAllNodes().first()
-                .filter { it.getCountryCode() == null }
-            scheduleNodeLocationEnrichment(nodes)
-        }
+    fun setRegionLookupMethods(methods: List<RegionLookupMethod>) {
+        viewModelScope.launch { settingsRepository.setRegionLookupMethods(methods) }
     }
 
     fun setAutoRefreshOnStartup(sourceId: String, enabled: Boolean) {

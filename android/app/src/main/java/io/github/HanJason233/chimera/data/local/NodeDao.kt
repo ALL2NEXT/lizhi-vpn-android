@@ -341,6 +341,10 @@ interface NodeDao {
     @Query("UPDATE nodes SET country = :country, countryName = :countryName WHERE id = :nodeId")
     suspend fun updateNodeLocation(nodeId: String, country: String?, countryName: String?): Int
 
+    /** 查询规则改变后清空旧结果，确保节点按新顺序重新识别。 */
+    @Query("UPDATE nodes SET country = NULL, countryName = NULL")
+    suspend fun clearNodeLocations(): Int
+
     @Transaction
     suspend fun updateNodeLocations(updates: List<NodeLocationUpdate>): Int {
         return updates.sumOf { update ->

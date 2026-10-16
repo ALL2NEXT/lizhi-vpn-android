@@ -1,7 +1,7 @@
 package io.github.HanJason233.chimera.network.location
 
 import io.github.HanJason233.chimera.data.model.Node
-import io.github.HanJason233.chimera.data.model.RegionLookupMode
+import io.github.HanJason233.chimera.data.model.RegionLookupMethod
 import io.github.HanJason233.chimera.network.NetworkClient
 import io.github.HanJason233.chimera.util.CountryCodeResolver
 import com.google.gson.JsonParser
@@ -19,7 +19,7 @@ import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-/** 按设置的查询方式补充节点缺失的国家代码。 */
+/** 按用户排列的查询规则补充节点地区代码。 */
 object NodeLocationResolver {
     private const val GEO_LOOKUP_HOST = "ipwho.is"
     private const val MAX_CONCURRENCY = 8
@@ -35,13 +35,13 @@ object NodeLocationResolver {
 
     suspend fun enrichNodes(
         nodes: List<Node>,
-        mode: RegionLookupMode,
+        methods: List<RegionLookupMethod>,
         geoIpDatabase: File
     ): List<Node> {
         return nodes.chunked(MAX_CONCURRENCY).flatMap { batch ->
             coroutineScope {
                 batch.map { node ->
-                    async(Dispatchers.IO) { enrichNode(node, mode, geoIpDatabase) }
+                    async(Dispatchers.IO) { enrichNode(node, methods, geoIpDatabase) }
                 }.awaitAll()
             }
         }
@@ -49,14 +49,10 @@ object NodeLocationResolver {
 
     private suspend fun enrichNode(
         node: Node,
-        mode: RegionLookupMode,
+        methods: List<RegionLookupMethod>,
         geoIpDatabase: File
     ): Node {
-        val knownCountry = CountryCodeResolver.normalizeCountryCode(node.country)
-            ?: CountryCodeResolver.fromNodeName(node.name)
-            ?: CountryCodeResolver.fromNodeName(node.countryName)
-        val resolvedCountry = knownCountry
-            ?: resolveServerCountry(node.server, mode, geoIpDatabase)
+        val resolvedCountry = resolveCountryByRules(node, methods, geoIpDatabase)
         if (resolvedCountry == null) return node
 
         val resolvedName = CountryCodeResolver.displayName(resolvedCountry)
@@ -66,23 +62,37 @@ object NodeLocationResolver {
         )
     }
 
-    private suspend fun resolveServerCountry(
-        server: String,
-        mode: RegionLookupMode,
+    private suspend fun resolveCountryByRules(
+        node: Node,
+        methods: List<RegionLookupMethod>,
         geoIpDatabase: File
     ): String? {
-        val addresses = resolvePublicAddresses(server)
-        if (addresses.isEmpty()) return null
+        var addresses: List<InetAddress>? = null
+        // 按卡片顺序尝试查询，首个识别到地区的方式决定最终结果。
+        for (method in methods) {
+            val country = when (method) {
+                RegionLookupMethod.NODE_NAME ->
+                    CountryCodeResolver.fromNodeName(node.name)
+                        ?: CountryCodeResolver.fromFlagEmoji(node.name)
+                        ?: CountryCodeResolver.fromNodeName(node.countryName)
+                        ?: CountryCodeResolver.fromFlagEmoji(node.countryName)
 
-        return when (mode) {
-            RegionLookupMode.LOCAL -> addresses.firstNotNullOfOrNull {
-                XrayGeoIpDatabase.lookup(geoIpDatabase, it)
+                RegionLookupMethod.LOCAL_GEOIP -> {
+                    if (addresses == null) addresses = resolvePublicAddresses(node.server)
+                    addresses.orEmpty().firstNotNullOfOrNull {
+                        XrayGeoIpDatabase.lookup(geoIpDatabase, it)
+                    }
+                }
+
+                RegionLookupMethod.REMOTE_API -> {
+                    if (addresses == null) addresses = resolvePublicAddresses(node.server)
+                    val address = addresses.orEmpty().firstOrNull()
+                    if (address == null) null else resolveRemoteCountry(address)
+                }
             }
-            RegionLookupMode.REMOTE -> resolveRemoteCountry(addresses.first())
-            RegionLookupMode.HYBRID -> addresses.firstNotNullOfOrNull {
-                XrayGeoIpDatabase.lookup(geoIpDatabase, it)
-            } ?: resolveRemoteCountry(addresses.first())
+            if (country != null) return country
         }
+        return null
     }
 
     private suspend fun resolveRemoteCountry(address: InetAddress): String? {

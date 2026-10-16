@@ -454,10 +454,7 @@ class MainActivity : ComponentActivity() {
                             composable(AppRoute.REGION_LOOKUP_SETTINGS) {
                                 RegionLookupSettingsScreen(
                                     viewModel = viewModel,
-                                    onBack = { navController.popBackStack() },
-                                    onOpenRoutingAssets = {
-                                        navigateTo(AppRoute.ROUTING_ASSETS)
-                                    }
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
 
