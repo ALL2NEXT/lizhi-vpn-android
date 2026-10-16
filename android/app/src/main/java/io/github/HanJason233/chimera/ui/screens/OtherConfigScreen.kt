@@ -102,6 +102,8 @@ fun OtherConfigScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            RoutingConnectionSettings(viewModel = viewModel)
+
             OtherConfigSection(
                 title = "协议核心",
                 collapsible = true,
