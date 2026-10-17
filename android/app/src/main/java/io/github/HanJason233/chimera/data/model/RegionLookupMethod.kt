@@ -19,7 +19,7 @@ enum class RegionLookupMethod(
     );
 
     companion object {
-        /** 默认先识别节点名称，再尝试远程 IP 查询。 */
-        val defaultRules = listOf(NODE_NAME, REMOTE_API)
+        /** 默认按节点名称、本地 GeoIP、远程 API 的顺序查询。 */
+        val defaultRules = listOf(NODE_NAME, LOCAL_GEOIP, REMOTE_API)
     }
 }
