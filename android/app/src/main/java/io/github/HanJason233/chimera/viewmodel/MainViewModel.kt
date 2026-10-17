@@ -693,18 +693,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .collect { nodes -> scheduleNodeLocationEnrichment(nodes) }
         }
         viewModelScope.launch {
-            settingsRepository.regionLookupMethods.drop(1).collect {
-                val nodes = nodeDao().getAllNodes().first()
-                if (nodes.isNotEmpty()) {
-                    // 旧查询结果不能挡住新的卡片顺序，因此先清空再完整重查。
-                    nodeLocationEnrichmentJob?.cancel()
-                    nodeLocationEnrichmentJob = null
-                    nodeDao().clearNodeLocations()
-                    scheduleNodeLocationEnrichment(
-                        nodes.map { it.copy(country = null, countryName = null) }
-                    )
+            // DataStore 也会因其他设置变化而发射；仅查询规则实际变化时才清空并重查地区。
+            settingsRepository.regionLookupMethods
+                .distinctUntilChanged()
+                .drop(1)
+                .collect {
+                    val nodes = nodeDao().getAllNodes().first()
+                    if (nodes.isNotEmpty()) {
+                        // 旧查询结果不能挡住新的卡片顺序，因此先清空再完整重查。
+                        nodeLocationEnrichmentJob?.cancel()
+                        nodeLocationEnrichmentJob = null
+                        nodeDao().clearNodeLocations()
+                        scheduleNodeLocationEnrichment(
+                            nodes.map { it.copy(country = null, countryName = null) }
+                        )
+                    }
                 }
-            }
         }
         // 链路类型结果属于节点的历史检测数据，VPN 断开后仍保留并在首页展示。
         viewModelScope.launch {
