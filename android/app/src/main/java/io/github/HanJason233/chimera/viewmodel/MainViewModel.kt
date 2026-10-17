@@ -256,6 +256,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val backendSettings = subscriptionDataLoader.backendSettings
 
     val accountInfo = accountManager.accountInfo
+    private val _clientNotifications = MutableStateFlow<List<ClientNotification>>(emptyList())
+    val clientNotifications = _clientNotifications.asStateFlow()
+    private val _notificationUnreadCount = MutableStateFlow(0)
+    val notificationUnreadCount = _notificationUnreadCount.asStateFlow()
+    private val _isLoadingNotifications = MutableStateFlow(false)
+    val isLoadingNotifications = _isLoadingNotifications.asStateFlow()
+    private val _notificationError = MutableStateFlow<String?>(null)
+    val notificationError = _notificationError.asStateFlow()
+    private var notificationLoadJob: Job? = null
+    private var notificationScopeKey = ""
+    private var lastNotificationLoadAt = 0L
+    private var lastOverviewSyncUid = ""
+    private var lastOverviewSyncAt = 0L
     private val _offlineModeEnabled = MutableStateFlow(accountManager.isOfflineMode())
     val offlineModeEnabled = _offlineModeEnabled.asStateFlow()
     private val _isActivatingVip = MutableStateFlow(false)
@@ -1432,6 +1445,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val MAX_CONCURRENT_UNLOCK_TESTS = 4
+        const val ACCOUNT_OVERVIEW_SYNC_COOLDOWN_MS = 60_000L
+        const val NOTIFICATION_REFRESH_COOLDOWN_MS = 30_000L
     }
 
     /** Connect to the selected node, or to the first node in the active subscription. */
@@ -2827,6 +2842,130 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    /** 移除顶栏刷新图标后，在打开“我的”页时低频同步账户状态。 */
+    fun syncAccountOnOverviewEntry() {
+        val current = accountManager.currentAccount() ?: return
+        if (accountManager.isOfflineMode() || _isSyncingAccount.value ||
+            _isUpdatingNickname.value || _isBindingAccount.value ||
+            _isSwitchingAccount.value || _isDeletingAccount.value || _isActivatingVip.value
+        ) return
+
+        val now = System.currentTimeMillis()
+        if (lastOverviewSyncUid != current.uid) {
+            lastOverviewSyncUid = current.uid
+            lastOverviewSyncAt = 0L
+        }
+        if (now - lastOverviewSyncAt < ACCOUNT_OVERVIEW_SYNC_COOLDOWN_MS) return
+        lastOverviewSyncAt = now
+
+        viewModelScope.launch {
+            val previous = accountManager.currentAccount()
+            _isSyncingAccount.value = true
+            try {
+                accountManager.syncCurrentAccount(
+                    timeoutMs = serviceRequestTimeoutMs.value
+                ).onSuccess { synced ->
+                    val accessChanged = previous == null ||
+                        previous.accountType != synced.accountType ||
+                        previous.deviceBlocked != synced.deviceBlocked ||
+                        previous.vipActive != synced.vipActive ||
+                        previous.vipExpiresAt != synced.vipExpiresAt
+                    if (accessChanged) {
+                        initializeSubscriptionsWithRefreshState(forceRefresh = true)
+                    }
+                }.onFailure { error ->
+                    Log.w(tag, "Failed to sync account when opening My page", error)
+                }
+            } finally {
+                _isSyncingAccount.value = false
+            }
+        }
+    }
+
+    fun refreshClientNotifications(force: Boolean = false) {
+        if (accountManager.isOfflineMode()) {
+            clearClientNotifications()
+            return
+        }
+        val account = accountManager.currentAccount() ?: run {
+            clearClientNotifications()
+            return
+        }
+        val scope = "${AppConfig.BACKEND_URL.trimEnd('/')}|${account.uid}"
+        if (scope != notificationScopeKey) {
+            notificationLoadJob?.cancel()
+            notificationScopeKey = scope
+            lastNotificationLoadAt = 0L
+            _clientNotifications.value = emptyList()
+            _notificationUnreadCount.value = 0
+            _notificationError.value = null
+        }
+        if (notificationLoadJob?.isActive == true) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastNotificationLoadAt < NOTIFICATION_REFRESH_COOLDOWN_MS) return
+        lastNotificationLoadAt = now
+        _isLoadingNotifications.value = true
+        _notificationError.value = null
+        notificationLoadJob = viewModelScope.launch {
+            try {
+                accountManager.getClientNotifications().onSuccess { feed ->
+                    if (scope == currentNotificationScope()) {
+                        _clientNotifications.value = feed.items
+                        _notificationUnreadCount.value = feed.unreadCount.coerceAtLeast(0)
+                    }
+                }.onFailure { error ->
+                    if (scope == currentNotificationScope()) {
+                        Log.w(tag, "Failed to load client notifications", error)
+                        _notificationError.value = "通知加载失败，请检查网络后重试。"
+                    }
+                }
+            } finally {
+                if (scope == notificationScopeKey) _isLoadingNotifications.value = false
+            }
+        }
+    }
+
+    fun clearClientNotifications() {
+        notificationLoadJob?.cancel()
+        notificationLoadJob = null
+        notificationScopeKey = ""
+        lastNotificationLoadAt = 0L
+        _clientNotifications.value = emptyList()
+        _notificationUnreadCount.value = 0
+        _isLoadingNotifications.value = false
+        _notificationError.value = null
+    }
+
+    fun markClientNotificationRead(notificationId: Long) {
+        val notification = _clientNotifications.value.firstOrNull { it.id == notificationId } ?: return
+        if (notification.isRead) return
+        _clientNotifications.value = _clientNotifications.value.map { item ->
+            if (item.id == notificationId) item.copy(isRead = true) else item
+        }
+        _notificationUnreadCount.value = (_notificationUnreadCount.value - 1).coerceAtLeast(0)
+        viewModelScope.launch {
+            accountManager.markClientNotificationRead(notificationId).onFailure { error ->
+                Log.w(tag, "Failed to mark notification as read", error)
+                refreshClientNotifications(force = true)
+            }
+        }
+    }
+
+    fun markAllClientNotificationsRead() {
+        if (_notificationUnreadCount.value <= 0) return
+        _clientNotifications.value = _clientNotifications.value.map { it.copy(isRead = true) }
+        _notificationUnreadCount.value = 0
+        viewModelScope.launch {
+            accountManager.markAllClientNotificationsRead().onFailure { error ->
+                Log.w(tag, "Failed to mark all notifications as read", error)
+                refreshClientNotifications(force = true)
+            }
+        }
+    }
+
+    private fun currentNotificationScope(): String =
+        "${AppConfig.BACKEND_URL.trimEnd('/')}|${accountManager.currentAccount()?.uid.orEmpty()}"
 
     fun bindEmailPassword(
         email: String,

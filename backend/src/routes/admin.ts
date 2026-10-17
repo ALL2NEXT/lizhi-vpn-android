@@ -9,6 +9,7 @@ import { createAdminAccessRoutes } from "./admin/access.ts";
 import { createAdminAnalyticsRoutes } from "./admin/analytics.ts";
 import { createAdminRegistrationCodeRoutes } from "./admin/registration-codes.ts";
 import { createAdminSecurityRoutes } from "./admin/security.ts";
+import { createAdminNotificationRoutes } from "./admin/notifications.ts";
 import { createAdminStateRoutes } from "./admin/state.ts";
 import { createAdminUserRoutes } from "./admin/users.ts";
 import { createAdminVipCodeRoutes } from "./admin/vip-codes.ts";
@@ -17,6 +18,7 @@ export function createAdminRoutes(deps: RouteDependencies) {
   const handlers = [
     createAdminAccessRoutes(deps),
     createAdminSecurityRoutes(deps),
+    createAdminNotificationRoutes(deps),
     createAdminAnalyticsRoutes(deps),
     createAdminRegistrationCodeRoutes(deps),
     createAdminVipCodeRoutes(deps),

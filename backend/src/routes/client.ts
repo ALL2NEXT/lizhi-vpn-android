@@ -3,6 +3,11 @@ import type { RouteDependencies } from "../types/routes.ts";
 import type { SubscriptionGroup, SubscriptionSource } from "../types/models.ts";
 import { subscriptionGroupAccessError } from "../domain/subscription-access.ts";
 import { getOrAssignBalancedSubscription } from "../services/subscription-balancing.ts";
+import {
+  markAllClientNotificationsRead,
+  markClientNotificationRead,
+  readClientNotifications,
+} from "../services/notifications.ts";
 import { observedFetch } from "../services/system-logs.ts";
 
 /*
@@ -18,6 +23,7 @@ const MAX_PROXY_APP_LIST_BYTES = 1024 * 1024;
 export function createClientRoutes(deps: Pick<
   RouteDependencies,
   | "resolveAccountAccess"
+  | "resolveDeviceIdentity"
   | "beijingTimestamp"
   | "normalizeAccountId"
   | "isAppVersionAtLeast"
@@ -33,6 +39,7 @@ export function createClientRoutes(deps: Pick<
 >) {
   const {
     resolveAccountAccess,
+    resolveDeviceIdentity,
     beijingTimestamp,
     normalizeAccountId,
     isAppVersionAtLeast,
@@ -92,6 +99,37 @@ async function handleClient(request: Request, env: Env) {
     settings: publicClientSettings(state.settings),
     generatedAt: beijingTimestamp(),
   });
+}
+
+async function handleClientNotifications(path: string, request: Request, env: Env) {
+  const requestUrl = new URL(request.url);
+  const deviceId = normalizeAccountId(requestUrl.searchParams.get("deviceId"));
+  if (!deviceId) return json({ ok: false, error: "device_id_required" }, 401);
+
+  const access = await resolveAccountAccess(env, deviceId);
+  if (!access.registered) return json({ ok: false, error: "account_access_denied" }, 403);
+  const identity = await resolveDeviceIdentity(env, deviceId);
+  if (!identity || identity.userId <= 0) {
+    return json({ ok: false, error: "account_access_denied" }, 403);
+  }
+
+  if (path === "/api/client/notifications" && request.method === "GET") {
+    return json(await readClientNotifications(env, identity.userId));
+  }
+  if (path === "/api/client/notifications/read-all" && request.method === "POST") {
+    return json(await markAllClientNotificationsRead(env, identity.userId));
+  }
+
+  const match = /^\/api\/client\/notifications\/(\d+)\/read$/.exec(path);
+  if (match && request.method === "POST") {
+    const notificationId = Number(match[1]);
+    if (!Number.isSafeInteger(notificationId) || notificationId <= 0) {
+      return json({ ok: false, error: "invalid_notification_id" }, 400);
+    }
+    return json(await markClientNotificationRead(env, identity.userId, notificationId));
+  }
+
+  return json({ ok: false, error: "notification_route_not_found" }, 404);
 }
 
 async function handleProxyAppList(env: Env) {
@@ -272,6 +310,7 @@ async function handleManagedSubscription(path: string, request: Request, env: En
 
   return {
     handleClient,
+    handleClientNotifications,
     handleProxyAppList,
     handleManagedSubscription,
   };

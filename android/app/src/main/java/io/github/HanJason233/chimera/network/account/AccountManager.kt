@@ -14,6 +14,7 @@ import io.github.HanJason233.chimera.data.model.AccountActionResponse
 import io.github.HanJason233.chimera.data.model.AccountBindingRequest
 import io.github.HanJason233.chimera.data.model.AccountDeleteRequest
 import io.github.HanJason233.chimera.data.model.AccountInfo
+import io.github.HanJason233.chimera.data.model.ClientNotificationFeed
 import io.github.HanJason233.chimera.data.model.AccountTrafficInfo
 import io.github.HanJason233.chimera.data.model.AccountTrafficPeriod
 import io.github.HanJason233.chimera.data.model.AccountLoginRequest
@@ -78,6 +79,61 @@ class AccountManager(private val context: Context) {
 
     suspend fun syncCurrentAccount(timeoutMs: Long = 25000L): Result<AccountInfo> =
         register(timeoutMs)
+
+    suspend fun getClientNotifications(timeoutMs: Long = 10000L): Result<ClientNotificationFeed> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
+        if (currentAccount() == null) {
+            return Result.failure(IllegalStateException("account_not_synced"))
+        }
+        return runCatching {
+            val response = withTimeout(timeoutMs.coerceIn(3000L, 30000L)) {
+                NetworkClient.apiService.getClientNotifications(
+                    accountEndpoint("/api/client/notifications"),
+                    accountId()
+                )
+            }
+            if (!response.ok) {
+                throw IllegalStateException(response.error ?: "notifications_read_failed")
+            }
+            response
+        }
+    }
+
+    suspend fun markClientNotificationRead(
+        notificationId: Long,
+        timeoutMs: Long = 10000L
+    ): Result<Unit> = notificationAction(
+        path = "/api/client/notifications/$notificationId/read",
+        timeoutMs = timeoutMs
+    )
+
+    suspend fun markAllClientNotificationsRead(timeoutMs: Long = 10000L): Result<Unit> =
+        notificationAction(
+            path = "/api/client/notifications/read-all",
+            timeoutMs = timeoutMs
+        )
+
+    private suspend fun notificationAction(path: String, timeoutMs: Long): Result<Unit> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
+        if (currentAccount() == null) {
+            return Result.failure(IllegalStateException("account_not_synced"))
+        }
+        return runCatching {
+            val response = withTimeout(timeoutMs.coerceIn(3000L, 30000L)) {
+                NetworkClient.apiService.markClientNotificationRead(
+                    accountEndpoint(path),
+                    accountId()
+                )
+            }
+            if (!response.ok) {
+                throw IllegalStateException(response.error ?: "notification_mark_read_failed")
+            }
+        }
+    }
 
     suspend fun activateVipCard(code: String, timeoutMs: Long = 10000L): Result<AccountInfo> {
         if (isOfflineMode()) {

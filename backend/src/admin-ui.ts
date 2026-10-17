@@ -1,6 +1,7 @@
 import adminDocument from "./admin-ui/document.html";
 import adminStyles from "./admin-ui/styles.css";
 import coreScript from "./admin-ui/scripts/core.client.js";
+import notificationsScript from "./admin-ui/scripts/notifications.client.js";
 import systemLogsScript from "./admin-ui/scripts/system-logs.client.js";
 import ipRelationsScript from "./admin-ui/scripts/ip-relations.client.js";
 import aiRiskScript from "./admin-ui/scripts/ai-risk.client.js";
@@ -16,6 +17,7 @@ import subscriptionImportScript from "./admin-ui/scripts/subscription-import.cli
 
 const adminScript = [
   coreScript,
+  notificationsScript,
   systemLogsScript,
   ipRelationsScript,
   aiRiskScript,

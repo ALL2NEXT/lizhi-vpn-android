@@ -27,6 +27,49 @@ data class BackendAppSettings(
 
 )
 
+/** 后台发布给客户端的单条应用内通知及当前账户的已读状态。 */
+data class ClientNotification(
+    @SerializedName("id")
+    val id: Long,
+
+    @SerializedName("title")
+    val title: String,
+
+    @SerializedName("body")
+    val body: String,
+
+    @SerializedName("level")
+    val level: String = "info",
+
+    @SerializedName("publishedAt")
+    val publishedAt: String? = null,
+
+    @SerializedName("isRead")
+    val isRead: Boolean = false
+)
+
+data class ClientNotificationFeed(
+    @SerializedName("ok")
+    val ok: Boolean = false,
+
+    @SerializedName("items")
+    val items: List<ClientNotification> = emptyList(),
+
+    @SerializedName("unreadCount")
+    val unreadCount: Int = 0,
+
+    @SerializedName("error")
+    val error: String? = null
+)
+
+data class NotificationActionResponse(
+    @SerializedName("ok")
+    val ok: Boolean = false,
+
+    @SerializedName("error")
+    val error: String? = null
+)
+
 data class AccountRegisterRequest(
     @SerializedName("deviceId")
     val deviceId: String,

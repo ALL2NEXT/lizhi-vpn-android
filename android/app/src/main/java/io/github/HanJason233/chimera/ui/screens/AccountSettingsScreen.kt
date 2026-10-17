@@ -1,18 +1,25 @@
 package io.github.HanJason233.chimera.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material3.CircularProgressIndicator
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import androidx.compose.material3.Icon
@@ -22,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,25 +37,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.ui.dialogs.AboutDialog
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.network.NetworkClient
 import io.github.HanJason233.chimera.platform.LauncherIdentityPresets
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
+import io.github.HanJason233.chimera.data.model.ClientNotification
 
 enum class AccountSettingsPage(val routeKey: String, val title: String) {
     OVERVIEW("overview", "我的"),
     ACCOUNT_INFO("account", "账户信息"),
     VIP("vip", "VIP 会员"),
     TRAFFIC("traffic", "流量信息"),
-    CLIENT_INFO("client", "客户端信息")
+    CLIENT_INFO("client", "客户端信息"),
+    NOTIFICATIONS("notifications", "通知")
 }
 
 @Composable
@@ -59,6 +73,7 @@ fun AccountSettingsScreen(
     onOpenPage: (AccountSettingsPage) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val isUpdatingNickname by viewModel.isUpdatingNickname.collectAsStateWithLifecycle()
     val isSyncingAccount by viewModel.isSyncingAccount.collectAsStateWithLifecycle()
@@ -69,9 +84,14 @@ fun AccountSettingsScreen(
     val accountMessage by viewModel.accountMessage.collectAsStateWithLifecycle()
     val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
     val offlineModeEnabled by viewModel.offlineModeEnabled.collectAsStateWithLifecycle()
+    val notifications by viewModel.clientNotifications.collectAsStateWithLifecycle()
+    val notificationUnreadCount by viewModel.notificationUnreadCount.collectAsStateWithLifecycle()
+    val isLoadingNotifications by viewModel.isLoadingNotifications.collectAsStateWithLifecycle()
+    val notificationError by viewModel.notificationError.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
     var showAboutDialog by remember { mutableStateOf(false) }
     var showBackendDialog by remember { mutableStateOf(false) }
+    var selectedNotification by remember { mutableStateOf<ClientNotification?>(null) }
     var backendUrlDraft by remember { mutableStateOf(AppConfig.BACKEND_URL) }
     val account = accountInfo
     var nickname by remember(accountInfo?.uid, accountInfo?.nickname) {
@@ -103,6 +123,7 @@ fun AccountSettingsScreen(
 
     LaunchedEffect(accountInfo?.uid, accountInfo?.email) {
         email = accountInfo?.email.orEmpty()
+        selectedNotification = null
         if (!accountInfo?.email.isNullOrBlank()) {
             password = ""
             confirmPassword = ""
@@ -121,6 +142,38 @@ fun AccountSettingsScreen(
         vipCode = ""
     }
 
+    LaunchedEffect(page, accountInfo?.uid, offlineModeEnabled) {
+        if (offlineModeEnabled || accountInfo == null) {
+            viewModel.clearClientNotifications()
+        } else {
+            if (page == AccountSettingsPage.OVERVIEW) {
+                viewModel.syncAccountOnOverviewEntry()
+            }
+            if (page == AccountSettingsPage.OVERVIEW || page == AccountSettingsPage.NOTIFICATIONS) {
+                viewModel.refreshClientNotifications(force = page == AccountSettingsPage.NOTIFICATIONS)
+            }
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, page, accountInfo?.uid, offlineModeEnabled) {
+        if (offlineModeEnabled || accountInfo == null ||
+            (page != AccountSettingsPage.OVERVIEW && page != AccountSettingsPage.NOTIFICATIONS)
+        ) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    if (page == AccountSettingsPage.OVERVIEW) {
+                        viewModel.syncAccountOnOverviewEntry()
+                    }
+                    viewModel.refreshClientNotifications()
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+    }
+
     val normalizedNickname = nickname.trim()
     val canSaveNickname = account != null &&
         normalizedNickname.isNotBlank() &&
@@ -128,12 +181,6 @@ fun AccountSettingsScreen(
         normalizedNickname != account.nickname &&
         account.accountType != "banned" &&
         !isUpdatingNickname
-    val canSyncAccount = !isSyncingAccount &&
-        !isUpdatingNickname &&
-        !isBindingAccount &&
-        !isSwitchingAccount &&
-        !isDeletingAccount &&
-        !isActivatingVip
     val canOpenBindDialog = account != null &&
         account.email.isBlank() &&
         account.accountType != "banned" &&
@@ -184,17 +231,25 @@ fun AccountSettingsScreen(
         containerColor = accountSettingsBackground,
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         actions = {
-            if (!offlineModeEnabled &&
-                (page == AccountSettingsPage.OVERVIEW || page == AccountSettingsPage.TRAFFIC)
-            ) {
-                IconButton(
-                    onClick = { viewModel.syncCurrentAccount() },
-                    enabled = canSyncAccount
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "刷新账户信息"
-                    )
+            if (!offlineModeEnabled && account != null && page == AccountSettingsPage.OVERVIEW) {
+                Box {
+                    IconButton(onClick = { onOpenPage(AccountSettingsPage.NOTIFICATIONS) }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Email,
+                            contentDescription = if (notificationUnreadCount > 0) "通知，有未读消息" else "通知"
+                        )
+                    }
+                    if (notificationUnreadCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = (-8).dp, y = 8.dp)
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.error)
+                                .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                        )
+                    }
                 }
             }
         }
@@ -284,9 +339,48 @@ fun AccountSettingsScreen(
                     )
                     AccountSettingsPage.TRAFFIC -> TrafficDetailContent(account = account)
                     AccountSettingsPage.CLIENT_INFO -> ClientInfoDetailContent(account = account)
+                    AccountSettingsPage.NOTIFICATIONS -> NotificationCenterContent(
+                        notifications = notifications,
+                        unreadCount = notificationUnreadCount,
+                        isLoading = isLoadingNotifications,
+                        error = notificationError,
+                        onRetry = { viewModel.refreshClientNotifications(force = true) },
+                        onMarkAllRead = viewModel::markAllClientNotificationsRead,
+                        onOpenNotification = { notification ->
+                            viewModel.markClientNotificationRead(notification.id)
+                            selectedNotification = notification
+                        }
+                    )
                 }
             }
         }
+    }
+    selectedNotification?.let { notification ->
+        AppAlertDialog(
+            onDismissRequest = { selectedNotification = null },
+            title = { Text(notification.title) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (notification.level == "important") {
+                        Text(
+                            "重要通知",
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Text(notification.body)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedNotification = null }) { Text("知道了") }
+            }
+        )
     }
     if (showAboutDialog) {
         val appIdentity = LauncherIdentityPresets.find(skinSettings.activeScheme.appIconPresetId)

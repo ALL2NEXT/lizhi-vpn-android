@@ -169,6 +169,7 @@
    currentState = null;
    if (typeof resetSettingsDrafts === 'function') resetSettingsDrafts();
    if (typeof resetAdminUsers === 'function') resetAdminUsers();
+   if (typeof resetAdminNotifications === 'function') resetAdminNotifications();
    accountSecurityData = null;
    accountSecuritySelection.clear();
    deviceRelationsData = null;

@@ -100,7 +100,35 @@ const SYSTEM_LOG_USER_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_use
 const SYSTEM_LOG_REQUEST_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_request_id
   ON system_logs_mb(request_id)`;
 
-export const USER_SCHEMA_VERSION = 22;
+const NOTIFICATION_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS notifications_mb (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 100),
+    body TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 10000),
+    level TEXT NOT NULL DEFAULT 'info' CHECK (level IN ('info', 'important')),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+    starts_at TEXT,
+    expires_at TEXT,
+    published_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (expires_at IS NULL OR starts_at IS NULL OR expires_at > starts_at)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_notifications_mb_visibility
+    ON notifications_mb(status, starts_at, expires_at, published_at DESC, id DESC)`,
+  `CREATE TABLE IF NOT EXISTS notification_reads_mb (
+    notification_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    read_at TEXT NOT NULL,
+    PRIMARY KEY (notification_id, user_id),
+    FOREIGN KEY (notification_id) REFERENCES notifications_mb(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users_mb(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_notification_reads_mb_user
+    ON notification_reads_mb(user_id, notification_id)`,
+];
+
+export const USER_SCHEMA_VERSION = 23;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -274,6 +302,7 @@ export const USER_SCHEMA_STATEMENTS = [
   SYSTEM_LOG_PAYLOADS_SCHEMA,
   SYSTEM_LOG_PAYLOADS_INDEX,
   SYSTEM_LOG_USER_INDEX,
+  ...NOTIFICATION_SCHEMA_STATEMENTS,
   ...USER_IP_LINKS_SCHEMA_STATEMENTS,
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
@@ -500,6 +529,7 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
   22: [
     SYSTEM_LOG_REQUEST_INDEX,
   ],
+  23: NOTIFICATION_SCHEMA_STATEMENTS,
 };
 export function resolveAdminBasePath(value: unknown): string | null {
   const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");

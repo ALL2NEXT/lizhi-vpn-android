@@ -7,6 +7,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Query
 import retrofit2.http.Url
 import io.github.HanJason233.chimera.data.model.AccountBindingRequest
 import io.github.HanJason233.chimera.data.model.AccountActionResponse
@@ -18,6 +19,8 @@ import io.github.HanJason233.chimera.data.model.AccountRegisterRequest
 import io.github.HanJason233.chimera.data.model.AccountRegisterResponse
 import io.github.HanJason233.chimera.data.model.TrafficReportRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportResponse
+import io.github.HanJason233.chimera.data.model.ClientNotificationFeed
+import io.github.HanJason233.chimera.data.model.NotificationActionResponse
 
 interface ApiService {
     
@@ -71,4 +74,16 @@ interface ApiService {
         @Url url: String,
         @Body request: TrafficReportRequest
     ): TrafficReportResponse
+
+    @GET
+    suspend fun getClientNotifications(
+        @Url url: String,
+        @Query("deviceId") deviceId: String
+    ): ClientNotificationFeed
+
+    @POST
+    suspend fun markClientNotificationRead(
+        @Url url: String,
+        @Query("deviceId") deviceId: String
+    ): NotificationActionResponse
 }

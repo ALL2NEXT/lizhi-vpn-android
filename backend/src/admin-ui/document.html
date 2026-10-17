@@ -70,6 +70,7 @@
              <div id="app-settings-subnav" class="nav-submenu" role="group" aria-label="应用设置子菜单">
                <button class="tab-button" role="tab" type="button" data-tab="subscriptions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16v2L4 8V6zm2-4h12v2H6V2zm14 8H4c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2zm0 10H4v-8h16v8zm-10-7.27v6.53L16 16l-6-3.27z"/></svg><span>订阅分组</span></button>
                <button class="tab-button" role="tab" type="button" data-tab="about-page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg><span>关于页</span></button>
+               <button class="tab-button" role="tab" type="button" data-tab="notifications"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h13A2.5 2.5 0 0 1 21 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5zm2.3-.5 6.7 5.2L18.7 5zm13.7 2.3-7 5.4-7-5.4v11.2h14z"/></svg><span>通知管理</span></button>
             </div>
           </div>
           <div class="nav-group" data-nav-group="backend-settings">
@@ -509,6 +510,50 @@
     </dialog>
    </section>
 
+  <section class="card tab-panel" role="tabpanel" data-panel="notifications">
+    <div class="dashboard-heading notification-admin-heading">
+      <div>
+        <h2>通知管理</h2>
+        <p>发布后，客户端用户可在“我的”页右上角查看通知和未读提醒。</p>
+      </div>
+      <button id="notificationCreate" type="button">新建通知</button>
+    </div>
+    <div id="notificationAdminStatus" class="notification-admin-status" role="status" aria-live="polite"></div>
+    <div id="notificationAdminList" class="notification-admin-list">
+      <div class="loading-state">打开通知管理后加载通知。</div>
+    </div>
+    <div id="notificationEditor" class="notification-modal" hidden>
+      <div class="notification-modal-scrim" data-notification-close></div>
+      <section class="notification-modal-card" role="dialog" aria-modal="true" aria-labelledby="notificationEditorTitle">
+        <header class="notification-modal-header">
+          <h3 id="notificationEditorTitle">新建通知</h3>
+          <button class="notification-modal-close" type="button" data-notification-close aria-label="关闭">×</button>
+        </header>
+        <input id="notificationId" type="hidden">
+        <label class="notification-field">标题
+          <input id="notificationTitle" maxlength="100" required placeholder="通知标题">
+        </label>
+        <label class="notification-field">正文
+          <textarea id="notificationBody" maxlength="10000" rows="8" required placeholder="支持纯文本和换行"></textarea>
+        </label>
+        <div class="notification-form-grid">
+          <label class="notification-field">重要程度
+            <select id="notificationLevel"><option value="info">普通</option><option value="important">重要</option></select>
+          </label>
+          <label class="notification-field">状态
+            <select id="notificationStatus"><option value="draft">草稿</option><option value="published">已发布</option><option value="archived">已撤回</option></select>
+          </label>
+          <label class="notification-field">开始显示时间（可选）<input id="notificationStartsAt" type="datetime-local"></label>
+          <label class="notification-field">失效时间（可选）<input id="notificationExpiresAt" type="datetime-local"></label>
+        </div>
+        <p class="notification-form-hint">时间按当前管理浏览器时区填写。已发布通知可撤回；已读状态按用户账户同步。</p>
+        <footer class="notification-modal-actions">
+          <button class="secondary" type="button" data-notification-close>取消</button>
+          <button id="notificationSave" type="button">保存通知</button>
+        </footer>
+      </section>
+    </div>
+  </section>
   <section class="card tab-panel" role="tabpanel" data-panel="about-page">
     <div class="dashboard-heading settings-page-heading">
       <h2>关于页</h2>

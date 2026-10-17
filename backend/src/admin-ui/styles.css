@@ -1698,3 +1698,37 @@
       .subscription-group-nav-toggle .subscription-switch-control input:checked + .subscription-switch-track > span { transform: translateX(10px); }
       .subscription-group-nav-settings { width: 30px; min-width: 30px; min-height: 32px; }
     }
+
+    .notification-admin-heading { align-items: center; }
+    .notification-admin-list { display: grid; gap: 12px; }
+    .notification-admin-status { min-height: 20px; margin: -8px 0 10px; color: #5f6368; font-size: 13px; }
+    .notification-admin-status.error { color: #b3261e; }
+    .notification-admin-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; padding: 16px; border: 1px solid #dadce0; border-radius: 12px; background: #ffffff; }
+    .notification-admin-card h3 { margin: 0 0 6px; color: #202124; font-size: 16px; }
+    .notification-admin-card p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .notification-admin-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; color: #5f6368; font-size: 12px; }
+    .notification-chip { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; background: #f1f3f4; color: #3c4043; font-size: 12px; }
+    .notification-chip.important { background: #fce8e6; color: #b3261e; }
+    .notification-admin-actions { display: flex; align-items: flex-start; gap: 8px; }
+    .notification-admin-actions button { margin: 0; padding: 8px 11px; white-space: nowrap; }
+    .notification-modal { position: fixed; inset: 0; z-index: 180; display: grid; place-items: center; padding: 24px; }
+    .notification-modal[hidden] { display: none; }
+    .notification-modal-scrim { position: absolute; inset: 0; background: rgba(2, 6, 23, .62); }
+    .notification-modal-card { position: relative; width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 22px; border: 1px solid #dadce0; border-radius: 14px; background: #ffffff; box-shadow: 0 20px 70px rgba(0, 0, 0, .28); }
+    .notification-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    .notification-modal-header h3 { margin: 0; color: #202124; font-size: 18px; }
+    .notification-modal-close { width: 38px; min-width: 38px; margin: 0; padding: 5px; font-size: 22px; line-height: 1; }
+    .notification-field { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; color: #3c4043; font-size: 13px; font-weight: 600; }
+    .notification-field input, .notification-field select, .notification-field textarea { box-sizing: border-box; width: 100%; margin: 0; font: inherit; font-weight: 400; }
+    .notification-field textarea { min-height: 150px; resize: vertical; line-height: 1.55; }
+    .notification-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+    .notification-form-hint { margin: 0 0 16px; color: #5f6368; font-size: 12px; }
+    .notification-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .notification-modal-actions button { margin: 0; }
+    @media (max-width: 700px) {
+      .notification-admin-card { grid-template-columns: minmax(0, 1fr); }
+      .notification-admin-actions { flex-wrap: wrap; }
+      .notification-form-grid { grid-template-columns: minmax(0, 1fr); }
+      .notification-modal { padding: 8px; }
+      .notification-modal-card { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 16px; }
+    }

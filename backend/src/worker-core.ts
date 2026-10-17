@@ -167,6 +167,7 @@ const routeDeps = {
 
 const {
   handleClient,
+  handleClientNotifications,
   handleProxyAppList,
   handleManagedSubscription,
 } = createClientRoutes(routeDeps);
@@ -275,6 +276,10 @@ async function dispatchWorkerRequest(request: Request, env: Env) {
         return handleClient(request, env);
       }
 
+      if (path.startsWith("/api/client/notifications")) {
+        return handleClientNotifications(path, request, env);
+      }
+
       if (path === "/api/app/proxy-packages" && request.method === "GET") {
         return handleProxyAppList(env);
       }
@@ -360,6 +365,7 @@ export async function fetchBackend(
     };
     const requestContext: { user: RequestUserIdentity | null } = { user: null };
     const isClientRequest = path === "/api/client" ||
+      path.startsWith("/api/client/notifications") ||
       path.startsWith("/api/subscription/") || path.startsWith("/api/account/");
     const observedEnv = createObservedEnv(env, sink, isClientRequest
       ? (identity) => { requestContext.user = identity; }
