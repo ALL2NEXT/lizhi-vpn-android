@@ -28,7 +28,7 @@ function harness() {
     return elements.get(id);
   };
   const panels = new Map();
-  for (const section of ['subscriptions', 'about-page', 'registration-control', 'notice']) {
+  for (const section of ['subscriptions', 'about-page', 'registration-control']) {
     const panel = element();
     panel.dataset.panel = section;
     const controls = new Map(['[data-settings-save-status]', '[data-settings-save]', '[data-settings-discard]'].map(selector => [selector, element()]));
@@ -69,7 +69,7 @@ function harness() {
     checked: (id, value) => { get(id).checked = Boolean(value); },
     esc: value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
     headers: () => ({}), ADMIN_API_BASE: '/local-admin/api', adminToken: 'test',
-    currentState: {subscriptionGroups: [], settings: {}, notice: {hasNotice: true, title: 'Saved notice', content: 'Saved content'}, appUpdate: null},
+    currentState: {subscriptionGroups: [], settings: {}},
     parseResponseJson: JSON.parse, adminErrorMessage: (error, fallback) => error || fallback,
     formatMegabytes: value => (value || 0) + ' MB',
     show: (message, error) => messages.push({message, error: Boolean(error)}), confirm: () => true,
@@ -92,7 +92,10 @@ function harness() {
       return {ok, status: ok ? 200 : 400, text: async () => JSON.stringify(data), json: async () => data};
     },
   });
-  scripts.forEach(script => vm.runInContext(script, context));
+  scripts.forEach((script, index) => {
+    const source = index === 2 ? script.replace('initializeSubscriptionManager();', '') : script;
+    vm.runInContext(source, context);
+  });
   vm.runInContext('fillState(currentState)', context);
   context.fixtureUsers = serverUsers;
   vm.runInContext('adminUserData = {users: fixtureUsers, securityAccounts: []}', context);
@@ -144,57 +147,17 @@ test('删除其他用户保留未选中用户的草稿及未保存状态', async
   assert.equal(h.run('adminUserData.users.some(user => user.uid === "b")'), false);
 });
 
-test('保存关于页不会覆盖公告草稿，也不会把未保存公告提交到服务器', async () => {
+test('管理端设置仅保存仍支持的模块，不提交更新或公告字段', async () => {
   const h = harness();
-  h.get('noticeTitle').value = 'Unsaved notice';
+  assert.equal(h.run('SETTINGS_SECTIONS.join(",")'), 'subscriptions,about-page,registration-control');
+  assert.equal(h.run('SETTINGS_SECTIONS.includes("notice") || SETTINGS_SECTIONS.includes("app-update")'), false);
   h.get('websiteUrl').value = 'https://example.test';
-  h.run('markSettingsDirty("notice"); markSettingsDirty("about-page")');
+  h.run('markSettingsDirty("about-page")');
   assert.equal(await h.run('pushSection("about-page")'), true);
   const request = h.calls.find(call => call.method === 'PUT');
-  assert.equal(JSON.parse(request.body).notice.title, 'Saved notice');
-  assert.equal(h.get('noticeTitle').value, 'Unsaved notice');
-  assert.equal(h.run('settingsDirtySections.has("notice")'), true);
-  assert.equal(h.run('settingsDirtySections.has("about-page")'), false);
-});
-
-test('保存过程中继续编辑时保留新草稿，同时阻止第二次提交', async () => {
-  const h = harness();
-  let resolve;
-  h.handleRequests((url, options) => new Promise(done => { resolve = () => done({state: JSON.parse(options.body)}); }));
-  h.get('noticeTitle').value = 'Submitted notice';
-  h.run('markSettingsDirty("notice")');
-  const pending = h.run('pushSection("notice")');
-  assert.equal(await h.run('pushSection("about-page")'), false);
-  h.get('noticeTitle').value = 'Newer draft';
-  h.run('markSettingsDirty("notice")');
-  resolve();
-  assert.equal(await pending, true);
-  assert.equal(h.get('noticeTitle').value, 'Newer draft');
-  assert.equal(h.context.currentState.notice.title, 'Submitted notice');
-  assert.equal(h.run('settingsDirtySections.has("notice")'), true);
-  assert.equal(h.calls.filter(call => call.method === 'PUT').length, 1);
-});
-
-test('网络失败保留设置草稿并恢复保存按钮，允许重新提交', async () => {
-  const h = harness();
-  h.handleRequests(async () => { throw new Error('Network unavailable'); });
-  h.get('noticeTitle').value = 'Retained draft';
-  h.run('markSettingsDirty("notice")');
-  assert.equal(await h.run('pushSection("notice")'), false);
-  assert.equal(h.get('noticeTitle').value, 'Retained draft');
-  assert.equal(h.run('settingsDirtySections.has("notice")'), true);
-  assert.equal(h.panels.get('notice').querySelector('[data-settings-save]').disabled, false);
-  assert.match(h.panels.get('notice').querySelector('[data-settings-save-status]').textContent, /草稿已保留/);
-});
-
-test('放弃当前模块修改仅恢复该模块，不影响其他草稿', () => {
-  const h = harness();
-  h.get('noticeTitle').value = 'Unsaved notice';
-  h.get('websiteUrl').value = 'https://unsaved.test';
-  h.run('markSettingsDirty("notice"); markSettingsDirty("about-page"); discardSettingsSection("notice")');
-  assert.equal(h.get('noticeTitle').value, 'Saved notice');
-  assert.equal(h.get('websiteUrl').value, 'https://unsaved.test');
-  assert.equal(h.run('settingsDirtySections.has("about-page")'), true);
+  const payload = JSON.parse(request.body);
+  assert.equal(Object.hasOwn(payload, 'notice'), false);
+  assert.equal(Object.hasOwn(payload, 'appUpdate'), false);
 });
 
 

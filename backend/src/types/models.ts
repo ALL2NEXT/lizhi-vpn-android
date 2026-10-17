@@ -38,16 +38,6 @@ export interface SubscriptionGroup {
   subscriptions: SubscriptionSource[];
 }
 
-export interface Notice {
-  hasNotice: boolean;
-  title: string;
-  content: string;
-  noticeId: string;
-  showOnce: boolean;
-  startAt: string;
-  endAt: string;
-}
-
 export interface Settings {
   websiteUrl: string;
   feedbackEmail: string;
@@ -61,9 +51,6 @@ export interface Settings {
 export interface AppState {
   version: 2;
   subscriptionGroups: SubscriptionGroup[];
-  notice: Notice | null;
-  // App update metadata is passed through for client version compatibility.
-  appUpdate: JsonObject | null;
   settings: Settings;
   updatedAt?: string;
 }

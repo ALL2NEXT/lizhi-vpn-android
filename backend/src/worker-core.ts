@@ -59,7 +59,6 @@ import {
   normalizeState,
   publicClientSettings,
   readState,
-  visibleNotice,
   writeState,
 } from "./services/state.ts";
 import { readSubscriptionContent } from "./services/subscription-store.ts";
@@ -115,7 +114,6 @@ const routeDeps = {
   deduplicateSubscriptionContent,
   readState,
   readSubscriptionContent,
-  visibleNotice,
   publicClientSettings,
   corsHeaders,
   json,

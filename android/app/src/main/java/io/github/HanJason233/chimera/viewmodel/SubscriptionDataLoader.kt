@@ -22,10 +22,8 @@ import io.github.HanJason233.chimera.data.local.NodeDao
 import io.github.HanJason233.chimera.data.model.BackendAppSettings
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeSource
-import io.github.HanJason233.chimera.data.model.NoticeInfo
 import io.github.HanJason233.chimera.data.model.SubscriptionList
 import io.github.HanJason233.chimera.data.model.SubscriptionSource
-import io.github.HanJason233.chimera.data.model.UpdateInfo
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
 import io.github.HanJason233.chimera.network.account.AccountManager
 import io.github.HanJason233.chimera.network.NetworkClient
@@ -63,10 +61,6 @@ internal class SubscriptionDataLoader(
     private val _backendSettings = MutableStateFlow(BackendAppSettings())
     val backendSettings = _backendSettings.asStateFlow()
 
-    var noticeConfig: NoticeInfo? = null
-        private set
-    var updateInfo: UpdateInfo? = null
-        private set
     var lastFetchedNodes: List<Node>? = null
         private set
     suspend fun loadCachedSubscriptionList(): SubscriptionList? {
@@ -202,18 +196,12 @@ internal class SubscriptionDataLoader(
     private fun applyBackendConfig(raw: String) {
         runCatching {
             val root = JsonParser.parseString(raw).asJsonObject
-            noticeConfig = root.get("notice")
-                ?.takeIf { !it.isJsonNull && it.isJsonObject }
-                ?.let { gson.fromJson(it, NoticeInfo::class.java) }
             _backendSettings.value = root.get("settings")
                 ?.takeIf { !it.isJsonNull && it.isJsonObject }
                 ?.let { gson.fromJson(it, BackendAppSettings::class.java) }
                 ?: BackendAppSettings()
-            updateInfo = root.get("appUpdate")
-                ?.takeIf { !it.isJsonNull && it.isJsonObject }
-                ?.let { gson.fromJson(it, UpdateInfo::class.java) }
         }.onFailure { error ->
-            Log.w(TAG, "Backend config does not contain valid notice/update metadata", error)
+            Log.w(TAG, "Failed to parse backend settings", error)
         }
     }
 

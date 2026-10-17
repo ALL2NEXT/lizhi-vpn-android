@@ -59,7 +59,7 @@ class SubscriptionListParserTest {
 
     @Test
     fun parseAcceptsEmptyAvailableList() {
-        assertTrue(parser.parse("""{"subscriptions":[],"settings":{},"notice":null}""").getOrThrow().sources.isEmpty())
+        assertTrue(parser.parse("""{"subscriptions":[],"settings":{}}""").getOrThrow().sources.isEmpty())
         assertTrue(parser.parse("[]").getOrThrow().sources.isEmpty())
     }
 

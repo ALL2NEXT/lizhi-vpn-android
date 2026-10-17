@@ -15,7 +15,7 @@ import {
   autoRenameSubscriptionContent, decodeExternalSubscriptionContent,
   isAppVersionAtLeast, normalizeSubscriptionCacheMinutes,
 } from "../src/services/subscriptions.ts";
-import { normalizeState, readState, visibleNotice, writeState } from "../src/services/state.ts";
+import { normalizeState, readState, writeState } from "../src/services/state.ts";
 
 const now = new Date("2026-10-07T02:00:00Z");
 const node = "vless://id@example.com:443#日本";
@@ -103,7 +103,7 @@ test("version comparison and cache bounds", () => {
   assert.equal(normalizeSubscriptionCacheMinutes(1e8), 10080);
 });
 
-test("旧 KV 字段可迁移，内联订阅不会自动重命名", () =>", () => {
+test("旧 KV 字段可迁移，内联订阅不会自动重命名", () => {
   const state = normalizeState({
     sources: [null, { title: "line", nodesText: node, autoRename: true, minimumAccountType: "formal" }],
   });
@@ -113,11 +113,13 @@ test("旧 KV 字段可迁移，内联订阅不会自动重命名", () =>", () =>
   assert.equal(normalizeState(null).subscriptionGroups.length, 0);
 });
 
-test("公告时间校验继续生效", () => {
-  const state = normalizeState({ notice: { hasNotice: true, startAt: "2026-10-07T09:00", endAt: "2026-10-07T11:00" } });
-  assert.equal(visibleNotice(state.notice, now.getTime()), state.notice);
-  assert.equal(visibleNotice(state.notice, now.getTime() + 7200000), null);
-  assert.throws(() => normalizeState({ notice: { startAt: "2026-10-08", endAt: "2026-10-07" } }), /invalid_notice_time_order/);
+test("旧公告和客户端更新字段不会进入归一化状态", () => {
+  const state = normalizeState({
+    notice: { hasNotice: true, title: "旧公告" },
+    appUpdate: { version: "9.9.9" },
+  });
+  assert.equal(Object.hasOwn(state, "notice"), false);
+  assert.equal(Object.hasOwn(state, "appUpdate"), false);
 });
 
 test("KV 使用较新的旧键数据并同步双写", async () => {

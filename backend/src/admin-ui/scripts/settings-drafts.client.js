@@ -1,4 +1,4 @@
-const SETTINGS_SECTIONS = ['subscriptions', 'about-page', 'app-update', 'registration-control', 'notice'];
+const SETTINGS_SECTIONS = ['subscriptions', 'about-page', 'registration-control'];
 const settingsDirtySections = new Set();
 const settingsDraftVersions = new Map();
 const settingsSaveMessages = new Map();
@@ -23,14 +23,7 @@ function updateSettingsSaveControls() {
     }
     if (save) {
       save.disabled = Boolean(settingsSaveInFlight) || !dirty;
-      const noticeEnabled = section === 'notice' && el('noticeEnabled') && el('noticeEnabled').checked;
-      const noticeScheduled = section === 'notice' && el('noticeStartScheduled') && el('noticeStartScheduled').checked;
-      const saveLabel = section !== 'notice'
-        ? '保存配置'
-        : noticeEnabled
-          ? noticeScheduled ? '保存定时公告' : '保存并发布'
-          : '保存草稿';
-      save.textContent = saving ? '保存中…' : saveLabel;
+      save.textContent = saving ? '保存中…' : '保存配置';
     }
     if (discard) discard.disabled = saving || !dirty;
     panel.setAttribute('aria-busy', saving ? 'true' : 'false');

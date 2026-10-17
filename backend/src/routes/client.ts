@@ -27,7 +27,6 @@ export function createClientRoutes(deps: Pick<
   | "deduplicateSubscriptionContent"
   | "readState"
   | "resolveUserIdentity"
-  | "visibleNotice"
   | "publicClientSettings"
   | "corsHeaders"
   | "json"
@@ -43,7 +42,6 @@ export function createClientRoutes(deps: Pick<
     deduplicateSubscriptionContent,
     readState,
     resolveUserIdentity,
-    visibleNotice,
     publicClientSettings,
     corsHeaders,
     json,
@@ -91,8 +89,6 @@ async function handleClient(request: Request, env: Env) {
         url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
       }));
     }),
-    notice: visibleNotice(state.notice),
-    appUpdate: state.appUpdate,
     settings: publicClientSettings(state.settings),
     generatedAt: beijingTimestamp(),
   });

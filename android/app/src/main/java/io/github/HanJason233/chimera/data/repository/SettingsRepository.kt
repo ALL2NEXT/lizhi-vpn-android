@@ -106,10 +106,6 @@ class SettingsRepository(
             booleanPreferencesKey("home_click_speed_test_enabled")
         private val HOME_LONG_PRESS_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_long_press_speed_test_enabled")
-        private val LAST_NOTICE_ID = stringPreferencesKey("last_notice_id")
-        private val IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
-        private val UPDATE_DOWNLOAD_DIRECTORY_URI =
-            stringPreferencesKey("update_download_directory_uri")
         
         // 订阅列表缓存
         private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
@@ -318,19 +314,6 @@ class SettingsRepository(
             activeSchemeId = activeScheme.id,
             schemes = schemes
         )
-    }
-    
-    val lastNoticeId: Flow<String?> = store.data.map { preferences ->
-        preferences[LAST_NOTICE_ID]
-    }
-
-    val ignoredUpdateVersionCode: Flow<Int?> = store.data.map { preferences ->
-        preferences[IGNORED_UPDATE_VERSION_CODE]
-    }
-
-    /** 用户选择的更新安装包目录；为空时使用应用缓存目录。 */
-    val updateDownloadDirectoryUri: Flow<String?> = store.data.map { preferences ->
-        preferences[UPDATE_DOWNLOAD_DIRECTORY_URI]
     }
     
     val selectedSubscriptionSourceId: Flow<String?> = store.data.map { preferences ->
@@ -844,28 +827,6 @@ class SettingsRepository(
             )
             if (preferences[ACTIVE_SKIN_SCHEME_ID] == schemeId) {
                 preferences[ACTIVE_SKIN_SCHEME_ID] = SkinScheme.DEFAULT_SCHEME_ID
-            }
-        }
-    }
-    
-    suspend fun setLastNoticeId(noticeId: String) {
-        store.edit { preferences ->
-            preferences[LAST_NOTICE_ID] = noticeId
-        }
-    }
-
-    suspend fun setIgnoredUpdateVersionCode(versionCode: Int) {
-        store.edit { preferences ->
-            preferences[IGNORED_UPDATE_VERSION_CODE] = versionCode
-        }
-    }
-
-    suspend fun setUpdateDownloadDirectoryUri(uri: String?) {
-        store.edit { preferences ->
-            if (uri.isNullOrBlank()) {
-                preferences.remove(UPDATE_DOWNLOAD_DIRECTORY_URI)
-            } else {
-                preferences[UPDATE_DOWNLOAD_DIRECTORY_URI] = uri
             }
         }
     }

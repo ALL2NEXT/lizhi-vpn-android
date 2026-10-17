@@ -1,7 +1,5 @@
 package io.github.HanJason233.chimera.viewmodel
 import android.app.Application
-import android.content.ClipData
-import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -49,8 +47,6 @@ import io.github.HanJason233.chimera.network.subscription.importer.LocalSubscrip
 import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionImportInput
 import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionInputDetector
 import io.github.HanJason233.chimera.network.subscription.ParsedSubscription
-import io.github.HanJason233.chimera.network.download.DownloadManager
-import io.github.HanJason233.chimera.network.download.DownloadArtifact
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestClassifier
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestDefinition
@@ -70,8 +66,6 @@ import io.github.HanJason233.chimera.util.SingBoxConfigGenerator
 import io.github.HanJason233.chimera.util.XrayConfigGenerator
 import io.github.HanJason233.chimera.util.DatabasePassphraseManager
 import java.io.File
-import java.time.Instant
-import java.time.OffsetDateTime
 import kotlin.math.ceil
 import java.util.UUID
 
@@ -212,8 +206,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     // 节流控制
-    private val THROTTLE_INTERVAL = 5000L // 5秒节流间隔
-    private var lastCheckUpdateTime = 0L
     private var nodeLocationEnrichmentJob: Job? = null
     private val subscriptionDataLoader = SubscriptionDataLoader(
         context = application,
@@ -261,9 +253,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _hysteriaBandwidthAdaptiveStatus = MutableStateFlow<String?>(null)
     val hysteriaBandwidthAdaptiveStatus = _hysteriaBandwidthAdaptiveStatus.asStateFlow()
     
-    private val _notice = MutableStateFlow<NoticeInfo?>(null)
-    val notice = _notice.asStateFlow()
-    
     val backendSettings = subscriptionDataLoader.backendSettings
 
     val accountInfo = accountManager.accountInfo
@@ -290,8 +279,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isDeletingAccount = _isDeletingAccount.asStateFlow()
     private val _accountMessage = MutableStateFlow<String?>(null)
     val accountMessage = _accountMessage.asStateFlow()
-    private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
-    val updateInfo = _updateInfo.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
 
     val error = _error.asStateFlow()
@@ -604,11 +591,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope,
         SharingStarted.Eagerly,
         AppConfig.BANDWIDTH_TEST_CONCURRENCY
-    )
-    val updateDownloadDirectoryUri = settingsRepository.updateDownloadDirectoryUri.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        null
     )
     val hysteriaBandwidthEnabled = settingsRepository.hysteriaBandwidthEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_BANDWIDTH_ENABLED)
     val hysteriaUpMbps = settingsRepository.hysteriaUpMbps.stateIn(viewModelScope, SharingStarted.Eagerly, AppConfig.HYSTERIA_UP_MBPS)
@@ -2762,239 +2744,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun checkNotice() {
-        if (accountManager.isOfflineMode()) return
-        val result = subscriptionDataLoader.noticeConfig?.let { Result.success(it) }
-            ?: Result.failure<NoticeInfo>(IllegalStateException("backend config unavailable"))
-        result.onSuccess { noticeInfo ->
-            if (noticeInfo.hasNotice && isNoticeWithinTimeRange(noticeInfo)) {
-                // 如果 showOnce 为 true，检查是否已显示过
-                // 如果 showOnce 为 false，则每次都显示
-                if (!noticeInfo.showOnce) {
-                    _notice.value = noticeInfo
-                    // 更新最后显示的 ID，以便后续如果服务器端改为 true，也能正确判断
-                    settingsRepository.setLastNoticeId(noticeInfo.noticeId)
-                } else {
-                    val lastNoticeId = settingsRepository.lastNoticeId.first()
-                    if (lastNoticeId != noticeInfo.noticeId) {
-                        _notice.value = noticeInfo
-                        settingsRepository.setLastNoticeId(noticeInfo.noticeId)
-                    }
-                }
-            } else {
-                _notice.value = null
-            }
-        }.onFailure { e ->
-            Log.e(tag, "Failed to check notice", e)
-            Log.w(tag, "Failed to check notice", e)
-        }
-    }
-    
-    
-    /**
-     * 检查更新
-     * @param isAuto 是否为自动检查 (不显示"已是最新"提示)
-     */
-    fun checkUpdate(isAuto: Boolean = false) {
-        viewModelScope.launch {
-            checkUpdateInternal(isAuto)
-        }
-    }
-
-    private suspend fun checkUpdateInternal(
-        isAuto: Boolean
-    ) {
-        if (accountManager.isOfflineMode()) {
-            if (!isAuto) _error.value = "离线模式下无法检查后台更新"
-            return
-        }
-        if (subscriptionDataLoader.updateInfo == null) {
-            return
-        }
-            // 节流检查 (自动检查可跳过)
-            if (!isAuto) {
-                val now = System.currentTimeMillis()
-                if (now - lastCheckUpdateTime < THROTTLE_INTERVAL) {
-                    _error.value = "操作过于频繁，请稍后再试"
-                    return
-                }
-                lastCheckUpdateTime = now
-            }
-            
-            val result = subscriptionDataLoader.updateInfo?.let { Result.success(it) }
-                ?: Result.failure<UpdateInfo>(IllegalStateException("backend update metadata unavailable"))
-            result.onSuccess { info ->
-                val currentVersionCode = getApplication<Application>().packageManager
-                    .getPackageInfo(getApplication<Application>().packageName, 0)
-                    .let { 
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                            it.longVersionCode.toInt()
-                        } else {
-                            @Suppress("DEPRECATION")
-                            it.versionCode
-                        }
-                    }
-                
-                if (info.versionCode > currentVersionCode) {
-                    val isIgnoredOptionalUpdate = isAuto &&
-                        info.isForce != 1 &&
-                        settingsRepository.ignoredUpdateVersionCode.first() == info.versionCode
-
-                    if (isIgnoredOptionalUpdate) {
-                        _updateInfo.value = null
-                    } else {
-                        _updateInfo.value = info
-                    }
-                } else {
-                    if (!isAuto) {
-                        _error.value = "已是最新版本"
-                    }
-                }
-
-            }.onFailure { e ->
-                Log.e(tag, "Failed to check update", e)
-                Log.w(tag, "Failed to check update", e)
-            }
-    }
-    
-    // 下载状态
-    val downloadState = DownloadManager.downloadState
-    
-    /**
-     * 打开下载链接 (现在改为应用内下载)
-     */
-    fun openDownloadUrl() {
-        updateInfo.value?.let { info ->
-            // 使用 DownloadManager 检查文件是否已下载且有效
-            val existingArtifact = DownloadManager.isApkReady(
-                getApplication(),
-                info.version,
-                updateDownloadDirectoryUri.value
-            )
-            if (existingArtifact != null) {
-                // 此处强制执行 installApk 逻辑
-                installApk()
-                return
-            }
-            
-            viewModelScope.launch {
-                DownloadManager.startDownload(
-                    info.downloadUrl,
-                    getApplication(),
-                    info.version,
-                    updateDownloadDirectoryUri.value
-                )
-            }
-        }
-    }
-    
-    fun pauseDownload() {
-        DownloadManager.pauseDownload()
-    }
-    
-    fun resumeDownload() {
-        updateInfo.value?.let { info ->
-            viewModelScope.launch {
-                DownloadManager.startDownload(
-                    info.downloadUrl,
-                    getApplication(),
-                    info.version,
-                    updateDownloadDirectoryUri.value
-                )
-            }
-        }
-    }
-    
-    fun retryDownload() {
-         updateInfo.value?.let { info ->
-            viewModelScope.launch {
-                DownloadManager.startDownload(
-                    info.downloadUrl,
-                    getApplication(),
-                    info.version,
-                    updateDownloadDirectoryUri.value
-                )
-            }
-        }
-    }
-    
-    fun cancelDownload() {
-        DownloadManager.cancelDownload()
-    }
-    
-    fun installApk() {
-        val context = getApplication<Application>()
-        val targetArtifact = updateInfo.value?.let { info ->
-            DownloadManager.isApkReady(
-                context,
-                info.version,
-                updateDownloadDirectoryUri.value
-            )
-        }
-            ?: downloadState.value.file?.let { DownloadArtifact(file = it) }
-            ?: downloadState.value.fileUri?.let { DownloadArtifact(uri = it) }
-
-        targetArtifact?.let { artifact ->
-            try {
-                val uri = artifact.uri ?: artifact.file?.takeIf { it.exists() }?.let { file ->
-                    androidx.core.content.FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        file
-                    )
-                } ?: run {
-                    _error.value = "安装文件丢失，请重新下载"
-                    DownloadManager.resetState()
-                    return
-                }
-
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/vnd.android.package-archive")
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    clipData = ClipData.newRawUri("APK", uri)
-                }
-                // 交给系统安装器打开 APK，不在应用内请求“安装未知来源”设置。
-                context.startActivity(intent)
-                // 安装器打开后消费本次完成事件，避免返回应用或重建主界面时重复弹出。
-                // 不删除安装包，用户仍可通过手动检查更新再次打开它。
-                DownloadManager.resetState()
-            } catch (e: Exception) {
-                Log.e(tag, "Install failed", e)
-                _error.value = "无法打开系统安装程序: ${e.message}"
-                // 即使系统没有可用的安装器，也不要让完成状态持续触发重复弹窗。
-                DownloadManager.resetState()
-            }
-        } ?: run {
-             _error.value = "找不到安装包，请重试下载"
-             DownloadManager.resetState()
-        }
-    }
-    
-    fun dismissNotice() {
-        _notice.value = null
-    }
-    
-    fun dismissUpdate() {
-        _updateInfo.value = null
-    }
-
-    fun skipUpdate(ignoreCurrentVersion: Boolean) {
-        val info = _updateInfo.value ?: return
-        _updateInfo.value = null
-        if (ignoreCurrentVersion && info.isForce != 1) {
-            viewModelScope.launch {
-                settingsRepository.setIgnoredUpdateVersionCode(info.versionCode)
-                Log.i(tag, "Ignored optional update: versionCode=${info.versionCode}")
-            }
-        }
-    }
-
-    fun setUpdateDownloadDirectoryUri(uri: String?) {
-        viewModelScope.launch {
-            settingsRepository.setUpdateDownloadDirectoryUri(uri)
-        }
-    }
-    
     fun clearError() {
         _error.value = null
     }
@@ -3077,19 +2826,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _isSyncingAccount.value = false
             }
         }
-    }
-
-    private fun isNoticeWithinTimeRange(noticeInfo: NoticeInfo): Boolean {
-        val now = Instant.now()
-        val startAt = noticeInfo.startAt.toInstantOrNull()
-        val endAt = noticeInfo.endAt.toInstantOrNull()
-        return (startAt == null || !now.isBefore(startAt)) &&
-            (endAt == null || !now.isAfter(endAt))
-    }
-
-    private fun String.toInstantOrNull(): Instant? {
-        if (isBlank()) return null
-        return runCatching { OffsetDateTime.parse(this).toInstant() }.getOrNull()
     }
 
     fun bindEmailPassword(
@@ -3205,8 +2941,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
             }
             refreshUserSubscriptionGroupsOnStartup(autoRefreshOverrides)
-            checkNotice()
-            checkUpdateInternal(isAuto = true)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {

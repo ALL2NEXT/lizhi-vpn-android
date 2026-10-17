@@ -69,9 +69,7 @@
             </button>
              <div id="app-settings-subnav" class="nav-submenu" role="group" aria-label="应用设置子菜单">
                <button class="tab-button" role="tab" type="button" data-tab="subscriptions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16v2L4 8V6zm2-4h12v2H6V2zm14 8H4c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2zm0 10H4v-8h16v8zm-10-7.27v6.53L16 16l-6-3.27z"/></svg><span>订阅分组</span></button>
-               <button class="tab-button" role="tab" type="button" data-tab="app-update"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17 1.01 7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-1-6h-3V8h-2v5H8l4 4 4-4z"/></svg><span>版本更新</span></button>
                <button class="tab-button" role="tab" type="button" data-tab="about-page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg><span>关于页</span></button>
-               <button class="tab-button" role="tab" type="button" data-tab="notice"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10v4h3l11 5V5L6 10H3zm5 5.2 7 3.2v-2.2l-7-3.2v2.2zm12-5.7v5a3 3 0 0 0 0-5z"/></svg><span>公告</span></button>
             </div>
           </div>
           <div class="nav-group" data-nav-group="backend-settings">
@@ -511,24 +509,6 @@
     </dialog>
    </section>
 
-  <section class="card tab-panel" role="tabpanel" data-panel="app-update">
-    <div class="dashboard-heading settings-page-heading">
-      <h2>版本更新</h2>
-      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="app-update" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('app-update')" disabled>保存配置</button></div></div>
-    </div>
-    <div class="settings-sections">
-      <section class="settings-section">
-        <label class="check"><input id="appUpdateEnabled" type="checkbox">启用版本更新提示</label>
-        <div class="grid">
-          <div class="field"><label>版本名称<input id="appVersion" type="text" placeholder="1.1.0"></label></div>
-          <div class="field"><label>版本号<input id="appVersionCode" type="number" min="1" step="1"></label></div>
-          <div class="field"><label>APK 下载地址<input id="appDownloadUrl" type="url" placeholder="https://example.com/app.apk"></label></div>
-        </div>
-        <div class="field"><label>更新说明<textarea id="appChangelog"></textarea></label></div>
-        <label class="check"><input id="appForce" type="checkbox">强制更新</label>
-      </section>
-    </div>
-  </section>
   <section class="card tab-panel" role="tabpanel" data-panel="about-page">
     <div class="dashboard-heading settings-page-heading">
       <h2>关于页</h2>
@@ -607,67 +587,6 @@
     </div>
     <div id="registrationCodeUsagesTable" class="traffic-detail-wrap"><div class="loading-state">正在读取使用记录</div></div>
   </dialog>
-  <section class="card tab-panel" role="tabpanel" data-panel="notice">
-    <div class="dashboard-heading settings-page-heading">
-      <div><h2>公告</h2><p>设置客户端登录后展示的公告内容和时间。</p></div>
-      <div class="settings-page-save"><span class="settings-page-save-status" data-settings-save-status role="status" aria-live="polite">所有修改已保存</span><div class="settings-page-save-actions"><button class="secondary" type="button" data-settings-discard="notice" disabled>放弃修改</button><button type="button" data-settings-save onclick="pushSection('notice')" disabled>保存并发布</button></div></div>
-    </div>
-    <div class="notice-settings-layout">
-      <div class="notice-editor">
-        <section class="notice-editor-section">
-          <div class="notice-section-heading">
-            <div><h3>发布状态</h3><p>只有启用且处于发布时间内的公告才会发送到客户端。</p></div>
-            <span id="noticeStatusBadge" class="notice-status-badge" role="status" aria-live="polite">未启用</span>
-          </div>
-          <label class="check notice-enable-toggle"><input id="noticeEnabled" type="checkbox"><span>启用公告</span></label>
-        </section>
-
-        <section class="notice-editor-section">
-          <div class="notice-section-heading"><div><h3>公告内容</h3><p>客户端会以弹窗展示标题和正文。</p></div></div>
-          <div class="field"><label for="noticeTitle">标题<input id="noticeTitle" type="text" maxlength="120" placeholder="例如：服务维护通知"></label></div>
-          <div class="field"><label for="noticeContent">正文<textarea id="noticeContent" rows="8" placeholder="填写公告内容，支持普通文本和 HTML。"></textarea></label><small class="hint">支持普通文本、常见 HTML 格式、链接和图片。</small></div>
-        </section>
-
-        <section class="notice-editor-section">
-          <div class="notice-section-heading"><div><h3>发布时间</h3><p>时间按北京时间执行。</p></div></div>
-          <fieldset class="notice-choice-fieldset">
-            <legend>开始方式</legend>
-            <div class="notice-choice-grid">
-              <label class="notice-choice"><input id="noticeStartImmediate" type="radio" name="noticeScheduleMode" value="immediate" checked><span><strong>立即发布</strong><small>保存后生效，客户端下次登录时展示。</small></span></label>
-              <label class="notice-choice"><input id="noticeStartScheduled" type="radio" name="noticeScheduleMode" value="scheduled"><span><strong>定时发布</strong><small>到设定时间后，客户端下次登录时展示。</small></span></label>
-            </div>
-          </fieldset>
-          <div class="notice-time-grid">
-            <div id="noticeStartField" class="field" hidden><label for="noticeStartAt">开始时间<input id="noticeStartAt" type="datetime-local"></label></div>
-            <div class="field"><label for="noticeEndAt">结束时间 <span class="notice-optional">可选</span><input id="noticeEndAt" type="datetime-local"></label></div>
-          </div>
-          <small class="hint">结束时间留空表示持续展示，直到手动停用。</small>
-        </section>
-
-        <section class="notice-editor-section">
-          <div class="notice-section-heading"><div><h3>展示频率</h3><p>展示记录保存在客户端本地，不会跨设备同步。</p></div></div>
-          <fieldset class="notice-choice-fieldset">
-            <legend>客户端何时弹出</legend>
-            <div class="notice-choice-grid">
-              <label class="notice-choice"><input id="noticeShowOnce" type="radio" name="noticeDisplayMode" value="once" checked><span><strong>每个客户端安装展示一次</strong><small>本机看过后不再重复弹出，换设备会再次展示。</small></span></label>
-              <label class="notice-choice"><input id="noticeShowEveryLogin" type="radio" name="noticeDisplayMode" value="every-login"><span><strong>每次登录后展示</strong><small>用户每次登录客户端都会看到。</small></span></label>
-            </div>
-          </fieldset>
-          <label id="noticeReannounceOption" class="check notice-reannounce-option" hidden><input id="noticeNotifyOnEdit" type="checkbox"><span><strong>本次发布后重新提醒已看过的设备</strong><small>系统会生成新的公告版本，已看过旧版本的设备也会再次弹出。</small></span></label>
-          <small id="noticeReannounceHint" class="hint">编辑已发布公告时，默认保留当前版本；已看过的设备不会因文字修改而再次弹窗。</small>
-          <input id="noticeId" type="hidden">
-        </section>
-      </div>
-
-      <aside class="notice-preview-card" aria-label="公告预览">
-        <div class="notice-preview-heading"><div><h3>客户端预览</h3><p>预览标题和正文的显示效果。</p></div><span>弹窗</span></div>
-        <div class="notice-preview-device"><div class="notice-preview-camera" aria-hidden="true"></div><iframe id="noticePreviewFrame" title="公告弹窗预览" sandbox=""></iframe></div>
-        <small class="hint">预览用于确认内容排版，实际尺寸会随客户端屏幕调整。</small>
-      </aside>
-    </div>
-   </section>
-
-
   <section class="card tab-panel" role="tabpanel" data-panel="system-logs">
     <div class="dashboard-heading system-logs-heading">
       <div class="system-logs-title">

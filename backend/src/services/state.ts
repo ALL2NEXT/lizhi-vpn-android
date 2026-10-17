@@ -2,7 +2,6 @@ import type { Env } from "../types/env.ts";
 import type {
   AppState,
   JsonObject,
-  Notice,
   Settings,
   SubscriptionAccountStatus,
   SubscriptionGroup,
@@ -13,7 +12,6 @@ import type {
 
 import { DEFAULT_STATE, LEGACY_STATE_KEY, STATE_KEY } from "../config.ts";
 import { normalizeAccountType } from "../domain/account.ts";
-import { beijingTimestamp } from "../domain/time.ts";
 import { cleanText, parseFlag, plainObject } from "../lib/values.ts";
 import {
   loadSubscriptionGroups,
@@ -265,55 +263,9 @@ export function normalizeState(input: unknown): AppState {
   return {
     version: 2,
     subscriptionGroups,
-    notice: normalizeNotice(value.notice),
-    appUpdate: plainObject(value.appUpdate) ? value.appUpdate : null,
     settings: normalizeSettings(value.settings),
     ...(value.updatedAt ? { updatedAt: String(value.updatedAt) } : {}),
   };
-}
-
-export function normalizeNotice(value: unknown): Notice | null {
-  if (!plainObject(value)) return null;
-  const startAt = normalizeNoticeTimestamp(value.startAt, "start_at");
-  const endAt = normalizeNoticeTimestamp(value.endAt, "end_at");
-  if (startAt && endAt && Date.parse(startAt) > Date.parse(endAt)) {
-    throw new Error("invalid_notice_time_order");
-  }
-  return {
-    hasNotice: parseFlag(value.hasNotice, false),
-    title: cleanText(value.title),
-    content: cleanText(value.content),
-    noticeId: cleanText(value.noticeId),
-    showOnce: parseFlag(value.showOnce, true),
-    startAt,
-    endAt,
-  };
-}
-
-export function normalizeNoticeTimestamp(value: unknown, field: string) {
-  const text = cleanText(value);
-  if (!text) return "";
-  const localMinute = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text);
-  const localSecond = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(text);
-  const candidate = localMinute
-    ? `${text}:00+08:00`
-    : localSecond
-      ? `${text}+08:00`
-      : text;
-  const date = new Date(candidate);
-  if (!Number.isFinite(date.getTime())) {
-    throw new Error(`invalid_notice_${field}`);
-  }
-  return beijingTimestamp(date);
-}
-
-export function visibleNotice(notice: Notice | null, now = Date.now()) {
-  if (!notice || !notice.hasNotice) return null;
-  const startAt = Date.parse(notice.startAt || "");
-  const endAt = Date.parse(notice.endAt || "");
-  if (Number.isFinite(startAt) && now < startAt) return null;
-  if (Number.isFinite(endAt) && now > endAt) return null;
-  return notice;
 }
 
 export function normalizeSettings(value: unknown): Settings {

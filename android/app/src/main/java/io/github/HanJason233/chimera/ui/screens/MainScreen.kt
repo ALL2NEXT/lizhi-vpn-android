@@ -29,7 +29,6 @@ import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.*
-import io.github.HanJason233.chimera.ui.dialogs.*
 import io.github.HanJason233.chimera.ui.theme.*
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import io.github.HanJason233.chimera.platform.LauncherIdentityPresets
@@ -83,8 +82,6 @@ fun MainScreen(
     val userSubscriptionGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
-    val notice by viewModel.notice.collectAsStateWithLifecycle()
-    val backendSettings by viewModel.backendSettings.collectAsStateWithLifecycle()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
 
@@ -373,15 +370,5 @@ fun MainScreen(
             }
         )
     }
-
-    // 通知弹窗
-    notice?.let { noticeInfo ->
-        NoticeDialog(
-            notice = noticeInfo,
-            onDismiss = { viewModel.dismissNotice() }
-        )
-    }
-
-    UpdateFlowHost(viewModel = viewModel, websiteUrl = backendSettings.websiteUrl)
 
 }

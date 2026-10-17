@@ -94,9 +94,6 @@
    if (error === 'local_subscription_cors_or_network_error') return '本地获取失败：浏览器跨域或网络策略阻止访问，可切换为服务器获取';
     if (error === 'subscription_changed_or_disabled') return '订阅已停用或已修改，请刷新管理页后重试';
     if (error === 'subscription_not_found') return '订阅已不存在，请刷新管理页后重试';
-   if (error === 'invalid_notice_start_at') return '公告开始时间格式无效';
-   if (error === 'invalid_notice_end_at') return '公告结束时间格式无效';
-   if (error === 'invalid_notice_time_order') return '公告结束时间不能早于开始时间';
    if (error === 'external_subscription_url_required') return '请填写外部订阅地址';
    if (String(error || '').indexOf('external_subscription_http_') === 0) {
      return '外部订阅接口请求失败（HTTP ' + String(error).slice('external_subscription_http_'.length) + '）';

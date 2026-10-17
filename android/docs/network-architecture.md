@@ -7,7 +7,6 @@ network/
 ├── NetworkClient.kt
 ├── ApiService.kt
 ├── account/                 # 账号注册、登录、绑定和流量上报
-├── download/                # APK 下载与续传
 ├── location/                # 节点地址与地理位置查询
 ├── subscription/
 │   ├── SubscriptionParser.kt

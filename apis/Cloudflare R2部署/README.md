@@ -304,7 +304,7 @@ sync-apk-to-r2.yml解决了几个问题：
 
 ## 六、其他文件处理
 
-backupNodes、update、notice文件需要更新直接扔到R2对象存储的apis目录即可！
+backupNodes文件需要更新时直接上传到R2对象存储的apis目录即可！
 
 nodes文件由于需要爬取节点信息并更新，我已经编写好了upload_r2.sh这个shell脚本，把里面需要的信息填写完毕即可
 

@@ -24,7 +24,6 @@ export interface RouteDependencies {
   deduplicateSubscriptionContent: typeof subscriptions.deduplicateSubscriptionContent;
   readState: typeof state.readState;
   readSubscriptionContent: typeof subscriptionStore.readSubscriptionContent;
-  visibleNotice: typeof state.visibleNotice;
   publicClientSettings: typeof state.publicClientSettings;
   corsHeaders: typeof responses.corsHeaders;
   json: typeof responses.json;

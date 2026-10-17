@@ -27,7 +27,6 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.Button
@@ -79,8 +78,6 @@ internal fun AccountSettingsOverviewContent(
     onOpenVip: () -> Unit,
     onOpenTraffic: () -> Unit,
     onOpenClientInfo: () -> Unit,
-    canCheckUpdate: Boolean,
-    onCheckUpdate: () -> Unit,
     onAbout: () -> Unit,
     onSwitchAccount: () -> Unit,
     onDeleteAccount: () -> Unit
@@ -182,15 +179,6 @@ internal fun AccountSettingsOverviewContent(
             fontSize = 13.sp
         )
         AccountSettingsCard {
-            if (canCheckUpdate) {
-                SettingsLinkRow(
-                    icon = Icons.Outlined.SystemUpdate,
-                    title = "检查更新",
-                    subtitle = "检查客户端新版本",
-                    onClick = onCheckUpdate
-                )
-                SettingsDivider(startInset = 54.dp)
-            }
             SettingsLinkRow(
                 icon = Icons.Outlined.Info,
                 title = "关于",
@@ -287,14 +275,6 @@ internal fun OfflineAccountSettingsOverviewContent(
             fontSize = 13.sp
         )
         AccountSettingsCard {
-            SettingsLinkRow(
-                icon = Icons.Outlined.SystemUpdate,
-                title = "检查更新",
-                subtitle = "离线模式下不可用",
-                enabled = false,
-                onClick = {}
-            )
-            SettingsDivider(startInset = 54.dp)
             SettingsLinkRow(
                 icon = Icons.Outlined.Info,
                 title = "关于",

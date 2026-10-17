@@ -53,8 +53,6 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
   const unregisteredDevice = "c".repeat(64);
   const content = "vless://id@example.com:443#test";
   const state = {
-    notice: { hasNotice: true, title: "公告", content: "测试公告" },
-    appUpdate: { versionName: "2.0.0" },
     settings: { websiteUrl: "https://example.com" },
     subscriptionGroups: [
       { id: "human", allowedIdentityTypes: ["human"], subscriptions: [{ id: "11", name: "真人线路", content }] },
@@ -96,9 +94,9 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
         const download = await call(new URL(source.url).pathname + `?deviceId=${result === human ? humanDevice : robotDevice}`);
         assert.equal(download.data, content);
       }
-      assert.equal(result.notice.title, "公告");
+      assert.equal(Object.hasOwn(result, "notice"), false);
+      assert.equal(Object.hasOwn(result, "appUpdate"), false);
       assert.equal(result.settings.websiteUrl, "https://example.com");
-      assert.equal(result.appUpdate.versionName, "2.0.0");
     }
     await call(`/api/subscription/22?deviceId=${humanDevice}`, { status: 403 });
     await call(`/api/subscription/11?deviceId=${robotDevice}`, { status: 403 });
@@ -125,7 +123,7 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
     await usersDb.prepare("UPDATE users_mb SET status = 'active' WHERE id = (SELECT user_id FROM user_devices_mb WHERE device_id = ?)").bind(humanDevice).run();
   });
 
-  await t.test("获取列表后权限被撤销，下载仍拒绝；空列表保留公告和设置", async () => {
+  await t.test("获取列表后权限被撤销仍拒绝下载，空列表仍返回客户端设置", async () => {
     assert.ok((await list(humanDevice)).subscriptions.length > 0);
     const updated = { ...state, subscriptionGroups: state.subscriptionGroups.map((group) => ({ ...group, allowedAccountTypes: [] })) };
     await call("/local-admin/api/state", { method: "PUT", admin: true, body: updated });
@@ -133,8 +131,8 @@ test("客户端按设备获取可用订阅，下载时再次校验完整权限",
     await call(`/api/subscription/lb/balanced?deviceId=${humanDevice}`, { status: 403 });
     const empty = await list(humanDevice);
     assert.deepEqual(empty.subscriptions, []);
-    assert.equal(empty.notice.title, "公告");
     assert.equal(empty.settings.websiteUrl, "https://example.com");
-    assert.equal(empty.appUpdate.versionName, "2.0.0");
+    assert.equal(Object.hasOwn(empty, "notice"), false);
+    assert.equal(Object.hasOwn(empty, "appUpdate"), false);
   });
 });

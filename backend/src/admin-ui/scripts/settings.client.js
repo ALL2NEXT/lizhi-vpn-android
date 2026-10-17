@@ -384,9 +384,6 @@ function updateSubscriptionAppVersionOptions() {
   const host = el('subscriptionAppVersionOptions');
   if (!host) return;
   const versions = new Set();
-  const versionInput = document.getElementById('appVersion');
-  const currentVersion = String(versionInput && versionInput.value || currentState && currentState.appUpdate && currentState.appUpdate.version || '').trim();
-  if (currentVersion) versions.add(currentVersion);
   getSubscriptionGroupRows().forEach(function(group) {
     ['minAppVersion', 'maxAppVersion'].forEach(function(field) {
       const value = String(group.querySelector('[data-field="' + field + '"]').value || '').trim();
@@ -1151,15 +1148,6 @@ function fillState(state, section) {
       setValue('githubUrl', settings.githubUrl);
       setValue('telegramUrl', settings.telegramUrl);
     }
-    if (!section || section === 'app-update') {
-      const update = currentState.appUpdate || {};
-      checked('appUpdateEnabled', Boolean(currentState.appUpdate));
-      setValue('appVersion', update.version);
-      setValue('appVersionCode', update.versionCode);
-      setValue('appDownloadUrl', update.downloadUrl);
-      setValue('appChangelog', update.changelog);
-      checked('appForce', update.is_force === 1 || update.isForce === 1);
-    }
     if (!section || section === 'registration-control') {
       const registrationMode = settings.registrationEnabled === false
         ? 'closed'
@@ -1170,146 +1158,12 @@ function fillState(state, section) {
       loadRegistrationCodes();
       loadVipCodes();
     }
-    if (!section || section === 'notice') {
-      const notice = currentState.notice || {};
-      checked('noticeEnabled', Boolean(currentState.notice && notice.hasNotice !== false));
-      setValue('noticeTitle', notice.title);
-      setValue('noticeId', notice.noticeId);
-      setValue('noticeStartAt', noticeDateTimeValue(notice.startAt));
-      setValue('noticeEndAt', noticeDateTimeValue(notice.endAt));
-      setValue('noticeContent', notice.content);
-      checked('noticeShowOnce', notice.showOnce !== false);
-      checked('noticeShowEveryLogin', notice.showOnce === false);
-      checked('noticeStartScheduled', Boolean(notice.startAt));
-      checked('noticeStartImmediate', !notice.startAt);
-      checked('noticeNotifyOnEdit', false);
-      updateNoticeEditor();
-    }
   } finally {
     settingsFilling = false;
   }
   if (!section) resetSettingsDrafts();
   updateSettingsSaveControls();
   if (!section || section === 'subscriptions') loadSubscriptionTraffic();
-}
-function noticeDateTimeValue(data) {
-  const text = String(data == null ? '' : data).trim();
-  const match = text.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
-  return match ? match[1] : '';
-}
-function noticeTimeEpoch(value) {
-  const text = String(value == null ? '' : value).trim();
-  if (!text) return null;
-  const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text) ? text + ':00+08:00' : text;
-  const timestamp = Date.parse(normalized);
-  return Number.isFinite(timestamp) ? timestamp : NaN;
-}
-function selectedNoticeScheduleMode() {
-  const selected = document.querySelector('input[name="noticeScheduleMode"]:checked');
-  return selected ? selected.value : 'immediate';
-}
-function updateNoticeEditor() {
-  const startField = el('noticeStartField');
-  const scheduled = selectedNoticeScheduleMode() === 'scheduled';
-  if (startField) startField.hidden = !scheduled;
-  const reannounceOption = el('noticeReannounceOption');
-  const hasSavedId = Boolean(value('noticeId'));
-  const showOnce = el('noticeShowOnce').checked;
-  const enabled = el('noticeEnabled').checked;
-  const canReannounce = enabled && hasSavedId && showOnce;
-  if (reannounceOption) reannounceOption.hidden = !canReannounce;
-  if (!canReannounce) checked('noticeNotifyOnEdit', false);
-  const reannounceHint = el('noticeReannounceHint');
-  if (reannounceHint) {
-    reannounceHint.textContent = !enabled
-      ? '停用时保存为草稿，不会发送到客户端。'
-      : hasSavedId && showOnce
-      ? '保留当前版本时，已看过的设备不会因文字修改而再次弹窗。需要提醒时，勾选上方选项。'
-      : showOnce
-        ? '首次发布时系统会自动创建公告版本。客户端本地只记录最近看过的版本。'
-        : '每次登录后都会弹出公告；切换到“每个客户端安装展示一次”后，本机会按当前公告版本判断是否已看过。';
-  }
-  updateNoticeStatus();
-  updateNoticePreview();
-}
-function updateNoticeStatus() {
-  const badge = el('noticeStatusBadge');
-  if (!badge) return;
-  let status = {text: '未启用', type: 'inactive'};
-  if (el('noticeEnabled').checked) {
-    const title = value('noticeTitle');
-    const content = String(el('noticeContent').value || '').trim();
-    const startValue = String(el('noticeStartAt').value || '').trim();
-    const endValue = String(el('noticeEndAt').value || '').trim();
-    const start = noticeTimeEpoch(startValue);
-    const end = noticeTimeEpoch(endValue);
-    if (!title || !content) {
-      status = {text: '待完善内容', type: 'warning'};
-    } else if (selectedNoticeScheduleMode() === 'scheduled' && !startValue) {
-      status = {text: '待设置开始时间', type: 'warning'};
-    } else if (Number.isNaN(start) || Number.isNaN(end)) {
-      status = {text: '时间格式有误', type: 'warning'};
-    } else if (start != null && end != null && end < start) {
-      status = {text: '时间范围有误', type: 'warning'};
-    } else if (end != null && Date.now() > end) {
-      status = {text: '已结束', type: 'ended'};
-    } else if (selectedNoticeScheduleMode() === 'scheduled' && start != null && Date.now() < start) {
-      status = {text: '待开始', type: 'scheduled'};
-    } else {
-      status = {text: '展示中', type: 'active'};
-    }
-  }
-  badge.textContent = status.text;
-  badge.className = 'notice-status-badge ' + status.type;
-}
-function noticePreviewEscape(value) {
-  return String(value == null ? '' : value).replace(/[&<>"']/g, function(character) {
-    return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[character];
-  });
-}
-function updateNoticePreview() {
-  const frame = el('noticePreviewFrame');
-  if (!frame) return;
-  const title = String(el('noticeTitle').value || '').trim() || '公告';
-  const content = String(el('noticeContent').value || '');
-  const containsHtml = /<\s*\/?\s*[a-zA-Z][^>]*>/.test(content);
-  const body = containsHtml ? content : noticePreviewEscape(content).replace(/\r?\n/g, '<br>');
-  frame.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>' +
-    'body{margin:0;padding:22px;color:#334155;font:15px/1.65 system-ui,"Noto Sans SC",sans-serif;overflow-wrap:anywhere}' +
-    'h1{margin:0 0 16px;color:#172238;font-size:20px;line-height:1.35;text-align:center}' +
-    'img{max-width:100%;height:auto}a{color:#1a73e8}p{margin:0 0 12px}' +
-    '</style></head><body><h1>' + noticePreviewEscape(title) + '</h1><main>' + body + '</main></body></html>';
-}
-function initializeNoticeSettings() {
-  const panel = document.querySelector('[data-panel="notice"]');
-  if (!panel) return;
-  panel.addEventListener('input', updateNoticeEditor);
-  panel.addEventListener('change', function(event) {
-    if (event.target && event.target.name === 'noticeScheduleMode' && selectedNoticeScheduleMode() === 'immediate') {
-      el('noticeStartAt').value = '';
-    }
-    updateNoticeEditor();
-  });
-  updateNoticeEditor();
-  window.setInterval(updateNoticeStatus, 60 * 1000);
-}
-function createNoticeId() {
-  const randomId = window.crypto && typeof window.crypto.randomUUID === 'function'
-    ? window.crypto.randomUUID()
-    : Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
-  return 'notice_' + randomId;
-}
-function validateNotice(notice) {
-  if (!notice || !notice.hasNotice) return '';
-  if (!notice.title) return '请填写公告标题';
-  if (!notice.content) return '请填写公告正文';
-  if (selectedNoticeScheduleMode() === 'scheduled' && !notice.startAt) return '请选择公告开始时间';
-  const start = noticeTimeEpoch(notice.startAt);
-  const end = noticeTimeEpoch(notice.endAt);
-  if (Number.isNaN(start)) return '公告开始时间格式无效';
-  if (Number.isNaN(end)) return '公告结束时间格式无效';
-  if (start != null && end != null && end < start) return '公告结束时间不能早于开始时间';
-  return '';
 }
 function readSubscriptionSource(row, index) {
     const sourceType = row.querySelector('[data-field="sourceType"]').value;
@@ -1358,22 +1212,6 @@ function readSubscriptionGroups() {
 function formState() {
   const subscriptionGroups = readSubscriptionGroups();
   const registrationMode = selectedRegistrationMode();
-  const notice = {
-    hasNotice: el('noticeEnabled').checked,
-    title: value('noticeTitle'),
-    content: value('noticeContent'),
-    noticeId: value('noticeId'),
-    showOnce: el('noticeShowOnce').checked,
-    startAt: value('noticeStartAt'),
-    endAt: value('noticeEndAt')
-  };
-  const appUpdate = el('appUpdateEnabled').checked ? {
-    version: value('appVersion'),
-    versionCode: Number(value('appVersionCode') || 0),
-    downloadUrl: value('appDownloadUrl'),
-    changelog: value('appChangelog'),
-    is_force: el('appForce').checked ? 1 : 0
-  } : null;
   return {
     subscriptionGroups: subscriptionGroups,
     settings: {
@@ -1383,10 +1221,8 @@ function formState() {
       githubUrl: value('githubUrl'),
       telegramUrl: value('telegramUrl'),
       registrationEnabled: registrationMode !== 'closed',
-      requireAdminRegistrationCode: registrationMode === 'code',
-      },
-    notice: notice,
-    appUpdate: appUpdate
+      requireAdminRegistrationCode: registrationMode === 'code'
+    }
   };
 }
 function selectedRegistrationMode() {
@@ -1591,14 +1427,6 @@ async function pushSection(section) {
   updateSettingsSaveControls();
   try {
     const form = formState();
-    if (section === 'notice') {
-      const noticeError = validateNotice(form.notice);
-      if (noticeError) throw new Error(noticeError);
-      if (form.notice.hasNotice && (!form.notice.noticeId || (form.notice.showOnce && el('noticeNotifyOnEdit').checked))) {
-        form.notice.noticeId = createNoticeId();
-        setValue('noticeId', form.notice.noticeId);
-      }
-    }
     if (section === 'subscriptions') {
       const versionError = validateSubscriptionGroupVersions(form.subscriptionGroups);
       if (versionError) throw new Error(versionError);
@@ -1611,8 +1439,6 @@ async function pushSection(section) {
           githubUrl: form.settings.githubUrl,
           telegramUrl: form.settings.telegramUrl
         })
-      : section === 'app-update'
-        ? currentState.settings
       : section === 'registration-control'
         ? Object.assign({}, currentState.settings, {
           registrationEnabled: form.settings.registrationEnabled,
@@ -1621,9 +1447,7 @@ async function pushSection(section) {
         : currentState.settings;
     const state = {
       subscriptionGroups: section === 'subscriptions' ? form.subscriptionGroups : currentState.subscriptionGroups,
-      settings: settings,
-      notice: section === 'notice' ? form.notice : currentState.notice,
-      appUpdate: section === 'app-update' ? form.appUpdate : currentState.appUpdate
+      settings: settings
     };
     const response = await fetch(ADMIN_API_BASE + '/state', {
       method: 'PUT',
@@ -1661,6 +1485,5 @@ initializeActivityRange();
 initializeTrafficRange();
 initializeSubscriptionManager();
 initializeSettingsDrafts();
-initializeNoticeSettings();
 const subscriptionTabButton = document.querySelector('[data-tab="subscriptions"]');
 if (subscriptionTabButton) subscriptionTabButton.addEventListener('click', loadSubscriptionTraffic);

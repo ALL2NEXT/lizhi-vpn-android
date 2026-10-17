@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
-import io.github.HanJason233.chimera.ui.components.UpdateFlowHost
 import io.github.HanJason233.chimera.ui.dialogs.AboutDialog
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.network.NetworkClient
@@ -249,8 +248,6 @@ fun AccountSettingsScreen(
                         onOpenVip = { onOpenPage(AccountSettingsPage.VIP) },
                         onOpenTraffic = { onOpenPage(AccountSettingsPage.TRAFFIC) },
                         onOpenClientInfo = { onOpenPage(AccountSettingsPage.CLIENT_INFO) },
-                        canCheckUpdate = AppConfig.BACKEND_URL.isNotBlank(),
-                        onCheckUpdate = { viewModel.checkUpdate() },
                         onAbout = { showAboutDialog = true },
                         onSwitchAccount = {
                             switchEmail = ""
@@ -290,9 +287,6 @@ fun AccountSettingsScreen(
                 }
             }
         }
-    }
-    if (!offlineModeEnabled) {
-        UpdateFlowHost(viewModel = viewModel, websiteUrl = backendSettings.websiteUrl)
     }
     if (showAboutDialog) {
         val appIdentity = LauncherIdentityPresets.find(skinSettings.activeScheme.appIconPresetId)

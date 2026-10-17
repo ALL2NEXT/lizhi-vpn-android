@@ -2,49 +2,6 @@ package io.github.HanJason233.chimera.data.model
 
 import com.google.gson.annotations.SerializedName
 
-/**
- * 版本更新响应
- */
-data class UpdateInfo(
-    @SerializedName("version")
-    val version: String,
-    
-    @SerializedName("versionCode")
-    val versionCode: Int,
-    
-    @SerializedName("downloadUrl")
-    val downloadUrl: String,
-    
-    @SerializedName("changelog") val changelog: String,
-    @SerializedName("is_force") val isForce: Int = 0
-)
-
-/**
- * 通知公告响应
- */
-data class NoticeInfo(
-    @SerializedName("hasNotice")
-    val hasNotice: Boolean,
-    
-    @SerializedName("title")
-    val title: String = "",
-    
-    @SerializedName("content")
-    val content: String = "",
-    
-    @SerializedName("noticeId")
-    val noticeId: String = "",
-    
-    @SerializedName("showOnce")
-    val showOnce: Boolean = true,
-
-    @SerializedName("startAt")
-    val startAt: String = "",
-
-    @SerializedName("endAt")
-    val endAt: String = ""
-)
-
 /** App-facing settings delivered by the unified Worker backend. */
 data class BackendAppSettings(
     @SerializedName("websiteUrl")
