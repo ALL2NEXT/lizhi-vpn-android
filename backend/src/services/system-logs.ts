@@ -558,15 +558,30 @@ export async function deleteSystemLogs(env: Env, rawIds: unknown) {
   const ids = [...new Set(rawIds as number[])];
   const placeholders = ids.map(() => "?").join(", ");
   const db = await ensureUserSchema(env);
-  const results = await db.batch([
+  const relatedLogs = await db.prepare(
+    `SELECT DISTINCT request_id FROM system_logs_mb
+     WHERE id IN (${placeholders}) AND request_id <> ''`,
+  ).bind(...ids).all<{ request_id: string }>();
+  const requestIds = [...new Set((relatedLogs.results || [])
+    .map((row) => String(row.request_id || ""))
+    .filter(Boolean))];
+
+  const statements = [
     db.prepare(`DELETE FROM system_logs_mb WHERE id IN (${placeholders})`).bind(...ids),
-    db.prepare(
+  ];
+  if (requestIds.length > 0) {
+    const requestPlaceholders = requestIds.map(() => "?").join(", ");
+    // 只清理本次删除涉及、且已经没有关联日志的载荷，避免全表扫描。
+    statements.push(db.prepare(
       `DELETE FROM system_log_payload_parts_mb
-       WHERE NOT EXISTS (
-         SELECT 1 FROM system_logs_mb WHERE system_logs_mb.request_id = system_log_payload_parts_mb.request_id
-       )`,
-    ),
-  ]);
+       WHERE request_id IN (${requestPlaceholders})
+         AND NOT EXISTS (
+           SELECT 1 FROM system_logs_mb
+           WHERE system_logs_mb.request_id = system_log_payload_parts_mb.request_id
+         )`,
+    ).bind(...requestIds));
+  }
+  const results = await db.batch(statements);
   return Number(results[0]?.meta?.changes) || 0;
 }
 

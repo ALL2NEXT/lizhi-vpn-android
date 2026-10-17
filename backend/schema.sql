@@ -234,6 +234,9 @@ ON system_logs_mb(occurred_at DESC, id DESC);
 CREATE INDEX idx_system_logs_mb_category_occurred
 ON system_logs_mb(category, occurred_at DESC, id DESC);
 
+CREATE INDEX idx_system_logs_mb_request_id
+ON system_logs_mb(request_id);
+
 CREATE TABLE system_log_payload_parts_mb (
   request_id TEXT NOT NULL,
   occurred_at TEXT NOT NULL,

@@ -97,8 +97,10 @@ const USER_IP_LINKS_SCHEMA_STATEMENTS = [
 ];
 const SYSTEM_LOG_USER_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_user_occurred
   ON system_logs_mb(user_uid, occurred_at DESC, id DESC) WHERE user_uid <> ''`;
+const SYSTEM_LOG_REQUEST_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_request_id
+  ON system_logs_mb(request_id)`;
 
-export const USER_SCHEMA_VERSION = 21;
+export const USER_SCHEMA_VERSION = 22;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -268,6 +270,7 @@ export const USER_SCHEMA_STATEMENTS = [
     ON system_logs_mb(occurred_at DESC, id DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_category_occurred
     ON system_logs_mb(category, occurred_at DESC, id DESC)`,
+  SYSTEM_LOG_REQUEST_INDEX,
   SYSTEM_LOG_PAYLOADS_SCHEMA,
   SYSTEM_LOG_PAYLOADS_INDEX,
   SYSTEM_LOG_USER_INDEX,
@@ -493,6 +496,9 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
   ],
   21: [
     `ALTER TABLE system_logs_mb DROP COLUMN level`,
+  ],
+  22: [
+    SYSTEM_LOG_REQUEST_INDEX,
   ],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
