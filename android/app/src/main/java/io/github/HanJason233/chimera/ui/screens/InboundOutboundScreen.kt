@@ -218,7 +218,6 @@ fun InboundScreen(
         }
     }
 }
-
 /** 只展示核心实际的出站对象；节点选择仍由主页节点列表负责。 */
 @Composable
 fun OutboundScreen(
@@ -249,7 +248,6 @@ fun OutboundScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             CoreSection(title = "核心出站") {
-                OutboundValueRow("当前代理出站", currentNode?.name ?: "未选择节点")
                 Text(
                     text = "局域网入站会直接复用当前代理出站，不会再次经过本机 TUN。",
                     fontSize = 13.sp,
@@ -898,27 +896,5 @@ private fun InboundCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-    }
-}
-
-@Composable
-private fun OutboundValueRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium
-        )
     }
 }
