@@ -7,6 +7,8 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +60,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
+import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
+import io.github.HanJason233.chimera.data.model.FailoverRuntimeStatus
+import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
@@ -219,6 +226,9 @@ fun OutboundScreen(
     onBack: () -> Unit
 ) {
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
+    val failoverSettings by viewModel.failoverSettings.collectAsStateWithLifecycle()
+    val failoverStatus by viewModel.failoverRuntimeStatus.collectAsStateWithLifecycle()
+    val availableNodes by viewModel.allWarehouseNodes.collectAsStateWithLifecycle()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
@@ -268,11 +278,331 @@ fun OutboundScreen(
                     onAdapt = viewModel::adaptHysteriaBandwidth
                 )
             }
+            CoreSection(title = "故障转移") {
+                FailoverDetectionCard(
+                    settings = failoverSettings.detection,
+                    runtimeStatus = failoverStatus,
+                    onEnabledChange = viewModel::setFailoverDetectionEnabled,
+                    onSave = viewModel::setFailoverDetection
+                )
+                FailoverTransferCard(
+                    settings = failoverSettings.transfer,
+                    currentNodeId = currentNode?.id,
+                    nodes = availableNodes,
+                    onChange = viewModel::setFailoverTransferNodes
+                )
+            }
         }
     }
 }
 
-/** Hy2 参数只作用于对应的核心出站，集中放在出站区域避免误认为入站参数。 */
+/** Runtime health check configuration; probe cadence and transfer targets remain separate. */
+@Composable
+private fun FailoverDetectionCard(
+    settings: FailoverDetectionSettings,
+    runtimeStatus: FailoverRuntimeStatus,
+    onEnabledChange: (Boolean) -> Unit,
+    onSave: (FailoverDetectionSettings) -> Unit
+) {
+    val context = LocalContext.current
+    var probeUrl by remember(settings.probeUrl) { mutableStateOf(settings.probeUrl) }
+    var intervalInput by remember(settings.intervalSeconds) {
+        mutableStateOf(settings.intervalSeconds.toString())
+    }
+    var timeoutInput by remember(settings.timeoutMs) { mutableStateOf(settings.timeoutMs.toString()) }
+    var failureInput by remember(settings.consecutiveFailures) {
+        mutableStateOf(settings.consecutiveFailures.toString())
+    }
+    var validationMessage by remember { mutableStateOf<String?>(null) }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "故障检测",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "通过当前代理出口发送 HTTPS 请求检查可用性",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = settings.enabled, onCheckedChange = onEnabledChange)
+            }
+            Text(
+                text = "检测方式：HTTPS 状态码探测。系统底层网络未验证时会暂停判定；连续失败达到阈值后启动转移。",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = runtimeStatus.message,
+                fontSize = 12.sp,
+                color = if (runtimeStatus.state.name in setOf("ERROR", "NO_BACKUP")) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
+            )
+            OutlinedTextField(
+                value = probeUrl,
+                onValueChange = { probeUrl = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("HTTPS 探测地址") },
+                singleLine = true
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = intervalInput,
+                    onValueChange = { intervalInput = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("间隔（秒）") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = timeoutInput,
+                    onValueChange = { timeoutInput = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("超时（毫秒）") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+            OutlinedTextField(
+                value = failureInput,
+                onValueChange = { failureInput = it.filter(Char::isDigit) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("连续失败次数") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+            validationMessage?.let {
+                Text(text = it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+            }
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    val parsedProbeUrl = Uri.parse(probeUrl.trim())
+                    val interval = intervalInput.toIntOrNull()?.takeIf { it in 1..2 }
+                    val timeout = timeoutInput.toLongOrNull()?.takeIf { it in 500L..2_000L }
+                    val failures = failureInput.toIntOrNull()?.takeIf { it in 1..2 }
+                    validationMessage = when {
+                        parsedProbeUrl.scheme?.equals("https", ignoreCase = true) != true ||
+                            parsedProbeUrl.host.isNullOrBlank() ->
+                            "探测地址必须使用 HTTPS"
+                        interval == null -> "检测间隔需为 1–2 秒"
+                        timeout == null -> "超时需为 500–2000 毫秒"
+                        failures == null -> "连续失败次数需为 1–2 次"
+                        else -> null
+                    }
+                    if (validationMessage == null && interval != null && timeout != null && failures != null) {
+                        onSave(
+                            settings.copy(
+                                probeUrl = probeUrl.trim(),
+                                intervalSeconds = interval,
+                                timeoutMs = timeout,
+                                consecutiveFailures = failures
+                            )
+                        )
+                        Toast.makeText(context, "故障检测设置已保存", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            ) {
+                Text("保存检测设置")
+            }
+            val confirmationEstimateSeconds = (
+                (settings.intervalSeconds.toLong() * 1_000L + settings.timeoutMs) *
+                    settings.consecutiveFailures.toLong() + 999L
+                ) / 1_000L
+            Text(
+                text = "按已保存参数估算，约 ${confirmationEstimateSeconds} 秒确认故障；之后还需启动转移节点。",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun FailoverTransferCard(
+    settings: FailoverTransferSettings,
+    currentNodeId: String?,
+    nodes: List<io.github.HanJason233.chimera.data.model.Node>,
+    onChange: (List<String>) -> Unit
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    var pickedNodeIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val nodeById = remember(nodes) { nodes.associateBy { it.id } }
+    val eligibleNodes = remember(nodes, currentNodeId) {
+        nodes.filter {
+            it.id != currentNodeId &&
+                it.type != io.github.HanJason233.chimera.data.model.NodeType.UNKNOWN &&
+                it.server.isNotBlank() && it.port in 1..65_535
+        }
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "转移节点",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "按列表顺序尝试连接。当前连接和失效节点会跳过；切换后保持使用转移节点，不自动回切。",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (settings.nodeIds.isEmpty()) {
+                Text("尚未添加转移节点", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                settings.nodeIds.forEachIndexed { index, nodeId ->
+                    val node = nodeById[nodeId]
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
+                            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${index + 1}. ${node?.name ?: "节点已删除"}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            node?.let {
+                                Text(
+                                    text = "${it.type.protocol} · ${it.server}:${it.port}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        TextButton(
+                            enabled = index > 0,
+                            onClick = {
+                                val orderedIds = settings.nodeIds.toMutableList()
+                                val previous = orderedIds[index - 1]
+                                orderedIds[index - 1] = orderedIds[index]
+                                orderedIds[index] = previous
+                                onChange(orderedIds)
+                            }
+                        ) { Text("上移") }
+                        TextButton(
+                            enabled = index < settings.nodeIds.lastIndex,
+                            onClick = {
+                                val orderedIds = settings.nodeIds.toMutableList()
+                                val next = orderedIds[index + 1]
+                                orderedIds[index + 1] = orderedIds[index]
+                                orderedIds[index] = next
+                                onChange(orderedIds)
+                            }
+                        ) { Text("下移") }
+                        TextButton(onClick = { onChange(settings.nodeIds - nodeId) }) { Text("移除") }
+                    }
+                }
+            }
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    pickedNodeIds = settings.nodeIds.toSet()
+                    showPicker = true
+                }
+            ) {
+                Text("添加或选择转移节点")
+            }
+        }
+    }
+
+    if (showPicker) {
+        AlertDialog(
+            onDismissRequest = { showPicker = false },
+            title = { Text("选择转移节点") },
+            text = {
+                if (eligibleNodes.isEmpty()) {
+                    Text("没有可添加的节点")
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        eligibleNodes.forEach { node ->
+                            val checked = node.id in pickedNodeIds
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        pickedNodeIds = if (checked) pickedNodeIds - node.id
+                                        else pickedNodeIds + node.id
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = { isChecked ->
+                                        pickedNodeIds = if (isChecked) pickedNodeIds + node.id
+                                        else pickedNodeIds - node.id
+                                    }
+                                )
+                                Column {
+                                    Text(node.name, fontSize = 13.sp)
+                                    Text(
+                                        "${node.type.protocol} · ${node.server}:${node.port}",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val retained = settings.nodeIds.filter { it in pickedNodeIds && it != currentNodeId }
+                    val newlyPicked = eligibleNodes.map { it.id }
+                        .filter { it in pickedNodeIds && it !in retained }
+                    onChange(retained + newlyPicked)
+                    showPicker = false
+                }) { Text("完成") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("取消") }
+            }
+        )
+    }
+}
+
+/** Hy2 bandwidth controls only affect the matching protocol outbound. */
 @Composable
 private fun OutboundHysteriaCard(
     enabled: Boolean,

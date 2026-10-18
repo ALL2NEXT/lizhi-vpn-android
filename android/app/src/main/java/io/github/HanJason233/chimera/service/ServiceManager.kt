@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.VpnState
+import io.github.HanJason233.chimera.data.model.FailoverRuntimeState
+import io.github.HanJason233.chimera.data.model.FailoverRuntimeStatus
 
 /**
  * VPN服务管理器 - 单例
@@ -22,6 +24,9 @@ object ServiceManager {
     
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private val _failoverStatus = MutableStateFlow(FailoverRuntimeStatus())
+    val failoverStatus: StateFlow<FailoverRuntimeStatus> = _failoverStatus.asStateFlow()
     
     // 移动网络提醒
     private val _cellularWarning = MutableStateFlow<String?>(null)
@@ -94,6 +99,7 @@ object ServiceManager {
     fun notifyStopped() {
         _vpnState.value = VpnState.DISCONNECTED
         _currentNode.value = null
+        notifyFailoverStatus(FailoverRuntimeState.DISABLED, "VPN 已断开")
     }
     
     /**
@@ -103,6 +109,14 @@ object ServiceManager {
         _errorMessage.value = message
         _vpnState.value = VpnState.DISCONNECTED
         _currentNode.value = null
+    }
+
+    fun notifyFailoverStatus(
+        state: FailoverRuntimeState,
+        message: String,
+        activeNodeId: String? = _currentNode.value?.id
+    ) {
+        _failoverStatus.value = FailoverRuntimeStatus(state, message, activeNodeId)
     }
     
     /**

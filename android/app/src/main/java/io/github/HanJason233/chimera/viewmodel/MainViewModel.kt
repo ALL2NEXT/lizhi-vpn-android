@@ -516,6 +516,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         LanInboundSettings()
     )
 
+    val failoverSettings = settingsRepository.failoverSettings.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        FailoverSettings()
+    )
+    val failoverRuntimeStatus = ServiceManager.failoverStatus
+
     val speedTestSchemes = settingsRepository.speedTestSchemes.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -2634,6 +2641,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // 端口和认证信息属于核心启动配置，保存后立即应用到运行中的 VPN。
             restartVpnIfNeeded()
         }
+    }
+
+    fun setFailoverDetection(settings: FailoverDetectionSettings) {
+        viewModelScope.launch { settingsRepository.setFailoverDetection(settings) }
+    }
+
+    fun setFailoverDetectionEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setFailoverDetectionEnabled(enabled) }
+    }
+
+    fun setFailoverTransferNodes(nodeIds: List<String>) {
+        viewModelScope.launch { settingsRepository.setFailoverTransferNodes(nodeIds) }
     }
 
     fun setHomeLongPressSpeedTestScheme(schemeId: String) {

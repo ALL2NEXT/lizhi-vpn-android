@@ -76,6 +76,13 @@ internal object Socks5HttpProbe {
         timeoutMs: Long
     ): Boolean = execute(endpoint, targetUrl, timeoutMs, "GET").statusCode == expectedStatus
 
+    /** One bounded HTTP request for runtime health checks; response bodies are not downloaded. */
+    fun probeHttpStatusCode(
+        endpoint: LocalSocksEndpoint,
+        targetUrl: String,
+        timeoutMs: Long
+    ): Int = execute(endpoint, targetUrl, timeoutMs, "GET").statusCode
+
     /** 首次建连和预热请求、后续暖连接测量请求各自使用独立超时。 */
     fun measureLatency(
         endpoint: LocalSocksEndpoint,

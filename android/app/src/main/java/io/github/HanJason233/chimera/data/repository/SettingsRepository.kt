@@ -18,6 +18,10 @@ import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconEffect
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
+import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
+import io.github.HanJason233.chimera.data.model.FailoverDetectionMethod
+import io.github.HanJason233.chimera.data.model.FailoverSettings
+import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
@@ -94,6 +98,13 @@ class SettingsRepository(
         private val LAN_INBOUND_USERNAME = stringPreferencesKey("lan_inbound_username")
         private val LAN_INBOUND_PASSWORD = stringPreferencesKey("lan_inbound_password")
         private val LAN_INBOUND_PROXY_MODE = stringPreferencesKey("lan_inbound_proxy_mode")
+        private val FAILOVER_DETECTION_ENABLED = booleanPreferencesKey("failover_detection_enabled")
+        private val FAILOVER_DETECTION_METHOD = stringPreferencesKey("failover_detection_method")
+        private val FAILOVER_PROBE_URL = stringPreferencesKey("failover_probe_url")
+        private val FAILOVER_INTERVAL_SECONDS = intPreferencesKey("failover_interval_seconds")
+        private val FAILOVER_TIMEOUT_MS = longPreferencesKey("failover_timeout_ms")
+        private val FAILOVER_CONSECUTIVE_FAILURES = intPreferencesKey("failover_consecutive_failures")
+        private val FAILOVER_TRANSFER_NODE_IDS = stringPreferencesKey("failover_transfer_node_ids")
         private val HOME_CLICK_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_click_speed_test_scheme_id")
         private val HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID =
@@ -204,6 +215,11 @@ class SettingsRepository(
     /** 局域网入站设置默认关闭，避免意外暴露代理端口。 */
     val lanInboundSettings: Flow<LanInboundSettings> = store.data.map { preferences ->
         decodeLanInboundSettings(preferences)
+    }
+
+    /** Detection policy and ordered transfer nodes are persisted independently. */
+    val failoverSettings: Flow<FailoverSettings> = store.data.map { preferences ->
+        decodeFailoverSettings(preferences)
     }
 
     /** 主页图标单击使用的测速方案。 */
@@ -534,6 +550,63 @@ class SettingsRepository(
                 enumValueOrDefault(preferences[PROXY_MODE], ProxyMode.SMART)
             )
         )
+
+    private fun decodeFailoverSettings(preferences: Preferences): FailoverSettings {
+        val transferNodeIds = runCatching {
+            val array = JSONArray(preferences[FAILOVER_TRANSFER_NODE_IDS].orEmpty())
+            buildList {
+                for (index in 0 until array.length()) {
+                    val nodeId = array.optString(index)
+                    if (nodeId.isNotBlank() && nodeId != "null") add(nodeId)
+                }
+            }.distinct()
+        }.getOrDefault(emptyList())
+        return FailoverSettings(
+            detection = FailoverDetectionSettings(
+                enabled = preferences[FAILOVER_DETECTION_ENABLED] ?: false,
+                method = runCatching {
+                    FailoverDetectionMethod.valueOf(preferences[FAILOVER_DETECTION_METHOD].orEmpty())
+                }.getOrDefault(FailoverDetectionMethod.HTTPS_PROBE),
+                probeUrl = normalizeFailoverProbeUrl(preferences[FAILOVER_PROBE_URL])
+                    ?: FailoverDetectionSettings.DEFAULT_PROBE_URL,
+                intervalSeconds = (preferences[FAILOVER_INTERVAL_SECONDS]
+                    ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS).coerceIn(1, 2),
+                timeoutMs = (preferences[FAILOVER_TIMEOUT_MS]
+                    ?: FailoverDetectionSettings.DEFAULT_TIMEOUT_MS).coerceIn(500L, 2_000L),
+                consecutiveFailures = (preferences[FAILOVER_CONSECUTIVE_FAILURES]
+                    ?: FailoverDetectionSettings.DEFAULT_CONSECUTIVE_FAILURES).coerceIn(1, 2)
+            ),
+            transfer = FailoverTransferSettings(transferNodeIds)
+        )
+    }
+
+    suspend fun setFailoverDetection(settings: FailoverDetectionSettings) {
+        val normalizedUrl = normalizeFailoverProbeUrl(settings.probeUrl) ?: return
+        store.edit { preferences ->
+            preferences[FAILOVER_DETECTION_METHOD] = settings.method.name
+            preferences[FAILOVER_PROBE_URL] = normalizedUrl
+            preferences[FAILOVER_INTERVAL_SECONDS] = settings.intervalSeconds.coerceIn(1, 2)
+            preferences[FAILOVER_TIMEOUT_MS] = settings.timeoutMs.coerceIn(500L, 2_000L)
+            preferences[FAILOVER_CONSECUTIVE_FAILURES] = settings.consecutiveFailures.coerceIn(1, 2)
+        }
+    }
+
+    suspend fun setFailoverDetectionEnabled(enabled: Boolean) {
+        store.edit { preferences -> preferences[FAILOVER_DETECTION_ENABLED] = enabled }
+    }
+
+    suspend fun setFailoverTransferNodes(nodeIds: List<String>) {
+        val normalizedIds = nodeIds.map { it.trim() }.filter(String::isNotEmpty).distinct()
+        val json = JSONArray().apply { normalizedIds.forEach { put(it) } }.toString()
+        store.edit { preferences -> preferences[FAILOVER_TRANSFER_NODE_IDS] = json }
+    }
+
+    private fun normalizeFailoverProbeUrl(value: String?): String? = runCatching {
+        val uri = java.net.URI(value?.trim().orEmpty())
+        value?.trim()?.takeIf {
+            uri.scheme?.equals("https", ignoreCase = true) == true && !uri.host.isNullOrBlank()
+        }
+    }.getOrNull()
 
     private fun decodeDnsSettings(preferences: Preferences): DnsSettings = DnsSettings(
         remoteDns = DnsSettings.normalizeServerList(preferences[DNS_REMOTE])
