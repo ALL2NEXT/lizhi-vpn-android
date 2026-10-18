@@ -80,13 +80,13 @@ fun SplitRoutingSettingsScreen(
                     )
                     SplitRoutingEntry(
                         title = "VPN 作用范围",
-                        description = "选择哪些应用的流量进入 VPN",
+                        description = "tun层控制",
                         icon = Icons.Outlined.Android,
                         onClick = { onOpenPerAppInbound(mode) }
                     )
                     SplitRoutingEntry(
                         title = "路由规则",
-                        description = "设置此模式下的域名、IP 与流量规则",
+                        description = "核心层控制",
                         icon = Icons.Outlined.Route,
                         onClick = { onOpenRoutingRules(mode) }
                     )
