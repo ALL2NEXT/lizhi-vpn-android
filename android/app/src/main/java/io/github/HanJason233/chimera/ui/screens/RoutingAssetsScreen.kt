@@ -186,6 +186,14 @@ internal fun RoutingAssetsScreen(
             }
             item(key = "asset_heading") {
                 Text(
+                    "GeoIP/GeoSite 数据随安装包提供，并在首次启动时初始化到本地；需要更新时可点右上角云下载按钮。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                Text(
                     "资源文件",
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier

@@ -22,8 +22,17 @@ internal data class RoutingAssetsUiState(
 
 internal class RoutingAssetsViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = RoutingAssetsRepository(application)
-    private val _state = MutableStateFlow(RoutingAssetsUiState(repository.load()))
+    private val _state = MutableStateFlow(RoutingAssetsUiState(repository.load(), loading = true))
     val state: StateFlow<RoutingAssetsUiState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { repository.initializeBundledAssets() }
+            _state.value = RoutingAssetsUiState(
+                snapshot = withContext(Dispatchers.IO) { repository.load() }
+            )
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {

@@ -30,6 +30,11 @@ internal data class RoutingAssetDownloadResult(
     val failed: List<String>
 )
 
+internal data class RoutingAssetInitializationResult(
+    val copied: List<String>,
+    val failed: List<String>
+)
+
 /** 管理 Xray 使用的 geo 数据库，与 v2rayNG 的 assets 目录及配置格式保持一致。 */
 internal class RoutingAssetsRepository(context: Context) {
     private val appContext = context.applicationContext
@@ -45,6 +50,33 @@ internal class RoutingAssetsRepository(context: Context) {
                 if (!newFile.exists()) runCatching { oldFile.copyTo(newFile) }
             }
         }
+    }
+
+    /** 首次启动时从 APK assets 补齐内置 Geo 文件，不覆盖已下载或导入的版本。 */
+    fun initializeBundledAssets(): RoutingAssetInitializationResult = synchronized(BUNDLED_ASSETS_LOCK) {
+        val copied = mutableListOf<String>()
+        val failed = mutableListOf<String>()
+        BUILTIN_FILES.forEach { filename ->
+            val target = File(directory, filename)
+            if (target.isFile && target.length() > 0L) return@forEach
+
+            val temporary = File(directory, "$filename.initializing")
+            val result = runCatching {
+                appContext.assets.open("$BUNDLED_ASSET_DIRECTORY/$filename").use { input ->
+                    temporary.outputStream().buffered().use { output -> input.copyTo(output) }
+                }
+                check(temporary.isFile && temporary.length() > 0L) { "内置资源文件为空" }
+                if (target.exists() && !target.delete()) error("无法替换空资源文件")
+                check(temporary.renameTo(target)) { "无法保存内置资源文件" }
+            }
+            if (result.isSuccess) {
+                copied += filename
+            } else {
+                temporary.delete()
+                failed += "$filename: ${result.exceptionOrNull()?.message ?: "初始化失败"}"
+            }
+        }
+        RoutingAssetInitializationResult(copied, failed)
     }
 
     fun load(): RoutingAssetsSnapshot {
@@ -240,6 +272,7 @@ internal class RoutingAssetsRepository(context: Context) {
     companion object {
         const val LOCAL_FILE_URL = "file"
         const val ASSET_DIRECTORY = "assets"
+        const val BUNDLED_ASSET_DIRECTORY = "routing-geo"
         const val GEOIP_CN_PRIVATE = "geoip-only-cn-private.dat"
         const val GEOIP_CN_PRIVATE_URL =
             "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/$GEOIP_CN_PRIVATE"
@@ -255,6 +288,7 @@ internal class RoutingAssetsRepository(context: Context) {
         private const val CONNECT_TIMEOUT_MS = 15_000
         private const val DOWNLOAD_TIMEOUT_MS = 90_000
         private val BUILTIN_FILES = listOf("geosite.dat", "geoip.dat", GEOIP_CN_PRIVATE)
+        private val BUNDLED_ASSETS_LOCK = Any()
 
         fun assetDirectory(context: Context): File =
             context.applicationContext.getExternalFilesDir(ASSET_DIRECTORY)

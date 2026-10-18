@@ -28,7 +28,9 @@ internal class XrayBackend : CoreBackend {
 
     override suspend fun prepare(context: Context, request: CoreRequest): PreparedCore = withContext(Dispatchers.IO) {
         val config = XrayVpnConfig.generate(request)
-        val assetDirectory = RoutingAssetsRepository.assetDirectory(context)
+        val assetRepository = RoutingAssetsRepository(context)
+        assetRepository.initializeBundledAssets()
+        val assetDirectory = assetRepository.directory
         val requiredAssets = buildList {
             if (config.contains("geosite:")) add("geosite.dat")
             if (config.contains("geoip:")) add("geoip.dat")
