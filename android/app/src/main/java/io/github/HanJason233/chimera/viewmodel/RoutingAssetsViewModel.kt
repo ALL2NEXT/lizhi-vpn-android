@@ -118,6 +118,15 @@ internal class RoutingAssetsViewModel(application: Application) : AndroidViewMod
         }
     }
 
+    fun removeBuiltInSingBoxRuleSet(fileName: String) {
+        if (_state.value.loading) return
+        _state.value = _state.value.copy(loading = true)
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { RuleManager.removeBuiltInRuleSet(app, fileName) }
+            _state.value = loadState()
+        }
+    }
+
     fun downloadAll(onResult: (RoutingAssetDownloadResult) -> Unit) {
         if (_state.value.loading) return
         _state.value = _state.value.copy(loading = true)

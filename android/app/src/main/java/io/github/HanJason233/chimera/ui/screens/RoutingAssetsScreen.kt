@@ -91,13 +91,15 @@ internal fun RoutingAssetsScreen(
     var addMenuExpanded by remember { mutableStateOf(false) }
     var sourceMenuExpanded by remember { mutableStateOf(false) }
     var ruleSetSourceMenuExpanded by remember { mutableStateOf(false) }
-    var singBoxResourceTab by rememberSaveable { mutableStateOf(0) }
     var assetDraft by remember { mutableStateOf<RoutingAssetDraft?>(null) }
     var deleteTarget by remember { mutableStateOf<RoutingAssetRecord?>(null) }
     var deleteRuleSetTarget by remember { mutableStateOf<SingBoxRuleSetCatalogEntry?>(null) }
+    var deleteBuiltInRuleSetTarget by remember { mutableStateOf<String?>(null) }
     val downloadedRuleSets = SingBoxRuleSetCatalog.entries.filter { entry ->
         state.singBoxRuleSets.containsKey(entry.fileName)
     }
+    val visibleRuleSets = (downloadedRuleSets + SingBoxRuleSetCatalog.entries(state.singBoxProvider))
+        .distinctBy(SingBoxRuleSetCatalogEntry::tag)
 
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -277,164 +279,117 @@ internal fun RoutingAssetsScreen(
                 ) {
                     Text("sing-box 规则集", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "本地资源管理内置和已下载文件；在线来源用于筛选并下载规则集。",
+                        "内置、已下载和当前来源可用的规则集统一显示在下方。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            item(key = "singbox_resource_tabs") {
-                TabRow(selectedTabIndex = singBoxResourceTab) {
-                    Tab(
-                        selected = singBoxResourceTab == 0,
-                        onClick = { singBoxResourceTab = 0 },
-                        text = { Text("本地资源 (${state.singBoxRuleSets.size})") }
-                    )
-                    Tab(
-                        selected = singBoxResourceTab == 1,
-                        onClick = { singBoxResourceTab = 1 },
-                        text = { Text("在线来源") }
+            item(key = "singbox_auto_update") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("自动更新规则集", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "应用启动后每 24 小时检查；关闭后仍可手动更新",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = state.singBoxAutoUpdateEnabled,
+                        onCheckedChange = viewModel::setSingBoxAutoUpdateEnabled,
+                        enabled = !state.loading
                     )
                 }
             }
-            if (singBoxResourceTab == 0) {
-                item(key = "singbox_auto_update") {
-                    Row(
+            item(key = "singbox_provider") {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .clickable { ruleSetSourceMenuExpanded = true }
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("自动更新本地规则集", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "应用启动后每 24 小时检查；关闭后仍可手动更新",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = state.singBoxAutoUpdateEnabled,
-                            onCheckedChange = viewModel::setSingBoxAutoUpdateEnabled,
-                            enabled = !state.loading
-                        )
-                    }
-                }
-                item(key = "singbox_builtin_heading") {
-                    Text(
-                        "内置资源",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                }
-                items(RuleManager.RULE_SET_FILES, key = { "singbox:builtin:$it" }) { name ->
-                    BuiltInRuleSetRow(name, state.singBoxRuleSets[name])
-                }
-                item(key = "singbox_downloaded_heading") {
-                    Text(
-                        "已下载规则集 (${downloadedRuleSets.size})",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                }
-                if (downloadedRuleSets.isEmpty()) {
-                    item(key = "singbox_downloaded_empty") {
+                        Text("规则集来源", style = MaterialTheme.typography.bodyLarge)
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "还没有下载规则集。切换到“在线来源”选择并下载。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                            state.singBoxProvider.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                } else {
-                    items(downloadedRuleSets, key = { "downloaded:${it.tag}" }) { entry ->
-                        DownloadedRuleSetRow(
-                            entry = entry,
-                            fileInfo = state.singBoxRuleSets[entry.fileName],
-                            enabled = !state.loading,
-                            onUpdate = {
-                                viewModel.updateSingBoxRuleSet(entry) { success ->
-                                    Toast.makeText(
-                                        context,
-                                        if (success) "已更新：${entry.title}" else "更新失败：${entry.title}",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                    DropdownMenu(
+                        expanded = ruleSetSourceMenuExpanded,
+                        onDismissRequest = { ruleSetSourceMenuExpanded = false }
+                    ) {
+                        SingBoxRuleSetCatalog.providers.forEach { provider ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(provider.title)
+                                        Text(
+                                            provider.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    ruleSetSourceMenuExpanded = false
+                                    viewModel.selectSingBoxProvider(provider)
                                 }
-                            },
-                            onRemove = { deleteRuleSetTarget = entry }
-                        )
-                    }
-                }
-            } else {
-                item(key = "singbox_provider") {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { ruleSetSourceMenuExpanded = true }
-                                .padding(horizontal = 16.dp, vertical = 12.dp)
-                        ) {
-                            Text("规则集来源", style = MaterialTheme.typography.bodyLarge)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                state.singBoxProvider.description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        DropdownMenu(
-                            expanded = ruleSetSourceMenuExpanded,
-                            onDismissRequest = { ruleSetSourceMenuExpanded = false }
-                        ) {
-                            SingBoxRuleSetCatalog.providers.forEach { provider ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(provider.title)
-                                            Text(
-                                                provider.description,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        ruleSetSourceMenuExpanded = false
-                                        viewModel.selectSingBoxProvider(provider)
-                                    }
-                                )
-                            }
-                        }
                     }
                 }
-                item(key = "singbox_catalog_hint") {
-                    Text(
-                        "选择规则集下载到本地；下载后的文件和更新管理在“本地资源”中。标签可用于自定义分流规则。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
-                }
-                items(
-                    SingBoxRuleSetCatalog.entries(state.singBoxProvider),
-                    key = { "catalog:${it.tag}" }
-                ) { entry ->
-                    CatalogRuleSetRow(
-                        entry = entry,
-                        enabled = !state.loading,
-                        onDownload = {
-                            viewModel.installSingBoxRuleSet(entry) { success ->
-                                Toast.makeText(
-                                    context,
-                                    if (success) "已下载：${entry.title}" else "下载失败：${entry.title}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
+            }
+            item(key = "singbox_catalog_hint") {
+                Text(
+                    "规则集标签可填写到自定义分流规则中；云朵按钮用于下载或更新，垃圾桶用于移除本地文件。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+            items(RuleManager.RULE_SET_FILES, key = { "singbox:builtin:$it" }) { name ->
+                BuiltInRuleSetRow(
+                    name = name,
+                    fileInfo = state.singBoxRuleSets[name],
+                    enabled = !state.loading,
+                    onRemove = { deleteBuiltInRuleSetTarget = name }
+                )
+            }
+            items(visibleRuleSets, key = { "catalog:${it.tag}" }) { entry ->
+                CatalogRuleSetRow(
+                    entry = entry,
+                    fileInfo = state.singBoxRuleSets[entry.fileName],
+                    enabled = !state.loading,
+                    onInstallOrUpdate = {
+                        val installed = state.singBoxRuleSets.containsKey(entry.fileName)
+                        val operation: ((Boolean) -> Unit) -> Unit = if (installed) {
+                            { callback -> viewModel.updateSingBoxRuleSet(entry, callback) }
+                        } else {
+                            { callback -> viewModel.installSingBoxRuleSet(entry, callback) }
                         }
-                    )
-                }
+                        operation { success ->
+                            Toast.makeText(
+                                context,
+                                if (success) {
+                                    if (installed) "已更新：${entry.title}" else "已下载：${entry.title}"
+                                } else {
+                                    "下载失败：${entry.title}"
+                                },
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    onRemove = { deleteRuleSetTarget = entry }
+                )
             }
                     }
         }
@@ -479,16 +434,33 @@ internal fun RoutingAssetsScreen(
     deleteRuleSetTarget?.let { entry ->
         AppAlertDialog(
             onDismissRequest = { deleteRuleSetTarget = null },
-            title = { Text("移除 sing-box 规则集") },
-            text = { Text("移除“${entry.title}”及其本地文件？分流标签 ${entry.routeExpression} 将改为按来源在线获取。") },
+            title = { Text("删除 sing-box 规则集") },
+            text = { Text("删除“${entry.title}”的本地文件？规则集来源仍保留，可重新下载。") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.removeSingBoxRuleSet(entry)
                     deleteRuleSetTarget = null
-                }) { Text("移除") }
+                }) { Text("删除") }
             },
             dismissButton = {
                 TextButton(onClick = { deleteRuleSetTarget = null }) { Text("取消") }
+            }
+        )
+    }
+
+    deleteBuiltInRuleSetTarget?.let { name ->
+        AppAlertDialog(
+            onDismissRequest = { deleteBuiltInRuleSetTarget = null },
+            title = { Text("删除 sing-box 规则集") },
+            text = { Text("删除“$name”的本地文件？应用需要时会从安装包重新初始化。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeBuiltInSingBoxRuleSet(name)
+                    deleteBuiltInRuleSetTarget = null
+                }) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteBuiltInRuleSetTarget = null }) { Text("取消") }
             }
         )
     }
@@ -497,7 +469,9 @@ internal fun RoutingAssetsScreen(
 @Composable
 private fun BuiltInRuleSetRow(
     name: String,
-    fileInfo: RoutingAssetFileInfo?
+    fileInfo: RoutingAssetFileInfo?,
+    enabled: Boolean,
+    onRemove: () -> Unit
 ) {
     val details = remember(fileInfo) {
         if (fileInfo == null) {
@@ -526,6 +500,9 @@ private fun BuiltInRuleSetRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            IconButton(onClick = onRemove, enabled = enabled) {
+                Icon(Icons.Filled.DeleteForever, contentDescription = "删除 $name")
+            }
         }
         Divider(
             modifier = Modifier.padding(horizontal = 12.dp),
@@ -535,22 +512,22 @@ private fun BuiltInRuleSetRow(
 }
 
 @Composable
-private fun DownloadedRuleSetRow(
+private fun CatalogRuleSetRow(
     entry: SingBoxRuleSetCatalogEntry,
     fileInfo: RoutingAssetFileInfo?,
     enabled: Boolean,
-    onUpdate: () -> Unit,
+    onInstallOrUpdate: () -> Unit,
     onRemove: () -> Unit
 ) {
     val details = remember(entry, fileInfo) {
-        val date = fileInfo?.let {
-            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                .format(Date(it.lastModified))
+        val fileStatus = if (fileInfo == null) {
+            "未下载"
+        } else {
+            val date = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                .format(Date(fileInfo.lastModified))
+            "本地 · ${fileInfo.length.toAssetSize()} · $date"
         }
-        listOfNotNull(
-            "${entry.provider.title} · ${entry.routeExpression}",
-            fileInfo?.let { "${it.length.toAssetSize()} · $date" }
-        ).joinToString("\n")
+        "${entry.provider.title} · ${entry.routeExpression}\n${entry.sourcePath} · $fileStatus"
     }
     Column {
         Row(
@@ -570,49 +547,14 @@ private fun DownloadedRuleSetRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            IconButton(onClick = onUpdate, enabled = enabled) {
+            IconButton(onClick = onInstallOrUpdate, enabled = enabled) {
                 Icon(
-                    Icons.Filled.Refresh,
-                    contentDescription = "更新 ${entry.title}"
+                    if (fileInfo == null) Icons.Filled.CloudDownload else Icons.Filled.Refresh,
+                    contentDescription = if (fileInfo == null) "下载 ${entry.title}" else "更新 ${entry.title}"
                 )
             }
-            IconButton(onClick = onRemove, enabled = enabled) {
-                Icon(Icons.Filled.DeleteForever, contentDescription = "移除 ${entry.title}")
-            }
-        }
-        Divider(
-            modifier = Modifier.padding(horizontal = 12.dp),
-            color = MaterialTheme.colorScheme.outlineVariant
-        )
-    }
-}
-
-@Composable
-private fun CatalogRuleSetRow(
-    entry: SingBoxRuleSetCatalogEntry,
-    enabled: Boolean,
-    onDownload: () -> Unit
-) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(entry.title, style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "${entry.routeExpression} · ${entry.sourcePath}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            IconButton(onClick = onDownload, enabled = enabled) {
-                Icon(Icons.Filled.CloudDownload, contentDescription = "下载 ${entry.title}")
+            IconButton(onClick = onRemove, enabled = enabled && fileInfo != null) {
+                Icon(Icons.Filled.DeleteForever, contentDescription = "删除 ${entry.title} 的本地文件")
             }
         }
         Divider(

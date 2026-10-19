@@ -194,6 +194,11 @@ object RuleManager {
         File(ruleSetDirectory(context), entry.fileName).delete()
     }
 
+    internal fun removeBuiltInRuleSet(context: Context, fileName: String) {
+        if (fileName !in RULE_SET_FILES) return
+        File(ruleSetDirectory(context), fileName).delete()
+    }
+
     private fun updateTargets(context: Context): List<Pair<String, String>> {
         val installedTags = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getStringSet(INSTALLED_RULE_SET_TAGS, emptySet()).orEmpty().toSet()
