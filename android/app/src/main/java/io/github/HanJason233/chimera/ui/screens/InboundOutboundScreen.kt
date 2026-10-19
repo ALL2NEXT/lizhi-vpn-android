@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DragHandle
@@ -357,6 +358,7 @@ fun OutboundScreen(
                     currentNodeId = currentNode?.id,
                     nodes = availableNodes,
                     groups = failoverGroups,
+                    viewModel = viewModel,
                     onChange = viewModel::setFailoverTransferTarget
                 )
             }
@@ -556,36 +558,47 @@ private fun FailoverDetectionCard(
                         .then(
                             if (isDragging || isSettling) {
                                 Modifier.graphicsLayer { translationY = cardTranslation }
-                            } else {
+                            } else if (draggedStepId != null || settlingStepId != null) {
                                 Modifier.animateItemPlacement()
+                            } else {
+                                Modifier
                             }
                         )
-                        .pointerInput(step.id) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { startDrag.value(step.id) },
-                                onDrag = { change, amount ->
-                                    change.consume()
-                                    updateDrag.value(step.id, amount.y)
-                                },
-                                onDragEnd = { endDrag.value(step.id) },
-                                onDragCancel = { endDrag.value(step.id) }
-                            )
-                        }
-                        .clickable {
+                    val dragHandleModifier = Modifier.pointerInput(step.id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { startDrag.value(step.id) },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                updateDrag.value(step.id, amount.y)
+                            },
+                            onDragEnd = { endDrag.value(step.id) },
+                            onDragCancel = { endDrag.value(step.id) }
+                        )
+                    }
+
+                    FailoverProbeStepRow(
+                        step = step,
+                        priority = index + 1,
+                        isDragging = isDragging,
+                        canDelete = probeSteps.size > 1,
+                        modifier = cardMovementModifier,
+                        dragHandleModifier = dragHandleModifier,
+                        onClick = {
                             editingStep = step
                             editingNewStep = false
+                        },
+                        onDelete = {
+                            // 删除时清理可能尚未结束的拖动和回弹，避免列表沿用旧卡片的位移状态。
+                            draggedStepId = null
+                            dragStartIndex = -1
+                            dragDistance = 0f
+                            reorderBaseline = 0f
+                            settlingStepId = null
+                            settleStartOffset = 0f
+                            settleAnimationReady = false
+                            persistDetection(probeSteps.filterNot { it.id == step.id })
                         }
-
-                FailoverProbeStepRow(
-                    step = step,
-                    priority = index + 1,
-                    isDragging = isDragging,
-                    canDelete = probeSteps.size > 1,
-                    modifier = cardMovementModifier,
-                    onDelete = {
-                        persistDetection(probeSteps.filterNot { it.id == step.id })
-                    }
-                )
+                    )
                 }
             }
         }
@@ -657,6 +670,8 @@ private fun FailoverProbeStepRow(
     isDragging: Boolean,
     canDelete: Boolean,
     modifier: Modifier,
+    dragHandleModifier: Modifier,
+    onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     val elevation by animateDpAsState(
@@ -681,7 +696,11 @@ private fun FailoverProbeStepRow(
                     .padding(horizontal = 16.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onClick)
+                ) {
                     Text(
                         text = "测试项 $priority · ${step.method.title}",
                         style = MaterialTheme.typography.bodyLarge,
@@ -712,7 +731,7 @@ private fun FailoverProbeStepRow(
                     Icon(
                         imageVector = Icons.Outlined.DragHandle,
                         contentDescription = "长按拖动排序",
-                        modifier = Modifier
+                        modifier = dragHandleModifier
                             .padding(12.dp)
                             .size(24.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -870,25 +889,19 @@ private fun FailoverTransferCard(
     currentNodeId: String?,
     nodes: List<io.github.HanJason233.chimera.data.model.Node>,
     groups: List<FailoverGroupOption>,
+    viewModel: MainViewModel,
     onChange: (FailoverTransferTarget?) -> Unit
 ) {
     var showPicker by remember { mutableStateOf(false) }
-    var showGroupOptions by remember { mutableStateOf(false) }
-    val eligibleNodes = remember(nodes, currentNodeId) {
-        nodes.filter {
-            it.id != currentNodeId &&
-                it.type != io.github.HanJason233.chimera.data.model.NodeType.UNKNOWN &&
-                it.server.isNotBlank() && it.port in 1..65_535
-        }
-    }
+    var nodePickerGroupId by remember { mutableStateOf<String?>(null) }
     val targetLabel = when (val target = settings.target) {
         is FailoverTransferTarget.Node -> {
             val nodeName = nodes.firstOrNull { it.id == target.nodeId }?.name ?: "节点已删除"
-            "单个节点：$nodeName"
+            "固定节点：$nodeName"
         }
         is FailoverTransferTarget.Group -> {
             val groupName = groups.firstOrNull { it.id == target.groupId }?.name ?: "节点组已删除"
-            "节点组：$groupName"
+            "随机组内节点：$groupName"
         }
         null -> "尚未选择备用目标"
     }
@@ -919,7 +932,7 @@ private fun FailoverTransferCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 TextButton(onClick = {
-                    showGroupOptions = false
+                    nodePickerGroupId = null
                     showPicker = true
                 }) {
                     Text(if (settings.target == null) "选择" else "更改")
@@ -936,47 +949,33 @@ private fun FailoverTransferCard(
     }
 
     if (showPicker) {
+        val nodePickerGroup = groups.firstOrNull { it.id == nodePickerGroupId }
         AlertDialog(
             onDismissRequest = { showPicker = false },
-            title = { Text("选择备用目标") },
+            title = {
+                Text(nodePickerGroup?.let { "选择${it.name}中的节点" } ?: "选择节点组")
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        TextButton(onClick = { showGroupOptions = false }) {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    if (nodePickerGroup == null) {
+                        if (groups.isEmpty()) {
                             Text(
-                                "单个节点",
-                                color = if (!showGroupOptions) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "当前没有可用节点组",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(vertical = 12.dp)
                             )
-                        }
-                        TextButton(onClick = { showGroupOptions = true }) {
-                            Text(
-                                "节点组",
-                                color = if (showGroupOptions) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 420.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        if (showGroupOptions) {
-                            if (groups.isEmpty()) {
-                                Text(
-                                    text = "当前没有可用节点组",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(vertical = 12.dp)
-                                )
-                            } else {
-                                groups.forEach { group ->
+                        } else {
+                            groups.forEach { group ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     TextButton(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.weight(1f),
                                         onClick = {
                                             onChange(FailoverTransferTarget.Group(group.id))
                                             showPicker = false
@@ -994,39 +993,37 @@ private fun FailoverTransferCard(
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                             Text(
-                                                text = "${group.nodeCount} 个节点",
+                                                text = "${group.nodeCount} 个",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
-                                }
-                            }
-                        } else if (eligibleNodes.isEmpty()) {
-                            Text(
-                                text = "没有可用的备用节点",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            )
-                        } else {
-                            eligibleNodes.forEach { node ->
-                                TextButton(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        onChange(FailoverTransferTarget.Node(node.id))
-                                        showPicker = false
+                                    TextButton(onClick = { nodePickerGroupId = group.id }) {
+                                        Text("选节点")
+                                        Icon(
+                                            imageVector = Icons.Outlined.ChevronRight,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                     }
-                                ) {
-                                    Text(
-                                        text = "${node.name} · ${node.type.protocol}",
-                                        modifier = Modifier.fillMaxWidth(),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
                                 }
                             }
                         }
+                    } else {
+                        TextButton(onClick = { nodePickerGroupId = null }) {
+                            Text("返回节点组")
+                        }
+                        Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                        FailoverGroupNodeOptions(
+                            group = nodePickerGroup,
+                            currentNodeId = currentNodeId,
+                            viewModel = viewModel,
+                            onSelect = { node ->
+                                onChange(FailoverTransferTarget.Node(node.id))
+                                showPicker = false
+                            }
+                        )
                     }
                 }
             },
@@ -1034,6 +1031,49 @@ private fun FailoverTransferCard(
                 TextButton(onClick = { showPicker = false }) { Text("关闭") }
             }
         )
+    }
+}
+
+@Composable
+private fun FailoverGroupNodeOptions(
+    group: FailoverGroupOption,
+    currentNodeId: String?,
+    viewModel: MainViewModel,
+    onSelect: (io.github.HanJason233.chimera.data.model.Node) -> Unit
+) {
+    val groupNodesFlow = remember(group.id, viewModel) {
+        viewModel.observeFailoverTargetGroupNodes(group.id)
+    }
+    val groupNodes by groupNodesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val eligibleNodes = remember(groupNodes, currentNodeId) {
+        groupNodes.filter {
+            it.id != currentNodeId &&
+                it.type != io.github.HanJason233.chimera.data.model.NodeType.UNKNOWN &&
+                it.server.isNotBlank() && it.port in 1..65_535
+        }
+    }
+
+    if (eligibleNodes.isEmpty()) {
+        Text(
+            text = "该组没有可用的备用节点",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(vertical = 12.dp)
+        )
+    } else {
+        eligibleNodes.forEach { node ->
+            TextButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onSelect(node) }
+            ) {
+                Text(
+                    text = "${node.name} · ${node.type.protocol}",
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 

@@ -449,6 +449,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 WarehouseGroupingCountryResolver.filter(nodes, countryCodes)
             }
 
+    /** 按故障转移目标组加载组内节点，避免在选择入口展示全部节点。 */
+    fun observeFailoverTargetGroupNodes(groupId: String): Flow<List<Node>> =
+        when (val group = NodeGroupKey.parse(groupId)) {
+            is NodeGroupKey.Subscription -> nodeDaoFlow.flatMapLatest {
+                it.getSubscriptionNodesBySource(group.sourceId)
+            }
+            is NodeGroupKey.Imported -> nodeDaoFlow.flatMapLatest {
+                it.getNodesByGroup(group.groupId)
+            }
+            is NodeGroupKey.Country -> countryGroupingNodes.map { nodes ->
+                nodes.filter { it.getCountryCode() == group.countryCode }
+            }
+            null -> flowOf(emptyList())
+        }
+
     /** 当前选中私人源的节点；没有选中私人源时不参与主页列表。 */
     private val importedNodes = selectedNodeGroupId.flatMapLatest { groupId ->
         val group = NodeGroupKey.parse(groupId) as? NodeGroupKey.Imported
