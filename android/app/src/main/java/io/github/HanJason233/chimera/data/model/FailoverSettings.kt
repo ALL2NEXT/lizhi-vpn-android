@@ -13,9 +13,7 @@ data class FailoverSettings(
 data class FailoverDetectionSettings(
     val enabled: Boolean = false,
     /** 按顺序执行的测试项；每项每轮只测一次，列表长度决定连续失败次数。 */
-    val probeSteps: List<FailoverProbeStep> = DEFAULT_PROBE_STEPS,
-    val intervalSeconds: Int = DEFAULT_INTERVAL_SECONDS,
-    val timeoutMs: Long = DEFAULT_TIMEOUT_MS
+    val probeSteps: List<FailoverProbeStep> = DEFAULT_PROBE_STEPS
 ) {
     companion object {
         const val DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
@@ -38,7 +36,11 @@ data class FailoverProbeStep(
     val method: FailoverDetectionMethod = FailoverDetectionMethod.HTTPS_PROBE,
     val probeUrl: String = FailoverDetectionSettings.DEFAULT_PROBE_URL,
     val pingHost: String = FailoverDetectionSettings.DEFAULT_PING_HOST,
-    val pingPort: Int = FailoverDetectionSettings.DEFAULT_PING_PORT
+    val pingPort: Int = FailoverDetectionSettings.DEFAULT_PING_PORT,
+    /** 本项完成后到下一项或下一轮的等待时间。 */
+    val intervalSeconds: Int = FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS,
+    /** 本项单次连接或请求的最长等待时间。 */
+    val timeoutMs: Long = FailoverDetectionSettings.DEFAULT_TIMEOUT_MS
 )
 
 enum class FailoverDetectionMethod(val title: String) {

@@ -558,6 +558,10 @@ class SettingsRepository(
         )
 
     private fun decodeFailoverSettings(preferences: Preferences): FailoverSettings {
+        val legacyIntervalSeconds = (preferences[FAILOVER_INTERVAL_SECONDS]
+            ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS).coerceIn(1, 2)
+        val legacyTimeoutMs = (preferences[FAILOVER_TIMEOUT_MS]
+            ?: FailoverDetectionSettings.DEFAULT_TIMEOUT_MS).coerceIn(500L, 2_000L)
         val transferNodeIds = runCatching {
             val array = JSONArray(preferences[FAILOVER_TRANSFER_NODE_IDS].orEmpty())
             buildList {
@@ -570,13 +574,14 @@ class SettingsRepository(
         return FailoverSettings(
             detection = FailoverDetectionSettings(
                 enabled = preferences[FAILOVER_DETECTION_ENABLED] ?: false,
-                probeSteps = decodeFailoverProbeSteps(preferences[FAILOVER_PROBE_STEPS])
+                // 旧版将间隔和超时保存在全局键中；用它们补齐旧格式的每条测试项。
+                probeSteps = decodeFailoverProbeSteps(
+                    preferences[FAILOVER_PROBE_STEPS],
+                    legacyIntervalSeconds,
+                    legacyTimeoutMs
+                )
                     .takeIf { it.isNotEmpty() }
                     ?: decodeLegacyFailoverProbeSteps(preferences),
-                intervalSeconds = (preferences[FAILOVER_INTERVAL_SECONDS]
-                    ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS).coerceIn(1, 2),
-                timeoutMs = (preferences[FAILOVER_TIMEOUT_MS]
-                    ?: FailoverDetectionSettings.DEFAULT_TIMEOUT_MS).coerceIn(500L, 2_000L)
             ),
             transfer = FailoverTransferSettings(transferNodeIds)
         )
@@ -594,6 +599,8 @@ class SettingsRepository(
                         .put("probeUrl", step.probeUrl)
                         .put("pingHost", step.pingHost)
                         .put("pingPort", step.pingPort)
+                        .put("intervalSeconds", step.intervalSeconds)
+                        .put("timeoutMs", step.timeoutMs)
                 )
             }
         }.toString()
@@ -605,8 +612,9 @@ class SettingsRepository(
             preferences[FAILOVER_PING_HOST] = firstStep.pingHost
             preferences[FAILOVER_PING_PORT] = firstStep.pingPort
             preferences[FAILOVER_CONSECUTIVE_FAILURES] = normalizedSteps.size
-            preferences[FAILOVER_INTERVAL_SECONDS] = settings.intervalSeconds.coerceIn(1, 2)
-            preferences[FAILOVER_TIMEOUT_MS] = settings.timeoutMs.coerceIn(500L, 2_000L)
+            // 保留旧版全局键，方便降级版本读取首个测试项的间隔和超时。
+            preferences[FAILOVER_INTERVAL_SECONDS] = firstStep.intervalSeconds
+            preferences[FAILOVER_TIMEOUT_MS] = firstStep.timeoutMs
         }
     }
 
@@ -622,6 +630,10 @@ class SettingsRepository(
             ?: FailoverDetectionSettings.DEFAULT_PING_PORT)
             .takeIf(FailoverPingTarget::isValidPort)
             ?: FailoverDetectionSettings.DEFAULT_PING_PORT
+        val intervalSeconds = (preferences[FAILOVER_INTERVAL_SECONDS]
+            ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS).coerceIn(1, 2)
+        val timeoutMs = (preferences[FAILOVER_TIMEOUT_MS]
+            ?: FailoverDetectionSettings.DEFAULT_TIMEOUT_MS).coerceIn(500L, 2_000L)
         val count = (preferences[FAILOVER_CONSECUTIVE_FAILURES] ?: 2).coerceIn(1, 2)
         return List(count) { index ->
             FailoverProbeStep(
@@ -629,12 +641,18 @@ class SettingsRepository(
                 method = method,
                 probeUrl = probeUrl,
                 pingHost = pingHost,
-                pingPort = pingPort
+                pingPort = pingPort,
+                intervalSeconds = intervalSeconds,
+                timeoutMs = timeoutMs
             )
         }
     }
 
-    private fun decodeFailoverProbeSteps(serialized: String?): List<FailoverProbeStep> {
+    private fun decodeFailoverProbeSteps(
+        serialized: String?,
+        defaultIntervalSeconds: Int,
+        defaultTimeoutMs: Long
+    ): List<FailoverProbeStep> {
         val array = runCatching { JSONArray(serialized.orEmpty()) }.getOrNull() ?: return emptyList()
         val steps = mutableListOf<FailoverProbeStep>()
         for (index in 0 until array.length()) {
@@ -647,7 +665,9 @@ class SettingsRepository(
                 method = method,
                 probeUrl = item.optString("probeUrl", FailoverDetectionSettings.DEFAULT_PROBE_URL),
                 pingHost = item.optString("pingHost", FailoverDetectionSettings.DEFAULT_PING_HOST),
-                pingPort = item.optInt("pingPort", FailoverDetectionSettings.DEFAULT_PING_PORT)
+                pingPort = item.optInt("pingPort", FailoverDetectionSettings.DEFAULT_PING_PORT),
+                intervalSeconds = item.optInt("intervalSeconds", defaultIntervalSeconds),
+                timeoutMs = item.optLong("timeoutMs", defaultTimeoutMs)
             )
             normalizeFailoverProbeStep(step)?.let(steps::add)
         }
@@ -667,15 +687,21 @@ class SettingsRepository(
         return normalizedSteps
     }
 
-    private fun normalizeFailoverProbeStep(step: FailoverProbeStep): FailoverProbeStep? = when (step.method) {
-        FailoverDetectionMethod.HTTPS_PROBE -> normalizeFailoverProbeUrl(step.probeUrl)
-            ?.let { step.copy(probeUrl = it) }
-        FailoverDetectionMethod.PROXY_TCP_PING -> {
-            val host = FailoverPingTarget.normalizeHost(step.pingHost)
-            if (host == null || !FailoverPingTarget.isValidPort(step.pingPort)) {
-                null
-            } else {
-                step.copy(pingHost = host)
+    private fun normalizeFailoverProbeStep(step: FailoverProbeStep): FailoverProbeStep? {
+        val normalizedTiming = step.copy(
+            intervalSeconds = step.intervalSeconds.coerceIn(1, 2),
+            timeoutMs = step.timeoutMs.coerceIn(500L, 2_000L)
+        )
+        return when (step.method) {
+            FailoverDetectionMethod.HTTPS_PROBE -> normalizeFailoverProbeUrl(step.probeUrl)
+                ?.let { normalizedTiming.copy(probeUrl = it) }
+            FailoverDetectionMethod.PROXY_TCP_PING -> {
+                val host = FailoverPingTarget.normalizeHost(step.pingHost)
+                if (host == null || !FailoverPingTarget.isValidPort(step.pingPort)) {
+                    null
+                } else {
+                    normalizedTiming.copy(pingHost = host)
+                }
             }
         }
     }

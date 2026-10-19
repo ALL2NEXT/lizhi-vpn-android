@@ -290,8 +290,11 @@ class BoxVpnService : VpnService() {
                     connectedNode?.id
                 )
 
+                // 每个测试项的间隔用于等待下一项，并决定下一轮开始前的等待时间。
+                var nextCycleIntervalSeconds = detection.probeSteps.firstOrNull()?.intervalSeconds
+                    ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS
                 while (isActive && controller.isCurrent(ticket)) {
-                    delay(detection.intervalSeconds * 1_000L)
+                    delay(nextCycleIntervalSeconds * 1_000L)
                     if (!isRunning) break
                     val node = activeNode ?: break
                     if (detection.probeSteps.isEmpty()) {
@@ -315,7 +318,9 @@ class BoxVpnService : VpnService() {
                     var probeDelayMs: Int? = null
                     // 按配置顺序逐项测试；任一项成功即结束本轮，全部失败后才转移节点。
                     for ((index, probe) in detection.probeSteps.withIndex()) {
-                        if (index > 0) delay(detection.intervalSeconds * 1_000L)
+                        if (index > 0) {
+                            delay(detection.probeSteps[index - 1].intervalSeconds * 1_000L)
+                        }
                         if (!isActive || !controller.isCurrent(ticket)) break
                         ServiceManager.notifyFailoverStatus(
                             FailoverRuntimeState.DETECTING,
@@ -329,7 +334,7 @@ class BoxVpnService : VpnService() {
                                         Socks5HttpProbe.probeHttpStatusCode(
                                             endpoint,
                                             probe.probeUrl,
-                                            detection.timeoutMs
+                                            probe.timeoutMs
                                         ) in 200..399
                                     }.getOrDefault(false)
                                     succeeded to null
@@ -340,7 +345,7 @@ class BoxVpnService : VpnService() {
                                             endpoint,
                                             probe.pingHost,
                                             probe.pingPort,
-                                            detection.timeoutMs
+                                            probe.timeoutMs
                                         )
                                     }.getOrNull()
                                     (pingDelayMs != null) to pingDelayMs
@@ -348,6 +353,7 @@ class BoxVpnService : VpnService() {
                             }
                         }
                         if (probeSucceeded) {
+                            nextCycleIntervalSeconds = probe.intervalSeconds
                             successfulProbeIndex = index
                             probeDelayMs = delayMs
                             break
@@ -378,6 +384,8 @@ class BoxVpnService : VpnService() {
                         )
                         continue
                     }
+
+                    nextCycleIntervalSeconds = detection.probeSteps.last().intervalSeconds
 
                     ServiceManager.notifyFailoverStatus(
                         FailoverRuntimeState.DETECTING,

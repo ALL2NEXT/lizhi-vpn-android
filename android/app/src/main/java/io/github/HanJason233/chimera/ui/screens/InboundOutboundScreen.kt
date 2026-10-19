@@ -346,13 +346,7 @@ private fun FailoverDetectionCard(
     onSave: (FailoverDetectionSettings) -> Unit
 ) {
     var probeSteps by remember(settings.probeSteps) { mutableStateOf(settings.probeSteps) }
-    var intervalSeconds by remember(settings.intervalSeconds) {
-        mutableStateOf(settings.intervalSeconds)
-    }
-    var timeoutMs by remember(settings.timeoutMs) { mutableStateOf(settings.timeoutMs) }
     var showAddDialog by remember { mutableStateOf(false) }
-    var showIntervalDialog by remember { mutableStateOf(false) }
-    var showTimeoutDialog by remember { mutableStateOf(false) }
     var editingStep by remember { mutableStateOf<FailoverProbeStep?>(null) }
     var editingNewStep by remember { mutableStateOf(false) }
     val probeListState = rememberLazyListState()
@@ -382,21 +376,9 @@ private fun FailoverDetectionCard(
         settleAnimationReady = false
     }
 
-    fun persistDetection(
-        steps: List<FailoverProbeStep> = probeSteps,
-        interval: Int = intervalSeconds,
-        timeout: Long = timeoutMs
-    ) {
+    fun persistDetection(steps: List<FailoverProbeStep> = probeSteps) {
         probeSteps = steps
-        intervalSeconds = interval
-        timeoutMs = timeout
-        onSave(
-            settings.copy(
-                probeSteps = steps,
-                intervalSeconds = interval,
-                timeoutMs = timeout
-            )
-        )
+        onSave(settings.copy(probeSteps = steps))
     }
 
     // 记录卡片起始位置和高度，供跟手位移、排序阈值及释放回弹使用。
@@ -489,7 +471,7 @@ private fun FailoverDetectionCard(
             Switch(checked = settings.enabled, onCheckedChange = onEnabledChange)
         }
         Text(
-            text = "从上到下依次测试；任一项通过即结束本轮，全部失败后才会转移节点。点按编辑目标，长按拖动排序。",
+            text = "从上到下依次测试；每项完成后按该项间隔等待。任一项通过即结束本轮，全部失败后才会转移节点。点按编辑，长按拖动排序。",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -591,53 +573,6 @@ private fun FailoverDetectionCard(
                 }
             }
         }
-
-        Divider(
-            modifier = Modifier.padding(horizontal = 12.dp),
-            color = MaterialTheme.colorScheme.outlineVariant
-        )
-        Text(
-            text = "检测参数",
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
-            style = MaterialTheme.typography.titleSmall
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { showIntervalDialog = true }
-                    .padding(vertical = 12.dp)
-            ) {
-                Text(
-                    text = "检测间隔",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(text = "$intervalSeconds 秒", style = MaterialTheme.typography.bodyLarge)
-            }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { showTimeoutDialog = true }
-                    .padding(vertical = 12.dp)
-            ) {
-                Text(
-                    text = "单项超时",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(text = "$timeoutMs 毫秒", style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-        Divider(
-            modifier = Modifier.padding(horizontal = 12.dp),
-            color = MaterialTheme.colorScheme.outlineVariant
-        )
     }
 
     if (showAddDialog) {
@@ -704,36 +639,6 @@ private fun FailoverDetectionCard(
             }
         )
     }
-
-    if (showIntervalDialog) {
-        FailoverNumberSettingDialog(
-            title = "检测间隔",
-            initialValue = intervalSeconds.toString(),
-            rangeDescription = "请输入 1–2 秒",
-            minimum = 1L,
-            maximum = 2L,
-            onDismiss = { showIntervalDialog = false },
-            onSave = { value ->
-                persistDetection(interval = value.toInt())
-                showIntervalDialog = false
-            }
-        )
-    }
-
-    if (showTimeoutDialog) {
-        FailoverNumberSettingDialog(
-            title = "单项超时",
-            initialValue = timeoutMs.toString(),
-            rangeDescription = "请输入 500–2000 毫秒",
-            minimum = 500L,
-            maximum = 2_000L,
-            onDismiss = { showTimeoutDialog = false },
-            onSave = { value ->
-                persistDetection(timeout = value)
-                showTimeoutDialog = false
-            }
-        )
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -785,9 +690,11 @@ private fun FailoverProbeStepRow(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "顺序 $priority",
+                        text = "间隔 ${step.intervalSeconds} 秒 · 超时 ${step.timeoutMs} 毫秒",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFFF97910)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 Column(
@@ -827,13 +734,18 @@ private fun FailoverProbeStepDialog(
 ) {
     var editedStep by remember(step.id) { mutableStateOf(step) }
     var pingPortInput by remember(step.id) { mutableStateOf(step.pingPort.toString()) }
+    var intervalInput by remember(step.id) { mutableStateOf(step.intervalSeconds.toString()) }
+    var timeoutInput by remember(step.id) { mutableStateOf(step.timeoutMs.toString()) }
     var validationMessage by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (isNewStep) "添加 ${step.method.title}" else "编辑测试项") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 when (step.method) {
                     FailoverDetectionMethod.HTTPS_PROBE -> OutlinedTextField(
                         value = editedStep.probeUrl,
@@ -865,6 +777,22 @@ private fun FailoverProbeStepDialog(
                         )
                     }
                 }
+                OutlinedTextField(
+                    value = intervalInput,
+                    onValueChange = { intervalInput = it.filter(Char::isDigit) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("检测间隔（秒，1–2）") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = timeoutInput,
+                    onValueChange = { timeoutInput = it.filter(Char::isDigit) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("单项超时（毫秒，500–2000）") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
                 validationMessage?.let { message ->
                     Text(
                         text = message,
@@ -877,69 +805,31 @@ private fun FailoverProbeStepDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val candidate = if (step.method == FailoverDetectionMethod.PROXY_TCP_PING) {
-                        editedStep.copy(pingPort = pingPortInput.toIntOrNull() ?: 0)
+                    val interval = intervalInput.toIntOrNull()
+                    val timeout = timeoutInput.toLongOrNull()
+                    if (interval == null || interval !in 1..2 ||
+                        timeout == null || timeout !in 500L..2_000L
+                    ) {
+                        validationMessage = "检测间隔需为 1–2 秒，单项超时需为 500–2000 毫秒"
                     } else {
-                        editedStep
-                    }
-                    val normalized = normalizeFailoverProbeStepInput(candidate)
-                    if (normalized == null) {
-                        validationMessage = when (step.method) {
-                            FailoverDetectionMethod.HTTPS_PROBE -> "请输入有效的 HTTPS 地址"
-                            FailoverDetectionMethod.PROXY_TCP_PING -> "请检查域名/IP 和端口（1–65535）"
+                        val candidate = editedStep.copy(
+                            intervalSeconds = interval,
+                            timeoutMs = timeout,
+                            pingPort = if (step.method == FailoverDetectionMethod.PROXY_TCP_PING) {
+                                pingPortInput.toIntOrNull() ?: 0
+                            } else {
+                                editedStep.pingPort
+                            }
+                        )
+                        val normalized = normalizeFailoverProbeStepInput(candidate)
+                        if (normalized == null) {
+                            validationMessage = when (step.method) {
+                                FailoverDetectionMethod.HTTPS_PROBE -> "请输入有效的 HTTPS 地址"
+                                FailoverDetectionMethod.PROXY_TCP_PING -> "请检查域名/IP 和端口（1–65535）"
+                            }
+                        } else {
+                            onSave(normalized)
                         }
-                    } else {
-                        onSave(normalized)
-                    }
-                }
-            ) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
-    )
-}
-
-@Composable
-private fun FailoverNumberSettingDialog(
-    title: String,
-    initialValue: String,
-    rangeDescription: String,
-    minimum: Long,
-    maximum: Long,
-    onDismiss: () -> Unit,
-    onSave: (Long) -> Unit
-) {
-    var input by remember(title, initialValue) { mutableStateOf(initialValue) }
-    var invalid by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it.filter(Char::isDigit) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(title) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-                Text(
-                    text = rangeDescription,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (invalid) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val value = input.toLongOrNull()
-                    if (value == null || value !in minimum..maximum) {
-                        invalid = true
-                    } else {
-                        onSave(value)
                     }
                 }
             ) { Text("保存") }
