@@ -217,10 +217,17 @@ class BoxVpnService : VpnService() {
                         Log.e(TAG, "VPN startup failed: " + error.javaClass.simpleName)
                         if (isFailoverAttempt) {
                             val failedNode = resolvedNodeForAttempt
-                            val latestFailover = SettingsRepository(applicationContext)
-                                .failoverSettings.first()
+                            val latestSettingsRepository = SettingsRepository(applicationContext)
+                            val latestFailover = latestSettingsRepository.failoverSettings.first()
                             val nextNode = if (latestFailover.detection.enabled) {
-                                nextFailoverNode(latestFailover, failedNode?.id)
+                                val primaryNodeId = synchronized(failoverStateLock) {
+                                    failoverPrimaryNodeId
+                                }
+                                val candidates = resolveFailoverCandidates(
+                                    latestFailover.transfer.target,
+                                    latestSettingsRepository
+                                ).filter { it.id != primaryNodeId }
+                                nextFailoverNode(candidates, failedNode?.id)
                             } else {
                                 null
                             }
@@ -263,8 +270,15 @@ class BoxVpnService : VpnService() {
     private fun startFailoverMonitor(settingsRepository: SettingsRepository, ticket: Long) {
         failoverJob?.cancel()
         failoverJob = serviceScope.launch {
+            var previousTransferTarget: FailoverTransferTarget? = null
+            var hasTransferTargetSnapshot = false
             settingsRepository.failoverSettings.collectLatest { settings ->
                 if (!controller.isCurrent(ticket)) return@collectLatest
+                if (hasTransferTargetSnapshot && previousTransferTarget != settings.transfer.target) {
+                    synchronized(failoverStateLock) { attemptedFailoverNodeIds.clear() }
+                }
+                previousTransferTarget = settings.transfer.target
+                hasTransferTargetSnapshot = true
                 val detection = settings.detection
                 if (!detection.enabled) {
                     ServiceManager.notifyFailoverStatus(
@@ -280,12 +294,12 @@ class BoxVpnService : VpnService() {
                 val isUsingBackup = connectedNode != null && connectedNode.id != primaryId
                 ServiceManager.notifyFailoverStatus(
                     if (isUsingBackup) FailoverRuntimeState.USING_BACKUP else FailoverRuntimeState.MONITORING,
-                    if (settings.transfer.nodeIds.isEmpty()) {
-                        "检测已开启，请在‘转移节点’中添加备用节点"
+                    if (settings.transfer.target == null) {
+                        "检测已开启，请选择备用节点或节点组"
                     } else if (isUsingBackup) {
                         "正在使用转移节点：${connectedNode?.name.orEmpty()}"
                     } else {
-                        "正在按顺序执行 ${detection.probeSteps.size} 项测活；${settings.transfer.nodeIds.size} 个转移节点待命"
+                        "正在执行 ${detection.probeSteps.size} 项测活；转移目标已设置"
                     },
                     connectedNode?.id
                 )
@@ -393,21 +407,24 @@ class BoxVpnService : VpnService() {
                         node.id
                     )
 
-                    val nextNode = nextFailoverNode(settings, node.id)
+                    val primaryNodeId = synchronized(failoverStateLock) { failoverPrimaryNodeId }
+                    val configuredCandidates = resolveFailoverCandidates(
+                        settings.transfer.target,
+                        settingsRepository
+                    ).filter { it.id != primaryNodeId }
+                    val nextNode = nextFailoverNode(configuredCandidates, node.id)
                     if (nextNode == null) {
-                        val primaryNodeId = synchronized(failoverStateLock) { failoverPrimaryNodeId }
-                        val configuredBackups = settings.transfer.nodeIds
-                            .distinct()
-                            .count { it != primaryNodeId }
+                        val configuredBackups = configuredCandidates.size
                         val attemptedCount = synchronized(failoverStateLock) {
-                            settings.transfer.nodeIds.distinct().count {
-                                it != primaryNodeId && it in attemptedFailoverNodeIds
-                            }
+                            configuredCandidates.count { it.id in attemptedFailoverNodeIds }
                         }
                         ServiceManager.notifyFailoverStatus(
                             FailoverRuntimeState.NO_BACKUP,
-                            if (configuredBackups == 0) "没有可用的转移节点，请添加备用节点"
-                            else "转移节点均已尝试，30 秒后重试",
+                            when {
+                                settings.transfer.target == null -> "请选择备用节点或节点组"
+                                configuredBackups == 0 -> "备用目标中没有可用节点"
+                                else -> "备用目标中的节点均已尝试，30 秒后重试"
+                            },
                             node.id
                         )
                         if (configuredBackups > 0 && attemptedCount >= configuredBackups) {
@@ -439,22 +456,38 @@ class BoxVpnService : VpnService() {
         }
     }
 
-    private suspend fun nextFailoverNode(
-        settings: FailoverSettings,
-        currentNodeId: String?
-    ): Node? {
-        val primaryId = synchronized(failoverStateLock) { failoverPrimaryNodeId }
+    private suspend fun resolveFailoverCandidates(
+        target: FailoverTransferTarget?,
+        settingsRepository: SettingsRepository
+    ): List<Node> {
+        if (target == null) return emptyList()
         val dao = AppDatabase.getInstance(applicationContext).nodeDao()
-        for (nodeId in settings.transfer.nodeIds.distinct()) {
-            if (nodeId == currentNodeId || nodeId == primaryId) continue
-            if (synchronized(failoverStateLock) { nodeId in attemptedFailoverNodeIds }) continue
-            val node = dao.getNodeById(nodeId)
-            if (node == null || node.type == NodeType.UNKNOWN || node.server.isBlank() || node.port !in 1..65_535) {
-                synchronized(failoverStateLock) { attemptedFailoverNodeIds.add(nodeId) }
-                continue
+        val candidates = when (target) {
+            is FailoverTransferTarget.Node -> listOfNotNull(dao.getNodeById(target.nodeId))
+            is FailoverTransferTarget.Group -> when (val group = NodeGroupKey.parse(target.groupId)) {
+                is NodeGroupKey.Subscription -> dao.getSubscriptionNodes().first()
+                    .filter { it.subscriptionSourceId == group.sourceId }
+                is NodeGroupKey.Imported -> dao.getNodesByGroup(group.groupId).first()
+                is NodeGroupKey.Country -> countryGroupingNodes(
+                    dao = dao,
+                    allNodes = dao.getAllNodes().first(),
+                    selectedSourceIds = settingsRepository.countryGroupingSourceIds.first()
+                ).filter { it.getCountryCode() == group.countryCode }
+                null -> emptyList()
             }
+        }
+        return candidates.distinctBy(Node::id).filter {
+            it.type != NodeType.UNKNOWN && it.server.isNotBlank() && it.port in 1..65_535
+        }
+    }
+
+    private fun nextFailoverNode(candidates: List<Node>, currentNodeId: String?): Node? {
+        for (node in candidates
+            .filter { it.id != currentNodeId }
+            .shuffled()
+        ) {
             val accepted = synchronized(failoverStateLock) {
-                attemptedFailoverNodeIds.add(node.id)
+                node.id !in attemptedFailoverNodeIds && attemptedFailoverNodeIds.add(node.id)
             }
             if (accepted) return node
         }

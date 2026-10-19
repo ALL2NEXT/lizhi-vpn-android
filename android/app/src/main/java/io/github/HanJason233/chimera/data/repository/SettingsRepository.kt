@@ -24,6 +24,7 @@ import io.github.HanJason233.chimera.data.model.FailoverProbeStep
 import io.github.HanJason233.chimera.data.model.FailoverPingTarget
 import io.github.HanJason233.chimera.data.model.FailoverSettings
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
+import io.github.HanJason233.chimera.data.model.FailoverTransferTarget
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
@@ -110,6 +111,7 @@ class SettingsRepository(
         private val FAILOVER_INTERVAL_SECONDS = intPreferencesKey("failover_interval_seconds")
         private val FAILOVER_TIMEOUT_MS = longPreferencesKey("failover_timeout_ms")
         private val FAILOVER_CONSECUTIVE_FAILURES = intPreferencesKey("failover_consecutive_failures")
+        private val FAILOVER_TRANSFER_TARGET = stringPreferencesKey("failover_transfer_target")
         private val FAILOVER_TRANSFER_NODE_IDS = stringPreferencesKey("failover_transfer_node_ids")
         private val HOME_CLICK_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_click_speed_test_scheme_id")
@@ -562,15 +564,12 @@ class SettingsRepository(
             ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS).coerceIn(1, 2)
         val legacyTimeoutMs = (preferences[FAILOVER_TIMEOUT_MS]
             ?: FailoverDetectionSettings.DEFAULT_TIMEOUT_MS).coerceIn(500L, 2_000L)
-        val transferNodeIds = runCatching {
-            val array = JSONArray(preferences[FAILOVER_TRANSFER_NODE_IDS].orEmpty())
-            buildList {
-                for (index in 0 until array.length()) {
-                    val nodeId = array.optString(index)
-                    if (nodeId.isNotBlank() && nodeId != "null") add(nodeId)
-                }
-            }.distinct()
-        }.getOrDefault(emptyList())
+        val transferTarget = if (preferences.contains(FAILOVER_TRANSFER_TARGET)) {
+            decodeFailoverTransferTarget(preferences[FAILOVER_TRANSFER_TARGET])
+        } else {
+            // 将旧版备用节点列表迁移为列表中的第一个节点。
+            decodeLegacyFailoverTransferTarget(preferences[FAILOVER_TRANSFER_NODE_IDS])
+        }
         return FailoverSettings(
             detection = FailoverDetectionSettings(
                 enabled = preferences[FAILOVER_DETECTION_ENABLED] ?: false,
@@ -583,9 +582,37 @@ class SettingsRepository(
                     .takeIf { it.isNotEmpty() }
                     ?: decodeLegacyFailoverProbeSteps(preferences),
             ),
-            transfer = FailoverTransferSettings(transferNodeIds)
+            transfer = FailoverTransferSettings(transferTarget)
         )
     }
+
+    private fun decodeFailoverTransferTarget(serialized: String?): FailoverTransferTarget? {
+        val json = runCatching { JSONObject(serialized.orEmpty()) }.getOrNull() ?: return null
+        val id = json.optString("id").trim().takeIf(String::isNotEmpty) ?: return null
+        return when (json.optString("type")) {
+            "NODE" -> FailoverTransferTarget.Node(id)
+            "GROUP" -> NodeGroupKey.parse(id)?.let { FailoverTransferTarget.Group(it.value) }
+            else -> null
+        }
+    }
+
+    private fun decodeLegacyFailoverTransferTarget(serialized: String?): FailoverTransferTarget? {
+        val array = runCatching { JSONArray(serialized.orEmpty()) }.getOrNull() ?: return null
+        val nodeId = array.optString(0).trim().takeIf { it.isNotEmpty() && it != "null" }
+            ?: return null
+        return FailoverTransferTarget.Node(nodeId)
+    }
+
+    private fun encodeFailoverTransferTarget(target: FailoverTransferTarget?): String =
+        target?.let {
+            JSONObject()
+                .put("type", if (it is FailoverTransferTarget.Node) "NODE" else "GROUP")
+                .put("id", when (it) {
+                    is FailoverTransferTarget.Node -> it.nodeId
+                    is FailoverTransferTarget.Group -> it.groupId
+                })
+                .toString()
+        }.orEmpty()
 
     suspend fun setFailoverDetection(settings: FailoverDetectionSettings) {
         val normalizedSteps = normalizeFailoverProbeSteps(settings.probeSteps) ?: return
@@ -710,10 +737,24 @@ class SettingsRepository(
         store.edit { preferences -> preferences[FAILOVER_DETECTION_ENABLED] = enabled }
     }
 
-    suspend fun setFailoverTransferNodes(nodeIds: List<String>) {
-        val normalizedIds = nodeIds.map { it.trim() }.filter(String::isNotEmpty).distinct()
-        val json = JSONArray().apply { normalizedIds.forEach { put(it) } }.toString()
-        store.edit { preferences -> preferences[FAILOVER_TRANSFER_NODE_IDS] = json }
+    suspend fun setFailoverTransferTarget(target: FailoverTransferTarget?) {
+        val normalizedTarget = when (target) {
+            is FailoverTransferTarget.Node -> target.nodeId.trim()
+                .takeIf(String::isNotEmpty)
+                ?.let(FailoverTransferTarget::Node)
+            is FailoverTransferTarget.Group -> NodeGroupKey.parse(target.groupId)
+                ?.let { FailoverTransferTarget.Group(it.value) }
+            null -> null
+        }
+        val legacyNodeIds = JSONArray().apply {
+            (normalizedTarget as? FailoverTransferTarget.Node)?.nodeId?.let { put(it) }
+        }.toString()
+        store.edit { preferences ->
+            // 空字符串表示用户明确清除了目标，避免重新读取旧版节点列表。
+            preferences[FAILOVER_TRANSFER_TARGET] = encodeFailoverTransferTarget(normalizedTarget)
+            // 保留单节点时的旧版读取兼容；组目标无法映射到旧版节点列表。
+            preferences[FAILOVER_TRANSFER_NODE_IDS] = legacyNodeIds
+        }
     }
 
     private fun normalizeFailoverProbeUrl(value: String?): String? = runCatching {

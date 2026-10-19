@@ -2651,8 +2651,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsRepository.setFailoverDetectionEnabled(enabled) }
     }
 
-    fun setFailoverTransferNodes(nodeIds: List<String>) {
-        viewModelScope.launch { settingsRepository.setFailoverTransferNodes(nodeIds) }
+    fun setFailoverTransferTarget(target: FailoverTransferTarget?) {
+        viewModelScope.launch { settingsRepository.setFailoverTransferTarget(target) }
     }
 
     fun setHomeLongPressSpeedTestScheme(schemeId: String) {

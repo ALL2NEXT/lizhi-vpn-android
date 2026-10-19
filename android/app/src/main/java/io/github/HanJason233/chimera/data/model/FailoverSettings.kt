@@ -86,9 +86,14 @@ object FailoverPingTarget {
     fun isValidPort(port: Int): Boolean = port in 1..65_535
 }
 
-/** Ordered node ids; the first usable node is tried first after the active node fails. */
+/** 故障时使用单个备用节点，或从指定节点组中随机挑选节点。 */
+sealed interface FailoverTransferTarget {
+    data class Node(val nodeId: String) : FailoverTransferTarget
+    data class Group(val groupId: String) : FailoverTransferTarget
+}
+
 data class FailoverTransferSettings(
-    val nodeIds: List<String> = emptyList()
+    val target: FailoverTransferTarget? = null
 )
 
 enum class FailoverRuntimeState {

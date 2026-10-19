@@ -39,7 +39,6 @@ import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
@@ -93,6 +92,8 @@ import io.github.HanJason233.chimera.data.model.FailoverPingTarget
 import io.github.HanJason233.chimera.data.model.FailoverProbeStep
 import io.github.HanJason233.chimera.data.model.FailoverRuntimeStatus
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
+import io.github.HanJason233.chimera.data.model.FailoverTransferTarget
+import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
@@ -265,10 +266,44 @@ fun OutboundScreen(
     val failoverSettings by viewModel.failoverSettings.collectAsStateWithLifecycle()
     val failoverStatus by viewModel.failoverRuntimeStatus.collectAsStateWithLifecycle()
     val availableNodes by viewModel.allWarehouseNodes.collectAsStateWithLifecycle()
+    val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
+    val personalGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
+    val countryOptions by viewModel.countryOptions.collectAsStateWithLifecycle()
     val hysteriaBandwidthEnabled by viewModel.hysteriaBandwidthEnabled.collectAsStateWithLifecycle()
     val hysteriaUpMbps by viewModel.hysteriaUpMbps.collectAsStateWithLifecycle()
     val hysteriaDownMbps by viewModel.hysteriaDownMbps.collectAsStateWithLifecycle()
     val isHysteriaBandwidthAdapting by viewModel.isHysteriaBandwidthAdapting.collectAsStateWithLifecycle()
+    val failoverGroups = remember(availableNodes, subscriptionGroups, personalGroups, countryOptions) {
+        buildList {
+            subscriptionGroups.forEach { group ->
+                add(
+                    FailoverGroupOption(
+                        id = NodeGroupKey.Subscription(group.sourceId).value,
+                        name = "官方源 · ${group.name}",
+                        nodeCount = availableNodes.count { it.subscriptionSourceId == group.sourceId }
+                    )
+                )
+            }
+            personalGroups.forEach { group ->
+                add(
+                    FailoverGroupOption(
+                        id = group.id,
+                        name = "私人源 · ${group.name}",
+                        nodeCount = group.nodeCount
+                    )
+                )
+            }
+            countryOptions.forEach { group ->
+                add(
+                    FailoverGroupOption(
+                        id = NodeGroupKey.Country(group.code).value,
+                        name = "地区组 · ${group.name}",
+                        nodeCount = group.nodeCount
+                    )
+                )
+            }
+        }.filter { it.nodeCount > 0 }.distinctBy(FailoverGroupOption::id)
+    }
 
     var hysteriaUpMbpsInput by remember(hysteriaUpMbps) {
         mutableStateOf(hysteriaUpMbps.toString())
@@ -321,7 +356,8 @@ fun OutboundScreen(
                     settings = failoverSettings.transfer,
                     currentNodeId = currentNode?.id,
                     nodes = availableNodes,
-                    onChange = viewModel::setFailoverTransferNodes
+                    groups = failoverGroups,
+                    onChange = viewModel::setFailoverTransferTarget
                 )
             }
         }
@@ -822,22 +858,39 @@ private fun normalizeFailoverProbeStepInput(step: FailoverProbeStep): FailoverPr
         }
     }
 
+private data class FailoverGroupOption(
+    val id: String,
+    val name: String,
+    val nodeCount: Int
+)
+
 @Composable
 private fun FailoverTransferCard(
     settings: FailoverTransferSettings,
     currentNodeId: String?,
     nodes: List<io.github.HanJason233.chimera.data.model.Node>,
-    onChange: (List<String>) -> Unit
+    groups: List<FailoverGroupOption>,
+    onChange: (FailoverTransferTarget?) -> Unit
 ) {
     var showPicker by remember { mutableStateOf(false) }
-    var pickedNodeIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    val nodeById = remember(nodes) { nodes.associateBy { it.id } }
+    var showGroupOptions by remember { mutableStateOf(false) }
     val eligibleNodes = remember(nodes, currentNodeId) {
         nodes.filter {
             it.id != currentNodeId &&
                 it.type != io.github.HanJason233.chimera.data.model.NodeType.UNKNOWN &&
                 it.server.isNotBlank() && it.port in 1..65_535
         }
+    }
+    val targetLabel = when (val target = settings.target) {
+        is FailoverTransferTarget.Node -> {
+            val nodeName = nodes.firstOrNull { it.id == target.nodeId }?.name ?: "节点已删除"
+            "单个节点：$nodeName"
+        }
+        is FailoverTransferTarget.Group -> {
+            val groupName = groups.firstOrNull { it.id == target.groupId }?.name ?: "节点组已删除"
+            "节点组：$groupName"
+        }
+        null -> "尚未选择备用目标"
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -848,72 +901,32 @@ private fun FailoverTransferCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "转移节点",
+                text = "转移目标",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            if (settings.nodeIds.isEmpty()) {
-                Text(
-                    text = "尚未添加转移节点",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                settings.nodeIds.forEachIndexed { index, nodeId ->
-                    val node = nodeById[nodeId]
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                                text = buildString {
-                                    append("${index + 1}. ")
-                                    append(node?.name ?: "节点已删除")
-                                    node?.let { append(" · ${it.type.protocol}") }
-                                },
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                        )
-                        TextButton(
-                            enabled = index > 0,
-                            onClick = {
-                                val orderedIds = settings.nodeIds.toMutableList()
-                                val previous = orderedIds[index - 1]
-                                orderedIds[index - 1] = orderedIds[index]
-                                orderedIds[index] = previous
-                                onChange(orderedIds)
-                            }
-                        ) { Text("上移") }
-                        TextButton(
-                            enabled = index < settings.nodeIds.lastIndex,
-                            onClick = {
-                                val orderedIds = settings.nodeIds.toMutableList()
-                                val next = orderedIds[index + 1]
-                                orderedIds[index + 1] = orderedIds[index]
-                                orderedIds[index] = next
-                                onChange(orderedIds)
-                            }
-                        ) { Text("下移") }
-                        TextButton(onClick = { onChange(settings.nodeIds - nodeId) }) { Text("移除") }
-                    }
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
-                }
-            }
-            Button(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    pickedNodeIds = settings.nodeIds.toSet()
-                    showPicker = true
-                }
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("添加或选择转移节点")
+                Text(
+                    text = targetLabel,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                TextButton(onClick = {
+                    showGroupOptions = false
+                    showPicker = true
+                }) {
+                    Text(if (settings.target == null) "选择" else "更改")
+                }
+                if (settings.target != null) {
+                    TextButton(onClick = { onChange(null) }) { Text("清除") }
+                }
             }
         }
         Divider(
@@ -925,55 +938,100 @@ private fun FailoverTransferCard(
     if (showPicker) {
         AlertDialog(
             onDismissRequest = { showPicker = false },
-            title = { Text("选择转移节点") },
+            title = { Text("选择备用目标") },
             text = {
-                if (eligibleNodes.isEmpty()) {
-                    Text("没有可添加的节点")
-                } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        TextButton(onClick = { showGroupOptions = false }) {
+                            Text(
+                                "单个节点",
+                                color = if (!showGroupOptions) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(onClick = { showGroupOptions = true }) {
+                            Text(
+                                "节点组",
+                                color = if (showGroupOptions) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
                     Column(
                         modifier = Modifier
                             .heightIn(max = 420.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        eligibleNodes.forEach { node ->
-                            val checked = node.id in pickedNodeIds
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        pickedNodeIds = if (checked) pickedNodeIds - node.id
-                                        else pickedNodeIds + node.id
-                                    }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = checked,
-                                    onCheckedChange = { isChecked ->
-                                        pickedNodeIds = if (isChecked) pickedNodeIds + node.id
-                                        else pickedNodeIds - node.id
-                                    }
-                                )
+                        if (showGroupOptions) {
+                            if (groups.isEmpty()) {
                                 Text(
-                                    "${node.name} · ${node.type.protocol}",
-                                    style = MaterialTheme.typography.bodyMedium
+                                    text = "当前没有可用节点组",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(vertical = 12.dp)
                                 )
+                            } else {
+                                groups.forEach { group ->
+                                    TextButton(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        onClick = {
+                                            onChange(FailoverTransferTarget.Group(group.id))
+                                            showPicker = false
+                                        }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = group.name,
+                                                modifier = Modifier.weight(1f),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "${group.nodeCount} 个节点",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (eligibleNodes.isEmpty()) {
+                            Text(
+                                text = "没有可用的备用节点",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+                        } else {
+                            eligibleNodes.forEach { node ->
+                                TextButton(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        onChange(FailoverTransferTarget.Node(node.id))
+                                        showPicker = false
+                                    }
+                                ) {
+                                    Text(
+                                        text = "${node.name} · ${node.type.protocol}",
+                                        modifier = Modifier.fillMaxWidth(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    val retained = settings.nodeIds.filter { it in pickedNodeIds && it != currentNodeId }
-                    val newlyPicked = eligibleNodes.map { it.id }
-                        .filter { it in pickedNodeIds && it !in retained }
-                    onChange(retained + newlyPicked)
-                    showPicker = false
-                }) { Text("完成") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("取消") }
+                TextButton(onClick = { showPicker = false }) { Text("关闭") }
             }
         )
     }
