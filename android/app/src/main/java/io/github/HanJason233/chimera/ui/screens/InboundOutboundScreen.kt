@@ -289,16 +289,8 @@ fun OutboundScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CoreSection(title = "核心出站") {
-                Text(
-                    text = "局域网入站会直接复用当前代理出站，不会再次经过本机 TUN。",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
                 OutboundHysteriaCard(
                     enabled = hysteriaBandwidthEnabled,
-                    upMbps = hysteriaUpMbps,
-                    downMbps = hysteriaDownMbps,
                     upMbpsInput = hysteriaUpMbpsInput,
                     downMbpsInput = hysteriaDownMbpsInput,
                     isAdapting = isHysteriaBandwidthAdapting,
@@ -455,31 +447,19 @@ private fun FailoverDetectionCard(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "故障检测",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "按测试列表检查当前代理节点",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = "故障检测",
+                modifier = Modifier.weight(1f),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Switch(checked = settings.enabled, onCheckedChange = onEnabledChange)
         }
         Text(
-            text = "从上到下依次测试；每项完成后按该项间隔等待。任一项通过即结束本轮，全部失败后才会转移节点。点按编辑，长按拖动排序。",
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
             text = runtimeStatus.message,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = if (runtimeStatus.state.name in setOf("ERROR", "NO_BACKUP")) {
                 MaterialTheme.colorScheme.error
             } else {
@@ -598,14 +578,6 @@ private fun FailoverDetectionCard(
                                     text = method.title,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
-                                Text(
-                                    text = when (method) {
-                                        FailoverDetectionMethod.HTTPS_PROBE -> "通过代理请求 HTTPS 地址"
-                                        FailoverDetectionMethod.PROXY_TCP_PING -> "通过代理连接域名或 IP 的端口"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
                         }
                     }
@@ -691,7 +663,7 @@ private fun FailoverProbeStepRow(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "间隔 ${step.intervalSeconds} 秒 · 超时 ${step.timeoutMs} 毫秒",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -755,11 +727,6 @@ private fun FailoverProbeStepDialog(
                         singleLine = true
                     )
                     FailoverDetectionMethod.PROXY_TCP_PING -> {
-                        Text(
-                            text = "经当前代理节点建立 TCP 连接；域名由代理端解析。这不是 ICMP Ping。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                         OutlinedTextField(
                             value = editedStep.pingHost,
                             onValueChange = { editedStep = editedStep.copy(pingHost = it) },
@@ -796,7 +763,7 @@ private fun FailoverProbeStepDialog(
                 validationMessage?.let { message ->
                     Text(
                         text = message,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -886,13 +853,12 @@ private fun FailoverTransferCard(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = "按列表顺序尝试连接。当前连接和失效节点会跳过；切换后保持使用转移节点，不自动回切。",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             if (settings.nodeIds.isEmpty()) {
-                Text("尚未添加转移节点", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = "尚未添加转移节点",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             } else {
                 settings.nodeIds.forEachIndexed { index, nodeId ->
                     val node = nodeById[nodeId]
@@ -902,21 +868,19 @@ private fun FailoverTransferCard(
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "${index + 1}. ${node?.name ?: "节点已删除"}",
-                                fontSize = 13.sp,
+                        Text(
+                                text = buildString {
+                                    append("${index + 1}. ")
+                                    append(node?.name ?: "节点已删除")
+                                    node?.let { append(" · ${it.type.protocol}") }
+                                },
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            node?.let {
-                                Text(
-                                    text = "${it.type.protocol} · ${it.server}:${it.port}",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                        )
                         TextButton(
                             enabled = index > 0,
                             onClick = {
@@ -990,14 +954,10 @@ private fun FailoverTransferCard(
                                         else pickedNodeIds - node.id
                                     }
                                 )
-                                Column {
-                                    Text(node.name, fontSize = 13.sp)
-                                    Text(
-                                        "${node.type.protocol} · ${node.server}:${node.port}",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Text(
+                                    "${node.name} · ${node.type.protocol}",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
                             }
                         }
                     }
@@ -1023,8 +983,6 @@ private fun FailoverTransferCard(
 @Composable
 private fun OutboundHysteriaCard(
     enabled: Boolean,
-    upMbps: Int,
-    downMbps: Int,
     upMbpsInput: String,
     downMbpsInput: String,
     isAdapting: Boolean,
@@ -1051,22 +1009,12 @@ private fun OutboundHysteriaCard(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        text = "仅对 Hysteria2 节点的核心出站生效",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
                 Switch(
                     checked = enabled,
                     onCheckedChange = onEnabledChange
                 )
             }
-            Text(
-                text = "启用后仅对 Hysteria2 节点的核心出站生效。",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1076,7 +1024,7 @@ private fun OutboundHysteriaCard(
                     value = upMbpsInput,
                     onValueChange = onUpMbpsChange,
                     modifier = Modifier.weight(1f),
-                    label = { Text("Up") },
+                    label = { Text("上行 Mbps") },
                     enabled = enabled,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -1085,7 +1033,7 @@ private fun OutboundHysteriaCard(
                     value = downMbpsInput,
                     onValueChange = onDownMbpsChange,
                     modifier = Modifier.weight(1f),
-                    label = { Text("Dw") },
+                    label = { Text("下行 Mbps") },
                     enabled = enabled,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -1097,11 +1045,6 @@ private fun OutboundHysteriaCard(
                     Text(if (isAdapting) "测试中..." else "自适应")
                 }
             }
-            Text(
-                text = "当前上行 $upMbps Mbps，下行 $downMbps Mbps",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
         Divider(
             modifier = Modifier.padding(horizontal = 12.dp),
