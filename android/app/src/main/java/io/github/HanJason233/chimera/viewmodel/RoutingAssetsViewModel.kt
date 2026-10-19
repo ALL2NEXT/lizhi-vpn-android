@@ -5,9 +5,11 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.HanJason233.chimera.data.repository.RoutingAssetDownloadResult
+import io.github.HanJason233.chimera.data.repository.RoutingAssetFileInfo
 import io.github.HanJason233.chimera.data.repository.RoutingAssetRecord
 import io.github.HanJason233.chimera.data.repository.RoutingAssetsRepository
 import io.github.HanJason233.chimera.data.repository.RoutingAssetsSnapshot
+import io.github.HanJason233.chimera.util.RuleManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,27 +19,37 @@ import kotlinx.coroutines.withContext
 
 internal data class RoutingAssetsUiState(
     val snapshot: RoutingAssetsSnapshot,
-    val loading: Boolean = false
+    val loading: Boolean = false,
+    val singBoxRuleSets: Map<String, RoutingAssetFileInfo> = emptyMap(),
+    val singBoxAutoUpdateEnabled: Boolean = true
 )
 
 internal class RoutingAssetsViewModel(application: Application) : AndroidViewModel(application) {
+    private val app = application
     private val repository = RoutingAssetsRepository(application)
-    private val _state = MutableStateFlow(RoutingAssetsUiState(repository.load(), loading = true))
+    private val _state = MutableStateFlow(
+        RoutingAssetsUiState(
+            snapshot = repository.load(),
+            loading = true,
+            singBoxRuleSets = RuleManager.ruleSetFileInfo(application),
+            singBoxAutoUpdateEnabled = RuleManager.isAutoUpdateEnabled(application)
+        )
+    )
     val state: StateFlow<RoutingAssetsUiState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { repository.initializeBundledAssets() }
-            _state.value = RoutingAssetsUiState(
-                snapshot = withContext(Dispatchers.IO) { repository.load() }
-            )
+            withContext(Dispatchers.IO) {
+                repository.initializeBundledAssets()
+                runCatching { RuleManager.ensureRuleSets(app) }
+            }
+            _state.value = loadState()
         }
     }
 
     fun refresh() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val snapshot = repository.load()
-            _state.value = _state.value.copy(snapshot = snapshot)
+        viewModelScope.launch {
+            _state.value = loadState()
         }
     }
 
@@ -65,9 +77,16 @@ internal class RoutingAssetsViewModel(application: Application) : AndroidViewMod
     }
 
     fun removeAsset(asset: RoutingAssetRecord) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             repository.removeAsset(asset.id, asset.name)
-            _state.value = _state.value.copy(snapshot = repository.load())
+            _state.value = loadState()
+        }
+    }
+
+    fun setSingBoxAutoUpdateEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { RuleManager.setAutoUpdateEnabled(app, enabled) }
+            _state.value = _state.value.copy(singBoxAutoUpdateEnabled = enabled)
         }
     }
 
@@ -75,12 +94,24 @@ internal class RoutingAssetsViewModel(application: Application) : AndroidViewMod
         if (_state.value.loading) return
         _state.value = _state.value.copy(loading = true)
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { repository.downloadAll() }
-            _state.value = RoutingAssetsUiState(
-                snapshot = withContext(Dispatchers.IO) { repository.load() },
-                loading = false
-            )
+            val result = withContext(Dispatchers.IO) {
+                val xrayResult = repository.downloadAll()
+                val singBoxResult = RuleManager.updateRuleSets(app, force = true)
+                RoutingAssetDownloadResult(
+                    downloaded = xrayResult.downloaded + singBoxResult.updated.size,
+                    failed = (xrayResult.failed + singBoxResult.failed).distinct()
+                )
+            }
+            _state.value = loadState()
             onResult(result)
         }
+    }
+
+    private suspend fun loadState(): RoutingAssetsUiState = withContext(Dispatchers.IO) {
+        RoutingAssetsUiState(
+            snapshot = repository.load(),
+            singBoxRuleSets = RuleManager.ruleSetFileInfo(app),
+            singBoxAutoUpdateEnabled = RuleManager.isAutoUpdateEnabled(app)
+        )
     }
 }

@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,8 +44,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.HanJason233.chimera.data.repository.RoutingAssetFileInfo
 import io.github.HanJason233.chimera.data.repository.RoutingAssetRecord
 import io.github.HanJason233.chimera.data.repository.RoutingAssetsRepository
+import io.github.HanJason233.chimera.util.RuleManager
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.RoutingAssetsViewModel
@@ -139,7 +142,7 @@ internal fun RoutingAssetsScreen(
                 },
                 enabled = !state.loading
             ) {
-                Icon(Icons.Filled.CloudDownload, contentDescription = "更新所有资源文件")
+                Icon(Icons.Filled.CloudDownload, contentDescription = "更新 Xray 和 sing-box 资源文件")
             }
         }
     ) {
@@ -156,7 +159,7 @@ internal fun RoutingAssetsScreen(
                             .padding(16.dp)
                     ) {
                         Text(
-                            "Geo 文件来源（可选）",
+                            "Xray Geo 文件来源（可选）",
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Spacer(modifier = Modifier.height(4.dp))
@@ -186,7 +189,7 @@ internal fun RoutingAssetsScreen(
             }
             item(key = "asset_heading") {
                 Text(
-                    "GeoIP/GeoSite 数据随安装包提供，并在首次启动时初始化到本地；需要更新时可点右上角云下载按钮。",
+                    "Xray GeoIP/GeoSite 数据随安装包提供，并在首次启动时初始化到本地。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
@@ -194,7 +197,7 @@ internal fun RoutingAssetsScreen(
                         .padding(horizontal = 16.dp, vertical = 4.dp)
                 )
                 Text(
-                    "资源文件",
+                    "Xray Geo 数据库",
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -217,6 +220,46 @@ internal fun RoutingAssetsScreen(
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
                 }
+            }
+            item(key = "singbox_heading") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("sing-box 规则集", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "本页管理内置的 geoip-cn.srs 和 geosite-cn.srs；其他 Geo 标签由 sing-box 核心按需下载。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            item(key = "singbox_auto_update") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("自动更新内置 sing-box 规则集", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "应用启动后每 24 小时检查；关闭后仍可手动更新",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = state.singBoxAutoUpdateEnabled,
+                        onCheckedChange = viewModel::setSingBoxAutoUpdateEnabled,
+                        enabled = !state.loading
+                    )
+                }
+            }
+            items(RuleManager.RULE_SET_FILES, key = { "singbox:$it" }) { name ->
+                SingBoxRuleSetRow(name, state.singBoxRuleSets[name])
             }
         }
     }
@@ -252,6 +295,46 @@ internal fun RoutingAssetsScreen(
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) { Text("取消") }
             }
+        )
+    }
+}
+
+@Composable
+private fun SingBoxRuleSetRow(
+    name: String,
+    fileInfo: RoutingAssetFileInfo?
+) {
+    val details = remember(fileInfo) {
+        if (fileInfo == null) {
+            "本地文件缺失，使用 sing-box 时会从安装包初始化"
+        } else {
+            val date = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                .format(Date(fileInfo.lastModified))
+            "${fileInfo.length.toAssetSize()} · $date"
+        }
+    }
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(name, style = MaterialTheme.typography.bodyLarge)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    details,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Divider(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
         )
     }
 }

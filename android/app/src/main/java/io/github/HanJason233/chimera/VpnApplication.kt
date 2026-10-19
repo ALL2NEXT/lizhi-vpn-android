@@ -34,13 +34,16 @@ class VpnApplication : Application() {
             }
         }
         
-        // 后台更新规则集（不阻塞启动，失败不影响使用）
+        // 自动更新受资源文件页面中的 sing-box 规则集开关控制。
         applicationScope.launch(Dispatchers.IO) {
             // Give homepage database/network preloading priority. Bundled
             // rules remain available if VPN starts before maintenance runs.
             delay(15_000)
             try {
-                RuleManager.updateRuleSets(this@VpnApplication)
+                val result = RuleManager.updateRuleSets(this@VpnApplication)
+                if (result.failed.isNotEmpty()) {
+                    Log.w("VpnApplication", "Rule set update failed: ${result.failed.joinToString()}")
+                }
             } catch (e: Exception) {
                 Log.w("VpnApplication", "Background rule set update failed", e)
             }
