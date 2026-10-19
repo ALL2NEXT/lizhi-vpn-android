@@ -2,8 +2,9 @@ package io.github.HanJason233.chimera.data.model
 
 import java.net.IDN
 import java.net.InetAddress
+import java.util.UUID
 
-/** Settings for detecting an unreachable active outbound and selecting a replacement. */
+/** 检测当前出站节点是否可用，并在故障时选择转移节点。 */
 data class FailoverSettings(
     val detection: FailoverDetectionSettings = FailoverDetectionSettings(),
     val transfer: FailoverTransferSettings = FailoverTransferSettings()
@@ -11,13 +12,10 @@ data class FailoverSettings(
 
 data class FailoverDetectionSettings(
     val enabled: Boolean = false,
-    val method: FailoverDetectionMethod = FailoverDetectionMethod.HTTPS_PROBE,
-    val probeUrl: String = DEFAULT_PROBE_URL,
-    val pingHost: String = DEFAULT_PING_HOST,
-    val pingPort: Int = DEFAULT_PING_PORT,
+    /** 按顺序执行的测试项；每项每轮只测一次，列表长度决定连续失败次数。 */
+    val probeSteps: List<FailoverProbeStep> = DEFAULT_PROBE_STEPS,
     val intervalSeconds: Int = DEFAULT_INTERVAL_SECONDS,
-    val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
-    val consecutiveFailures: Int = DEFAULT_CONSECUTIVE_FAILURES
+    val timeoutMs: Long = DEFAULT_TIMEOUT_MS
 ) {
     companion object {
         const val DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
@@ -25,13 +23,27 @@ data class FailoverDetectionSettings(
         const val DEFAULT_PING_PORT = 443
         const val DEFAULT_INTERVAL_SECONDS = 1
         const val DEFAULT_TIMEOUT_MS = 1_000L
-        const val DEFAULT_CONSECUTIVE_FAILURES = 2
+
+        /** 默认保留两次 HTTPS 测活，延续旧版连续失败两次才转移的行为。 */
+        val DEFAULT_PROBE_STEPS = listOf(
+            FailoverProbeStep(id = "default-https-1"),
+            FailoverProbeStep(id = "default-https-2")
+        )
     }
 }
 
-enum class FailoverDetectionMethod {
-    HTTPS_PROBE,
-    PROXY_TCP_PING
+/** 一项代理连通性检测，可选择 HTTPS 测活或 TCP 连接测试。 */
+data class FailoverProbeStep(
+    val id: String = UUID.randomUUID().toString(),
+    val method: FailoverDetectionMethod = FailoverDetectionMethod.HTTPS_PROBE,
+    val probeUrl: String = FailoverDetectionSettings.DEFAULT_PROBE_URL,
+    val pingHost: String = FailoverDetectionSettings.DEFAULT_PING_HOST,
+    val pingPort: Int = FailoverDetectionSettings.DEFAULT_PING_PORT
+)
+
+enum class FailoverDetectionMethod(val title: String) {
+    HTTPS_PROBE("HTTPS 测活"),
+    PROXY_TCP_PING("代理 TCP Ping")
 }
 
 /** 规范化代理 Ping 目标；域名保留为域名，由 SOCKS5 代理端执行 DNS 解析。 */

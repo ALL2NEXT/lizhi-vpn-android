@@ -20,6 +20,7 @@ import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionMethod
+import io.github.HanJason233.chimera.data.model.FailoverProbeStep
 import io.github.HanJason233.chimera.data.model.FailoverPingTarget
 import io.github.HanJason233.chimera.data.model.FailoverSettings
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
@@ -100,6 +101,8 @@ class SettingsRepository(
         private val LAN_INBOUND_PASSWORD = stringPreferencesKey("lan_inbound_password")
         private val LAN_INBOUND_PROXY_MODE = stringPreferencesKey("lan_inbound_proxy_mode")
         private val FAILOVER_DETECTION_ENABLED = booleanPreferencesKey("failover_detection_enabled")
+        private val FAILOVER_PROBE_STEPS = stringPreferencesKey("failover_probe_steps")
+        // 旧版单项检测字段仅用于升级时迁移已有设置。
         private val FAILOVER_DETECTION_METHOD = stringPreferencesKey("failover_detection_method")
         private val FAILOVER_PROBE_URL = stringPreferencesKey("failover_probe_url")
         private val FAILOVER_PING_HOST = stringPreferencesKey("failover_ping_host")
@@ -567,44 +570,113 @@ class SettingsRepository(
         return FailoverSettings(
             detection = FailoverDetectionSettings(
                 enabled = preferences[FAILOVER_DETECTION_ENABLED] ?: false,
-                method = runCatching {
-                    FailoverDetectionMethod.valueOf(preferences[FAILOVER_DETECTION_METHOD].orEmpty())
-                }.getOrDefault(FailoverDetectionMethod.HTTPS_PROBE),
-                probeUrl = normalizeFailoverProbeUrl(preferences[FAILOVER_PROBE_URL])
-                    ?: FailoverDetectionSettings.DEFAULT_PROBE_URL,
-                pingHost = FailoverPingTarget.normalizeHost(preferences[FAILOVER_PING_HOST])
-                    ?: FailoverDetectionSettings.DEFAULT_PING_HOST,
-                pingPort = (preferences[FAILOVER_PING_PORT]
-                    ?: FailoverDetectionSettings.DEFAULT_PING_PORT).takeIf(FailoverPingTarget::isValidPort)
-                    ?: FailoverDetectionSettings.DEFAULT_PING_PORT,
+                probeSteps = decodeFailoverProbeSteps(preferences[FAILOVER_PROBE_STEPS])
+                    .takeIf { it.isNotEmpty() }
+                    ?: decodeLegacyFailoverProbeSteps(preferences),
                 intervalSeconds = (preferences[FAILOVER_INTERVAL_SECONDS]
                     ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS).coerceIn(1, 2),
                 timeoutMs = (preferences[FAILOVER_TIMEOUT_MS]
-                    ?: FailoverDetectionSettings.DEFAULT_TIMEOUT_MS).coerceIn(500L, 2_000L),
-                consecutiveFailures = (preferences[FAILOVER_CONSECUTIVE_FAILURES]
-                    ?: FailoverDetectionSettings.DEFAULT_CONSECUTIVE_FAILURES).coerceIn(1, 2)
+                    ?: FailoverDetectionSettings.DEFAULT_TIMEOUT_MS).coerceIn(500L, 2_000L)
             ),
             transfer = FailoverTransferSettings(transferNodeIds)
         )
     }
 
     suspend fun setFailoverDetection(settings: FailoverDetectionSettings) {
-        val normalizedUrl = normalizeFailoverProbeUrl(settings.probeUrl)
-        val normalizedHost = FailoverPingTarget.normalizeHost(settings.pingHost)
-        if (settings.method == FailoverDetectionMethod.HTTPS_PROBE && normalizedUrl == null) return
-        if (settings.method == FailoverDetectionMethod.PROXY_TCP_PING &&
-            (normalizedHost == null || !FailoverPingTarget.isValidPort(settings.pingPort))
-        ) return
-        store.edit { preferences ->
-            preferences[FAILOVER_DETECTION_METHOD] = settings.method.name
-            normalizedUrl?.let { preferences[FAILOVER_PROBE_URL] = it }
-            normalizedHost?.let { preferences[FAILOVER_PING_HOST] = it }
-            if (FailoverPingTarget.isValidPort(settings.pingPort)) {
-                preferences[FAILOVER_PING_PORT] = settings.pingPort
+        val normalizedSteps = normalizeFailoverProbeSteps(settings.probeSteps) ?: return
+        val firstStep = normalizedSteps.first()
+        val serializedSteps = JSONArray().apply {
+            normalizedSteps.forEach { step ->
+                put(
+                    JSONObject()
+                        .put("id", step.id)
+                        .put("method", step.method.name)
+                        .put("probeUrl", step.probeUrl)
+                        .put("pingHost", step.pingHost)
+                        .put("pingPort", step.pingPort)
+                )
             }
+        }.toString()
+        store.edit { preferences ->
+            preferences[FAILOVER_PROBE_STEPS] = serializedSteps
+            // 同步首项和条数，保留旧版本读取单项设置时的合理降级行为。
+            preferences[FAILOVER_DETECTION_METHOD] = firstStep.method.name
+            preferences[FAILOVER_PROBE_URL] = firstStep.probeUrl
+            preferences[FAILOVER_PING_HOST] = firstStep.pingHost
+            preferences[FAILOVER_PING_PORT] = firstStep.pingPort
+            preferences[FAILOVER_CONSECUTIVE_FAILURES] = normalizedSteps.size
             preferences[FAILOVER_INTERVAL_SECONDS] = settings.intervalSeconds.coerceIn(1, 2)
             preferences[FAILOVER_TIMEOUT_MS] = settings.timeoutMs.coerceIn(500L, 2_000L)
-            preferences[FAILOVER_CONSECUTIVE_FAILURES] = settings.consecutiveFailures.coerceIn(1, 2)
+        }
+    }
+
+    private fun decodeLegacyFailoverProbeSteps(preferences: Preferences): List<FailoverProbeStep> {
+        val method = runCatching {
+            FailoverDetectionMethod.valueOf(preferences[FAILOVER_DETECTION_METHOD].orEmpty())
+        }.getOrDefault(FailoverDetectionMethod.HTTPS_PROBE)
+        val probeUrl = normalizeFailoverProbeUrl(preferences[FAILOVER_PROBE_URL])
+            ?: FailoverDetectionSettings.DEFAULT_PROBE_URL
+        val pingHost = FailoverPingTarget.normalizeHost(preferences[FAILOVER_PING_HOST])
+            ?: FailoverDetectionSettings.DEFAULT_PING_HOST
+        val pingPort = (preferences[FAILOVER_PING_PORT]
+            ?: FailoverDetectionSettings.DEFAULT_PING_PORT)
+            .takeIf(FailoverPingTarget::isValidPort)
+            ?: FailoverDetectionSettings.DEFAULT_PING_PORT
+        val count = (preferences[FAILOVER_CONSECUTIVE_FAILURES] ?: 2).coerceIn(1, 2)
+        return List(count) { index ->
+            FailoverProbeStep(
+                id = "migrated-${index + 1}",
+                method = method,
+                probeUrl = probeUrl,
+                pingHost = pingHost,
+                pingPort = pingPort
+            )
+        }
+    }
+
+    private fun decodeFailoverProbeSteps(serialized: String?): List<FailoverProbeStep> {
+        val array = runCatching { JSONArray(serialized.orEmpty()) }.getOrNull() ?: return emptyList()
+        val steps = mutableListOf<FailoverProbeStep>()
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            val method = runCatching {
+                FailoverDetectionMethod.valueOf(item.optString("method"))
+            }.getOrNull() ?: continue
+            val step = FailoverProbeStep(
+                id = item.optString("id").takeIf(String::isNotBlank) ?: UUID.randomUUID().toString(),
+                method = method,
+                probeUrl = item.optString("probeUrl", FailoverDetectionSettings.DEFAULT_PROBE_URL),
+                pingHost = item.optString("pingHost", FailoverDetectionSettings.DEFAULT_PING_HOST),
+                pingPort = item.optInt("pingPort", FailoverDetectionSettings.DEFAULT_PING_PORT)
+            )
+            normalizeFailoverProbeStep(step)?.let(steps::add)
+        }
+        return steps.distinctBy(FailoverProbeStep::id)
+    }
+
+    private fun normalizeFailoverProbeSteps(steps: List<FailoverProbeStep>): List<FailoverProbeStep>? {
+        if (steps.isEmpty()) return null
+        val usedIds = mutableSetOf<String>()
+        val normalizedSteps = mutableListOf<FailoverProbeStep>()
+        for (step in steps) {
+            val normalized = normalizeFailoverProbeStep(step) ?: return null
+            val id = normalized.id.takeIf { it.isNotBlank() && usedIds.add(it) }
+                ?: UUID.randomUUID().toString().also(usedIds::add)
+            normalizedSteps += normalized.copy(id = id)
+        }
+        return normalizedSteps
+    }
+
+    private fun normalizeFailoverProbeStep(step: FailoverProbeStep): FailoverProbeStep? = when (step.method) {
+        FailoverDetectionMethod.HTTPS_PROBE -> normalizeFailoverProbeUrl(step.probeUrl)
+            ?.let { step.copy(probeUrl = it) }
+        FailoverDetectionMethod.PROXY_TCP_PING -> {
+            val host = FailoverPingTarget.normalizeHost(step.pingHost)
+            if (host == null || !FailoverPingTarget.isValidPort(step.pingPort)) {
+                null
+            } else {
+                step.copy(pingHost = host)
+            }
         }
     }
 

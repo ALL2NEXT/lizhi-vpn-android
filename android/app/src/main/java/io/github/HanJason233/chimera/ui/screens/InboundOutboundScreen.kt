@@ -5,22 +5,37 @@ import android.content.ClipboardManager
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
@@ -32,13 +47,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,12 +66,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -64,6 +90,7 @@ import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionMethod
 import io.github.HanJason233.chimera.data.model.FailoverPingTarget
+import io.github.HanJason233.chimera.data.model.FailoverProbeStep
 import io.github.HanJason233.chimera.data.model.FailoverRuntimeStatus
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
 import io.github.HanJason233.chimera.data.model.VpnState
@@ -71,6 +98,7 @@ import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.util.NetworkUtils
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
+import kotlin.math.abs
 
 /** 只展示核心实际拥有的入站对象；应用过滤和 TUN 参数不属于核心入站。 */
 @Composable
@@ -308,7 +336,8 @@ fun OutboundScreen(
     }
 }
 
-/** Runtime health check configuration; probe cadence and transfer targets remain separate. */
+/** 故障检测按顺序列表配置；每轮逐项测试，全部失败后才转移节点。 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FailoverDetectionCard(
     settings: FailoverDetectionSettings,
@@ -316,223 +345,471 @@ private fun FailoverDetectionCard(
     onEnabledChange: (Boolean) -> Unit,
     onSave: (FailoverDetectionSettings) -> Unit
 ) {
-    val context = LocalContext.current
-    var detectionMethod by remember(settings.method) { mutableStateOf(settings.method) }
-    var probeUrl by remember(settings.probeUrl) { mutableStateOf(settings.probeUrl) }
-    var pingHost by remember(settings.pingHost) { mutableStateOf(settings.pingHost) }
-    var pingPortInput by remember(settings.pingPort) { mutableStateOf(settings.pingPort.toString()) }
-    var intervalInput by remember(settings.intervalSeconds) {
-        mutableStateOf(settings.intervalSeconds.toString())
+    var probeSteps by remember(settings.probeSteps) { mutableStateOf(settings.probeSteps) }
+    var intervalSeconds by remember(settings.intervalSeconds) {
+        mutableStateOf(settings.intervalSeconds)
     }
-    var timeoutInput by remember(settings.timeoutMs) { mutableStateOf(settings.timeoutMs.toString()) }
-    var failureInput by remember(settings.consecutiveFailures) {
-        mutableStateOf(settings.consecutiveFailures.toString())
+    var timeoutMs by remember(settings.timeoutMs) { mutableStateOf(settings.timeoutMs) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var showIntervalDialog by remember { mutableStateOf(false) }
+    var showTimeoutDialog by remember { mutableStateOf(false) }
+    var editingStep by remember { mutableStateOf<FailoverProbeStep?>(null) }
+    var editingNewStep by remember { mutableStateOf(false) }
+    val probeListState = rememberLazyListState()
+    val hapticFeedback = LocalHapticFeedback.current
+    var draggedStepId by remember { mutableStateOf<String?>(null) }
+    var dragStartIndex by remember { mutableIntStateOf(-1) }
+    var draggedItemHeight by remember { mutableFloatStateOf(1f) }
+    var dragDistance by remember { mutableFloatStateOf(0f) }
+    var reorderBaseline by remember { mutableFloatStateOf(0f) }
+    var settlingStepId by remember { mutableStateOf<String?>(null) }
+    var settleStartOffset by remember { mutableFloatStateOf(0f) }
+    var settleAnimationReady by remember { mutableStateOf(false) }
+    val settleOffsetAnimation = remember { Animatable(0f) }
+
+    LaunchedEffect(settlingStepId, settleStartOffset) {
+        if (settlingStepId != null && abs(settleStartOffset) > 0.5f) {
+            settleAnimationReady = false
+            settleOffsetAnimation.snapTo(settleStartOffset)
+            settleAnimationReady = true
+            settleOffsetAnimation.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            )
+        }
+        settlingStepId = null
+        settleStartOffset = 0f
+        settleAnimationReady = false
     }
-    var validationMessage by remember { mutableStateOf<String?>(null) }
+
+    fun persistDetection(
+        steps: List<FailoverProbeStep> = probeSteps,
+        interval: Int = intervalSeconds,
+        timeout: Long = timeoutMs
+    ) {
+        probeSteps = steps
+        intervalSeconds = interval
+        timeoutMs = timeout
+        onSave(
+            settings.copy(
+                probeSteps = steps,
+                intervalSeconds = interval,
+                timeoutMs = timeout
+            )
+        )
+    }
+
+    // 记录卡片起始位置和高度，供跟手位移、排序阈值及释放回弹使用。
+    fun startDragging(stepId: String) {
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        settlingStepId = null
+        val itemInfo = probeListState.layoutInfo.visibleItemsInfo
+            .firstOrNull { it.key == "failover:$stepId" }
+        draggedStepId = stepId
+        dragStartIndex = probeSteps.indexOfFirst { it.id == stepId }
+        draggedItemHeight = itemInfo?.size?.toFloat() ?: 100f
+        dragDistance = 0f
+        reorderBaseline = 0f
+    }
+
+    // 拖动超过半个卡片高度时换位，列表动画负责让相邻卡片平滑让位。
+    fun updateDragging(stepId: String, deltaY: Float) {
+        dragDistance += deltaY
+        var baseline = reorderBaseline
+        val reorderStep = draggedItemHeight * 0.55f
+        val reorderedSteps = probeSteps.toMutableList()
+        var currentIndex = reorderedSteps.indexOfFirst { it.id == stepId }
+        var hasMoved = false
+
+        while (
+            dragDistance - baseline >= reorderStep &&
+            currentIndex >= 0 && currentIndex < reorderedSteps.lastIndex
+        ) {
+            reorderedSteps.add(currentIndex + 1, reorderedSteps.removeAt(currentIndex))
+            currentIndex += 1
+            baseline += draggedItemHeight
+            hasMoved = true
+        }
+        while (
+            dragDistance - baseline <= -reorderStep &&
+            currentIndex > 0
+        ) {
+            reorderedSteps.add(currentIndex - 1, reorderedSteps.removeAt(currentIndex))
+            currentIndex -= 1
+            baseline -= draggedItemHeight
+            hasMoved = true
+        }
+        reorderBaseline = baseline
+        if (hasMoved) probeSteps = reorderedSteps
+    }
+
+    // 释放后保存最终顺序，并把卡片弹回它在列表中的位置。
+    fun finishDragging(stepId: String) {
+        val currentIndex = probeSteps.indexOfFirst { it.id == stepId }
+        val settleOffset = if (currentIndex >= 0 && dragStartIndex >= 0) {
+            dragDistance - (currentIndex - dragStartIndex) * draggedItemHeight
+        } else {
+            0f
+        }
+        if (abs(settleOffset) > 0.5f) {
+            settlingStepId = stepId
+            settleStartOffset = settleOffset
+        }
+        if (probeSteps != settings.probeSteps) persistDetection()
+        draggedStepId = null
+        dragStartIndex = -1
+        dragDistance = 0f
+        reorderBaseline = 0f
+    }
+
+    val startDrag = rememberUpdatedState<(String) -> Unit>(::startDragging)
+    val updateDrag = rememberUpdatedState<(String, Float) -> Unit>(::updateDragging)
+    val endDrag = rememberUpdatedState<(String) -> Unit>(::finishDragging)
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "故障检测",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "按测试列表检查当前代理节点",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(checked = settings.enabled, onCheckedChange = onEnabledChange)
+        }
+        Text(
+            text = "从上到下依次测试；任一项通过即结束本轮，全部失败后才会转移节点。点按编辑目标，长按拖动排序。",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = runtimeStatus.message,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            fontSize = 12.sp,
+            color = if (runtimeStatus.state.name in setOf("ERROR", "NO_BACKUP")) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.primary
+            }
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "测试顺序 · ${probeSteps.size} 项",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium
+            )
+            IconButton(onClick = { showAddDialog = true }) {
+                Icon(Icons.Outlined.Add, contentDescription = "添加测试项")
+            }
+        }
+
+        if (probeSteps.isEmpty()) {
+            Text(
+                text = "还没有测试项，点击右侧 + 添加。",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            val listMaxHeight = (probeSteps.size * 120).coerceAtMost(480).dp
+            LazyColumn(
+                state = probeListState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = listMaxHeight),
+                contentPadding = PaddingValues(bottom = 8.dp)
+            ) {
+                itemsIndexed(
+                    items = probeSteps,
+                    key = { _, step -> "failover:${step.id}" }
+                ) { index, step ->
+                    val isDragging = draggedStepId == step.id
+                    val isSettling = settlingStepId == step.id
+                    val currentIndex = probeSteps.indexOfFirst { it.id == step.id }
+                    val cardTranslation = when {
+                        isDragging && currentIndex >= 0 && dragStartIndex >= 0 ->
+                            dragDistance - (currentIndex - dragStartIndex) * draggedItemHeight
+                        isSettling -> if (settleAnimationReady) {
+                            settleOffsetAnimation.value
+                        } else {
+                            settleStartOffset
+                        }
+                        else -> 0f
+                    }
+                    val cardMovementModifier = Modifier
+                        .zIndex(if (isDragging || isSettling) 1f else 0f)
+                        .then(
+                            if (isDragging || isSettling) {
+                                Modifier.graphicsLayer { translationY = cardTranslation }
+                            } else {
+                                Modifier.animateItemPlacement()
+                            }
+                        )
+                        .pointerInput(step.id) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { startDrag.value(step.id) },
+                                onDrag = { change, amount ->
+                                    change.consume()
+                                    updateDrag.value(step.id, amount.y)
+                                },
+                                onDragEnd = { endDrag.value(step.id) },
+                                onDragCancel = { endDrag.value(step.id) }
+                            )
+                        }
+                        .clickable {
+                            editingStep = step
+                            editingNewStep = false
+                        }
+
+                FailoverProbeStepRow(
+                    step = step,
+                    priority = index + 1,
+                    isDragging = isDragging,
+                    canDelete = probeSteps.size > 1,
+                    modifier = cardMovementModifier,
+                    onDelete = {
+                        persistDetection(probeSteps.filterNot { it.id == step.id })
+                    }
+                )
+                }
+            }
+        }
+
+        Divider(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+        Text(
+            text = "检测参数",
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+            style = MaterialTheme.typography.titleSmall
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { showIntervalDialog = true }
+                    .padding(vertical = 12.dp)
+            ) {
+                Text(
+                    text = "检测间隔",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(text = "$intervalSeconds 秒", style = MaterialTheme.typography.bodyLarge)
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { showTimeoutDialog = true }
+                    .padding(vertical = 12.dp)
+            ) {
+                Text(
+                    text = "单项超时",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(text = "$timeoutMs 毫秒", style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        Divider(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = { Text("添加测试项") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FailoverDetectionMethod.entries.forEach { method ->
+                        TextButton(
+                            onClick = {
+                                editingStep = FailoverProbeStep(method = method)
+                                editingNewStep = true
+                                showAddDialog = false
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                Text(
+                                    text = method.title,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = when (method) {
+                                        FailoverDetectionMethod.HTTPS_PROBE -> "通过代理请求 HTTPS 地址"
+                                        FailoverDetectionMethod.PROXY_TCP_PING -> "通过代理连接域名或 IP 的端口"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAddDialog = false }) { Text("关闭") }
+            }
+        )
+    }
+
+    editingStep?.let { step ->
+        FailoverProbeStepDialog(
+            step = step,
+            isNewStep = editingNewStep,
+            onDismiss = {
+                editingStep = null
+                editingNewStep = false
+            },
+            onSave = { updatedStep ->
+                val updatedSteps = if (editingNewStep) {
+                    probeSteps + updatedStep
+                } else {
+                    probeSteps.map { current ->
+                        if (current.id == updatedStep.id) updatedStep else current
+                    }
+                }
+                persistDetection(updatedSteps)
+                editingStep = null
+                editingNewStep = false
+            }
+        )
+    }
+
+    if (showIntervalDialog) {
+        FailoverNumberSettingDialog(
+            title = "检测间隔",
+            initialValue = intervalSeconds.toString(),
+            rangeDescription = "请输入 1–2 秒",
+            minimum = 1L,
+            maximum = 2L,
+            onDismiss = { showIntervalDialog = false },
+            onSave = { value ->
+                persistDetection(interval = value.toInt())
+                showIntervalDialog = false
+            }
+        )
+    }
+
+    if (showTimeoutDialog) {
+        FailoverNumberSettingDialog(
+            title = "单项超时",
+            initialValue = timeoutMs.toString(),
+            rangeDescription = "请输入 500–2000 毫秒",
+            minimum = 500L,
+            maximum = 2_000L,
+            onDismiss = { showTimeoutDialog = false },
+            onSave = { value ->
+                persistDetection(timeout = value)
+                showTimeoutDialog = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FailoverProbeStepRow(
+    step: FailoverProbeStep,
+    priority: Int,
+    isDragging: Boolean,
+    canDelete: Boolean,
+    modifier: Modifier,
+    onDelete: () -> Unit
+) {
+    val elevation by animateDpAsState(
+        targetValue = if (isDragging) 4.dp else 0.dp,
+        label = "FailoverProbeStepElevation"
+    )
+    val target = when (step.method) {
+        FailoverDetectionMethod.HTTPS_PROBE -> step.probeUrl
+        FailoverDetectionMethod.PROXY_TCP_PING -> "${step.pingHost}:${step.pingPort}"
+    }
+
+    Column(
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shadowElevation = elevation
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "故障检测",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "测试项 $priority · ${step.method.title}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "选择 HTTPS 探测或经当前节点进行 TCP Ping",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = target,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
-                }
-                Switch(checked = settings.enabled, onCheckedChange = onEnabledChange)
-            }
-            Text(
-                text = "系统网络不可用时会暂停判定；连续失败达到阈值后启动转移。",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(modifier = Modifier.fillMaxWidth()) {
-                TextButton(
-                    onClick = {
-                        detectionMethod = FailoverDetectionMethod.HTTPS_PROBE
-                        validationMessage = null
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "HTTPS",
-                        color = if (detectionMethod == FailoverDetectionMethod.HTTPS_PROBE) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        fontWeight = if (detectionMethod == FailoverDetectionMethod.HTTPS_PROBE) {
-                            FontWeight.SemiBold
-                        } else {
-                            FontWeight.Normal
-                        }
+                        text = "顺序 $priority",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFFF97910)
                     )
                 }
-                TextButton(
-                    onClick = {
-                        detectionMethod = FailoverDetectionMethod.PROXY_TCP_PING
-                        validationMessage = null
-                    },
-                    modifier = Modifier.weight(1f)
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.padding(start = 8.dp)
                 ) {
-                    Text(
-                        text = "代理 Ping",
-                        color = if (detectionMethod == FailoverDetectionMethod.PROXY_TCP_PING) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        fontWeight = if (detectionMethod == FailoverDetectionMethod.PROXY_TCP_PING) {
-                            FontWeight.SemiBold
-                        } else {
-                            FontWeight.Normal
-                        }
+                    Icon(
+                        imageVector = Icons.Outlined.DragHandle,
+                        contentDescription = "长按拖动排序",
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .size(24.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-            }
-            Text(
-                text = runtimeStatus.message,
-                fontSize = 12.sp,
-                color = if (runtimeStatus.state.name in setOf("ERROR", "NO_BACKUP")) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                }
-            )
-            if (detectionMethod == FailoverDetectionMethod.HTTPS_PROBE) {
-                OutlinedTextField(
-                    value = probeUrl,
-                    onValueChange = { probeUrl = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("HTTPS 探测地址") },
-                    singleLine = true
-                )
-            } else {
-                Text(
-                    text = "通过当前节点建立到目标主机和端口的 SOCKS5 TCP 连接，并显示连接耗时。默认 www.google.com:443；域名由代理节点解析。此方式检测 TCP 连通性，不发送 ICMP。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = pingHost,
-                        onValueChange = { pingHost = it },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("域名或 IP") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
-                    )
-                    OutlinedTextField(
-                        value = pingPortInput,
-                        onValueChange = { pingPortInput = it.filter(Char::isDigit) },
-                        modifier = Modifier.weight(0.42f),
-                        label = { Text("端口") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = intervalInput,
-                    onValueChange = { intervalInput = it.filter(Char::isDigit) },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("间隔（秒）") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-                OutlinedTextField(
-                    value = timeoutInput,
-                    onValueChange = { timeoutInput = it.filter(Char::isDigit) },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("超时（毫秒）") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-            }
-            OutlinedTextField(
-                value = failureInput,
-                onValueChange = { failureInput = it.filter(Char::isDigit) },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("连续失败次数") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
-            validationMessage?.let {
-                Text(text = it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-            }
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    val parsedProbeUrl = Uri.parse(probeUrl.trim())
-                    val normalizedPingHost = FailoverPingTarget.normalizeHost(pingHost)
-                    val pingPort = pingPortInput.toIntOrNull()
-                        ?.takeIf(FailoverPingTarget::isValidPort)
-                    val interval = intervalInput.toIntOrNull()?.takeIf { it in 1..2 }
-                    val timeout = timeoutInput.toLongOrNull()?.takeIf { it in 500L..2_000L }
-                    val failures = failureInput.toIntOrNull()?.takeIf { it in 1..2 }
-                    validationMessage = when {
-                        detectionMethod == FailoverDetectionMethod.HTTPS_PROBE &&
-                            (parsedProbeUrl.scheme?.equals("https", ignoreCase = true) != true ||
-                                parsedProbeUrl.host.isNullOrBlank()) ->
-                            "探测地址必须使用 HTTPS"
-                        detectionMethod == FailoverDetectionMethod.PROXY_TCP_PING && normalizedPingHost == null ->
-                            "请输入有效域名或 IP，IPv6 可使用方括号"
-                        detectionMethod == FailoverDetectionMethod.PROXY_TCP_PING && pingPort == null ->
-                            "Ping 端口需为 1–65535"
-                        interval == null -> "检测间隔需为 1–2 秒"
-                        timeout == null -> "超时需为 500–2000 毫秒"
-                        failures == null -> "连续失败次数需为 1–2 次"
-                        else -> null
-                    }
-                    if (validationMessage == null && interval != null && timeout != null && failures != null) {
-                        onSave(
-                            settings.copy(
-                                method = detectionMethod,
-                                probeUrl = probeUrl.trim(),
-                                pingHost = normalizedPingHost ?: settings.pingHost,
-                                pingPort = pingPort ?: settings.pingPort,
-                                intervalSeconds = interval,
-                                timeoutMs = timeout,
-                                consecutiveFailures = failures
-                            )
+                    IconButton(onClick = onDelete, enabled = canDelete) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = "删除测试项 $priority"
                         )
-                        Toast.makeText(context, "故障检测设置已保存", Toast.LENGTH_SHORT).show()
                     }
                 }
-            ) {
-                Text("保存检测设置")
             }
-            val confirmationEstimateSeconds = (
-                (settings.intervalSeconds.toLong() * 1_000L + settings.timeoutMs) *
-                    settings.consecutiveFailures.toLong() + 999L
-                ) / 1_000L
-            Text(
-                text = "按已保存参数估算，约 ${confirmationEstimateSeconds} 秒确认故障；之后还需启动转移节点。",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
         Divider(
             modifier = Modifier.padding(horizontal = 12.dp),
@@ -540,6 +817,153 @@ private fun FailoverDetectionCard(
         )
     }
 }
+
+@Composable
+private fun FailoverProbeStepDialog(
+    step: FailoverProbeStep,
+    isNewStep: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (FailoverProbeStep) -> Unit
+) {
+    var editedStep by remember(step.id) { mutableStateOf(step) }
+    var pingPortInput by remember(step.id) { mutableStateOf(step.pingPort.toString()) }
+    var validationMessage by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isNewStep) "添加 ${step.method.title}" else "编辑测试项") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                when (step.method) {
+                    FailoverDetectionMethod.HTTPS_PROBE -> OutlinedTextField(
+                        value = editedStep.probeUrl,
+                        onValueChange = { editedStep = editedStep.copy(probeUrl = it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("HTTPS 测活地址") },
+                        singleLine = true
+                    )
+                    FailoverDetectionMethod.PROXY_TCP_PING -> {
+                        Text(
+                            text = "经当前代理节点建立 TCP 连接；域名由代理端解析。这不是 ICMP Ping。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = editedStep.pingHost,
+                            onValueChange = { editedStep = editedStep.copy(pingHost = it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("域名或 IP") },
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = pingPortInput,
+                            onValueChange = { pingPortInput = it.filter(Char::isDigit) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("端口") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+                }
+                validationMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val candidate = if (step.method == FailoverDetectionMethod.PROXY_TCP_PING) {
+                        editedStep.copy(pingPort = pingPortInput.toIntOrNull() ?: 0)
+                    } else {
+                        editedStep
+                    }
+                    val normalized = normalizeFailoverProbeStepInput(candidate)
+                    if (normalized == null) {
+                        validationMessage = when (step.method) {
+                            FailoverDetectionMethod.HTTPS_PROBE -> "请输入有效的 HTTPS 地址"
+                            FailoverDetectionMethod.PROXY_TCP_PING -> "请检查域名/IP 和端口（1–65535）"
+                        }
+                    } else {
+                        onSave(normalized)
+                    }
+                }
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+@Composable
+private fun FailoverNumberSettingDialog(
+    title: String,
+    initialValue: String,
+    rangeDescription: String,
+    minimum: Long,
+    maximum: Long,
+    onDismiss: () -> Unit,
+    onSave: (Long) -> Unit
+) {
+    var input by remember(title, initialValue) { mutableStateOf(initialValue) }
+    var invalid by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it.filter(Char::isDigit) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(title) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                Text(
+                    text = rangeDescription,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (invalid) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val value = input.toLongOrNull()
+                    if (value == null || value !in minimum..maximum) {
+                        invalid = true
+                    } else {
+                        onSave(value)
+                    }
+                }
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+private fun normalizeFailoverProbeStepInput(step: FailoverProbeStep): FailoverProbeStep? =
+    when (step.method) {
+        FailoverDetectionMethod.HTTPS_PROBE -> runCatching {
+            java.net.URI(step.probeUrl.trim())
+        }.getOrNull()?.takeIf { uri ->
+            uri.scheme?.equals("https", ignoreCase = true) == true && !uri.host.isNullOrBlank()
+        }?.let { step.copy(probeUrl = step.probeUrl.trim()) }
+        FailoverDetectionMethod.PROXY_TCP_PING -> {
+            val host = FailoverPingTarget.normalizeHost(step.pingHost)
+            if (host == null || !FailoverPingTarget.isValidPort(step.pingPort)) {
+                null
+            } else {
+                step.copy(pingHost = host)
+            }
+        }
+    }
 
 @Composable
 private fun FailoverTransferCard(
