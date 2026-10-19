@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.NodeSource
+import io.github.HanJason233.chimera.feature.nodegrouping.model.CountryContinent
 import io.github.HanJason233.chimera.feature.nodegrouping.model.CountryGroupingSourceOption
 import io.github.HanJason233.chimera.feature.nodegrouping.model.CountryOption
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
@@ -131,6 +132,9 @@ private fun CountryGroupingScreen(
     }
     val isAllSourcesSelected = selectedSourceIds == null ||
         selectedSourceIds.containsAll(availableSourceIds)
+    val countriesByContinent = remember(countries) {
+        countries.groupBy(CountryOption::continent)
+    }
 
     AppScreenScaffold(
         title = "地区组",
@@ -170,20 +174,36 @@ private fun CountryGroupingScreen(
                 contentPadding = PaddingValues(bottom = bottomContentPadding),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                items(
-                    items = countries,
-                    key = CountryOption::code
-                ) { country ->
-                    CountryCard(
-                        country = country,
-                        selected = selectedNodeGroupId == NodeGroupKey.Country(country.code).value,
-                        onClick = { onCountrySelected(country.code) },
-                        onViewDetails = { onViewCountryDetails(country) }
-                    )
-                    Divider(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
+                CountryContinent.entries.forEach { continent ->
+                    val sectionCountries = countriesByContinent[continent].orEmpty()
+                    if (sectionCountries.isNotEmpty()) {
+                        item(key = "continent:${continent.name}") {
+                            Text(
+                                text = continent.title,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        items(
+                            items = sectionCountries,
+                            key = CountryOption::code
+                        ) { country ->
+                            CountryCard(
+                                country = country,
+                                selected = selectedNodeGroupId ==
+                                    NodeGroupKey.Country(country.code).value,
+                                onClick = { onCountrySelected(country.code) },
+                                onViewDetails = { onViewCountryDetails(country) }
+                            )
+                            Divider(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant
+                            )
+                        }
+                    }
                 }
             }
 
