@@ -26,6 +26,8 @@
     <string name="per_app_inbound_information">VPN作用范围说明</string>
     <string name="per_app_inbound_summary">VPN 作用范围由 Android VPN（TUN）层控制，决定应用流量是否进入 VPN 隧道；它不负责隧道内的代理、直连或阻断分流。进入隧道后的流量由代理核心按路由规则处理。</string>
     <string name="per_app_inbound_ok">确定</string>
+    <string name="per_app_inbound_mode_information">黑白名单说明</string>
+    <string name="per_app_inbound_mode_summary">白名单：选中的应用走代理。\n黑名单：选中的应用走直连。</string>
     <string name="routing_rules_information">路由规则说明</string>
     <string name="routing_rules_summary">路由规则由代理核心处理。应用流量进入 VPN 隧道后，核心根据域名、IP、端口等规则，将流量分流到代理、直连或阻断出口。未进入 VPN 隧道的应用不会经过核心路由规则。</string>
     <string name="routing_rules_ok">确定</string>

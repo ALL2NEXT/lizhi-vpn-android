@@ -94,7 +94,7 @@ fun PerAppInboundScreen(
     var searchActive by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
-    var showInformation by remember { mutableStateOf(false) }
+    var showModeInformation by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.messages.collectLatest { messageId ->
@@ -253,10 +253,10 @@ fun PerAppInboundScreen(
                         viewModel.setBypassMode(!isWhitelist, mode)
                     }
                 )
-                IconButton(onClick = { showInformation = true }) {
+                IconButton(onClick = { showModeInformation = true }) {
                     Icon(
                         imageVector = Icons.Outlined.Info,
-                        contentDescription = stringResource(R.string.per_app_inbound_information)
+                        contentDescription = stringResource(R.string.per_app_inbound_mode_information)
                     )
                 }
             }
@@ -296,13 +296,13 @@ fun PerAppInboundScreen(
         }
     }
 
-    if (showInformation) {
+    if (showModeInformation) {
         AppAlertDialog(
-            onDismissRequest = { showInformation = false },
-            title = { Text(stringResource(R.string.per_app_inbound_information)) },
-            text = { Text(stringResource(R.string.per_app_inbound_summary)) },
+            onDismissRequest = { showModeInformation = false },
+            title = { Text(stringResource(R.string.per_app_inbound_mode_information)) },
+            text = { Text(stringResource(R.string.per_app_inbound_mode_summary)) },
             confirmButton = {
-                TextButton(onClick = { showInformation = false }) {
+                TextButton(onClick = { showModeInformation = false }) {
                     Text(stringResource(R.string.per_app_inbound_ok))
                 }
             }
