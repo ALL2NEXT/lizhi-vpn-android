@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material3.Checkbox
@@ -29,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -126,6 +129,7 @@ private fun CountryGroupingScreen(
     bottomContentPadding: Dp
 ) {
     var sourceDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var collapsedContinentMask by rememberSaveable { mutableIntStateOf(0) }
     var draftSourceIds by remember { mutableStateOf(emptySet<String>()) }
     val availableSourceIds = remember(sourceOptions) {
         sourceOptions.mapTo(mutableSetOf()) { it.id }
@@ -177,31 +181,57 @@ private fun CountryGroupingScreen(
                 CountryContinent.entries.forEach { continent ->
                     val sectionCountries = countriesByContinent[continent].orEmpty()
                     if (sectionCountries.isNotEmpty()) {
+                        val continentCollapseBit = 1 shl continent.ordinal
+                        val expanded = (collapsedContinentMask and continentCollapseBit) == 0
                         item(key = "continent:${continent.name}") {
-                            Text(
-                                text = continent.title,
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                                    .clickable(role = Role.Button) {
+                                        collapsedContinentMask =
+                                            collapsedContinentMask xor continentCollapseBit
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = continent.title,
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Icon(
+                                    imageVector = if (expanded) {
+                                        Icons.Default.KeyboardArrowUp
+                                    } else {
+                                        Icons.Default.KeyboardArrowDown
+                                    },
+                                    contentDescription = if (expanded) {
+                                        "收起${continent.title}"
+                                    } else {
+                                        "展开${continent.title}"
+                                    },
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                        items(
-                            items = sectionCountries,
-                            key = CountryOption::code
-                        ) { country ->
-                            CountryCard(
-                                country = country,
-                                selected = selectedNodeGroupId ==
-                                    NodeGroupKey.Country(country.code).value,
-                                onClick = { onCountrySelected(country.code) },
-                                onViewDetails = { onViewCountryDetails(country) }
-                            )
-                            Divider(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant
-                            )
+                        if (expanded) {
+                            items(
+                                items = sectionCountries,
+                                key = CountryOption::code
+                            ) { country ->
+                                CountryCard(
+                                    country = country,
+                                    selected = selectedNodeGroupId ==
+                                        NodeGroupKey.Country(country.code).value,
+                                    onClick = { onCountrySelected(country.code) },
+                                    onViewDetails = { onViewCountryDetails(country) }
+                                )
+                                Divider(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                            }
                         }
                     }
                 }
