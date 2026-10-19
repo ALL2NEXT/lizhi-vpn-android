@@ -9,8 +9,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -18,19 +16,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -48,7 +42,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,9 +51,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -75,10 +65,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.EncodeHintType
-import com.google.zxing.qrcode.QRCodeWriter
-import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.github.HanJason233.chimera.data.model.SmartRoutingDomainStrategy
 import io.github.HanJason233.chimera.data.model.SmartRoutingPreset
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
@@ -88,17 +74,13 @@ import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.withContext
 
 private enum class RoutingMenuAction(val title: String) {
     PRESETS("导入预设"),
     IMPORT_CLIPBOARD("从剪贴板导入"),
-    IMPORT_QR("扫描二维码导入"),
-    EXPORT_CLIPBOARD("复制到剪贴板"),
-    EXPORT_QR("生成分享二维码")
+    EXPORT_CLIPBOARD("复制到剪贴板")
 }
 
 @Composable
@@ -106,10 +88,7 @@ private enum class RoutingMenuAction(val title: String) {
 fun CoreRoutingScreen(
     viewModel: MainViewModel,
     mode: ProxyMode,
-    onBack: () -> Unit,
-    onScanQrCode: () -> Unit,
-    scannedRulesText: String?,
-    onScannedRulesTextConsumed: () -> Unit
+    onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val settingsFlow = remember(viewModel, mode) { viewModel.routingSettings(mode) }
@@ -119,7 +98,6 @@ fun CoreRoutingScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     var strategyMenuExpanded by remember { mutableStateOf(false) }
     var showPresets by rememberSaveable { mutableStateOf(false) }
-    var qrRulesText by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
     val hapticFeedback = LocalHapticFeedback.current
     var displayedRules by remember { mutableStateOf(routingSettings.rules) }
@@ -315,14 +293,6 @@ fun CoreRoutingScreen(
         }
     }
 
-    LaunchedEffect(scannedRulesText) {
-        val text = scannedRulesText
-        if (!text.isNullOrBlank()) {
-            importRules(text)
-            onScannedRulesTextConsumed()
-        }
-    }
-
     AppScreenScaffold(
         title = if (mode == ProxyMode.GLOBAL) "全局路由规则" else "智能路由规则",
         onBack = onBack,
@@ -356,7 +326,6 @@ fun CoreRoutingScreen(
                                         importRules(text)
                                     }
                                 }
-                                RoutingMenuAction.IMPORT_QR -> onScanQrCode()
                                 RoutingMenuAction.EXPORT_CLIPBOARD -> {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
                                         as? ClipboardManager
@@ -367,9 +336,6 @@ fun CoreRoutingScreen(
                                         )
                                     )
                                     Toast.makeText(context, "路由规则已复制", Toast.LENGTH_SHORT).show()
-                                }
-                                RoutingMenuAction.EXPORT_QR -> {
-                                    qrRulesText = SmartRoutingRulesCodec.encode(routingSettings.rules)
                                 }
                             }
                         }
@@ -565,86 +531,6 @@ fun CoreRoutingScreen(
             }
         )
     }
-
-    qrRulesText?.let { rulesText ->
-        RoutingRulesQrDialog(
-            json = rulesText,
-            onDismiss = { qrRulesText = null }
-        )
-    }
-}
-
-@Composable
-private fun RoutingRulesQrDialog(json: String, onDismiss: () -> Unit) {
-    val qrCode by produceState<Result<ImageBitmap>?>(initialValue = null, key1 = json) {
-        value = withContext(Dispatchers.Default) {
-            runCatching { createRoutingQrCode(json) }
-        }
-    }
-    val image = qrCode?.getOrNull()
-
-    AppAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("路由规则二维码") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "可用 Chimera 或 v2rayNG 扫描导入",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                when {
-                    image != null -> Image(
-                        bitmap = image,
-                        contentDescription = "路由规则分享二维码",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
-                            .background(Color.White),
-                        filterQuality = FilterQuality.None
-                    )
-                    qrCode == null -> CircularProgressIndicator()
-                    else -> Text(
-                        text = "规则内容超过单个二维码容量，请改用剪贴板导出。",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        }
-    )
-}
-
-private fun createRoutingQrCode(json: String): ImageBitmap {
-    val matrix = QRCodeWriter().encode(
-        json,
-        BarcodeFormat.QR_CODE,
-        512,
-        512,
-        mapOf(
-            EncodeHintType.CHARACTER_SET to "UTF-8",
-            EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
-            EncodeHintType.MARGIN to 4
-        )
-    )
-    val pixels = IntArray(matrix.width * matrix.height) { index ->
-        if (matrix[index % matrix.width, index / matrix.width]) {
-            android.graphics.Color.BLACK
-        } else {
-            android.graphics.Color.WHITE
-        }
-    }
-    return android.graphics.Bitmap.createBitmap(
-        pixels,
-        matrix.width,
-        matrix.height,
-        android.graphics.Bitmap.Config.ARGB_8888
-    ).asImageBitmap()
 }
 
 @Composable

@@ -114,9 +114,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val navController = rememberNavController()
                     var scannedSubscriptionText by rememberSaveable { mutableStateOf<String?>(null) }
-                    var scannedRoutingRulesText by rememberSaveable { mutableStateOf<String?>(null) }
                     var scannedRoutingAssetUrl by rememberSaveable { mutableStateOf<String?>(null) }
-                    var routingQrScanTarget by rememberSaveable { mutableStateOf(false) }
                     var routingAssetQrScanTarget by rememberSaveable { mutableStateOf(false) }
                     val navigateTo: (String) -> Unit = { route ->
                             navController.navigate(route) {
@@ -371,7 +369,6 @@ class MainActivity : ComponentActivity() {
                                                     deleteSubscriptionGroup(groupId, onComplete)
                                                 },
                                                 onScanQrCode = {
-                                                    routingQrScanTarget = false
                                                     navigateTo(AppRoute.QR_SCANNER)
                                                 },
                                                 scannedSubscriptionText = scannedSubscriptionText,
@@ -424,19 +421,15 @@ class MainActivity : ComponentActivity() {
                             composable(AppRoute.QR_SCANNER) {
                                 QrScannerScreen(
                                     onBack = {
-                                        routingQrScanTarget = false
                                         routingAssetQrScanTarget = false
                                         navController.popBackStack()
                                     },
                                     onQrCodeScanned = { text, onComplete ->
-                                        if (routingQrScanTarget) {
-                                            scannedRoutingRulesText = text
-                                        } else if (routingAssetQrScanTarget) {
+                                        if (routingAssetQrScanTarget) {
                                             scannedRoutingAssetUrl = text
                                         } else {
                                             scannedSubscriptionText = text
                                         }
-                                        routingQrScanTarget = false
                                         routingAssetQrScanTarget = false
                                         onComplete(true)
                                         navController.popBackStack()
@@ -484,15 +477,7 @@ class MainActivity : ComponentActivity() {
                                 CoreRoutingScreen(
                                     viewModel = viewModel,
                                     mode = mode,
-                                    onBack = { navController.popBackStack() },
-                                    onScanQrCode = {
-                                        routingQrScanTarget = true
-                                        navigateTo(AppRoute.QR_SCANNER)
-                                    },
-                                    scannedRulesText = scannedRoutingRulesText,
-                                    onScannedRulesTextConsumed = {
-                                        scannedRoutingRulesText = null
-                                    }
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
 
