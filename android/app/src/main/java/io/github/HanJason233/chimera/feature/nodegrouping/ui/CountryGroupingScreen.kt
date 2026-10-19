@@ -15,12 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -157,9 +157,9 @@ private fun CountryGroupingScreen(
             }
         },
         contentPadding = PaddingValues(
-            start = 20.dp,
+            start = 0.dp,
             top = 16.dp,
-            end = 20.dp,
+            end = 0.dp,
             bottom = 0.dp
         ),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -168,7 +168,7 @@ private fun CountryGroupingScreen(
             countries.isNotEmpty() -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = bottomContentPadding),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 items(
                     items = countries,
@@ -179,6 +179,10 @@ private fun CountryGroupingScreen(
                         selected = selectedNodeGroupId == NodeGroupKey.Country(country.code).value,
                         onClick = { onCountrySelected(country.code) },
                         onViewDetails = { onViewCountryDetails(country) }
+                    )
+                    Divider(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
                     )
                 }
             }
@@ -307,21 +311,15 @@ private fun CountryCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        }
+            .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 72.dp)
-                .padding(horizontal = 18.dp, vertical = 12.dp),
+                .heightIn(min = 64.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text = country.marker,
@@ -329,38 +327,31 @@ private fun CountryCard(
                 lineHeight = if (country.code == "TW") 22.sp else 38.sp,
                 fontWeight = if (country.code == "TW") FontWeight.Bold else FontWeight.Normal
             )
-            Text(
-                text = country.name,
-                modifier = Modifier.weight(1f),
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "${country.nodeCount} 台服务器",
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                fontSize = 13.sp,
-                maxLines = 1
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = country.name,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${country.nodeCount} 台服务器",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
             IconButton(onClick = onViewDetails) {
                 Icon(
                     imageVector = Icons.Rounded.ChevronRight,
                     contentDescription = "查看当前地区的线路详细信息",
-                    tint = if (selected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
