@@ -75,6 +75,13 @@ class SettingsRepository(
                 .bufferedReader(Charsets.UTF_8).use { SmartRoutingRulesCodec.decode(it.readText()) }
         }.getOrDefault(emptyList())
     }
+
+    private val initialGlobalRoutingRules: List<SmartRoutingRule> by lazy {
+        runCatching {
+            appContext.assets.open("routing-presets/global.json")
+                .bufferedReader(Charsets.UTF_8).use { SmartRoutingRulesCodec.decode(it.readText()) }
+        }.getOrDefault(emptyList())
+    }
     
     companion object {
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
@@ -784,6 +791,11 @@ class SettingsRepository(
         val strategyKey = routingStrategyKey(mode)
         val rawRules = preferences[rulesKey]
         val stored = rawRules?.takeIf(String::isNotBlank)?.let(::decodeSmartRoutingRules)
+        val defaultRules = if (mode == ProxyMode.GLOBAL) {
+            initialGlobalRoutingRules
+        } else {
+            initialRoutingRules
+        }
         // Remove the old Chimera-only injected domestic rules. When they were the
         // entire stored list, migrate to v2rayNG's default white-list preset.
         val migratedRules = stored?.filterNot {
@@ -792,11 +804,12 @@ class SettingsRepository(
                 it.id == "builtin_smart_domestic_domain" ||
                 it.id == "builtin_smart_domestic_ip"
         }
+        // 未保存规则时按模式加载默认预设；用户保存的空列表仍表示主动清空。
         val rules = when {
-            rawRules.isNullOrBlank() -> if (mode == ProxyMode.SMART) initialRoutingRules else emptyList()
-            stored == null -> if (mode == ProxyMode.SMART) initialRoutingRules else emptyList()
+            rawRules.isNullOrBlank() -> defaultRules
+            stored == null -> defaultRules
             stored.isEmpty() -> emptyList()
-            migratedRules.isNullOrEmpty() -> if (mode == ProxyMode.SMART) initialRoutingRules else emptyList()
+            migratedRules.isNullOrEmpty() -> defaultRules
             else -> migratedRules
         }
         val rawStrategy = preferences[strategyKey]
