@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.DropdownMenu
@@ -57,6 +58,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -65,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import io.github.HanJason233.chimera.R
 import io.github.HanJason233.chimera.data.model.SmartRoutingDomainStrategy
 import io.github.HanJason233.chimera.data.model.SmartRoutingPreset
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
@@ -98,6 +101,7 @@ fun CoreRoutingScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     var strategyMenuExpanded by remember { mutableStateOf(false) }
     var showPresets by rememberSaveable { mutableStateOf(false) }
+    var showInformation by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val hapticFeedback = LocalHapticFeedback.current
     var displayedRules by remember { mutableStateOf(routingSettings.rules) }
@@ -298,6 +302,12 @@ fun CoreRoutingScreen(
         onBack = onBack,
         contentPadding = PaddingValues(0.dp),
         actions = {
+            IconButton(onClick = { showInformation = true }) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = stringResource(R.string.routing_rules_information)
+                )
+            }
             IconButton(onClick = { addingRule = true }) {
                 Icon(Icons.Outlined.Add, contentDescription = "添加路由规则")
             }
@@ -528,6 +538,19 @@ fun CoreRoutingScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showPresets = false }) { Text("取消") }
+            }
+        )
+    }
+
+    if (showInformation) {
+        AppAlertDialog(
+            onDismissRequest = { showInformation = false },
+            title = { Text(stringResource(R.string.routing_rules_information)) },
+            text = { Text(stringResource(R.string.routing_rules_summary)) },
+            confirmButton = {
+                TextButton(onClick = { showInformation = false }) {
+                    Text(stringResource(R.string.routing_rules_ok))
+                }
             }
         )
     }

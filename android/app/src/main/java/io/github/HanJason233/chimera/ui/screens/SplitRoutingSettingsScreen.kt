@@ -6,10 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -83,13 +81,11 @@ fun SplitRoutingSettingsScreen(
                     )
                     SplitRoutingEntry(
                         title = "VPN 作用范围",
-                        description = "选择通过此模式建立 VPN 隧道的应用",
                         icon = Icons.Outlined.Android,
                         onClick = { onOpenPerAppInbound(mode) }
                     )
                     SplitRoutingEntry(
                         title = "路由规则",
-                        description = "管理此模式下的核心路由规则",
                         icon = Icons.Outlined.Route,
                         onClick = { onOpenRoutingRules(mode) }
                     )
@@ -108,7 +104,6 @@ private val ProxyMode.title: String
 @Composable
 private fun SplitRoutingEntry(
     title: String,
-    description: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit
 ) {
@@ -127,15 +122,11 @@ private fun SplitRoutingEntry(
                 modifier = Modifier.size(24.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium
+            )
             Text(
                 "›",
                 style = MaterialTheme.typography.headlineSmall,
