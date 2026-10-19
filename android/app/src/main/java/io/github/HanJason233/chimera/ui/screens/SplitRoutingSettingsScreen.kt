@@ -1,92 +1,95 @@
 package io.github.HanJason233.chimera.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Android
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SplitRoutingSettingsScreen(
     onBack: () -> Unit,
     onOpenPerAppInbound: (ProxyMode) -> Unit,
     onOpenRoutingRules: (ProxyMode) -> Unit
 ) {
-    var selectedMode by rememberSaveable { mutableStateOf<ProxyMode?>(null) }
-    val mode = selectedMode
+    val modes = listOf(ProxyMode.GLOBAL, ProxyMode.SMART)
+    val pagerState = rememberPagerState(pageCount = { modes.size })
+    val coroutineScope = rememberCoroutineScope()
 
-    // 切换内外层时重建 Scaffold，避免内部返回后仍保留离场遮罩状态。
-    key(mode) {
-        AppScreenScaffold(
-            title = when (mode) {
-                ProxyMode.GLOBAL -> "全局模式设定"
-                ProxyMode.SMART -> "智能模式设定"
-                null -> "分流设置"
-            },
-            onBack = {
-                if (mode == null) onBack() else selectedMode = null
-            },
-            contentPadding = PaddingValues(16.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (mode == null) {
+    AppScreenScaffold(
+        title = "分流设置",
+        onBack = onBack,
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TabRow(selectedTabIndex = pagerState.currentPage) {
+                modes.forEachIndexed { index, mode ->
+                    Tab(
+                        selected = pagerState.currentPage == index,
+                        onClick = {
+                            coroutineScope.launch { pagerState.animateScrollToPage(index) }
+                        },
+                        text = {
+                            Text(
+                                text = mode.title,
+                                maxLines = 1
+                            )
+                        }
+                    )
+                }
+            }
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxWidth().weight(1f)
+            ) { page ->
+                val mode = modes[page]
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
-                        text = "选择要配置的分流模式",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    SplitRoutingEntry(
-                        title = "全局模式设定",
-                        description = "配置全局模式下的 VPN 作用范围和路由规则",
-                        icon = Icons.Outlined.Public,
-                        onClick = { selectedMode = ProxyMode.GLOBAL }
-                    )
-                    SplitRoutingEntry(
-                        title = "智能模式设定",
-                        description = "配置智能模式下的 VPN 作用范围和路由规则",
-                        icon = Icons.Outlined.Route,
-                        onClick = { selectedMode = ProxyMode.SMART }
-                    )
-                } else {
-                    Text(
-                        text = "此处的设置仅作用于当前模式。",
+                        text = "以下设置仅作用于${mode.title}。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     SplitRoutingEntry(
                         title = "VPN 作用范围",
-                        description = "tun层控制",
+                        description = "选择通过此模式建立 VPN 隧道的应用",
                         icon = Icons.Outlined.Android,
                         onClick = { onOpenPerAppInbound(mode) }
                     )
                     SplitRoutingEntry(
                         title = "路由规则",
-                        description = "核心层控制",
+                        description = "管理此模式下的核心路由规则",
                         icon = Icons.Outlined.Route,
                         onClick = { onOpenRoutingRules(mode) }
                     )
@@ -95,6 +98,12 @@ fun SplitRoutingSettingsScreen(
         }
     }
 }
+
+private val ProxyMode.title: String
+    get() = when (this) {
+        ProxyMode.GLOBAL -> "全局模式设定"
+        ProxyMode.SMART -> "智能模式设定"
+    }
 
 @Composable
 private fun SplitRoutingEntry(
