@@ -41,8 +41,7 @@ fun MainScreen(
     onOpenRoutingAssets: () -> Unit = {},
     onOpenRegionLookupSettings: () -> Unit = {},
     onOpenSplitRoutingSettings: () -> Unit = {},
-    onOpenInbound: () -> Unit = {},
-    onOpenOutbound: () -> Unit = {},
+    onOpenInboundOutbound: () -> Unit = {},
     onOpenSpeedTestSchemes: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     onOpenCurrentGroupDetails: (NodeGroupKey?, String) -> Unit = { _, _ -> },
@@ -134,8 +133,7 @@ fun MainScreen(
                         closeDrawerThen(onOpenRegionLookupSettings)
                     },
                     onOpenSplitRoutingSettings = { closeDrawerThen(onOpenSplitRoutingSettings) },
-                    onOpenInbound = { closeDrawerThen(onOpenInbound) },
-                    onOpenOutbound = { closeDrawerThen(onOpenOutbound) },
+                    onOpenInboundOutbound = { closeDrawerThen(onOpenInboundOutbound) },
                     onOpenSpeedTestSchemes = { closeDrawerThen(onOpenSpeedTestSchemes) },
                     onOpenSkin = { closeDrawerThen(onOpenSkin) },
                     appDisplayName = LauncherIdentityPresets.find(

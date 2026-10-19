@@ -26,8 +26,7 @@ fun DrawerContent(
     onOpenRoutingAssets: () -> Unit = {},
     onOpenRegionLookupSettings: () -> Unit = {},
     onOpenSplitRoutingSettings: () -> Unit = {},
-    onOpenInbound: () -> Unit = {},
-    onOpenOutbound: () -> Unit = {},
+    onOpenInboundOutbound: () -> Unit = {},
     onOpenSpeedTestSchemes: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     appDisplayName: String = "Chimera"
@@ -87,15 +86,9 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Login,
-                title = "入站",
-                onClick = onOpenInbound
-            )
-
-            DrawerMenuItem(
-                icon = Icons.Outlined.Logout,
-                title = "出站",
-                onClick = onOpenOutbound
+                icon = Icons.Outlined.SwapHoriz,
+                title = "出入站",
+                onClick = onOpenInboundOutbound
             )
 
             DrawerMenuItem(

@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -48,6 +49,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -60,6 +63,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -102,12 +106,51 @@ import io.github.HanJason233.chimera.util.NetworkUtils
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import kotlin.math.abs
 
-/** 只展示核心实际拥有的入站对象；应用过滤和 TUN 参数不属于核心入站。 */
+/** 入站与出站共用一个设置入口，通过顶部标签切换配置内容。 */
 @Composable
-fun InboundScreen(
+fun InboundOutboundScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+
+    AppScreenScaffold(
+        title = "出入站",
+        onBack = onBack,
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("入站") }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("出站") }
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                if (selectedTab == 0) {
+                    InboundContent(viewModel)
+                } else {
+                    OutboundContent(viewModel)
+                }
+            }
+        }
+    }
+}
+
+/** 只展示核心实际拥有的入站对象；应用过滤和 TUN 参数不属于核心入站。 */
+@Composable
+private fun InboundContent(viewModel: MainViewModel) {
     val context = LocalContext.current
     val lanInbound by viewModel.lanInboundSettings.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
@@ -124,18 +167,13 @@ fun InboundScreen(
     var passwordInput by remember(lanInbound.password) { mutableStateOf(lanInbound.password) }
     var validationMessage by remember { mutableStateOf<String?>(null) }
 
-    AppScreenScaffold(
-        title = "入站",
-        onBack = onBack,
-        contentPadding = PaddingValues(0.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            CoreSection(title = "核心入站") {
+        CoreSection(title = "核心入站") {
                 InboundCard(
                     title = "本地 SOCKS5 入站（HEV 对接）",
                     description = "核心实际监听 127.0.0.1 端口，接收 HEV 数据面转换后的 SOCKS5 请求。",
@@ -253,16 +291,12 @@ fun InboundScreen(
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
                 }
-            }
         }
     }
 }
 /** 只展示核心实际的出站对象；节点选择仍由主页节点列表负责。 */
 @Composable
-fun OutboundScreen(
-    viewModel: MainViewModel,
-    onBack: () -> Unit
-) {
+private fun OutboundContent(viewModel: MainViewModel) {
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val failoverSettings by viewModel.failoverSettings.collectAsStateWithLifecycle()
     val failoverStatus by viewModel.failoverRuntimeStatus.collectAsStateWithLifecycle()
@@ -313,18 +347,13 @@ fun OutboundScreen(
         mutableStateOf(hysteriaDownMbps.toString())
     }
 
-    AppScreenScaffold(
-        title = "出站",
-        onBack = onBack,
-        contentPadding = PaddingValues(0.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            CoreSection(title = "核心出站") {
+        CoreSection(title = "核心出站") {
                 OutboundHysteriaCard(
                     enabled = hysteriaBandwidthEnabled,
                     upMbpsInput = hysteriaUpMbpsInput,
@@ -345,23 +374,22 @@ fun OutboundScreen(
                     },
                     onAdapt = viewModel::adaptHysteriaBandwidth
                 )
-            }
-            CoreSection(title = "故障转移") {
-                FailoverDetectionCard(
-                    settings = failoverSettings.detection,
-                    runtimeStatus = failoverStatus,
-                    onEnabledChange = viewModel::setFailoverDetectionEnabled,
-                    onSave = viewModel::setFailoverDetection
-                )
-                FailoverTransferCard(
-                    settings = failoverSettings.transfer,
-                    currentNodeId = currentNode?.id,
-                    nodes = availableNodes,
-                    groups = failoverGroups,
-                    viewModel = viewModel,
-                    onChange = viewModel::setFailoverTransferTarget
-                )
-            }
+        }
+        CoreSection(title = "故障转移") {
+            FailoverDetectionCard(
+                settings = failoverSettings.detection,
+                runtimeStatus = failoverStatus,
+                onEnabledChange = viewModel::setFailoverDetectionEnabled,
+                onSave = viewModel::setFailoverDetection
+            )
+            FailoverTransferCard(
+                settings = failoverSettings.transfer,
+                currentNodeId = currentNode?.id,
+                nodes = availableNodes,
+                groups = failoverGroups,
+                viewModel = viewModel,
+                onChange = viewModel::setFailoverTransferTarget
+            )
         }
     }
 }

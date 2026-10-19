@@ -52,8 +52,7 @@ import io.github.HanJason233.chimera.ui.screens.AccountSettingsPage
 import io.github.HanJason233.chimera.ui.screens.MainScreen
 import io.github.HanJason233.chimera.ui.screens.OtherConfigScreen
 import io.github.HanJason233.chimera.ui.screens.RegionLookupSettingsScreen
-import io.github.HanJason233.chimera.ui.screens.InboundScreen
-import io.github.HanJason233.chimera.ui.screens.OutboundScreen
+import io.github.HanJason233.chimera.ui.screens.InboundOutboundScreen
 import io.github.HanJason233.chimera.ui.screens.CoreRoutingScreen
 import io.github.HanJason233.chimera.ui.screens.SplitRoutingSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.RoutingAssetsScreen
@@ -287,11 +286,8 @@ class MainActivity : ComponentActivity() {
                                         onOpenSplitRoutingSettings = {
                                             navigateTo(AppRoute.SPLIT_ROUTING_SETTINGS)
                                         },
-                                        onOpenInbound = {
-                                            navigateTo(AppRoute.INBOUND)
-                                        },
-                                        onOpenOutbound = {
-                                            navigateTo(AppRoute.OUTBOUND)
+                                        onOpenInboundOutbound = {
+                                            navigateTo(AppRoute.INBOUND_OUTBOUND)
                                         },
                                         onOpenSpeedTestSchemes = {
                                             navigateTo(AppRoute.SPEED_TEST_SCHEMES)
@@ -463,8 +459,8 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            composable(AppRoute.INBOUND) {
-                                InboundScreen(
+                            composable(AppRoute.INBOUND_OUTBOUND) {
+                                InboundOutboundScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() }
                                 )
@@ -493,13 +489,6 @@ class MainActivity : ComponentActivity() {
                                     onScannedAssetUrlConsumed = {
                                         scannedRoutingAssetUrl = null
                                     }
-                                )
-                            }
-
-                            composable(AppRoute.OUTBOUND) {
-                                OutboundScreen(
-                                    viewModel = viewModel,
-                                    onBack = { navController.popBackStack() }
                                 )
                             }
 
