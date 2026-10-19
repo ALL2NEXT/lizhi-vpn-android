@@ -114,7 +114,9 @@ internal fun SmartRoutingRuleEditorDialog(
                     onValueChange = { domainsText = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("域名") },
-                    supportingText = { Text("每行一项；支持 geosite:、domain:、full:、keyword:、regexp:") },
+                    supportingText = {
+                        Text("每行一项；支持 geosite:、domain:、full:、keyword:、regexp:；规则集标签见“资源文件”")
+                    },
                     minLines = 2
                 )
                 OutlinedTextField(
@@ -122,7 +124,7 @@ internal fun SmartRoutingRuleEditorDialog(
                     onValueChange = { ipsText = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("IP / CIDR") },
-                    supportingText = { Text("支持 geoip: 标签；每行一项，也可用逗号分隔") },
+                    supportingText = { Text("支持 geoip: 标签；第三方规则集标签见“资源文件”") },
                     minLines = 2
                 )
                 OutlinedTextField(

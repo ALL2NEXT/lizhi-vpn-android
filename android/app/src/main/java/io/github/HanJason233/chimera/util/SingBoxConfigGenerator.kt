@@ -22,6 +22,7 @@ import io.github.HanJason233.chimera.data.model.decodeRoutingRuleValues
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import android.net.Uri
+import java.io.File
 
 /**
  * sing-box 配置生成器
@@ -53,7 +54,9 @@ class SingBoxConfigGenerator {
         lanInbound: LanInboundSettings = LanInboundSettings(),
         hysteriaUpMbps: Int = AppConfig.HYSTERIA_UP_MBPS,
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS,
-        smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings()
+        smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings(),
+        ruleSetDirectory: File? = null,
+        ruleSetUrls: Map<String, String> = emptyMap()
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
         if (nodes.isEmpty()) {
@@ -108,7 +111,9 @@ class SingBoxConfigGenerator {
                     smartRoutingSettings,
                     dnsSettings.dnsRoutingEnabled,
                     smartInboundTags,
-                    routingInboundTags
+                    routingInboundTags,
+                    ruleSetDirectory,
+                    ruleSetUrls
                 )
             )
             add("experimental", createExperimental())
@@ -1088,7 +1093,9 @@ class SingBoxConfigGenerator {
         smartRoutingSettings: SmartRoutingSettings,
         dnsRoutingEnabled: Boolean,
         smartInboundTags: List<String>,
-        routingInboundTags: List<String>
+        routingInboundTags: List<String>,
+        ruleSetDirectory: File?,
+        ruleSetUrls: Map<String, String>
     ): JsonObject {
         val rules = JsonArray()
         
@@ -1257,20 +1264,20 @@ class SingBoxConfigGenerator {
                         add(JsonObject().apply {
                             addProperty("tag", tag)
                             addProperty("format", "binary")
-                            when (tag) {
-                                "geosite-cn", "geoip-cn" -> {
-                                    addProperty("type", "local")
-                                    addProperty("path", "$tag.srs")
-                                }
-                                else -> {
-                                    addProperty("type", "remote")
-                                    val family = if (tag.startsWith("geosite-")) "sing-geosite" else "sing-geoip"
-                                    addProperty(
-                                        "url",
+                            val localFile = ruleSetDirectory?.let { File(it, "$tag.srs") }
+                                ?.takeIf(File::isFile)
+                            if (localFile != null) {
+                                addProperty("type", "local")
+                                addProperty("path", localFile.absolutePath)
+                            } else {
+                                addProperty("type", "remote")
+                                val family = if (tag.startsWith("geosite-")) "sing-geosite" else "sing-geoip"
+                                addProperty(
+                                    "url",
+                                    ruleSetUrls[tag] ?:
                                         "https://testingcf.jsdelivr.net/gh/SagerNet/$family@rule-set/$tag.srs"
-                                    )
-                                    addProperty("download_detour", "direct")
-                                }
+                                )
+                                addProperty("download_detour", "direct")
                             }
                         })
                     }

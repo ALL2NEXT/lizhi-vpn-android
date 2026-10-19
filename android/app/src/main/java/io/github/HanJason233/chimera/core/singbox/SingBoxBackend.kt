@@ -46,10 +46,11 @@ internal class SingBoxBackend : CoreBackend {
                     lanInbound = settings.lanInbound,
                     dnsSettings = settings.dnsSettings,
                     smartRoutingSettings = settings.smartRoutingSettings,
-                    hysteriaUpMbps = request.hysteriaUpMbps, hysteriaDownMbps = request.hysteriaDownMbps,
+                    hysteriaUpMbps = request.hysteriaUpMbps,
+                    hysteriaDownMbps = request.hysteriaDownMbps,
+                    ruleSetDirectory = RuleManager.ruleSetDirectory(context),
+                    ruleSetUrls = RuleManager.ruleSetUrls()
                 )
-                    .replace("\"geosite-cn.srs\"", "\"${File(context.filesDir, "sing-box/geosite-cn.srs").absolutePath}\"")
-                    .replace("\"geoip-cn.srs\"", "\"${File(context.filesDir, "sing-box/geoip-cn.srs").absolutePath}\"")
             } else {
                 generator.generateTestConfig(
                     request.node, request.socksPort,

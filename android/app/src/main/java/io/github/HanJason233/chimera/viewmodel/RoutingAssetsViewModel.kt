@@ -10,6 +10,8 @@ import io.github.HanJason233.chimera.data.repository.RoutingAssetRecord
 import io.github.HanJason233.chimera.data.repository.RoutingAssetsRepository
 import io.github.HanJason233.chimera.data.repository.RoutingAssetsSnapshot
 import io.github.HanJason233.chimera.util.RuleManager
+import io.github.HanJason233.chimera.util.SingBoxRuleSetCatalogEntry
+import io.github.HanJason233.chimera.util.SingBoxRuleSetProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +23,8 @@ internal data class RoutingAssetsUiState(
     val snapshot: RoutingAssetsSnapshot,
     val loading: Boolean = false,
     val singBoxRuleSets: Map<String, RoutingAssetFileInfo> = emptyMap(),
-    val singBoxAutoUpdateEnabled: Boolean = true
+    val singBoxAutoUpdateEnabled: Boolean = true,
+    val singBoxProvider: SingBoxRuleSetProvider = SingBoxRuleSetProvider.SAGER_NET
 )
 
 internal class RoutingAssetsViewModel(application: Application) : AndroidViewModel(application) {
@@ -32,7 +35,8 @@ internal class RoutingAssetsViewModel(application: Application) : AndroidViewMod
             snapshot = repository.load(),
             loading = true,
             singBoxRuleSets = RuleManager.ruleSetFileInfo(application),
-            singBoxAutoUpdateEnabled = RuleManager.isAutoUpdateEnabled(application)
+            singBoxAutoUpdateEnabled = RuleManager.isAutoUpdateEnabled(application),
+            singBoxProvider = RuleManager.selectedProvider(application)
         )
     )
     val state: StateFlow<RoutingAssetsUiState> = _state.asStateFlow()
@@ -90,6 +94,30 @@ internal class RoutingAssetsViewModel(application: Application) : AndroidViewMod
         }
     }
 
+    fun selectSingBoxProvider(provider: SingBoxRuleSetProvider) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { RuleManager.setSelectedProvider(app, provider) }
+            _state.value = _state.value.copy(singBoxProvider = provider)
+        }
+    }
+
+    fun installSingBoxRuleSet(entry: SingBoxRuleSetCatalogEntry, onResult: (Boolean) -> Unit) {
+        runRuleSetOperation(onResult) { RuleManager.installRuleSet(app, entry) }
+    }
+
+    fun updateSingBoxRuleSet(entry: SingBoxRuleSetCatalogEntry, onResult: (Boolean) -> Unit) {
+        runRuleSetOperation(onResult) { RuleManager.updateRuleSet(app, entry) }
+    }
+
+    fun removeSingBoxRuleSet(entry: SingBoxRuleSetCatalogEntry) {
+        if (_state.value.loading) return
+        _state.value = _state.value.copy(loading = true)
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { RuleManager.removeRuleSet(app, entry) }
+            _state.value = loadState()
+        }
+    }
+
     fun downloadAll(onResult: (RoutingAssetDownloadResult) -> Unit) {
         if (_state.value.loading) return
         _state.value = _state.value.copy(loading = true)
@@ -107,11 +135,22 @@ internal class RoutingAssetsViewModel(application: Application) : AndroidViewMod
         }
     }
 
+    private fun runRuleSetOperation(onResult: (Boolean) -> Unit, operation: () -> Boolean) {
+        if (_state.value.loading) return
+        _state.value = _state.value.copy(loading = true)
+        viewModelScope.launch {
+            val success = withContext(Dispatchers.IO) { operation() }
+            _state.value = loadState()
+            onResult(success)
+        }
+    }
+
     private suspend fun loadState(): RoutingAssetsUiState = withContext(Dispatchers.IO) {
         RoutingAssetsUiState(
             snapshot = repository.load(),
             singBoxRuleSets = RuleManager.ruleSetFileInfo(app),
-            singBoxAutoUpdateEnabled = RuleManager.isAutoUpdateEnabled(app)
+            singBoxAutoUpdateEnabled = RuleManager.isAutoUpdateEnabled(app),
+            singBoxProvider = RuleManager.selectedProvider(app)
         )
     }
 }

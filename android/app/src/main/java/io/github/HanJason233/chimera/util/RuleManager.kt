@@ -29,6 +29,8 @@ object RuleManager {
     private const val PREFS_NAME = "rule_manager"
     private const val LAST_SUCCESSFUL_UPDATE = "last_successful_update"
     private const val UPDATE_INTERVAL_MS = 24L * 60L * 60L * 1000L
+    private const val INSTALLED_RULE_SET_TAGS = "installed_rule_set_tags"
+    private const val SELECTED_PROVIDER = "selected_rule_set_provider"
 
     // .srs 规则集下载地址 (jsDelivr CDN 加速)
     private const val GEOIP_CN_URL = "https://testingcf.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs"
@@ -38,12 +40,27 @@ object RuleManager {
     const val GEOIP_CN_FILE = "geoip-cn.srs"
     const val GEOSITE_CN_FILE = "geosite-cn.srs"
     private const val AUTO_UPDATE_ENABLED = "auto_update_enabled"
-    private val RULE_SET_URLS = mapOf(
-        GEOIP_CN_FILE to GEOIP_CN_URL,
-        GEOSITE_CN_FILE to GEOSITE_CN_URL
-    )
-
     val RULE_SET_FILES = listOf(GEOIP_CN_FILE, GEOSITE_CN_FILE)
+
+    internal fun selectedProvider(context: Context): SingBoxRuleSetProvider {
+        val id = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(SELECTED_PROVIDER, SingBoxRuleSetProvider.SAGER_NET.id)
+        return SingBoxRuleSetCatalog.providers.firstOrNull { it.id == id }
+            ?: SingBoxRuleSetProvider.SAGER_NET
+    }
+
+    internal fun setSelectedProvider(context: Context, provider: SingBoxRuleSetProvider) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(SELECTED_PROVIDER, provider.id)
+            .apply()
+    }
+
+    internal fun ruleSetDirectory(context: Context): File = File(context.filesDir, "sing-box")
+
+    /** 所有目录资源的 URL；未下载的目录规则也可由 sing-box 按需拉取。 */
+    internal fun ruleSetUrls(): Map<String, String> =
+        SingBoxRuleSetCatalog.entries.associate { it.tag to it.url }
 
     internal fun isAutoUpdateEnabled(context: Context): Boolean =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -57,8 +74,9 @@ object RuleManager {
     }
 
     internal fun ruleSetFileInfo(context: Context): Map<String, RoutingAssetFileInfo> {
-        val workDir = File(context.filesDir, "sing-box")
-        return RULE_SET_FILES.mapNotNull { name ->
+        val workDir = ruleSetDirectory(context)
+        val fileNames = (RULE_SET_FILES + SingBoxRuleSetCatalog.entries.map { it.fileName }).distinct()
+        return fileNames.mapNotNull { name ->
             File(workDir, name).takeIf(File::isFile)?.let { file ->
                 name to RoutingAssetFileInfo(file.length(), file.lastModified())
             }
@@ -72,7 +90,7 @@ object RuleManager {
      */
     suspend fun ensureRuleSets(context: Context) {
         withContext(Dispatchers.IO) {
-            val workDir = File(context.filesDir, "sing-box")
+            val workDir = ruleSetDirectory(context)
             if (!workDir.exists()) {
                 workDir.mkdirs()
             }
@@ -119,20 +137,15 @@ object RuleManager {
                     return@withContext SingBoxRuleSetUpdateResult(emptyList(), emptyList(), skipped = true)
                 }
 
-                val workDir = File(context.filesDir, "sing-box")
-                if (!workDir.exists()) {
-                    workDir.mkdirs()
+                val workDir = ruleSetDirectory(context).apply { mkdirs() }
+                val targets = updateTargets(context).map { (name, url) ->
+                    Triple(name, url, File(workDir, name))
                 }
-
-                val targets = listOf(
-                    GEOIP_CN_FILE to File(workDir, GEOIP_CN_FILE),
-                    GEOSITE_CN_FILE to File(workDir, GEOSITE_CN_FILE)
-                )
                 val updated = mutableListOf<String>()
                 val failed = mutableListOf<String>()
-                targets.forEach { (name, file) ->
+                targets.forEach { (name, url, file) ->
                     Log.i(TAG, "Updating $name...")
-                    if (downloadToFile(RULE_SET_URLS.getValue(name), file)) {
+                    if (downloadToFile(url, file)) {
                         updated += name
                     } else {
                         Log.w(TAG, "Failed to update $name, keeping existing file")
@@ -147,9 +160,51 @@ object RuleManager {
                 SingBoxRuleSetUpdateResult(updated, failed)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update rule sets", e)
-                SingBoxRuleSetUpdateResult(emptyList(), RULE_SET_FILES)
+                SingBoxRuleSetUpdateResult(emptyList(), updateTargets(context).map { it.first })
             }
         }
+    }
+
+    /** 下载并登记一条来源目录规则，供自动更新和 sing-box 分流配置使用。 */
+    internal fun installRuleSet(context: Context, entry: SingBoxRuleSetCatalogEntry): Boolean {
+        if (SingBoxRuleSetCatalog.find(entry.tag) != entry) return false
+        val directory = ruleSetDirectory(context).apply { mkdirs() }
+        val target = File(directory, entry.fileName)
+        if (!downloadToFile(entry.url, target)) return false
+        val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val installed = preferences.getStringSet(INSTALLED_RULE_SET_TAGS, emptySet()).orEmpty().toMutableSet()
+        installed += entry.tag
+        preferences.edit().putStringSet(INSTALLED_RULE_SET_TAGS, installed).apply()
+        return true
+    }
+
+    /** 更新单条已登记规则。 */
+    internal fun updateRuleSet(context: Context, entry: SingBoxRuleSetCatalogEntry): Boolean =
+        SingBoxRuleSetCatalog.find(entry.tag) == entry &&
+            downloadToFile(entry.url, File(ruleSetDirectory(context).apply { mkdirs() }, entry.fileName))
+
+    /** 删除单条目录规则及其自动更新登记。 */
+    internal fun removeRuleSet(context: Context, entry: SingBoxRuleSetCatalogEntry) {
+        if (SingBoxRuleSetCatalog.find(entry.tag) != entry) return
+        val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val installed = preferences.getStringSet(INSTALLED_RULE_SET_TAGS, emptySet()).orEmpty()
+            .toMutableSet()
+        installed -= entry.tag
+        preferences.edit().putStringSet(INSTALLED_RULE_SET_TAGS, installed).apply()
+        File(ruleSetDirectory(context), entry.fileName).delete()
+    }
+
+    private fun updateTargets(context: Context): List<Pair<String, String>> {
+        val installedTags = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getStringSet(INSTALLED_RULE_SET_TAGS, emptySet()).orEmpty().toSet()
+        val directory = ruleSetDirectory(context)
+        val managed = SingBoxRuleSetCatalog.entries
+            .filter { it.tag in installedTags || File(directory, it.fileName).isFile }
+            .map { it.fileName to it.url }
+        return listOf(
+            GEOIP_CN_FILE to GEOIP_CN_URL,
+            GEOSITE_CN_FILE to GEOSITE_CN_URL
+        ) + managed
     }
 
     /**
@@ -193,7 +248,7 @@ object RuleManager {
                 }
 
                 // 校验下载文件大小
-                if (tempFile.length() < 1024) {
+                if (tempFile.length() < 64) {
                     Log.e(TAG, "Downloaded file too small: ${tempFile.length()} bytes")
                     tempFile.delete()
                     return false
