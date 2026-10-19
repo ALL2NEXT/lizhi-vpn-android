@@ -10,12 +10,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -25,11 +26,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -91,12 +92,16 @@ fun InboundScreen(
     var passwordInput by remember(lanInbound.password) { mutableStateOf(lanInbound.password) }
     var validationMessage by remember { mutableStateOf<String?>(null) }
 
-    AppScreenScaffold(title = "入站", onBack = onBack) {
+    AppScreenScaffold(
+        title = "入站",
+        onBack = onBack,
+        contentPadding = PaddingValues(0.dp)
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CoreSection(title = "核心入站") {
                 InboundCard(
@@ -105,13 +110,11 @@ fun InboundScreen(
                     status = if (vpnState == VpnState.CONNECTED) "运行中" else "VPN 启动后运行"
                 )
 
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(14.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
@@ -213,6 +216,10 @@ fun InboundScreen(
                             }
                         )
                     }
+                    Divider(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
                 }
             }
         }
@@ -240,18 +247,23 @@ fun OutboundScreen(
         mutableStateOf(hysteriaDownMbps.toString())
     }
 
-    AppScreenScaffold(title = "出站", onBack = onBack) {
+    AppScreenScaffold(
+        title = "出站",
+        onBack = onBack,
+        contentPadding = PaddingValues(0.dp)
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CoreSection(title = "核心出站") {
                 Text(
                     text = "局域网入站会直接复用当前代理出站，不会再次经过本机 TUN。",
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
                 OutboundHysteriaCard(
                     enabled = hysteriaBandwidthEnabled,
@@ -313,13 +325,11 @@ private fun FailoverDetectionCard(
     }
     var validationMessage by remember { mutableStateOf<String?>(null) }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(14.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -435,6 +445,10 @@ private fun FailoverDetectionCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        Divider(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
     }
 }
 
@@ -456,13 +470,11 @@ private fun FailoverTransferCard(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(14.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
@@ -484,8 +496,7 @@ private fun FailoverTransferCard(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
-                            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                            .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -525,6 +536,7 @@ private fun FailoverTransferCard(
                         ) { Text("下移") }
                         TextButton(onClick = { onChange(settings.nodeIds - nodeId) }) { Text("移除") }
                     }
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
             Button(
@@ -537,6 +549,10 @@ private fun FailoverTransferCard(
                 Text("添加或选择转移节点")
             }
         }
+        Divider(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
     }
 
     if (showPicker) {
@@ -614,13 +630,11 @@ private fun OutboundHysteriaCard(
     onDownMbpsChange: (String) -> Unit,
     onAdapt: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(14.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -686,6 +700,10 @@ private fun OutboundHysteriaCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        Divider(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
     }
 }
 
@@ -722,15 +740,11 @@ private fun LanShareUriPanel(
             )
             else -> addresses.forEach { address ->
                 val uri = buildSocksImportUri(address, settings)
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(10.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                            .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -752,6 +766,7 @@ private fun LanShareUriPanel(
                             )
                         }
                     }
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }
@@ -845,11 +860,13 @@ private fun CoreSection(
     content: @Composable () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(
             text = title,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -864,13 +881,11 @@ private fun InboundCard(
     description: String,
     status: String
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(14.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
@@ -896,5 +911,9 @@ private fun InboundCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        Divider(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
     }
 }
