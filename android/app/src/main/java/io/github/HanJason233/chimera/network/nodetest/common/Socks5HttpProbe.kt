@@ -4,11 +4,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Call
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
+import io.github.HanJason233.chimera.data.model.FailoverPingTarget
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.EOFException
 import java.io.InputStream
+import java.net.InetAddress
 import java.net.IDN
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -82,6 +84,37 @@ internal object Socks5HttpProbe {
         targetUrl: String,
         timeoutMs: Long
     ): Int = execute(endpoint, targetUrl, timeoutMs, "GET").statusCode
+
+    /** 通过当前 SOCKS5 出站连接目标端口，以 CONNECT 建立耗时作为代理 TCP Ping 延迟。 */
+    fun probeTcpConnect(
+        endpoint: LocalSocksEndpoint,
+        targetHost: String,
+        targetPort: Int,
+        timeoutMs: Long
+    ): Int {
+        require(targetPort in 1..65_535) { "Invalid ping target port" }
+        val host = requireNotNull(FailoverPingTarget.normalizeHost(targetHost)) {
+            "Invalid ping target host"
+        }
+        val timeoutNanos = timeoutMs.coerceIn(1, Int.MAX_VALUE.toLong()) * NANOS_PER_MILLISECOND
+        val startedAt = System.nanoTime()
+        val deadline = startedAt + timeoutNanos
+        val socket = Socket()
+        activeSockets.add(socket)
+        try {
+            socket.soTimeout = remainingMillis(deadline)
+            socket.connect(InetSocketAddress(endpoint.address, endpoint.port), remainingMillis(deadline))
+            socket.soTimeout = remainingMillis(deadline)
+            negotiate(socket, endpoint, host, targetPort, deadline)
+            val completedAt = System.nanoTime()
+            if (completedAt > deadline) throw SocketTimeoutException("代理 TCP Ping 超时")
+            return ((completedAt - startedAt) / NANOS_PER_MILLISECOND)
+                .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+        } finally {
+            activeSockets.remove(socket)
+            runCatching { socket.close() }
+        }
+    }
 
     /** 首次建连和预热请求、后续暖连接测量请求各自使用独立超时。 */
     fun measureLatency(
@@ -353,15 +386,25 @@ internal object Socks5HttpProbe {
         error("HTTP line is too long")
     }
 
-    private fun negotiate(socket: Socket, endpoint: LocalSocksEndpoint, host: String, port: Int) {
+    private fun negotiate(
+        socket: Socket,
+        endpoint: LocalSocksEndpoint,
+        host: String,
+        port: Int,
+        deadlineNanos: Long? = null
+    ) {
         // 此处不能使用缓冲流，否则预读的 SOCKS 响应字节在套接字交给 TLS/HTTP 后会丢失。
         val input = socket.getInputStream()
         val output = socket.getOutputStream()
         val credentials = endpoint.credentials
         val method = if (credentials == null) NO_AUTH else USER_PASSWORD
+        fun readExactly(size: Int): ByteArray {
+            deadlineNanos?.let { socket.soTimeout = remainingMillis(it) }
+            return input.readExactly(size)
+        }
         output.write(byteArrayOf(VERSION, 1, method))
         output.flush()
-        val greeting = input.readExactly(2)
+        val greeting = readExactly(2)
         require(greeting[0] == VERSION && greeting[1] == method) {
             "SOCKS5 authentication method was rejected"
         }
@@ -375,30 +418,60 @@ internal object Socks5HttpProbe {
             output.write(password.size)
             output.write(password)
             output.flush()
-            val authentication = input.readExactly(2)
+            val authentication = readExactly(2)
             require(authentication[0] == AUTH_VERSION && authentication[1].toInt() == 0) {
                 "SOCKS5 authentication failed"
             }
         }
 
-        val encodedHost = IDN.toASCII(host).toByteArray(Charsets.US_ASCII)
-        require(encodedHost.size in 1..255) { "SOCKS5 target host is too long" }
-        output.write(byteArrayOf(VERSION, CONNECT, 0, DOMAIN, encodedHost.size.toByte()))
-        output.write(encodedHost)
+        val (addressType, encodedAddress) = encodeSocks5Address(host)
+        output.write(byteArrayOf(VERSION, CONNECT, 0, addressType))
+        if (addressType == DOMAIN) output.write(encodedAddress.size)
+        output.write(encodedAddress)
         output.write(byteArrayOf((port ushr 8).toByte(), port.toByte()))
         output.flush()
 
-        val response = input.readExactly(4)
+        val response = readExactly(4)
         require(response[0] == VERSION && response[1].toInt() == 0) {
             "SOCKS5 connect failed: ${response[1].toInt() and 0xff}"
         }
         when (response[3]) {
-            IPV4 -> input.readExactly(4)
-            IPV6 -> input.readExactly(16)
-            DOMAIN -> input.readExactly(input.readExactly(1)[0].toInt() and 0xff)
+            IPV4 -> readExactly(4)
+            IPV6 -> readExactly(16)
+            DOMAIN -> readExactly(readExactly(1)[0].toInt() and 0xff)
             else -> error("Invalid SOCKS5 address type")
         }
-        input.readExactly(2)
+        readExactly(2)
+    }
+
+    /** SOCKS5 域名以域名类型发送，避免客户端本地解析绕过代理的 DNS。 */
+    private fun encodeSocks5Address(host: String): Pair<Byte, ByteArray> {
+        val unwrappedHost = if (host.startsWith('[') && host.endsWith(']')) {
+            host.substring(1, host.length - 1)
+        } else {
+            host
+        }
+        if (':' in unwrappedHost) {
+            require('%' !in unwrappedHost) { "Scoped IPv6 addresses are not supported" }
+            val address = InetAddress.getByName(unwrappedHost).address
+            require(address.size == 16) { "Invalid IPv6 target host" }
+            return IPV6 to address
+        }
+
+        if (unwrappedHost.all { it.isDigit() || it == '.' }) {
+            val octets = unwrappedHost.split('.')
+            require(octets.size == 4 && octets.all { it.isNotEmpty() && it.length <= 3 }) {
+                "Invalid IPv4 target host"
+            }
+            val address = octets.map { it.toIntOrNull()?.takeIf { octet -> octet in 0..255 } }
+            require(address.all { it != null }) { "Invalid IPv4 target host" }
+            return IPV4 to address.map { it!!.toByte() }.toByteArray()
+        }
+
+        val encodedHost = IDN.toASCII(unwrappedHost, IDN.USE_STD3_ASCII_RULES)
+            .toByteArray(Charsets.US_ASCII)
+        require(encodedHost.size in 1..255) { "SOCKS5 target host is too long" }
+        return DOMAIN to encodedHost
     }
 
     private fun writeRequest(

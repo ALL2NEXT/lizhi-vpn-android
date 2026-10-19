@@ -286,7 +286,12 @@ class BoxVpnService : VpnService() {
                     } else if (isUsingBackup) {
                         "正在使用转移节点：${connectedNode?.name.orEmpty()}"
                     } else {
-                        "正在检测当前节点；${settings.transfer.nodeIds.size} 个转移节点按顺序待命"
+                        val probeLabel = if (detection.method == FailoverDetectionMethod.PROXY_TCP_PING) {
+                            "代理 Ping ${detection.pingHost}:${detection.pingPort}"
+                        } else {
+                            "HTTPS 探测"
+                        }
+                        "正在进行$probeLabel；${settings.transfer.nodeIds.size} 个转移节点按顺序待命"
                     },
                     connectedNode?.id
                 )
@@ -305,14 +310,30 @@ class BoxVpnService : VpnService() {
                         continue
                     }
                     val endpoint = activeSocksEndpoint() ?: continue
-                    val probeSucceeded = withContext(Dispatchers.IO) {
-                        runCatching {
-                            Socks5HttpProbe.probeHttpStatusCode(
-                                endpoint,
-                                detection.probeUrl,
-                                detection.timeoutMs
-                            ) in 200..399
-                        }.getOrDefault(false)
+                    val (probeSucceeded, probeDelayMs) = withContext(Dispatchers.IO) {
+                        when (detection.method) {
+                            FailoverDetectionMethod.HTTPS_PROBE -> {
+                                val succeeded = runCatching {
+                                    Socks5HttpProbe.probeHttpStatusCode(
+                                        endpoint,
+                                        detection.probeUrl,
+                                        detection.timeoutMs
+                                    ) in 200..399
+                                }.getOrDefault(false)
+                                succeeded to null
+                            }
+                            FailoverDetectionMethod.PROXY_TCP_PING -> {
+                                val delayMs = runCatching {
+                                    Socks5HttpProbe.probeTcpConnect(
+                                        endpoint,
+                                        detection.pingHost,
+                                        detection.pingPort,
+                                        detection.timeoutMs
+                                    )
+                                }.getOrNull()
+                                (delayMs != null) to delayMs
+                            }
+                        }
                     }
                     if (probeSucceeded) {
                         consecutiveFailures = 0
@@ -320,17 +341,27 @@ class BoxVpnService : VpnService() {
                         ServiceManager.notifyFailoverStatus(
                             if (primaryStillActive) FailoverRuntimeState.MONITORING
                             else FailoverRuntimeState.USING_BACKUP,
-                            if (primaryStillActive) "当前节点可用，故障检测正常"
-                            else "转移节点可用：${node.name}",
+                            if (primaryStillActive) {
+                                if (probeDelayMs != null) "当前节点可用，代理 Ping ${probeDelayMs} ms"
+                                else "当前节点可用，故障检测正常"
+                            } else {
+                                if (probeDelayMs != null) "转移节点可用：${node.name}，代理 Ping ${probeDelayMs} ms"
+                                else "转移节点可用：${node.name}"
+                            },
                             node.id
                         )
                         continue
                     }
 
                     consecutiveFailures += 1
+                    val failureLabel = if (detection.method == FailoverDetectionMethod.PROXY_TCP_PING) {
+                        "代理 Ping"
+                    } else {
+                        "HTTPS 探测"
+                    }
                     ServiceManager.notifyFailoverStatus(
                         FailoverRuntimeState.DETECTING,
-                        "当前节点探测失败 ${consecutiveFailures}/${detection.consecutiveFailures}",
+                        "当前节点${failureLabel}失败 ${consecutiveFailures}/${detection.consecutiveFailures}",
                         node.id
                     )
                     if (consecutiveFailures < detection.consecutiveFailures) continue

@@ -62,6 +62,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
+import io.github.HanJason233.chimera.data.model.FailoverDetectionMethod
+import io.github.HanJason233.chimera.data.model.FailoverPingTarget
 import io.github.HanJason233.chimera.data.model.FailoverRuntimeStatus
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
 import io.github.HanJason233.chimera.data.model.VpnState
@@ -315,7 +317,10 @@ private fun FailoverDetectionCard(
     onSave: (FailoverDetectionSettings) -> Unit
 ) {
     val context = LocalContext.current
+    var detectionMethod by remember(settings.method) { mutableStateOf(settings.method) }
     var probeUrl by remember(settings.probeUrl) { mutableStateOf(settings.probeUrl) }
+    var pingHost by remember(settings.pingHost) { mutableStateOf(settings.pingHost) }
+    var pingPortInput by remember(settings.pingPort) { mutableStateOf(settings.pingPort.toString()) }
     var intervalInput by remember(settings.intervalSeconds) {
         mutableStateOf(settings.intervalSeconds.toString())
     }
@@ -344,7 +349,7 @@ private fun FailoverDetectionCard(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "通过当前代理出口发送 HTTPS 请求检查可用性",
+                        text = "选择 HTTPS 探测或经当前节点进行 TCP Ping",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -352,10 +357,54 @@ private fun FailoverDetectionCard(
                 Switch(checked = settings.enabled, onCheckedChange = onEnabledChange)
             }
             Text(
-                text = "检测方式：HTTPS 状态码探测。系统底层网络未验证时会暂停判定；连续失败达到阈值后启动转移。",
+                text = "系统网络不可用时会暂停判定；连续失败达到阈值后启动转移。",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TextButton(
+                    onClick = {
+                        detectionMethod = FailoverDetectionMethod.HTTPS_PROBE
+                        validationMessage = null
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "HTTPS",
+                        color = if (detectionMethod == FailoverDetectionMethod.HTTPS_PROBE) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = if (detectionMethod == FailoverDetectionMethod.HTTPS_PROBE) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        }
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        detectionMethod = FailoverDetectionMethod.PROXY_TCP_PING
+                        validationMessage = null
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "代理 Ping",
+                        color = if (detectionMethod == FailoverDetectionMethod.PROXY_TCP_PING) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = if (detectionMethod == FailoverDetectionMethod.PROXY_TCP_PING) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        }
+                    )
+                }
+            }
             Text(
                 text = runtimeStatus.message,
                 fontSize = 12.sp,
@@ -365,13 +414,42 @@ private fun FailoverDetectionCard(
                     MaterialTheme.colorScheme.primary
                 }
             )
-            OutlinedTextField(
-                value = probeUrl,
-                onValueChange = { probeUrl = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("HTTPS 探测地址") },
-                singleLine = true
-            )
+            if (detectionMethod == FailoverDetectionMethod.HTTPS_PROBE) {
+                OutlinedTextField(
+                    value = probeUrl,
+                    onValueChange = { probeUrl = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("HTTPS 探测地址") },
+                    singleLine = true
+                )
+            } else {
+                Text(
+                    text = "通过当前节点建立到目标主机和端口的 SOCKS5 TCP 连接，并显示连接耗时。默认 www.google.com:443；域名由代理节点解析。此方式检测 TCP 连通性，不发送 ICMP。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = pingHost,
+                        onValueChange = { pingHost = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("域名或 IP") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                    )
+                    OutlinedTextField(
+                        value = pingPortInput,
+                        onValueChange = { pingPortInput = it.filter(Char::isDigit) },
+                        modifier = Modifier.weight(0.42f),
+                        label = { Text("端口") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -408,13 +486,21 @@ private fun FailoverDetectionCard(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     val parsedProbeUrl = Uri.parse(probeUrl.trim())
+                    val normalizedPingHost = FailoverPingTarget.normalizeHost(pingHost)
+                    val pingPort = pingPortInput.toIntOrNull()
+                        ?.takeIf(FailoverPingTarget::isValidPort)
                     val interval = intervalInput.toIntOrNull()?.takeIf { it in 1..2 }
                     val timeout = timeoutInput.toLongOrNull()?.takeIf { it in 500L..2_000L }
                     val failures = failureInput.toIntOrNull()?.takeIf { it in 1..2 }
                     validationMessage = when {
-                        parsedProbeUrl.scheme?.equals("https", ignoreCase = true) != true ||
-                            parsedProbeUrl.host.isNullOrBlank() ->
+                        detectionMethod == FailoverDetectionMethod.HTTPS_PROBE &&
+                            (parsedProbeUrl.scheme?.equals("https", ignoreCase = true) != true ||
+                                parsedProbeUrl.host.isNullOrBlank()) ->
                             "探测地址必须使用 HTTPS"
+                        detectionMethod == FailoverDetectionMethod.PROXY_TCP_PING && normalizedPingHost == null ->
+                            "请输入有效域名或 IP，IPv6 可使用方括号"
+                        detectionMethod == FailoverDetectionMethod.PROXY_TCP_PING && pingPort == null ->
+                            "Ping 端口需为 1–65535"
                         interval == null -> "检测间隔需为 1–2 秒"
                         timeout == null -> "超时需为 500–2000 毫秒"
                         failures == null -> "连续失败次数需为 1–2 次"
@@ -423,7 +509,10 @@ private fun FailoverDetectionCard(
                     if (validationMessage == null && interval != null && timeout != null && failures != null) {
                         onSave(
                             settings.copy(
+                                method = detectionMethod,
                                 probeUrl = probeUrl.trim(),
+                                pingHost = normalizedPingHost ?: settings.pingHost,
+                                pingPort = pingPort ?: settings.pingPort,
                                 intervalSeconds = interval,
                                 timeoutMs = timeout,
                                 consecutiveFailures = failures

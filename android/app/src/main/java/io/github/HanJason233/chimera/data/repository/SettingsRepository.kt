@@ -20,6 +20,7 @@ import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionMethod
+import io.github.HanJason233.chimera.data.model.FailoverPingTarget
 import io.github.HanJason233.chimera.data.model.FailoverSettings
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
@@ -101,6 +102,8 @@ class SettingsRepository(
         private val FAILOVER_DETECTION_ENABLED = booleanPreferencesKey("failover_detection_enabled")
         private val FAILOVER_DETECTION_METHOD = stringPreferencesKey("failover_detection_method")
         private val FAILOVER_PROBE_URL = stringPreferencesKey("failover_probe_url")
+        private val FAILOVER_PING_HOST = stringPreferencesKey("failover_ping_host")
+        private val FAILOVER_PING_PORT = intPreferencesKey("failover_ping_port")
         private val FAILOVER_INTERVAL_SECONDS = intPreferencesKey("failover_interval_seconds")
         private val FAILOVER_TIMEOUT_MS = longPreferencesKey("failover_timeout_ms")
         private val FAILOVER_CONSECUTIVE_FAILURES = intPreferencesKey("failover_consecutive_failures")
@@ -569,6 +572,11 @@ class SettingsRepository(
                 }.getOrDefault(FailoverDetectionMethod.HTTPS_PROBE),
                 probeUrl = normalizeFailoverProbeUrl(preferences[FAILOVER_PROBE_URL])
                     ?: FailoverDetectionSettings.DEFAULT_PROBE_URL,
+                pingHost = FailoverPingTarget.normalizeHost(preferences[FAILOVER_PING_HOST])
+                    ?: FailoverDetectionSettings.DEFAULT_PING_HOST,
+                pingPort = (preferences[FAILOVER_PING_PORT]
+                    ?: FailoverDetectionSettings.DEFAULT_PING_PORT).takeIf(FailoverPingTarget::isValidPort)
+                    ?: FailoverDetectionSettings.DEFAULT_PING_PORT,
                 intervalSeconds = (preferences[FAILOVER_INTERVAL_SECONDS]
                     ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS).coerceIn(1, 2),
                 timeoutMs = (preferences[FAILOVER_TIMEOUT_MS]
@@ -581,10 +589,19 @@ class SettingsRepository(
     }
 
     suspend fun setFailoverDetection(settings: FailoverDetectionSettings) {
-        val normalizedUrl = normalizeFailoverProbeUrl(settings.probeUrl) ?: return
+        val normalizedUrl = normalizeFailoverProbeUrl(settings.probeUrl)
+        val normalizedHost = FailoverPingTarget.normalizeHost(settings.pingHost)
+        if (settings.method == FailoverDetectionMethod.HTTPS_PROBE && normalizedUrl == null) return
+        if (settings.method == FailoverDetectionMethod.PROXY_TCP_PING &&
+            (normalizedHost == null || !FailoverPingTarget.isValidPort(settings.pingPort))
+        ) return
         store.edit { preferences ->
             preferences[FAILOVER_DETECTION_METHOD] = settings.method.name
-            preferences[FAILOVER_PROBE_URL] = normalizedUrl
+            normalizedUrl?.let { preferences[FAILOVER_PROBE_URL] = it }
+            normalizedHost?.let { preferences[FAILOVER_PING_HOST] = it }
+            if (FailoverPingTarget.isValidPort(settings.pingPort)) {
+                preferences[FAILOVER_PING_PORT] = settings.pingPort
+            }
             preferences[FAILOVER_INTERVAL_SECONDS] = settings.intervalSeconds.coerceIn(1, 2)
             preferences[FAILOVER_TIMEOUT_MS] = settings.timeoutMs.coerceIn(500L, 2_000L)
             preferences[FAILOVER_CONSECUTIVE_FAILURES] = settings.consecutiveFailures.coerceIn(1, 2)
