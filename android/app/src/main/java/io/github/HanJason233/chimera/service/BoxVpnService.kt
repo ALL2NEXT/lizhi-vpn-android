@@ -299,26 +299,20 @@ class BoxVpnService : VpnService() {
                     } else if (isUsingBackup) {
                         "正在使用转移节点：${connectedNode?.name.orEmpty()}"
                     } else {
-                        "正在执行 ${detection.probeSteps.size} 项测活；转移目标已设置"
+                        "每 ${FailoverDetectionSettings.PROBE_INTERVAL_SECONDS} 秒检测一次；转移目标已设置"
                     },
                     connectedNode?.id
                 )
 
-                // 每个测试项的间隔用于等待下一项，并决定下一轮开始前的等待时间。
-                var nextCycleIntervalSeconds = detection.probeSteps.firstOrNull()?.intervalSeconds
-                    ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS
+                var consecutiveFailures = 0
+                val probeIntervalMs = FailoverDetectionSettings.PROBE_INTERVAL_SECONDS * 1_000L
+                var nextProbeAt = SystemClock.elapsedRealtime() + probeIntervalMs
                 while (isActive && controller.isCurrent(ticket)) {
-                    delay(nextCycleIntervalSeconds * 1_000L)
+                    val waitMs = (nextProbeAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+                    if (waitMs > 0L) delay(waitMs)
                     if (!isRunning) break
+                    nextProbeAt = SystemClock.elapsedRealtime() + probeIntervalMs
                     val node = activeNode ?: break
-                    if (detection.probeSteps.isEmpty()) {
-                        ServiceManager.notifyFailoverStatus(
-                            FailoverRuntimeState.ERROR,
-                            "未配置故障检测项，已暂停节点转移",
-                            node.id
-                        )
-                        continue
-                    }
                     if (host?.currentNetwork == null) {
                         ServiceManager.notifyFailoverStatus(
                             FailoverRuntimeState.WAITING_FOR_NETWORK,
@@ -328,82 +322,49 @@ class BoxVpnService : VpnService() {
                         continue
                     }
                     val endpoint = activeSocksEndpoint() ?: continue
-                    var successfulProbeIndex: Int? = null
-                    var probeDelayMs: Int? = null
-                    // 按配置顺序逐项测试；任一项成功即结束本轮，全部失败后才转移节点。
-                    for ((index, probe) in detection.probeSteps.withIndex()) {
-                        if (index > 0) {
-                            delay(detection.probeSteps[index - 1].intervalSeconds * 1_000L)
-                        }
-                        if (!isActive || !controller.isCurrent(ticket)) break
-                        ServiceManager.notifyFailoverStatus(
-                            FailoverRuntimeState.DETECTING,
-                            "正在测试第 ${index + 1}/${detection.probeSteps.size} 项：${probe.method.title}",
-                            node.id
-                        )
-                        val (probeSucceeded, delayMs) = withContext(Dispatchers.IO) {
-                            when (probe.method) {
-                                FailoverDetectionMethod.HTTPS_PROBE -> {
-                                    val succeeded = runCatching {
-                                        Socks5HttpProbe.probeHttpStatusCode(
-                                            endpoint,
-                                            probe.probeUrl,
-                                            probe.timeoutMs
-                                        ) in 200..399
-                                    }.getOrDefault(false)
-                                    succeeded to null
-                                }
-                                FailoverDetectionMethod.PROXY_TCP_PING -> {
-                                    val pingDelayMs = runCatching {
-                                        Socks5HttpProbe.probeTcpConnect(
-                                            endpoint,
-                                            probe.pingHost,
-                                            probe.pingPort,
-                                            probe.timeoutMs
-                                        )
-                                    }.getOrNull()
-                                    (pingDelayMs != null) to pingDelayMs
-                                }
-                            }
-                        }
-                        if (probeSucceeded) {
-                            nextCycleIntervalSeconds = probe.intervalSeconds
-                            successfulProbeIndex = index
-                            probeDelayMs = delayMs
-                            break
-                        }
-                        ServiceManager.notifyFailoverStatus(
-                            FailoverRuntimeState.DETECTING,
-                            "测试项 ${index + 1}/${detection.probeSteps.size} 失败，${if (index < detection.probeSteps.lastIndex) "继续下一项" else "本轮测试结束"}",
-                            node.id
-                        )
+                    ServiceManager.notifyFailoverStatus(
+                        FailoverRuntimeState.DETECTING,
+                        "正在检测当前节点",
+                        node.id
+                    )
+                    val probeSucceeded = withContext(Dispatchers.IO) {
+                        runCatching {
+                            Socks5HttpProbe.probeHttpStatusCode(
+                                endpoint,
+                                detection.probeUrl,
+                                FailoverDetectionSettings.PROBE_TIMEOUT_MS
+                            ) in 200..399
+                        }.getOrDefault(false)
                     }
-                    if (!isActive || !controller.isCurrent(ticket)) continue
-                    val passedIndex = successfulProbeIndex
-                    if (passedIndex != null) {
+                    if (probeSucceeded) {
+                        consecutiveFailures = 0
                         val primaryStillActive = node.id == primaryId
-                        val passedProbeLabel = buildString {
-                            append("测试项 ${passedIndex + 1}/${detection.probeSteps.size} 通过")
-                            probeDelayMs?.let { append("，代理 Ping ${it} ms") }
-                        }
                         ServiceManager.notifyFailoverStatus(
                             if (primaryStillActive) FailoverRuntimeState.MONITORING
                             else FailoverRuntimeState.USING_BACKUP,
                             if (primaryStillActive) {
-                                "当前节点可用：$passedProbeLabel"
+                                "当前节点可用：HTTPS 测活通过"
                             } else {
-                                "转移节点可用：${node.name}，$passedProbeLabel"
+                                "转移节点可用：${node.name}"
                             },
                             node.id
                         )
                         continue
                     }
 
-                    nextCycleIntervalSeconds = detection.probeSteps.last().intervalSeconds
-
+                    consecutiveFailures += 1
+                    if (consecutiveFailures < FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD) {
+                        ServiceManager.notifyFailoverStatus(
+                            FailoverRuntimeState.DETECTING,
+                            "测活失败（$consecutiveFailures/${FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD}），等待下一次检测",
+                            node.id
+                        )
+                        continue
+                    }
+                    consecutiveFailures = 0
                     ServiceManager.notifyFailoverStatus(
                         FailoverRuntimeState.DETECTING,
-                        "${detection.probeSteps.size} 项测活均失败，正在尝试转移节点",
+                        "连续失败 ${FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD} 次，正在尝试转移节点",
                         node.id
                     )
 
@@ -429,6 +390,7 @@ class BoxVpnService : VpnService() {
                         )
                         if (configuredBackups > 0 && attemptedCount >= configuredBackups) {
                             delay(FAILOVER_RETRY_BACKOFF_MS)
+                            nextProbeAt = SystemClock.elapsedRealtime() + probeIntervalMs
                             synchronized(failoverStateLock) {
                                 attemptedFailoverNodeIds.removeAll { it != primaryNodeId && it != node.id }
                             }
@@ -455,7 +417,6 @@ class BoxVpnService : VpnService() {
             }
         }
     }
-
     private suspend fun resolveFailoverCandidates(
         target: FailoverTransferTarget?,
         settingsRepository: SettingsRepository

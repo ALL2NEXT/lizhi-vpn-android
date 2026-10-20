@@ -19,9 +19,6 @@ import io.github.HanJason233.chimera.data.model.HomeIconEffect
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
-import io.github.HanJason233.chimera.data.model.FailoverDetectionMethod
-import io.github.HanJason233.chimera.data.model.FailoverProbeStep
-import io.github.HanJason233.chimera.data.model.FailoverPingTarget
 import io.github.HanJason233.chimera.data.model.FailoverSettings
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
 import io.github.HanJason233.chimera.data.model.FailoverTransferTarget
@@ -109,12 +106,10 @@ class SettingsRepository(
         private val LAN_INBOUND_PASSWORD = stringPreferencesKey("lan_inbound_password")
         private val LAN_INBOUND_PROXY_MODE = stringPreferencesKey("lan_inbound_proxy_mode")
         private val FAILOVER_DETECTION_ENABLED = booleanPreferencesKey("failover_detection_enabled")
+        // 旧探测列表键用于迁移已有配置；旧字段用于兼容降级版本读取。
         private val FAILOVER_PROBE_STEPS = stringPreferencesKey("failover_probe_steps")
-        // 旧版单项检测字段仅用于升级时迁移已有设置。
         private val FAILOVER_DETECTION_METHOD = stringPreferencesKey("failover_detection_method")
         private val FAILOVER_PROBE_URL = stringPreferencesKey("failover_probe_url")
-        private val FAILOVER_PING_HOST = stringPreferencesKey("failover_ping_host")
-        private val FAILOVER_PING_PORT = intPreferencesKey("failover_ping_port")
         private val FAILOVER_INTERVAL_SECONDS = intPreferencesKey("failover_interval_seconds")
         private val FAILOVER_TIMEOUT_MS = longPreferencesKey("failover_timeout_ms")
         private val FAILOVER_CONSECUTIVE_FAILURES = intPreferencesKey("failover_consecutive_failures")
@@ -567,10 +562,6 @@ class SettingsRepository(
         )
 
     private fun decodeFailoverSettings(preferences: Preferences): FailoverSettings {
-        val legacyIntervalSeconds = (preferences[FAILOVER_INTERVAL_SECONDS]
-            ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS).coerceIn(1, 2)
-        val legacyTimeoutMs = (preferences[FAILOVER_TIMEOUT_MS]
-            ?: FailoverDetectionSettings.DEFAULT_TIMEOUT_MS).coerceIn(500L, 2_000L)
         val transferTarget = if (preferences.contains(FAILOVER_TRANSFER_TARGET)) {
             decodeFailoverTransferTarget(preferences[FAILOVER_TRANSFER_TARGET])
         } else {
@@ -580,14 +571,7 @@ class SettingsRepository(
         return FailoverSettings(
             detection = FailoverDetectionSettings(
                 enabled = preferences[FAILOVER_DETECTION_ENABLED] ?: false,
-                // 旧版将间隔和超时保存在全局键中；用它们补齐旧格式的每条测试项。
-                probeSteps = decodeFailoverProbeSteps(
-                    preferences[FAILOVER_PROBE_STEPS],
-                    legacyIntervalSeconds,
-                    legacyTimeoutMs
-                )
-                    .takeIf { it.isNotEmpty() }
-                    ?: decodeLegacyFailoverProbeSteps(preferences),
+                probeUrl = decodeFailoverProbeUrl(preferences),
             ),
             transfer = FailoverTransferSettings(transferTarget)
         )
@@ -622,122 +606,31 @@ class SettingsRepository(
         }.orEmpty()
 
     suspend fun setFailoverDetection(settings: FailoverDetectionSettings) {
-        val normalizedSteps = normalizeFailoverProbeSteps(settings.probeSteps) ?: return
-        val firstStep = normalizedSteps.first()
-        val serializedSteps = JSONArray().apply {
-            normalizedSteps.forEach { step ->
-                put(
-                    JSONObject()
-                        .put("id", step.id)
-                        .put("method", step.method.name)
-                        .put("probeUrl", step.probeUrl)
-                        .put("pingHost", step.pingHost)
-                        .put("pingPort", step.pingPort)
-                        .put("intervalSeconds", step.intervalSeconds)
-                        .put("timeoutMs", step.timeoutMs)
-                )
-            }
-        }.toString()
+        val probeUrl = normalizeFailoverProbeUrl(settings.probeUrl) ?: return
         store.edit { preferences ->
-            preferences[FAILOVER_PROBE_STEPS] = serializedSteps
-            // 同步首项和条数，保留旧版本读取单项设置时的合理降级行为。
-            preferences[FAILOVER_DETECTION_METHOD] = firstStep.method.name
-            preferences[FAILOVER_PROBE_URL] = firstStep.probeUrl
-            preferences[FAILOVER_PING_HOST] = firstStep.pingHost
-            preferences[FAILOVER_PING_PORT] = firstStep.pingPort
-            preferences[FAILOVER_CONSECUTIVE_FAILURES] = normalizedSteps.size
-            // 保留旧版全局键，方便降级版本读取首个测试项的间隔和超时。
-            preferences[FAILOVER_INTERVAL_SECONDS] = firstStep.intervalSeconds
-            preferences[FAILOVER_TIMEOUT_MS] = firstStep.timeoutMs
+            preferences[FAILOVER_PROBE_URL] = probeUrl
+            preferences.remove(FAILOVER_PROBE_STEPS)
+            // 同步固定探测参数，兼容降级版本读取。
+            preferences[FAILOVER_DETECTION_METHOD] = "HTTPS_PROBE"
+            preferences[FAILOVER_CONSECUTIVE_FAILURES] =
+                FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD
+            preferences[FAILOVER_INTERVAL_SECONDS] = FailoverDetectionSettings.PROBE_INTERVAL_SECONDS
+            preferences[FAILOVER_TIMEOUT_MS] = FailoverDetectionSettings.PROBE_TIMEOUT_MS
         }
     }
 
-    private fun decodeLegacyFailoverProbeSteps(preferences: Preferences): List<FailoverProbeStep> {
-        val method = runCatching {
-            FailoverDetectionMethod.valueOf(preferences[FAILOVER_DETECTION_METHOD].orEmpty())
-        }.getOrDefault(FailoverDetectionMethod.HTTPS_PROBE)
-        val probeUrl = normalizeFailoverProbeUrl(preferences[FAILOVER_PROBE_URL])
-            ?: FailoverDetectionSettings.DEFAULT_PROBE_URL
-        val pingHost = FailoverPingTarget.normalizeHost(preferences[FAILOVER_PING_HOST])
-            ?: FailoverDetectionSettings.DEFAULT_PING_HOST
-        val pingPort = (preferences[FAILOVER_PING_PORT]
-            ?: FailoverDetectionSettings.DEFAULT_PING_PORT)
-            .takeIf(FailoverPingTarget::isValidPort)
-            ?: FailoverDetectionSettings.DEFAULT_PING_PORT
-        val intervalSeconds = (preferences[FAILOVER_INTERVAL_SECONDS]
-            ?: FailoverDetectionSettings.DEFAULT_INTERVAL_SECONDS).coerceIn(1, 2)
-        val timeoutMs = (preferences[FAILOVER_TIMEOUT_MS]
-            ?: FailoverDetectionSettings.DEFAULT_TIMEOUT_MS).coerceIn(500L, 2_000L)
-        val count = (preferences[FAILOVER_CONSECUTIVE_FAILURES] ?: 2).coerceIn(1, 2)
-        return List(count) { index ->
-            FailoverProbeStep(
-                id = "migrated-${index + 1}",
-                method = method,
-                probeUrl = probeUrl,
-                pingHost = pingHost,
-                pingPort = pingPort,
-                intervalSeconds = intervalSeconds,
-                timeoutMs = timeoutMs
-            )
-        }
-    }
-
-    private fun decodeFailoverProbeSteps(
-        serialized: String?,
-        defaultIntervalSeconds: Int,
-        defaultTimeoutMs: Long
-    ): List<FailoverProbeStep> {
-        val array = runCatching { JSONArray(serialized.orEmpty()) }.getOrNull() ?: return emptyList()
-        val steps = mutableListOf<FailoverProbeStep>()
-        for (index in 0 until array.length()) {
-            val item = array.optJSONObject(index) ?: continue
-            val method = runCatching {
-                FailoverDetectionMethod.valueOf(item.optString("method"))
-            }.getOrNull() ?: continue
-            val step = FailoverProbeStep(
-                id = item.optString("id").takeIf(String::isNotBlank) ?: UUID.randomUUID().toString(),
-                method = method,
-                probeUrl = item.optString("probeUrl", FailoverDetectionSettings.DEFAULT_PROBE_URL),
-                pingHost = item.optString("pingHost", FailoverDetectionSettings.DEFAULT_PING_HOST),
-                pingPort = item.optInt("pingPort", FailoverDetectionSettings.DEFAULT_PING_PORT),
-                intervalSeconds = item.optInt("intervalSeconds", defaultIntervalSeconds),
-                timeoutMs = item.optLong("timeoutMs", defaultTimeoutMs)
-            )
-            normalizeFailoverProbeStep(step)?.let(steps::add)
-        }
-        return steps.distinctBy(FailoverProbeStep::id)
-    }
-
-    private fun normalizeFailoverProbeSteps(steps: List<FailoverProbeStep>): List<FailoverProbeStep>? {
-        if (steps.isEmpty()) return null
-        val usedIds = mutableSetOf<String>()
-        val normalizedSteps = mutableListOf<FailoverProbeStep>()
-        for (step in steps) {
-            val normalized = normalizeFailoverProbeStep(step) ?: return null
-            val id = normalized.id.takeIf { it.isNotBlank() && usedIds.add(it) }
-                ?: UUID.randomUUID().toString().also(usedIds::add)
-            normalizedSteps += normalized.copy(id = id)
-        }
-        return normalizedSteps
-    }
-
-    private fun normalizeFailoverProbeStep(step: FailoverProbeStep): FailoverProbeStep? {
-        val normalizedTiming = step.copy(
-            intervalSeconds = step.intervalSeconds.coerceIn(1, 2),
-            timeoutMs = step.timeoutMs.coerceIn(500L, 2_000L)
-        )
-        return when (step.method) {
-            FailoverDetectionMethod.HTTPS_PROBE -> normalizeFailoverProbeUrl(step.probeUrl)
-                ?.let { normalizedTiming.copy(probeUrl = it) }
-            FailoverDetectionMethod.PROXY_TCP_PING -> {
-                val host = FailoverPingTarget.normalizeHost(step.pingHost)
-                if (host == null || !FailoverPingTarget.isValidPort(step.pingPort)) {
-                    null
-                } else {
-                    normalizedTiming.copy(pingHost = host)
-                }
+    private fun decodeFailoverProbeUrl(preferences: Preferences): String {
+        val array = runCatching { JSONArray(preferences[FAILOVER_PROBE_STEPS].orEmpty()) }
+            .getOrNull()
+        if (array != null) {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                if (item.optString("method") != "HTTPS_PROBE") continue
+                normalizeFailoverProbeUrl(item.optString("probeUrl"))?.let { return it }
             }
         }
+        return normalizeFailoverProbeUrl(preferences[FAILOVER_PROBE_URL])
+            ?: FailoverDetectionSettings.DEFAULT_PROBE_URL
     }
 
     suspend fun setFailoverDetectionEnabled(enabled: Boolean) {

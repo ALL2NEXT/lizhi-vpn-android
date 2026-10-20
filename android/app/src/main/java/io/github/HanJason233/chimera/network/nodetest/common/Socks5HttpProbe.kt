@@ -4,7 +4,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Call
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
-import io.github.HanJason233.chimera.data.model.FailoverPingTarget
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -84,37 +83,6 @@ internal object Socks5HttpProbe {
         targetUrl: String,
         timeoutMs: Long
     ): Int = execute(endpoint, targetUrl, timeoutMs, "GET").statusCode
-
-    /** 通过当前 SOCKS5 出站连接目标端口，以 CONNECT 建立耗时作为代理 TCP Ping 延迟。 */
-    fun probeTcpConnect(
-        endpoint: LocalSocksEndpoint,
-        targetHost: String,
-        targetPort: Int,
-        timeoutMs: Long
-    ): Int {
-        require(targetPort in 1..65_535) { "Invalid ping target port" }
-        val host = requireNotNull(FailoverPingTarget.normalizeHost(targetHost)) {
-            "Invalid ping target host"
-        }
-        val timeoutNanos = timeoutMs.coerceIn(1, Int.MAX_VALUE.toLong()) * NANOS_PER_MILLISECOND
-        val startedAt = System.nanoTime()
-        val deadline = startedAt + timeoutNanos
-        val socket = Socket()
-        activeSockets.add(socket)
-        try {
-            socket.soTimeout = remainingMillis(deadline)
-            socket.connect(InetSocketAddress(endpoint.address, endpoint.port), remainingMillis(deadline))
-            socket.soTimeout = remainingMillis(deadline)
-            negotiate(socket, endpoint, host, targetPort, deadline)
-            val completedAt = System.nanoTime()
-            if (completedAt > deadline) throw SocketTimeoutException("代理 TCP Ping 超时")
-            return ((completedAt - startedAt) / NANOS_PER_MILLISECOND)
-                .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
-        } finally {
-            activeSockets.remove(socket)
-            runCatching { socket.close() }
-        }
-    }
 
     /** 首次建连和预热请求、后续暖连接测量请求各自使用独立超时。 */
     fun measureLatency(
