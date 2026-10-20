@@ -27,6 +27,9 @@ internal class XrayNativeSession(
 
     override fun selectedOutboundTag() = delegate.selectedOutboundTag()
 
+    override fun selectOutboundTag(tag: String): Boolean =
+        delegate.sendControlCommand("SELECT $tag")
+
     suspend fun start(config: String): XrayNativeSession {
         delegate.start(config)
         return this

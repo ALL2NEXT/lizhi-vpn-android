@@ -23,8 +23,7 @@ internal class VpnSessionFactory(
         context: Context,
         node: Node,
         settings: VpnRuntimeSettings,
-        failoverNodes: List<Node> = emptyList(),
-        failoverProbeUrl: String? = null
+        failoverNodes: List<Node> = emptyList()
     ): PreparedVpnSession = withContext(Dispatchers.IO) {
         val backend = registry.resolve(settings.protocolCoreSettings.coreFor(node.type), node)
         val outboundNodes = (listOf(node) + failoverNodes)
@@ -33,23 +32,31 @@ internal class VpnSessionFactory(
                 settings.protocolCoreSettings.coreFor(candidate.type) == backend.id &&
                     backend.supports(candidate)
             }
-        val reservation = PortReservation()
+        val reservations = mutableListOf(PortReservation())
         try {
             val endpoint = LocalSocksEndpoint(
                 LocalSocksEndpoint.LOOPBACK,
-                reservation.port,
+                reservations.first().port,
                 SocksCredentials("vpn", UUID.randomUUID().toString().replace("-", ""))
             )
+            val failoverProbeEndpoints = if (outboundNodes.size > 1) {
+                outboundNodes.associate { candidate ->
+                    val reservation = PortReservation().also(reservations::add)
+                    candidate.id to LocalSocksEndpoint(LocalSocksEndpoint.LOOPBACK, reservation.port)
+                }
+            } else {
+                emptyMap()
+            }
             val request = CoreRequest(
                 node = node,
                 endpoint = endpoint,
                 settings = settings,
                 outboundNodes = outboundNodes,
-                failoverProbeUrl = failoverProbeUrl.takeIf { outboundNodes.size > 1 }
+                failoverProbeEndpoints = failoverProbeEndpoints
             )
-            PreparedVpnSession(backend, backend.prepare(context, request), reservation, outboundNodes)
+            PreparedVpnSession(backend, backend.prepare(context, request), reservations, outboundNodes)
         } catch (error: Throwable) {
-            reservation.close()
+            reservations.forEach(PortReservation::close)
             throw error
         }
     }
@@ -82,14 +89,14 @@ internal class VpnSessionFactory(
 internal class PreparedVpnSession(
     internal val backend: CoreBackend,
     internal val core: PreparedCore,
-    private val reservation: PortReservation,
+    private val reservations: List<PortReservation>,
     val outboundNodes: List<Node>
 ) : AutoCloseable {
     val selectedCore: ProxyCore get() = backend.id
     val endpoint: LocalSocksEndpoint get() = core.request.endpoint
 
-    internal fun releasePortForBinding() = reservation.close()
-    override fun close() = reservation.close()
+    internal fun releasePortForBinding() = reservations.forEach(PortReservation::close)
+    override fun close() = reservations.forEach(PortReservation::close)
 }
 
 internal class PortReservation : AutoCloseable {

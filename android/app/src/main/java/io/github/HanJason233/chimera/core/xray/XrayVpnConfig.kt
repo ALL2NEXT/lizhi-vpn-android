@@ -7,7 +7,6 @@ import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.core.CoreRequest
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
-import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
 import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import io.github.HanJason233.chimera.data.model.ProxyMode
@@ -78,11 +77,27 @@ internal object XrayVpnConfig {
         val inbound = base.getAsJsonArray("inbounds")[0].asJsonObject
         inbound.addProperty("tag", "internal-socks-in")
         val outboundNodes = request.outboundNodes.ifEmpty { listOf(request.node) }
-        val failoverEnabled = request.isVpn && !request.failoverProbeUrl.isNullOrBlank() && outboundNodes.size > 1
+        val failoverEnabled = request.isVpn && outboundNodes.size > 1 &&
+            request.failoverProbeEndpoints.size == outboundNodes.size
         val primaryOutboundTag = if (failoverEnabled) failoverOutboundTag(0) else "proxy"
         base.getAsJsonArray("outbounds")[0].asJsonObject.addProperty("tag", primaryOutboundTag)
         if (failoverEnabled) {
             val generator = XrayConfigGenerator()
+            outboundNodes.forEachIndexed { index, node ->
+                val probeEndpoint = request.failoverProbeEndpoints[node.id]
+                    ?: error("Xray 故障预检缺少节点入站")
+                base.getAsJsonArray("inbounds").add(JsonObject().apply {
+                    addProperty("listen", probeEndpoint.address)
+                    addProperty("port", probeEndpoint.port)
+                    addProperty("protocol", "socks")
+                    addProperty("tag", failoverProbeInboundTag(index))
+                    add("settings", JsonObject().apply {
+                        addProperty("auth", "noauth")
+                        addProperty("udp", true)
+                        addProperty("ip", "127.0.0.1")
+                    })
+                })
+            }
             outboundNodes.drop(1).forEachIndexed { index, node ->
                 val candidateBase = JsonParser.parseString(
                     generator.generateCoreConfig(
@@ -101,6 +116,15 @@ internal object XrayVpnConfig {
             }
         }
         val rules = JsonArray()
+        if (failoverEnabled) {
+            // 预检入站固定路由到对应节点，不触碰当前 VPN 流量使用的 balancer。
+            outboundNodes.forEachIndexed { index, _ ->
+                rules.add(rule(failoverOutboundTag(index)).apply {
+                    add("inboundTag", strings(failoverProbeInboundTag(index)))
+                    addProperty("network", "tcp,udp")
+                })
+            }
+        }
         if (request.isVpn) {
             val settings = request.settings!!
             val dnsSettings = settings.dnsSettings
@@ -295,7 +319,7 @@ internal object XrayVpnConfig {
             })
 
             if (failoverEnabled) {
-                // 核心探测候选出站，再由 balancer 在 Xray 进程内切换。
+                // 代理流量交给 balancer；出站由服务按需预检后显式切换。
                 rules.forEach { element ->
                     val rule = element.asJsonObject
                     if (rule.get("outboundTag")?.asString == "proxy") {
@@ -308,15 +332,6 @@ internal object XrayVpnConfig {
                     addProperty("balancerTag", FAILOVER_BALANCER_TAG)
                     add("inboundTag", strings(*routingInboundTags.toTypedArray()))
                     addProperty("network", "tcp,udp")
-                })
-                base.add("observatory", JsonObject().apply {
-                    add("subjectSelector", strings(FAILOVER_OUTBOUND_PREFIX))
-                    addProperty("probeURL", request.failoverProbeUrl)
-                    addProperty(
-                        "probeInterval",
-                        "${FailoverDetectionSettings.PROBE_INTERVAL_SECONDS}s"
-                    )
-                    addProperty("enableConcurrency", true)
                 })
             }
         }
@@ -334,8 +349,8 @@ internal object XrayVpnConfig {
                     add(JsonObject().apply {
                         addProperty("tag", FAILOVER_BALANCER_TAG)
                         add("selector", strings(FAILOVER_OUTBOUND_PREFIX))
-                        addProperty("fallbackTag", primaryOutboundTag)
-                        add("strategy", JsonObject().apply { addProperty("type", "leastPing") })
+                        // App 在预检通过后显式覆盖目标；不启用 Observatory 周期探测。
+                        add("strategy", JsonObject().apply { addProperty("type", "roundRobin") })
                     })
                 })
             }
@@ -344,6 +359,8 @@ internal object XrayVpnConfig {
     }
 
     internal fun failoverOutboundTag(index: Int): String = "$FAILOVER_OUTBOUND_PREFIX$index"
+
+    private fun failoverProbeInboundTag(index: Int): String = "chimera-failover-probe-in-$index"
 
     private const val FAILOVER_BALANCER_TAG = "chimera-failover"
     private const val FAILOVER_OUTBOUND_PREFIX = "chimera-failover-node-"

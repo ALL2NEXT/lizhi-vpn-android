@@ -43,7 +43,9 @@ internal class NativeCoreSession(
     private val output = NativeProcessOutput()
     private val lanCounter = LanTrafficCounter()
     private val connections = Collections.synchronizedSet(mutableSetOf<LocalSocket>())
+    private val controlWriteLock = Any()
     private var server: LocalServerSocket? = null
+    @Volatile private var controlSocket: LocalSocket? = null
     private var process: Process? = null
     private var configFile: File? = null
     @Volatile private var selectedOutboundTag: String? = null
@@ -133,6 +135,7 @@ internal class NativeCoreSession(
                     header.append(value.toChar())
                 }
                 if (header.toString() == "WATCH $token") {
+                    controlSocket = socket
                     socket.soTimeout = 0
                     input.read()
                 }
@@ -140,7 +143,21 @@ internal class NativeCoreSession(
         } catch (_: Exception) {
             // Closing the session interrupts the pending liveness channel.
         } finally {
+            if (controlSocket === socket) controlSocket = null
             connections.remove(socket)
+        }
+    }
+
+    fun sendControlCommand(command: String): Boolean {
+        if (command.isBlank() || command.any { it == '\n' || it == '\r' }) return false
+        return synchronized(controlWriteLock) {
+            val socket = controlSocket ?: return@synchronized false
+            runCatching {
+                socket.outputStream.apply {
+                    write((command + "\n").toByteArray(Charsets.UTF_8))
+                    flush()
+                }
+            }.isSuccess
         }
     }
 

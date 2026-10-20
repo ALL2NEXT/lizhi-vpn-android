@@ -52,7 +52,7 @@ internal class SingBoxBackend : CoreBackend {
                     hysteriaDownMbps = request.hysteriaDownMbps,
                     ruleSetDirectory = RuleManager.ruleSetDirectory(context),
                     ruleSetUrls = RuleManager.ruleSetUrls(),
-                    failoverProbeUrl = request.failoverProbeUrl
+                    failoverProbeEndpoints = request.failoverProbeEndpoints
                 )
             } else {
                 generator.generateTestConfig(

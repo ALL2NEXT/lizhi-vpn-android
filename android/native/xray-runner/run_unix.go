@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net"
@@ -12,9 +13,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/xtls/xray-core/app/observatory"
 	"github.com/xtls/xray-core/core"
-	"github.com/xtls/xray-core/features/extension"
+	"github.com/xtls/xray-core/features/routing"
+)
+
+const (
+	failoverBalancerTag    = "chimera-failover"
+	failoverOutboundPrefix = "chimera-failover-node-"
 )
 
 func controlConnection(path, token, command string) (*net.UnixConn, error) {
@@ -45,8 +50,6 @@ func run(config *core.Config, path, token string) error {
 	// Bound teardown even on Android 7, where Process.destroyForcibly is
 	// unavailable to the host.
 	go func() { <-ctx.Done(); time.Sleep(2 * time.Second); os.Exit(0) }()
-	go func() { var b [1]byte; _, _ = watcher.Read(b[:]); cancel() }()
-
 	server, err := core.NewWithContext(ctx, config)
 	if err != nil {
 		return err
@@ -55,9 +58,17 @@ func run(config *core.Config, path, token string) error {
 		server.Close()
 		return err
 	}
+	balancer := failoverBalancer(server)
+	if balancer != nil {
+		if err := balancer.SetOverrideTarget(failoverBalancerTag, failoverOutboundPrefix+"0"); err != nil {
+			server.Close()
+			return err
+		}
+	}
+	go watchControlCommands(ctx, watcher, balancer, cancel)
+	stopOutboundReporting := startOutboundSelectionReporter(ctx, balancer)
 	emit(map[string]any{"event": "ready"})
 	stopReporting := startLanTrafficReporter(lanTrafficReader(server))
-	stopOutboundReporting := startOutboundSelectionReporter(ctx, server)
 	<-ctx.Done()
 	stopOutboundReporting()
 	err = server.Close()
@@ -65,10 +76,50 @@ func run(config *core.Config, path, token string) error {
 	return err
 }
 
-// 将核心的出站选择同步给服务状态，不触发 VPN 隧道重建。
-func startOutboundSelectionReporter(ctx context.Context, server *core.Instance) func() {
-	observer, ok := server.GetFeature(extension.ObservatoryType()).(extension.Observatory)
+func failoverBalancer(server *core.Instance) routing.BalancerOverrider {
+	router, ok := server.GetFeature(routing.RouterType()).(routing.Router)
 	if !ok {
+		return nil
+	}
+	balancer, ok := router.(routing.BalancerOverrider)
+	if !ok {
+		return nil
+	}
+	if _, err := balancer.GetOverrideTarget(failoverBalancerTag); err != nil {
+		return nil
+	}
+	return balancer
+}
+
+func watchControlCommands(
+	ctx context.Context,
+	watcher *net.UnixConn,
+	balancer routing.BalancerOverrider,
+	cancel context.CancelFunc,
+) {
+	scanner := bufio.NewScanner(watcher)
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		fields := strings.Fields(scanner.Text())
+		if len(fields) != 2 || fields[0] != "SELECT" || balancer == nil ||
+			!strings.HasPrefix(fields[1], failoverOutboundPrefix) {
+			continue
+		}
+		if err := balancer.SetOverrideTarget(failoverBalancerTag, fields[1]); err != nil {
+			emit(map[string]any{"event": "control-error", "message": "Xray 出站切换失败"})
+		}
+	}
+	// Kotlin 关闭 WATCH 连接以结束核心会话。
+	cancel()
+}
+
+// 将核心中手动覆盖的出站同步给服务状态，不触发 VPN 隧道重建。
+func startOutboundSelectionReporter(ctx context.Context, balancer routing.BalancerOverrider) func() {
+	if balancer == nil {
 		return func() {}
 	}
 	done := make(chan struct{})
@@ -77,26 +128,12 @@ func startOutboundSelectionReporter(ctx context.Context, server *core.Instance) 
 		defer ticker.Stop()
 		lastTag := ""
 		report := func() {
-			result, err := observer.GetObservation(ctx)
+			selectedTag, err := balancer.GetOverrideTarget(failoverBalancerTag)
 			if err != nil {
 				return
 			}
-			observation, ok := result.(*observatory.ObservationResult)
-			if !ok {
-				return
-			}
-			selectedTag := ""
-			selectedDelay := int64(1<<63 - 1)
-			for _, status := range observation.GetStatus() {
-				if status.GetAlive() &&
-					strings.HasPrefix(status.GetOutboundTag(), "chimera-failover-node-") &&
-					status.GetDelay() < selectedDelay {
-					selectedTag = status.GetOutboundTag()
-					selectedDelay = status.GetDelay()
-				}
-			}
 			if selectedTag == "" {
-				selectedTag = "chimera-failover-node-0"
+				selectedTag = failoverOutboundPrefix + "0"
 			}
 			if selectedTag != lastTag {
 				emit(map[string]any{"event": "outbound", "tag": selectedTag})

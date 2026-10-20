@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.SystemClock
 import android.util.Log
+import android.widget.Toast
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collectLatest
@@ -18,8 +19,10 @@ import io.github.HanJason233.chimera.data.model.*
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingSourceResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.WarehouseGroupingCountryResolver
+import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
 import io.github.HanJason233.chimera.platform.AndroidVpnHost
 import io.github.HanJason233.chimera.core.xray.XrayVpnConfig
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Android foreground host; native details live behind CoreBackend. */
 class BoxVpnService : VpnService() {
@@ -152,8 +155,7 @@ class BoxVpnService : VpnService() {
                         applicationContext,
                         node,
                         settings,
-                        failoverCandidates,
-                        failoverSettings.detection.probeUrl
+                        failoverCandidates
                     )
                     try {
                         ensureActive()
@@ -196,7 +198,8 @@ class BoxVpnService : VpnService() {
                             prepared.outboundNodes,
                             settings.proxyMode,
                             prepared.selectedCore,
-                            failoverSettings
+                            failoverSettings,
+                            prepared.core.request.failoverProbeEndpoints
                         )
                         TrafficReporter.reportPendingAsync(applicationContext, "vpn_connect")
                         trafficJob = serviceScope.launch {
@@ -243,7 +246,8 @@ class BoxVpnService : VpnService() {
         outboundNodes: List<Node>,
         proxyMode: ProxyMode,
         core: ProxyCore,
-        loadedSettings: FailoverSettings
+        loadedSettings: FailoverSettings,
+        probeEndpoints: Map<String, LocalSocksEndpoint>
     ) {
         failoverJob?.cancel()
         failoverJob = serviceScope.launch {
@@ -268,64 +272,278 @@ class BoxVpnService : VpnService() {
                     return@collectLatest
                 }
 
-                var lastSelectedNodeId = primaryNode.id
-                while (isActive && controller.isCurrent(ticket)) {
-                    // 读取核心当前选中的出站；切换留在同一 HEV/TUN 会话内完成。
-                    val selectedTag = withContext(Dispatchers.IO) {
-                        controller.current?.selectedOutboundTag()
-                    }
-                    val selectedNode = outboundNodes.mapIndexed { index, node ->
-                        val tag = when (core) {
-                            ProxyCore.SING_BOX -> node.id
-                            ProxyCore.XRAY -> XrayVpnConfig.failoverOutboundTag(index)
-                        }
-                        tag to node
-                    }.firstOrNull { it.first == selectedTag }?.second
+                if (outboundNodes.any { it.id !in probeEndpoints }) {
+                    ServiceManager.notifyFailoverStatus(
+                        FailoverRuntimeState.NO_BACKUP,
+                        "核心未准备好故障探测入口，请重连后重试",
+                        primaryNode.id
+                    )
+                    return@collectLatest
+                }
 
-                    if (selectedNode != null) {
-                        if (selectedNode.id != activeNode?.id) {
-                            activeNode = selectedNode
-                            currentNodeName = selectedNode.name
-                            currentNodeGroupName = selectedNode.getConnectionGroupName()
-                            withContext(Dispatchers.Main) {
-                                if (controller.isCurrent(ticket)) {
-                                    foreground(selectedNode.name, currentNodeGroupName, proxyMode)
-                                    ServiceManager.notifyConnected(selectedNode)
+                coroutineScope {
+                    var current = primaryNode
+                    var consecutiveFailures = 0
+                    var primaryRecoverySuccesses = 0
+                    var warmupAttemptedFor: String? = null
+                    var warmupJob: Deferred<Node?>? = null
+                    var warmedCandidate: Node? = null
+                    var switchNoticeShownFor: String? = null
+
+                    while (isActive && controller.isCurrent(ticket)) {
+                        val cycleStartedAt = SystemClock.elapsedRealtime()
+                        val session = controller.current ?: break
+                        val selectedTag = withContext(Dispatchers.IO) {
+                            session.selectedOutboundTag()
+                        }
+                        val selectedNode = outboundNodes.mapIndexed { index, node ->
+                            outboundTag(core, node, index) to node
+                        }.firstOrNull { it.first == selectedTag }?.second ?: activeNode ?: current
+
+                        if (selectedNode.id != current.id) {
+                            current = selectedNode
+                            consecutiveFailures = 0
+                            primaryRecoverySuccesses = 0
+                            warmupJob?.cancel()
+                            warmupJob = null
+                            warmedCandidate = null
+                            warmupAttemptedFor = null
+                            switchNoticeShownFor = null
+                            updateActiveFailoverNode(selectedNode, proxyMode, ticket)
+                        }
+
+                        // 只探测当前出站。处于备用节点时，额外探测主节点用于自动恢复。
+                        val activeProbe = async { probeFailoverNode(current, probeEndpoints, loadedSettings) }
+                        val primaryProbe = if (current.id != primaryNode.id) {
+                            async { probeFailoverNode(primaryNode, probeEndpoints, loadedSettings) }
+                        } else null
+                        val activeHealthy = activeProbe.await()
+
+                        // 当前节点首次超时就立即预检转移目标；之后不再周期探测这些备用节点。
+                        if (!activeHealthy && warmupAttemptedFor != current.id) {
+                            warmupAttemptedFor = current.id
+                            warmedCandidate = null
+                            warmupJob?.cancel()
+                            warmupJob = async {
+                                probeFailoverCandidates(
+                                    activeNode = current,
+                                    outboundNodes = outboundNodes,
+                                    probeEndpoints = probeEndpoints,
+                                    settings = loadedSettings
+                                )
+                            }
+                        }
+
+                        val primaryHealthy = primaryProbe?.await()
+                        if (warmupJob?.isCompleted == true) {
+                            warmedCandidate = warmupJob.await()
+                            warmupJob = null
+                        }
+
+                        if (activeHealthy) {
+                            consecutiveFailures = 0
+                            warmupAttemptedFor = null
+                            switchNoticeShownFor = null
+                            warmupJob?.cancel()
+                            warmupJob = null
+                            warmedCandidate = null
+
+                            if (current.id == primaryNode.id) {
+                                primaryRecoverySuccesses = 0
+                                ServiceManager.notifyFailoverStatus(
+                                    FailoverRuntimeState.MONITORING,
+                                    if (settingsChanged) {
+                                        "主节点正常，设置更改将在重连后生效"
+                                    } else {
+                                        "正在检测当前节点：${primaryNode.name}"
+                                    },
+                                    primaryNode.id
+                                )
+                            } else {
+                                if (primaryHealthy == true) primaryRecoverySuccesses++
+                                else primaryRecoverySuccesses = 0
+
+                                if (primaryRecoverySuccesses >= FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD) {
+                                    if (selectFailoverNode(primaryNode, outboundNodes, core, proxyMode, ticket)) {
+                                        current = primaryNode
+                                        primaryRecoverySuccesses = 0
+                                        warmupAttemptedFor = null
+                                        ServiceManager.notifyFailoverStatus(
+                                            FailoverRuntimeState.MONITORING,
+                                            "主节点已恢复，已切回：${primaryNode.name}",
+                                            primaryNode.id
+                                        )
+                                    }
+                                } else {
+                                    ServiceManager.notifyFailoverStatus(
+                                        FailoverRuntimeState.USING_BACKUP,
+                                        if (primaryRecoverySuccesses > 0) {
+                                            "当前使用备用节点：${current.name}；正在确认主节点恢复"
+                                        } else {
+                                            "当前使用备用节点：${current.name}；VPN 隧道保持运行"
+                                        },
+                                        current.id
+                                    )
+                                }
+                            }
+                        } else {
+                            consecutiveFailures++
+                            primaryRecoverySuccesses = 0
+                            val message = if (consecutiveFailures < FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD) {
+                                if (current.id == primaryNode.id) {
+                                    "主节点首次探测超时，正在预检转移目标"
+                                } else {
+                                    "备用节点首次探测超时，正在预检其他转移节点"
+                                }
+                            } else {
+                                "当前节点连续探测超时，正在切换出站"
+                            }
+                            ServiceManager.notifyFailoverStatus(
+                                FailoverRuntimeState.SWITCHING,
+                                if (settingsChanged) "$message；设置更改将在重连后生效" else message,
+                                current.id
+                            )
+
+                            if (consecutiveFailures >= FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD) {
+                                if (switchNoticeShownFor != current.id) {
+                                    switchNoticeShownFor = current.id
+                                    showFailoverToast("当前节点连续两次探测失败，正在进行故障转移")
+                                }
+                                val candidate = warmedCandidate ?: warmupJob?.await()
+                                if (candidate != null && candidate.id != current.id) {
+                                    if (selectFailoverNode(candidate, outboundNodes, core, proxyMode, ticket)) {
+                                        current = candidate
+                                        consecutiveFailures = 0
+                                        primaryRecoverySuccesses = 0
+                                        warmupAttemptedFor = null
+                                        warmupJob = null
+                                        warmedCandidate = null
+                                        ServiceManager.notifyFailoverStatus(
+                                            FailoverRuntimeState.USING_BACKUP,
+                                            "已切换到可用节点：${candidate.name}；VPN 隧道保持运行",
+                                            candidate.id
+                                        )
+                                    } else {
+                                        ServiceManager.notifyFailoverStatus(
+                                            FailoverRuntimeState.ERROR,
+                                            "核心切换到 ${candidate.name} 失败",
+                                            current.id
+                                        )
+                                    }
+                                } else {
+                                    ServiceManager.notifyFailoverStatus(
+                                        FailoverRuntimeState.NO_BACKUP,
+                                        "转移目标探测失败，没有可用节点",
+                                        current.id
+                                    )
                                 }
                             }
                         }
-                        val returnedToPrimary = lastSelectedNodeId != primaryNode.id &&
-                            selectedNode.id == primaryNode.id
-                        ServiceManager.notifyFailoverStatus(
-                            if (selectedNode.id == primaryNode.id) {
-                                FailoverRuntimeState.MONITORING
-                            } else {
-                                FailoverRuntimeState.USING_BACKUP
-                            },
-                            when {
-                                settingsChanged -> "核心正在故障转移；设置更改将在重连后生效"
-                                returnedToPrimary -> "主节点已恢复，核心已切回：" + primaryNode.name
-                                selectedNode.id == primaryNode.id ->
-                                    "核心正在检测备用节点，当前使用主节点：" + primaryNode.name
-                                else -> "核心已切换到备用节点：" + selectedNode.name + "；VPN 隧道保持运行"
-                            },
-                            selectedNode.id
-                        )
-                        lastSelectedNodeId = selectedNode.id
-                    } else {
-                        ServiceManager.notifyFailoverStatus(
-                            FailoverRuntimeState.DETECTING,
-                            if (settingsChanged) {
-                                "核心正在故障转移；设置更改将在重连后生效"
-                            } else {
-                                "核心正在检测出站节点"
-                            },
-                            activeNode?.id ?: primaryNode.id
-                        )
+
+                        val elapsed = SystemClock.elapsedRealtime() - cycleStartedAt
+                        delay((FailoverDetectionSettings.PROBE_INTERVAL_SECONDS * 1_000L - elapsed).coerceAtLeast(0L))
                     }
-                    delay(1_000)
                 }
             }
+        }
+    }
+
+    private suspend fun probeFailoverNode(
+        node: Node,
+        probeEndpoints: Map<String, LocalSocksEndpoint>,
+        settings: FailoverSettings
+    ): Boolean = withContext(Dispatchers.IO) {
+        val endpoint = probeEndpoints[node.id] ?: return@withContext false
+        try {
+            Socks5HttpProbe.probeHttpStatusCode(
+                endpoint,
+                settings.detection.probeUrl,
+                FailoverDetectionSettings.PROBE_TIMEOUT_MS
+            ) in 200..399
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private suspend fun probeFailoverCandidates(
+        activeNode: Node,
+        outboundNodes: List<Node>,
+        probeEndpoints: Map<String, LocalSocksEndpoint>,
+        settings: FailoverSettings
+    ): Node? = coroutineScope {
+        val candidates = outboundNodes.filter { it.id != activeNode.id && it.id in probeEndpoints }.shuffled()
+        if (candidates.isEmpty()) return@coroutineScope null
+
+        val nextCandidate = AtomicInteger()
+        val winner = CompletableDeferred<Node?>()
+        val workers = List(minOf(8, candidates.size)) {
+            launch {
+                while (isActive && !winner.isCompleted) {
+                    val index = nextCandidate.getAndIncrement()
+                    if (index >= candidates.size) break
+                    val candidate = candidates[index]
+                    if (probeFailoverNode(candidate, probeEndpoints, settings)) {
+                        winner.complete(candidate)
+                    }
+                }
+            }
+        }
+        launch {
+            workers.joinAll()
+            winner.complete(null)
+        }
+        val candidate = winner.await()
+        workers.forEach { it.cancel() }
+        candidate
+    }
+
+    private fun outboundTag(core: ProxyCore, node: Node, index: Int): String = when (core) {
+        ProxyCore.SING_BOX -> node.id
+        ProxyCore.XRAY -> XrayVpnConfig.failoverOutboundTag(index)
+    }
+
+    private suspend fun selectFailoverNode(
+        node: Node,
+        outboundNodes: List<Node>,
+        core: ProxyCore,
+        proxyMode: ProxyMode,
+        ticket: Long
+    ): Boolean {
+        val session = controller.current ?: return false
+        val index = outboundNodes.indexOfFirst { it.id == node.id }
+        if (index < 0) return false
+        val tag = outboundTag(core, node, index)
+        val selected = withContext(Dispatchers.IO) { session.selectOutboundTag(tag) }
+        if (!selected) return false
+
+        repeat(20) {
+            if (withContext(Dispatchers.IO) { session.selectedOutboundTag() } == tag) {
+                updateActiveFailoverNode(node, proxyMode, ticket)
+                showFailoverToast("已切换到节点：${node.name}，VPN 隧道保持运行")
+                return true
+            }
+            delay(100)
+        }
+        return false
+    }
+
+    private suspend fun updateActiveFailoverNode(node: Node, proxyMode: ProxyMode, ticket: Long) {
+        activeNode = node
+        currentNodeName = node.name
+        currentNodeGroupName = node.getConnectionGroupName()
+        withContext(Dispatchers.Main) {
+            if (controller.isCurrent(ticket)) {
+                foreground(node.name, currentNodeGroupName, proxyMode)
+                ServiceManager.notifyConnected(node)
+            }
+        }
+    }
+
+    private suspend fun showFailoverToast(message: String) {
+        withContext(Dispatchers.Main) {
+            Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
         }
     }
 

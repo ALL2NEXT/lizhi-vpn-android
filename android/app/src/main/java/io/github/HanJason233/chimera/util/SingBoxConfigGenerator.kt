@@ -57,7 +57,7 @@ class SingBoxConfigGenerator {
         smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings(),
         ruleSetDirectory: File? = null,
         ruleSetUrls: Map<String, String> = emptyMap(),
-        failoverProbeUrl: String? = null
+        failoverProbeEndpoints: Map<String, LocalSocksEndpoint> = emptyMap()
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
         if (nodes.isEmpty()) {
@@ -94,15 +94,14 @@ class SingBoxConfigGenerator {
                     smartInboundTags
                 )
             )
-            add("inbounds", createInbounds(internalSocksEndpoint, lanInbound))
+            add("inbounds", createInbounds(internalSocksEndpoint, lanInbound, nodes, failoverProbeEndpoints))
             add(
                 "outbounds",
                 createOutbounds(
                     nodes,
                     selectedNodeId,
                     hysteriaUpMbps,
-                    hysteriaDownMbps,
-                    failoverProbeUrl
+                    hysteriaDownMbps
                 )
             )
             add(
@@ -114,6 +113,8 @@ class SingBoxConfigGenerator {
                     dnsSettings.dnsRoutingEnabled,
                     smartInboundTags,
                     routingInboundTags,
+                    nodes,
+                    failoverProbeEndpoints,
                     ruleSetDirectory,
                     ruleSetUrls
                 )
@@ -600,7 +601,9 @@ class SingBoxConfigGenerator {
 
     private fun createInbounds(
         endpoint: LocalSocksEndpoint?,
-        lanInbound: LanInboundSettings
+        lanInbound: LanInboundSettings,
+        nodes: List<Node> = emptyList(),
+        failoverProbeEndpoints: Map<String, LocalSocksEndpoint> = emptyMap()
     ): JsonArray {
         return JsonArray().apply {
             // HEV 独占 Android VPN TUN，并将数据包转发到这个环回 SOCKS5 入口。
@@ -618,6 +621,17 @@ class SingBoxConfigGenerator {
                             })
                         })
                     }
+                })
+            }
+
+            // 仅在当前出站首次探测超时时，才通过专属入口对备用节点做一次预检。
+            nodes.forEachIndexed { index, node ->
+                val probeEndpoint = failoverProbeEndpoints[node.id] ?: return@forEachIndexed
+                add(JsonObject().apply {
+                    addProperty("type", "socks")
+                    addProperty("tag", failoverProbeInboundTag(index))
+                    addProperty("listen", probeEndpoint.address)
+                    addProperty("listen_port", probeEndpoint.port)
                 })
             }
 
@@ -645,31 +659,21 @@ class SingBoxConfigGenerator {
         nodes: List<Node>,
         selectedNodeId: String?,
         hysteriaUpMbps: Int,
-        hysteriaDownMbps: Int,
-        failoverProbeUrl: String?
+        hysteriaDownMbps: Int
     ): JsonArray {
         val outbounds = JsonArray()
 
-        // 故障转移启用时由核心 URLTest 组在主节点和备用节点间自动选择。
+        // 核心只保留手动选择器；备用节点由服务在主节点超时时按需预检。
         val selectorGroup = JsonObject().apply {
-            val useFailoverGroup = nodes.size > 1 && !failoverProbeUrl.isNullOrBlank()
-            addProperty("type", if (useFailoverGroup) "urltest" else "selector")
+            addProperty("type", "selector")
             addProperty("tag", "proxy")
             val outboundTags = JsonArray()
             nodes.forEach { outboundTags.add(it.id) } // 添加所有节点ID
             add("outbounds", outboundTags)
 
-            if (useFailoverGroup) {
-                addProperty("url", failoverProbeUrl)
-                addProperty("interval", "${io.github.HanJason233.chimera.data.model.FailoverDetectionSettings.PROBE_INTERVAL_SECONDS}s")
-                addProperty("tolerance", 50)
-                addProperty("idle_timeout", "30m")
-                addProperty("interrupt_exist_connections", false)
-            } else {
-                // 连接指定节点时默认使用该节点；没有指定节点时回退到列表第一个节点。
-                val defaultNodeId = selectedNodeId?.takeIf { id -> nodes.any { it.id == id } } ?: nodes.first().id
-                addProperty("default", defaultNodeId)
-            }
+            // 连接指定节点时默认使用该节点；没有指定节点时回退到列表第一个节点。
+            val defaultNodeId = selectedNodeId?.takeIf { id -> nodes.any { it.id == id } } ?: nodes.first().id
+            addProperty("default", defaultNodeId)
         }
         outbounds.add(selectorGroup)
         
@@ -1106,10 +1110,22 @@ class SingBoxConfigGenerator {
         dnsRoutingEnabled: Boolean,
         smartInboundTags: List<String>,
         routingInboundTags: List<String>,
+        nodes: List<Node>,
+        failoverProbeEndpoints: Map<String, LocalSocksEndpoint>,
         ruleSetDirectory: File?,
         ruleSetUrls: Map<String, String>
     ): JsonObject {
         val rules = JsonArray()
+
+        // 预检入站固定走对应节点，避免探测请求被主出站选择器接管。
+        nodes.forEachIndexed { index, node ->
+            if (node.id !in failoverProbeEndpoints) return@forEachIndexed
+            rules.add(JsonObject().apply {
+                add("inbound", JsonArray().apply { add(failoverProbeInboundTag(index)) })
+                addProperty("action", "route")
+                addProperty("outbound", node.id)
+            })
+        }
         
         // 1. 劫持 DNS 流量
         rules.add(JsonObject().apply {
@@ -1363,6 +1379,8 @@ class SingBoxConfigGenerator {
             add("clash_api", JsonObject().apply { addProperty("external_controller", "127.0.0.1:9090") })
         }
     }
+
+    private fun failoverProbeInboundTag(index: Int): String = "chimera-failover-probe-$index"
 
 
 }

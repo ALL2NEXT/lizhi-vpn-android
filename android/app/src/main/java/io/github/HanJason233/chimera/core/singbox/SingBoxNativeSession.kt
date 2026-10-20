@@ -1,6 +1,7 @@
 package io.github.HanJason233.chimera.core.singbox
 
 import android.content.Context
+import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.github.HanJason233.chimera.core.CoreSession
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
@@ -43,6 +44,24 @@ internal class SingBoxNativeSession(
             connection.disconnect()
         }
     }.getOrNull()
+
+    override fun selectOutboundTag(tag: String): Boolean = runCatching {
+        val connection = URL("http://127.0.0.1:9090/proxies/proxy")
+            .openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "PUT"
+            connection.doOutput = true
+            connection.connectTimeout = 750
+            connection.readTimeout = 750
+            connection.setRequestProperty("Content-Type", "application/json")
+            val payload = JsonObject().apply { addProperty("name", tag) }
+                .toString().toByteArray(Charsets.UTF_8)
+            connection.outputStream.use { it.write(payload) }
+            connection.responseCode in 200..299
+        } finally {
+            connection.disconnect()
+        }
+    }.getOrDefault(false)
 
     suspend fun start(config: String): SingBoxNativeSession {
         delegate.start(config)
