@@ -429,7 +429,7 @@ private fun FailoverDetectionCard(
             )
         }
         Text(
-            text = "正常探测间隔 2 秒 · 单次超时 1.5 秒 · 连续失败 2 次后转移",
+            text = "核心自动探测出站节点，探测间隔约 2 秒；切换时保持 VPN 隧道",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant

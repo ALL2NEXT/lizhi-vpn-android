@@ -56,7 +56,8 @@ class SingBoxConfigGenerator {
         hysteriaDownMbps: Int = AppConfig.HYSTERIA_DOWN_MBPS,
         smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings(),
         ruleSetDirectory: File? = null,
-        ruleSetUrls: Map<String, String> = emptyMap()
+        ruleSetUrls: Map<String, String> = emptyMap(),
+        failoverProbeUrl: String? = null
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
         if (nodes.isEmpty()) {
@@ -100,7 +101,8 @@ class SingBoxConfigGenerator {
                     nodes,
                     selectedNodeId,
                     hysteriaUpMbps,
-                    hysteriaDownMbps
+                    hysteriaDownMbps,
+                    failoverProbeUrl
                 )
             )
             add(
@@ -643,21 +645,31 @@ class SingBoxConfigGenerator {
         nodes: List<Node>,
         selectedNodeId: String?,
         hysteriaUpMbps: Int,
-        hysteriaDownMbps: Int
+        hysteriaDownMbps: Int,
+        failoverProbeUrl: String?
     ): JsonArray {
         val outbounds = JsonArray()
-        
-        // 1. 手动选择组
+
+        // 故障转移启用时由核心 URLTest 组在主节点和备用节点间自动选择。
         val selectorGroup = JsonObject().apply {
-            addProperty("type", "selector")
+            val useFailoverGroup = nodes.size > 1 && !failoverProbeUrl.isNullOrBlank()
+            addProperty("type", if (useFailoverGroup) "urltest" else "selector")
             addProperty("tag", "proxy")
             val outboundTags = JsonArray()
             nodes.forEach { outboundTags.add(it.id) } // 添加所有节点ID
             add("outbounds", outboundTags)
-            
-            // 连接指定节点时默认使用该节点；没有指定节点时回退到列表第一个节点。
-            val defaultNodeId = selectedNodeId?.takeIf { id -> nodes.any { it.id == id } } ?: nodes.first().id
-            addProperty("default", defaultNodeId)
+
+            if (useFailoverGroup) {
+                addProperty("url", failoverProbeUrl)
+                addProperty("interval", "${io.github.HanJason233.chimera.data.model.FailoverDetectionSettings.PROBE_INTERVAL_SECONDS}s")
+                addProperty("tolerance", 50)
+                addProperty("idle_timeout", "30m")
+                addProperty("interrupt_exist_connections", false)
+            } else {
+                // 连接指定节点时默认使用该节点；没有指定节点时回退到列表第一个节点。
+                val defaultNodeId = selectedNodeId?.takeIf { id -> nodes.any { it.id == id } } ?: nodes.first().id
+                addProperty("default", defaultNodeId)
+            }
         }
         outbounds.add(selectorGroup)
         

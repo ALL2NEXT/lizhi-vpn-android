@@ -37,6 +37,8 @@ private class VpnSession(
     override val core = delegate.core
     override val endpoint = delegate.endpoint
 
+    override fun selectedOutboundTag(): String? = delegate.selectedOutboundTag()
+
     // These inputs are disjoint: HEV counts phone traffic, and the core counts
     // only LAN ingress. Whole-core counters would count the phone twice.
     override fun traffic(): CoreTraffic? {

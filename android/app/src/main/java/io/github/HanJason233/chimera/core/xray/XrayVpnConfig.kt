@@ -7,6 +7,7 @@ import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.core.CoreRequest
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
+import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
 import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import io.github.HanJason233.chimera.data.model.ProxyMode
@@ -76,7 +77,29 @@ internal object XrayVpnConfig {
     internal fun compose(base: JsonObject, request: CoreRequest): String {
         val inbound = base.getAsJsonArray("inbounds")[0].asJsonObject
         inbound.addProperty("tag", "internal-socks-in")
-        base.getAsJsonArray("outbounds")[0].asJsonObject.addProperty("tag", "proxy")
+        val outboundNodes = request.outboundNodes.ifEmpty { listOf(request.node) }
+        val failoverEnabled = request.isVpn && !request.failoverProbeUrl.isNullOrBlank() && outboundNodes.size > 1
+        val primaryOutboundTag = if (failoverEnabled) failoverOutboundTag(0) else "proxy"
+        base.getAsJsonArray("outbounds")[0].asJsonObject.addProperty("tag", primaryOutboundTag)
+        if (failoverEnabled) {
+            val generator = XrayConfigGenerator()
+            outboundNodes.drop(1).forEachIndexed { index, node ->
+                val candidateBase = JsonParser.parseString(
+                    generator.generateCoreConfig(
+                        node,
+                        request.endpoint,
+                        request.hysteriaUpMbps,
+                        request.hysteriaDownMbps,
+                        request.settings!!.lanInbound
+                    )
+                ).asJsonObject
+                val candidateOutbound = candidateBase.getAsJsonArray("outbounds")
+                    .firstOrNull()?.asJsonObject?.deepCopy()
+                    ?: error("Xray 备用节点配置缺少出站")
+                candidateOutbound.addProperty("tag", failoverOutboundTag(index + 1))
+                base.getAsJsonArray("outbounds").add(candidateOutbound)
+            }
+        }
         val rules = JsonArray()
         if (request.isVpn) {
             val settings = request.settings!!
@@ -97,7 +120,10 @@ internal object XrayVpnConfig {
                 val outbound = element.asJsonObject
                 if (outbound.get("protocol").asString == "freedom") {
                     outbound.add("settings", JsonObject().apply { addProperty("targetStrategy", strategy) })
-                } else if (outbound.get("tag")?.asString == "proxy") {
+                } else if (
+                    outbound.get("tag")?.asString == "proxy" ||
+                    outbound.get("tag")?.asString?.startsWith(FAILOVER_OUTBOUND_PREFIX) == true
+                ) {
                     val stream = outbound.getAsJsonObject("streamSettings") ?: JsonObject().also {
                         outbound.add("streamSettings", it)
                     }
@@ -117,7 +143,7 @@ internal object XrayVpnConfig {
                 // Forward SRV/TXT/HTTPS and other non-address queries through the
                 // chosen proxy, instead of sending them back to the virtual TUN DNS IP.
                 add("streamSettings", JsonObject().apply {
-                    add("sockopt", JsonObject().apply { addProperty("dialerProxy", "proxy") })
+                    add("sockopt", JsonObject().apply { addProperty("dialerProxy", primaryOutboundTag) })
                 })
             })
             if (dnsSettings.fakeDnsEnabled) {
@@ -164,12 +190,14 @@ internal object XrayVpnConfig {
             rules.add(rule("proxy").apply {
                 add("domain", strings(*LinkTypeTestTargets.hosts.map { "full:$it" }.toTypedArray()))
             })
-            rules.add(rule("direct").apply { add("domain", strings("full:${request.node.server}")) })
+            rules.add(rule("direct").apply {
+                add("domain", strings(*outboundNodes.map { "full:${it.server}" }.distinct().toTypedArray()))
+            })
             rules.add(rule("direct").apply {
                 add("ip", strings("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
                     "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10"))
             })
-            val localDomains = strings("full:${request.node.server}")
+            val localDomains = strings(*outboundNodes.map { "full:${it.server}" }.distinct().toTypedArray())
             if (routingInboundTags.isNotEmpty()) {
                 fun scopedRoutingRule(outbound: String) = rule(outbound).apply {
                     add("inboundTag", strings(*routingInboundTags.toTypedArray()))
@@ -265,18 +293,60 @@ internal object XrayVpnConfig {
                     })
                 })
             })
+
+            if (failoverEnabled) {
+                // 核心探测候选出站，再由 balancer 在 Xray 进程内切换。
+                rules.forEach { element ->
+                    val rule = element.asJsonObject
+                    if (rule.get("outboundTag")?.asString == "proxy") {
+                        rule.remove("outboundTag")
+                        rule.addProperty("balancerTag", FAILOVER_BALANCER_TAG)
+                    }
+                }
+                rules.add(JsonObject().apply {
+                    addProperty("type", "field")
+                    addProperty("balancerTag", FAILOVER_BALANCER_TAG)
+                    add("inboundTag", strings(*routingInboundTags.toTypedArray()))
+                    addProperty("network", "tcp,udp")
+                })
+                base.add("observatory", JsonObject().apply {
+                    add("subjectSelector", strings(FAILOVER_OUTBOUND_PREFIX))
+                    addProperty("probeURL", request.failoverProbeUrl)
+                    addProperty(
+                        "probeInterval",
+                        "${FailoverDetectionSettings.PROBE_INTERVAL_SECONDS}s"
+                    )
+                    addProperty("enableConcurrency", true)
+                })
+            }
         }
         // The first outbound is the default proxy. A catch-all rule here would
         // prevent IPIfNonMatch from resolving domains for the SMART geo-IP rules.
         base.add("routing", JsonObject().apply {
             addProperty(
                 "domainStrategy",
-                request.settings?.smartRoutingSettings?.domainStrategy?.xrayValue ?: "AsIs"
+                if (failoverEnabled) "IPOnDemand"
+                else request.settings?.smartRoutingSettings?.domainStrategy?.xrayValue ?: "AsIs"
             )
             add("rules", rules)
+            if (failoverEnabled) {
+                add("balancers", JsonArray().apply {
+                    add(JsonObject().apply {
+                        addProperty("tag", FAILOVER_BALANCER_TAG)
+                        add("selector", strings(FAILOVER_OUTBOUND_PREFIX))
+                        addProperty("fallbackTag", primaryOutboundTag)
+                        add("strategy", JsonObject().apply { addProperty("type", "leastPing") })
+                    })
+                })
+            }
         })
         return base.toString()
     }
+
+    internal fun failoverOutboundTag(index: Int): String = "$FAILOVER_OUTBOUND_PREFIX$index"
+
+    private const val FAILOVER_BALANCER_TAG = "chimera-failover"
+    private const val FAILOVER_OUTBOUND_PREFIX = "chimera-failover-node-"
 
     private fun rule(outbound: String) = JsonObject().apply {
         addProperty("type", "field")

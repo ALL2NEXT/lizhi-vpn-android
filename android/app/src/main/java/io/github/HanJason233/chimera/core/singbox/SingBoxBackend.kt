@@ -41,7 +41,9 @@ internal class SingBoxBackend : CoreBackend {
                 RuleManager.ensureRuleSets(context)
                 val settings = request.settings!!
                 generator.generateConfig(
-                    listOf(request.node), request.node.id, settings.proxyMode,
+                    request.outboundNodes.ifEmpty { listOf(request.node) },
+                    request.node.id,
+                    settings.proxyMode,
                     settings.ipv6RoutingMode, internalSocksEndpoint = request.endpoint,
                     lanInbound = settings.lanInbound,
                     dnsSettings = settings.dnsSettings,
@@ -49,7 +51,8 @@ internal class SingBoxBackend : CoreBackend {
                     hysteriaUpMbps = request.hysteriaUpMbps,
                     hysteriaDownMbps = request.hysteriaDownMbps,
                     ruleSetDirectory = RuleManager.ruleSetDirectory(context),
-                    ruleSetUrls = RuleManager.ruleSetUrls()
+                    ruleSetUrls = RuleManager.ruleSetUrls(),
+                    failoverProbeUrl = request.failoverProbeUrl
                 )
             } else {
                 generator.generateTestConfig(

@@ -64,7 +64,9 @@ internal data class CoreRequest(
     val endpoint: LocalSocksEndpoint,
     val settings: VpnRuntimeSettings? = null,
     val hysteriaUpMbps: Int = settings?.hysteriaUpMbps ?: 0,
-    val hysteriaDownMbps: Int = settings?.hysteriaDownMbps ?: 0
+    val hysteriaDownMbps: Int = settings?.hysteriaDownMbps ?: 0,
+    val outboundNodes: List<Node> = emptyList(),
+    val failoverProbeUrl: String? = null
 ) {
     constructor(
         node: Node,
@@ -87,6 +89,7 @@ internal interface CoreSession : AutoCloseable {
     val endpoint: LocalSocksEndpoint
     val socksPort: Int get() = endpoint.port
     fun traffic(): CoreTraffic? = null
+    fun selectedOutboundTag(): String? = null
     /** Only LAN ingress; excludes the local SOCKS traffic already counted by HEV. */
     fun lanTraffic(): CoreTraffic? = null
     /** Idempotent; must release native resources before returning. */

@@ -46,6 +46,7 @@ internal class NativeCoreSession(
     private var server: LocalServerSocket? = null
     private var process: Process? = null
     private var configFile: File? = null
+    @Volatile private var selectedOutboundTag: String? = null
 
     suspend fun start(config: String): NativeCoreSession = withContext(Dispatchers.IO) {
         try {
@@ -89,6 +90,7 @@ internal class NativeCoreSession(
                     when (event?.get("event")?.asString) {
                         "ready" -> ready.complete(Unit)
                         "lan-traffic" -> lanCounter.record(event)
+                        "outbound" -> selectedOutboundTag = event.get("tag")?.asString
                         "error" -> {
                             val message = event.get("message")?.asString.orEmpty()
                             Log.e(TAG, "$processLabel runner startup failed: $message")
@@ -149,6 +151,8 @@ internal class NativeCoreSession(
     }
 
     override fun lanTraffic(): CoreTraffic? = lanCounter.total
+
+    override fun selectedOutboundTag(): String? = selectedOutboundTag
 
     override fun close() {
         if (!stopped.compareAndSet(false, true)) {

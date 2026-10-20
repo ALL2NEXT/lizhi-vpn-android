@@ -25,6 +25,8 @@ internal class XrayNativeSession(
 
     override fun lanTraffic() = delegate.lanTraffic()
 
+    override fun selectedOutboundTag() = delegate.selectedOutboundTag()
+
     suspend fun start(config: String): XrayNativeSession {
         delegate.start(config)
         return this

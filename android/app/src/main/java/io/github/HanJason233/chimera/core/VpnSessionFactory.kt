@@ -22,9 +22,17 @@ internal class VpnSessionFactory(
     suspend fun prepare(
         context: Context,
         node: Node,
-        settings: VpnRuntimeSettings
+        settings: VpnRuntimeSettings,
+        failoverNodes: List<Node> = emptyList(),
+        failoverProbeUrl: String? = null
     ): PreparedVpnSession = withContext(Dispatchers.IO) {
         val backend = registry.resolve(settings.protocolCoreSettings.coreFor(node.type), node)
+        val outboundNodes = (listOf(node) + failoverNodes)
+            .distinctBy(Node::id)
+            .filter { candidate ->
+                settings.protocolCoreSettings.coreFor(candidate.type) == backend.id &&
+                    backend.supports(candidate)
+            }
         val reservation = PortReservation()
         try {
             val endpoint = LocalSocksEndpoint(
@@ -32,8 +40,14 @@ internal class VpnSessionFactory(
                 reservation.port,
                 SocksCredentials("vpn", UUID.randomUUID().toString().replace("-", ""))
             )
-            val request = CoreRequest(node, endpoint, settings)
-            PreparedVpnSession(backend, backend.prepare(context, request), reservation)
+            val request = CoreRequest(
+                node = node,
+                endpoint = endpoint,
+                settings = settings,
+                outboundNodes = outboundNodes,
+                failoverProbeUrl = failoverProbeUrl.takeIf { outboundNodes.size > 1 }
+            )
+            PreparedVpnSession(backend, backend.prepare(context, request), reservation, outboundNodes)
         } catch (error: Throwable) {
             reservation.close()
             throw error
@@ -68,7 +82,8 @@ internal class VpnSessionFactory(
 internal class PreparedVpnSession(
     internal val backend: CoreBackend,
     internal val core: PreparedCore,
-    private val reservation: PortReservation
+    private val reservation: PortReservation,
+    val outboundNodes: List<Node>
 ) : AutoCloseable {
     val selectedCore: ProxyCore get() = backend.id
     val endpoint: LocalSocksEndpoint get() = core.request.endpoint

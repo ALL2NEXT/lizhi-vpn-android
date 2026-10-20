@@ -19,14 +19,13 @@ import io.github.HanJason233.chimera.data.repository.SettingsRepository
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingSourceResolver
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.WarehouseGroupingCountryResolver
 import io.github.HanJason233.chimera.platform.AndroidVpnHost
-import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
+import io.github.HanJason233.chimera.core.xray.XrayVpnConfig
 
 /** Android foreground host; native details live behind CoreBackend. */
 class BoxVpnService : VpnService() {
     companion object {
         private const val TAG = "BoxVpnService"
         private const val TRAFFIC_REPORT_INTERVAL_MS = 30L * 60L * 1000L
-        private const val FAILOVER_RETRY_BACKOFF_MS = 30_000L
         private val operations = Mutex()
         @Volatile private var owner: BoxVpnService? = null
         const val ACTION_START = "io.github.HanJason233.chimera.START_VPN"
@@ -72,9 +71,7 @@ class BoxVpnService : VpnService() {
     private var persistedUpload = 0L
     private var persistedDownload = 0L
     private var lastPersistAt = 0L
-    private val failoverStateLock = Any()
-    private var failoverPrimaryNodeId: String? = null
-    private val attemptedFailoverNodeIds = mutableSetOf<String>()
+    @Volatile private var failoverPrimaryNode: Node? = null
     @Volatile private var destroyed = false
 
     override fun onCreate() {
@@ -112,7 +109,7 @@ class BoxVpnService : VpnService() {
     }
 
     private fun restart(mode: ProxyMode?) {
-        val node = ServiceManager.currentNode.value ?: activeNode
+        val node = failoverPrimaryNode ?: ServiceManager.currentNode.value ?: activeNode
         if (node == null) { stopVpn(); return }
         ServiceManager.notifyRestarting()
         connect(node.getRawLinkPlain(), node.name, mode, node, preserveFailoverState = true)
@@ -123,8 +120,7 @@ class BoxVpnService : VpnService() {
         name: String,
         mode: ProxyMode?,
         knownNode: Node? = null,
-        preserveFailoverState: Boolean = false,
-        isFailoverAttempt: Boolean = false
+        preserveFailoverState: Boolean = false
     ) {
         val ticket = controller.invalidate()
         operation?.cancel()
@@ -138,21 +134,27 @@ class BoxVpnService : VpnService() {
                     owner = this@BoxVpnService
                 }
                 withContext(NonCancellable) { cleanup() }
-                var resolvedNodeForAttempt: Node? = knownNode
                 try {
                     ensureActive()
                     val settingsRepo = SettingsRepository(applicationContext)
                     if (mode != null) settingsRepo.setProxyMode(mode)
                     val settings = settingsRepo.getVpnRuntimeSettings()
                     val node = knownNode ?: findNode(raw, name, settingsRepo)
-                    resolvedNodeForAttempt = node
-                    if (!preserveFailoverState) {
-                        synchronized(failoverStateLock) {
-                            failoverPrimaryNodeId = node.id
-                            attemptedFailoverNodeIds.clear()
-                        }
+                    if (!preserveFailoverState) failoverPrimaryNode = node
+                    val failoverSettings = settingsRepo.failoverSettings.first()
+                    val failoverCandidates = if (failoverSettings.detection.enabled) {
+                        resolveFailoverCandidates(failoverSettings.transfer.target, settingsRepo)
+                            .filterNot { it.id == node.id }
+                    } else {
+                        emptyList()
                     }
-                    val prepared = sessionFactory.prepare(applicationContext, node, settings)
+                    val prepared = sessionFactory.prepare(
+                        applicationContext,
+                        node,
+                        settings,
+                        failoverCandidates,
+                        failoverSettings.detection.probeUrl
+                    )
                     try {
                         ensureActive()
                         val vpnHost = AndroidVpnHost(this@BoxVpnService,
@@ -187,7 +189,15 @@ class BoxVpnService : VpnService() {
                             foreground(node.name, currentNodeGroupName, settings.proxyMode)
                             ServiceManager.notifyConnected(node)
                         }
-                        startFailoverMonitor(settingsRepo, ticket)
+                        startFailoverMonitor(
+                            settingsRepo,
+                            ticket,
+                            node,
+                            prepared.outboundNodes,
+                            settings.proxyMode,
+                            prepared.selectedCore,
+                            failoverSettings
+                        )
                         TrafficReporter.reportPendingAsync(applicationContext, "vpn_connect")
                         trafficJob = serviceScope.launch {
                             var nextReportAt = SystemClock.elapsedRealtime() + TRAFFIC_REPORT_INTERVAL_MS
@@ -215,51 +225,10 @@ class BoxVpnService : VpnService() {
                     withContext(NonCancellable) { cleanup() }
                     if (controller.isCurrent(ticket)) {
                         Log.e(TAG, "VPN startup failed: " + error.javaClass.simpleName)
-                        if (isFailoverAttempt) {
-                            val failedNode = resolvedNodeForAttempt
-                            val latestSettingsRepository = SettingsRepository(applicationContext)
-                            val latestFailover = latestSettingsRepository.failoverSettings.first()
-                            val nextNode = if (latestFailover.detection.enabled) {
-                                val primaryNodeId = synchronized(failoverStateLock) {
-                                    failoverPrimaryNodeId
-                                }
-                                val candidates = resolveFailoverCandidates(
-                                    latestFailover.transfer.target,
-                                    latestSettingsRepository
-                                ).filter { it.id != primaryNodeId }
-                                nextFailoverNode(candidates, failedNode?.id)
-                            } else {
-                                null
-                            }
-                            if (nextNode != null) {
-                                ServiceManager.notifyFailoverStatus(
-                                    FailoverRuntimeState.SWITCHING,
-                                    "转移节点 ${failedNode?.name ?: "当前节点"} 连接失败，继续尝试 ${nextNode.name}",
-                                    failedNode?.id
-                                )
-                                serviceScope.launch {
-                                    yield()
-                                    connect(
-                                        nextNode.getRawLinkPlain(), nextNode.name, null, nextNode,
-                                        preserveFailoverState = true,
-                                        isFailoverAttempt = true
-                                    )
-                                }
-                            } else {
-                                ServiceManager.notifyFailoverStatus(
-                                    FailoverRuntimeState.ERROR,
-                                    "转移节点均无法连接，VPN 已停止",
-                                    failedNode?.id
-                                )
-                                ServiceManager.notifyError("故障转移失败：没有可连接的转移节点")
-                                withContext(Dispatchers.Main) {
-                                    stopForeground(STOP_FOREGROUND_REMOVE)
-                                    stopSelf()
-                                }
-                            }
-                        } else {
-                            ServiceManager.notifyError("VPN 启动失败：" + error.message)
-                            withContext(Dispatchers.Main) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
+                        ServiceManager.notifyError("VPN 启动失败：" + error.message)
+                        withContext(Dispatchers.Main) {
+                            stopForeground(STOP_FOREGROUND_REMOVE)
+                            stopSelf()
                         }
                     }
                 }
@@ -267,156 +236,99 @@ class BoxVpnService : VpnService() {
         }
     }
 
-    private fun startFailoverMonitor(settingsRepository: SettingsRepository, ticket: Long) {
+    private fun startFailoverMonitor(
+        settingsRepository: SettingsRepository,
+        ticket: Long,
+        primaryNode: Node,
+        outboundNodes: List<Node>,
+        proxyMode: ProxyMode,
+        core: ProxyCore,
+        loadedSettings: FailoverSettings
+    ) {
         failoverJob?.cancel()
         failoverJob = serviceScope.launch {
-            var previousTransferTarget: FailoverTransferTarget? = null
-            var hasTransferTargetSnapshot = false
             settingsRepository.failoverSettings.collectLatest { settings ->
                 if (!controller.isCurrent(ticket)) return@collectLatest
-                if (hasTransferTargetSnapshot && previousTransferTarget != settings.transfer.target) {
-                    synchronized(failoverStateLock) { attemptedFailoverNodeIds.clear() }
-                }
-                previousTransferTarget = settings.transfer.target
-                hasTransferTargetSnapshot = true
-                val detection = settings.detection
-                if (!detection.enabled) {
+                val settingsChanged = settings != loadedSettings
+                if (!loadedSettings.detection.enabled || outboundNodes.size <= 1) {
                     ServiceManager.notifyFailoverStatus(
-                        FailoverRuntimeState.DISABLED,
-                        "故障检测已关闭",
-                        activeNode?.id
+                        when {
+                            settingsChanged -> FailoverRuntimeState.DETECTING
+                            loadedSettings.detection.enabled -> FailoverRuntimeState.NO_BACKUP
+                            else -> FailoverRuntimeState.DISABLED
+                        },
+                        when {
+                            settingsChanged -> "故障转移设置已更改，重连后生效"
+                            !loadedSettings.detection.enabled -> "故障检测已关闭"
+                            loadedSettings.transfer.target == null -> "请设置备用节点或节点组"
+                            else -> "转移目标中没有当前核心支持的备用节点"
+                        },
+                        primaryNode.id
                     )
                     return@collectLatest
                 }
 
-                val primaryId = synchronized(failoverStateLock) { failoverPrimaryNodeId }
-                val connectedNode = activeNode
-                val isUsingBackup = connectedNode != null && connectedNode.id != primaryId
-                ServiceManager.notifyFailoverStatus(
-                    if (isUsingBackup) FailoverRuntimeState.USING_BACKUP else FailoverRuntimeState.MONITORING,
-                    if (settings.transfer.target == null) {
-                        "检测已开启，请选择备用节点或节点组"
-                    } else if (isUsingBackup) {
-                        "正在使用转移节点：${connectedNode?.name.orEmpty()}"
-                    } else {
-                        "每 ${FailoverDetectionSettings.PROBE_INTERVAL_SECONDS} 秒检测一次；转移目标已设置"
-                    },
-                    connectedNode?.id
-                )
-
-                var consecutiveFailures = 0
-                val probeIntervalMs = FailoverDetectionSettings.PROBE_INTERVAL_SECONDS * 1_000L
-                var nextProbeAt = SystemClock.elapsedRealtime() + probeIntervalMs
+                var lastSelectedNodeId = primaryNode.id
                 while (isActive && controller.isCurrent(ticket)) {
-                    val waitMs = (nextProbeAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
-                    if (waitMs > 0L) delay(waitMs)
-                    if (!isRunning) break
-                    nextProbeAt = SystemClock.elapsedRealtime() + probeIntervalMs
-                    val node = activeNode ?: break
-                    if (host?.currentNetwork == null) {
-                        ServiceManager.notifyFailoverStatus(
-                            FailoverRuntimeState.WAITING_FOR_NETWORK,
-                            "系统网络尚未验证，暂不切换节点",
-                            node.id
-                        )
-                        continue
+                    // 读取核心当前选中的出站；切换留在同一 HEV/TUN 会话内完成。
+                    val selectedTag = withContext(Dispatchers.IO) {
+                        controller.current?.selectedOutboundTag()
                     }
-                    val endpoint = activeSocksEndpoint() ?: continue
-                    ServiceManager.notifyFailoverStatus(
-                        FailoverRuntimeState.DETECTING,
-                        "正在检测当前节点",
-                        node.id
-                    )
-                    val probeSucceeded = withContext(Dispatchers.IO) {
-                        runCatching {
-                            Socks5HttpProbe.probeHttpStatusCode(
-                                endpoint,
-                                detection.probeUrl,
-                                FailoverDetectionSettings.PROBE_TIMEOUT_MS
-                            ) in 200..399
-                        }.getOrDefault(false)
-                    }
-                    if (probeSucceeded) {
-                        consecutiveFailures = 0
-                        val primaryStillActive = node.id == primaryId
-                        ServiceManager.notifyFailoverStatus(
-                            if (primaryStillActive) FailoverRuntimeState.MONITORING
-                            else FailoverRuntimeState.USING_BACKUP,
-                            if (primaryStillActive) {
-                                "当前节点可用：HTTPS 测活通过"
-                            } else {
-                                "转移节点可用：${node.name}"
-                            },
-                            node.id
-                        )
-                        continue
-                    }
-
-                    consecutiveFailures += 1
-                    if (consecutiveFailures < FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD) {
-                        ServiceManager.notifyFailoverStatus(
-                            FailoverRuntimeState.DETECTING,
-                            "测活失败（$consecutiveFailures/${FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD}），等待下一次检测",
-                            node.id
-                        )
-                        continue
-                    }
-                    consecutiveFailures = 0
-                    ServiceManager.notifyFailoverStatus(
-                        FailoverRuntimeState.DETECTING,
-                        "连续失败 ${FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD} 次，正在尝试转移节点",
-                        node.id
-                    )
-
-                    val primaryNodeId = synchronized(failoverStateLock) { failoverPrimaryNodeId }
-                    val configuredCandidates = resolveFailoverCandidates(
-                        settings.transfer.target,
-                        settingsRepository
-                    ).filter { it.id != primaryNodeId }
-                    val nextNode = nextFailoverNode(configuredCandidates, node.id)
-                    if (nextNode == null) {
-                        val configuredBackups = configuredCandidates.size
-                        val attemptedCount = synchronized(failoverStateLock) {
-                            configuredCandidates.count { it.id in attemptedFailoverNodeIds }
+                    val selectedNode = outboundNodes.mapIndexed { index, node ->
+                        val tag = when (core) {
+                            ProxyCore.SING_BOX -> node.id
+                            ProxyCore.XRAY -> XrayVpnConfig.failoverOutboundTag(index)
                         }
-                        ServiceManager.notifyFailoverStatus(
-                            FailoverRuntimeState.NO_BACKUP,
-                            when {
-                                settings.transfer.target == null -> "请选择备用节点或节点组"
-                                configuredBackups == 0 -> "备用目标中没有可用节点"
-                                else -> "备用目标中的节点均已尝试，30 秒后重试"
-                            },
-                            node.id
-                        )
-                        if (configuredBackups > 0 && attemptedCount >= configuredBackups) {
-                            delay(FAILOVER_RETRY_BACKOFF_MS)
-                            nextProbeAt = SystemClock.elapsedRealtime() + probeIntervalMs
-                            synchronized(failoverStateLock) {
-                                attemptedFailoverNodeIds.removeAll { it != primaryNodeId && it != node.id }
+                        tag to node
+                    }.firstOrNull { it.first == selectedTag }?.second
+
+                    if (selectedNode != null) {
+                        if (selectedNode.id != activeNode?.id) {
+                            activeNode = selectedNode
+                            currentNodeName = selectedNode.name
+                            currentNodeGroupName = selectedNode.getConnectionGroupName()
+                            withContext(Dispatchers.Main) {
+                                if (controller.isCurrent(ticket)) {
+                                    foreground(selectedNode.name, currentNodeGroupName, proxyMode)
+                                    ServiceManager.notifyConnected(selectedNode)
+                                }
                             }
                         }
-                        continue
+                        val returnedToPrimary = lastSelectedNodeId != primaryNode.id &&
+                            selectedNode.id == primaryNode.id
+                        ServiceManager.notifyFailoverStatus(
+                            if (selectedNode.id == primaryNode.id) {
+                                FailoverRuntimeState.MONITORING
+                            } else {
+                                FailoverRuntimeState.USING_BACKUP
+                            },
+                            when {
+                                settingsChanged -> "核心正在故障转移；设置更改将在重连后生效"
+                                returnedToPrimary -> "主节点已恢复，核心已切回：" + primaryNode.name
+                                selectedNode.id == primaryNode.id ->
+                                    "核心正在检测备用节点，当前使用主节点：" + primaryNode.name
+                                else -> "核心已切换到备用节点：" + selectedNode.name + "；VPN 隧道保持运行"
+                            },
+                            selectedNode.id
+                        )
+                        lastSelectedNodeId = selectedNode.id
+                    } else {
+                        ServiceManager.notifyFailoverStatus(
+                            FailoverRuntimeState.DETECTING,
+                            if (settingsChanged) {
+                                "核心正在故障转移；设置更改将在重连后生效"
+                            } else {
+                                "核心正在检测出站节点"
+                            },
+                            activeNode?.id ?: primaryNode.id
+                        )
                     }
-
-                    ServiceManager.notifyFailoverStatus(
-                        FailoverRuntimeState.SWITCHING,
-                        "检测到节点故障，正在切换到 ${nextNode.name}",
-                        node.id
-                    )
-                    ServiceManager.notifyRestarting()
-                    connect(
-                        nextNode.getRawLinkPlain(),
-                        nextNode.name,
-                        null,
-                        nextNode,
-                        preserveFailoverState = true,
-                        isFailoverAttempt = true
-                    )
-                    return@collectLatest
+                    delay(1_000)
                 }
             }
         }
     }
+
     private suspend fun resolveFailoverCandidates(
         target: FailoverTransferTarget?,
         settingsRepository: SettingsRepository
@@ -440,19 +352,6 @@ class BoxVpnService : VpnService() {
         return candidates.distinctBy(Node::id).filter {
             it.type != NodeType.UNKNOWN && it.server.isNotBlank() && it.port in 1..65_535
         }
-    }
-
-    private fun nextFailoverNode(candidates: List<Node>, currentNodeId: String?): Node? {
-        for (node in candidates
-            .filter { it.id != currentNodeId }
-            .shuffled()
-        ) {
-            val accepted = synchronized(failoverStateLock) {
-                node.id !in attemptedFailoverNodeIds && attemptedFailoverNodeIds.add(node.id)
-            }
-            if (accepted) return node
-        }
-        return null
     }
 
     private suspend fun findNode(raw: String, name: String, settings: SettingsRepository): Node {
