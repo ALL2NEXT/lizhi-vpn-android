@@ -352,11 +352,18 @@ private fun OutboundContent(viewModel: MainViewModel) {
                     onAdapt = viewModel::adaptHysteriaBandwidth
                 )
         }
-        CoreSection(title = "故障转移") {
+        CoreSection(
+            title = "故障转移",
+            trailingContent = {
+                Switch(
+                    checked = failoverSettings.detection.enabled,
+                    onCheckedChange = viewModel::setFailoverDetectionEnabled
+                )
+            }
+        ) {
             FailoverDetectionCard(
                 settings = failoverSettings.detection,
                 runtimeStatus = failoverStatus,
-                onEnabledChange = viewModel::setFailoverDetectionEnabled,
                 onSave = viewModel::setFailoverDetection
             )
             FailoverTransferCard(
@@ -376,7 +383,6 @@ private fun OutboundContent(viewModel: MainViewModel) {
 private fun FailoverDetectionCard(
     settings: FailoverDetectionSettings,
     runtimeStatus: FailoverRuntimeStatus,
-    onEnabledChange: (Boolean) -> Unit,
     onSave: (FailoverDetectionSettings) -> Unit
 ) {
     var probeUrl by remember(settings.probeUrl) { mutableStateOf(settings.probeUrl) }
@@ -396,7 +402,6 @@ private fun FailoverDetectionCard(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Switch(checked = settings.enabled, onCheckedChange = onEnabledChange)
         }
         Text(
             text = runtimeStatus.message,
@@ -883,20 +888,27 @@ private fun buildSocksImportUri(address: String, settings: LanInboundSettings): 
 @Composable
 private fun CoreSection(
     title: String,
+    trailingContent: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text(
-            text = title,
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            trailingContent?.invoke()
+        }
         content()
     }
 }
