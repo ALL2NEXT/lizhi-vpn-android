@@ -455,24 +455,16 @@ internal fun VipDetailContent(
 internal fun TrafficDetailContent(account: AccountInfo) {
     val traffic = account.traffic ?: AccountTrafficInfo()
     val hasReported = hasReportedTraffic(traffic)
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AccountSettingsCard {
-            TrafficDetailRow("今日流量", traffic.today, hasReported)
-            SettingsDivider()
-            TrafficDetailRow("本月流量", traffic.month, hasReported)
-            SettingsDivider()
-            TrafficDetailRow("累计流量", traffic.total, hasReported)
-            SettingsDivider()
-            AccountDetailRow(
-                label = "更新时间",
-                value = TrafficUsageFormatter.formatTimestamp(traffic.lastReportAt)
-            )
-        }
-        Text(
-            text = "这里显示后台已接收的 VPN 流量，点击右上角刷新可获取最新统计。",
-            modifier = Modifier.padding(horizontal = 6.dp),
-            color = settingsMutedColor,
-            fontSize = 12.sp
+    AccountSettingsCard {
+        TrafficDetailRow("今日流量", traffic.today, hasReported)
+        SettingsDivider()
+        TrafficDetailRow("本月流量", traffic.month, hasReported)
+        SettingsDivider()
+        TrafficDetailRow("累计流量", traffic.total, hasReported)
+        SettingsDivider()
+        AccountDetailRow(
+            label = "更新时间",
+            value = TrafficUsageFormatter.formatTimestamp(traffic.lastReportAt)
         )
     }
 }
