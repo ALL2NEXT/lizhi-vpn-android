@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
@@ -63,99 +65,104 @@ internal fun NodeListItem(
             .clickable(enabled = enabled) { onClick() },
         color = backgroundColor
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 36.dp, vertical = 16.dp)
+                .padding(horizontal = 36.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = node.getRegionMarker(),
-                    fontSize = 24.sp,
-                    modifier = Modifier.padding(end = 12.dp)
-                )
+            Text(
+                text = node.getRegionMarker(),
+                fontSize = 34.sp,
+                lineHeight = 38.sp,
+                modifier = Modifier
+                    .offset(x = (-8).dp)
+                    .width(48.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = node.getDisplayName(),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (node.isAvailable) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                Text(
-                    text = node.getDisplayName(),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (node.isAvailable) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+                    if (protocolDisplay.isNotEmpty()) {
+                        NodeProtocolDetailsBadge(
+                            label = protocolDisplay,
+                            modifier = Modifier.padding(start = 8.dp, end = 4.dp)
+                        )
+                    }
 
-                if (protocolDisplay.isNotEmpty()) {
-                    NodeProtocolDetailsBadge(
-                        label = protocolDisplay,
-                        modifier = Modifier.padding(start = 8.dp, end = 4.dp)
+                    when (actionMode) {
+                        null -> Unit
+                        NodeActionMode.EDIT -> IconButton(
+                            onClick = onEditNode,
+                            enabled = enabled,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "编辑节点",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        NodeActionMode.DELETE -> IconButton(
+                            onClick = onDeleteNode,
+                            enabled = enabled,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = "删除节点",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    NodeMetric(
+                        label = "TCPing",
+                        value = formatNodeLatency(node.tcpingLatency),
+                        valueColor = nodeMetricColor(node.tcpingLatency),
+                        modifier = Modifier.weight(1f)
+                    )
+                    NodeMetric(
+                        label = "204 URLTest",
+                        value = formatNodeLatency(node.urlTestLatency),
+                        valueColor = nodeMetricColor(node.urlTestLatency),
+                        modifier = Modifier.weight(1f)
+                    )
+                    NodeMetric(
+                        label = "带宽",
+                        value = formatBandwidth(node.downloadMbps),
+                        valueColor = if (node.downloadMbps > 0f) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.weight(1f)
                     )
                 }
-
-                when (actionMode) {
-                    null -> Unit
-                    NodeActionMode.EDIT -> IconButton(
-                        onClick = onEditNode,
-                        enabled = enabled,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Edit,
-                            contentDescription = "编辑节点",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    NodeActionMode.DELETE -> IconButton(
-                        onClick = onDeleteNode,
-                        enabled = enabled,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Delete,
-                            contentDescription = "删除节点",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                NodeMetric(
-                    label = "TCPing",
-                    value = formatNodeLatency(node.tcpingLatency),
-                    valueColor = nodeMetricColor(node.tcpingLatency),
-                    modifier = Modifier.weight(1f)
-                )
-                NodeMetric(
-                    label = "204 URLTest",
-                    value = formatNodeLatency(node.urlTestLatency),
-                    valueColor = nodeMetricColor(node.urlTestLatency),
-                    modifier = Modifier.weight(1f)
-                )
-                NodeMetric(
-                    label = "带宽",
-                    value = formatBandwidth(node.downloadMbps),
-                    valueColor = if (node.downloadMbps > 0f) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.weight(1f)
-                )
             }
         }
     }

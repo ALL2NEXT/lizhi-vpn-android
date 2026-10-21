@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1507,13 +1508,17 @@ private fun ModernGroupCard(
             MaterialTheme.colorScheme.surface
         }
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 34.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 34.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .offset(x = (-8).dp)
+                    .width(48.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
                 val loadedIcon = groupIcon
                 if (loadedIcon != null) {
@@ -1522,7 +1527,7 @@ private fun ModernGroupCard(
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(36.dp)
                             .clip(RoundedCornerShape(6.dp))
                     )
                 } else {
@@ -1534,178 +1539,187 @@ private fun ModernGroupCard(
                         } else {
                             MaterialTheme.colorScheme.primary
                         },
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(36.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = name,
-                    modifier = Modifier.weight(1f),
-                    color = contentColor,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                status?.let { label ->
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = if (label == "长期有效") {
-                            label
+                        text = name,
+                        modifier = Modifier.weight(1f),
+                        color = contentColor,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    status?.let { label ->
+                        Text(
+                            text = if (label == "长期有效") {
+                                label
+                            } else {
+                                "到期时间: $label"
+                            },
+                            modifier = Modifier.padding(start = 8.dp),
+                            color = statusColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Box {
+                        if (actionMode == null) {
+                            IconButton(
+                                onClick = { menuExpanded = true },
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreVert,
+                                    contentDescription = "更多操作",
+                                    tint = if (selected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    }
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("查看详情") },
+                                    leadingIcon = {
+                                        Icon(Icons.Rounded.ChevronRight, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onViewDetails()
+                                    }
+                                )
+                                onRefresh?.let { refresh ->
+                                    DropdownMenuItem(
+                                        text = { Text("刷新") },
+                                        leadingIcon = {
+                                            Icon(Icons.Rounded.Refresh, contentDescription = null)
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            refresh()
+                                        }
+                                    )
+                                }
+                                onEdit?.let { edit ->
+                                    DropdownMenuItem(
+                                        text = { Text("编辑") },
+                                        leadingIcon = {
+                                            Icon(Icons.Rounded.Edit, contentDescription = null)
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            edit()
+                                        }
+                                    )
+                                }
+                                onDelete?.let { delete ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "删除",
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Rounded.Delete,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            delete()
+                                        }
+                                    )
+                                }
+                            }
                         } else {
-                            "到期时间: $label"
-                        },
-                        modifier = Modifier.padding(start = 8.dp),
-                        color = statusColor,
+                            val actionIcon = when (actionMode) {
+                                GroupActionMode.UPDATE -> Icons.Rounded.Refresh
+                                GroupActionMode.EDIT -> Icons.Rounded.Edit
+                                GroupActionMode.DELETE -> Icons.Rounded.Delete
+                                null -> Icons.Rounded.MoreVert
+                            }
+                            IconButton(
+                                onClick = onGroupAction,
+                                enabled = actionEnabled,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = actionIcon,
+                                    contentDescription = "仓库源操作",
+                                    tint = if (actionMode == GroupActionMode.DELETE) {
+                                        MaterialTheme.colorScheme.error
+                                    } else if (selected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Box(modifier = progressModifier) {
+                    progress?.let { value ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(value)
+                                .fillMaxHeight()
+                                .background(progressColor)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = traffic?.text ?: "流量数据不可用",
+                        modifier = Modifier.weight(1f),
+                        color = mutedColor,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                }
-                Box {
-                    if (actionMode == null) {
-                        IconButton(
-                            onClick = { menuExpanded = true },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                        Icon(
-                            imageVector = Icons.Rounded.MoreVert,
-                            contentDescription = "更多操作",
-                            tint = if (selected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            }
+                    formatRelativeUpdate(updatedAt)?.let { updatedText ->
+                        Text(
+                            text = "· $updatedText",
+                            modifier = Modifier.padding(start = 6.dp),
+                            color = mutedColor,
+                            fontSize = 12.sp,
+                            maxLines = 1
                         )
-                        }
-                        DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                        ) {
-                        DropdownMenuItem(
-                            text = { Text("查看详情") },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.ChevronRight, contentDescription = null)
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                onViewDetails()
-                            }
-                        )
-                        onRefresh?.let { refresh ->
-                            DropdownMenuItem(
-                                text = { Text("刷新") },
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.Refresh, contentDescription = null)
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    refresh()
-                                }
-                            )
-                        }
-                        onEdit?.let { edit ->
-                            DropdownMenuItem(
-                                text = { Text("编辑") },
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.Edit, contentDescription = null)
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    edit()
-                                }
-                            )
-                        }
-                        onDelete?.let { delete ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "删除",
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Rounded.Delete,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    delete()
-                                }
-                            )
-                        }
-                        }
-                    } else {
-                        val actionIcon = when (actionMode) {
-                            GroupActionMode.UPDATE -> Icons.Rounded.Refresh
-                            GroupActionMode.EDIT -> Icons.Rounded.Edit
-                            GroupActionMode.DELETE -> Icons.Rounded.Delete
-                            null -> Icons.Rounded.MoreVert
-                        }
-                        IconButton(
-                            onClick = onGroupAction,
-                            enabled = actionEnabled,
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = actionIcon,
-                                contentDescription = "仓库源操作",
-                                tint = if (actionMode == GroupActionMode.DELETE) {
-                                    MaterialTheme.colorScheme.error
-                                } else if (selected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.primary
-                                }
-                            )
-                        }
                     }
-                }
-            }
-
-            Box(modifier = progressModifier) {
-                progress?.let { value ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(value)
-                            .fillMaxHeight()
-                            .background(progressColor)
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = traffic?.text ?: "流量数据不可用",
-                    modifier = Modifier.weight(1f),
-                    color = mutedColor,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                formatRelativeUpdate(updatedAt)?.let { updatedText ->
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "· $updatedText",
-                        modifier = Modifier.padding(start = 6.dp),
+                        text = "$nodeCount 个节点",
                         color = mutedColor,
                         fontSize = 12.sp,
                         maxLines = 1
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "$nodeCount 个节点",
-                    color = mutedColor,
-                    fontSize = 12.sp,
-                    maxLines = 1
-                )
             }
         }
     }
