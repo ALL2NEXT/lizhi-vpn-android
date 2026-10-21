@@ -290,6 +290,7 @@ class BoxVpnService : VpnService() {
                 coroutineScope {
                     var current = primaryNode
                     var consecutiveFailures = 0
+                    var activeProbeIndex = 0
                     var primaryRecoverySuccesses = 0
                     var warmupAttemptedFor: String? = null
                     var warmupJob: Deferred<Node?>? = null
@@ -309,6 +310,7 @@ class BoxVpnService : VpnService() {
                         if (selectedNode.id != current.id) {
                             current = selectedNode
                             consecutiveFailures = 0
+                            activeProbeIndex = 0
                             primaryRecoverySuccesses = 0
                             warmupJob?.cancel()
                             warmupJob = null
@@ -319,13 +321,17 @@ class BoxVpnService : VpnService() {
                         }
 
                         // 只探测当前出站。处于备用节点时，额外探测主节点用于自动恢复。
-                        val activeProbe = async { probeFailoverNode(current, probeEndpoints, loadedSettings) }
+                        // 正常时使用首项周期探测；失败后依次使用第二、第三项的等待时间与参数重试。
+                        val probeStep = loadedSettings.detection.probeStep(activeProbeIndex)
+                        val activeProbe = async {
+                            probeFailoverNode(current, probeEndpoints, probeStep)
+                        }
                         val primaryProbe = if (current.id != primaryNode.id) {
-                            async { probeFailoverNode(primaryNode, probeEndpoints, loadedSettings) }
+                            async { probeFailoverNode(primaryNode, probeEndpoints, probeStep) }
                         } else null
                         val activeHealthy = activeProbe.await()
 
-                        // 当前节点首次超时就立即预检策略选出的备用线路；之后不再周期探测。
+                        // 当前节点首次 204 探测失败时立即预检备用线路。
                         if (!activeHealthy && warmupAttemptedFor != current.id) {
                             warmupAttemptedFor = current.id
                             warmedCandidate = null
@@ -348,6 +354,7 @@ class BoxVpnService : VpnService() {
 
                         if (activeHealthy) {
                             consecutiveFailures = 0
+                            activeProbeIndex = 0
                             warmupAttemptedFor = null
                             switchNoticeShownFor = null
                             warmupJob?.cancel()
@@ -373,6 +380,8 @@ class BoxVpnService : VpnService() {
                                     if (selectFailoverNode(primaryNode, outboundNodes, core, proxyMode, ticket)) {
                                         current = primaryNode
                                         primaryRecoverySuccesses = 0
+                                        consecutiveFailures = 0
+                                        activeProbeIndex = 0
                                         warmupAttemptedFor = null
                                         ServiceManager.notifyFailoverStatus(
                                             FailoverRuntimeState.MONITORING,
@@ -393,16 +402,20 @@ class BoxVpnService : VpnService() {
                                 }
                             }
                         } else {
-                            consecutiveFailures++
+                            // 按当前探测序号累计失败次数，第三次失败后确认故障并切换。
+                            val failedProbeIndex = activeProbeIndex
+                            consecutiveFailures = failedProbeIndex + 1
                             primaryRecoverySuccesses = 0
-                            val message = if (consecutiveFailures < FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD) {
+                            val allProbesFailed = consecutiveFailures >=
+                                FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD
+                            val message = if (!allProbesFailed) {
                                 if (current.id == primaryNode.id) {
-                                    "主节点首次探测超时，正在预检备用线路"
+                                    "主节点第${consecutiveFailures}次 204 探测失败，正在预检备用线路"
                                 } else {
-                                    "备用节点首次探测超时，正在预检其他转移节点"
+                                    "备用节点第${consecutiveFailures}次 204 探测失败"
                                 }
                             } else {
-                                "当前节点连续探测超时，正在切换出站"
+                                "当前节点连续三次 204 探测失败，正在切换出站"
                             }
                             ServiceManager.notifyFailoverStatus(
                                 FailoverRuntimeState.SWITCHING,
@@ -410,16 +423,17 @@ class BoxVpnService : VpnService() {
                                 current.id
                             )
 
-                            if (consecutiveFailures >= FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD) {
+                            if (allProbesFailed) {
                                 if (switchNoticeShownFor != current.id) {
                                     switchNoticeShownFor = current.id
-                                    showFailoverToast("当前节点连续两次探测失败，正在进行故障转移")
+                                    showFailoverToast("当前节点连续三次 204 探测失败，正在进行故障转移")
                                 }
                                 val candidate = warmedCandidate ?: warmupJob?.await()
                                 if (candidate != null && candidate.id != current.id) {
                                     if (selectFailoverNode(candidate, outboundNodes, core, proxyMode, ticket)) {
                                         current = candidate
                                         consecutiveFailures = 0
+                                        activeProbeIndex = 0
                                         primaryRecoverySuccesses = 0
                                         warmupAttemptedFor = null
                                         warmupJob = null
@@ -443,11 +457,23 @@ class BoxVpnService : VpnService() {
                                         current.id
                                     )
                                 }
+                                // 本轮三次探测结束后重新开始周期检测。
+                                consecutiveFailures = 0
+                                activeProbeIndex = 0
+                            } else {
+                                activeProbeIndex = failedProbeIndex + 1
                             }
                         }
 
                         val elapsed = SystemClock.elapsedRealtime() - cycleStartedAt
-                        delay((FailoverDetectionSettings.PROBE_INTERVAL_SECONDS * 1_000L - elapsed).coerceAtLeast(0L))
+                        val nextIntervalMs = loadedSettings.detection
+                            .probeStep(activeProbeIndex).intervalSeconds * 1_000L
+                        val nextDelayMs = if (activeHealthy) {
+                            (nextIntervalMs - elapsed).coerceAtLeast(0L)
+                        } else {
+                            nextIntervalMs
+                        }
+                        delay(nextDelayMs)
                     }
                 }
             }
@@ -457,15 +483,15 @@ class BoxVpnService : VpnService() {
     private suspend fun probeFailoverNode(
         node: Node,
         probeEndpoints: Map<String, LocalSocksEndpoint>,
-        settings: FailoverSettings
+        probeStep: FailoverProbeStepSettings
     ): Boolean = withContext(Dispatchers.IO) {
         val endpoint = probeEndpoints[node.id] ?: return@withContext false
         try {
             Socks5HttpProbe.probeHttpStatusCode(
                 endpoint,
-                settings.detection.probeUrl,
-                FailoverDetectionSettings.PROBE_TIMEOUT_MS
-            ) in 200..399
+                probeStep.probeUrl,
+                probeStep.timeoutMs
+            ) == 204
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -490,7 +516,12 @@ class BoxVpnService : VpnService() {
                     val index = nextCandidate.getAndIncrement()
                     if (index >= candidates.size) break
                     val candidate = candidates[index]
-                    if (probeFailoverNode(candidate, probeEndpoints, settings)) {
+                    if (probeFailoverNode(
+                            candidate,
+                            probeEndpoints,
+                            settings.detection.firstProbe
+                        )
+                    ) {
                         winner.complete(candidate)
                     }
                 }

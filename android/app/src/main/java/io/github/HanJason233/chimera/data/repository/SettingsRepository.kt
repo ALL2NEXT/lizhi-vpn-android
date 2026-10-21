@@ -22,6 +22,7 @@ import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
 import io.github.HanJason233.chimera.data.model.FailoverSettings
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
 import io.github.HanJason233.chimera.data.model.FailoverTransferStrategy
+import io.github.HanJason233.chimera.data.model.FailoverProbeStepSettings
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
@@ -110,6 +111,7 @@ class SettingsRepository(
         private val FAILOVER_PROBE_STEPS = stringPreferencesKey("failover_probe_steps")
         private val FAILOVER_DETECTION_METHOD = stringPreferencesKey("failover_detection_method")
         private val FAILOVER_PROBE_URL = stringPreferencesKey("failover_probe_url")
+        private val FAILOVER_PROBE_CONFIGS = stringPreferencesKey("failover_probe_configs")
         private val FAILOVER_INTERVAL_SECONDS = intPreferencesKey("failover_interval_seconds")
         private val FAILOVER_TIMEOUT_MS = longPreferencesKey("failover_timeout_ms")
         private val FAILOVER_CONSECUTIVE_FAILURES = intPreferencesKey("failover_consecutive_failures")
@@ -568,13 +570,45 @@ class SettingsRepository(
             // 将旧版备用节点列表迁移为列表中的第一个节点。
             decodeLegacyFailoverTransferStrategy(preferences[FAILOVER_TRANSFER_NODE_IDS])
         }
+        // 将旧版单地址设置迁移为第一次探测地址，其余参数使用新版本默认值。
+        val legacyProbeUrl = decodeFailoverProbeUrl(preferences)
+        val probeSteps = decodeFailoverProbeSteps(
+            serialized = preferences[FAILOVER_PROBE_CONFIGS],
+            legacyFirstProbeUrl = legacyProbeUrl
+        )
         return FailoverSettings(
             detection = FailoverDetectionSettings(
                 enabled = preferences[FAILOVER_DETECTION_ENABLED] ?: false,
-                probeUrl = decodeFailoverProbeUrl(preferences),
+                firstProbe = probeSteps[0],
+                secondProbe = probeSteps[1],
+                thirdProbe = probeSteps[2]
             ),
             transfer = FailoverTransferSettings(transferStrategy)
         )
+    }
+
+    private fun decodeFailoverProbeSteps(
+        serialized: String?,
+        legacyFirstProbeUrl: String
+    ): List<FailoverProbeStepSettings> {
+        val defaults = FailoverDetectionSettings().probeSteps
+        val array = runCatching { JSONArray(serialized.orEmpty()) }.getOrNull()
+        return defaults.mapIndexed { index, default ->
+            val fallback = if (index == 0) default.copy(probeUrl = legacyFirstProbeUrl) else default
+            val item = array?.optJSONObject(index) ?: return@mapIndexed fallback
+            val probeUrl = normalizeFailoverProbeUrl(item.optString("probeUrl")) ?: fallback.probeUrl
+            FailoverProbeStepSettings(
+                probeUrl = probeUrl,
+                intervalSeconds = item.optInt("intervalSeconds", fallback.intervalSeconds).coerceIn(
+                    FailoverDetectionSettings.MIN_PROBE_INTERVAL_SECONDS,
+                    FailoverDetectionSettings.MAX_PROBE_INTERVAL_SECONDS
+                ),
+                timeoutMs = item.optLong("timeoutMs", fallback.timeoutMs).coerceIn(
+                    FailoverDetectionSettings.MIN_PROBE_TIMEOUT_MS,
+                    FailoverDetectionSettings.MAX_PROBE_TIMEOUT_MS
+                )
+            )
+        }
     }
 
     private fun decodeFailoverTransferStrategy(serialized: String?): FailoverTransferStrategy? {
@@ -617,16 +651,40 @@ class SettingsRepository(
         }.orEmpty()
 
     suspend fun setFailoverDetection(settings: FailoverDetectionSettings) {
-        val probeUrl = normalizeFailoverProbeUrl(settings.probeUrl) ?: return
+        val normalizedProbeSteps = settings.probeSteps.map { step ->
+            val probeUrl = normalizeFailoverProbeUrl(step.probeUrl) ?: return
+            step.copy(
+                probeUrl = probeUrl,
+                intervalSeconds = step.intervalSeconds.coerceIn(
+                    FailoverDetectionSettings.MIN_PROBE_INTERVAL_SECONDS,
+                    FailoverDetectionSettings.MAX_PROBE_INTERVAL_SECONDS
+                ),
+                timeoutMs = step.timeoutMs.coerceIn(
+                    FailoverDetectionSettings.MIN_PROBE_TIMEOUT_MS,
+                    FailoverDetectionSettings.MAX_PROBE_TIMEOUT_MS
+                )
+            )
+        }
         store.edit { preferences ->
-            preferences[FAILOVER_PROBE_URL] = probeUrl
+            preferences[FAILOVER_PROBE_CONFIGS] = JSONArray().apply {
+                normalizedProbeSteps.forEach { step ->
+                    put(
+                        JSONObject()
+                            .put("probeUrl", step.probeUrl)
+                            .put("intervalSeconds", step.intervalSeconds)
+                            .put("timeoutMs", step.timeoutMs)
+                    )
+                }
+            }.toString()
+            // 保留首项旧键，便于旧版本回退时继续读取探测地址。
+            preferences[FAILOVER_PROBE_URL] = normalizedProbeSteps.first().probeUrl
             preferences.remove(FAILOVER_PROBE_STEPS)
-            // 同步固定探测参数，兼容降级版本读取。
+            // 同步首项参数和三次失败阈值，兼容旧版本读取。
             preferences[FAILOVER_DETECTION_METHOD] = "HTTPS_PROBE"
             preferences[FAILOVER_CONSECUTIVE_FAILURES] =
                 FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD
-            preferences[FAILOVER_INTERVAL_SECONDS] = FailoverDetectionSettings.PROBE_INTERVAL_SECONDS
-            preferences[FAILOVER_TIMEOUT_MS] = FailoverDetectionSettings.PROBE_TIMEOUT_MS
+            preferences[FAILOVER_INTERVAL_SECONDS] = normalizedProbeSteps.first().intervalSeconds
+            preferences[FAILOVER_TIMEOUT_MS] = normalizedProbeSteps.first().timeoutMs
         }
     }
 
@@ -641,7 +699,7 @@ class SettingsRepository(
             }
         }
         return normalizeFailoverProbeUrl(preferences[FAILOVER_PROBE_URL])
-            ?: FailoverDetectionSettings.DEFAULT_PROBE_URL
+            ?: FailoverDetectionSettings.DEFAULT_FIRST_PROBE_URL
     }
 
     suspend fun setFailoverDetectionEnabled(enabled: Boolean) {

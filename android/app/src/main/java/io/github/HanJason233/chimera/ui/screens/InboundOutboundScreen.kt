@@ -74,6 +74,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
+import io.github.HanJason233.chimera.data.model.FailoverProbeStepSettings
 import io.github.HanJason233.chimera.data.model.FailoverRuntimeStatus
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
 import io.github.HanJason233.chimera.data.model.FailoverTransferStrategy
@@ -379,17 +380,46 @@ private fun OutboundContent(viewModel: MainViewModel) {
     }
 }
 
-/** 固定探测策略的故障检测，仅允许设置测试目标地址。 */
+private data class FailoverProbeDraft(
+    val probeUrl: String,
+    val intervalSeconds: String,
+    val timeoutMs: String
+)
+
+private fun FailoverProbeStepSettings.toDraft() = FailoverProbeDraft(
+    probeUrl = probeUrl,
+    intervalSeconds = intervalSeconds.toString(),
+    timeoutMs = timeoutMs.toString()
+)
+
+private fun FailoverProbeDraft.toSettings(): FailoverProbeStepSettings? {
+    val normalizedUrl = normalizeFailoverProbeUrlInput(probeUrl) ?: return null
+    val interval = intervalSeconds.toIntOrNull()?.takeIf {
+        it in FailoverDetectionSettings.MIN_PROBE_INTERVAL_SECONDS..
+            FailoverDetectionSettings.MAX_PROBE_INTERVAL_SECONDS
+    } ?: return null
+    val timeout = timeoutMs.toLongOrNull()?.takeIf {
+        it in FailoverDetectionSettings.MIN_PROBE_TIMEOUT_MS..
+            FailoverDetectionSettings.MAX_PROBE_TIMEOUT_MS
+    } ?: return null
+    return FailoverProbeStepSettings(normalizedUrl, interval, timeout)
+}
+
 @Composable
 private fun FailoverDetectionCard(
     settings: FailoverDetectionSettings,
     runtimeStatus: FailoverRuntimeStatus,
     onSave: (FailoverDetectionSettings) -> Unit
 ) {
-    var probeUrl by remember(settings.probeUrl) { mutableStateOf(settings.probeUrl) }
+    var firstProbe by remember(settings.firstProbe) { mutableStateOf(settings.firstProbe.toDraft()) }
+    var secondProbe by remember(settings.secondProbe) { mutableStateOf(settings.secondProbe.toDraft()) }
+    var thirdProbe by remember(settings.thirdProbe) { mutableStateOf(settings.thirdProbe.toDraft()) }
     var validationMessage by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -414,17 +444,29 @@ private fun FailoverDetectionCard(
                 MaterialTheme.colorScheme.primary
             }
         )
-        OutlinedTextField(
-            value = probeUrl,
-            onValueChange = {
-                probeUrl = it
-                validationMessage = null
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            label = { Text("测试目标地址") },
-            singleLine = true
+        Text(
+            text = "正常时按第一次的间隔检测；失败后按第二、第三次各自设置的等待时间继续探测。连续三次未收到 204 时切换。",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        FailoverProbeEditor(
+            title = "第一次 204 探测",
+            intervalLabel = "正常探测间隔（秒）",
+            draft = firstProbe,
+            onDraftChange = { firstProbe = it; validationMessage = null }
+        )
+        FailoverProbeEditor(
+            title = "第二次 204 探测",
+            intervalLabel = "首次失败后等待（秒）",
+            draft = secondProbe,
+            onDraftChange = { secondProbe = it; validationMessage = null }
+        )
+        FailoverProbeEditor(
+            title = "第三次 204 探测",
+            intervalLabel = "二次失败后等待（秒）",
+            draft = thirdProbe,
+            onDraftChange = { thirdProbe = it; validationMessage = null }
         )
         validationMessage?.let { message ->
             Text(
@@ -435,7 +477,7 @@ private fun FailoverDetectionCard(
             )
         }
         Text(
-            text = "核心自动探测出站节点，探测间隔约 2 秒；切换时保持 VPN 隧道",
+            text = "首次失败即预检备用线路；切换时保持 VPN 隧道",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -445,19 +487,84 @@ private fun FailoverDetectionCard(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             onClick = {
-                val normalized = normalizeFailoverProbeUrlInput(probeUrl)
-                if (normalized == null) {
-                    validationMessage = "请输入有效的 HTTPS 地址"
+                val first = firstProbe.toSettings()
+                val second = secondProbe.toSettings()
+                val third = thirdProbe.toSettings()
+                if (first == null || second == null || third == null) {
+                    validationMessage = "请检查三项 HTTPS 地址、间隔和超时；间隔需为 1–3600 秒，超时需为 250–30000 毫秒"
                 } else {
-                    onSave(settings.copy(probeUrl = normalized))
-                    probeUrl = normalized
+                    onSave(
+                        settings.copy(
+                            firstProbe = first,
+                            secondProbe = second,
+                            thirdProbe = third
+                        )
+                    )
+                    firstProbe = first.toDraft()
+                    secondProbe = second.toDraft()
+                    thirdProbe = third.toDraft()
                     validationMessage = null
                 }
             }
         ) {
-            Text("保存测试地址")
+            Text("保存三次探测设置")
         }
     }
+}
+
+@Composable
+private fun FailoverProbeEditor(
+    title: String,
+    intervalLabel: String,
+    draft: FailoverProbeDraft,
+    onDraftChange: (FailoverProbeDraft) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        OutlinedTextField(
+            value = draft.probeUrl,
+            onValueChange = { onDraftChange(draft.copy(probeUrl = it)) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("测试地址") },
+            singleLine = true
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = draft.intervalSeconds,
+                onValueChange = {
+                    onDraftChange(draft.copy(intervalSeconds = it.filter(Char::isDigit).take(4)))
+                },
+                modifier = Modifier.weight(1f),
+                label = { Text(intervalLabel) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = draft.timeoutMs,
+                onValueChange = {
+                    onDraftChange(draft.copy(timeoutMs = it.filter(Char::isDigit).take(5)))
+                },
+                modifier = Modifier.weight(1f),
+                label = { Text("超时（毫秒）") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true
+            )
+        }
+    }
+    Divider(
+        modifier = Modifier.padding(horizontal = 12.dp),
+        color = MaterialTheme.colorScheme.outlineVariant
+    )
 }
 
 private fun normalizeFailoverProbeUrlInput(value: String): String? = runCatching {
