@@ -1,6 +1,5 @@
 package io.github.HanJason233.chimera.feature.nodegrouping.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,16 +48,10 @@ internal fun NodeListItem(
     onEditNode: () -> Unit,
     onDeleteNode: () -> Unit
 ) {
-    val backgroundColor =
-        if (isSelected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        }
-    val borderColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary
+    val backgroundColor = if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer
     } else {
-        Color.Transparent
+        MaterialTheme.colorScheme.surface
     }
     val protocolDisplay = remember(node.type, node.rawLink, displaySettings, coreSettings) {
         node.protocolDisplayLabel(displaySettings, coreSettings)
@@ -68,16 +60,13 @@ internal fun NodeListItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled) { onClick() },
-        color = backgroundColor,
-        shape = RoundedCornerShape(12.dp),
-        border = if (isSelected) BorderStroke(2.dp, borderColor) else null
+        color = backgroundColor
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 36.dp, vertical = 16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

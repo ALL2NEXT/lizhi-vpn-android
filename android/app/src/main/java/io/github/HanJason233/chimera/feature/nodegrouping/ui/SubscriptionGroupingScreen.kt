@@ -31,6 +31,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Button
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +48,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -259,9 +259,9 @@ internal fun SubscriptionGroupingScreen(
             }
         },
         contentPadding = PaddingValues(
-            start = 20.dp,
+            start = 0.dp,
             top = 16.dp,
-            end = 20.dp,
+            end = 0.dp,
             bottom = 0.dp
         ),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -575,7 +575,7 @@ private fun NodeListContent(
                             top = 4.dp,
                             bottom = bottomContentPadding
                         ),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
                         items(
                             items = displayNodes,
@@ -591,6 +591,10 @@ private fun NodeListContent(
                                 actionMode = actionMode,
                                 onEditNode = { onEditNode(node) },
                                 onDeleteNode = { onDeleteNode(node) }
+                            )
+                            Divider(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.outlineVariant
                             )
                         }
                     }

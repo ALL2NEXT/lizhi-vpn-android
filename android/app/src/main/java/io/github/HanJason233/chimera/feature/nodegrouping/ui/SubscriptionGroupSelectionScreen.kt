@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -48,6 +47,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -512,9 +512,9 @@ private fun SubscriptionGroupSelectionScreen(
             }
         },
         contentPadding = PaddingValues(
-            start = 20.dp,
+            start = 0.dp,
             top = 16.dp,
-            end = 20.dp,
+            end = 0.dp,
             bottom = 0.dp
         ),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -525,7 +525,7 @@ private fun SubscriptionGroupSelectionScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = bottomContentPadding + 72.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
                         if (subscriptionGroups.isNotEmpty()) {
                             item(key = "official-groups-header") { GroupTypeHeader("官方源") }
@@ -557,6 +557,10 @@ private fun SubscriptionGroupSelectionScreen(
                                             autoRefreshOnStartupOverrides[group.sourceId] ?: true
                                         )
                                     }
+                                )
+                                Divider(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = MaterialTheme.colorScheme.outlineVariant
                                 )
                             }
                         }
@@ -594,6 +598,10 @@ private fun SubscriptionGroupSelectionScreen(
                                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                         }
                                     }
+                                )
+                                Divider(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = MaterialTheme.colorScheme.outlineVariant
                                 )
                             }
                         }
@@ -1311,6 +1319,7 @@ private fun GroupTypeHeader(title: String) {
         text = title,
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 20.dp)
             .padding(top = 8.dp, bottom = 2.dp),
         color = MaterialTheme.colorScheme.primary,
         style = MaterialTheme.typography.titleSmall,
@@ -1445,7 +1454,6 @@ private fun ModernGroupCard(
             }
         }
     }
-    val cardShape = RoundedCornerShape(16.dp)
     val contentColor = if (selected) {
         MaterialTheme.colorScheme.onPrimaryContainer
     } else {
@@ -1493,23 +1501,14 @@ private fun ModernGroupCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = cardShape,
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        },
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f)
-            }
-        )
+            MaterialTheme.colorScheme.surface
+        }
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 34.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
