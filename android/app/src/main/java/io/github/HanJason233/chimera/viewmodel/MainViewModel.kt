@@ -1635,21 +1635,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {
+    fun updateSkinSettings(update: (SkinSettings) -> SkinSettings) {
         viewModelScope.launch {
-            settingsRepository.upsertSkinScheme(scheme, activate)
-        }
-    }
-
-    fun setActiveSkinScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.setActiveSkinScheme(schemeId)
-        }
-    }
-
-    fun deleteSkinScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.deleteSkinScheme(schemeId)
+            settingsRepository.updateSkinSettings(update)
         }
     }
 

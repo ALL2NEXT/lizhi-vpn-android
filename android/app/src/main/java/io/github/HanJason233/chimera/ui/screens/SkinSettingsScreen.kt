@@ -59,7 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import io.github.HanJason233.chimera.data.model.SkinScheme
+import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.VpnState
@@ -267,42 +267,32 @@ private fun SkinColorOption(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun SkinSchemeEditorScreen(
+fun SkinSettingsScreen(
     viewModel: MainViewModel,
-    schemeId: String,
     onBack: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
-    val scheme = skinSettings.schemes.firstOrNull { it.id == schemeId }
-
-    if (scheme == null) {
-        AppScreenScaffold(title = "编辑主题", onBack = onBack) {
-            Text(
-                text = "正在加载主题…",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        return
-    }
-
-    var nameInput by remember(scheme.id, scheme.name) { mutableStateOf(scheme.name) }
-    var colorInput by remember(scheme.id, scheme.baseColorArgb) {
-        mutableStateOf(scheme.baseColorArgb.toSkinHex())
+    val settings = skinSettings
+    var colorInput by remember(settings.baseColorArgb) {
+        mutableStateOf(settings.baseColorArgb.toSkinHex())
     }
     var colorError by remember { mutableStateOf(false) }
-    val isActive = scheme.id == skinSettings.activeSchemeId
+
+    fun updateGlobalSettings(update: SkinSettings.() -> SkinSettings) {
+        viewModel.updateSkinSettings { current -> current.update() }
+    }
 
     fun applyLauncherIdentity(preset: LauncherIdentityPreset) {
-        val oldCustomIconPath = scheme.customImagePath
-        viewModel.upsertSkinScheme(
-            scheme.copy(
+        val oldCustomIconPath = settings.customImagePath
+        updateGlobalSettings {
+            copy(
                 appDisplayName = preset.displayName,
                 appIconPresetId = preset.id,
                 customImagePath = null
             )
-        )
+        }
         if (oldCustomIconPath != null) {
             scope.launch(Dispatchers.IO) { File(oldCustomIconPath).delete() }
         }
@@ -313,12 +303,12 @@ fun SkinSchemeEditorScreen(
         uri: Uri?,
         assetName: String,
         previousPath: String?,
-        updateScheme: (String) -> SkinScheme
+        updateImageSettings: (SkinSettings, String) -> SkinSettings
     ) {
         uri ?: return
         scope.launch {
             val copiedPath = withContext(Dispatchers.IO) {
-                copySkinAsset(context, uri, scheme.id, assetName)
+                copySkinAsset(context, uri, assetName)
             }
             if (copiedPath == null) {
                 Toast.makeText(context, "图片读取失败，请重试", Toast.LENGTH_SHORT).show()
@@ -326,7 +316,9 @@ fun SkinSchemeEditorScreen(
                 if (previousPath != null && previousPath != copiedPath) {
                     withContext(Dispatchers.IO) { File(previousPath).delete() }
                 }
-                viewModel.upsertSkinScheme(updateScheme(copiedPath))
+                viewModel.updateSkinSettings { current ->
+                    updateImageSettings(current, copiedPath)
+                }
             }
         }
     }
@@ -337,8 +329,8 @@ fun SkinSchemeEditorScreen(
         saveHomeStateImage(
             uri = uri,
             assetName = "home_disconnected",
-            previousPath = scheme.homeDisconnectedImagePath,
-            updateScheme = { path -> scheme.copy(homeDisconnectedImagePath = path) }
+            previousPath = settings.homeDisconnectedImagePath,
+            updateImageSettings = { current, path -> current.copy(homeDisconnectedImagePath = path) }
         )
     }
     val connectingImagePicker = rememberLauncherForActivityResult(
@@ -347,8 +339,8 @@ fun SkinSchemeEditorScreen(
         saveHomeStateImage(
             uri = uri,
             assetName = "home_connecting",
-            previousPath = scheme.homeConnectingImagePath,
-            updateScheme = { path -> scheme.copy(homeConnectingImagePath = path) }
+            previousPath = settings.homeConnectingImagePath,
+            updateImageSettings = { current, path -> current.copy(homeConnectingImagePath = path) }
         )
     }
     val connectedImagePicker = rememberLauncherForActivityResult(
@@ -357,8 +349,8 @@ fun SkinSchemeEditorScreen(
         saveHomeStateImage(
             uri = uri,
             assetName = "home_connected",
-            previousPath = scheme.homeConnectedImagePath,
-            updateScheme = { path -> scheme.copy(homeConnectedImagePath = path) }
+            previousPath = settings.homeConnectedImagePath,
+            updateImageSettings = { current, path -> current.copy(homeConnectedImagePath = path) }
         )
     }
     val disconnectingImagePicker = rememberLauncherForActivityResult(
@@ -367,14 +359,13 @@ fun SkinSchemeEditorScreen(
         saveHomeStateImage(
             uri = uri,
             assetName = "home_disconnecting",
-            previousPath = scheme.homeDisconnectingImagePath,
-            updateScheme = { path -> scheme.copy(homeDisconnectingImagePath = path) }
+            previousPath = settings.homeDisconnectingImagePath,
+            updateImageSettings = { current, path -> current.copy(homeDisconnectingImagePath = path) }
         )
     }
 
     AppScreenScaffold(
-        title = "编辑主题",
-        subtitle = scheme.name,
+        title = "主题设置",
         onBack = onBack
     ) {
         Column(
@@ -394,7 +385,7 @@ fun SkinSchemeEditorScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "名称与图标",
+                        text = "应用名称与图标",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -407,7 +398,7 @@ fun SkinSchemeEditorScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         LauncherIdentityPresets.all.forEach { preset ->
                             val selected =
-                                LauncherIdentityPresets.find(scheme.appIconPresetId).id == preset.id
+                                LauncherIdentityPresets.find(settings.appIconPresetId).id == preset.id
                             Surface(
                                 modifier = Modifier
                                     .weight(1f)
@@ -460,31 +451,16 @@ fun SkinSchemeEditorScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "主题方案信息",
+                        text = "全局外观设置",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = nameInput,
-                        onValueChange = { nameInput = it },
-                        label = { Text("主题名称") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                    Text(
+                        text = "此处修改会立即应用到整个应用。",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedButton(
-                        onClick = {
-                            val name = nameInput.trim()
-                            if (name.isNotEmpty()) {
-                                viewModel.upsertSkinScheme(scheme.copy(name = name))
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("保存名称")
-                    }
                     Spacer(modifier = Modifier.height(18.dp))
                     Text(
                         text = "主题模式",
@@ -502,10 +478,10 @@ fun SkinSchemeEditorScreen(
                             val buttonModifier = Modifier.weight(
                                 if (mode == SkinThemeMode.SYSTEM) 1.5f else 1f
                             )
-                            if (scheme.themeMode == mode) {
+                            if (settings.themeMode == mode) {
                                 Button(
                                     onClick = {
-                                        viewModel.upsertSkinScheme(scheme.copy(themeMode = mode))
+                                        updateGlobalSettings { copy(themeMode = mode) }
                                     },
                                     modifier = buttonModifier
                                 ) {
@@ -514,7 +490,7 @@ fun SkinSchemeEditorScreen(
                             } else {
                                 OutlinedButton(
                                     onClick = {
-                                        viewModel.upsertSkinScheme(scheme.copy(themeMode = mode))
+                                        updateGlobalSettings { copy(themeMode = mode) }
                                     },
                                     modifier = buttonModifier
                                 ) {
@@ -531,7 +507,7 @@ fun SkinSchemeEditorScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "经典、胶囊式或原生式；当前主题会立即生效。",
+                        text = "经典、胶囊式或原生式；选择后立即全局生效。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -541,12 +517,10 @@ fun SkinSchemeEditorScreen(
                     ) {
                         HomeNavigationStyle.entries.forEach { style ->
                             val buttonModifier = Modifier.weight(1f)
-                            if (scheme.navigationStyle == style) {
+                            if (settings.navigationStyle == style) {
                                 Button(
                                     onClick = {
-                                        viewModel.upsertSkinScheme(
-                                            scheme.copy(navigationStyle = style)
-                                        )
+                                        updateGlobalSettings { copy(navigationStyle = style) }
                                     },
                                     modifier = buttonModifier
                                 ) {
@@ -555,9 +529,7 @@ fun SkinSchemeEditorScreen(
                             } else {
                                 OutlinedButton(
                                     onClick = {
-                                        viewModel.upsertSkinScheme(
-                                            scheme.copy(navigationStyle = style)
-                                        )
+                                        updateGlobalSettings { copy(navigationStyle = style) }
                                     },
                                     modifier = buttonModifier
                                 ) {
@@ -586,21 +558,21 @@ fun SkinSchemeEditorScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "这些选项仅应用于当前主题方案。全部关闭后隐藏节点标签。",
+                        text = "这些选项全局生效。全部关闭后隐藏节点标签。",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    NodeDisplaySchemeSwitchRow("显示协议", scheme.showNodeProtocol) {
-                        viewModel.upsertSkinScheme(scheme.copy(showNodeProtocol = it))
+                    NodeDisplaySettingsSwitchRow("显示协议", settings.showNodeProtocol) {
+                        updateGlobalSettings { copy(showNodeProtocol = it) }
                     }
-                    NodeDisplaySchemeSwitchRow("显示安全层", scheme.showNodeSecurity) {
-                        viewModel.upsertSkinScheme(scheme.copy(showNodeSecurity = it))
+                    NodeDisplaySettingsSwitchRow("显示安全层", settings.showNodeSecurity) {
+                        updateGlobalSettings { copy(showNodeSecurity = it) }
                     }
-                    NodeDisplaySchemeSwitchRow("显示传输方式", scheme.showNodeTransport) {
-                        viewModel.upsertSkinScheme(scheme.copy(showNodeTransport = it))
+                    NodeDisplaySettingsSwitchRow("显示传输方式", settings.showNodeTransport) {
+                        updateGlobalSettings { copy(showNodeTransport = it) }
                     }
-                    NodeDisplaySchemeSwitchRow("显示核心", scheme.showNodeCore) {
-                        viewModel.upsertSkinScheme(scheme.copy(showNodeCore = it))
+                    NodeDisplaySettingsSwitchRow("显示核心", settings.showNodeCore) {
+                        updateGlobalSettings { copy(showNodeCore = it) }
                     }
                 }
             }
@@ -623,106 +595,106 @@ fun SkinSchemeEditorScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     HomeStateSettingsRow(
                         title = "未连接",
-                        imagePath = scheme.homeDisconnectedImagePath,
+                        imagePath = settings.homeDisconnectedImagePath,
                         state = VpnState.DISCONNECTED,
-                        selectedEffect = scheme.homeDisconnectedIconEffect,
-                        selectedParticleEnabled = scheme.homeDisconnectedParticleEffectEnabled,
+                        selectedEffect = settings.homeDisconnectedIconEffect,
+                        selectedParticleEnabled = settings.homeDisconnectedParticleEffectEnabled,
                         onChoose = { disconnectedImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
-                            val oldPath = scheme.homeDisconnectedImagePath
-                            viewModel.upsertSkinScheme(scheme.copy(homeDisconnectedImagePath = null))
+                            val oldPath = settings.homeDisconnectedImagePath
+                            updateGlobalSettings { copy(homeDisconnectedImagePath = null) }
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
                         },
-                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
-                            scheme.copy(homeDisconnectedIconEffect = effect)
-                        ) },
-                        onParticleEffectChanged = { enabled -> viewModel.upsertSkinScheme(
-                            scheme.copy(
+                        onEffectSelected = { effect -> updateGlobalSettings {
+                            copy(homeDisconnectedIconEffect = effect)
+                        } },
+                        onParticleEffectChanged = { enabled -> updateGlobalSettings {
+                            copy(
                                 homeDisconnectedParticleEffectEnabled = enabled,
                                 homeIconEffectEnabled = enabled ||
-                                    scheme.homeConnectingParticleEffectEnabled ||
-                                    scheme.homeDisconnectingParticleEffectEnabled ||
-                                    scheme.homeConnectedParticleEffectEnabled
+                                    homeConnectingParticleEffectEnabled ||
+                                    homeDisconnectingParticleEffectEnabled ||
+                                    homeConnectedParticleEffectEnabled
                             )
-                        ) }
+                        } }
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     HomeStateSettingsRow(
                         title = "连接中",
-                        imagePath = scheme.homeConnectingImagePath,
+                        imagePath = settings.homeConnectingImagePath,
                         state = VpnState.CONNECTING,
-                        selectedEffect = scheme.homeConnectingIconEffect,
-                        selectedParticleEnabled = scheme.homeConnectingParticleEffectEnabled,
+                        selectedEffect = settings.homeConnectingIconEffect,
+                        selectedParticleEnabled = settings.homeConnectingParticleEffectEnabled,
                         onChoose = { connectingImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
-                            val oldPath = scheme.homeConnectingImagePath
-                            viewModel.upsertSkinScheme(scheme.copy(homeConnectingImagePath = null))
+                            val oldPath = settings.homeConnectingImagePath
+                            updateGlobalSettings { copy(homeConnectingImagePath = null) }
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
                         },
-                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
-                            scheme.copy(homeConnectingIconEffect = effect)
-                        ) },
-                        onParticleEffectChanged = { enabled -> viewModel.upsertSkinScheme(
-                            scheme.copy(
+                        onEffectSelected = { effect -> updateGlobalSettings {
+                            copy(homeConnectingIconEffect = effect)
+                        } },
+                        onParticleEffectChanged = { enabled -> updateGlobalSettings {
+                            copy(
                                 homeConnectingParticleEffectEnabled = enabled,
                                 homeIconEffectEnabled = enabled ||
-                                    scheme.homeDisconnectedParticleEffectEnabled ||
-                                    scheme.homeDisconnectingParticleEffectEnabled ||
-                                    scheme.homeConnectedParticleEffectEnabled
+                                    homeDisconnectedParticleEffectEnabled ||
+                                    homeDisconnectingParticleEffectEnabled ||
+                                    homeConnectedParticleEffectEnabled
                             )
-                        ) }
+                        } }
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     HomeStateSettingsRow(
                         title = "断开中",
-                        imagePath = scheme.homeDisconnectingImagePath,
+                        imagePath = settings.homeDisconnectingImagePath,
                         state = VpnState.DISCONNECTING,
-                        selectedEffect = scheme.homeDisconnectingIconEffect,
-                        selectedParticleEnabled = scheme.homeDisconnectingParticleEffectEnabled,
+                        selectedEffect = settings.homeDisconnectingIconEffect,
+                        selectedParticleEnabled = settings.homeDisconnectingParticleEffectEnabled,
                         onChoose = { disconnectingImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
-                            val oldPath = scheme.homeDisconnectingImagePath
-                            viewModel.upsertSkinScheme(scheme.copy(homeDisconnectingImagePath = null))
+                            val oldPath = settings.homeDisconnectingImagePath
+                            updateGlobalSettings { copy(homeDisconnectingImagePath = null) }
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
                         },
-                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
-                            scheme.copy(homeDisconnectingIconEffect = effect)
-                        ) },
-                        onParticleEffectChanged = { enabled -> viewModel.upsertSkinScheme(
-                            scheme.copy(
+                        onEffectSelected = { effect -> updateGlobalSettings {
+                            copy(homeDisconnectingIconEffect = effect)
+                        } },
+                        onParticleEffectChanged = { enabled -> updateGlobalSettings {
+                            copy(
                                 homeDisconnectingParticleEffectEnabled = enabled,
                                 homeIconEffectEnabled = enabled ||
-                                    scheme.homeDisconnectedParticleEffectEnabled ||
-                                    scheme.homeConnectingParticleEffectEnabled ||
-                                    scheme.homeConnectedParticleEffectEnabled
+                                    homeDisconnectedParticleEffectEnabled ||
+                                    homeConnectingParticleEffectEnabled ||
+                                    homeConnectedParticleEffectEnabled
                             )
-                        ) }
+                        } }
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     HomeStateSettingsRow(
                         title = "已连接",
-                        imagePath = scheme.homeConnectedImagePath,
+                        imagePath = settings.homeConnectedImagePath,
                         state = VpnState.CONNECTED,
-                        selectedEffect = scheme.homeConnectedIconEffect,
-                        selectedParticleEnabled = scheme.homeConnectedParticleEffectEnabled,
+                        selectedEffect = settings.homeConnectedIconEffect,
+                        selectedParticleEnabled = settings.homeConnectedParticleEffectEnabled,
                         onChoose = { connectedImagePicker.launch(arrayOf("image/*")) },
                         onReset = {
-                            val oldPath = scheme.homeConnectedImagePath
-                            viewModel.upsertSkinScheme(scheme.copy(homeConnectedImagePath = null))
+                            val oldPath = settings.homeConnectedImagePath
+                            updateGlobalSettings { copy(homeConnectedImagePath = null) }
                             scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
                         },
-                        onEffectSelected = { effect -> viewModel.upsertSkinScheme(
-                            scheme.copy(homeConnectedIconEffect = effect)
-                        ) },
-                        onParticleEffectChanged = { enabled -> viewModel.upsertSkinScheme(
-                            scheme.copy(
+                        onEffectSelected = { effect -> updateGlobalSettings {
+                            copy(homeConnectedIconEffect = effect)
+                        } },
+                        onParticleEffectChanged = { enabled -> updateGlobalSettings {
+                            copy(
                                 homeConnectedParticleEffectEnabled = enabled,
                                 homeIconEffectEnabled = enabled ||
-                                    scheme.homeDisconnectedParticleEffectEnabled ||
-                                    scheme.homeConnectingParticleEffectEnabled ||
-                                    scheme.homeDisconnectingParticleEffectEnabled
+                                    homeDisconnectedParticleEffectEnabled ||
+                                    homeConnectingParticleEffectEnabled ||
+                                    homeDisconnectingParticleEffectEnabled
                             )
-                        ) }
+                        } }
                     )
                 }
             }
@@ -754,27 +726,27 @@ fun SkinSchemeEditorScreen(
                         val monetSwatchColor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                             dynamicLightColorScheme(context).primary
                         } else {
-                            Color(scheme.baseColorArgb)
+                            Color(settings.baseColorArgb)
                         }
                         SkinColorOption(
                             name = "莫奈色",
                             color = monetSwatchColor,
-                            selected = scheme.monetEnabled,
+                            selected = settings.monetEnabled,
                             onClick = {
-                                viewModel.upsertSkinScheme(scheme.copy(monetEnabled = true))
+                                updateGlobalSettings { copy(monetEnabled = true) }
                             }
                         )
                         EDITOR_PRESET_COLORS.forEach { (name, colorArgb) ->
                             SkinColorOption(
                                 name = name,
                                 color = Color(colorArgb),
-                                selected = !scheme.monetEnabled && scheme.baseColorArgb == colorArgb,
+                                selected = !settings.monetEnabled && settings.baseColorArgb == colorArgb,
                                 onClick = {
                                     colorInput = colorArgb.toSkinHex()
                                     colorError = false
-                                    viewModel.upsertSkinScheme(
-                                        scheme.copy(baseColorArgb = colorArgb, monetEnabled = false)
-                                    )
+                                    updateGlobalSettings {
+                                        copy(baseColorArgb = colorArgb, monetEnabled = false)
+                                    }
                                 }
                             )
                         }
@@ -783,58 +755,41 @@ fun SkinSchemeEditorScreen(
                     OutlinedTextField(
                         value = colorInput,
                         onValueChange = { value ->
-                            colorInput = value
+                            val normalizedValue = value
                                 .uppercase(Locale.US)
                                 .filter { it == '#' || it in '0'..'9' || it in 'A'..'F' }
                                 .take(7)
-                            colorError = false
+                            colorInput = normalizedValue
+                            val color = parseSkinColor(normalizedValue)
+                            colorError = normalizedValue.length == 7 && color == null
+                            if (color != null) {
+                                updateGlobalSettings {
+                                    copy(baseColorArgb = color, monetEnabled = false)
+                                }
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         label = { Text("颜色代码") },
                         placeholder = { Text("例如 #2979FF") },
-                        supportingText = if (colorError) {
-                            { Text("请输入 6 位十六进制颜色代码") }
-                        } else {
-                            null
+                        supportingText = {
+                            Text(
+                                if (colorError) "请输入 6 位十六进制颜色代码"
+                                else "输入完整颜色代码后立即生效"
+                            )
                         },
                         isError = colorError,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = {
-                            val color = parseSkinColor(colorInput)
-                            if (color == null) {
-                                colorError = true
-                            } else {
-                                colorError = false
-                                viewModel.upsertSkinScheme(
-                                    scheme.copy(baseColorArgb = color, monetEnabled = false)
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("应用颜色")
-                    }
                 }
             }
 
-            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
-            Button(
-                enabled = !isActive,
-                onClick = { viewModel.setActiveSkinScheme(scheme.id) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(if (isActive) "当前方案正在使用" else "应用此方案")
-            }
         }
     }
 }
 
 @Composable
-private fun NodeDisplaySchemeSwitchRow(
+private fun NodeDisplaySettingsSwitchRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit

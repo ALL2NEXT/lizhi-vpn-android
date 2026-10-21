@@ -1,7 +1,5 @@
 package io.github.HanJason233.chimera.data.model
 
-import java.util.UUID
-
 /** 主页连接图标可用的动画特效，后续可按需扩展。 */
 enum class HomeIconEffect(val storageName: String, val displayName: String) {
     RADIAL_PARTICLE("radial_particle", "环绕粒子");
@@ -27,14 +25,11 @@ enum class HomeIconMotionEffect(val storageName: String, val displayName: String
     }
 }
 
-/** 一个可切换、可编辑的主题方案。 */
-data class SkinScheme(
+/** 仅用于将旧版多主题配置迁移为一份全局外观设置。 */
+internal data class LegacySkinScheme(
     val id: String,
-    val name: String,
-    /** 与启动器名称一致的内置身份名称，显示名由图标预设 ID 决定。 */
-    val appDisplayName: String = DEFAULT_APP_DISPLAY_NAME,
-    /** 内置启动器名称与图标组合的稳定 ID。 */
-    val appIconPresetId: String = DEFAULT_APP_ICON_PRESET_ID,
+    val appDisplayName: String = SkinSettings.DEFAULT_APP_DISPLAY_NAME,
+    val appIconPresetId: String = SkinSettings.DEFAULT_APP_ICON_PRESET_ID,
     val baseColorArgb: Long = SkinSettings.DEFAULT_BASE_COLOR_ARGB,
     /** 主题模式，默认跟随系统。 */
     val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,
@@ -69,25 +64,14 @@ data class SkinScheme(
     val showNodeTransport: Boolean = false,
     val showNodeCore: Boolean = false
 ) {
-    val nodeDisplaySettings: NodeDisplaySettings
-        get() = NodeDisplaySettings(
-            showProtocol = showNodeProtocol,
-            showSecurity = showNodeSecurity,
-            showTransport = showNodeTransport,
-            showCore = showNodeCore
-        )
-
     val isDefault: Boolean
         get() = id == DEFAULT_SCHEME_ID
 
     companion object {
         const val DEFAULT_SCHEME_ID = "default"
-        const val DEFAULT_APP_DISPLAY_NAME = "Chimera"
-        const val DEFAULT_APP_ICON_PRESET_ID = "android"
 
-        fun default(): SkinScheme = SkinScheme(
+        fun default(): LegacySkinScheme = LegacySkinScheme(
             id = DEFAULT_SCHEME_ID,
-            name = "默认主题",
             themeMode = SkinThemeMode.SYSTEM,
             monetEnabled = true,
             homeIconEffectEnabled = false,
@@ -99,32 +83,50 @@ data class SkinScheme(
             homeConnectedParticleEffectEnabled = false
         )
 
-        fun create(name: String): SkinScheme = SkinScheme(
-            id = UUID.randomUUID().toString(),
-            name = name.trim().ifBlank { "我的主题" }
-        )
     }
 }
 
-/** 用户可持久化的应用主题配置。 */
+/** 应用唯一的全局外观配置，修改后直接作用于整个应用。 */
 data class SkinSettings(
+    /** 启动器图标预设决定应用显示名称和图标。 */
+    val appDisplayName: String = DEFAULT_APP_DISPLAY_NAME,
+    val appIconPresetId: String = DEFAULT_APP_ICON_PRESET_ID,
     val baseColorArgb: Long = DEFAULT_BASE_COLOR_ARGB,
     val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,
+    val navigationStyle: HomeNavigationStyle = HomeNavigationStyle.CLASSIC,
     val monetEnabled: Boolean = true,
+    /** 旧版自定义启动器图标路径，仅保留用于兼容读取。 */
     val customImagePath: String? = null,
     val homeDisconnectedImagePath: String? = null,
     val homeConnectingImagePath: String? = null,
     val homeDisconnectingImagePath: String? = null,
     val homeConnectedImagePath: String? = null,
-    val activeSchemeId: String = SkinScheme.DEFAULT_SCHEME_ID,
-    val schemes: List<SkinScheme> = listOf(SkinScheme.default())
+    val homeIconEffect: HomeIconEffect = HomeIconEffect.RADIAL_PARTICLE,
+    val homeIconEffectEnabled: Boolean = false,
+    val homeDisconnectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
+    val homeConnectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.ROTATE,
+    val homeDisconnectingIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.BREATHE,
+    val homeConnectedIconEffect: HomeIconMotionEffect = HomeIconMotionEffect.NONE,
+    val homeDisconnectedParticleEffectEnabled: Boolean = false,
+    val homeConnectingParticleEffectEnabled: Boolean = false,
+    val homeDisconnectingParticleEffectEnabled: Boolean = false,
+    val homeConnectedParticleEffectEnabled: Boolean = false,
+    val showNodeProtocol: Boolean = false,
+    val showNodeSecurity: Boolean = false,
+    val showNodeTransport: Boolean = false,
+    val showNodeCore: Boolean = false
 ) {
-    val activeScheme: SkinScheme
-        get() = schemes.firstOrNull { it.id == activeSchemeId }
-            ?: schemes.firstOrNull { it.isDefault }
-            ?: SkinScheme.default()
+    val nodeDisplaySettings: NodeDisplaySettings
+        get() = NodeDisplaySettings(
+            showProtocol = showNodeProtocol,
+            showSecurity = showNodeSecurity,
+            showTransport = showNodeTransport,
+            showCore = showNodeCore
+        )
 
     companion object {
+        const val DEFAULT_APP_DISPLAY_NAME = "Chimera"
+        const val DEFAULT_APP_ICON_PRESET_ID = "android"
         const val DEFAULT_BASE_COLOR_ARGB: Long = 0xFF37474FL
     }
 }

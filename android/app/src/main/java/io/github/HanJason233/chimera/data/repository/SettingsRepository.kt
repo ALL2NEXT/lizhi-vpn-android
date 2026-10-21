@@ -29,7 +29,7 @@ import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.data.model.ProxyCore
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.RegionLookupMethod
-import io.github.HanJason233.chimera.data.model.SkinScheme
+import io.github.HanJason233.chimera.data.model.LegacySkinScheme
 import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.SkinThemeMode
 import io.github.HanJason233.chimera.data.model.SpeedTestScheme
@@ -83,7 +83,7 @@ class SettingsRepository(
     companion object {
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
         private const val AUTO_REFRESH_SOURCE_PREFIX = "auto_refresh_source_on_startup:"
-        /** 默认测速与默认主题方案分别维护版本；升级后保存新版本并尊重后续修改。 */
+        /** 默认测速预置与旧版主题数据迁移分别维护版本。 */
         private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 3
         private const val DEFAULT_SKIN_PARTICLE_PRESET_REVISION = 1
         private const val DEFAULT_SKIN_PRESET_REVISION = 3
@@ -172,7 +172,7 @@ class SettingsRepository(
         private val HYSTERIA_UP_MBPS = intPreferencesKey("hysteria_up_mbps")
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
         private val CORE_ASSIGNMENTS = stringSetPreferencesKey("protocol_core_assignments")
-        // 迁移旧版全局节点标签设置；新值按主题方案保存。
+        // 迁移旧版全局节点标签设置；新值并入全局外观配置。
         private val NODE_LABEL_SHOW_PROTOCOL = booleanPreferencesKey("node_label_show_protocol")
         private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
         private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
@@ -186,8 +186,9 @@ class SettingsRepository(
             booleanPreferencesKey("auto_delete_low_bandwidth_nodes")
         private val AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS =
             intPreferencesKey("auto_delete_bandwidth_threshold_mbps")
-        private val SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
-        private val ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
+        private val SKIN_SETTINGS_JSON = stringPreferencesKey("skin_settings_json")
+        private val LEGACY_SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
+        private val LEGACY_ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
         private val SPEED_TEST_SCHEMES_JSON = stringPreferencesKey("speed_test_schemes_json")
 
     }
@@ -320,28 +321,8 @@ class SettingsRepository(
         }
     }
 
-    /** 皮肤配置，未设置时保持当前内置默认皮肤。 */
-    val skinSettings: Flow<SkinSettings> = store.data.map { preferences ->
-        val schemes = decodeSkinSchemes(preferences)
-        val activeId = preferences[ACTIVE_SKIN_SCHEME_ID]
-            ?.takeIf { id -> schemes.any { it.id == id } }
-            ?: schemes.firstOrNull { !it.isDefault }?.id
-            ?: SkinScheme.DEFAULT_SCHEME_ID
-        val activeScheme = schemes.firstOrNull { it.id == activeId }
-            ?: SkinScheme.default()
-        SkinSettings(
-            baseColorArgb = activeScheme.baseColorArgb,
-            themeMode = activeScheme.themeMode,
-            monetEnabled = activeScheme.monetEnabled,
-            customImagePath = activeScheme.customImagePath,
-            homeDisconnectedImagePath = activeScheme.homeDisconnectedImagePath,
-            homeConnectingImagePath = activeScheme.homeConnectingImagePath,
-            homeDisconnectingImagePath = activeScheme.homeDisconnectingImagePath,
-            homeConnectedImagePath = activeScheme.homeConnectedImagePath,
-            activeSchemeId = activeScheme.id,
-            schemes = schemes
-        )
-    }
+    /** 全局外观配置；旧版多主题数据在首次修改时迁移当前选中的主题。 */
+    val skinSettings: Flow<SkinSettings> = store.data.map(::decodeSkinSettings)
     
     val selectedSubscriptionSourceId: Flow<String?> = store.data.map { preferences ->
         preferences[SELECTED_SUBSCRIPTION_SOURCE_ID]
@@ -996,42 +977,19 @@ class SettingsRepository(
         }
     }
 
-    suspend fun upsertSkinScheme(scheme: SkinScheme, activate: Boolean = false) {
+    suspend fun updateSkinSettings(update: (SkinSettings) -> SkinSettings) {
         store.edit { preferences ->
-            val normalizedScheme = scheme.copy(
-                name = scheme.name.trim().ifBlank {
-                    if (scheme.isDefault) "默认方案" else "我的方案"
-                },
-                baseColorArgb = normalizeSkinColor(scheme.baseColorArgb)
+            val settings = update(decodeSkinSettings(preferences))
+            val normalizedSettings = settings.copy(
+                baseColorArgb = normalizeSkinColor(settings.baseColorArgb)
             )
-            val schemes = decodeSkinSchemes(preferences)
-                .filterNot { it.id == scheme.id } + normalizedScheme
-            preferences[SKIN_SCHEMES_JSON] = encodeSkinSchemes(schemes)
-            if (activate) {
-                preferences[ACTIVE_SKIN_SCHEME_ID] = scheme.id
-            }
-        }
-    }
-
-    suspend fun setActiveSkinScheme(schemeId: String) {
-        store.edit { preferences ->
-            if (decodeSkinSchemes(preferences).any { it.id == schemeId }) {
-                preferences[ACTIVE_SKIN_SCHEME_ID] = schemeId
-            }
-        }
-    }
-
-    suspend fun deleteSkinScheme(schemeId: String) {
-        if (schemeId == SkinScheme.DEFAULT_SCHEME_ID) return
-        store.edit { preferences ->
-            val schemes = decodeSkinSchemes(preferences)
-            if (schemes.none { it.id == schemeId }) return@edit
-            preferences[SKIN_SCHEMES_JSON] = encodeSkinSchemes(
-                schemes.filterNot { it.id == schemeId }
-            )
-            if (preferences[ACTIVE_SKIN_SCHEME_ID] == schemeId) {
-                preferences[ACTIVE_SKIN_SCHEME_ID] = SkinScheme.DEFAULT_SCHEME_ID
-            }
+            preferences[SKIN_SETTINGS_JSON] = encodeSkinSettings(normalizedSettings)
+            preferences.remove(LEGACY_SKIN_SCHEMES_JSON)
+            preferences.remove(LEGACY_ACTIVE_SKIN_SCHEME_ID)
+            preferences.remove(NODE_LABEL_SHOW_PROTOCOL)
+            preferences.remove(NODE_LABEL_SHOW_SECURITY)
+            preferences.remove(NODE_LABEL_SHOW_TRANSPORT)
+            preferences.remove(NODE_LABEL_SHOW_CORE)
         }
     }
     
@@ -1765,15 +1723,180 @@ class SettingsRepository(
         return array.toString()
     }
 
-    private fun decodeSkinSchemes(preferences: Preferences): List<SkinScheme> {
-        fun defaultSchemeWithLegacyNodeDisplaySettings(): SkinScheme = SkinScheme.default().copy(
-            showNodeProtocol = preferences[NODE_LABEL_SHOW_PROTOCOL] ?: false,
-            showNodeSecurity = preferences[NODE_LABEL_SHOW_SECURITY] ?: false,
-            showNodeTransport = preferences[NODE_LABEL_SHOW_TRANSPORT] ?: false,
-            showNodeCore = preferences[NODE_LABEL_SHOW_CORE] ?: false
-        )
+    private fun decodeSkinSettings(preferences: Preferences): SkinSettings {
+        val storedSettings = preferences[SKIN_SETTINGS_JSON]
+            ?.takeIf(String::isNotBlank)
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+        if (storedSettings != null) {
+            val defaults = SkinSettings()
+            fun optionalPath(key: String): String? = storedSettings.optString(key)
+                .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() }
 
-        val storedJson = preferences[SKIN_SCHEMES_JSON]
+            return SkinSettings(
+                appDisplayName = storedSettings.optString(
+                    "appDisplayName",
+                    SkinSettings.DEFAULT_APP_DISPLAY_NAME
+                ).trim().ifBlank { SkinSettings.DEFAULT_APP_DISPLAY_NAME }
+                    .let { if (it == "Firefly") "Chimera" else it },
+                appIconPresetId = storedSettings.optString(
+                    "appIconPresetId",
+                    SkinSettings.DEFAULT_APP_ICON_PRESET_ID
+                ).trim().ifBlank { SkinSettings.DEFAULT_APP_ICON_PRESET_ID },
+                baseColorArgb = normalizeSkinColor(
+                    storedSettings.optLong("baseColorArgb", defaults.baseColorArgb)
+                ),
+                themeMode = SkinThemeMode.fromStorage(
+                    storedSettings.optString("themeMode").takeIf(String::isNotBlank)
+                ),
+                navigationStyle = HomeNavigationStyle.fromStorage(
+                    storedSettings.optString("navigationStyle").takeIf(String::isNotBlank)
+                ),
+                monetEnabled = storedSettings.optBoolean("monetEnabled", defaults.monetEnabled),
+                customImagePath = optionalPath("customImagePath"),
+                homeDisconnectedImagePath = optionalPath("homeDisconnectedImagePath"),
+                homeConnectingImagePath = optionalPath("homeConnectingImagePath"),
+                homeDisconnectingImagePath = optionalPath("homeDisconnectingImagePath"),
+                homeConnectedImagePath = optionalPath("homeConnectedImagePath"),
+                homeIconEffect = HomeIconEffect.fromStorage(
+                    storedSettings.optString("homeIconEffect").takeIf(String::isNotBlank)
+                ),
+                homeIconEffectEnabled = storedSettings.optBoolean(
+                    "homeIconEffectEnabled",
+                    defaults.homeIconEffectEnabled
+                ),
+                homeDisconnectedIconEffect = HomeIconMotionEffect.fromStorage(
+                    storedSettings.optString(
+                        "homeDisconnectedIconEffect",
+                        defaults.homeDisconnectedIconEffect.storageName
+                    ).takeIf(String::isNotBlank)
+                ),
+                homeConnectingIconEffect = HomeIconMotionEffect.fromStorage(
+                    storedSettings.optString(
+                        "homeConnectingIconEffect",
+                        defaults.homeConnectingIconEffect.storageName
+                    ).takeIf(String::isNotBlank)
+                ),
+                homeDisconnectingIconEffect = HomeIconMotionEffect.fromStorage(
+                    storedSettings.optString(
+                        "homeDisconnectingIconEffect",
+                        defaults.homeDisconnectingIconEffect.storageName
+                    ).takeIf(String::isNotBlank)
+                ),
+                homeConnectedIconEffect = HomeIconMotionEffect.fromStorage(
+                    storedSettings.optString(
+                        "homeConnectedIconEffect",
+                        defaults.homeConnectedIconEffect.storageName
+                    ).takeIf(String::isNotBlank)
+                ),
+                homeDisconnectedParticleEffectEnabled = storedSettings.optBoolean(
+                    "homeDisconnectedParticleEffectEnabled",
+                    defaults.homeDisconnectedParticleEffectEnabled
+                ),
+                homeConnectingParticleEffectEnabled = storedSettings.optBoolean(
+                    "homeConnectingParticleEffectEnabled",
+                    defaults.homeConnectingParticleEffectEnabled
+                ),
+                homeDisconnectingParticleEffectEnabled = storedSettings.optBoolean(
+                    "homeDisconnectingParticleEffectEnabled",
+                    defaults.homeDisconnectingParticleEffectEnabled
+                ),
+                homeConnectedParticleEffectEnabled = storedSettings.optBoolean(
+                    "homeConnectedParticleEffectEnabled",
+                    defaults.homeConnectedParticleEffectEnabled
+                ),
+                showNodeProtocol = storedSettings.optBoolean(
+                    "showNodeProtocol",
+                    defaults.showNodeProtocol
+                ),
+                showNodeSecurity = storedSettings.optBoolean(
+                    "showNodeSecurity",
+                    defaults.showNodeSecurity
+                ),
+                showNodeTransport = storedSettings.optBoolean(
+                    "showNodeTransport",
+                    defaults.showNodeTransport
+                ),
+                showNodeCore = storedSettings.optBoolean("showNodeCore", defaults.showNodeCore)
+            )
+        }
+
+        // 迁移时沿用旧版当前选中的主题；没有选择记录时与旧版一样优先采用首个自定义主题。
+        val legacySchemes = decodeLegacySkinSchemes(preferences)
+        val activeId = preferences[LEGACY_ACTIVE_SKIN_SCHEME_ID]
+            ?.takeIf { id -> legacySchemes.any { it.id == id } }
+            ?: legacySchemes.firstOrNull { !it.isDefault }?.id
+            ?: LegacySkinScheme.DEFAULT_SCHEME_ID
+        return legacySchemes.firstOrNull { it.id == activeId }
+            ?.toSkinSettings()
+            ?: LegacySkinScheme.default().toSkinSettings()
+    }
+
+    private fun LegacySkinScheme.toSkinSettings() = SkinSettings(
+        appDisplayName = appDisplayName,
+        appIconPresetId = appIconPresetId,
+        baseColorArgb = baseColorArgb,
+        themeMode = themeMode,
+        navigationStyle = navigationStyle,
+        monetEnabled = monetEnabled,
+        customImagePath = customImagePath,
+        homeDisconnectedImagePath = homeDisconnectedImagePath,
+        homeConnectingImagePath = homeConnectingImagePath,
+        homeDisconnectingImagePath = homeDisconnectingImagePath,
+        homeConnectedImagePath = homeConnectedImagePath,
+        homeIconEffect = homeIconEffect,
+        homeIconEffectEnabled = homeIconEffectEnabled,
+        homeDisconnectedIconEffect = homeDisconnectedIconEffect,
+        homeConnectingIconEffect = homeConnectingIconEffect,
+        homeDisconnectingIconEffect = homeDisconnectingIconEffect,
+        homeConnectedIconEffect = homeConnectedIconEffect,
+        homeDisconnectedParticleEffectEnabled = homeDisconnectedParticleEffectEnabled,
+        homeConnectingParticleEffectEnabled = homeConnectingParticleEffectEnabled,
+        homeDisconnectingParticleEffectEnabled = homeDisconnectingParticleEffectEnabled,
+        homeConnectedParticleEffectEnabled = homeConnectedParticleEffectEnabled,
+        showNodeProtocol = showNodeProtocol,
+        showNodeSecurity = showNodeSecurity,
+        showNodeTransport = showNodeTransport,
+        showNodeCore = showNodeCore
+    )
+
+    private fun encodeSkinSettings(settings: SkinSettings): String = JSONObject().apply {
+        put("appDisplayName", settings.appDisplayName)
+        put("appIconPresetId", settings.appIconPresetId)
+        put("baseColorArgb", normalizeSkinColor(settings.baseColorArgb))
+        put("themeMode", settings.themeMode.storageName)
+        put("navigationStyle", settings.navigationStyle.storageName)
+        put("monetEnabled", settings.monetEnabled)
+        settings.customImagePath?.let { put("customImagePath", it) }
+        settings.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }
+        settings.homeConnectingImagePath?.let { put("homeConnectingImagePath", it) }
+        settings.homeDisconnectingImagePath?.let { put("homeDisconnectingImagePath", it) }
+        settings.homeConnectedImagePath?.let { put("homeConnectedImagePath", it) }
+        put("homeIconEffect", settings.homeIconEffect.storageName)
+        put("homeIconEffectEnabled", settings.homeIconEffectEnabled)
+        put("homeDisconnectedIconEffect", settings.homeDisconnectedIconEffect.storageName)
+        put("homeConnectingIconEffect", settings.homeConnectingIconEffect.storageName)
+        put("homeDisconnectingIconEffect", settings.homeDisconnectingIconEffect.storageName)
+        put("homeConnectedIconEffect", settings.homeConnectedIconEffect.storageName)
+        put("homeDisconnectedParticleEffectEnabled", settings.homeDisconnectedParticleEffectEnabled)
+        put("homeConnectingParticleEffectEnabled", settings.homeConnectingParticleEffectEnabled)
+        put("homeDisconnectingParticleEffectEnabled", settings.homeDisconnectingParticleEffectEnabled)
+        put("homeConnectedParticleEffectEnabled", settings.homeConnectedParticleEffectEnabled)
+        put("showNodeProtocol", settings.showNodeProtocol)
+        put("showNodeSecurity", settings.showNodeSecurity)
+        put("showNodeTransport", settings.showNodeTransport)
+        put("showNodeCore", settings.showNodeCore)
+    }.toString()
+
+    private fun decodeLegacySkinSchemes(preferences: Preferences): List<LegacySkinScheme> {
+        fun defaultSchemeWithLegacyNodeDisplaySettings(): LegacySkinScheme =
+            LegacySkinScheme.default().copy(
+                showNodeProtocol = preferences[NODE_LABEL_SHOW_PROTOCOL] ?: false,
+                showNodeSecurity = preferences[NODE_LABEL_SHOW_SECURITY] ?: false,
+                showNodeTransport = preferences[NODE_LABEL_SHOW_TRANSPORT] ?: false,
+                showNodeCore = preferences[NODE_LABEL_SHOW_CORE] ?: false
+            )
+
+        val storedJson = preferences[LEGACY_SKIN_SCHEMES_JSON]
         if (!storedJson.isNullOrBlank()) {
             val storedSchemes = runCatching {
                 val array = JSONArray(storedJson)
@@ -1788,15 +1911,15 @@ class SettingsRepository(
                             false
                         )
                         val defaultsVersion = item.optInt("defaultsVersion", 0)
-                        if (id == SkinScheme.DEFAULT_SCHEME_ID &&
+                        if (id == LegacySkinScheme.DEFAULT_SCHEME_ID &&
                             defaultsVersion < DEFAULT_SKIN_PARTICLE_PRESET_REVISION
                         ) {
-                            item.put("homeIconEffectEnabled", SkinScheme.default().homeIconEffectEnabled)
+                            item.put("homeIconEffectEnabled", LegacySkinScheme.default().homeIconEffectEnabled)
                         }
-                        if (id == SkinScheme.DEFAULT_SCHEME_ID &&
+                        if (id == LegacySkinScheme.DEFAULT_SCHEME_ID &&
                             defaultsVersion < DEFAULT_SKIN_PRESET_REVISION
                         ) {
-                            val defaultScheme = SkinScheme.default()
+                            val defaultScheme = LegacySkinScheme.default()
                             // Revert the just introduced defaults when upgrading from revision 2.
                             if (defaultsVersion >= 2 &&
                                 item.optString("homeDisconnectedIconEffect") ==
@@ -1834,23 +1957,20 @@ class SettingsRepository(
                         // 旧版只有统一粒子开关，新字段缺失时沿用旧设置作为四种状态的初始值。
                         val legacyHomeIconEffectEnabled = item.optBoolean(
                             "homeIconEffectEnabled",
-                            id != SkinScheme.DEFAULT_SCHEME_ID
+                            id != LegacySkinScheme.DEFAULT_SCHEME_ID
                         )
                         add(
-                            SkinScheme(
+                            LegacySkinScheme(
                                 id = id,
-                                name = item.optString("name", "我的主题")
-                                    .trim()
-                                    .ifBlank { "我的主题" },
                                 appDisplayName = item.optString(
                                     "appDisplayName",
-                                    SkinScheme.DEFAULT_APP_DISPLAY_NAME
-                                ).trim().ifBlank { SkinScheme.DEFAULT_APP_DISPLAY_NAME }
+                                    SkinSettings.DEFAULT_APP_DISPLAY_NAME
+                                ).trim().ifBlank { SkinSettings.DEFAULT_APP_DISPLAY_NAME }
                                     .let { if (it == "Firefly") "Chimera" else it },
                                 appIconPresetId = item.optString(
                                     "appIconPresetId",
-                                    SkinScheme.DEFAULT_APP_ICON_PRESET_ID
-                                ).trim().ifBlank { SkinScheme.DEFAULT_APP_ICON_PRESET_ID },
+                                    SkinSettings.DEFAULT_APP_ICON_PRESET_ID
+                                ).trim().ifBlank { SkinSettings.DEFAULT_APP_ICON_PRESET_ID },
                                 baseColorArgb = normalizeSkinColor(
                                     item.optLong(
                                         "baseColorArgb",
@@ -1895,7 +2015,7 @@ class SettingsRepository(
                                 ),
                                 homeIconEffectEnabled = item.optBoolean(
                                     "homeIconEffectEnabled",
-                                    id != SkinScheme.DEFAULT_SCHEME_ID
+                                    id != LegacySkinScheme.DEFAULT_SCHEME_ID
                                 ),
                                 homeDisconnectedParticleEffectEnabled = item.optBoolean(
                                     "homeDisconnectedParticleEffectEnabled",
@@ -1952,47 +2072,6 @@ class SettingsRepository(
         }
 
         return listOf(defaultSchemeWithLegacyNodeDisplaySettings())
-    }
-
-    private fun encodeSkinSchemes(schemes: List<SkinScheme>): String {
-        val array = JSONArray()
-        schemes
-            .distinctBy { it.id }
-            .forEach { scheme ->
-                array.put(
-                    JSONObject().apply {
-                        put("id", scheme.id)
-                        if (scheme.isDefault) put("defaultsVersion", DEFAULT_SKIN_PRESET_REVISION)
-                        put("name", scheme.name)
-                        put("appDisplayName", scheme.appDisplayName)
-                        put("appIconPresetId", scheme.appIconPresetId)
-                        put("baseColorArgb", normalizeSkinColor(scheme.baseColorArgb))
-                        put("showNodeProtocol", scheme.showNodeProtocol)
-                        put("showNodeSecurity", scheme.showNodeSecurity)
-                        put("showNodeTransport", scheme.showNodeTransport)
-                        put("showNodeCore", scheme.showNodeCore)
-                        put("themeMode", scheme.themeMode.storageName)
-                        put("navigationStyle", scheme.navigationStyle.storageName)
-                        put("monetEnabled", scheme.monetEnabled)
-                        scheme.customImagePath?.let { put("customImagePath", it) }
-                        scheme.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }
-                        scheme.homeConnectingImagePath?.let { put("homeConnectingImagePath", it) }
-                        scheme.homeDisconnectingImagePath?.let { put("homeDisconnectingImagePath", it) }
-                        scheme.homeConnectedImagePath?.let { put("homeConnectedImagePath", it) }
-                        put("homeIconEffect", scheme.homeIconEffect.storageName)
-                        put("homeIconEffectEnabled", scheme.homeIconEffectEnabled)
-                        put("homeDisconnectedIconEffect", scheme.homeDisconnectedIconEffect.storageName)
-                        put("homeConnectingIconEffect", scheme.homeConnectingIconEffect.storageName)
-                        put("homeDisconnectingIconEffect", scheme.homeDisconnectingIconEffect.storageName)
-                        put("homeConnectedIconEffect", scheme.homeConnectedIconEffect.storageName)
-                        put("homeDisconnectedParticleEffectEnabled", scheme.homeDisconnectedParticleEffectEnabled)
-                        put("homeConnectingParticleEffectEnabled", scheme.homeConnectingParticleEffectEnabled)
-                        put("homeDisconnectingParticleEffectEnabled", scheme.homeDisconnectingParticleEffectEnabled)
-                        put("homeConnectedParticleEffectEnabled", scheme.homeConnectedParticleEffectEnabled)
-                    }
-                )
-            }
-        return array.toString()
     }
 
 }

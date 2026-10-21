@@ -57,8 +57,7 @@ import io.github.HanJason233.chimera.ui.screens.CoreRoutingScreen
 import io.github.HanJason233.chimera.ui.screens.SplitRoutingSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.RoutingAssetsScreen
 import io.github.HanJason233.chimera.ui.screens.QrScannerScreen
-import io.github.HanJason233.chimera.ui.screens.SkinScreen
-import io.github.HanJason233.chimera.ui.screens.SkinSchemeEditorScreen
+import io.github.HanJason233.chimera.ui.screens.SkinSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.StartupAccountScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemeEditorScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemesScreen
@@ -100,10 +99,10 @@ class MainActivity : ComponentActivity() {
             val isStartupAccountActionInProgress by
                 viewModel.isStartupAccountActionInProgress.collectAsStateWithLifecycle()
             val accountMessage by viewModel.accountMessage.collectAsStateWithLifecycle()
-            LaunchedEffect(skinSettings.activeScheme.appIconPresetId) {
+            LaunchedEffect(skinSettings.appIconPresetId) {
                 LauncherIdentityManager.apply(
                     this@MainActivity,
-                    skinSettings.activeScheme.appIconPresetId
+                    skinSettings.appIconPresetId
                 )
             }
             ChimeraTheme(skinSettings = skinSettings) {
@@ -309,7 +308,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         },
-                                        navigationStyle = skinSettings.activeScheme.navigationStyle,
+                                        navigationStyle = skinSettings.navigationStyle,
                                         bottomNavigationDestination =
                                             selectedDestination,
                                         onBottomNavigationDestinationSelected =
@@ -328,7 +327,7 @@ class MainActivity : ComponentActivity() {
                                             selectedDestination = selectedDestination,
                                             onDestinationSelected =
                                                 onBottomNavigationDestinationSelected,
-                                            navigationStyle = skinSettings.activeScheme.navigationStyle
+                                            navigationStyle = skinSettings.navigationStyle
                                         ) {
                                             NodeGroupingDestination(
                                                 groupingMode = groupingMode,
@@ -395,7 +394,7 @@ class MainActivity : ComponentActivity() {
                                             selectedDestination = selectedDestination,
                                             onDestinationSelected =
                                                 onBottomNavigationDestinationSelected,
-                                            navigationStyle = skinSettings.activeScheme.navigationStyle
+                                            navigationStyle = skinSettings.navigationStyle
                                         ) {
                                             // “我的”总览直接作为底部标签页内容展示。
                                             AccountSettingsScreen(
@@ -535,19 +534,8 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable(AppRoute.SKIN) {
-                                SkinScreen(
+                                SkinSettingsScreen(
                                     viewModel = viewModel,
-                                    onOpenEditor = { schemeId ->
-                                        navigateTo(AppRoute.skinEditor(schemeId))
-                                    },
-                                    onBack = { navController.popBackStack() }
-                                )
-                            }
-
-                            composable(AppRoute.SKIN_EDITOR) { backStackEntry ->
-                                SkinSchemeEditorScreen(
-                                    viewModel = viewModel,
-                                    schemeId = backStackEntry.arguments?.getString("schemeId").orEmpty(),
                                     onBack = { navController.popBackStack() }
                                 )
                             }

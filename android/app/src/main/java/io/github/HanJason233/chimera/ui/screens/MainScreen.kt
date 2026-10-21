@@ -137,7 +137,7 @@ fun MainScreen(
                     onOpenSpeedTestSchemes = { closeDrawerThen(onOpenSpeedTestSchemes) },
                     onOpenSkin = { closeDrawerThen(onOpenSkin) },
                     appDisplayName = LauncherIdentityPresets.find(
-                        skinSettings.activeScheme.appIconPresetId
+                        skinSettings.appIconPresetId
                     ).displayName,
                 )
             }
@@ -173,7 +173,7 @@ fun MainScreen(
                     title = {
                         Text(
                             text = LauncherIdentityPresets.find(
-                                skinSettings.activeScheme.appIconPresetId
+                                skinSettings.appIconPresetId
                             ).displayName,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
@@ -280,15 +280,15 @@ fun MainScreen(
                             customConnectingImagePath = skinSettings.homeConnectingImagePath,
                             customDisconnectingImagePath = skinSettings.homeDisconnectingImagePath,
                             customConnectedImagePath = skinSettings.homeConnectedImagePath,
-                            homeIconEffect = skinSettings.activeScheme.homeIconEffect,
-                            disconnectedParticleEffectEnabled = skinSettings.activeScheme.homeDisconnectedParticleEffectEnabled,
-                            connectingParticleEffectEnabled = skinSettings.activeScheme.homeConnectingParticleEffectEnabled,
-                            disconnectingParticleEffectEnabled = skinSettings.activeScheme.homeDisconnectingParticleEffectEnabled,
-                            connectedParticleEffectEnabled = skinSettings.activeScheme.homeConnectedParticleEffectEnabled,
-                            disconnectedIconEffect = skinSettings.activeScheme.homeDisconnectedIconEffect,
-                            connectingIconEffect = skinSettings.activeScheme.homeConnectingIconEffect,
-                            disconnectingIconEffect = skinSettings.activeScheme.homeDisconnectingIconEffect,
-                            connectedIconEffect = skinSettings.activeScheme.homeConnectedIconEffect,
+                            homeIconEffect = skinSettings.homeIconEffect,
+                            disconnectedParticleEffectEnabled = skinSettings.homeDisconnectedParticleEffectEnabled,
+                            connectingParticleEffectEnabled = skinSettings.homeConnectingParticleEffectEnabled,
+                            disconnectingParticleEffectEnabled = skinSettings.homeDisconnectingParticleEffectEnabled,
+                            connectedParticleEffectEnabled = skinSettings.homeConnectedParticleEffectEnabled,
+                            disconnectedIconEffect = skinSettings.homeDisconnectedIconEffect,
+                            connectingIconEffect = skinSettings.homeConnectingIconEffect,
+                            disconnectingIconEffect = skinSettings.homeDisconnectingIconEffect,
+                            connectedIconEffect = skinSettings.homeConnectedIconEffect,
                             onClick = {
                                 if (!isTesting) {
                                     when (vpnState) {

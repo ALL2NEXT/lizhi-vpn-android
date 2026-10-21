@@ -383,7 +383,7 @@ fun AccountSettingsScreen(
         )
     }
     if (showAboutDialog) {
-        val appIdentity = LauncherIdentityPresets.find(skinSettings.activeScheme.appIconPresetId)
+        val appIdentity = LauncherIdentityPresets.find(skinSettings.appIconPresetId)
         AboutDialog(
             githubUrl = backendSettings.githubUrl,
             websiteUrl = backendSettings.websiteUrl,
