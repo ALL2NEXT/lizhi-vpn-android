@@ -146,7 +146,11 @@ class BoxVpnService : VpnService() {
                     if (!preserveFailoverState) failoverPrimaryNode = node
                     val failoverSettings = settingsRepo.failoverSettings.first()
                     val failoverCandidates = if (failoverSettings.detection.enabled) {
-                        resolveFailoverCandidates(failoverSettings.transfer.target, settingsRepo)
+                        resolveFailoverCandidates(
+                            failoverSettings.transfer.strategy,
+                            node.id,
+                            settingsRepo
+                        )
                             .filterNot { it.id == node.id }
                     } else {
                         emptyList()
@@ -264,8 +268,10 @@ class BoxVpnService : VpnService() {
                         when {
                             settingsChanged -> "故障转移设置已更改，重连后生效"
                             !loadedSettings.detection.enabled -> "故障检测已关闭"
-                            loadedSettings.transfer.target == null -> "请设置备用节点或节点组"
-                            else -> "转移目标中没有当前核心支持的备用节点"
+                            loadedSettings.transfer.strategy == null -> "请设置转移策略"
+                            loadedSettings.transfer.strategy == FailoverTransferStrategy.SecondBestTestResult ->
+                                "没有可用的第二名测速线路，请先完成 URL 测速"
+                            else -> "转移策略中没有当前核心支持的备用节点"
                         },
                         primaryNode.id
                     )
@@ -319,7 +325,7 @@ class BoxVpnService : VpnService() {
                         } else null
                         val activeHealthy = activeProbe.await()
 
-                        // 当前节点首次超时就立即预检转移目标；之后不再周期探测这些备用节点。
+                        // 当前节点首次超时就立即预检策略选出的备用线路；之后不再周期探测。
                         if (!activeHealthy && warmupAttemptedFor != current.id) {
                             warmupAttemptedFor = current.id
                             warmedCandidate = null
@@ -391,7 +397,7 @@ class BoxVpnService : VpnService() {
                             primaryRecoverySuccesses = 0
                             val message = if (consecutiveFailures < FailoverDetectionSettings.CONSECUTIVE_FAILURE_THRESHOLD) {
                                 if (current.id == primaryNode.id) {
-                                    "主节点首次探测超时，正在预检转移目标"
+                                    "主节点首次探测超时，正在预检备用线路"
                                 } else {
                                     "备用节点首次探测超时，正在预检其他转移节点"
                                 }
@@ -433,7 +439,7 @@ class BoxVpnService : VpnService() {
                                 } else {
                                     ServiceManager.notifyFailoverStatus(
                                         FailoverRuntimeState.NO_BACKUP,
-                                        "转移目标探测失败，没有可用节点",
+                                        "备用线路预检失败，没有可用线路",
                                         current.id
                                     )
                                 }
@@ -548,14 +554,16 @@ class BoxVpnService : VpnService() {
     }
 
     private suspend fun resolveFailoverCandidates(
-        target: FailoverTransferTarget?,
+        strategy: FailoverTransferStrategy?,
+        primaryNodeId: String,
         settingsRepository: SettingsRepository
     ): List<Node> {
-        if (target == null) return emptyList()
+        if (strategy == null) return emptyList()
         val dao = AppDatabase.getInstance(applicationContext).nodeDao()
-        val candidates = when (target) {
-            is FailoverTransferTarget.Node -> listOfNotNull(dao.getNodeById(target.nodeId))
-            is FailoverTransferTarget.Group -> when (val group = NodeGroupKey.parse(target.groupId)) {
+        val candidates = when (strategy) {
+            is FailoverTransferStrategy.SpecifiedNode ->
+                listOfNotNull(dao.getNodeById(strategy.nodeId))
+            is FailoverTransferStrategy.SpecifiedGroup -> when (val group = NodeGroupKey.parse(strategy.groupId)) {
                 is NodeGroupKey.Subscription -> dao.getSubscriptionNodes().first()
                     .filter { it.subscriptionSourceId == group.sourceId }
                 is NodeGroupKey.Imported -> dao.getNodesByGroup(group.groupId).first()
@@ -565,6 +573,26 @@ class BoxVpnService : VpnService() {
                     selectedSourceIds = settingsRepository.countryGroupingSourceIds.first()
                 ).filter { it.getCountryCode() == group.countryCode }
                 null -> emptyList()
+            }
+            FailoverTransferStrategy.SecondBestTestResult -> {
+                val rankedNodes = dao.getAllNodes().first()
+                    .filter {
+                        it.urlTestLatency > 0 && it.type != NodeType.UNKNOWN && it.server.isNotBlank() &&
+                            it.port in 1..65_535
+                    }
+                    .sortedWith(
+                        compareBy<Node> { it.urlTestLatency }
+                            .thenBy { it.sortOrder }
+                            .thenBy { it.id }
+                    )
+                val runnerUp = rankedNodes.getOrNull(1)
+                val selected = if (runnerUp?.id == primaryNodeId) {
+                    // 当前线路本身排第二时顺延到下一条可用线路，避免故障后选回当前线路。
+                    rankedNodes.drop(2).firstOrNull { it.id != primaryNodeId }
+                } else {
+                    runnerUp
+                }
+                listOfNotNull(selected)
             }
         }
         return candidates.distinctBy(Node::id).filter {

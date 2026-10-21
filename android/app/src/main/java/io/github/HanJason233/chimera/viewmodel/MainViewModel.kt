@@ -449,7 +449,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 WarehouseGroupingCountryResolver.filter(nodes, countryCodes)
             }
 
-    /** 按故障转移目标组加载组内节点，避免在选择入口展示全部节点。 */
+    /** 按故障转移指定组加载组内节点，避免在线路选择入口展示全部节点。 */
     fun observeFailoverTargetGroupNodes(groupId: String): Flow<List<Node>> =
         when (val group = NodeGroupKey.parse(groupId)) {
             is NodeGroupKey.Subscription -> nodeDaoFlow.flatMapLatest {
@@ -2666,8 +2666,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsRepository.setFailoverDetectionEnabled(enabled) }
     }
 
-    fun setFailoverTransferTarget(target: FailoverTransferTarget?) {
-        viewModelScope.launch { settingsRepository.setFailoverTransferTarget(target) }
+    fun setFailoverTransferStrategy(strategy: FailoverTransferStrategy?) {
+        viewModelScope.launch { settingsRepository.setFailoverTransferStrategy(strategy) }
     }
 
     fun setHomeLongPressSpeedTestScheme(schemeId: String) {

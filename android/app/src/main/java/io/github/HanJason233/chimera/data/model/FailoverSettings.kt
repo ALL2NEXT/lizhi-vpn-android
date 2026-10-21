@@ -19,14 +19,15 @@ data class FailoverDetectionSettings(
     }
 }
 
-/** 故障时使用单个备用节点，或从指定节点组中随机挑选节点。 */
-sealed interface FailoverTransferTarget {
-    data class Node(val nodeId: String) : FailoverTransferTarget
-    data class Group(val groupId: String) : FailoverTransferTarget
+/** 故障确认后选择备用线路的策略。 */
+sealed interface FailoverTransferStrategy {
+    data class SpecifiedNode(val nodeId: String) : FailoverTransferStrategy
+    data class SpecifiedGroup(val groupId: String) : FailoverTransferStrategy
+    data object SecondBestTestResult : FailoverTransferStrategy
 }
 
 data class FailoverTransferSettings(
-    val target: FailoverTransferTarget? = null
+    val strategy: FailoverTransferStrategy? = null
 )
 
 enum class FailoverRuntimeState {

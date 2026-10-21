@@ -35,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -75,7 +76,7 @@ import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
 import io.github.HanJason233.chimera.data.model.FailoverRuntimeStatus
 import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
-import io.github.HanJason233.chimera.data.model.FailoverTransferTarget
+import io.github.HanJason233.chimera.data.model.FailoverTransferStrategy
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
@@ -372,7 +373,7 @@ private fun OutboundContent(viewModel: MainViewModel) {
                 nodes = availableNodes,
                 groups = failoverGroups,
                 viewModel = viewModel,
-                onChange = viewModel::setFailoverTransferTarget
+                onChange = viewModel::setFailoverTransferStrategy
             )
         }
     }
@@ -470,6 +471,11 @@ private data class FailoverGroupOption(
     val nodeCount: Int
 )
 
+private enum class FailoverTransferPickerMode {
+    NODE,
+    GROUP
+}
+
 @Composable
 private fun FailoverTransferCard(
     settings: FailoverTransferSettings,
@@ -477,20 +483,22 @@ private fun FailoverTransferCard(
     nodes: List<io.github.HanJason233.chimera.data.model.Node>,
     groups: List<FailoverGroupOption>,
     viewModel: MainViewModel,
-    onChange: (FailoverTransferTarget?) -> Unit
+    onChange: (FailoverTransferStrategy?) -> Unit
 ) {
     var showPicker by remember { mutableStateOf(false) }
+    var pickerMode by remember { mutableStateOf(FailoverTransferPickerMode.NODE) }
     var nodePickerGroupId by remember { mutableStateOf<String?>(null) }
-    val targetLabel = when (val target = settings.target) {
-        is FailoverTransferTarget.Node -> {
-            val nodeName = nodes.firstOrNull { it.id == target.nodeId }?.name ?: "节点已删除"
-            "固定节点：$nodeName"
+    val strategyLabel = when (val strategy = settings.strategy) {
+        is FailoverTransferStrategy.SpecifiedNode -> {
+            val nodeName = nodes.firstOrNull { it.id == strategy.nodeId }?.name ?: "线路已删除"
+            "指定线路：$nodeName"
         }
-        is FailoverTransferTarget.Group -> {
-            val groupName = groups.firstOrNull { it.id == target.groupId }?.name ?: "节点组已删除"
-            "随机组内节点：$groupName"
+        is FailoverTransferStrategy.SpecifiedGroup -> {
+            val groupName = groups.firstOrNull { it.id == strategy.groupId }?.name ?: "节点组已删除"
+            "指定组：$groupName"
         }
-        null -> "尚未选择备用目标"
+        FailoverTransferStrategy.SecondBestTestResult -> "测试结果第二名"
+        null -> "尚未选择转移策略"
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -501,30 +509,51 @@ private fun FailoverTransferCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "转移目标",
+                text = "转移策略",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = targetLabel,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                TextButton(onClick = {
+            Text(
+                text = strategyLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            FailoverTransferStrategyOption(
+                title = "指定线路",
+                selected = settings.strategy is FailoverTransferStrategy.SpecifiedNode,
+                onClick = {
+                    pickerMode = FailoverTransferPickerMode.NODE
                     nodePickerGroupId = null
                     showPicker = true
-                }) {
-                    Text(if (settings.target == null) "选择" else "更改")
                 }
-                if (settings.target != null) {
+            )
+            FailoverTransferStrategyOption(
+                title = "指定组",
+                selected = settings.strategy is FailoverTransferStrategy.SpecifiedGroup,
+                onClick = {
+                    pickerMode = FailoverTransferPickerMode.GROUP
+                    nodePickerGroupId = null
+                    showPicker = true
+                }
+            )
+            FailoverTransferStrategyOption(
+                title = "测试结果第二名",
+                selected = settings.strategy == FailoverTransferStrategy.SecondBestTestResult,
+                onClick = { onChange(FailoverTransferStrategy.SecondBestTestResult) }
+            )
+            if (settings.strategy == FailoverTransferStrategy.SecondBestTestResult) {
+                Text(
+                    text = "按最近一次 URL 测速结果选择排名第二的可用线路；若当前线路排第二，则顺延一名。",
+                    modifier = Modifier.padding(start = 48.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (settings.strategy != null) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = { onChange(null) }) { Text("清除") }
                 }
             }
@@ -538,9 +567,15 @@ private fun FailoverTransferCard(
     if (showPicker) {
         val nodePickerGroup = groups.firstOrNull { it.id == nodePickerGroupId }
         AlertDialog(
-            onDismissRequest = { showPicker = false },
+            onDismissRequest = {
+                showPicker = false
+                nodePickerGroupId = null
+            },
             title = {
-                Text(nodePickerGroup?.let { "选择${it.name}中的节点" } ?: "选择节点组")
+                Text(
+                    nodePickerGroup?.let { "选择${it.name}中的线路" }
+                        ?: if (pickerMode == FailoverTransferPickerMode.GROUP) "选择转移组" else "选择线路所在分组"
+                )
             },
             text = {
                 Column(
@@ -564,8 +599,12 @@ private fun FailoverTransferCard(
                                     TextButton(
                                         modifier = Modifier.weight(1f),
                                         onClick = {
-                                            onChange(FailoverTransferTarget.Group(group.id))
-                                            showPicker = false
+                                            if (pickerMode == FailoverTransferPickerMode.GROUP) {
+                                                onChange(FailoverTransferStrategy.SpecifiedGroup(group.id))
+                                                showPicker = false
+                                            } else {
+                                                nodePickerGroupId = group.id
+                                            }
                                         }
                                     ) {
                                         Row(
@@ -584,22 +623,21 @@ private fun FailoverTransferCard(
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
+                                            if (pickerMode == FailoverTransferPickerMode.NODE) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.ChevronRight,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
                                         }
-                                    }
-                                    TextButton(onClick = { nodePickerGroupId = group.id }) {
-                                        Text("选节点")
-                                        Icon(
-                                            imageVector = Icons.Outlined.ChevronRight,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
                                     }
                                 }
                             }
                         }
                     } else {
                         TextButton(onClick = { nodePickerGroupId = null }) {
-                            Text("返回节点组")
+                            Text("返回分组")
                         }
                         Divider(color = MaterialTheme.colorScheme.outlineVariant)
                         FailoverGroupNodeOptions(
@@ -607,16 +645,42 @@ private fun FailoverTransferCard(
                             currentNodeId = currentNodeId,
                             viewModel = viewModel,
                             onSelect = { node ->
-                                onChange(FailoverTransferTarget.Node(node.id))
+                                onChange(FailoverTransferStrategy.SpecifiedNode(node.id))
                                 showPicker = false
+                                nodePickerGroupId = null
                             }
                         )
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showPicker = false }) { Text("关闭") }
+                TextButton(onClick = {
+                    showPicker = false
+                    nodePickerGroupId = null
+                }) { Text("关闭") }
             }
+        )
+    }
+}
+
+@Composable
+private fun FailoverTransferStrategyOption(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
