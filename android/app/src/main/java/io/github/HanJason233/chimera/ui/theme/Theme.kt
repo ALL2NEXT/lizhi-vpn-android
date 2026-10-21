@@ -4,7 +4,6 @@ import android.app.Activity
 import android.os.Build
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -174,13 +173,9 @@ fun ChimeraTheme(
         }
     }
 
-    CompositionLocalProvider(
-        LocalDialogMaterialVersion provides skinSettings.activeScheme.dialogMaterialVersion
-    ) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography = Typography,
-            content = content
-        )
-    }
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        content = content
+    )
 }

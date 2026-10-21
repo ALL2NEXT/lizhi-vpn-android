@@ -62,7 +62,6 @@ import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.data.model.SkinScheme
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
-import io.github.HanJason233.chimera.data.model.DialogMaterialVersion
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.platform.LauncherIdentityPreset
@@ -563,49 +562,6 @@ fun SkinSchemeEditorScreen(
                                     modifier = buttonModifier
                                 ) {
                                     Text(style.displayName, fontSize = 12.sp, maxLines = 1)
-                                }
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(18.dp))
-                    Text(
-                        text = "弹窗样式",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "选择标准弹窗和自定义弹窗容器的 Compose Material 实现。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        DialogMaterialVersion.entries.forEach { version ->
-                            val buttonModifier = Modifier.weight(1f)
-                            if (scheme.dialogMaterialVersion == version) {
-                                Button(
-                                    onClick = {
-                                        viewModel.upsertSkinScheme(
-                                            scheme.copy(dialogMaterialVersion = version)
-                                        )
-                                    },
-                                    modifier = buttonModifier
-                                ) {
-                                    Text(version.displayName, maxLines = 1, softWrap = false)
-                                }
-                            } else {
-                                OutlinedButton(
-                                    onClick = {
-                                        viewModel.upsertSkinScheme(
-                                            scheme.copy(dialogMaterialVersion = version)
-                                        )
-                                    },
-                                    modifier = buttonModifier
-                                ) {
-                                    Text(version.displayName, maxLines = 1, softWrap = false)
                                 }
                             }
                         }

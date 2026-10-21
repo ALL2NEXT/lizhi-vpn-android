@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
-import io.github.HanJason233.chimera.data.model.DialogMaterialVersion
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
@@ -1880,9 +1879,6 @@ class SettingsRepository(
                                 navigationStyle = HomeNavigationStyle.fromStorage(
                                     item.optString("navigationStyle").takeIf { it.isNotBlank() }
                                 ),
-                                dialogMaterialVersion = DialogMaterialVersion.fromStorage(
-                                    item.optString("dialogMaterialVersion").takeIf { it.isNotBlank() }
-                                ),
                                 monetEnabled = item.optBoolean("monetEnabled", false),
                                 customImagePath = item.optString("customImagePath")
                                     .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
@@ -1977,7 +1973,6 @@ class SettingsRepository(
                         put("showNodeCore", scheme.showNodeCore)
                         put("themeMode", scheme.themeMode.storageName)
                         put("navigationStyle", scheme.navigationStyle.storageName)
-                        put("dialogMaterialVersion", scheme.dialogMaterialVersion.storageName)
                         put("monetEnabled", scheme.monetEnabled)
                         scheme.customImagePath?.let { put("customImagePath", it) }
                         scheme.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }
