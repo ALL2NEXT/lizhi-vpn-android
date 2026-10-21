@@ -33,6 +33,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
@@ -268,6 +270,8 @@ private fun SubscriptionGroupSelectionScreen(
     var groupActionMode by rememberSaveable { mutableStateOf<GroupActionMode?>(null) }
     var importStatus by rememberSaveable { mutableStateOf<String?>(null) }
     var countryDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var officialGroupsExpanded by rememberSaveable { mutableStateOf(true) }
+    var personalGroupsExpanded by rememberSaveable { mutableStateOf(true) }
     var draftCountryCodes by remember { mutableStateOf(emptySet<String>()) }
     var editingUserGroup by remember { mutableStateOf<NodeGroupSummary?>(null) }
     var editingOfficialGroup by remember { mutableStateOf<SubscriptionGroup?>(null) }
@@ -529,81 +533,101 @@ private fun SubscriptionGroupSelectionScreen(
                         verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
                         if (subscriptionGroups.isNotEmpty()) {
-                            item(key = "official-groups-header") { GroupTypeHeader("官方源") }
-                            items(
-                                items = subscriptionGroups,
-                                key = { "subscription:${it.sourceId}" }
-                            ) { group ->
-                                SubscriptionGroupCard(
-                                    group = group,
-                                    nodeCount = nodeCounts[group.sourceId] ?: 0,
-                                    selected = selectedNodeGroupId ==
-                                        NodeGroupKey.Subscription(group.sourceId).value,
-                                    actionMode = groupActionMode,
-                                    onClick = { onSubscriptionSelected(group) },
-                                    onViewDetails = { onViewSubscriptionDetails(group) },
-                                    onRefresh = {
-                                        onRefreshOfficialSubscription(group.sourceId) { success ->
-                                            Toast.makeText(
-                                                context,
-                                                if (success) "官方源已更新" else "官方源更新失败或当前操作繁忙",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    },
-                                    onDelete = { confirmDeleteOfficialSubscription(group) },
-                                    onEdit = {
-                                        editOfficialSubscription(
-                                            group,
-                                            autoRefreshOnStartupOverrides[group.sourceId] ?: true
-                                        )
+                            item(key = "official-groups-header") {
+                                GroupTypeHeader(
+                                    title = "官方源",
+                                    expanded = officialGroupsExpanded,
+                                    onToggle = {
+                                        officialGroupsExpanded = !officialGroupsExpanded
                                     }
                                 )
-                                Divider(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = MaterialTheme.colorScheme.outlineVariant
-                                )
+                            }
+                            if (officialGroupsExpanded) {
+                                items(
+                                    items = subscriptionGroups,
+                                    key = { "subscription:${it.sourceId}" }
+                                ) { group ->
+                                    SubscriptionGroupCard(
+                                        group = group,
+                                        nodeCount = nodeCounts[group.sourceId] ?: 0,
+                                        selected = selectedNodeGroupId ==
+                                            NodeGroupKey.Subscription(group.sourceId).value,
+                                        actionMode = groupActionMode,
+                                        onClick = { onSubscriptionSelected(group) },
+                                        onViewDetails = { onViewSubscriptionDetails(group) },
+                                        onRefresh = {
+                                            onRefreshOfficialSubscription(group.sourceId) { success ->
+                                                Toast.makeText(
+                                                    context,
+                                                    if (success) "官方源已更新" else "官方源更新失败或当前操作繁忙",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        },
+                                        onDelete = { confirmDeleteOfficialSubscription(group) },
+                                        onEdit = {
+                                            editOfficialSubscription(
+                                                group,
+                                                autoRefreshOnStartupOverrides[group.sourceId] ?: true
+                                            )
+                                        }
+                                    )
+                                    Divider(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
+                                }
                             }
                         }
                         if (userGroups.isNotEmpty()) {
-                            item(key = "personal-groups-header") { GroupTypeHeader("私人源") }
-                            items(
-                                items = userGroups,
-                                key = NodeGroupSummary::id
-                            ) { group ->
-                                UserSubscriptionGroupCard(
-                                    group = group,
-                                    nodeCount = personalNodeCounts[
-                                        group.id.removePrefix("imported:")
-                                    ] ?: 0,
-                                    selected = selectedNodeGroupId == group.id,
-                                    actionMode = groupActionMode,
-                                    onClick = { onUserGroupSelected(group) },
-                                    onViewDetails = { onViewUserGroupDetails(group) },
-                                    onEdit = { editGroup(group) },
-                                    onDelete = { confirmDeleteGroup(group) },
-                                    onRefresh = {
-                                        onRefreshUserGroup(group.id.removePrefix("imported:")) { result ->
-                                            val message = when (result) {
-                                                MainViewModel.SubscriptionGroupRefreshResult.REFRESHED ->
-                                                    "私人源已更新"
-                                                MainViewModel.SubscriptionGroupRefreshResult.INVALID ->
-                                                    "订阅内容中未找到可用节点"
-                                                MainViewModel.SubscriptionGroupRefreshResult.FETCH_FAILED ->
-                                                    "订阅链接获取失败"
-                                                MainViewModel.SubscriptionGroupRefreshResult.NOT_FOUND ->
-                                                    "私人源不存在"
-                                                MainViewModel.SubscriptionGroupRefreshResult.BUSY ->
-                                                    "当前操作繁忙，请稍后重试"
-                                            }
-                                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                        }
+                            item(key = "personal-groups-header") {
+                                GroupTypeHeader(
+                                    title = "私人源",
+                                    expanded = personalGroupsExpanded,
+                                    onToggle = {
+                                        personalGroupsExpanded = !personalGroupsExpanded
                                     }
                                 )
-                                Divider(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = MaterialTheme.colorScheme.outlineVariant
-                                )
+                            }
+                            if (personalGroupsExpanded) {
+                                items(
+                                    items = userGroups,
+                                    key = NodeGroupSummary::id
+                                ) { group ->
+                                    UserSubscriptionGroupCard(
+                                        group = group,
+                                        nodeCount = personalNodeCounts[
+                                            group.id.removePrefix("imported:")
+                                        ] ?: 0,
+                                        selected = selectedNodeGroupId == group.id,
+                                        actionMode = groupActionMode,
+                                        onClick = { onUserGroupSelected(group) },
+                                        onViewDetails = { onViewUserGroupDetails(group) },
+                                        onEdit = { editGroup(group) },
+                                        onDelete = { confirmDeleteGroup(group) },
+                                        onRefresh = {
+                                            onRefreshUserGroup(group.id.removePrefix("imported:")) { result ->
+                                                val message = when (result) {
+                                                    MainViewModel.SubscriptionGroupRefreshResult.REFRESHED ->
+                                                        "私人源已更新"
+                                                    MainViewModel.SubscriptionGroupRefreshResult.INVALID ->
+                                                        "订阅内容中未找到可用节点"
+                                                    MainViewModel.SubscriptionGroupRefreshResult.FETCH_FAILED ->
+                                                        "订阅链接获取失败"
+                                                    MainViewModel.SubscriptionGroupRefreshResult.NOT_FOUND ->
+                                                        "私人源不存在"
+                                                    MainViewModel.SubscriptionGroupRefreshResult.BUSY ->
+                                                        "当前操作繁忙，请稍后重试"
+                                                }
+                                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
+                                    Divider(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -1315,17 +1339,36 @@ private fun UserSubscriptionGroupCard(
 }
 
 @Composable
-private fun GroupTypeHeader(title: String) {
-    Text(
-        text = title,
+private fun GroupTypeHeader(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onToggle)
             .padding(horizontal = 20.dp)
             .padding(top = 8.dp, bottom = 2.dp),
-        color = MaterialTheme.colorScheme.primary,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold
-    )
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Icon(
+            imageVector = if (expanded) {
+                Icons.Default.KeyboardArrowUp
+            } else {
+                Icons.Default.KeyboardArrowDown
+            },
+            contentDescription = if (expanded) "收起$title" else "展开$title",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable
