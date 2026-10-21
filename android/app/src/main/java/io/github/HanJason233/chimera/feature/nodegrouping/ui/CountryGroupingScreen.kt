@@ -228,7 +228,7 @@ private fun CountryGroupingScreen(
                                     onViewDetails = { onViewCountryDetails(country) }
                                 )
                                 Divider(
-                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    modifier = Modifier.fillMaxWidth(),
                                     color = MaterialTheme.colorScheme.outlineVariant
                                 )
                             }
