@@ -91,15 +91,10 @@
     if (error === 'managed_subscription_too_large') return '订阅内容或文件不能超过 2 MB';
     if (error === 'invalid_min_app_version') return '最低应用版本格式无效，请填写类似 2.40 的数字版本';
    if (error === 'external_subscription_unreachable') return '外部订阅接口无法访问或请求超时';
-   if (error === 'local_subscription_cors_or_network_error') return '本地获取失败：浏览器跨域或网络策略阻止访问，可切换为服务器获取';
-    if (error === 'subscription_changed_or_disabled') return '订阅已停用或已修改，请刷新管理页后重试';
     if (error === 'subscription_not_found') return '订阅已不存在，请刷新管理页后重试';
    if (error === 'external_subscription_url_required') return '请填写外部订阅地址';
    if (String(error || '').indexOf('external_subscription_http_') === 0) {
      return '外部订阅接口请求失败（HTTP ' + String(error).slice('external_subscription_http_'.length) + '）';
-   }
-   if (String(error || '').indexOf('local_subscription_http_') === 0) {
-     return '本地获取失败（HTTP ' + String(error).slice('local_subscription_http_'.length) + '）';
    }
    return error || fallback;
  }

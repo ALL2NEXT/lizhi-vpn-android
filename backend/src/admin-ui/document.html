@@ -451,7 +451,7 @@
             <label class="subscription-selection-count"><input class="subscription-select-page" type="checkbox" aria-label="选择当前页订阅"><span data-subscription-selection-meta>已选择 0 项</span></label>
             <div class="subscription-list-footer-actions">
               <div class="subscription-pagination"><span data-subscription-filtered-count>共 0 条</span><button class="secondary" type="button" data-subscription-page-prev aria-label="上一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-prev"></use></svg></button><span data-subscription-page-number>1</span><button class="secondary" type="button" data-subscription-page-next aria-label="下一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><select data-subscription-page-size aria-label="每页显示条数"><option value="20" selected>20 条/页</option><option value="50">50 条/页</option><option value="100">100 条/页</option></select></div>
-              <div class="subscription-group-add-row"><button class="danger subscription-delete-selected" type="button" data-action="delete-selected-subscriptions" aria-label="删除已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg> 删除订阅</button><button class="secondary" type="button" data-action="refresh-subscriptions" data-refresh-mode="remote" aria-label="更新已选订阅（远程）" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-refresh"></use></svg><span data-refresh-label>更新订阅(远程)</span></button><button class="secondary" type="button" data-action="refresh-subscriptions" data-refresh-mode="local" aria-label="更新已选订阅（本地）" title="由当前浏览器获取，订阅源需允许跨域访问" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-refresh"></use></svg><span data-refresh-label>更新订阅(本地)</span></button><button type="button" data-action="add-subscription"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 添加订阅</button></div>
+              <div class="subscription-group-add-row"><button class="danger subscription-delete-selected" type="button" data-action="delete-selected-subscriptions" aria-label="删除已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg> 删除订阅</button><button class="secondary" type="button" data-action="refresh-subscriptions" aria-label="更新已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-refresh"></use></svg><span data-refresh-label>更新订阅</span></button><button type="button" data-action="add-subscription"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 添加订阅</button></div>
             </div>
           </footer>
         </section>
@@ -486,13 +486,6 @@
         <label class="field" for="subscriptionImportInput">智能识别
           <textarea id="subscriptionImportInput" rows="8" placeholder="粘贴订阅地址、节点 URI、Base64、Clash YAML 或 sing-box / Xray JSON。支持多个地址与配置混合导入。"></textarea>
         </label>
-        <label class="field subscription-import-fetch-setting">远程订阅获取方式
-          <select id="subscriptionImportFetchMode">
-            <option value="server" selected>服务器获取（当前方式）</option>
-            <option value="local">本地获取（当前浏览器）</option>
-          </select>
-        </label>
-        <small id="subscriptionImportFetchHint">服务器获取由 Worker 访问订阅地址，适用于不允许浏览器跨域访问的来源。</small>
         <div class="subscription-import-tools">
           <button class="secondary" type="button" id="subscriptionImportClipboard">从剪贴板粘贴</button>
           <button class="secondary" type="button" id="subscriptionImportFileButton">选择文件</button>

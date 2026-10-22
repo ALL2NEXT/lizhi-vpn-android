@@ -10,11 +10,7 @@ import {
   TEXT_ENCODER,
 } from "../config.ts";
 import { cleanText } from "../lib/values.ts";
-import {
-  extractSubscriptionNodeNames,
-  normalizeRemoteUrl,
-  toStandardUris,
-} from "../domain/subscription-import/index.ts";
+import { normalizeRemoteUrl, toStandardUris } from "../domain/subscription-import/index.ts";
 import { decodeBase64, encodeBase64 } from "../domain/subscription-import/text.ts";
 import {
   loadSubscriptionCacheMetadata,
@@ -231,81 +227,6 @@ function extractNodeName(link: string) {
   }
   const hashIndex = trimmed.indexOf("#");
   return hashIndex >= 0 ? decodeUriFragment(trimmed.slice(hashIndex + 1)) : "";
-}
-
-function parseTrafficBytesFromNodeName(name: string) {
-  const match = name.match(
-    /(?:剩余流量|流量剩余|剩余(?:数据|用量)|remaining\s*(?:traffic|data|quota))\s*[:：]?\s*(\d+(?:[.,]\d+)?)\s*(PB|PiB|P|TB|TiB|T|GB|GiB|G|MB|MiB|M|KB|KiB|K|B|字节)?/i,
-  );
-  if (!match) return null;
-  const amount = Number(match[1].replace(",", "."));
-  if (!Number.isFinite(amount) || amount < 0) return null;
-  const unit = (match[2] || "B").toUpperCase();
-  const power = unit.startsWith("P") ? 5
-    : unit.startsWith("T") ? 4
-      : unit.startsWith("G") ? 3
-        : unit.startsWith("M") ? 2
-          : unit.startsWith("K") ? 1
-            : 0;
-  const bytes = Math.round(amount * 1024 ** power);
-  return Number.isSafeInteger(bytes) ? bytes : null;
-}
-
-function parseResetAtFromNodeName(name: string, now: number) {
-  const match = name.match(
-    /(?:距离|距)?\s*(?:下次)?(?:流量)?\s*重置(?:剩余|余量|还有|倒计时|时间)?\s*[:：]?\s*(\d+(?:[.,]\d+)?)\s*(天|日|小时|时|分钟|分|days?|d|hours?|h|minutes?|mins?)/i,
-  ) || name.match(/\breset\s*(?:in|after|[:：])?\s*(\d+(?:[.,]\d+)?)\s*(days?|d|hours?|h|minutes?|mins?)/i);
-  if (!match) return null;
-  const amount = Number(match[1].replace(",", "."));
-  if (!Number.isFinite(amount) || amount < 0) return null;
-  const unit = match[2].toLowerCase();
-  const duration = /^(?:天|日|days?|d)$/.test(unit) ? amount * 24 * 60 * 60 * 1000
-    : /^(?:小时|时|hours?|h)$/.test(unit) ? amount * 60 * 60 * 1000
-      : amount * 60 * 1000;
-  const resetAt = Math.round(now + duration);
-  return Number.isSafeInteger(resetAt) ? resetAt : null;
-}
-
-function parseExpiryFromNodeName(name: string) {
-  const match = name.match(
-    /(?:套餐|订阅|服务)?\s*(?:到期(?:时间)?|有效期(?:至)?|截止日期|expires?|expiry)\s*[:：]?\s*(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})日?/i,
-  );
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const timestamp = Date.UTC(year, month - 1, day, 12);
-  const date = new Date(timestamp);
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 &&
-      date.getUTCDate() === day
-    ? timestamp
-    : null;
-}
-
-function parseNodeNameTraffic(
-  content: string,
-  now = Date.now(),
-  extraNames: string[] = [],
-): SubscriptionTrafficMetadata | null {
-  let remainingBytes: number | null = null;
-  let resetAtMillis: number | null = null;
-  let expireAtMillis: number | null = null;
-  const names = [...content.split(/\r?\n/).map(extractNodeName), ...extraNames];
-  for (const name of names) {
-    if (!name) continue;
-    remainingBytes ??= parseTrafficBytesFromNodeName(name);
-    resetAtMillis ??= parseResetAtFromNodeName(name, now);
-    expireAtMillis ??= parseExpiryFromNodeName(name);
-  }
-  if (remainingBytes === null && resetAtMillis === null && expireAtMillis === null) return null;
-  return {
-    uploadBytes: null,
-    downloadBytes: null,
-    totalBytes: null,
-    expireAtMillis,
-    remainingBytes,
-    resetAtMillis,
-  };
 }
 
 function renameNodeLink(link: string, name: string) {
@@ -653,45 +574,6 @@ export async function readExternalSubscription(
   const fetched = await fetchExternalSubscription(source.url, { deduplicate: false, env });
   await cacheExternalSubscription(env, source, fetched, Date.now());
   return fetched.content;
-}
-
-export async function cacheLocallyFetchedSubscription(
-  env: Env,
-  source: SubscriptionSource,
-  contentValue: unknown,
-  subscriptionUserInfo: unknown,
-) {
-  if (!env.CONFIG) throw new Error("Missing KV binding CONFIG");
-  if (!source?.url) throw new Error("external_subscription_url_required");
-
-  const content = decodeExternalSubscriptionContent(contentValue, { deduplicate: false });
-  const headerTraffic = parseSubscriptionUserInfo(
-    typeof subscriptionUserInfo === "string" ? subscriptionUserInfo : null,
-  );
-  const nameTraffic = parseNodeNameTraffic(
-    content,
-    Date.now(),
-    extractSubscriptionNodeNames(String(contentValue)),
-  );
-  let traffic: SubscriptionTrafficMetadata | null = headerTraffic || nameTraffic
-    ? {
-      uploadBytes: headerTraffic?.uploadBytes ?? null,
-      downloadBytes: headerTraffic?.downloadBytes ?? null,
-      totalBytes: headerTraffic?.totalBytes ?? null,
-      expireAtMillis: headerTraffic?.expireAtMillis ?? nameTraffic?.expireAtMillis ?? null,
-      remainingBytes: nameTraffic?.remainingBytes ?? null,
-      resetAtMillis: nameTraffic?.resetAtMillis ?? null,
-    }
-    : null;
-  if (!traffic) {
-    const cached = await readSubscriptionCache(env, source);
-    if (cached.metadata?.sourceUrl === source.url) {
-      traffic = cachedSubscriptionTraffic(cached.metadata.traffic);
-    }
-  }
-
-  await cacheExternalSubscription(env, source, { content, traffic }, Date.now());
-  return { nodeCount: content.split("\n").length };
 }
 
 export async function readExternalSubscriptionTraffic(

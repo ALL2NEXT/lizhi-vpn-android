@@ -889,56 +889,7 @@ function getSelectedPersistedRemoteSources(rows) {
   }).filter(Boolean);
 }
 
-async function updateSubscriptionLocally(source) {
-  let content;
-  let subscriptionUserInfo = null;
-  try {
-    const response = await fetch(source.url, {
-      method: 'GET',
-      headers: {accept: 'text/plain, application/yaml, application/json, */*;q=0.1'},
-      credentials: 'omit',
-      redirect: 'follow'
-    });
-    if (!response.ok) throw new Error('local_subscription_http_' + response.status);
-    content = await readLocalSubscriptionContent(response);
-    subscriptionUserInfo = response.headers.get('subscription-userinfo');
-  } catch (error) {
-    return {id: source.id, ok: false, error: localSubscriptionFetchError(error)};
-  }
-
-  try {
-    const response = await fetch(adminApiUrl('/subscriptions/refresh/local'), {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({
-        id: source.id,
-        url: source.url,
-        content: content,
-        subscriptionUserInfo: subscriptionUserInfo
-      }),
-      cache: 'no-store'
-    });
-    const data = await response.json();
-    if (!response.ok || !data.ok) {
-      return {id: source.id, ok: false, error: adminErrorMessage(data.error, 'local_subscription_upload_failed')};
-    }
-    return {id: source.id, ok: true};
-  } catch (error) {
-    return {id: source.id, ok: false, error: error.message || 'local_subscription_upload_failed'};
-  }
-}
-
-async function updateSubscriptionsLocally(sources, label) {
-  const results = [];
-  for (let start = 0; start < sources.length; start += 3) {
-    const batch = sources.slice(start, start + 3);
-    if (label) label.textContent = '本地拉取并上传 ' + Math.min(start + batch.length, sources.length) + '/' + sources.length;
-    results.push(...await Promise.all(batch.map(updateSubscriptionLocally)));
-  }
-  return results;
-}
-
-async function refreshSubscriptions(button, mode) {
+async function refreshSubscriptions(button) {
   Array.from(selectedSubscriptionRows).forEach(function(row) {
     if (!row.isConnected || !row.classList.contains('source-row')) selectedSubscriptionRows.delete(row);
   });
@@ -954,28 +905,23 @@ async function refreshSubscriptions(button, mode) {
   const label = button.querySelector('[data-refresh-label]');
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
-  if (label) label.textContent = mode === 'local' ? '本地获取中…' : 'Worker更新中…';
+  if (label) label.textContent = 'Worker更新中…';
   try {
-    let results;
     let skipped = selectedRows.length - sourceIds.length;
-    if (mode === 'local') {
-      results = await updateSubscriptionsLocally(remoteSources, label);
-    } else {
-      const response = await fetch(ADMIN_API_BASE + '/subscriptions/refresh', {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({ids: sourceIds}),
-        cache: 'no-store'
-      });
-      const data = await response.json();
-      if (!response.ok || typeof data.updated !== 'number' || typeof data.failed !== 'number' ||
-          typeof data.skipped !== 'number' || !Array.isArray(data.updatedIds)) {
-        throw new Error(adminErrorMessage(data.error, '订阅更新失败'));
-      }
-      skipped += data.skipped;
-      results = data.updatedIds.map(function(id) { return {id: String(id), ok: true}; });
-      for (let index = 0; index < data.failed; index++) results.push({ok: false});
+    const response = await fetch(ADMIN_API_BASE + '/subscriptions/refresh', {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ids: sourceIds}),
+      cache: 'no-store'
+    });
+    const data = await response.json();
+    if (!response.ok || typeof data.updated !== 'number' || typeof data.failed !== 'number' ||
+        typeof data.skipped !== 'number' || !Array.isArray(data.updatedIds)) {
+      throw new Error(adminErrorMessage(data.error, '订阅更新失败'));
     }
+    skipped += data.skipped;
+    const results = data.updatedIds.map(function(id) { return {id: String(id), ok: true}; });
+    for (let index = 0; index < data.failed; index++) results.push({ok: false});
     const updatedIds = results.filter(function(result) { return result.ok; }).map(function(result) { return result.id; });
     const updated = updatedIds.length;
     const failed = results.length - updated;
@@ -983,8 +929,7 @@ async function refreshSubscriptions(button, mode) {
     if (updated === 0 && failed === 0) {
       show('选中的订阅中没有可更新的已保存远程订阅');
     } else {
-      const method = mode === 'local' ? '本地' : '远程';
-      const summary = method + '更新完成：成功 ' + updated + ' 个，失败 ' + failed + ' 个，跳过 ' + skipped + ' 个';
+      const summary = '更新完成：成功 ' + updated + ' 个，失败 ' + failed + ' 个，跳过 ' + skipped + ' 个';
       const firstFailure = results.find(function(result) { return !result.ok && result.error; });
       const detail = firstFailure ? '；' + adminErrorMessage(firstFailure.error, '') : '';
       show(summary + detail, failed > 0);
@@ -994,7 +939,7 @@ async function refreshSubscriptions(button, mode) {
   } finally {
     subscriptionRefreshInFlight = false;
     button.removeAttribute('aria-busy');
-    if (label) label.textContent = mode === 'local' ? '更新订阅(本地)' : '更新订阅(远程)';
+    if (label) label.textContent = '更新订阅';
     applySubscriptionFilters();
   }
 }
@@ -1043,7 +988,7 @@ function initializeSubscriptionManager() {
   panel.querySelector('[data-action="delete-selected-subscriptions"]').addEventListener('click', deleteSelectedSubscriptions);
   panel.querySelectorAll('[data-action="refresh-subscriptions"]').forEach(function(button) {
     button.addEventListener('click', function(event) {
-      refreshSubscriptions(event.currentTarget, event.currentTarget.dataset.refreshMode);
+      refreshSubscriptions(event.currentTarget);
     });
   });
   panel.querySelectorAll('[data-action="close-subscription-editor"]').forEach(function(button) {

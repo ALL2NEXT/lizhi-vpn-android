@@ -6,16 +6,11 @@ import type { RouteDependencies } from "../../types/routes.ts";
  */
 
 import { readJsonObject } from "../../http/request.ts";
-import {
-  importSubscriptionSources,
-  parseLocalSubscriptionResponse,
-  prepareLocalSubscriptionImport,
-} from "../../services/subscription-import.ts";
+import { importSubscriptionSources } from "../../services/subscription-import.ts";
 
 export function createAdminStateRoutes(deps: Pick<
   RouteDependencies,
   | "beijingTimestamp"
-  | "cacheLocallyFetchedSubscription"
   | "json"
   | "normalizeState"
   | "readExternalSubscription"
@@ -26,7 +21,6 @@ export function createAdminStateRoutes(deps: Pick<
 >) {
   const {
     beijingTimestamp,
-    cacheLocallyFetchedSubscription,
     json,
     normalizeState,
     readExternalSubscription,
@@ -40,22 +34,6 @@ export function createAdminStateRoutes(deps: Pick<
     if (path === "/api/subscriptions/import" && request.method === "POST") {
       try {
         const incoming = await readJsonObject(request);
-        if (incoming.mode === "prepare-local") {
-          return json({
-            ok: true,
-            ...prepareLocalSubscriptionImport(incoming.input, incoming.minAccountType),
-          });
-        }
-        if (incoming.mode === "parse-local-response") {
-          return json({
-            ok: true,
-            source: parseLocalSubscriptionResponse(
-              incoming.url,
-              incoming.content,
-              incoming.minAccountType,
-            ),
-          });
-        }
         const result = await importSubscriptionSources(incoming.input, incoming.minAccountType, env);
         return json({ ok: result.sources.length > 0, ...result }, result.sources.length ? 200 : 422);
       } catch (error) {
@@ -137,41 +115,6 @@ export function createAdminStateRoutes(deps: Pick<
         skipped: requestedIds.size - sources.length,
         updatedIds: results.filter((result) => result.ok).map((result) => result.id),
       });
-    }
-
-    if (path === "/api/subscriptions/refresh/local" && request.method === "POST") {
-      try {
-        const incoming = await readJsonObject(request);
-        const sourceId = typeof incoming.id === "string" ? incoming.id.trim() : "";
-        const sourceUrl = typeof incoming.url === "string" ? incoming.url : "";
-        if (!sourceId || !sourceUrl) {
-          return json({ ok: false, error: "invalid_subscription_refresh_request" }, 400);
-        }
-
-        const state = await readState(env);
-        const source = state.subscriptionGroups.flatMap((group) => group.subscriptions)
-          .find((candidate) => candidate.id === sourceId);
-        if (!source) return json({ ok: false, error: "subscription_not_found" }, 404);
-        if (source.enabled === false || !source.url || source.content || source.url !== sourceUrl) {
-          return json({ ok: false, error: "subscription_changed_or_disabled" }, 409);
-        }
-
-        const result = await cacheLocallyFetchedSubscription(
-          env,
-          source,
-          incoming.content,
-          incoming.subscriptionUserInfo,
-        );
-        return json({ ok: true, id: sourceId, nodeCount: result.nodeCount });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const status = message === "managed_subscription_too_large"
-          ? 413
-          : message === "subscription_must_be_plaintext_nodes"
-            ? 422
-            : 400;
-        return json({ ok: false, error: message }, status);
-      }
     }
 
     if (path === "/api/state" && request.method === "GET") {

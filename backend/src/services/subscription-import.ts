@@ -1,11 +1,7 @@
 import type { AccountType, SubscriptionSource } from "../types/models.ts";
 import type { Env } from "../types/env.ts";
 import { detectSubscriptionInput, toStandardUris } from "../domain/subscription-import/index.ts";
-import {
-  decodeExternalSubscriptionContent,
-  fetchExternalSubscription,
-  normalizeManagedContent,
-} from "./subscriptions.ts";
+import { fetchExternalSubscription, normalizeManagedContent } from "./subscriptions.ts";
 
 export interface ImportedSubscription extends Omit<SubscriptionSource, "id"> {
   nodeCount: number;
@@ -18,7 +14,7 @@ export interface SubscriptionImportResult {
   failedSources: { url: string; error: string }[];
   nodeCount: number;
 }
-export interface LocalSubscriptionImportPlan extends SubscriptionImportResult {
+interface PreparedSubscriptionImport extends SubscriptionImportResult {
   urls: string[];
 }
 
@@ -47,11 +43,11 @@ function importedSource(
   };
 }
 
-/** 只解析输入，供浏览器本地获取模式提取待请求的远程地址。 */
-export function prepareLocalSubscriptionImport(
+/** 解析输入并转换本地节点；远程地址继续交给 Worker 拉取。 */
+function prepareSubscriptionImport(
   input: unknown,
   accountType: unknown,
-): LocalSubscriptionImportPlan {
+): PreparedSubscriptionImport {
   if (typeof input !== "string") throw new Error("invalid_subscription_import_input");
   const content = normalizeManagedContent(input);
   const minAccountType = normalizeImportAccountType(accountType);
@@ -82,29 +78,9 @@ export function prepareLocalSubscriptionImport(
   };
 }
 
-/** 解析浏览器已获取的响应正文；该步骤不向订阅地址发起网络请求。 */
-export function parseLocalSubscriptionResponse(
-  url: unknown,
-  responseContent: unknown,
-  accountType: unknown,
-): ImportedSubscription {
-  if (typeof url !== "string") throw new Error("invalid_subscription_url");
-  let normalizedUrl: string;
-  try {
-    const parsedUrl = new URL(url);
-    if (!["http:", "https:"].includes(parsedUrl.protocol)) throw new Error("invalid_subscription_url");
-    normalizedUrl = parsedUrl.href;
-  } catch {
-    throw new Error("invalid_subscription_url");
-  }
-  const content = decodeExternalSubscriptionContent(responseContent);
-  const name = new URL(normalizedUrl).hostname.replace(/^www\./, "");
-  return importedSource(name, normalizedUrl, "", content.split("\n").length, normalizeImportAccountType(accountType));
-}
-
 /** 仅生成待编辑的线路，不修改 KV；原有「推送」操作负责保存和缓存预热。 */
 export async function importSubscriptionSources(input: unknown, accountType: unknown, env?: Env): Promise<SubscriptionImportResult> {
-  const plan = prepareLocalSubscriptionImport(input, accountType);
+  const plan = prepareSubscriptionImport(input, accountType);
   if (!plan.urls.length) return plan;
 
   const minAccountType = normalizeImportAccountType(accountType);
