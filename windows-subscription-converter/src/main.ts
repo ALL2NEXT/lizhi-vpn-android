@@ -30,7 +30,6 @@ interface SourceResult {
   errorMessage?: string;
 }
 
-const MAX_SOURCES = 20;
 const FETCH_CONCURRENCY = 3;
 const USER_AGENT_PRESETS: Record<string, string> = {
   nekobox: "NekoBox/Android/1.4.2 (Prefer ClashMeta Format)",
@@ -60,6 +59,8 @@ const dom = {
   validation: getElement<HTMLDivElement>("validation-message"),
   userAgentSelect: getElement<HTMLSelectElement>("user-agent-select"),
   customUserAgent: getElement<HTMLInputElement>("custom-user-agent"),
+  skipCertificateVerification: getElement<HTMLButtonElement>("skip-certificate-verification"),
+  skipCertificateNote: getElement<HTMLParagraphElement>("skip-certificate-note"),
   clearButton: getElement<HTMLButtonElement>("clear-button"),
   convertButton: getElement<HTMLButtonElement>("convert-button"),
   convertLabel: getElement<HTMLSpanElement>("convert-button").querySelector<HTMLSpanElement>(".button-label")!,
@@ -154,19 +155,24 @@ function readInputUrls(): string[] {
     return [];
   }
 
-  if (detected.urls.length > MAX_SOURCES) {
-    setValidation(`检测到 ${detected.urls.length} 个来源，本次只处理前 ${MAX_SOURCES} 个。`, true);
-    showToast(`来源数量超过上限，已截取前 ${MAX_SOURCES} 个`, true);
-  } else {
-    setValidation();
-  }
+  setValidation();
+  return detected.urls;
+}
 
-  return detected.urls.slice(0, MAX_SOURCES);
+function shouldSkipCertificateVerification(): boolean {
+  return dom.skipCertificateVerification.getAttribute("aria-pressed") === "true";
+}
+
+function toggleCertificateVerification() {
+  const skip = !shouldSkipCertificateVerification();
+  dom.skipCertificateVerification.setAttribute("aria-pressed", String(skip));
+  dom.skipCertificateNote.hidden = !skip;
 }
 
 function setBusy(busy: boolean) {
   running = busy;
   dom.convertButton.disabled = busy;
+  dom.skipCertificateVerification.disabled = busy;
   dom.convertButton.classList.toggle("busy", busy);
   dom.convertLabel.textContent = busy ? "正在获取与转换…" : "获取并转换";
 }
@@ -309,6 +315,7 @@ async function startConversion() {
       const fetched = await invoke<FetchedSubscription>("fetch_subscription", {
         url,
         userAgent,
+        skipCertificateVerification: shouldSkipCertificateVerification(),
       });
       const nodes = toStandardUris(fetched.content).filter(node => !/^https?:\/\//i.test(node));
       if (nodes.length === 0) {
@@ -447,6 +454,8 @@ function bindEvents() {
     dom.customUserAgent.hidden = dom.userAgentSelect.value !== "custom";
     if (!dom.customUserAgent.hidden) dom.customUserAgent.focus();
   });
+
+  dom.skipCertificateVerification.addEventListener("click", toggleCertificateVerification);
 
   dom.urls.addEventListener("input", () => {
     if (!dom.validation.hidden) setValidation();

@@ -38,7 +38,7 @@
                 <span class="step-index">01</span>
                 <div>
                   <h2 id="input-title">输入订阅地址</h2>
-                  <p>每行一个 URL，最多 20 个来源</p>
+                  <p>每行一个 URL，支持批量来源</p>
                 </div>
               </div>
               <button class="text-button" id="clear-button" type="button">清空</button>
@@ -87,6 +87,20 @@
                 <p class="option-note">
                   自动模式会在服务器拒绝请求或返回空内容时，依次尝试常见客户端标识。
                 </p>
+                <div class="security-option">
+                  <button
+                    class="toggle-button"
+                    id="skip-certificate-verification"
+                    type="button"
+                    aria-pressed="false"
+                  >
+                    <span class="toggle-indicator" aria-hidden="true"></span>
+                    跳过证书验证
+                  </button>
+                  <p class="option-note security-note" id="skip-certificate-note" hidden>
+                    已关闭 TLS 证书校验，仅对证书异常或自签名的可信订阅源使用。
+                  </p>
+                </div>
               </div>
             </details>
 
@@ -157,7 +171,7 @@
 
       <footer class="app-footer">
         <span>Chimera Subscription Converter</span>
-        <span>响应上限 2 MiB · 最多 10 次重定向 · TLS 校验保持开启</span>
+        <span>响应上限 2 MiB · 最多 10 次重定向 · TLS 证书校验默认开启</span>
       </footer>
     </div>
 
