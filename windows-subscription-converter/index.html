@@ -26,7 +26,6 @@
         </a>
         <nav class="app-nav" aria-label="主导航">
           <div class="local-badge" title="所有请求均由本机发起，不经过 Chimera Worker">
-            <span class="local-badge-dot" aria-hidden="true"></span>
             完全本地运行
           </div>
           <details class="settings-menu" id="settings-menu">
@@ -37,7 +36,6 @@
             <div class="settings-popover">
               <div class="settings-heading">
                 <strong>设置</strong>
-                <span>请求与安全选项</span>
               </div>
               <label class="field-label" for="user-agent-select">User-Agent</label>
               <select id="user-agent-select" class="select-input">
@@ -58,15 +56,12 @@
                 placeholder="例如：MyClient/1.0"
                 hidden
               />
-              <p class="option-note">
-                自动模式会在服务器拒绝请求或返回空内容时，依次尝试常见客户端标识。
-              </p>
               <div class="settings-divider" aria-hidden="true"></div>
               <div class="settings-limits">
                 <span class="settings-section-label">请求限制</span>
                 <div class="settings-grid">
                   <div class="settings-field">
-                    <label class="field-label" for="max-response-mib">响应上限（MiB）</label>
+                    <label class="field-label" for="max-response-mib">响应上限（1–64 MiB）</label>
                     <input
                       id="max-response-mib"
                       class="text-input number-input"
@@ -79,7 +74,7 @@
                     />
                   </div>
                   <div class="settings-field">
-                    <label class="field-label" for="max-redirects">最大重定向</label>
+                    <label class="field-label" for="max-redirects">最大重定向（0–50）</label>
                     <input
                       id="max-redirects"
                       class="text-input number-input"
@@ -91,8 +86,21 @@
                       inputmode="numeric"
                     />
                   </div>
+                  <div class="settings-field settings-field-wide">
+                    <label class="field-label" for="fetch-concurrency">并发数量（1–20）</label>
+                    <input
+                      id="fetch-concurrency"
+                      class="text-input number-input"
+                      type="number"
+                      min="1"
+                      max="20"
+                      step="1"
+                      value="3"
+                      inputmode="numeric"
+                      aria-describedby="fetch-concurrency-note"
+                    />
+                  </div>
                 </div>
-                <p class="option-note">响应上限 1–64 MiB；重定向 0–50 次。</p>
               </div>
               <div class="settings-divider" aria-hidden="true"></div>
               <div class="security-option">
@@ -119,10 +127,8 @@
           <section class="panel input-panel" aria-labelledby="input-title">
             <div class="panel-header">
               <div class="panel-title-group">
-                <span class="step-index">01</span>
                 <div>
                   <h2 id="input-title">输入订阅</h2>
-                  <p>每行一个 URL，支持批量导入来源</p>
                 </div>
               </div>
               <button class="text-button" id="clear-button" type="button">清空</button>
@@ -138,17 +144,14 @@
                 autocomplete="off"
                 placeholder="https://example.com/api/v1/client/subscribe?token=...&#10;https://another.example.com/subscription"
               ></textarea>
-              <span class="input-hint">支持 HTTP / HTTPS，可包含 Basic Auth 凭据</span>
             </div>
 
             <div class="validation-message" id="validation-message" hidden></div>
 
             <div class="run-area">
-              <p class="run-note">输入完成后开始转换，Ctrl + Enter 也可执行。</p>
               <button class="primary-button" id="convert-button" type="button">
                 <span class="button-spinner" aria-hidden="true"></span>
                 <span class="button-label">获取并转换</span>
-                <kbd>Ctrl ↵</kbd>
               </button>
             </div>
           </section>
@@ -156,10 +159,8 @@
           <section class="panel processing-panel" aria-labelledby="processing-title">
             <div class="panel-header">
               <div class="panel-title-group">
-                <span class="step-index">02</span>
                 <div>
                   <h2 id="processing-title">处理进度</h2>
-                  <p>实时查看每个订阅来源的拉取状态</p>
                 </div>
               </div>
               <span class="panel-status" id="processing-status" data-state="idle" role="status">待开始</span>
@@ -171,11 +172,7 @@
             </div>
 
             <div class="processing-empty" id="processing-empty">
-              <div class="processing-glyph" aria-hidden="true">
-                <span></span><span></span><span></span>
-              </div>
               <strong>等待开始</strong>
-              <p>开始转换后，各来源的处理状态会显示在这里。</p>
             </div>
 
             <div class="source-list" id="source-list" hidden></div>
@@ -184,10 +181,8 @@
           <section class="panel output-panel" aria-labelledby="result-title">
             <div class="panel-header">
               <div class="panel-title-group">
-                <span class="step-index">03</span>
                 <div>
                   <h2 id="result-title">转换输出</h2>
-                  <p>标准节点 URI，已自动去重</p>
                 </div>
               </div>
               <div class="result-stats" aria-live="polite">
@@ -198,11 +193,7 @@
             </div>
 
             <div class="empty-state" id="empty-state" aria-live="polite">
-              <div class="empty-illustration" aria-hidden="true">
-                <span></span><span></span><span></span>
-              </div>
               <strong id="empty-state-title">等待输出</strong>
-              <p id="empty-state-copy">转换完成后，节点链接会显示在这里。</p>
             </div>
 
             <div class="output-area" id="output-area" hidden>

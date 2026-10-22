@@ -31,7 +31,8 @@ interface SourceResult {
   errorMessage?: string;
 }
 
-const FETCH_CONCURRENCY = 3;
+const MIN_FETCH_CONCURRENCY = 1;
+const MAX_FETCH_CONCURRENCY = 20;
 const MIN_RESPONSE_MIB = 1;
 const MAX_RESPONSE_MIB = 64;
 const MAX_REDIRECTS = 50;
@@ -64,6 +65,7 @@ const dom = {
   validation: getElement<HTMLDivElement>("validation-message"),
   userAgentSelect: getElement<HTMLSelectElement>("user-agent-select"),
   customUserAgent: getElement<HTMLInputElement>("custom-user-agent"),
+  fetchConcurrency: getElement<HTMLInputElement>("fetch-concurrency"),
   maxResponseMib: getElement<HTMLInputElement>("max-response-mib"),
   maxRedirects: getElement<HTMLInputElement>("max-redirects"),
   skipCertificateVerification: getElement<HTMLButtonElement>("skip-certificate-verification"),
@@ -77,7 +79,6 @@ const dom = {
   processingEmpty: getElement<HTMLDivElement>("processing-empty"),
   emptyState: getElement<HTMLDivElement>("empty-state"),
   emptyStateTitle: getElement<HTMLElement>("empty-state-title"),
-  emptyStateCopy: getElement<HTMLParagraphElement>("empty-state-copy"),
   sourceList: getElement<HTMLDivElement>("source-list"),
   outputArea: getElement<HTMLDivElement>("output-area"),
   output: getElement<HTMLTextAreaElement>("output-uris"),
@@ -190,6 +191,17 @@ function resolveRequestLimits(): { maxResponseBytes: number; maxRedirects: numbe
   return { maxResponseBytes: maxResponseMib * 1024 * 1024, maxRedirects };
 }
 
+function resolveFetchConcurrency(): number {
+  const concurrency = dom.fetchConcurrency.valueAsNumber;
+  if (!Number.isInteger(concurrency) || concurrency < MIN_FETCH_CONCURRENCY || concurrency > MAX_FETCH_CONCURRENCY) {
+    dom.settingsMenu.open = true;
+    setValidation(`并发数量必须是 ${MIN_FETCH_CONCURRENCY} 到 ${MAX_FETCH_CONCURRENCY} 之间的整数。`);
+    dom.fetchConcurrency.focus();
+    throw new ConversionError("invalid_concurrency", "并发数量设置无效。");
+  }
+  return concurrency;
+}
+
 function shouldSkipCertificateVerification(): boolean {
   return dom.skipCertificateVerification.getAttribute("aria-pressed") === "true";
 }
@@ -208,6 +220,9 @@ function setProcessingStatus(label: string, state: ProcessingState) {
 function setBusy(busy: boolean) {
   running = busy;
   dom.convertButton.disabled = busy;
+  dom.userAgentSelect.disabled = busy;
+  dom.customUserAgent.disabled = busy;
+  dom.fetchConcurrency.disabled = busy;
   dom.maxResponseMib.disabled = busy;
   dom.maxRedirects.disabled = busy;
   dom.skipCertificateVerification.disabled = busy;
@@ -227,10 +242,6 @@ function updateProgress(done: number, total: number) {
 function createSourceCard(source: SourceResult): HTMLElement {
   const card = document.createElement("article");
   card.className = `source-card ${source.state}`;
-
-  const indicator = document.createElement("span");
-  indicator.className = "source-indicator";
-  indicator.setAttribute("aria-hidden", "true");
 
   const main = document.createElement("div");
   main.className = "source-main";
@@ -259,7 +270,7 @@ function createSourceCard(source: SourceResult): HTMLElement {
   status.className = "source-status";
   status.textContent = source.state === "pending" ? "请求中" : source.state === "success" ? "完成" : "失败";
 
-  card.append(indicator, main, status);
+  card.append(main, status);
   return card;
 }
 
@@ -295,9 +306,6 @@ function aggregateResults() {
   dom.emptyState.hidden = hasOutput;
   if (!hasOutput) {
     dom.emptyStateTitle.textContent = sourceResults.length > 0 ? "没有可用节点" : "等待输出";
-    dom.emptyStateCopy.textContent = sourceResults.length > 0
-      ? "请查看“处理进度”窗口中的来源错误信息。"
-      : "转换完成后，节点链接会显示在这里。";
   }
 }
 function failureFrom(error: unknown): { code: string; message: string } {
@@ -337,14 +345,18 @@ async function startConversion() {
   if (urls.length === 0) return;
 
   let userAgent: string | null;
+  let fetchConcurrency: number;
   let requestLimits: { maxResponseBytes: number; maxRedirects: number };
   try {
     userAgent = resolveUserAgent();
+    fetchConcurrency = resolveFetchConcurrency();
     requestLimits = resolveRequestLimits();
   } catch (error) {
     showToast(failureFrom(error).message, true);
     return;
   }
+
+  dom.settingsMenu.open = false;
 
   sourceResults = urls.map(url => ({ url, state: "pending", nodes: [] }));
   outputUris = [];
@@ -357,12 +369,11 @@ async function startConversion() {
   dom.outputArea.hidden = true;
   dom.emptyState.hidden = false;
   dom.emptyStateTitle.textContent = "正在转换";
-  dom.emptyStateCopy.textContent = "处理完成后，节点 URI 会显示在这里。";
   renderSources();
   setBusy(true);
   updateProgress(0, urls.length);
 
-  await runWithConcurrency(urls, FETCH_CONCURRENCY, async (url, index) => {
+  await runWithConcurrency(urls, fetchConcurrency, async (url, index) => {
     try {
       const fetched = await invoke<FetchedSubscription>("fetch_subscription", {
         url,
@@ -491,7 +502,6 @@ function resetView(clearInput: boolean) {
   dom.outputArea.hidden = true;
   dom.emptyState.hidden = false;
   dom.emptyStateTitle.textContent = "等待输出";
-  dom.emptyStateCopy.textContent = "转换完成后，节点链接会显示在这里。";
   dom.output.value = "";
   dom.outputSize.textContent = "";
 }
@@ -532,6 +542,12 @@ function bindEvents() {
   });
 
   dom.skipCertificateVerification.addEventListener("click", toggleCertificateVerification);
+
+  for (const input of [dom.fetchConcurrency, dom.maxResponseMib, dom.maxRedirects]) {
+    input.addEventListener("input", () => {
+      if (!dom.validation.hidden) setValidation();
+    });
+  }
 
   dom.urls.addEventListener("input", () => {
     if (!dom.validation.hidden) setValidation();
