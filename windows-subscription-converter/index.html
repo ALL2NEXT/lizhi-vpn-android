@@ -124,14 +124,17 @@
 
       <main class="main-content">
         <div class="workspace">
-          <section class="panel input-panel" aria-labelledby="input-title">
+          <section class="panel input-panel" id="input-panel" aria-labelledby="input-title">
             <div class="panel-header">
               <div class="panel-title-group">
                 <div>
                   <h2 id="input-title">输入订阅</h2>
                 </div>
               </div>
-              <button class="text-button" id="clear-button" type="button">清空</button>
+              <div class="panel-header-actions">
+                <button class="text-button" id="clear-button" type="button">清空</button>
+                <button class="text-button detail-button" id="input-detail-button" type="button" aria-expanded="false" aria-controls="input-panel">查看详情</button>
+              </div>
             </div>
 
             <label class="field-label" for="subscription-urls">订阅 URL</label>
@@ -156,14 +159,17 @@
             </div>
           </section>
 
-          <section class="panel processing-panel" aria-labelledby="processing-title">
+          <section class="panel processing-panel" id="processing-panel" aria-labelledby="processing-title">
             <div class="panel-header">
               <div class="panel-title-group">
                 <div>
                   <h2 id="processing-title">处理进度</h2>
                 </div>
               </div>
-              <span class="panel-status" id="processing-status" data-state="idle" role="status">待开始</span>
+              <div class="panel-header-actions">
+                <span class="panel-status" id="processing-status" data-state="idle" role="status">待开始</span>
+                <button class="text-button detail-button" id="processing-detail-button" type="button" aria-expanded="false" aria-controls="processing-panel">查看详情</button>
+              </div>
             </div>
 
             <div class="progress-copy" id="progress-copy" aria-live="polite">准备就绪</div>
@@ -178,17 +184,20 @@
             <div class="source-list" id="source-list" hidden></div>
           </section>
 
-          <section class="panel output-panel" aria-labelledby="result-title">
+          <section class="panel output-panel" id="output-panel" aria-labelledby="result-title">
             <div class="panel-header">
               <div class="panel-title-group">
                 <div>
                   <h2 id="result-title">转换输出</h2>
                 </div>
               </div>
-              <div class="result-stats" aria-live="polite">
-                <span><strong id="node-count">0</strong> 节点</span>
-                <span><strong id="source-count">0</strong> 来源</span>
-                <span><strong id="duplicate-count">0</strong> 重复</span>
+              <div class="panel-header-actions">
+                <div class="result-stats" aria-live="polite">
+                  <span><strong id="node-count">0</strong> 节点</span>
+                  <span><strong id="source-count">0</strong> 来源</span>
+                  <span><strong id="duplicate-count">0</strong> 重复</span>
+                </div>
+                <button class="text-button detail-button" id="output-detail-button" type="button" aria-expanded="false" aria-controls="output-panel">查看详情</button>
               </div>
             </div>
 
@@ -223,6 +232,7 @@
       </main>
     </div>
 
+    <div class="detail-backdrop" id="detail-backdrop" hidden></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </body>
 </html>

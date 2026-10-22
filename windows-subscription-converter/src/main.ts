@@ -90,8 +90,27 @@ const dom = {
   saveButton: getElement<HTMLButtonElement>("save-button"),
   toast: getElement<HTMLDivElement>("toast"),
   brandHome: getElement<HTMLAnchorElement>("brand-home"),
+  inputPanel: getElement<HTMLElement>("input-panel"),
+  processingPanel: getElement<HTMLElement>("processing-panel"),
+  outputPanel: getElement<HTMLElement>("output-panel"),
+  inputDetailButton: getElement<HTMLButtonElement>("input-detail-button"),
+  processingDetailButton: getElement<HTMLButtonElement>("processing-detail-button"),
+  outputDetailButton: getElement<HTMLButtonElement>("output-detail-button"),
+  detailBackdrop: getElement<HTMLDivElement>("detail-backdrop"),
 };
 
+interface DetailView {
+  panel: HTMLElement;
+  button: HTMLButtonElement;
+}
+
+const detailViews: DetailView[] = [
+  { panel: dom.inputPanel, button: dom.inputDetailButton },
+  { panel: dom.processingPanel, button: dom.processingDetailButton },
+  { panel: dom.outputPanel, button: dom.outputDetailButton },
+];
+
+let activeDetail: DetailView | null = null;
 let sourceResults: SourceResult[] = [];
 let outputUris: string[] = [];
 let duplicateCount = 0;
@@ -111,6 +130,37 @@ function showToast(message: string, error = false) {
   dom.toast.classList.toggle("error", error);
   dom.toast.classList.add("visible");
   toastTimer = window.setTimeout(() => dom.toast.classList.remove("visible"), 3200);
+}
+
+function closeDetail(focusTrigger = true) {
+  if (!activeDetail) return;
+  const { panel, button } = activeDetail;
+  panel.classList.remove("is-expanded");
+  panel.removeAttribute("role");
+  panel.removeAttribute("aria-modal");
+  button.textContent = "查看详情";
+  button.setAttribute("aria-expanded", "false");
+  dom.detailBackdrop.hidden = true;
+  document.body.classList.remove("detail-open");
+  activeDetail = null;
+  if (focusTrigger) button.focus();
+}
+
+function openDetail(view: DetailView) {
+  if (activeDetail && activeDetail !== view) closeDetail(false);
+  activeDetail = view;
+  view.panel.classList.add("is-expanded");
+  view.panel.setAttribute("role", "dialog");
+  view.panel.setAttribute("aria-modal", "true");
+  view.button.textContent = "收起详情";
+  view.button.setAttribute("aria-expanded", "true");
+  dom.detailBackdrop.hidden = false;
+  document.body.classList.add("detail-open");
+}
+
+function toggleDetail(view: DetailView) {
+  if (activeDetail === view) closeDetail();
+  else openDetail(view);
 }
 
 function formatBytes(bytes = 0): string {
@@ -357,6 +407,7 @@ async function startConversion() {
   }
 
   dom.settingsMenu.open = false;
+  closeDetail(false);
 
   sourceResults = urls.map(url => ({ url, state: "pending", nodes: [] }));
   outputUris = [];
@@ -524,7 +575,12 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", event => {
-    if (event.key !== "Escape" || !dom.settingsMenu.open) return;
+    if (event.key !== "Escape") return;
+    if (activeDetail) {
+      closeDetail();
+      return;
+    }
+    if (!dom.settingsMenu.open) return;
     dom.settingsMenu.open = false;
     dom.settingsMenu.querySelector<HTMLElement>("summary")?.focus();
   });
@@ -542,6 +598,11 @@ function bindEvents() {
   });
 
   dom.skipCertificateVerification.addEventListener("click", toggleCertificateVerification);
+
+  for (const view of detailViews) {
+    view.button.addEventListener("click", () => toggleDetail(view));
+  }
+  dom.detailBackdrop.addEventListener("click", () => closeDetail());
 
   for (const input of [dom.fetchConcurrency, dom.maxResponseMib, dom.maxRedirects]) {
     input.addEventListener("input", () => {
