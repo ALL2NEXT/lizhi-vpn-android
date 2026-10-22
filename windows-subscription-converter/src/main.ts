@@ -56,6 +56,7 @@ function getElement<T extends HTMLElement>(id: string): T {
 
 const dom = {
   urls: getElement<HTMLTextAreaElement>("subscription-urls"),
+  settingsMenu: getElement<HTMLDetailsElement>("settings-menu"),
   validation: getElement<HTMLDivElement>("validation-message"),
   userAgentSelect: getElement<HTMLSelectElement>("user-agent-select"),
   customUserAgent: getElement<HTMLInputElement>("custom-user-agent"),
@@ -441,6 +442,19 @@ function bindEvents() {
   dom.brandHome.addEventListener("click", event => {
     event.preventDefault();
     dom.urls.focus();
+  });
+
+  document.addEventListener("click", event => {
+    const target = event.target;
+    if (dom.settingsMenu.open && target instanceof Node && !dom.settingsMenu.contains(target)) {
+      dom.settingsMenu.open = false;
+    }
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape" || !dom.settingsMenu.open) return;
+    dom.settingsMenu.open = false;
+    dom.settingsMenu.querySelector<HTMLElement>("summary")?.focus();
   });
 
   dom.urls.addEventListener("keydown", event => {

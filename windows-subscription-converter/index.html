@@ -24,10 +24,61 @@
             <span>订阅转换器</span>
           </span>
         </a>
-        <div class="local-badge" title="所有请求均由本机发起，不经过 Chimera Worker">
-          <span class="local-badge-dot" aria-hidden="true"></span>
-          完全本地运行
-        </div>
+        <nav class="app-nav" aria-label="主导航">
+          <div class="local-badge" title="所有请求均由本机发起，不经过 Chimera Worker">
+            <span class="local-badge-dot" aria-hidden="true"></span>
+            完全本地运行
+          </div>
+          <details class="settings-menu" id="settings-menu">
+            <summary>
+              <span>设置</span>
+              <span class="settings-chevron" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-popover">
+              <div class="settings-heading">
+                <strong>设置</strong>
+                <span>请求与安全选项</span>
+              </div>
+              <label class="field-label" for="user-agent-select">User-Agent</label>
+              <select id="user-agent-select" class="select-input">
+                <option value="auto">自动识别（推荐）</option>
+                <option value="nekobox">NekoBox / Clash Meta</option>
+                <option value="sing-box">sing-box</option>
+                <option value="clash">Clash Meta</option>
+                <option value="v2rayn">v2rayN</option>
+                <option value="custom">自定义</option>
+              </select>
+              <input
+                id="custom-user-agent"
+                class="text-input"
+                type="text"
+                maxlength="512"
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="例如：MyClient/1.0"
+                hidden
+              />
+              <p class="option-note">
+                自动模式会在服务器拒绝请求或返回空内容时，依次尝试常见客户端标识。
+              </p>
+              <div class="settings-divider" aria-hidden="true"></div>
+              <div class="security-option">
+                <button
+                  class="toggle-button"
+                  id="skip-certificate-verification"
+                  type="button"
+                  aria-pressed="false"
+                >
+                  <span class="toggle-indicator" aria-hidden="true"></span>
+                  跳过证书验证
+                </button>
+                <p class="option-note security-note" id="skip-certificate-note" hidden>
+                  已关闭 TLS 证书校验，仅对证书异常或自签名的可信订阅源使用。
+                </p>
+              </div>
+            </div>
+          </details>
+        </nav>
       </header>
 
       <main class="main-content">
@@ -58,51 +109,6 @@
             </div>
 
             <div class="validation-message" id="validation-message" hidden></div>
-
-            <details class="advanced-options">
-              <summary>
-                <span>请求选项</span>
-                <span class="summary-note">默认自动识别客户端</span>
-              </summary>
-              <div class="advanced-content">
-                <label class="field-label" for="user-agent-select">User-Agent</label>
-                <select id="user-agent-select" class="select-input">
-                  <option value="auto">自动识别（推荐）</option>
-                  <option value="nekobox">NekoBox / Clash Meta</option>
-                  <option value="sing-box">sing-box</option>
-                  <option value="clash">Clash Meta</option>
-                  <option value="v2rayn">v2rayN</option>
-                  <option value="custom">自定义</option>
-                </select>
-                <input
-                  id="custom-user-agent"
-                  class="text-input"
-                  type="text"
-                  maxlength="512"
-                  spellcheck="false"
-                  autocomplete="off"
-                  placeholder="例如：MyClient/1.0"
-                  hidden
-                />
-                <p class="option-note">
-                  自动模式会在服务器拒绝请求或返回空内容时，依次尝试常见客户端标识。
-                </p>
-                <div class="security-option">
-                  <button
-                    class="toggle-button"
-                    id="skip-certificate-verification"
-                    type="button"
-                    aria-pressed="false"
-                  >
-                    <span class="toggle-indicator" aria-hidden="true"></span>
-                    跳过证书验证
-                  </button>
-                  <p class="option-note security-note" id="skip-certificate-note" hidden>
-                    已关闭 TLS 证书校验，仅对证书异常或自签名的可信订阅源使用。
-                  </p>
-                </div>
-              </div>
-            </details>
 
             <div class="run-area">
               <div class="progress-copy" id="progress-copy" aria-live="polite">准备就绪</div>
