@@ -106,8 +106,7 @@ button {
 button:focus-visible,
 textarea:focus-visible,
 input:focus-visible,
-select:focus-visible,
-summary:focus-visible {
+select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -119,69 +118,6 @@ summary:focus-visible {
   min-height: 100vh;
   margin: 0 auto;
   padding: 0 32px;
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 78px;
-  border-bottom: 1px solid var(--border);
-}
-
-.app-nav {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.brand {
-  display: inline-flex;
-  gap: 12px;
-  align-items: center;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.brand-mark {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  color: var(--accent-bright);
-  background: linear-gradient(145deg, var(--accent-soft), transparent);
-  border: 1px solid rgba(91, 157, 255, 0.25);
-  border-radius: 11px;
-  place-items: center;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.brand-mark svg {
-  width: 27px;
-  height: 27px;
-}
-
-.brand-copy {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-}
-
-.brand-copy strong {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.local-badge {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  padding: 7px 11px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: 999px;
 }
 
 .main-content {
@@ -402,78 +338,47 @@ summary:focus-visible {
   border-color: rgba(246, 189, 98, 0.2);
 }
 
-.settings-menu {
-  position: relative;
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(3, 10, 20, 0.58);
+  backdrop-filter: blur(6px);
 }
 
-.settings-menu > summary {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  min-height: 38px;
-  padding: 0 14px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  list-style: none;
-  cursor: pointer;
-  user-select: none;
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
+body.settings-open {
+  overflow: hidden;
 }
 
-.settings-menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.settings-menu > summary:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
-.settings-menu[open] > summary {
-  color: var(--accent-bright);
-  background: var(--accent-soft);
-  border-color: rgba(91, 157, 255, 0.35);
-}
-
-.settings-chevron {
-  width: 5px;
-  height: 5px;
-  margin-left: 1px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg) translateY(-1px);
-  transition: transform 160ms ease;
-}
-
-.settings-menu[open] .settings-chevron {
-  transform: rotate(225deg) translate(-1px, -1px);
-}
-
-.settings-popover {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  z-index: 30;
+.settings-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 60;
   display: grid;
   gap: 12px;
-  width: min(400px, calc(100vw - 36px));
-  max-height: calc(100vh - 90px);
-  padding: 18px;
+  width: min(440px, calc(100vw - 36px));
+  max-height: calc(100vh - 48px);
+  padding: 20px;
   overflow-y: auto;
   background: var(--surface-solid);
   border: 1px solid var(--border-strong);
   border-radius: 16px;
   box-shadow: var(--shadow);
+  transform: translate(-50%, -50%);
+  animation: detail-in 180ms ease-out;
+}
+
+.settings-pane {
+  display: grid;
+  gap: 12px;
 }
 
 .settings-heading {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
   padding-bottom: 3px;
 }
 
@@ -996,14 +901,6 @@ body.detail-open {
 @media (max-width: 760px) {
   .app-shell {
     padding: 0 18px;
-  }
-
-  .app-nav {
-    gap: 8px;
-  }
-
-  .local-badge {
-    display: none;
   }
 
   .workspace {

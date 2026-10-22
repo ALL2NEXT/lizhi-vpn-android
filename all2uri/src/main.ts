@@ -19,6 +19,7 @@ interface FetchFailure {
 
 type SourceState = "pending" | "success" | "error";
 type ProcessingState = "idle" | "running" | "done" | "warning" | "error";
+type SettingsView = "input" | "processing" | "output";
 
 interface SourceResult {
   url: string;
@@ -61,13 +62,19 @@ function getElement<T extends HTMLElement>(id: string): T {
 
 const dom = {
   urls: getElement<HTMLTextAreaElement>("subscription-urls"),
-  settingsMenu: getElement<HTMLDetailsElement>("settings-menu"),
+  settingsDialog: getElement<HTMLElement>("settings-dialog"),
+  settingsBackdrop: getElement<HTMLDivElement>("settings-backdrop"),
+  settingsCloseButton: getElement<HTMLButtonElement>("settings-close-button"),
+  settingsButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".settings-button")),
+  settingsTitle: getElement<HTMLElement>("settings-title"),
+  settingsPanes: Array.from(document.querySelectorAll<HTMLElement>(".settings-pane")),
   validation: getElement<HTMLDivElement>("validation-message"),
   userAgentSelect: getElement<HTMLSelectElement>("user-agent-select"),
   customUserAgent: getElement<HTMLInputElement>("custom-user-agent"),
   fetchConcurrency: getElement<HTMLInputElement>("fetch-concurrency"),
   maxResponseMib: getElement<HTMLInputElement>("max-response-mib"),
   maxRedirects: getElement<HTMLInputElement>("max-redirects"),
+  deduplicateOutput: getElement<HTMLButtonElement>("deduplicate-output"),
   skipCertificateVerification: getElement<HTMLButtonElement>("skip-certificate-verification"),
   skipCertificateNote: getElement<HTMLParagraphElement>("skip-certificate-note"),
   clearButton: getElement<HTMLButtonElement>("clear-button"),
@@ -89,7 +96,6 @@ const dom = {
   copyButton: getElement<HTMLButtonElement>("copy-button"),
   saveButton: getElement<HTMLButtonElement>("save-button"),
   toast: getElement<HTMLDivElement>("toast"),
-  brandHome: getElement<HTMLAnchorElement>("brand-home"),
   inputPanel: getElement<HTMLElement>("input-panel"),
   processingPanel: getElement<HTMLElement>("processing-panel"),
   outputPanel: getElement<HTMLElement>("output-panel"),
@@ -111,6 +117,8 @@ const detailViews: DetailView[] = [
 ];
 
 let activeDetail: DetailView | null = null;
+let activeSettingsView: SettingsView | null = null;
+let settingsTrigger: HTMLButtonElement | null = null;
 let sourceResults: SourceResult[] = [];
 let outputUris: string[] = [];
 let duplicateCount = 0;
@@ -132,6 +140,37 @@ function showToast(message: string, error = false) {
   toastTimer = window.setTimeout(() => dom.toast.classList.remove("visible"), 3200);
 }
 
+const SETTINGS_TITLES: Record<SettingsView, string> = {
+  input: "输入设置",
+  processing: "处理设置",
+  output: "输出设置",
+};
+
+function openSettings(view: SettingsView, trigger?: HTMLButtonElement) {
+  if (activeDetail) closeDetail(false);
+  if (trigger) settingsTrigger = trigger;
+  else if (!activeSettingsView) settingsTrigger = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
+  activeSettingsView = view;
+  dom.settingsTitle.textContent = SETTINGS_TITLES[view];
+  for (const pane of dom.settingsPanes) pane.hidden = pane.dataset.settingsView !== view;
+  dom.settingsDialog.hidden = false;
+  dom.settingsBackdrop.hidden = false;
+  document.body.classList.add("settings-open");
+  const activePane = dom.settingsPanes.find(pane => pane.dataset.settingsView === view);
+  window.requestAnimationFrame(() => activePane?.querySelector<HTMLElement>("select, input, button")?.focus());
+}
+
+function closeSettings(focusTrigger = true) {
+  if (dom.settingsDialog.hidden) return;
+  dom.settingsDialog.hidden = true;
+  dom.settingsBackdrop.hidden = true;
+  document.body.classList.remove("settings-open");
+  const trigger = settingsTrigger;
+  activeSettingsView = null;
+  settingsTrigger = null;
+  if (focusTrigger) trigger?.focus();
+}
+
 function closeDetail(focusTrigger = true) {
   if (!activeDetail) return;
   const { panel, button } = activeDetail;
@@ -147,6 +186,7 @@ function closeDetail(focusTrigger = true) {
 }
 
 function openDetail(view: DetailView) {
+  closeSettings(false);
   if (activeDetail && activeDetail !== view) closeDetail(false);
   activeDetail = view;
   view.panel.classList.add("is-expanded");
@@ -184,11 +224,13 @@ function resolveUserAgent(): string | null {
   if (preset === "custom") {
     const custom = dom.customUserAgent.value.trim();
     if (!custom) {
+      openSettings("input");
       setValidation("已选择自定义 User-Agent，但输入内容为空。");
       dom.customUserAgent.focus();
       throw new ConversionError("invalid_user_agent", "自定义 User-Agent 不能为空。");
     }
     if (custom.length > 512 || /[\r\n]/.test(custom)) {
+      openSettings("input");
       setValidation("User-Agent 不能包含换行，且长度不能超过 512 个字符。");
       dom.customUserAgent.focus();
       throw new ConversionError("invalid_user_agent", "User-Agent 格式无效。");
@@ -224,7 +266,7 @@ function readInputUrls(): string[] {
 function resolveRequestLimits(): { maxResponseBytes: number; maxRedirects: number } {
   const maxResponseMib = dom.maxResponseMib.valueAsNumber;
   if (!Number.isInteger(maxResponseMib) || maxResponseMib < MIN_RESPONSE_MIB || maxResponseMib > MAX_RESPONSE_MIB) {
-    dom.settingsMenu.open = true;
+    openSettings("processing");
     setValidation(`响应上限必须是 ${MIN_RESPONSE_MIB} 到 ${MAX_RESPONSE_MIB} MiB 之间的整数。`);
     dom.maxResponseMib.focus();
     throw new ConversionError("invalid_response_limit", "响应上限设置无效。");
@@ -232,7 +274,7 @@ function resolveRequestLimits(): { maxResponseBytes: number; maxRedirects: numbe
 
   const maxRedirects = dom.maxRedirects.valueAsNumber;
   if (!Number.isInteger(maxRedirects) || maxRedirects < 0 || maxRedirects > MAX_REDIRECTS) {
-    dom.settingsMenu.open = true;
+    openSettings("processing");
     setValidation(`最大重定向必须是 0 到 ${MAX_REDIRECTS} 之间的整数。`);
     dom.maxRedirects.focus();
     throw new ConversionError("invalid_redirect_limit", "重定向设置无效。");
@@ -244,7 +286,7 @@ function resolveRequestLimits(): { maxResponseBytes: number; maxRedirects: numbe
 function resolveFetchConcurrency(): number {
   const concurrency = dom.fetchConcurrency.valueAsNumber;
   if (!Number.isInteger(concurrency) || concurrency < MIN_FETCH_CONCURRENCY || concurrency > MAX_FETCH_CONCURRENCY) {
-    dom.settingsMenu.open = true;
+    openSettings("processing");
     setValidation(`并发数量必须是 ${MIN_FETCH_CONCURRENCY} 到 ${MAX_FETCH_CONCURRENCY} 之间的整数。`);
     dom.fetchConcurrency.focus();
     throw new ConversionError("invalid_concurrency", "并发数量设置无效。");
@@ -262,6 +304,16 @@ function toggleCertificateVerification() {
   dom.skipCertificateNote.hidden = !skip;
 }
 
+function shouldDeduplicateOutput(): boolean {
+  return dom.deduplicateOutput.getAttribute("aria-pressed") !== "false";
+}
+
+function toggleOutputDeduplication() {
+  const deduplicate = !shouldDeduplicateOutput();
+  dom.deduplicateOutput.setAttribute("aria-pressed", String(deduplicate));
+  if (!running && sourceResults.length > 0) aggregateResults();
+}
+
 function setProcessingStatus(label: string, state: ProcessingState) {
   dom.processingStatus.textContent = label;
   dom.processingStatus.dataset.state = state;
@@ -275,6 +327,7 @@ function setBusy(busy: boolean) {
   dom.fetchConcurrency.disabled = busy;
   dom.maxResponseMib.disabled = busy;
   dom.maxRedirects.disabled = busy;
+  dom.deduplicateOutput.disabled = busy;
   dom.skipCertificateVerification.disabled = busy;
   dom.convertButton.classList.toggle("busy", busy);
   dom.convertLabel.textContent = busy ? "正在获取与转换…" : "获取并转换";
@@ -332,18 +385,22 @@ function renderSources() {
 }
 
 function aggregateResults() {
-  const uniqueNodes = new Set<string>();
+  const deduplicate = shouldDeduplicateOutput();
+  const seenNodes = new Set<string>();
+  const nodes: string[] = [];
   duplicateCount = 0;
 
   for (const source of sourceResults) {
     if (source.state !== "success") continue;
     for (const node of source.nodes) {
-      if (uniqueNodes.has(node)) duplicateCount++;
-      else uniqueNodes.add(node);
+      const duplicate = seenNodes.has(node);
+      if (duplicate) duplicateCount++;
+      else seenNodes.add(node);
+      if (!deduplicate || !duplicate) nodes.push(node);
     }
   }
 
-  outputUris = [...uniqueNodes];
+  outputUris = nodes;
   const successfulSources = sourceResults.filter(source => source.state === "success").length;
   dom.nodeCount.textContent = String(outputUris.length);
   dom.sourceCount.textContent = String(successfulSources);
@@ -406,7 +463,7 @@ async function startConversion() {
     return;
   }
 
-  dom.settingsMenu.open = false;
+  closeSettings(false);
   closeDetail(false);
 
   sourceResults = urls.map(url => ({ url, state: "pending", nodes: [] }));
@@ -562,27 +619,13 @@ function bindEvents() {
   dom.copyButton.addEventListener("click", () => void copyAll());
   dom.saveButton.addEventListener("click", () => void saveAll());
   dom.clearButton.addEventListener("click", () => resetView(true));
-  dom.brandHome.addEventListener("click", event => {
-    event.preventDefault();
-    dom.urls.focus();
-  });
-
-  document.addEventListener("click", event => {
-    const target = event.target;
-    if (dom.settingsMenu.open && target instanceof Node && !dom.settingsMenu.contains(target)) {
-      dom.settingsMenu.open = false;
-    }
-  });
-
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
     if (activeDetail) {
       closeDetail();
       return;
     }
-    if (!dom.settingsMenu.open) return;
-    dom.settingsMenu.open = false;
-    dom.settingsMenu.querySelector<HTMLElement>("summary")?.focus();
+    if (!dom.settingsDialog.hidden) closeSettings();
   });
 
   dom.urls.addEventListener("keydown", event => {
@@ -598,6 +641,16 @@ function bindEvents() {
   });
 
   dom.skipCertificateVerification.addEventListener("click", toggleCertificateVerification);
+
+  for (const button of dom.settingsButtons) {
+    button.addEventListener("click", () => {
+      const view = button.dataset.settingsView;
+      if (view === "input" || view === "processing" || view === "output") openSettings(view, button);
+    });
+  }
+  dom.settingsCloseButton.addEventListener("click", () => closeSettings());
+  dom.settingsBackdrop.addEventListener("click", () => closeSettings());
+  dom.deduplicateOutput.addEventListener("click", toggleOutputDeduplication);
 
   for (const view of detailViews) {
     view.button.addEventListener("click", () => toggleDetail(view));
