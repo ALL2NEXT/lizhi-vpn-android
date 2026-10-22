@@ -32,6 +32,9 @@ interface SourceResult {
 }
 
 const FETCH_CONCURRENCY = 3;
+const MIN_RESPONSE_MIB = 1;
+const MAX_RESPONSE_MIB = 64;
+const MAX_REDIRECTS = 50;
 const USER_AGENT_PRESETS: Record<string, string> = {
   nekobox: "NekoBox/Android/1.4.2 (Prefer ClashMeta Format)",
   "sing-box": "sing-box/1.15.0",
@@ -61,6 +64,8 @@ const dom = {
   validation: getElement<HTMLDivElement>("validation-message"),
   userAgentSelect: getElement<HTMLSelectElement>("user-agent-select"),
   customUserAgent: getElement<HTMLInputElement>("custom-user-agent"),
+  maxResponseMib: getElement<HTMLInputElement>("max-response-mib"),
+  maxRedirects: getElement<HTMLInputElement>("max-redirects"),
   skipCertificateVerification: getElement<HTMLButtonElement>("skip-certificate-verification"),
   skipCertificateNote: getElement<HTMLParagraphElement>("skip-certificate-note"),
   clearButton: getElement<HTMLButtonElement>("clear-button"),
@@ -165,6 +170,26 @@ function readInputUrls(): string[] {
   return detected.urls;
 }
 
+function resolveRequestLimits(): { maxResponseBytes: number; maxRedirects: number } {
+  const maxResponseMib = dom.maxResponseMib.valueAsNumber;
+  if (!Number.isInteger(maxResponseMib) || maxResponseMib < MIN_RESPONSE_MIB || maxResponseMib > MAX_RESPONSE_MIB) {
+    dom.settingsMenu.open = true;
+    setValidation(`响应上限必须是 ${MIN_RESPONSE_MIB} 到 ${MAX_RESPONSE_MIB} MiB 之间的整数。`);
+    dom.maxResponseMib.focus();
+    throw new ConversionError("invalid_response_limit", "响应上限设置无效。");
+  }
+
+  const maxRedirects = dom.maxRedirects.valueAsNumber;
+  if (!Number.isInteger(maxRedirects) || maxRedirects < 0 || maxRedirects > MAX_REDIRECTS) {
+    dom.settingsMenu.open = true;
+    setValidation(`最大重定向必须是 0 到 ${MAX_REDIRECTS} 之间的整数。`);
+    dom.maxRedirects.focus();
+    throw new ConversionError("invalid_redirect_limit", "重定向设置无效。");
+  }
+
+  return { maxResponseBytes: maxResponseMib * 1024 * 1024, maxRedirects };
+}
+
 function shouldSkipCertificateVerification(): boolean {
   return dom.skipCertificateVerification.getAttribute("aria-pressed") === "true";
 }
@@ -183,6 +208,8 @@ function setProcessingStatus(label: string, state: ProcessingState) {
 function setBusy(busy: boolean) {
   running = busy;
   dom.convertButton.disabled = busy;
+  dom.maxResponseMib.disabled = busy;
+  dom.maxRedirects.disabled = busy;
   dom.skipCertificateVerification.disabled = busy;
   dom.convertButton.classList.toggle("busy", busy);
   dom.convertLabel.textContent = busy ? "正在获取与转换…" : "获取并转换";
@@ -310,8 +337,10 @@ async function startConversion() {
   if (urls.length === 0) return;
 
   let userAgent: string | null;
+  let requestLimits: { maxResponseBytes: number; maxRedirects: number };
   try {
     userAgent = resolveUserAgent();
+    requestLimits = resolveRequestLimits();
   } catch (error) {
     showToast(failureFrom(error).message, true);
     return;
@@ -339,6 +368,8 @@ async function startConversion() {
         url,
         userAgent,
         skipCertificateVerification: shouldSkipCertificateVerification(),
+        maxResponseBytes: requestLimits.maxResponseBytes,
+        maxRedirects: requestLimits.maxRedirects,
       });
       const nodes = toStandardUris(fetched.content).filter(node => !/^https?:\/\//i.test(node));
       if (nodes.length === 0) {

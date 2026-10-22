@@ -62,6 +62,39 @@
                 自动模式会在服务器拒绝请求或返回空内容时，依次尝试常见客户端标识。
               </p>
               <div class="settings-divider" aria-hidden="true"></div>
+              <div class="settings-limits">
+                <span class="settings-section-label">请求限制</span>
+                <div class="settings-grid">
+                  <div class="settings-field">
+                    <label class="field-label" for="max-response-mib">响应上限（MiB）</label>
+                    <input
+                      id="max-response-mib"
+                      class="text-input number-input"
+                      type="number"
+                      min="1"
+                      max="64"
+                      step="1"
+                      value="2"
+                      inputmode="numeric"
+                    />
+                  </div>
+                  <div class="settings-field">
+                    <label class="field-label" for="max-redirects">最大重定向</label>
+                    <input
+                      id="max-redirects"
+                      class="text-input number-input"
+                      type="number"
+                      min="0"
+                      max="50"
+                      step="1"
+                      value="10"
+                      inputmode="numeric"
+                    />
+                  </div>
+                </div>
+                <p class="option-note">响应上限 1–64 MiB；重定向 0–50 次。</p>
+              </div>
+              <div class="settings-divider" aria-hidden="true"></div>
               <div class="security-option">
                 <button
                   class="toggle-button"
@@ -197,11 +230,6 @@
           </section>
         </div>
       </main>
-
-      <footer class="app-footer">
-        <span>Chimera Subscription Converter</span>
-        <span>响应上限 2 MiB · 最多 10 次重定向 · TLS 证书校验默认开启</span>
-      </footer>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

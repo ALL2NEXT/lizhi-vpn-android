@@ -8,9 +8,12 @@ use serde::Serialize;
 use std::{io, path::PathBuf, time::Duration};
 use url::Url;
 
-const MAX_SUBSCRIPTION_BYTES: usize = 2 * 1024 * 1024;
+const DEFAULT_MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+const MIN_RESPONSE_BYTES: usize = 1024 * 1024;
+const MAX_RESPONSE_BYTES_LIMIT: usize = 64 * 1024 * 1024;
+const DEFAULT_MAX_REDIRECTS: usize = 10;
+const MAX_REDIRECTS_LIMIT: usize = 50;
 const MAX_OUTPUT_BYTES: usize = 64 * 1024 * 1024;
-const MAX_REDIRECTS: usize = 10;
 const MAX_URL_CHARS: usize = 8192;
 const DEFAULT_USER_AGENTS: &[&str] = &[
     "NekoBox/Android/1.4.2 (Prefer ClashMeta Format)",
@@ -36,6 +39,41 @@ struct FetchFailure {
     code: String,
     message: String,
     status: Option<u16>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RequestOptions {
+    skip_certificate_verification: bool,
+    max_response_bytes: usize,
+    max_redirects: usize,
+}
+
+impl Default for RequestOptions {
+    fn default() -> Self {
+        Self {
+            skip_certificate_verification: false,
+            max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
+            max_redirects: DEFAULT_MAX_REDIRECTS,
+        }
+    }
+}
+
+impl RequestOptions {
+    fn validate(self) -> Result<Self, FetchFailure> {
+        if !(MIN_RESPONSE_BYTES..=MAX_RESPONSE_BYTES_LIMIT).contains(&self.max_response_bytes) {
+            return Err(FetchFailure::new(
+                "invalid_response_limit",
+                "响应上限必须在 1 到 64 MiB 之间。",
+            ));
+        }
+        if self.max_redirects > MAX_REDIRECTS_LIMIT {
+            return Err(FetchFailure::new(
+                "invalid_redirect_limit",
+                "最大重定向次数不能超过 50。",
+            ));
+        }
+        Ok(self)
+    }
 }
 
 impl FetchFailure {
@@ -121,9 +159,10 @@ fn user_agents(custom: Option<&str>) -> Result<Vec<String>, FetchFailure> {
     Ok(vec![custom.to_string()])
 }
 
-fn build_client(skip_certificate_verification: bool) -> Result<Client, FetchFailure> {
-    let redirect_policy = Policy::custom(|attempt| {
-        if attempt.previous().len() >= MAX_REDIRECTS {
+fn build_client(options: RequestOptions) -> Result<Client, FetchFailure> {
+    let max_redirects = options.max_redirects;
+    let redirect_policy = Policy::custom(move |attempt| {
+        if attempt.previous().len() > max_redirects {
             attempt.error(io::Error::new(io::ErrorKind::InvalidData, "重定向次数过多"))
         } else if !matches!(attempt.url().scheme(), "http" | "https") {
             attempt.error(io::Error::new(
@@ -140,7 +179,7 @@ fn build_client(skip_certificate_verification: bool) -> Result<Client, FetchFail
         .timeout(Duration::from_secs(30))
         .redirect(redirect_policy);
 
-    if skip_certificate_verification {
+    if options.skip_certificate_verification {
         builder = builder
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true);
@@ -187,14 +226,18 @@ fn should_retry_with_next_user_agent(status: StatusCode) -> bool {
     matches!(status.as_u16(), 400 | 403 | 406 | 415)
 }
 
-async fn read_limited_response(mut response: Response) -> Result<Vec<u8>, FetchFailure> {
+async fn read_limited_response(
+    mut response: Response,
+    max_response_bytes: usize,
+) -> Result<Vec<u8>, FetchFailure> {
+    let limit_mib = max_response_bytes / (1024 * 1024);
     if response
         .content_length()
-        .is_some_and(|length| length > MAX_SUBSCRIPTION_BYTES as u64)
+        .is_some_and(|length| length > max_response_bytes as u64)
     {
         return Err(FetchFailure::new(
             "response_too_large",
-            "订阅响应超过 2 MiB 限制。",
+            format!("订阅响应超过 {limit_mib} MiB 限制。"),
         ));
     }
 
@@ -202,17 +245,17 @@ async fn read_limited_response(mut response: Response) -> Result<Vec<u8>, FetchF
         response
             .content_length()
             .unwrap_or(0)
-            .min(MAX_SUBSCRIPTION_BYTES as u64) as usize,
+            .min(max_response_bytes as u64) as usize,
     );
     while let Some(chunk) = response
         .chunk()
         .await
         .map_err(|error| network_failure(&error))?
     {
-        if body.len().saturating_add(chunk.len()) > MAX_SUBSCRIPTION_BYTES {
+        if body.len().saturating_add(chunk.len()) > max_response_bytes {
             return Err(FetchFailure::new(
                 "response_too_large",
-                "订阅响应超过 2 MiB 限制。",
+                format!("订阅响应超过 {limit_mib} MiB 限制。"),
             ));
         }
         body.extend_from_slice(&chunk);
@@ -223,11 +266,12 @@ async fn read_limited_response(mut response: Response) -> Result<Vec<u8>, FetchF
 async fn fetch_subscription_inner(
     raw_url: &str,
     custom_user_agent: Option<&str>,
-    skip_certificate_verification: bool,
+    options: RequestOptions,
 ) -> Result<FetchedSubscription, FetchFailure> {
+    let options = options.validate()?;
     let (url, basic_auth) = parse_target(raw_url)?;
     let agents = user_agents(custom_user_agent)?;
-    let client = build_client(skip_certificate_verification)?;
+    let client = build_client(options)?;
     let agent_count = agents.len();
     let mut last_status = None;
 
@@ -259,7 +303,7 @@ async fn fetch_subscription_inner(
                 .and_then(|value| value.to_str().ok())
                 .map(str::to_string);
             let final_url = sanitized_display_url(response.url());
-            let body = read_limited_response(response).await?;
+            let body = read_limited_response(response, options.max_response_bytes).await?;
 
             if body.is_empty() {
                 if index + 1 < agent_count {
@@ -300,13 +344,15 @@ async fn fetch_subscription(
     url: String,
     user_agent: Option<String>,
     skip_certificate_verification: Option<bool>,
+    max_response_bytes: Option<usize>,
+    max_redirects: Option<usize>,
 ) -> Result<FetchedSubscription, FetchFailure> {
-    fetch_subscription_inner(
-        &url,
-        user_agent.as_deref(),
-        skip_certificate_verification.unwrap_or(false),
-    )
-    .await
+    let options = RequestOptions {
+        skip_certificate_verification: skip_certificate_verification.unwrap_or(false),
+        max_response_bytes: max_response_bytes.unwrap_or(DEFAULT_MAX_RESPONSE_BYTES),
+        max_redirects: max_redirects.unwrap_or(DEFAULT_MAX_REDIRECTS),
+    };
+    fetch_subscription_inner(&url, user_agent.as_deref(), options).await
 }
 
 #[tauri::command]
@@ -375,6 +421,38 @@ mod tests {
         format!("http://{address}/subscription")
     }
 
+    fn request_options(skip_certificate_verification: bool) -> RequestOptions {
+        RequestOptions {
+            skip_certificate_verification,
+            ..RequestOptions::default()
+        }
+    }
+
+    async fn serve_redirects(redirects: usize, body: &'static [u8]) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            for index in 0..=redirects {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = [0_u8; 4096];
+                let _ = socket.read(&mut buffer).await;
+                let response = if index < redirects {
+                    "HTTP/1.1 302 Found\r\nLocation: /subscription\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()
+                } else {
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    )
+                };
+                socket.write_all(response.as_bytes()).await.unwrap();
+                if index == redirects {
+                    socket.write_all(body).await.unwrap();
+                }
+            }
+        });
+        format!("http://{address}/subscription")
+    }
+
     async fn serve_once_tls(body: &'static [u8], content_type: &'static str) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -415,16 +493,69 @@ mod tests {
     #[tokio::test]
     async fn rejects_self_signed_certificate_by_default() {
         let url = serve_once_tls(b"vless://node@example.com:443", "text/plain").await;
-        let result = fetch_subscription_inner(&url, Some("TestClient/1.0"), false).await;
+        let result =
+            fetch_subscription_inner(&url, Some("TestClient/1.0"), request_options(false)).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn allows_self_signed_certificate_when_verification_is_skipped() {
         let url = serve_once_tls(b"vless://node@example.com:443", "text/plain").await;
-        let result = fetch_subscription_inner(&url, Some("TestClient/1.0"), true)
+        let result = fetch_subscription_inner(&url, Some("TestClient/1.0"), request_options(true))
             .await
             .unwrap();
+        assert_eq!(result.content, "vless://node@example.com:443");
+    }
+
+    #[test]
+    fn validates_request_limits() {
+        let defaults = RequestOptions::default().validate().unwrap();
+        assert_eq!(defaults.max_response_bytes, DEFAULT_MAX_RESPONSE_BYTES);
+        assert_eq!(defaults.max_redirects, DEFAULT_MAX_REDIRECTS);
+
+        let too_small = RequestOptions {
+            max_response_bytes: MIN_RESPONSE_BYTES - 1,
+            ..RequestOptions::default()
+        }
+        .validate()
+        .unwrap_err();
+        assert_eq!(too_small.code, "invalid_response_limit");
+
+        let too_many_redirects = RequestOptions {
+            max_redirects: MAX_REDIRECTS_LIMIT + 1,
+            ..RequestOptions::default()
+        }
+        .validate()
+        .unwrap_err();
+        assert_eq!(too_many_redirects.code, "invalid_redirect_limit");
+    }
+
+    #[tokio::test]
+    async fn honors_configured_redirect_limit() {
+        let url = serve_redirects(1, b"vless://node@example.com:443").await;
+        let failure = fetch_subscription_inner(
+            &url,
+            Some("TestClient/1.0"),
+            RequestOptions {
+                max_redirects: 0,
+                ..RequestOptions::default()
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(failure.code, "redirect_failed");
+
+        let url = serve_redirects(1, b"vless://node@example.com:443").await;
+        let result = fetch_subscription_inner(
+            &url,
+            Some("TestClient/1.0"),
+            RequestOptions {
+                max_redirects: 1,
+                ..RequestOptions::default()
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(result.content, "vless://node@example.com:443");
     }
 
@@ -437,7 +568,7 @@ mod tests {
     #[tokio::test]
     async fn fetches_plain_text_subscription() {
         let url = serve_once(b"vless://node@example.com:443", "text/plain").await;
-        let result = fetch_subscription_inner(&url, Some("TestClient/1.0"), false)
+        let result = fetch_subscription_inner(&url, Some("TestClient/1.0"), request_options(false))
             .await
             .unwrap();
         assert_eq!(result.content, "vless://node@example.com:443");
@@ -446,12 +577,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_oversized_response() {
-        static BODY: [u8; MAX_SUBSCRIPTION_BYTES + 1] = [b'a'; MAX_SUBSCRIPTION_BYTES + 1];
+    async fn honors_custom_response_limit() {
+        static BODY: [u8; MIN_RESPONSE_BYTES + 1] = [b'a'; MIN_RESPONSE_BYTES + 1];
         let url = serve_once(&BODY, "text/plain").await;
-        let failure = fetch_subscription_inner(&url, Some("TestClient/1.0"), false)
-            .await
-            .unwrap_err();
+        let failure = fetch_subscription_inner(
+            &url,
+            Some("TestClient/1.0"),
+            RequestOptions {
+                max_response_bytes: MIN_RESPONSE_BYTES,
+                ..RequestOptions::default()
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(failure.code, "response_too_large");
+    }
+
+    #[tokio::test]
+    async fn rejects_oversized_response() {
+        static BODY: [u8; DEFAULT_MAX_RESPONSE_BYTES + 1] = [b'a'; DEFAULT_MAX_RESPONSE_BYTES + 1];
+        let url = serve_once(&BODY, "text/plain").await;
+        let failure =
+            fetch_subscription_inner(&url, Some("TestClient/1.0"), request_options(false))
+                .await
+                .unwrap_err();
         assert_eq!(failure.code, "response_too_large");
     }
 
