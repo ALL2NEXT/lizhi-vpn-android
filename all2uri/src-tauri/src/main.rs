@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    windows_subscription_converter_lib::run()
+    all2uri_lib::run()
 }

@@ -1,6 +1,6 @@
-# Chimera 订阅转换器（Windows）
+# all2uri
 
-一个完全在本机运行的 Windows 桌面工具：读取远程订阅地址，由系统原生 HTTP 客户端拉取内容，再转换为标准节点 URI。项目只提供 Windows 桌面程序，不提供网页版或常驻本地 Web 服务。程序不连接 Chimera Worker，不需要管理员 Token，也不会上传订阅内容。
+all2uri 是一个完全在本机运行的 Windows 桌面订阅转换工具，支持将远程订阅转换为标准节点 URI。
 
 ## 功能
 
@@ -94,7 +94,7 @@ $env:ALL_PROXY = 'http://127.0.0.1:10808'
 ## 目录结构
 
 ```text
-windows-subscription-converter/
+all2uri/
 ├─ src/                         # 前端界面、解析与转换逻辑
 │  └─ core/subscription-import/ # 订阅格式识别与 URI 转换
 ├─ src-tauri/                   # Tauri/Rust 原生层

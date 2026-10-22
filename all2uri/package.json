@@ -1,7 +1,8 @@
 {
-  "name": "windows-subscription-converter",
+  "name": "all2uri",
   "private": true,
   "version": "0.1.0",
+  "description": "all2uri",
   "type": "module",
   "scripts": {
     "build": "tsc && vite build",

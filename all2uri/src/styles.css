@@ -172,11 +172,6 @@ summary:focus-visible {
   letter-spacing: 0.02em;
 }
 
-.brand-copy span {
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
 .local-badge {
   display: inline-flex;
   gap: 8px;
@@ -1042,10 +1037,6 @@ body.detail-open {
 }
 
 @media (max-width: 520px) {
-  .brand-copy span {
-    display: none;
-  }
-
   .panel-header-actions {
     gap: 10px;
   }

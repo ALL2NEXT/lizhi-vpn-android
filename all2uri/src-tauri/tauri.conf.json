@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Chimera 订阅转换器",
+  "productName": "all2uri",
   "version": "0.1.0",
-  "identifier": "com.chimera.subscriptionconverter",
+  "identifier": "com.all2uri.app",
   "build": {
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Chimera 订阅转换器",
+        "title": "all2uri",
         "width": 1180,
         "height": 780,
         "minWidth": 880,
@@ -26,6 +26,8 @@
   },
   "bundle": {
     "active": true,
+    "shortDescription": "all2uri",
+    "longDescription": "all2uri",
     "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
