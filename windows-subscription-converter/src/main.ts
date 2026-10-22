@@ -18,6 +18,7 @@ interface FetchFailure {
 }
 
 type SourceState = "pending" | "success" | "error";
+type ProcessingState = "idle" | "running" | "done" | "warning" | "error";
 
 interface SourceResult {
   url: string;
@@ -67,7 +68,11 @@ const dom = {
   convertLabel: getElement<HTMLSpanElement>("convert-button").querySelector<HTMLSpanElement>(".button-label")!,
   progressCopy: getElement<HTMLDivElement>("progress-copy"),
   progressBar: getElement<HTMLSpanElement>("progress-bar"),
+  processingStatus: getElement<HTMLSpanElement>("processing-status"),
+  processingEmpty: getElement<HTMLDivElement>("processing-empty"),
   emptyState: getElement<HTMLDivElement>("empty-state"),
+  emptyStateTitle: getElement<HTMLElement>("empty-state-title"),
+  emptyStateCopy: getElement<HTMLParagraphElement>("empty-state-copy"),
   sourceList: getElement<HTMLDivElement>("source-list"),
   outputArea: getElement<HTMLDivElement>("output-area"),
   output: getElement<HTMLTextAreaElement>("output-uris"),
@@ -170,12 +175,18 @@ function toggleCertificateVerification() {
   dom.skipCertificateNote.hidden = !skip;
 }
 
+function setProcessingStatus(label: string, state: ProcessingState) {
+  dom.processingStatus.textContent = label;
+  dom.processingStatus.dataset.state = state;
+}
+
 function setBusy(busy: boolean) {
   running = busy;
   dom.convertButton.disabled = busy;
   dom.skipCertificateVerification.disabled = busy;
   dom.convertButton.classList.toggle("busy", busy);
   dom.convertLabel.textContent = busy ? "正在获取与转换…" : "获取并转换";
+  setProcessingStatus(busy ? "处理中" : "已完成", busy ? "running" : "done");
 }
 
 function updateProgress(done: number, total: number) {
@@ -226,8 +237,10 @@ function createSourceCard(source: SourceResult): HTMLElement {
 }
 
 function renderSources() {
+  const hasSources = sourceResults.length > 0;
   dom.sourceList.replaceChildren(...sourceResults.map(createSourceCard));
-  dom.sourceList.hidden = sourceResults.length === 0;
+  dom.sourceList.hidden = !hasSources;
+  dom.processingEmpty.hidden = hasSources;
 }
 
 function aggregateResults() {
@@ -248,10 +261,17 @@ function aggregateResults() {
   dom.sourceCount.textContent = String(successfulSources);
   dom.duplicateCount.textContent = String(duplicateCount);
 
+  const hasOutput = outputUris.length > 0;
   dom.output.value = outputUris.join("\n");
   dom.outputSize.textContent = `${outputUris.length} 条 · ${formatBytes(new Blob([dom.output.value]).size)}`;
-  dom.outputArea.hidden = outputUris.length === 0;
-  dom.emptyState.hidden = sourceResults.length > 0;
+  dom.outputArea.hidden = !hasOutput;
+  dom.emptyState.hidden = hasOutput;
+  if (!hasOutput) {
+    dom.emptyStateTitle.textContent = sourceResults.length > 0 ? "没有可用节点" : "等待输出";
+    dom.emptyStateCopy.textContent = sourceResults.length > 0
+      ? "请查看“处理进度”窗口中的来源错误信息。"
+      : "转换完成后，节点链接会显示在这里。";
+  }
 }
 function failureFrom(error: unknown): { code: string; message: string } {
   if (error instanceof ConversionError) return { code: error.code, message: error.message };
@@ -306,7 +326,9 @@ async function startConversion() {
   dom.sourceCount.textContent = "0";
   dom.duplicateCount.textContent = "0";
   dom.outputArea.hidden = true;
-  dom.emptyState.hidden = true;
+  dom.emptyState.hidden = false;
+  dom.emptyStateTitle.textContent = "正在转换";
+  dom.emptyStateCopy.textContent = "处理完成后，节点 URI 会显示在这里。";
   renderSources();
   setBusy(true);
   updateProgress(0, urls.length);
@@ -355,6 +377,10 @@ async function startConversion() {
   updateProgress(urls.length, urls.length);
 
   const successful = sourceResults.filter(source => source.state === "success").length;
+  if (successful === urls.length) setProcessingStatus("全部完成", "done");
+  else if (successful > 0) setProcessingStatus("部分完成", "warning");
+  else setProcessingStatus("处理失败", "error");
+
   if (outputUris.length > 0) {
     dom.progressCopy.textContent = `转换完成 · ${successful} 个来源 · ${outputUris.length} 个唯一节点`;
     showToast(`已生成 ${outputUris.length} 个节点 URI`);
@@ -429,9 +455,14 @@ function resetView(clearInput: boolean) {
   dom.progressCopy.textContent = "准备就绪";
   dom.sourceList.hidden = true;
   dom.sourceList.replaceChildren();
+  dom.processingEmpty.hidden = false;
+  setProcessingStatus("待开始", "idle");
   dom.outputArea.hidden = true;
   dom.emptyState.hidden = false;
+  dom.emptyStateTitle.textContent = "等待输出";
+  dom.emptyStateCopy.textContent = "转换完成后，节点链接会显示在这里。";
   dom.output.value = "";
+  dom.outputSize.textContent = "";
 }
 
 function bindEvents() {

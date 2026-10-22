@@ -88,8 +88,8 @@
               <div class="panel-title-group">
                 <span class="step-index">01</span>
                 <div>
-                  <h2 id="input-title">输入订阅地址</h2>
-                  <p>每行一个 URL，支持批量来源</p>
+                  <h2 id="input-title">输入订阅</h2>
+                  <p>每行一个 URL，支持批量导入来源</p>
                 </div>
               </div>
               <button class="text-button" id="clear-button" type="button">清空</button>
@@ -111,10 +111,7 @@
             <div class="validation-message" id="validation-message" hidden></div>
 
             <div class="run-area">
-              <div class="progress-copy" id="progress-copy" aria-live="polite">准备就绪</div>
-              <div class="progress-track" aria-hidden="true">
-                <span id="progress-bar"></span>
-              </div>
+              <p class="run-note">输入完成后开始转换，Ctrl + Enter 也可执行。</p>
               <button class="primary-button" id="convert-button" type="button">
                 <span class="button-spinner" aria-hidden="true"></span>
                 <span class="button-label">获取并转换</span>
@@ -123,12 +120,40 @@
             </div>
           </section>
 
-          <section class="panel result-panel" aria-labelledby="result-title">
+          <section class="panel processing-panel" aria-labelledby="processing-title">
             <div class="panel-header">
               <div class="panel-title-group">
                 <span class="step-index">02</span>
                 <div>
-                  <h2 id="result-title">转换结果</h2>
+                  <h2 id="processing-title">处理进度</h2>
+                  <p>实时查看每个订阅来源的拉取状态</p>
+                </div>
+              </div>
+              <span class="panel-status" id="processing-status" data-state="idle" role="status">待开始</span>
+            </div>
+
+            <div class="progress-copy" id="progress-copy" aria-live="polite">准备就绪</div>
+            <div class="progress-track" aria-hidden="true">
+              <span id="progress-bar"></span>
+            </div>
+
+            <div class="processing-empty" id="processing-empty">
+              <div class="processing-glyph" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+              <strong>等待开始</strong>
+              <p>开始转换后，各来源的处理状态会显示在这里。</p>
+            </div>
+
+            <div class="source-list" id="source-list" hidden></div>
+          </section>
+
+          <section class="panel output-panel" aria-labelledby="result-title">
+            <div class="panel-header">
+              <div class="panel-title-group">
+                <span class="step-index">03</span>
+                <div>
+                  <h2 id="result-title">转换输出</h2>
                   <p>标准节点 URI，已自动去重</p>
                 </div>
               </div>
@@ -139,15 +164,13 @@
               </div>
             </div>
 
-            <div class="empty-state" id="empty-state">
+            <div class="empty-state" id="empty-state" aria-live="polite">
               <div class="empty-illustration" aria-hidden="true">
                 <span></span><span></span><span></span>
               </div>
-              <strong>等待转换</strong>
-              <p>订阅拉取成功后，节点链接会显示在这里。</p>
+              <strong id="empty-state-title">等待输出</strong>
+              <p id="empty-state-copy">转换完成后，节点链接会显示在这里。</p>
             </div>
-
-            <div class="source-list" id="source-list" hidden></div>
 
             <div class="output-area" id="output-area" hidden>
               <div class="output-heading">
