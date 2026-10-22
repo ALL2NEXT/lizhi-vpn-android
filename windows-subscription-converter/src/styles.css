@@ -196,74 +196,6 @@ summary:focus-visible {
   padding: 42px 0 36px;
 }
 
-.intro {
-  display: flex;
-  gap: 48px;
-  align-items: flex-end;
-  justify-content: space-between;
-  max-width: 1180px;
-  margin-bottom: 32px;
-}
-
-.eyebrow {
-  margin: 0 0 10px;
-  color: var(--accent-bright);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-}
-
-.intro h1 {
-  margin: 0;
-  color: var(--text);
-  font-size: clamp(28px, 3.2vw, 44px);
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.15;
-}
-
-.intro-copy {
-  max-width: 720px;
-  margin: 14px 0 0;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.75;
-}
-
-.privacy-card {
-  display: flex;
-  flex: 0 0 300px;
-  gap: 12px;
-  align-items: center;
-  padding: 14px 16px;
-  background: linear-gradient(135deg, var(--success-soft), transparent);
-  border: 1px solid rgba(66, 211, 154, 0.2);
-  border-radius: 14px;
-}
-
-.privacy-card svg {
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  color: var(--success);
-}
-
-.privacy-card div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.privacy-card strong {
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.privacy-card span {
-  color: var(--text-muted);
-  font-size: 10px;
-}
-
 .workspace {
   display: grid;
   grid-template-columns: minmax(360px, 0.82fr) minmax(480px, 1.18fr);
@@ -913,9 +845,6 @@ summary:focus-visible {
     min-height: 520px;
   }
 
-  .privacy-card {
-    flex-basis: 270px;
-  }
 }
 
 @media (max-width: 760px) {
@@ -923,15 +852,6 @@ summary:focus-visible {
     padding: 0 18px;
   }
 
-  .intro {
-    display: block;
-    padding-top: 8px;
-  }
-
-  .privacy-card {
-    width: 100%;
-    margin-top: 20px;
-  }
 
   .panel {
     padding: 19px;
