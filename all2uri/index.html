@@ -12,7 +12,7 @@
   <body>
     <div class="app-shell">
       <main class="main-content">
-        <div class="workspace">
+        <div class="workspace" id="workspace">
           <section class="panel input-panel" id="input-panel" aria-labelledby="input-title">
             <div class="panel-header">
               <div class="panel-title-group">
@@ -49,6 +49,8 @@
             </div>
           </section>
 
+          <div class="panel-resizer" data-resizer="0" role="separator" aria-orientation="vertical" aria-label="调整输入和处理版块宽度" title="拖动调整宽度，双击恢复均分" tabindex="0"></div>
+
           <section class="panel processing-panel" id="processing-panel" aria-labelledby="processing-title">
             <div class="panel-header">
               <div class="panel-title-group">
@@ -74,6 +76,8 @@
 
             <div class="source-list" id="source-list" hidden></div>
           </section>
+
+          <div class="panel-resizer" data-resizer="1" role="separator" aria-orientation="vertical" aria-label="调整处理和输出版块宽度" title="拖动调整宽度，双击恢复均分" tabindex="0"></div>
 
           <section class="panel output-panel" id="output-panel" aria-labelledby="result-title">
             <div class="panel-header">

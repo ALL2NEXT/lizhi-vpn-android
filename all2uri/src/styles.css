@@ -114,40 +114,81 @@ select:focus-visible {
 .app-shell {
   display: flex;
   flex-direction: column;
-  width: min(1480px, 100%);
-  min-height: 100vh;
-  margin: 0 auto;
-  padding: 0 32px;
+  width: 100%;
+  height: 100vh;
+  min-height: 620px;
+  margin: 0;
+  padding: 0;
 }
 
 .main-content {
   display: flex;
   flex: 1;
-  padding: 26px 0 24px;
+  min-height: 0;
+  padding: 0;
 }
 
 .workspace {
+  --panel-a: 0.333333fr;
+  --panel-b: 0.333333fr;
+  --panel-c: 0.333333fr;
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(300px, 0.9fr) minmax(280px, 0.82fr) minmax(360px, 1.16fr);
-  gap: 18px;
+  grid-template-columns: minmax(200px, var(--panel-a)) 9px minmax(200px, var(--panel-b)) 9px minmax(200px, var(--panel-c));
+  gap: 0;
   align-items: stretch;
   width: 100%;
+  min-height: 0;
 }
 
 .panel {
   display: flex;
-  height: clamp(600px, 72vh, 760px);
+  height: 100%;
+  min-width: 0;
   min-height: 0;
-  padding: 22px;
+  padding: 24px;
   overflow: hidden;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.025), transparent 34%),
-    var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(18px);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.panel-resizer {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.panel-resizer::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  content: "";
+  background: var(--border-strong);
+  transform: translateX(-50%);
+  transition: width 120ms ease, background 120ms ease;
+}
+
+.panel-resizer:hover::before,
+.panel-resizer:focus-visible::before,
+.panel-resizer.is-active::before {
+  width: 2px;
+  background: var(--accent);
+}
+
+.panel-resizer:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+
+body.resizing-panels {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .input-panel,
@@ -186,38 +227,29 @@ select:focus-visible {
 
 .panel-status {
   flex: 0 0 auto;
-  padding: 5px 10px;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  background: none;
+  border: 0;
+  border-radius: 0;
 }
 
 .panel-status[data-state="running"] {
   color: var(--accent-bright);
-  background: var(--accent-soft);
-  border-color: rgba(91, 157, 255, 0.3);
 }
 
 .panel-status[data-state="done"] {
   color: var(--success);
-  background: var(--success-soft);
-  border-color: rgba(66, 211, 154, 0.2);
 }
 
 .panel-status[data-state="warning"] {
   color: var(--warning);
-  background: rgba(246, 189, 98, 0.08);
-  border-color: rgba(246, 189, 98, 0.24);
 }
 
 .panel-status[data-state="error"] {
   color: var(--danger);
-  background: var(--danger-soft);
-  border-color: rgba(255, 125, 141, 0.22);
 }
 
 .text-button {
@@ -828,7 +860,10 @@ body.detail-open {
   width: min(1200px, calc(100vw - 48px));
   height: min(900px, calc(100vh - 48px));
   max-height: calc(100vh - 48px);
+  padding: 22px;
   background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
   box-shadow: 0 32px 100px rgba(0, 0, 0, 0.42);
   transform: translate(-50%, -50%);
   animation: detail-in 180ms ease-out;
@@ -885,22 +920,16 @@ body.detail-open {
 }
 
 @media (max-width: 1060px) {
-  .workspace {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .panel {
-    height: clamp(520px, 56vh, 640px);
-  }
-
-  .output-panel {
-    grid-column: 1 / -1;
+  .result-stats {
+    display: none;
   }
 }
 
 @media (max-width: 760px) {
   .app-shell {
-    padding: 0 18px;
+    height: auto;
+    min-height: 100vh;
+    padding: 0;
   }
 
   .workspace {
@@ -908,14 +937,19 @@ body.detail-open {
   }
 
   .panel {
-    height: clamp(500px, 64vh, 620px);
+    height: 100vh;
     min-height: 0;
-    padding: 19px;
-    border-radius: 16px;
+    padding: 24px 18px;
+    border-radius: 0;
   }
 
+  .panel-resizer {
+    display: none;
+  }
+
+  .processing-panel,
   .output-panel {
-    grid-column: auto;
+    border-top: 1px solid var(--border-strong);
   }
 
   .panel.is-expanded {

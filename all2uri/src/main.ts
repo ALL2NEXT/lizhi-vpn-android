@@ -68,6 +68,8 @@ const dom = {
   settingsButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".settings-button")),
   settingsTitle: getElement<HTMLElement>("settings-title"),
   settingsPanes: Array.from(document.querySelectorAll<HTMLElement>(".settings-pane")),
+  workspace: getElement<HTMLElement>("workspace"),
+  panelResizers: Array.from(document.querySelectorAll<HTMLElement>(".panel-resizer")),
   validation: getElement<HTMLDivElement>("validation-message"),
   userAgentSelect: getElement<HTMLSelectElement>("user-agent-select"),
   customUserAgent: getElement<HTMLInputElement>("custom-user-agent"),
@@ -110,13 +112,27 @@ interface DetailView {
   button: HTMLButtonElement;
 }
 
+interface ResizeState {
+  index: number;
+  pointerId: number;
+  startX: number;
+  availableWidth: number;
+  startRatios: number[];
+}
+
 const detailViews: DetailView[] = [
   { panel: dom.inputPanel, button: dom.inputDetailButton },
   { panel: dom.processingPanel, button: dom.processingDetailButton },
   { panel: dom.outputPanel, button: dom.outputDetailButton },
 ];
 
+const MIN_PANEL_WIDTH = 200;
+const SPLITTER_WIDTH = 9;
+const DEFAULT_PANEL_RATIOS = [1 / 3, 1 / 3, 1 / 3];
+
 let activeDetail: DetailView | null = null;
+let panelRatios = [...DEFAULT_PANEL_RATIOS];
+let resizeState: ResizeState | null = null;
 let activeSettingsView: SettingsView | null = null;
 let settingsTrigger: HTMLButtonElement | null = null;
 let sourceResults: SourceResult[] = [];
@@ -201,6 +217,115 @@ function openDetail(view: DetailView) {
 function toggleDetail(view: DetailView) {
   if (activeDetail === view) closeDetail();
   else openDetail(view);
+}
+
+function availableWorkspaceWidth(): number {
+  return Math.max(0, dom.workspace.getBoundingClientRect().width - dom.panelResizers.length * SPLITTER_WIDTH);
+}
+
+function clampPanelRatios(ratios: number[], availableWidth: number): number[] {
+  if (availableWidth <= 0) return [...DEFAULT_PANEL_RATIOS];
+  const minRatio = MIN_PANEL_WIDTH / availableWidth;
+  let next = ratios.map(ratio => Math.max(minRatio, ratio));
+  let total = next.reduce((sum, ratio) => sum + ratio, 0);
+  if (total > 1) {
+    const reducible = next.map(ratio => Math.max(0, ratio - minRatio));
+    const reducibleTotal = reducible.reduce((sum, ratio) => sum + ratio, 0);
+    if (reducibleTotal > 0) {
+      const excess = total - 1;
+      next = next.map((ratio, index) => ratio - excess * (reducible[index] / reducibleTotal));
+    }
+  }
+  total = next.reduce((sum, ratio) => sum + ratio, 0);
+  return total > 0 ? next.map(ratio => ratio / total) : [...DEFAULT_PANEL_RATIOS];
+}
+
+function applyPanelRatios() {
+  dom.workspace.style.setProperty("--panel-a", `${panelRatios[0]}fr`);
+  dom.workspace.style.setProperty("--panel-b", `${panelRatios[1]}fr`);
+  dom.workspace.style.setProperty("--panel-c", `${panelRatios[2]}fr`);
+}
+
+function adjustPanelRatios(index: number, delta: number) {
+  const availableWidth = availableWorkspaceWidth();
+  if (availableWidth <= 0) return;
+  const minRatio = MIN_PANEL_WIDTH / availableWidth;
+  const next = [...panelRatios];
+  const clamped = Math.min(Math.max(delta, minRatio - next[index]), next[index + 1] - minRatio);
+  next[index] += clamped;
+  next[index + 1] -= clamped;
+  panelRatios = clampPanelRatios(next, availableWidth);
+  applyPanelRatios();
+}
+
+function resetPanelRatios() {
+  panelRatios = clampPanelRatios([...DEFAULT_PANEL_RATIOS], availableWorkspaceWidth());
+  applyPanelRatios();
+}
+
+function bindPanelResizers() {
+  dom.panelResizers.forEach((handle, index) => {
+    handle.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      const availableWidth = availableWorkspaceWidth();
+      if (availableWidth <= 0) return;
+      resizeState = {
+        index,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        availableWidth,
+        startRatios: [...panelRatios],
+      };
+      try {
+        handle.setPointerCapture(event.pointerId);
+      } catch {
+        // 指针捕获不可用时继续使用窗口级事跟踪
+      }
+      handle.classList.add("is-active");
+      document.body.classList.add("resizing-panels");
+    });
+
+    handle.addEventListener("pointermove", event => {
+      if (!resizeState || resizeState.index !== index || event.pointerId !== resizeState.pointerId) return;
+      const minRatio = MIN_PANEL_WIDTH / resizeState.availableWidth;
+      const next = [...resizeState.startRatios];
+      const rawDelta = (event.clientX - resizeState.startX) / resizeState.availableWidth;
+      const clamped = Math.min(Math.max(rawDelta, minRatio - next[index]), next[index + 1] - minRatio);
+      next[index] += clamped;
+      next[index + 1] -= clamped;
+      panelRatios = clampPanelRatios(next, resizeState.availableWidth);
+      applyPanelRatios();
+    });
+
+    const endResize = (event: PointerEvent) => {
+      if (!resizeState || resizeState.index !== index) return;
+      try {
+        if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+      } catch {
+        // 释放失败时不影响结束逻辑
+      }
+      handle.classList.remove("is-active");
+      document.body.classList.remove("resizing-panels");
+      resizeState = null;
+    };
+    handle.addEventListener("pointerup", endResize);
+    handle.addEventListener("pointercancel", endResize);
+    window.addEventListener("pointerup", endResize);
+    window.addEventListener("pointercancel", endResize);
+    handle.addEventListener("dblclick", resetPanelRatios);
+    handle.addEventListener("keydown", event => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      adjustPanelRatios(index, event.key === "ArrowLeft" ? -0.02 : 0.02);
+    });
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth <= 760) return;
+    panelRatios = clampPanelRatios(panelRatios, availableWorkspaceWidth());
+    applyPanelRatios();
+  });
 }
 
 function formatBytes(bytes = 0): string {
@@ -666,6 +791,9 @@ function bindEvents() {
   dom.urls.addEventListener("input", () => {
     if (!dom.validation.hidden) setValidation();
   });
+
+  bindPanelResizers();
+  applyPanelRatios();
 }
 
 bindEvents();
