@@ -513,10 +513,6 @@ body.settings-open {
   line-height: 1.6;
 }
 
-.input-support-note {
-  margin-top: 10px;
-}
-
 .security-option {
   display: grid;
   gap: 7px;

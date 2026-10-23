@@ -21,7 +21,6 @@
                 </div>
               </div>
               <div class="panel-header-actions">
-                <button class="text-button" id="clear-button" type="button">清空</button>
                 <button class="text-button settings-button" id="input-settings-button" type="button" data-settings-view="input">设置</button>
                 <button class="text-button detail-button" id="input-detail-button" type="button" aria-expanded="false" aria-controls="input-panel">查看详情</button>
               </div>
@@ -45,11 +44,6 @@
               ></textarea>
             </div>
 
-            <p class="option-note input-support-note">
-              支持远程订阅 URL、本地节点 URI、Base64、Clash YAML、sing-box / Xray JSON，可混合导入。<br />
-              HTTP/HTTPS 仅作为订阅地址；协议覆盖 SOCKS、SS、VMess、VLESS、Trojan、Hysteria2、AnyTLS、TUIC、Naive、WireGuard、MASQUE。
-            </p>
-
             <div class="validation-message" id="validation-message" hidden></div>
 
             <div class="run-area">
@@ -70,7 +64,7 @@
                 </div>
               </div>
               <div class="panel-header-actions">
-                <span class="panel-status" id="processing-status" data-state="idle" role="status">待开始</span>
+                <span class="panel-status" id="processing-status" data-state="idle" role="status" hidden></span>
                 <button class="text-button settings-button" id="processing-settings-button" type="button" data-settings-view="processing">设置</button>
                 <button class="text-button detail-button" id="processing-detail-button" type="button" aria-expanded="false" aria-controls="processing-panel">查看详情</button>
               </div>

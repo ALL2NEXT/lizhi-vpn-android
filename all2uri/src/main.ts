@@ -84,7 +84,6 @@ const dom = {
   deduplicateOutput: getElement<HTMLButtonElement>("deduplicate-output"),
   skipCertificateVerification: getElement<HTMLButtonElement>("skip-certificate-verification"),
   skipCertificateNote: getElement<HTMLParagraphElement>("skip-certificate-note"),
-  clearButton: getElement<HTMLButtonElement>("clear-button"),
   convertButton: getElement<HTMLButtonElement>("convert-button"),
   convertLabel: getElement<HTMLSpanElement>("convert-button").querySelector<HTMLSpanElement>(".button-label")!,
   progressCopy: getElement<HTMLDivElement>("progress-copy"),
@@ -487,12 +486,12 @@ function toggleOutputDeduplication() {
 function setProcessingStatus(label: string, state: ProcessingState) {
   dom.processingStatus.textContent = label;
   dom.processingStatus.dataset.state = state;
+  dom.processingStatus.hidden = state === "idle" || !label;
 }
 
 function setBusy(busy: boolean) {
   running = busy;
   dom.convertButton.disabled = busy;
-  dom.clearButton.disabled = busy;
   dom.urls.disabled = busy;
   dom.pasteButton.disabled = busy;
   dom.importFileButton.disabled = busy;
@@ -790,40 +789,12 @@ async function saveAll() {
   }
 }
 
-function resetView(clearInput: boolean) {
-  if (running) {
-    showToast("请等待当前转换任务完成", true);
-    return;
-  }
-  sourceResults = [];
-  outputUris = [];
-  duplicateCount = 0;
-  completedSources = 0;
-  if (clearInput) dom.urls.value = "";
-  setValidation();
-  dom.nodeCount.textContent = "0";
-  dom.sourceCount.textContent = "0";
-  dom.duplicateCount.textContent = "0";
-  dom.progressBar.style.width = "0%";
-  dom.progressCopy.textContent = "准备就绪";
-  dom.sourceList.hidden = true;
-  dom.sourceList.replaceChildren();
-  dom.processingEmpty.hidden = false;
-  setProcessingStatus("待开始", "idle");
-  dom.outputArea.hidden = true;
-  dom.emptyState.hidden = false;
-  dom.emptyStateTitle.textContent = "等待输出";
-  dom.output.value = "";
-  dom.outputSize.textContent = "";
-}
-
 function bindEvents() {
   dom.convertButton.addEventListener("click", () => void startConversion());
   dom.pasteButton.addEventListener("click", () => void pasteFromClipboard());
   dom.importFileButton.addEventListener("click", () => void importFile());
   dom.copyButton.addEventListener("click", () => void copyAll());
   dom.saveButton.addEventListener("click", () => void saveAll());
-  dom.clearButton.addEventListener("click", () => resetView(true));
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
     if (activeDetail) {
