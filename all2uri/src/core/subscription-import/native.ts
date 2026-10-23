@@ -18,7 +18,7 @@ function convert(proxy: NodeMap, native: NodeMap, format: "sing-box" | "xray") {
   const extras: Record<string, string> = {};
   const add = (key: string, value: unknown) => { const result = scalar(value); if (result) extras[key] = result; };
   if (format === "sing-box") {
-    for (const key of ["hop_interval", "network", "heartbeat", "zero_rtt_handshake", "udp_over_stream", "udp_over_tcp", "insecure_concurrency", "quic_congestion_control", "quic", "workers", "global_padding", "authenticated_length", "packet_encoding", "path"]) add(key, native[key]);
+    for (const key of ["hop_interval", "network", "heartbeat", "zero_rtt_handshake", "udp_over_stream", "udp_over_tcp", "insecure_concurrency", "quic_congestion_control", "quic", "workers", "global_padding", "authenticated_length", "packet_encoding", "path", "persistent_keepalive_interval"]) add(key, native[key]);
     add("host", list(map(native.headers).Host)[0]);
     const transport = map(native.transport);
     add("method", transport.method); add("idleTimeout", transport.idle_timeout); add("pingTimeout", transport.ping_timeout);
@@ -49,27 +49,29 @@ function singBox(node: NodeMap): string[] {
   const raw = text(node, "type");
   const type = raw === "shadowsocks" ? "ss" : raw === "socks" ? text(node, "version") === "4" ? "socks4" : text(node, "version") === "4a" ? "socks4a" : "socks5" : raw;
   const proxy: NodeMap = { type, name: name(node, type) };
-  copy(node, proxy, ["server", "server_port:port", "uuid", "password", "username", "method:cipher", "security:cipher", "alter_id:alterId", "flow", "packet_encoding:packet-encoding", "congestion_control", "udp_relay_mode", "zero_rtt_handshake:reduce-rtt", "mtu", "idle_session_check_interval:idle-session-check-interval", "idle_session_timeout:idle-session-timeout", "min_idle_session:min-idle-session", "profile", "vhttp", "private_key:private-key", "public_key:public-key", "ip", "ipv6", "uri", "idle_timeout:idle-timeout", "keep_alive_period:keep-alive-period", "network_list:network-list"]);
+  copy(node, proxy, ["server", "server_port:port", "uuid", "password", "username", "encryption", "method:cipher", "security:cipher", "alter_id:alterId", "flow", "packet_encoding:packet-encoding", "congestion_control", "udp_relay_mode", "zero_rtt_handshake:reduce-rtt", "mtu", "idle_session_check_interval:idle-session-check-interval", "idle_session_timeout:idle-session-timeout", "min_idle_session:min-idle-session", "profile", "vhttp", "private_key:private-key", "public_key:public-key", "ip", "ipv6", "uri", "idle_timeout:idle-timeout", "keep_alive_period:keep-alive-period", "network_list:network-list", "persistent_keepalive_interval"]);
   if (node.plugin) proxy.plugin = text(node, "plugin") + (text(node, "plugin_opts") ? ";" + text(node, "plugin_opts") : "");
   const tls = map(node.tls);
   proxy.tls = bool(tls.enabled) || false;
-  copy(tls, proxy, ["server_name:sni", "insecure:skip-cert-verify", "alpn", "min_version", "max_version", "certificate_public_key_sha256"]);
+  copy(tls, proxy, ["server_name:sni", "insecure:skip-cert-verify", "alpn", "min_version", "max_version", "certificate_public_key_sha256", "fragment", "fragment_fallback_delay", "record_fragment"]);
   if (tls.certificate) proxy.certificate = lines(tls.certificate);
   const utls = map(tls.utls), reality = map(tls.reality), ech = map(tls.ech);
   if (bool(utls.enabled)) proxy["client-fingerprint"] = utls.fingerprint;
-  if (bool(reality.enabled)) proxy["reality-opts"] = { "public-key": reality.public_key, "short-id": reality.short_id };
+  if (bool(reality.enabled)) proxy["reality-opts"] = { "public-key": reality.public_key, "short-id": reality.short_id, "key_share": reality.key_share || reality.keyShare };
   if (tls.ech) proxy["ech-opts"] = { enabled: ech.enabled, config: lines(ech.config) };
   if (node.transport) {
     const transport = map(node.transport), network = text(transport, "type") || "tcp";
     proxy.network = network;
     const opts: NodeMap = {};
     copy(transport, opts, ["path", "host", "headers", "service_name:grpc-service-name", "max_early_data:max-early-data", "early_data_header_name:early-data-header-name"]);
+    if (network === "xhttp") for (const [key, value] of Object.entries(transport)) opts[key] = value;
     proxy[transportKey(network)] = opts;
   }
   if (node.obfs) { proxy.obfs = map(node.obfs).type; proxy["obfs-password"] = map(node.obfs).password; }
   if (node.server_ports) proxy.ports = list(node.server_ports).map(port => port.replace(/:/g, "-")).join(",");
   if (type === "wireguard") {
     copy(node, proxy, ["private_key:private-key", "local_address:address", "address"]);
+    copy(node, proxy, ["jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4", "i1", "i2", "i3", "i4", "i5", "id", "ip", "ib", "header_protection_key", "content_padding_addition", "rekey_after_time", "rekey_timeout", "reject_after_time", "keepalive_timeout", "max_handshake_attempts", "random_trailers", "disable_cookies"]);
     const peers = objects(node.peers).flatMap(peer => {
       const candidate = { ...proxy };
       copy(peer, candidate, ["address:server", "port", "public_key:public-key", "pre_shared_key:pre-shared-key", "reserved"]);
@@ -93,7 +95,7 @@ function xrayStream(stream: NodeMap, proxy: NodeMap) {
   proxy.tls = security === "tls" || security === "reality";
   const tls = map(security === "reality" ? stream.realitySettings : stream.tlsSettings);
   copy(tls, proxy, ["serverName:sni", "allowInsecure:skip-cert-verify", "alpn", "fingerprint:client-fingerprint", "pinnedPeerCertSha256:fingerprint"]);
-  if (security === "reality") proxy["reality-opts"] = { "public-key": tls.password || tls.publicKey, "short-id": tls.shortId };
+  if (security === "reality") proxy["reality-opts"] = { "public-key": tls.password || tls.publicKey, "short-id": tls.shortId, "key_share": tls.keyShare || tls.key_share };
   if (tls.echConfigList) proxy["ech-opts"] = { enabled: true, config: tls.echConfigList };
 }
 

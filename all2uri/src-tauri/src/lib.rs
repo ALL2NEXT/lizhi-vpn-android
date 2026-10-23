@@ -387,11 +387,39 @@ fn save_text_file(path: String, content: String) -> Result<String, FetchFailure>
     Ok(target.to_string_lossy().into_owned())
 }
 
+/// 读取用户主动选择的 UTF-8 文本文件，限制大小并去除 BOM。
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, FetchFailure> {
+    let target = PathBuf::from(path.trim());
+    if !target.is_absolute() {
+        return Err(FetchFailure::new(
+            "invalid_path",
+            "文件路径必须是绝对路径。",
+        ));
+    }
+    let metadata = std::fs::metadata(&target)
+        .map_err(|_| FetchFailure::new("read_failed", "无法读取文件，请检查路径和权限。"))?;
+    if !metadata.is_file() {
+        return Err(FetchFailure::new("invalid_path", "选择的路径不是文件。"));
+    }
+    if metadata.len() > MAX_OUTPUT_BYTES as u64 {
+        return Err(FetchFailure::new(
+            "input_too_large",
+            "输入文件超过 64 MiB，无法读取。",
+        ));
+    }
+    let bytes = std::fs::read(&target)
+        .map_err(|_| FetchFailure::new("read_failed", "无法读取文件，请检查路径和权限。"))?;
+    let content = String::from_utf8(bytes)
+        .map_err(|_| FetchFailure::new("invalid_encoding", "文件不是有效的 UTF-8 文本。"))?;
+    Ok(content.trim_start_matches('\u{feff}').to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![fetch_subscription, save_text_file])
+        .invoke_handler(tauri::generate_handler![fetch_subscription, read_text_file, save_text_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -627,6 +655,18 @@ mod tests {
             std::fs::read_to_string(std::path::Path::new(&path)).unwrap(),
             "vless://测试节点"
         );
+        let _ = std::fs::remove_file(target);
+    }
+
+    #[test]
+    fn reads_utf8_text_file_and_strips_bom() {
+        let target = std::env::temp_dir().join(format!(
+            "chimera-subscription-read-test-{}.yaml",
+            std::process::id()
+        ));
+        std::fs::write(&target, "\u{feff}vless://node@example.com:443").unwrap();
+        let content = read_text_file(target.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(content, "vless://node@example.com:443");
         let _ = std::fs::remove_file(target);
     }
 }

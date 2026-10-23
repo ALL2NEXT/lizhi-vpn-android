@@ -27,7 +27,13 @@
               </div>
             </div>
 
-            <label class="field-label" for="subscription-urls">订阅 URL</label>
+            <div class="field-heading">
+              <label class="field-label" for="subscription-urls">订阅 / 节点内容</label>
+              <div class="inline-actions">
+                <button class="text-button" id="paste-button" type="button">粘贴</button>
+                <button class="text-button" id="import-file-button" type="button">导入文件</button>
+              </div>
+            </div>
             <div class="textarea-wrap">
               <textarea
                 id="subscription-urls"
@@ -35,16 +41,21 @@
                 rows="9"
                 spellcheck="false"
                 autocomplete="off"
-                placeholder="https://example.com/api/v1/client/subscribe?token=...&#10;https://another.example.com/subscription"
+                placeholder="https://example.com/api/v1/client/subscribe?token=...&#10;vless://uuid@example.com:443#节点&#10;Clash YAML / sing-box / Xray JSON"
               ></textarea>
             </div>
+
+            <p class="option-note input-support-note">
+              支持远程订阅 URL、本地节点 URI、Base64、Clash YAML、sing-box / Xray JSON，可混合导入。<br />
+              HTTP/HTTPS 仅作为订阅地址；协议覆盖 SOCKS、SS、VMess、VLESS、Trojan、Hysteria2、AnyTLS、TUIC、Naive、WireGuard、MASQUE。
+            </p>
 
             <div class="validation-message" id="validation-message" hidden></div>
 
             <div class="run-area">
               <button class="primary-button" id="convert-button" type="button">
                 <span class="button-spinner" aria-hidden="true"></span>
-                <span class="button-label">获取并转换</span>
+                <span class="button-label">开始转换</span>
               </button>
             </div>
           </section>

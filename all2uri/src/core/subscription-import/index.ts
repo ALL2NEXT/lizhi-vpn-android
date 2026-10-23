@@ -27,6 +27,8 @@ export function detectSubscriptionInput(value: string) {
 
 /** 对照客户端最终 URI 解析结果，过滤没有服务器或合法端口的分享链接。 */
 export function isUsableNode(uri: string): boolean {
+  // HTTP/HTTPS 是订阅地址，不作为节点代理 URI。
+  if (/^https?:\/\//i.test(uri)) return false;
   const portValid = (port: unknown) => /^\d+$/.test(String(port)) && Number(port) >= 1 && Number(port) <= 65535;
   try {
     if (/^vmess:\/\//i.test(uri)) {

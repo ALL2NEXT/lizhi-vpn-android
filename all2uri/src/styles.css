@@ -285,6 +285,31 @@ body.resizing-panels {
   letter-spacing: 0.04em;
 }
 
+.field-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.field-heading .field-label {
+  margin-bottom: 0;
+}
+
+.inline-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.text-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .textarea-wrap {
   position: relative;
 }
@@ -486,6 +511,10 @@ body.settings-open {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.6;
+}
+
+.input-support-note {
+  margin-top: 10px;
 }
 
 .security-option {

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { detectSubscriptionInput, toStandardUris } from "./core/subscription-import/index.ts";
 
 interface FetchedSubscription {
@@ -21,7 +21,10 @@ type SourceState = "pending" | "success" | "error";
 type ProcessingState = "idle" | "running" | "done" | "warning" | "error";
 type SettingsView = "input" | "processing" | "output";
 
+type SourceKind = "local" | "remote";
+
 interface SourceResult {
+  kind: SourceKind;
   url: string;
   state: SourceState;
   nodes: string[];
@@ -62,6 +65,8 @@ function getElement<T extends HTMLElement>(id: string): T {
 
 const dom = {
   urls: getElement<HTMLTextAreaElement>("subscription-urls"),
+  pasteButton: getElement<HTMLButtonElement>("paste-button"),
+  importFileButton: getElement<HTMLButtonElement>("import-file-button"),
   settingsDialog: getElement<HTMLElement>("settings-dialog"),
   settingsBackdrop: getElement<HTMLDivElement>("settings-backdrop"),
   settingsCloseButton: getElement<HTMLButtonElement>("settings-close-button"),
@@ -365,27 +370,67 @@ function resolveUserAgent(): string | null {
   return USER_AGENT_PRESETS[preset] ?? null;
 }
 
-function readInputUrls(): string[] {
+// 与 Android 客户端一致：同时保留远程订阅 URL 和本地节点/配置片段。
+interface DetectedImportInput {
+  urls: string[];
+  local: string[];
+}
+
+function readImportInput(): DetectedImportInput | null {
   const value = dom.urls.value.trim();
   if (!value) {
-    setValidation("请先输入至少一个订阅 URL。");
+    setValidation("请先输入订阅 URL、节点 URI 或配置内容。");
     dom.urls.focus();
-    return [];
+    return null;
   }
 
   const detected = detectSubscriptionInput(value);
-  if (detected.urls.length === 0) {
-    setValidation(
-      detected.local.length > 0
-        ? "当前版本只处理远程订阅 URL；检测到的是节点或本地配置。"
-        : "未检测到有效的 HTTP / HTTPS 订阅地址。",
-    );
+  if (detected.urls.length === 0 && detected.local.length === 0) {
+    setValidation("未检测到有效的订阅 URL、节点 URI 或配置内容。");
     dom.urls.focus();
-    return [];
+    return null;
   }
 
   setValidation();
-  return detected.urls;
+  return detected;
+}
+
+// Windows 端使用剪贴板读取对应 Android 的剪贴板导入。
+async function pasteFromClipboard() {
+  if (running) return;
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) {
+      showToast("剪贴板为空", true);
+      return;
+    }
+    dom.urls.value = text;
+    setValidation();
+    showToast("已从剪贴板粘贴");
+  } catch {
+    showToast("无法读取剪贴板，请使用 Ctrl+V 手动粘贴", true);
+  }
+}
+
+// 文件只作为文本来源，后续仍走同一套智能识别逻辑。
+async function importFile() {
+  if (running) return;
+  try {
+    const selected = await open({ multiple: false, directory: false });
+    if (!selected) return;
+    const path = Array.isArray(selected) ? selected[0] : selected;
+    if (!path) return;
+    const content = await invoke<string>("read_text_file", { path });
+    if (!content.trim()) {
+      showToast("文件内容为空", true);
+      return;
+    }
+    dom.urls.value = content;
+    setValidation();
+    showToast("已导入文件内容");
+  } catch (error) {
+    showToast(failureFrom(error).message || "读取文件失败", true);
+  }
 }
 
 function resolveRequestLimits(): { maxResponseBytes: number; maxRedirects: number } {
@@ -447,6 +492,10 @@ function setProcessingStatus(label: string, state: ProcessingState) {
 function setBusy(busy: boolean) {
   running = busy;
   dom.convertButton.disabled = busy;
+  dom.clearButton.disabled = busy;
+  dom.urls.disabled = busy;
+  dom.pasteButton.disabled = busy;
+  dom.importFileButton.disabled = busy;
   dom.userAgentSelect.disabled = busy;
   dom.customUserAgent.disabled = busy;
   dom.fetchConcurrency.disabled = busy;
@@ -455,7 +504,7 @@ function setBusy(busy: boolean) {
   dom.deduplicateOutput.disabled = busy;
   dom.skipCertificateVerification.disabled = busy;
   dom.convertButton.classList.toggle("busy", busy);
-  dom.convertLabel.textContent = busy ? "正在获取与转换…" : "获取并转换";
+  dom.convertLabel.textContent = busy ? "正在转换…" : "开始转换";
   setProcessingStatus(busy ? "处理中" : "已完成", busy ? "running" : "done");
 }
 
@@ -474,29 +523,38 @@ function createSourceCard(source: SourceResult): HTMLElement {
   const main = document.createElement("div");
   main.className = "source-main";
 
+  const isLocal = source.kind === "local";
+  const title = isLocal ? "本地内容" : displayUrl(source.url);
   const url = document.createElement("div");
   url.className = "source-url";
-  url.textContent = displayUrl(source.url);
-  url.title = displayUrl(source.url);
+  url.textContent = title;
+  url.title = isLocal ? "本地节点或配置文件内容" : title;
 
   const meta = document.createElement("div");
   meta.className = "source-meta";
   if (source.state === "pending") {
-    meta.textContent = "正在通过本机原生 HTTP 客户端拉取…";
+    meta.textContent = isLocal ? "正在解析本地内容…" : "正在通过本机原生 HTTP 客户端拉取…";
   } else if (source.state === "success") {
-    const usedUserAgent = source.usedUserAgent || "未知 User-Agent";
-    const ua = usedUserAgent.length > 34 ? `${usedUserAgent.slice(0, 34)}…` : usedUserAgent;
-    meta.textContent = `${source.nodes.length} 个节点 · ${formatBytes(source.bytes)} · ${ua}`;
-    meta.title = `${usedUserAgent}${source.finalUrl ? `\n最终地址：${displayUrl(source.finalUrl)}` : ""}`;
+    if (isLocal) {
+      meta.textContent = `${source.nodes.length} 个节点 · ${formatBytes(source.bytes)} · 本地导入`;
+      meta.title = "来自文本或文件导入";
+    } else {
+      const usedUserAgent = source.usedUserAgent || "未知 User-Agent";
+      const ua = usedUserAgent.length > 34 ? `${usedUserAgent.slice(0, 34)}…` : usedUserAgent;
+      meta.textContent = `${source.nodes.length} 个节点 · ${formatBytes(source.bytes)} · ${ua}`;
+      meta.title = `${usedUserAgent}${source.finalUrl ? `\n最终地址：${displayUrl(source.finalUrl)}` : ""}`;
+    }
   } else {
-    meta.textContent = source.errorMessage || "订阅获取失败";
+    meta.textContent = source.errorMessage || (isLocal ? "本地内容解析失败" : "订阅获取失败");
   }
 
   main.append(url, meta);
 
   const status = document.createElement("span");
   status.className = "source-status";
-  status.textContent = source.state === "pending" ? "请求中" : source.state === "success" ? "完成" : "失败";
+  status.textContent = source.state === "pending"
+    ? (isLocal ? "解析中" : "请求中")
+    : source.state === "success" ? "完成" : "失败";
 
   card.append(main, status);
   return card;
@@ -573,28 +631,44 @@ async function runWithConcurrency<T>(
 async function startConversion() {
   if (running) return;
 
-  const urls = readInputUrls();
-  if (urls.length === 0) return;
+  const input = readImportInput();
+  if (!input) return;
 
-  let userAgent: string | null;
-  let fetchConcurrency: number;
-  let requestLimits: { maxResponseBytes: number; maxRedirects: number };
-  try {
-    userAgent = resolveUserAgent();
-    fetchConcurrency = resolveFetchConcurrency();
-    requestLimits = resolveRequestLimits();
-  } catch (error) {
-    showToast(failureFrom(error).message, true);
-    return;
+  let userAgent: string | null = null;
+  let fetchConcurrency = MIN_FETCH_CONCURRENCY;
+  let requestLimits = { maxResponseBytes: MIN_RESPONSE_MIB * 1024 * 1024, maxRedirects: 0 };
+  if (input.urls.length > 0) {
+    try {
+      userAgent = resolveUserAgent();
+      fetchConcurrency = resolveFetchConcurrency();
+      requestLimits = resolveRequestLimits();
+    } catch (error) {
+      showToast(failureFrom(error).message, true);
+      return;
+    }
   }
 
   closeSettings(false);
   closeDetail(false);
 
-  sourceResults = urls.map(url => ({ url, state: "pending", nodes: [] }));
+  // 本地内容先解析为一个来源，再与远程订阅并发处理。
+  const hasLocal = input.local.length > 0;
+  const localNodes = hasLocal ? toStandardUris(input.local) : [];
+  const localBytes = hasLocal ? new Blob([input.local.join("\n")]).size : 0;
+  const remoteOffset = hasLocal ? 1 : 0;
+  const totalSources = input.urls.length + remoteOffset;
+
+  sourceResults = [];
+  if (hasLocal) {
+    sourceResults.push(localNodes.length > 0
+      ? { kind: "local", url: "", state: "success", nodes: localNodes, bytes: localBytes }
+      : { kind: "local", url: "", state: "error", nodes: [], errorCode: "no_nodes", errorMessage: "本地内容未解析到可用节点。" });
+  }
+  sourceResults.push(...input.urls.map(url => ({ kind: "remote" as const, url, state: "pending" as const, nodes: [] })));
+
   outputUris = [];
   duplicateCount = 0;
-  completedSources = 0;
+  completedSources = hasLocal ? 1 : 0;
 
   dom.nodeCount.textContent = "0";
   dom.sourceCount.textContent = "0";
@@ -604,9 +678,10 @@ async function startConversion() {
   dom.emptyStateTitle.textContent = "正在转换";
   renderSources();
   setBusy(true);
-  updateProgress(0, urls.length);
+  updateProgress(completedSources, totalSources);
 
-  await runWithConcurrency(urls, fetchConcurrency, async (url, index) => {
+  await runWithConcurrency(input.urls, fetchConcurrency, async (url, index) => {
+    const sourceIndex = remoteOffset + index;
     try {
       const fetched = await invoke<FetchedSubscription>("fetch_subscription", {
         url,
@@ -623,7 +698,8 @@ async function startConversion() {
         );
       }
 
-      sourceResults[index] = {
+      sourceResults[sourceIndex] = {
+        kind: "remote",
         url,
         state: "success",
         nodes,
@@ -633,7 +709,8 @@ async function startConversion() {
       };
     } catch (error) {
       const failure = failureFrom(error);
-      sourceResults[index] = {
+      sourceResults[sourceIndex] = {
+        kind: "remote",
         url,
         state: "error",
         nodes: [],
@@ -643,16 +720,16 @@ async function startConversion() {
     } finally {
       completedSources++;
       renderSources();
-      updateProgress(completedSources, urls.length);
+      updateProgress(completedSources, totalSources);
     }
   });
 
   aggregateResults();
   setBusy(false);
-  updateProgress(urls.length, urls.length);
+  updateProgress(totalSources, totalSources);
 
   const successful = sourceResults.filter(source => source.state === "success").length;
-  if (successful === urls.length) setProcessingStatus("全部完成", "done");
+  if (successful === totalSources) setProcessingStatus("全部完成", "done");
   else if (successful > 0) setProcessingStatus("部分完成", "warning");
   else setProcessingStatus("处理失败", "error");
 
@@ -664,6 +741,7 @@ async function startConversion() {
     showToast("没有获得可用节点，请查看各来源的错误信息", true);
   }
 }
+
 async function copyText(value: string) {
   try {
     await navigator.clipboard.writeText(value);
@@ -741,6 +819,8 @@ function resetView(clearInput: boolean) {
 
 function bindEvents() {
   dom.convertButton.addEventListener("click", () => void startConversion());
+  dom.pasteButton.addEventListener("click", () => void pasteFromClipboard());
+  dom.importFileButton.addEventListener("click", () => void importFile());
   dom.copyButton.addEventListener("click", () => void copyAll());
   dom.saveButton.addEventListener("click", () => void saveAll());
   dom.clearButton.addEventListener("click", () => resetView(true));
