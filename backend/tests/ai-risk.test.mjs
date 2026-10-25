@@ -75,7 +75,7 @@ test("默认提示词覆盖五类风控行为，模板可保存、恢复且要�
 
 test("风控分析提示词将数据集 JSON 插入唯一占位符", () => {
   const dataset = { subjects: [{ ipRef: "ip-1", requestCount: 2 }] };
-  assert.equal(buildAiRiskPrompt("分析：{{DATASET_JSON}}。", dataset), `分析：${JSON.stringify(dataset)}。`);
+  assert.equal(buildAiRiskPrompt("分析：{{DATASET_JSON}}。", dataset), `分析：${JSON.stringify(dataset)}。\n\n输出筛选要求：findings 仅列出符合本提示词规则的 IP；未命中任何规则的 IP 不得出现在 findings 中。没有命中项时，findings 必须为空数组。`);
 });
 
 test("保存多个 Gemini Key 时去重，空输入保留并允许显式清除", async () => {

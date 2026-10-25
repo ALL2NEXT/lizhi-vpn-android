@@ -43,10 +43,9 @@ test("后台包含 Gemini 风控设置、模型获取与分析入口", () => {
     assert.ok(documentHtml.includes(`id="${id}"`), `缺少 ${id}`);
   }
   assert.ok(documentHtml.includes('data-tab="ai-risk"'));
-  assert.ok(documentHtml.includes('data-ai-risk-filter="pending"'));
 });
 
-test("dashboard data route populates the IP risk view", async () => {
+test("dashboard data route loads telemetry for AI analysis", async () => {
   const h = harness();
   h.setHandler(async url => {
     if (url.includes("/ai-risk/dashboard-data")) return {
@@ -66,10 +65,6 @@ test("dashboard data route populates the IP risk view", async () => {
   h.el("aiRiskWindowHours").value = "24";
   await h.run("loadAiRiskDashboard(false)");
   assert.ok(h.calls.some(call => call.url.includes("/ai-risk/dashboard-data?windowHours=24")));
-  assert.equal(h.el("aiRiskMetricIps").textContent, "1");
-  assert.equal(h.el("aiRiskMetricRequests").textContent, "12");
-  assert.ok(h.el("aiRiskResults").innerHTML.includes("203.0.113.9"));
-  assert.ok(h.el("aiRiskResults").innerHTML.includes('data-ip="203.0.113.9"'));
   assert.equal(h.el("aiRiskResults").innerHTML.includes("/api/subscription/list"), false);
 });
 

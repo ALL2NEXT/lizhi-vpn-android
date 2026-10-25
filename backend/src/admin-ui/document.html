@@ -346,13 +346,6 @@
         </div>
 
         <div class="ai-risk-list-toolbar">
-          <div class="ai-risk-filter-tabs" role="tablist" aria-label="按风险筛选">
-            <button type="button" role="tab" class="active" aria-selected="true" data-ai-risk-filter="all">全部 IP <span id="aiRiskCountAll">0</span></button>
-            <button type="button" role="tab" aria-selected="false" data-ai-risk-filter="high">高风险 <span id="aiRiskCountHigh">0</span></button>
-            <button type="button" role="tab" aria-selected="false" data-ai-risk-filter="medium">中风险 <span id="aiRiskCountMedium">0</span></button>
-            <button type="button" role="tab" aria-selected="false" data-ai-risk-filter="low">低风险 <span id="aiRiskCountLow">0</span></button>
-            <button type="button" role="tab" aria-selected="false" data-ai-risk-filter="pending">待复核 <span id="aiRiskCountPending">0</span></button>
-          </div>
           <div class="ai-risk-list-controls">
             <label><span class="sr-only">排序方式</span><select id="aiRiskSort"><option value="risk">按风险等级排序</option><option value="requests">按请求数排序</option><option value="recent">按最近访问排序</option></select></label>
             <label><span class="sr-only">搜索 IP 或账户</span><input id="aiRiskSearch" type="search" placeholder="搜索 IP 或账户…" autocomplete="off"></label>
@@ -377,7 +370,7 @@
             <label class="ai-risk-clear-keys"><input id="aiRiskClearKeys" type="checkbox"><span>保存时清除已保存的 API Key</span></label>
             <button id="aiRiskSave" class="ai-risk-save" type="button">保存配置</button>
           </section>
-          <details class="ai-risk-prompt-editor"><summary>提示词模板</summary><div><label class="field" for="aiRiskPromptTemplate"><span>Gemini 分析提示词</span><textarea id="aiRiskPromptTemplate" maxlength="12000" rows="13" spellcheck="false" placeholder="读取设置后显示当前提示词"></textarea><small>可自行调整风险分析规则；必须保留且仅保留一次 {{DATASET_JSON}}，它会在分析时替换为脱敏遥测数据。最长 12,000 字符，修改后点击“保存配置”生效。</small></label><button id="aiRiskPromptReset" class="secondary" type="button">恢复推荐模板</button></div></details>
+          <details class="ai-risk-prompt-editor"><summary>提示词模板</summary><div><label class="field" for="aiRiskPromptTemplate"><span>Gemini 分析提示词</span><textarea id="aiRiskPromptTemplate" maxlength="12000" rows="13" spellcheck="false" placeholder="读取设置后显示当前提示词"></textarea><small>可自行调整风险分析规则；必须保留且仅保留一次 {{DATASET_JSON}}，它会在分析时替换为脱敏遥测数据。最长 12,000 字符，修改后点击“保存配置”生效。分析结果只保留命中规则的 IP。</small></label><button id="aiRiskPromptReset" class="secondary" type="button">恢复推荐模板</button></div></details>
           <details class="ai-risk-advanced"><summary>高级设置与数据说明</summary><div><p>分析仅由管理员手动触发，不会定时请求或自动采取封禁操作。</p><p>发送给 Google 的数据会将 IP 和 UID 替换为本次分析专用的随机引用标记，不包含请求正文、密码或订阅内容。</p><p>本地展示的 IP 与账户仅用于后台复核，数据受网络日志开关和保留期影响。</p><button id="aiRiskPreview" class="secondary" type="button">预览发送给 Gemini 的脱敏数据</button></div></details>
         </div>
       </dialog>

@@ -5,7 +5,6 @@ let aiRiskDefaultPromptTemplate = '';
 let aiRiskModels = [];
 let aiRiskDashboard = null;
 let aiRiskAnalysis = null;
-let aiRiskFilter = 'all';
 let aiRiskExpandedIp = '';
 let aiRiskSearchValue = '';
 let aiRiskSortValue = 'risk';
@@ -259,11 +258,9 @@ function aiRiskBuildRows() {
   });
 }
 
-function aiRiskFilteredRows(rows) {
+function aiRiskSearchAndSortRows(rows) {
   const query = aiRiskSearchValue.trim().toLowerCase();
   return rows.filter(function(row) {
-    if (aiRiskFilter === 'pending' && (!row.finding || row.processed)) return false;
-    if (['high', 'medium', 'low'].includes(aiRiskFilter) && (!row.finding || row.finding.riskLevel !== aiRiskFilter)) return false;
     if (!query) return true;
     return row.ip.toLowerCase().includes(query) || row.accounts.some(function(account) { return account.uid.toLowerCase().includes(query); });
   }).sort(function(left, right) {
@@ -271,18 +268,6 @@ function aiRiskFilteredRows(rows) {
     if (aiRiskSortValue === 'recent') return right.lastSeenAt.localeCompare(left.lastSeenAt);
     return aiRiskRiskRank(right.finding && right.finding.riskLevel) - aiRiskRiskRank(left.finding && left.finding.riskLevel) || right.requestCount - left.requestCount;
   });
-}
-
-function aiRiskUpdateFilterCounts(rows) {
-  const high = rows.filter(function(row) { return row.finding && row.finding.riskLevel === 'high'; }).length;
-  const medium = rows.filter(function(row) { return row.finding && row.finding.riskLevel === 'medium'; }).length;
-  const low = rows.filter(function(row) { return row.finding && row.finding.riskLevel === 'low'; }).length;
-  const pending = rows.filter(function(row) { return row.finding && !row.processed; }).length;
-  el('aiRiskCountAll').textContent = aiRiskFormatCount(rows.length);
-  el('aiRiskCountHigh').textContent = aiRiskFormatCount(high);
-  el('aiRiskCountMedium').textContent = aiRiskFormatCount(medium);
-  el('aiRiskCountLow').textContent = aiRiskFormatCount(low);
-  el('aiRiskCountPending').textContent = aiRiskFormatCount(pending);
 }
 
 function aiRiskRenderHourChart(row) {
@@ -313,7 +298,6 @@ function aiRiskRenderOverview(row) {
 
 function aiRiskRenderOverviewFinding(row) {
   const finding = row.finding;
-  if (!finding) return '<div class="ai-risk-overview-analysis"><div class="ai-risk-empty-note">运行 AI 风控分析后，可查看该 IP 的研判理由和人工复核建议。</div></div>';
   const evidence = finding.evidence || [];
   const score = Number.isSafeInteger(finding.riskScore) && finding.riskScore >= 0 && finding.riskScore <= 100
     ? finding.riskScore : null;
@@ -365,20 +349,20 @@ function aiRiskRenderDetail(row) {
 function aiRiskRenderCard(row, index) {
   const expanded = row.ip === aiRiskExpandedIp || (!aiRiskExpandedIp && index === 0);
   const finding = row.finding;
-  const level = finding && ['high', 'medium', 'low'].includes(finding.riskLevel) ? finding.riskLevel : 'pending';
-  const labels = {high: '高风险', medium: '中风险', low: '低风险', pending: finding ? '待复核' : '待分析'};
+  const level = finding && ['high', 'medium', 'low'].includes(finding.riskLevel) ? finding.riskLevel : 'low';
+  const labels = {high: '高风险', medium: '中风险', low: '低风险'};
   const riskScore = finding && Number.isSafeInteger(finding.riskScore) && finding.riskScore >= 0 && finding.riskScore <= 100
     ? finding.riskScore : null;
   const accountLabel = row.accounts.length ? '关联 ' + row.accounts.length + ' 个账户' : '未识别账户';
-  const title = finding && finding.title || (row.accounts.length > 1 ? '单 IP 关联多个账户' : '等待 AI 风险研判');
+  const title = finding && finding.title || '风控线索';
   const actionLabel = row.processed ? '撤销已处理' : '标记为已处理';
   return '<article class="ai-risk-ip-card risk-border-' + level + (expanded ? ' expanded' : '') + '" data-ip="' + esc(row.ip) + '">' +
     '<div class="ai-risk-ip-summary">' +
       '<button class="ai-risk-expand" type="button" data-ai-risk-action="expand" aria-expanded="' + expanded + '" aria-label="' + (expanded ? '收起' : '展开') + ' IP 详情">' + (expanded ? '−' : '+') + '</button>' +
       '<span class="ai-risk-badge risk-' + level + '">' + labels[level] + '</span>' +
       '<div class="ai-risk-ip-identity"><div><strong><code>' + esc(row.ip) + '</code></strong><button class="ai-risk-copy" type="button" data-ai-risk-action="copy" aria-label="复制 IP">复制</button></div><p>' + accountLabel + ' <span>首次 ' + esc(aiRiskFormatTime(row.firstSeenAt)) + '</span><span>最近 ' + esc(aiRiskFormatTime(row.lastSeenAt)) + '</span></p></div>' +
-      '<div class="ai-risk-confidence"><span>' + (riskScore !== null ? '风险分' : finding ? '风险级别' : '请求量') + '</span><strong>' + (riskScore !== null ? riskScore + '/100' : finding ? labels[level] : aiRiskFormatCount(row.requestCount)) + '</strong>' + (riskScore !== null ? '<div class="ai-risk-confidence-track" role="img" aria-label="风控排查优先级 ' + riskScore + ' 分"><i class="' + level + '" style="--risk-width:' + riskScore + '%"></i></div>' : '<div class="ai-risk-confidence-track" aria-hidden="true"><i class="' + level + '" style="--risk-width:0%"></i></div>') + '</div>' +
-      (finding ? '<button class="ai-risk-review-button secondary" type="button" data-ai-risk-action="review">' + actionLabel + '</button>' : '<span class="ai-risk-awaiting">运行分析后复核</span>') +
+      '<div class="ai-risk-confidence"><span>' + (riskScore !== null ? '风险分' : '风险级别') + '</span><strong>' + (riskScore !== null ? riskScore + '/100' : labels[level]) + '</strong>' + (riskScore !== null ? '<div class="ai-risk-confidence-track" role="img" aria-label="风控排查优先级 ' + riskScore + ' 分"><i class="' + level + '" style="--risk-width:' + riskScore + '%"></i></div>' : '<div class="ai-risk-confidence-track" aria-hidden="true"><i class="' + level + '" style="--risk-width:0%"></i></div>') + '</div>' +
+      '<button class="ai-risk-review-button secondary" type="button" data-ai-risk-action="review">' + actionLabel + '</button>' +
     '</div>' +
     (expanded ? '<div class="ai-risk-detail" id="ai-risk-detail-' + index + '">' + aiRiskRenderDetail(row) + '</div>' : '') +
   '</article>';
@@ -391,8 +375,8 @@ function renderAiRiskFindings(result) {
 
 function aiRiskRenderDashboard() {
   const host = el('aiRiskResults');
-  const rows = aiRiskBuildRows();
-  aiRiskUpdateFilterCounts(rows);
+  const allRows = aiRiskBuildRows();
+  const rows = allRows.filter(function(row) { return row.finding; });
   if (aiRiskAnalysis && aiRiskAnalysis.analyzedAt) {
     el('aiRiskLastAnalysis').textContent = aiRiskFormatTime(aiRiskAnalysis.analyzedAt);
     el('aiRiskAnalysisDuration').textContent = Number.isFinite(aiRiskAnalysis.durationMs) ? Math.max(1, Math.round(aiRiskAnalysis.durationMs / 1000)) + ' 秒' : '—';
@@ -406,18 +390,25 @@ function aiRiskRenderDashboard() {
   } else {
     host.innerHTML = '';
   }
-  if (!aiRiskDashboard && !rows.length) {
+  if (!aiRiskDashboard && !allRows.length) {
     host.innerHTML += '<div class="loading-state">正在读取风险数据…</div>';
     return;
   }
-  const visible = aiRiskFilteredRows(rows);
-  if (!visible.length) {
-    const message = rows.length ? '没有符合当前筛选条件的 IP。' : '当前时间窗内没有可展示的请求记录。请确认网络日志记录已启用。';
-    host.innerHTML += '<div class="ai-risk-empty"><strong>' + message + '</strong>' + (aiRiskAnalysis ? '<p>分析结果仅覆盖当前日志保留范围。</p>' : '<p>运行 AI 风控分析后，可查看风险级别、证据和处置建议。</p>') + '</div>';
+  if (!aiRiskAnalysis) {
+    const message = allRows.length ? '运行 AI 风控分析后，这里只显示命中规则的 IP。' : '当前时间窗内没有可分析的请求记录。';
+    host.innerHTML += '<div class="ai-risk-empty"><strong>' + message + '</strong></div>';
     return;
   }
-  host.innerHTML += '<div class="ai-risk-list-summary">显示 ' + aiRiskFormatCount(visible.length) + ' / ' + aiRiskFormatCount(rows.length) + ' 个 IP · AI 结果只作人工复核参考</div>' +
-    '<div class="ai-risk-ip-list">' + visible.map(aiRiskRenderCard).join('') + '</div>';
+  if (!rows.length) {
+    host.innerHTML += '<div class="ai-risk-empty"><strong>本次分析没有发现符合规则的 IP。</strong></div>';
+    return;
+  }
+  const visible = aiRiskSearchAndSortRows(rows);
+  if (!visible.length) {
+    host.innerHTML += '<div class="ai-risk-empty"><strong>没有符合搜索条件的命中项。</strong></div>';
+    return;
+  }
+  host.innerHTML += '<div class="ai-risk-ip-list">' + visible.map(aiRiskRenderCard).join('') + '</div>';
 }
 
 async function loadAiRiskDashboard(clearAnalysis) {
@@ -432,7 +423,7 @@ async function loadAiRiskDashboard(clearAnalysis) {
     aiRiskDashboard = data.dataset || null;
     aiRiskExpandedIp = '';
     aiRiskRenderDashboard();
-    aiRiskSetStatus('aiRiskAnalysisStatus', aiRiskDashboard ? '数据已更新 · ' + aiRiskFormatTime(aiRiskDashboard.generatedAt) : '没有可用的风险数据。', false);
+    aiRiskSetStatus('aiRiskAnalysisStatus', '', false);
   } catch (error) {
     aiRiskDashboard = null;
     aiRiskRenderDashboard();
@@ -596,17 +587,6 @@ function aiRiskHandlePageClick(event) {
   }
   if (button.id === 'aiRiskSettingsClose') {
     aiRiskSetSettingsOpen(false);
-    return;
-  }
-  const filter = button.getAttribute && button.getAttribute('data-ai-risk-filter');
-  if (filter) {
-    aiRiskFilter = filter;
-    el('aiRiskPage').querySelectorAll('[data-ai-risk-filter]').forEach(function(tab) {
-      const selected = tab === button;
-      tab.classList.toggle('active', selected);
-      tab.setAttribute('aria-selected', String(selected));
-    });
-    aiRiskRenderDashboard();
     return;
   }
   const action = button.getAttribute && button.getAttribute('data-ai-risk-action');

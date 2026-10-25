@@ -255,7 +255,8 @@ export async function updateAiRiskSettings(env: Env, incoming: Record<string, un
 
 export function buildAiRiskPrompt(promptTemplate: string, dataset: unknown): string {
   const serializedDataset = JSON.stringify(dataset) ?? "null";
-  return promptTemplate.replace(AI_RISK_DATASET_PLACEHOLDER, () => serializedDataset);
+  const prompt = promptTemplate.replace(AI_RISK_DATASET_PLACEHOLDER, () => serializedDataset);
+  return prompt + "\n\n输出筛选要求：findings 仅列出符合本提示词规则的 IP；未命中任何规则的 IP 不得出现在 findings 中。没有命中项时，findings 必须为空数组。";
 }
 
 function normalizeWindowHours(value: unknown) {
