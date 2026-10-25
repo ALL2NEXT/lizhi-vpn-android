@@ -78,6 +78,7 @@ import {
   usersDb,
 } from "./services/user-store.ts";
 import { handleHoneypotRoute, isHoneypotPath } from "./services/honeypot.ts";
+import { pruneSecurityRuleHits, recordHoneypotRuleHit } from "./services/security-risk.ts";
 import type {
   SystemLogDraft,
   SystemLogDetailSettings,
@@ -238,7 +239,16 @@ async function dispatchWorkerRequest(request: Request, env: Env) {
       const path = url.pathname.replace(/\/+$/, "") || "/";
       const adminBasePath = resolveAdminBasePath(env.ADMIN_PATH);
 
-      if (isHoneypotPath(path)) {
+      if (adminBasePath && path === adminBasePath && request.method === "GET") {
+        return new Response(adminHtml(adminBasePath), {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store, no-cache, must-revalidate",
+          },
+        });
+      }
+
+      if (isHoneypotPath(path) && path !== adminBasePath) {
         return handleHoneypotRoute(request, json);
       }
 
@@ -257,15 +267,6 @@ async function dispatchWorkerRequest(request: Request, env: Env) {
           database: {
             initialized: usersSchemaVersion === USER_SCHEMA_VERSION,
             schemaVersion: usersSchemaVersion,
-          },
-        });
-      }
-
-      if (adminBasePath && path === adminBasePath && request.method === "GET") {
-        return new Response(adminHtml(adminBasePath), {
-          headers: {
-            "content-type": "text/html; charset=utf-8",
-            "cache-control": "no-store, no-cache, must-revalidate",
           },
         });
       }
@@ -324,6 +325,7 @@ export async function fetchBackend(
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const adminBasePath = resolveAdminBasePath(env.ADMIN_PATH);
+    const isHoneypotRequest = isHoneypotPath(path) && path !== adminBasePath;
     const isAdminApi = Boolean(adminBasePath && path.startsWith(`${adminBasePath}/api/`));
     const requestId = request.headers.get("cf-ray") || crypto.randomUUID();
     let recordingSettings: SystemLogRecordingSettings | undefined;
@@ -419,7 +421,19 @@ export async function fetchBackend(
           // Payload capture failures do not interfere with the original response.
         }
       }
-      await writeSystemLogs(env, entries, recordingSettings);
+      await Promise.all([
+        writeSystemLogs(env, entries, recordingSettings),
+        isHoneypotRequest
+          ? recordHoneypotRuleHit(env, {
+              method: request.method,
+              path,
+              status: response.status,
+              ip: requestIp(request),
+              requestId,
+              occurredAt,
+            })
+          : Promise.resolve(),
+      ]);
     })();
     if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(persist);
     else await persist;
@@ -427,5 +441,5 @@ export async function fetchBackend(
 }
 
 export function scheduledBackend(env: Env, ctx: BackendExecutionContext) {
-  ctx.waitUntil(pruneSystemLogs(env));
+  ctx.waitUntil(Promise.all([pruneSystemLogs(env), pruneSecurityRuleHits(env)]));
 }

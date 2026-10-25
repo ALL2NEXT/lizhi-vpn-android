@@ -11,6 +11,7 @@ import {
   testGeminiConnection,
   updateAiRiskSettings,
 } from "../../services/ai-risk.ts";
+import { readSecurityRuleHits } from "../../services/security-risk.ts";
 
 /* System log query route. */
 
@@ -37,6 +38,19 @@ export function createAdminAccessRoutes(deps: Pick<
   } = deps;
 
   return async function handleAdminAccess(path: string, request: Request, env: Env) {
+    if (path === "/api/security-risk/rule-hits" && request.method === "GET") {
+      try {
+        const hours = new URL(request.url).searchParams.get("windowHours");
+        return json(await readSecurityRuleHits(env, hours === null ? 24 : Number(hours)));
+      } catch (error) {
+        const invalidWindow = error instanceof Error && error.message === "invalid_security_risk_window";
+        return json({
+          ok: false,
+          error: invalidWindow ? "invalid_security_risk_window" : "security_rule_hits_read_failed",
+        }, invalidWindow ? 400 : 500);
+      }
+    }
+
     if (path === "/api/ai-risk/settings" && request.method === "GET") {
       return json({ ok: true, settings: await readAiRiskSettings(env) });
     }

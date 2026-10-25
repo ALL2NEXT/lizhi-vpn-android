@@ -340,7 +340,7 @@
         <div class="ai-risk-toolbar">
           <label class="ai-risk-window-field"><span>分析时间窗</span><select id="aiRiskWindowHours"><option value="24">最近 24 小时</option><option value="72">最近 3 天</option><option value="168">最近 7 天</option></select></label>
           <div class="ai-risk-toolbar-actions">
-            <button id="aiRiskAnalyze" type="button">运行安全风控分析</button>
+            <button id="aiRiskAnalyze" type="button">运行 AI 分析</button>
             <button id="aiRiskRefresh" class="secondary" type="button">刷新数据</button>
           </div>
         </div>
@@ -348,13 +348,20 @@
         <div class="ai-risk-list-toolbar">
           <div class="ai-risk-list-controls">
             <label><span class="sr-only">排序方式</span><select id="aiRiskSort"><option value="risk">按风险等级排序</option><option value="requests">按请求数排序</option><option value="recent">按最近访问排序</option></select></label>
-            <label><span class="sr-only">搜索 IP 或账户</span><input id="aiRiskSearch" type="search" placeholder="搜索 IP 或账户…" autocomplete="off"></label>
+            <label><span class="sr-only">搜索 IP、账户或命中路径</span><input id="aiRiskSearch" type="search" placeholder="搜索 IP、账户或命中路径…" autocomplete="off"></label>
           </div>
         </div>
 
-        <p id="aiRiskAnalysisStatus" class="ai-risk-status" role="status" aria-live="polite"></p>
-        <pre id="aiRiskDataPreview" class="ai-risk-data-preview" hidden></pre>
-        <div id="aiRiskResults" class="ai-risk-results" aria-live="polite"><div class="loading-state">正在读取风险数据…</div></div>
+        <section class="security-risk-section" aria-labelledby="securityRuleHitsTitle">
+          <div class="security-risk-section-heading"><h3 id="securityRuleHitsTitle">后台规则命中</h3><span id="securityRuleHitCount">读取中</span></div>
+          <div id="securityRuleHitResults" class="security-risk-rule-results" aria-live="polite"><div class="loading-state">正在读取后台规则命中…</div></div>
+        </section>
+        <section class="security-risk-section" aria-labelledby="aiRiskFindingsTitle">
+          <div class="security-risk-section-heading"><h3 id="aiRiskFindingsTitle">AI 分析命中</h3></div>
+          <p id="aiRiskAnalysisStatus" class="ai-risk-status" role="status" aria-live="polite"></p>
+          <pre id="aiRiskDataPreview" class="ai-risk-data-preview" hidden></pre>
+          <div id="aiRiskResults" class="ai-risk-results" aria-live="polite"><div class="loading-state">正在读取 AI 分析数据…</div></div>
+        </section>
       </main>
 
       <dialog id="aiRiskSettingsPanel" class="ai-risk-settings-panel" aria-labelledby="aiRiskSettingsTitle">

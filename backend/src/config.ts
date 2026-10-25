@@ -99,6 +99,25 @@ const SYSTEM_LOG_USER_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_use
   ON system_logs_mb(user_uid, occurred_at DESC, id DESC) WHERE user_uid <> ''`;
 const SYSTEM_LOG_REQUEST_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_request_id
   ON system_logs_mb(request_id)`;
+const SYSTEM_LOG_IP_INDEX = `CREATE INDEX IF NOT EXISTS idx_system_logs_mb_ip_occurred
+  ON system_logs_mb(ip, occurred_at DESC)
+  WHERE category = 'request' AND user_uid <> '' AND device_id <> ''`;
+const SECURITY_RISK_RULE_HITS_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS security_risk_rule_hits_mb (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    occurred_at TEXT NOT NULL,
+    rule_id TEXT NOT NULL,
+    method TEXT NOT NULL,
+    path TEXT NOT NULL,
+    status INTEGER NOT NULL,
+    ip TEXT NOT NULL,
+    request_id TEXT NOT NULL DEFAULT ''
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_security_risk_rule_hits_mb_rule_time
+    ON security_risk_rule_hits_mb(rule_id, occurred_at DESC, ip)`,
+  `CREATE INDEX IF NOT EXISTS idx_security_risk_rule_hits_mb_ip_time
+    ON security_risk_rule_hits_mb(ip, occurred_at DESC)`,
+];
 
 const NOTIFICATION_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS notifications_mb (
@@ -128,7 +147,7 @@ const NOTIFICATION_SCHEMA_STATEMENTS = [
     ON notification_reads_mb(user_id, notification_id)`,
 ];
 
-export const USER_SCHEMA_VERSION = 23;
+export const USER_SCHEMA_VERSION = 24;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -302,6 +321,8 @@ export const USER_SCHEMA_STATEMENTS = [
   SYSTEM_LOG_PAYLOADS_SCHEMA,
   SYSTEM_LOG_PAYLOADS_INDEX,
   SYSTEM_LOG_USER_INDEX,
+  SYSTEM_LOG_IP_INDEX,
+  ...SECURITY_RISK_RULE_HITS_SCHEMA_STATEMENTS,
   ...NOTIFICATION_SCHEMA_STATEMENTS,
   ...USER_IP_LINKS_SCHEMA_STATEMENTS,
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
@@ -530,6 +551,7 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
     SYSTEM_LOG_REQUEST_INDEX,
   ],
   23: NOTIFICATION_SCHEMA_STATEMENTS,
+  24: [SYSTEM_LOG_IP_INDEX, ...SECURITY_RISK_RULE_HITS_SCHEMA_STATEMENTS],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
   const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");

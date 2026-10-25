@@ -2,7 +2,7 @@ import type { json as jsonResponse } from "../http/responses.ts";
 
 /* 常见后台路径蜜罐只返回虚假登录页，提交的登录请求固定失败。 */
 
-const HONEYPOT_PATHS = new Set([
+export const HONEYPOT_PATHS = [
   "/admin",
   "/admin/login",
   "/admin/login.php",
@@ -24,10 +24,12 @@ const HONEYPOT_PATHS = new Set([
   "/wp-login.php",
   "/api/login",
   "/api/admin/login",
-]);
+] as const;
+
+const HONEYPOT_PATH_SET = new Set<string>(HONEYPOT_PATHS);
 
 export function isHoneypotPath(path: string) {
-  return HONEYPOT_PATHS.has(String(path || "").toLowerCase());
+  return HONEYPOT_PATH_SET.has(String(path || "").toLowerCase());
 }
 
 function fakeLoginPage() {
