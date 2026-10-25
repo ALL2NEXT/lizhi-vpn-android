@@ -162,7 +162,7 @@ function renderSourceTraffic(row, traffic, unavailable) {
 }
 
 async function loadSubscriptionTraffic(sourceIds) {
-  const requestedIds = sourceIds ? new Set(sourceIds.map(String)) : null;
+  const requestedIds = Array.isArray(sourceIds) ? new Set(sourceIds.map(String)) : null;
   const rows = getSourceRows();
   const activeRows = rows.filter(function(row) {
     return row.dataset.sourceId &&

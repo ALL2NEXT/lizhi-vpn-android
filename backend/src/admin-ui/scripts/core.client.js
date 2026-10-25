@@ -67,7 +67,7 @@
  function checked(id, data) { el(id).checked = Boolean(data); }
  function esc(data) { return String(data == null ? '' : data).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
  function headers() { return {'content-type':'application/json','authorization':'Bearer ' + adminToken}; }
- function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#fca5a5' : '#86efac'; }
+ function show(message, error) { statusEl.textContent = message; statusEl.style.color = error ? '#c42b1c' : '#107c10'; }
  function showLoginError(message) { loginStatusEl.textContent = message || ''; }
  function parseResponseJson(responseText) {
    try { return JSON.parse(responseText); } catch (_) { return {}; }

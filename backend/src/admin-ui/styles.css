@@ -1730,3 +1730,394 @@
       .notification-modal { padding: 8px; }
       .notification-modal-card { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 16px; }
     }
+
+
+/* 后台界面采用 Windows 10 风格，截图中的侧栏保留原有配色与字体。 */
+body {
+  --surface: #ffffff;
+  --surface-page: #f3f3f3;
+  --surface-soft: #f0f0f0;
+  --surface-active: #e5f1fb;
+  --line: #d6d6d6;
+  --ink: #1a1a1a;
+  --ink-muted: #5f5f5f;
+  --blue: #0078d4;
+  --blue-ink: #005a9e;
+  --green: #107c10;
+  --red: #c42b1c;
+  background: #f3f3f3;
+}
+
+.dashboard-sidebar {
+  --surface: #ffffff;
+  --surface-page: #f0f4f9;
+  --surface-soft: #e8eef6;
+  --surface-active: #e8f0fe;
+  --line: #d7e0ea;
+  --ink: #202124;
+  --ink-muted: #5f6368;
+  --blue: #1a73e8;
+  --blue-ink: #174ea6;
+  --green: #137333;
+  --red: #b3261e;
+}
+
+#dashboard .dashboard-workspace,
+.login-gate,
+dialog,
+[role="dialog"] {
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+}
+
+#dashboard .dashboard-workspace {
+  color: var(--ink);
+  background: var(--surface-page);
+}
+
+#dashboard .dashboard-workspace .tab-panel {
+  color: var(--ink);
+  background: transparent;
+}
+
+#dashboard .dashboard-workspace .tab-panel[data-panel="subscriptions"].active {
+  background: var(--surface-page);
+}
+
+#dashboard .dashboard-workspace h1,
+#dashboard .dashboard-workspace h2,
+#dashboard .dashboard-workspace h3,
+#dashboard .dashboard-workspace h4,
+.login-gate h1,
+dialog h1,
+dialog h2,
+dialog h3,
+[role="dialog"] h1,
+[role="dialog"] h2,
+[role="dialog"] h3 {
+  color: var(--ink);
+  letter-spacing: 0;
+}
+
+#dashboard .dashboard-workspace .dashboard-heading h2,
+.login-gate h1 {
+  font-size: 26px;
+  font-weight: 600;
+}
+
+#dashboard .dashboard-workspace :is(p, small, label),
+.login-gate :is(p, small, label),
+dialog :is(p, small, label),
+[role="dialog"] :is(p, small, label) {
+  color: var(--ink-muted);
+}
+
+#dashboard .dashboard-workspace .card:not(.tab-panel),
+#dashboard .dashboard-workspace :is([class*="-card"], [class*="-panel"], [class*="-wrap"]):not(.tab-panel),
+#dashboard .dashboard-workspace .settings-section,
+#dashboard .dashboard-workspace .source-section,
+#dashboard .dashboard-workspace .subscription-group,
+#dashboard .dashboard-workspace .subscription-manager-header,
+.login-gate .card,
+dialog,
+[role="dialog"] {
+  border-color: var(--line);
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+#dashboard .dashboard-workspace .card:not(.tab-panel),
+#dashboard .dashboard-workspace :is([class*="-card"], [class*="-panel"], [class*="-wrap"]):not(.tab-panel),
+#dashboard .dashboard-workspace .settings-section,
+#dashboard .dashboard-workspace .source-section,
+#dashboard .dashboard-workspace .subscription-group,
+#dashboard .dashboard-workspace .subscription-manager-header,
+.login-gate .card,
+dialog,
+[role="dialog"] {
+  background-color: var(--surface);
+}
+
+#dashboard .dashboard-workspace .subscription-manager,
+#dashboard .dashboard-workspace .subscription-manager-screen,
+#dashboard .dashboard-workspace .subscription-group-workspace {
+  background-color: var(--surface-page);
+}
+
+#dashboard .dashboard-workspace button,
+.login-gate button,
+dialog button,
+[role="dialog"] button {
+  min-height: 34px;
+  border-radius: 2px;
+  box-shadow: none;
+  font-family: inherit;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+#dashboard .dashboard-workspace button:not(.secondary):not(.danger):not([class]),
+.login-gate button:not(.secondary):not(.danger):not([class]),
+#dashboard .dashboard-workspace button.primary,
+.login-gate button.primary {
+  color: #ffffff;
+  background: #0078d4;
+  border: 1px solid #0078d4;
+}
+
+#dashboard .dashboard-workspace button:not(.secondary):not(.danger):not([class]):hover:not(:disabled),
+.login-gate button:not(.secondary):not(.danger):not([class]):hover:not(:disabled),
+#dashboard .dashboard-workspace button.primary:hover:not(:disabled),
+.login-gate button.primary:hover:not(:disabled) {
+  background: #106ebe;
+  border-color: #106ebe;
+}
+
+#dashboard .dashboard-workspace button.secondary,
+.login-gate button.secondary,
+dialog button.secondary,
+[role="dialog"] button.secondary {
+  color: #1a1a1a;
+  background: #f2f2f2;
+  border: 1px solid #adadad;
+}
+
+#dashboard .dashboard-workspace button.secondary:hover:not(:disabled),
+.login-gate button.secondary:hover:not(:disabled),
+dialog button.secondary:hover:not(:disabled),
+[role="dialog"] button.secondary:hover:not(:disabled) {
+  color: #1a1a1a;
+  background: #e5f1fb;
+  border-color: #0078d4;
+}
+
+#dashboard .dashboard-workspace button.danger,
+.login-gate button.danger,
+dialog button.danger,
+[role="dialog"] button.danger {
+  color: #a4262c;
+  background: #fde7e9;
+  border: 1px solid #e1a7aa;
+}
+
+#dashboard .dashboard-workspace button:focus-visible,
+#dashboard .dashboard-workspace input:focus-visible,
+#dashboard .dashboard-workspace select:focus-visible,
+#dashboard .dashboard-workspace textarea:focus-visible,
+.login-gate button:focus-visible,
+.login-gate input:focus-visible,
+dialog button:focus-visible,
+dialog input:focus-visible,
+dialog select:focus-visible,
+dialog textarea:focus-visible,
+[role="dialog"] button:focus-visible,
+[role="dialog"] input:focus-visible,
+[role="dialog"] select:focus-visible,
+[role="dialog"] textarea:focus-visible {
+  outline: 2px solid #0078d4;
+  outline-offset: 1px;
+}
+
+#dashboard .dashboard-workspace :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, select),
+.login-gate :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, select),
+dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, select),
+[role="dialog"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, select) {
+  color: #1a1a1a;
+  background-color: #ffffff;
+  border-color: #8a8886;
+  border-radius: 2px;
+  font-family: inherit;
+}
+
+#dashboard .dashboard-workspace :is(input[type="checkbox"], input[type="radio"]),
+.login-gate :is(input[type="checkbox"], input[type="radio"]),
+dialog :is(input[type="checkbox"], input[type="radio"]),
+[role="dialog"] :is(input[type="checkbox"], input[type="radio"]) {
+  accent-color: #0078d4;
+}
+
+#dashboard .dashboard-workspace fieldset,
+dialog fieldset,
+[role="dialog"] fieldset {
+  border-color: var(--line);
+  border-radius: 2px;
+}
+
+#dashboard .dashboard-workspace table,
+dialog table,
+[role="dialog"] table {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+#dashboard .dashboard-workspace table th,
+dialog table th,
+[role="dialog"] table th {
+  color: #323130;
+  background: #ededed;
+  border-color: var(--line);
+  font-weight: 600;
+}
+
+#dashboard .dashboard-workspace table td,
+dialog table td,
+[role="dialog"] table td {
+  color: #323130;
+  border-color: #e1e1e1;
+}
+
+#dashboard .dashboard-workspace table tbody tr:hover td {
+  background-color: #f5faff;
+}
+
+#dashboard .dashboard-workspace a,
+dialog a,
+[role="dialog"] a {
+  color: var(--blue);
+}
+
+#dashboard .dashboard-workspace :is(.growth-period-switch, .subscription-view-toggle) {
+  border-radius: 2px;
+}
+
+#dashboard .dashboard-workspace .growth-period-button {
+  color: #323130;
+  background: #f2f2f2;
+  border: 1px solid #adadad;
+  border-radius: 0;
+}
+
+#dashboard .dashboard-workspace .growth-period-button.active {
+  color: #ffffff;
+  background: #0078d4;
+  border-color: #0078d4;
+}
+
+#dashboard .dashboard-workspace :is([class*="badge"], [class*="chip"]) {
+  border-radius: 2px;
+}
+
+#dashboard .dashboard-workspace .source-row,
+#dashboard .dashboard-workspace .subscription-import-item {
+  border-color: #e1e1e1;
+}
+
+#dashboard .dashboard-workspace .source-row:hover,
+#dashboard .dashboard-workspace .source-row.selected {
+  background-color: #f5faff;
+}
+
+#dashboard .dashboard-workspace .notification-modal-scrim,
+#dashboard .dashboard-workspace .system-log-settings-backdrop {
+  background: rgb(0 0 0 / 42%);
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 42%);
+}
+
+/* 将剩余圆角卡片和分组控件调整为 Windows 10 风格。 */
+#dashboard .dashboard-workspace .ai-risk-brand-mark,
+#dashboard .dashboard-workspace .ai-risk-metric,
+#dashboard .dashboard-workspace .ai-risk-page :is(
+  .ai-risk-analysis-summary,
+  .ai-risk-ip-card,
+  .ai-risk-badge,
+  .ai-risk-confidence-track,
+  .ai-risk-overview-conclusion,
+  .ai-risk-overview-advice,
+  .ai-risk-activity-card,
+  .ai-risk-chart-card,
+  .ai-risk-expanded-chart,
+  .ai-risk-activity-metrics > div,
+  .ai-risk-endpoints,
+  .ai-risk-endpoint-row b,
+  .ai-risk-reasoning,
+  .ai-risk-recommendation,
+  .ai-risk-account-row,
+  .ai-risk-empty,
+  .ai-risk-empty-note
+) {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+#dashboard .dashboard-workspace .ai-risk-hour-bar {
+  border-radius: 0;
+}
+
+#dashboard .dashboard-workspace :is(
+  .subscription-group-sidebar,
+  .subscription-group-workspace,
+  .subscription-group-nav-row,
+  .subscription-group-nav-item,
+  .subscription-list-search,
+  .source-list-header,
+  .subscription-group-add-row button,
+  .subscription-pagination > span:nth-child(3),
+  .subscription-editor,
+  .ip-relations-view-toggle,
+  .ip-relations-search,
+  .security-device-empty,
+  .system-log-method,
+  .system-log-status
+) {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+#dashboard .dashboard-workspace .registration-mode-switch {
+  padding: 0;
+  overflow: hidden;
+  background: #f2f2f2;
+  border-color: #adadad;
+  border-radius: 2px;
+}
+
+#dashboard .dashboard-workspace .registration-mode-switch-thumb {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% / 3);
+  background: #ffffff;
+  border: 1px solid #0078d4;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+#dashboard .dashboard-workspace .registration-mode-option span {
+  border-radius: 2px;
+}
+
+@media (max-width: 1100px) {
+  body.subscriptions-fullscreen {
+    overflow: auto;
+  }
+
+  body.subscriptions-fullscreen #dashboard,
+  body.subscriptions-fullscreen .dashboard-workspace {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  body.subscriptions-fullscreen .tab-panel[data-panel="subscriptions"].active {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+    padding: 8px;
+  }
+
+  body.subscriptions-fullscreen .subscription-manager-layout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  body.subscriptions-fullscreen .subscription-group-sidebar {
+    min-height: 138px;
+    max-height: 180px;
+  }
+
+  body.subscriptions-fullscreen .subscription-group-workspace {
+    min-height: 520px;
+    padding: 10px;
+  }
+}
