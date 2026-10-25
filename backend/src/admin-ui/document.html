@@ -78,7 +78,7 @@
               <span class="nav-label"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19.4 13a7.8 7.8 0 0 0 0-2l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1L15 3h-4l-.4 3a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.8 7.8 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 3h4l.4-3a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2.1-1.6zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>后台设置</span><span class="nav-chevron" aria-hidden="true">⌄</span>
             </button>
             <div id="backend-settings-subnav" class="nav-submenu" role="group" aria-label="后台设置子菜单">
-              <button class="tab-button" role="tab" type="button" data-tab="ai-risk"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a7 7 0 0 0-7 7v2a4 4 0 0 0 4 4h1v3h4v-3h1a4 4 0 0 0 4-4V9a7 7 0 0 0-7-7zm-3 8H7V8h2v2zm8 0h-2V8h2v2zM9 21h6v-2H9v2z"/></svg><span>AI 风控</span></button>
+              <button class="tab-button" role="tab" type="button" data-tab="ai-risk"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 4 5v6c0 5.2 3.4 9.8 8 11 4.6-1.2 8-5.8 8-11V5l-8-3zm0 3.2 5 1.9V11c0 3.7-2.1 7.1-5 8.3-2.9-1.2-5-4.6-5-8.3V7.1l5-1.9zm-1 9.4-2-2-1.4 1.4L11 17l5.4-5.4L15 10.2l-4 4.4z"/></svg><span>安全风控</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="ip-relations"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3 14h7v7H3v-7zm11 0h7v7h-7v-7zm-3-3h2v2h5v2h-2v-1H8v1H6v-2h5v-2z"/></svg><span>IP 与用户</span></button>
               <button class="tab-button" role="tab" type="button" data-tab="system-logs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 3a9 9 0 1 0 8.9 10h-2a7 7 0 1 1-2-6L15 10h7V3l-2.7 2.7A8.9 8.9 0 0 0 13 3zm-1 5v5l4 2.4 1-1.6-3-1.8V8h-2z"/></svg><span>网络日志</span></button>
             </div>
@@ -325,8 +325,8 @@
       <main class="ai-risk-main" aria-labelledby="aiRiskTitle">
         <header class="ai-risk-header">
           <div class="ai-risk-title-group">
-            <span class="ai-risk-brand-mark" aria-hidden="true">AI</span>
-            <div><h2 id="aiRiskTitle">AI 风控分析</h2><p>基于日志行为分析，辅助识别异常 IP 与账户模式；分析结果由管理员复核，不会自动封禁。</p></div>
+            <span class="ai-risk-brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 2 4 5v6c0 5.2 3.4 9.8 8 11 4.6-1.2 8-5.8 8-11V5l-8-3zm0 3.2 5 1.9V11c0 3.7-2.1 7.1-5 8.3-2.9-1.2-5-4.6-5-8.3V7.1l5-1.9zm-1 9.4-2-2-1.4 1.4L11 17l5.4-5.4L15 10.2l-4 4.4z"/></svg></span>
+            <h2 id="aiRiskTitle">安全风控</h2>
           </div>
           <div class="ai-risk-header-meta">
             <span>最近分析 <strong id="aiRiskLastAnalysis">尚未分析</strong></span>
@@ -340,7 +340,7 @@
         <div class="ai-risk-toolbar">
           <label class="ai-risk-window-field"><span>分析时间窗</span><select id="aiRiskWindowHours"><option value="24">最近 24 小时</option><option value="72">最近 3 天</option><option value="168">最近 7 天</option></select></label>
           <div class="ai-risk-toolbar-actions">
-            <button id="aiRiskAnalyze" type="button">运行 AI 风控分析</button>
+            <button id="aiRiskAnalyze" type="button">运行安全风控分析</button>
             <button id="aiRiskRefresh" class="secondary" type="button">刷新数据</button>
           </div>
         </div>

@@ -911,7 +911,8 @@
     .ai-risk-main { display: grid; min-width: 0; align-content: start; gap: 14px; }
     .ai-risk-header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 16px; padding: 2px 0 13px; border-bottom: 1px solid var(--line); }
     .ai-risk-title-group { display: flex; min-width: 0; align-items: center; gap: 13px; }
-    .ai-risk-brand-mark { display: grid; flex: 0 0 42px; width: 42px; height: 42px; place-items: center; color: #ffffff; background: #1a73e8; border-radius: 12px; font-size: 15px; font-weight: 750; letter-spacing: -.04em; }
+    .ai-risk-brand-mark { display: grid; flex: 0 0 42px; width: 42px; height: 42px; place-items: center; color: #ffffff; background: #1a73e8; border-radius: 12px; }
+    .ai-risk-brand-mark svg { width: 24px; height: 24px; fill: currentColor; }
     .ai-risk-title-group h2 { margin: 0 0 3px; font-size: 22px; }
     .ai-risk-title-group p { max-width: 650px; margin: 0; color: var(--ink-muted); font-size: 13px; }
     .ai-risk-header-meta { display: flex; min-width: 0; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; color: var(--ink-muted); font-size: 13px; }

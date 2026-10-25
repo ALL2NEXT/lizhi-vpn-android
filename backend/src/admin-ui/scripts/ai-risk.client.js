@@ -395,7 +395,7 @@ function aiRiskRenderDashboard() {
     return;
   }
   if (!aiRiskAnalysis) {
-    const message = allRows.length ? '运行 AI 风控分析后，这里只显示命中规则的 IP。' : '当前时间窗内没有可分析的请求记录。';
+    const message = allRows.length ? '运行安全风控分析后，这里只显示命中规则的 IP。' : '当前时间窗内没有可分析的请求记录。';
     host.innerHTML += '<div class="ai-risk-empty"><strong>' + message + '</strong></div>';
     return;
   }
