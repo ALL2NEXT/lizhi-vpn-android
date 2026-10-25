@@ -338,7 +338,11 @@
         </header>
 
         <div class="ai-risk-toolbar">
-          <label class="ai-risk-window-field"><span>分析时间窗</span><select id="aiRiskWindowHours"><option value="24">最近 24 小时</option><option value="72">最近 3 天</option><option value="168">最近 7 天</option></select></label>
+          <div class="ai-risk-date-range" aria-label="分析时间范围">
+            <label><span>开始时间</span><input id="aiRiskStartDate" type="datetime-local" step="60" required></label>
+            <span class="ai-risk-date-separator" aria-hidden="true">至</span>
+            <label><span>结束时间</span><input id="aiRiskEndDate" type="datetime-local" step="60" required></label>
+          </div>
           <div class="ai-risk-toolbar-actions">
             <button id="aiRiskAnalyze" type="button">运行 AI 分析</button>
             <button id="aiRiskRefresh" class="secondary" type="button">刷新数据</button>

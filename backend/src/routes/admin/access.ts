@@ -15,6 +15,14 @@ import { readSecurityRuleHits } from "../../services/security-risk.ts";
 
 /* System log query route. */
 
+function requestedRiskRange(url: URL) {
+  const startDate = url.searchParams.get("startDate");
+  const endDate = url.searchParams.get("endDate");
+  if (startDate !== null || endDate !== null) return { startDate, endDate };
+  const hours = url.searchParams.get("windowHours");
+  return hours === null ? 24 : Number(hours);
+}
+
 export function createAdminAccessRoutes(deps: Pick<
   RouteDependencies,
   | "json"
@@ -40,13 +48,13 @@ export function createAdminAccessRoutes(deps: Pick<
   return async function handleAdminAccess(path: string, request: Request, env: Env) {
     if (path === "/api/security-risk/rule-hits" && request.method === "GET") {
       try {
-        const hours = new URL(request.url).searchParams.get("windowHours");
-        return json(await readSecurityRuleHits(env, hours === null ? 24 : Number(hours)));
+        return json(await readSecurityRuleHits(env, requestedRiskRange(new URL(request.url))));
       } catch (error) {
-        const invalidWindow = error instanceof Error && error.message === "invalid_security_risk_window";
+        const errorCode = error instanceof Error ? error.message : "";
+        const invalidWindow = errorCode === "invalid_security_risk_window" || errorCode === "invalid_security_risk_date_range";
         return json({
           ok: false,
-          error: invalidWindow ? "invalid_security_risk_window" : "security_rule_hits_read_failed",
+          error: invalidWindow ? errorCode : "security_rule_hits_read_failed",
         }, invalidWindow ? 400 : 500);
       }
     }
@@ -88,8 +96,7 @@ export function createAdminAccessRoutes(deps: Pick<
 
     if (path === "/api/ai-risk/data" && request.method === "GET") {
       try {
-        const hours = new URL(request.url).searchParams.get("windowHours");
-        return json({ ok: true, dataset: await readAiRiskDataset(env, hours === null ? 24 : Number(hours)) });
+        return json({ ok: true, dataset: await readAiRiskDataset(env, requestedRiskRange(new URL(request.url))) });
       } catch (error) {
         const status = error instanceof AiRiskError ? error.status : 500;
         const code = error instanceof AiRiskError ? error.code : "ai_risk_data_read_failed";
@@ -99,8 +106,7 @@ export function createAdminAccessRoutes(deps: Pick<
 
     if (path === "/api/ai-risk/dashboard-data" && request.method === "GET") {
       try {
-        const hours = new URL(request.url).searchParams.get("windowHours");
-        return json({ ok: true, dataset: await readAiRiskDashboardData(env, hours === null ? 24 : Number(hours)) });
+        return json({ ok: true, dataset: await readAiRiskDashboardData(env, requestedRiskRange(new URL(request.url))) });
       } catch (error) {
         const status = error instanceof AiRiskError ? error.status : 500;
         const code = error instanceof AiRiskError ? error.code : "ai_risk_dashboard_data_read_failed";
@@ -111,7 +117,10 @@ export function createAdminAccessRoutes(deps: Pick<
     if (path === "/api/ai-risk/analyze" && request.method === "POST") {
       try {
         const incoming = await readJsonObject(request);
-        return json(await analyzeAiRisk(env, incoming.windowHours ?? 24));
+        const requestedRange = incoming.startDate !== undefined || incoming.endDate !== undefined
+          ? { startDate: incoming.startDate, endDate: incoming.endDate }
+          : incoming.windowHours ?? 24;
+        return json(await analyzeAiRisk(env, requestedRange));
       } catch (error) {
         const status = error instanceof AiRiskError ? error.status : 500;
         const code = error instanceof AiRiskError ? error.code : "ai_risk_analysis_failed";

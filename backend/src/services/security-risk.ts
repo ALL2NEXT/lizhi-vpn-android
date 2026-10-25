@@ -1,6 +1,6 @@
 import type { Env } from "../types/env.ts";
 import { resolveAdminBasePath } from "../config.ts";
-import { beijingTimestamp } from "../domain/time.ts";
+import { beijingTimestamp, normalizeBeijingDateTimeRange } from "../domain/time.ts";
 import { HONEYPOT_PATHS, isHoneypotPath } from "./honeypot.ts";
 import { ensureUserSchema } from "./user-store.ts";
 
@@ -9,6 +9,7 @@ const HONEYPOT_ADMIN_RULE_NAME = "蜜罐后台地址访问";
 const MAX_RULE_HIT_ROWS = 2000;
 const MAX_ACCOUNT_ASSOCIATIONS = 5000;
 const ACCOUNT_ASSOCIATION_DAYS = 30;
+const MAX_RISK_RANGE_MILLISECONDS = 30 * 24 * 60 * 60 * 1000;
 const ALLOWED_WINDOW_HOURS = new Set([24, 72, 168]);
 
 interface RuleHitRow {
@@ -35,18 +36,42 @@ function normalizeWindowHours(value: unknown) {
   return hours;
 }
 
-function hitRowsCte(adminBasePath: string | null, windowStart: string) {
+function resolveSecurityRiskRange(requestedRange: unknown) {
+  if (requestedRange && typeof requestedRange === "object" && !Array.isArray(requestedRange)) {
+    const value = requestedRange as Record<string, unknown>;
+    const range = normalizeBeijingDateTimeRange(value.startDate, value.endDate, MAX_RISK_RANGE_MILLISECONDS);
+    if (!range) throw new Error("invalid_security_risk_date_range");
+    return {
+      windowStart: range.start,
+      windowEnd: range.end,
+      windowEndExclusive: range.endExclusive,
+      windowHours: Math.max(1, Math.ceil((range.endMilliseconds - range.startMilliseconds) / (60 * 60 * 1000))),
+    };
+  }
+
+  const windowHours = normalizeWindowHours(requestedRange);
+  const now = new Date();
+  const windowEnd = beijingTimestamp(now);
+  return {
+    windowStart: beijingTimestamp(new Date(now.getTime() - windowHours * 60 * 60 * 1000)),
+    windowEnd,
+    windowEndExclusive: windowEnd,
+    windowHours,
+  };
+}
+
+function hitRowsCte(adminBasePath: string | null, windowStart: string, windowEndExclusive: string) {
   const paths = HONEYPOT_PATHS.map(() => "?").join(", ");
   const skipAdminPath = adminBasePath ? "AND l.path <> ?" : "";
   const sql = `WITH all_hits AS (
     SELECT occurred_at, rule_id, method, path, status, ip, request_id
     FROM security_risk_rule_hits_mb
-    WHERE rule_id = ? AND occurred_at >= ? AND ip <> ''
+    WHERE rule_id = ? AND occurred_at >= ? AND occurred_at < ? AND ip <> ''
     UNION ALL
     SELECT l.occurred_at, '${HONEYPOT_ADMIN_RULE_ID}', upper(l.method), lower(l.path),
       l.status, l.ip, l.request_id
     FROM system_logs_mb l
-    WHERE l.category = 'request' AND l.occurred_at >= ?
+    WHERE l.category = 'request' AND l.occurred_at >= ? AND l.occurred_at < ?
       AND lower(l.path) IN (${paths}) AND l.ip <> ''
       ${skipAdminPath}
       AND NOT EXISTS (
@@ -58,7 +83,9 @@ function hitRowsCte(adminBasePath: string | null, windowStart: string) {
   const bindings: Array<string | number> = [
     HONEYPOT_ADMIN_RULE_ID,
     windowStart,
+    windowEndExclusive,
     windowStart,
+    windowEndExclusive,
     ...HONEYPOT_PATHS,
     ...(adminBasePath ? [adminBasePath] : []),
   ];
@@ -102,13 +129,12 @@ export async function recordHoneypotRuleHit(
 }
 
 /** 查询直接规则命中，并将同 IP 的已识别账户作为关联线索返回。 */
-export async function readSecurityRuleHits(env: Env, requestedWindowHours: unknown = 24) {
-  const windowHours = normalizeWindowHours(requestedWindowHours);
-  const now = Date.now();
-  const windowStart = beijingTimestamp(new Date(now - windowHours * 60 * 60 * 1000));
-  const accountWindowStart = beijingTimestamp(new Date(now - ACCOUNT_ASSOCIATION_DAYS * 24 * 60 * 60 * 1000));
+export async function readSecurityRuleHits(env: Env, requestedRange: unknown = 24) {
+  const range = resolveSecurityRiskRange(requestedRange);
+  const { windowHours, windowStart, windowEnd, windowEndExclusive } = range;
+  const accountWindowStart = beijingTimestamp(new Date(Date.now() - ACCOUNT_ASSOCIATION_DAYS * 24 * 60 * 60 * 1000));
   const adminBasePath = resolveAdminBasePath(env.ADMIN_PATH);
-  const { sql: hitCte, bindings } = hitRowsCte(adminBasePath, windowStart);
+  const { sql: hitCte, bindings } = hitRowsCte(adminBasePath, windowStart, windowEndExclusive);
   const db = await ensureUserSchema(env);
   const [hitResult, accountResult] = await Promise.all([
     db.prepare(
@@ -116,14 +142,14 @@ export async function readSecurityRuleHits(env: Env, requestedWindowHours: unkno
        SELECT ip, path, method, status, COUNT(*) AS hit_count,
          MIN(occurred_at) AS first_seen_at, MAX(occurred_at) AS last_seen_at
        FROM all_hits
-       WHERE occurred_at >= ? AND ip <> ''
+       WHERE ip <> ''
        GROUP BY ip, path, method, status
        ORDER BY last_seen_at DESC, hit_count DESC
        LIMIT ?`,
-    ).bind(...bindings, windowStart, MAX_RULE_HIT_ROWS + 1).all<RuleHitRow>(),
+    ).bind(...bindings, MAX_RULE_HIT_ROWS + 1).all<RuleHitRow>(),
     db.prepare(
       `${hitCte}, hit_ips AS (
-         SELECT DISTINCT ip FROM all_hits WHERE occurred_at >= ? AND ip <> ''
+         SELECT DISTINCT ip FROM all_hits WHERE ip <> ''
        )
        SELECT l.ip, l.user_uid, COALESCE(MAX(u.status), 'deleted') AS account_status,
          COUNT(*) AS request_count, MAX(l.occurred_at) AS last_seen_at
@@ -135,7 +161,7 @@ export async function readSecurityRuleHits(env: Env, requestedWindowHours: unkno
        GROUP BY l.ip, l.user_uid
        ORDER BY last_seen_at DESC, request_count DESC
        LIMIT ?`,
-    ).bind(...bindings, windowStart, accountWindowStart, MAX_ACCOUNT_ASSOCIATIONS + 1).all<RuleHitAccountRow>(),
+    ).bind(...bindings, accountWindowStart, MAX_ACCOUNT_ASSOCIATIONS + 1).all<RuleHitAccountRow>(),
   ]);
 
   const hitRows = hitResult.results || [];
@@ -210,6 +236,7 @@ export async function readSecurityRuleHits(env: Env, requestedWindowHours: unkno
     ok: true,
     windowHours,
     windowStart,
+    windowEnd,
     generatedAt: beijingTimestamp(),
     ruleHits: hits,
     coverage: {

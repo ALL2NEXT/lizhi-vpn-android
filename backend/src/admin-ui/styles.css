@@ -923,8 +923,10 @@
     .ai-risk-connection::before { width: 8px; height: 8px; border-radius: 50%; background: currentColor; content: ""; }
     .ai-risk-connection.connected { color: #137333; }
     .ai-risk-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-    .ai-risk-window-field { display: flex; min-width: 190px; align-items: center; gap: 9px; color: var(--ink); font-size: 13px; font-weight: 600; }
-    .ai-risk-window-field select { width: auto; min-width: 150px; min-height: 38px; padding: 7px 30px 7px 10px; }
+    .ai-risk-date-range { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .ai-risk-date-range label { display: flex; min-width: 0; align-items: center; gap: 7px; margin: 0; color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .ai-risk-date-range input { box-sizing: border-box; width: 205px; min-width: 0; min-height: 38px; padding: 7px 9px; border: 1px solid #d8e0eb; border-radius: 2px; color: #33435c; background: #ffffff; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .ai-risk-date-separator { color: var(--ink-muted); font-size: 13px; }
     .ai-risk-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .ai-risk-toolbar-actions button { min-height: 38px; margin: 0; }
     .ai-risk-toolbar-actions #aiRiskAnalyze { padding-inline: 18px; }
@@ -948,6 +950,8 @@
     .security-risk-rule-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px 14px; padding: 11px 13px; }
     .security-risk-rule-identity { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 3px 9px; }
     .security-risk-rule-identity strong { min-width: 0; color: var(--ink); font-size: 14px; overflow-wrap: anywhere; }
+    .security-risk-rule-identity strong code,
+    .ai-risk-ip-identity strong code { color: #294967; font-family: ui-sans-serif, "Segoe UI", "Microsoft YaHei UI", sans-serif; font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: .015em; line-height: 1.4; }
     .security-risk-rule-identity small { grid-column: 2; color: var(--ink-muted); font-size: 12px; }
     .security-risk-rule-badge { padding: 4px 7px; color: #b3261e; background: #fce8e6; font-size: 12px; font-weight: 700; white-space: nowrap; }
     .security-risk-rule-metric { display: grid; justify-items: end; gap: 2px; color: var(--ink-muted); font-size: 12px; }
@@ -1117,6 +1121,10 @@
       .ai-risk-header-meta { gap: 6px; font-size: 12px; }
       .ai-risk-header-meta button { flex: 1 0 100%; }
       .ai-risk-toolbar { align-items: stretch; }
+      .ai-risk-date-range { width: 100%; align-items: stretch; flex-direction: column; }
+      .ai-risk-date-range label { width: 100%; justify-content: space-between; }
+      .ai-risk-date-range input { width: min(68vw, 260px); }
+      .ai-risk-date-separator { display: none; }
       .ai-risk-toolbar-actions { width: 100%; }
       .ai-risk-toolbar-actions button { flex: 1; }
       .ai-risk-list-controls { align-items: stretch; flex-direction: column; }

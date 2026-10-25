@@ -1,10 +1,12 @@
 import type { Env } from "../types/env.ts";
 import { AI_RISK_SETTINGS_KEY } from "../config.ts";
-import { beijingTimestamp } from "../domain/time.ts";
+import { beijingTimestamp, normalizeBeijingDateTimeRange } from "../domain/time.ts";
 import { ensureUserSchema } from "./user-store.ts";
 
 const DEFAULT_MODEL = "gemini-3.8-flash";
 const MAX_WINDOW_HOURS = 168;
+const MAX_RISK_RANGE_MILLISECONDS = 30 * 24 * 60 * 60 * 1000;
+const HOUR_MILLISECONDS = 60 * 60 * 1000;
 const MAX_LOG_ROWS = 10_000;
 const MAX_RELATION_ROWS = 5_000;
 const MAX_SUBJECTS = 100;
@@ -271,6 +273,42 @@ function normalizeWindowHours(value: unknown) {
   return hours;
 }
 
+function resolveRiskDateRange(requestedRange: unknown) {
+  const now = new Date();
+  if (requestedRange && typeof requestedRange === "object" && !Array.isArray(requestedRange)) {
+    const value = requestedRange as Record<string, unknown>;
+    const range = normalizeBeijingDateTimeRange(value.startDate, value.endDate, MAX_RISK_RANGE_MILLISECONDS);
+    if (!range) throw new AiRiskError("invalid_ai_risk_date_range", 400);
+    const hourStartMilliseconds = Math.floor(range.startMilliseconds / HOUR_MILLISECONDS) * HOUR_MILLISECONDS;
+    const hourBucketCount = Math.floor((range.endExclusiveMilliseconds - 1 - hourStartMilliseconds) / HOUR_MILLISECONDS) + 1;
+    return {
+      start: range.start,
+      end: range.end,
+      endExclusive: range.endExclusive,
+      startMilliseconds: range.startMilliseconds,
+      endExclusiveMilliseconds: range.endExclusiveMilliseconds,
+      windowHours: Math.max(1, Math.ceil((range.endMilliseconds - range.startMilliseconds) / HOUR_MILLISECONDS)),
+      hourStartMilliseconds,
+      hourBucketCount,
+    };
+  }
+
+  const windowHours = normalizeWindowHours(requestedRange ?? 24);
+  const endMilliseconds = now.getTime();
+  const startMilliseconds = endMilliseconds - windowHours * HOUR_MILLISECONDS;
+  const hourStartMilliseconds = Math.floor(startMilliseconds / HOUR_MILLISECONDS) * HOUR_MILLISECONDS;
+  return {
+    start: beijingTimestamp(new Date(startMilliseconds)),
+    end: beijingTimestamp(now),
+    endExclusive: beijingTimestamp(now),
+    startMilliseconds,
+    endExclusiveMilliseconds: endMilliseconds,
+    windowHours,
+    hourStartMilliseconds,
+    hourBucketCount: Math.floor((endMilliseconds - 1 - hourStartMilliseconds) / HOUR_MILLISECONDS) + 1,
+  };
+}
+
 function subjectKey(ip: string, uid: string) {
   return `${ip}\u0000${uid}`;
 }
@@ -307,18 +345,20 @@ async function createReferenceFactory() {
   return { reference, ipByRef, userByRef };
 }
 
-async function collectRiskDataset(env: Env, requestedWindowHours: unknown) {
-  const windowHours = normalizeWindowHours(requestedWindowHours ?? 24);
+async function collectRiskDataset(env: Env, requestedRange: unknown) {
+  const range = resolveRiskDateRange(requestedRange);
+  const windowHours = range.windowHours;
   const generatedAt = beijingTimestamp();
-  const windowStart = beijingTimestamp(new Date(Date.now() - windowHours * 60 * 60 * 1000));
+  const windowStart = range.start;
+  const windowEnd = range.end;
   const db = await ensureUserSchema(env);
   const [logsResult, relationsResult] = await Promise.all([
     db.prepare(
       `SELECT ip, user_uid, method, path, status, occurred_at
        FROM system_logs_mb
-       WHERE category = 'request' AND occurred_at >= ? AND ip <> ''
+       WHERE category = 'request' AND occurred_at >= ? AND occurred_at < ? AND ip <> ''
        ORDER BY occurred_at DESC LIMIT ?`,
-    ).bind(windowStart, MAX_LOG_ROWS + 1).all<RequestLogRow>(),
+    ).bind(windowStart, range.endExclusive, MAX_LOG_ROWS + 1).all<RequestLogRow>(),
     db.prepare(
       `SELECT l.ip, l.user_uid, COUNT(*) AS request_count,
          SUM(CASE WHEN l.path LIKE '/api/subscription/%' THEN 1 ELSE 0 END) AS subscription_count,
@@ -326,12 +366,12 @@ async function collectRiskDataset(env: Env, requestedWindowHours: unknown) {
          MAX(l.occurred_at) AS last_seen_at,
          COALESCE(MAX(u.status), 'deleted') AS account_status
        FROM system_logs_mb l LEFT JOIN users_mb u ON u.uid = l.user_uid
-       WHERE l.category = 'request' AND l.occurred_at >= ?
+       WHERE l.category = 'request' AND l.occurred_at >= ? AND l.occurred_at < ?
          AND l.status BETWEEN 200 AND 299 AND l.ip <> ''
          AND l.user_uid <> '' AND l.device_id <> ''
        GROUP BY l.ip, l.user_uid
        ORDER BY MAX(l.occurred_at) DESC LIMIT ?`,
-    ).bind(windowStart, MAX_RELATION_ROWS + 1).all<RelationRow>(),
+    ).bind(windowStart, range.endExclusive, MAX_RELATION_ROWS + 1).all<RelationRow>(),
   ]);
   const logRows = logsResult.results || [];
   const relationRows = relationsResult.results || [];
@@ -471,15 +511,15 @@ async function collectRiskDataset(env: Env, requestedWindowHours: unknown) {
     firstSeenAt: subject.firstSeenAt,
     lastSeenAt: subject.lastSeenAt,
   })));
-  const windowStartHourMs = Math.floor((Date.now() - windowHours * 60 * 60 * 1000) / 3_600_000) * 3_600_000;
+  const windowStartHourMs = range.hourStartMilliseconds;
   const hourlyStart = beijingTimestamp(new Date(windowStartHourMs)).slice(0, 13).replace("T", " ");
   const systemHourlyCountsByOffset = new Map<number, { requests: number; subscriptions: number; clientErrors: number }>();
   for (const [hour, counts] of systemHours.entries()) {
     const timestamp = Date.parse(`${hour.replace(" ", "T")}:00:00+08:00`);
     const offset = Math.floor((timestamp - windowStartHourMs) / 3_600_000);
-    if (offset >= 0 && offset <= windowHours) systemHourlyCountsByOffset.set(offset, counts);
+    if (offset >= 0 && offset < range.hourBucketCount) systemHourlyCountsByOffset.set(offset, counts);
   }
-  const systemHourlyActivity = Array.from({ length: windowHours + 1 }, (_, offset) => {
+  const systemHourlyActivity = Array.from({ length: range.hourBucketCount }, (_, offset) => {
     const counts = systemHourlyCountsByOffset.get(offset) || { requests: 0, subscriptions: 0, clientErrors: 0 };
     return [offset, counts.requests, counts.subscriptions, counts.clientErrors];
   });
@@ -491,7 +531,7 @@ async function collectRiskDataset(env: Env, requestedWindowHours: unknown) {
       .flatMap(([hour, counts]) => {
         const timestamp = Date.parse(`${hour.replace(" ", "T")}:00:00+08:00`);
         const offset = Math.floor((timestamp - windowStartHourMs) / 3_600_000);
-        return offset >= 0 && offset <= windowHours
+        return offset >= 0 && offset < range.hourBucketCount
           ? [[offset, counts.requests, counts.subscriptions, counts.clientErrors, counts.badRequestCount]]
           : [];
       })
@@ -531,7 +571,8 @@ async function collectRiskDataset(env: Env, requestedWindowHours: unknown) {
     dataset: {
       generatedAt,
       windowStart,
-      windowEnd: generatedAt,
+      windowEnd,
+      windowEndExclusive: range.endExclusive,
       windowHours,
       hourlyStart,
       // 每个元素依次表示小时偏移、系统总请求、订阅请求和 4xx 请求；受日志采样范围影响。
@@ -567,16 +608,16 @@ async function collectRiskDataset(env: Env, requestedWindowHours: unknown) {
   };
 }
 
-export async function readAiRiskDataset(env: Env, windowHours: unknown = 24) {
-  const { dataset } = await collectRiskDataset(env, windowHours);
+export async function readAiRiskDataset(env: Env, requestedRange: unknown = 24) {
+  const { dataset } = await collectRiskDataset(env, requestedRange);
   return dataset;
 }
 
 /**
  * 为已鉴权的后台展示聚合风险对象；真实 IP/UID 不会进入发往 Gemini 的脱敏数据。
  */
-export async function readAiRiskDashboardData(env: Env, windowHours: unknown = 24) {
-  const { dataset, ipByRef, userByRef } = await collectRiskDataset(env, windowHours);
+export async function readAiRiskDashboardData(env: Env, requestedRange: unknown = 24) {
+  const { dataset, ipByRef, userByRef } = await collectRiskDataset(env, requestedRange);
   const resolveSubject = <T extends { ipRef: string; userRef: string | null }>(subject: T) => {
     const { ipRef, userRef, ...metrics } = subject;
     return {
@@ -909,11 +950,11 @@ function safeText(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, maxLength) : "";
 }
 
-export async function analyzeAiRisk(env: Env, requestedWindowHours: unknown = 24) {
+export async function analyzeAiRisk(env: Env, requestedRange: unknown = 24) {
   const settings = await readStoredSettings(env);
   if (!settings.enabled) throw new AiRiskError("ai_risk_disabled", 409);
   if (!settings.apiKeys.length) throw new AiRiskError("ai_risk_api_key_required", 400);
-  const collected = await collectRiskDataset(env, requestedWindowHours);
+  const collected = await collectRiskDataset(env, requestedRange);
   const generation = await callGemini(
     settings.model,
     settings.apiKeys,

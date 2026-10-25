@@ -12,6 +12,7 @@ let aiRiskSearchValue = '';
 let aiRiskSortValue = 'risk';
 let aiRiskActiveViews = Object.create(null);
 let aiRiskReviewedIps = aiRiskReadReviewedIps();
+let aiRiskRangeTimer = null;
 
 function aiRiskReadReviewedIps() {
   try {
@@ -47,9 +48,11 @@ function aiRiskErrorText(code) {
     invalid_ai_risk_model: '模型名称格式无效。',
     invalid_ai_risk_thinking_level: '思考强度设置无效。',
     invalid_ai_risk_window: '分析时间窗无效。',
+    invalid_ai_risk_date_range: '开始和结束时间无效，或时间范围超过 30 天。',
     ai_risk_dashboard_data_read_failed: '读取风控统计失败，请检查网络日志和数据库状态。',
     security_rule_hits_read_failed: '读取后台规则命中失败，请检查数据库状态。',
     invalid_security_risk_window: '后台规则查询时间窗无效。',
+    invalid_security_risk_date_range: '后台规则查询的开始或结束时间无效，或时间范围超过 30 天。',
     gemini_auth_failed: 'Gemini 认证失败，请检查 API Key 和模型权限。',
     gemini_rate_limited: 'Gemini 请求频率受限，请稍后再试。',
     gemini_unavailable: '无法连接 Gemini，请检查网络后重试。',
@@ -62,6 +65,42 @@ function aiRiskErrorText(code) {
     gemini_models_list_failed: '读取 Gemini 模型列表失败，请检查 API 配额后重试。',
   };
   return messages[code] || code || '操作失败，请稍后重试。';
+}
+
+function aiRiskBeijingDateTime(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  }).formatToParts(date);
+  const values = {};
+  parts.forEach(function(part) { values[part.type] = part.value; });
+  return values.year + '-' + values.month + '-' + values.day + 'T' + values.hour + ':' + values.minute;
+}
+
+function setDefaultAiRiskDateRange() {
+  const now = new Date();
+  el('aiRiskEndDate').value = aiRiskBeijingDateTime(now);
+  el('aiRiskStartDate').value = aiRiskBeijingDateTime(new Date(now.getTime() - 72 * 60 * 60 * 1000));
+}
+
+function aiRiskSelectedDateRange() {
+  const startDate = el('aiRiskStartDate').value;
+  const endDate = el('aiRiskEndDate').value;
+  const dateTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+  if (!dateTimePattern.test(startDate) || !dateTimePattern.test(endDate) || startDate > endDate) return null;
+  return {startDate: startDate, endDate: endDate};
+}
+
+function scheduleAiRiskDateRangeUpdate() {
+  if (aiRiskRangeTimer) clearTimeout(aiRiskRangeTimer);
+  aiRiskRangeTimer = setTimeout(function() {
+    aiRiskRangeTimer = null;
+    if (!aiRiskSelectedDateRange()) {
+      aiRiskSetStatus('aiRiskAnalysisStatus', aiRiskErrorText('invalid_ai_risk_date_range'), true);
+      return;
+    }
+    loadAiRiskDashboard(true);
+  }, 120);
 }
 
 async function aiRiskRequest(path, options) {
@@ -300,7 +339,7 @@ function aiRiskRenderOverview(row) {
     '<div><span>错误响应</span><strong>' + aiRiskFormatCount(errorCount) + '</strong><small>4xx ' + aiRiskFormatCount(row.clientErrors) + ' · 5xx ' + aiRiskFormatCount(row.serverErrors) + '</small></div>' +
     '<div><span>参数校验候选</span><strong>' + aiRiskFormatCount(row.badRequestCount) + '</strong><small>HTTP 400 / 422</small></div>' +
     '<div><span>活跃小时</span><strong>' + aiRiskFormatCount(row.activeHourCount) + '</strong></div></div></section>' +
-    '<section class="ai-risk-chart-card"><h4>请求趋势（最近 ' + esc(String(Number(el('aiRiskWindowHours').value) || 24)) + ' 小时）</h4>' + aiRiskRenderHourChart(row) + '</section></div>' +
+    '<section class="ai-risk-chart-card"><h4>请求趋势（所选时间范围）</h4>' + aiRiskRenderHourChart(row) + '</section></div>' +
     aiRiskRenderOverviewFinding(row);
 }
 
@@ -525,13 +564,17 @@ function aiRiskRenderDashboard() {
 
 async function loadAiRiskDashboard(clearAnalysis) {
   if (aiRiskOperationInFlight) return;
+  const dateRange = aiRiskSelectedDateRange();
+  if (!dateRange) {
+    aiRiskSetStatus('aiRiskAnalysisStatus', aiRiskErrorText('invalid_ai_risk_date_range'), true);
+    return;
+  }
   aiRiskOperationInFlight = true;
   el('aiRiskRefresh').disabled = true;
   if (clearAnalysis) aiRiskAnalysis = null;
   aiRiskSetStatus('aiRiskAnalysisStatus', '正在读取风险数据…', false);
   try {
-    const hours = Number(el('aiRiskWindowHours').value) || 24;
-    const query = '?windowHours=' + encodeURIComponent(hours);
+    const query = '?' + new URLSearchParams(dateRange).toString();
     const results = await Promise.allSettled([
       aiRiskRequest('/ai-risk/dashboard-data' + query),
       aiRiskRequest('/security-risk/rule-hits' + query),
@@ -568,6 +611,11 @@ async function loadAiRiskDashboard(clearAnalysis) {
 
 async function runAiRiskAnalysis() {
   if (aiRiskOperationInFlight) return;
+  const dateRange = aiRiskSelectedDateRange();
+  if (!dateRange) {
+    aiRiskSetStatus('aiRiskAnalysisStatus', aiRiskErrorText('invalid_ai_risk_date_range'), true);
+    return;
+  }
   if (!aiRiskSettingsLoaded) await loadAiRiskSettings(true);
   if (!el('aiRiskEnabled').checked) {
     aiRiskSetStatus('aiRiskAnalysisStatus', '请先启用并保存 Gemini 风控分析。', true);
@@ -582,7 +630,7 @@ async function runAiRiskAnalysis() {
   try {
     const data = await aiRiskRequest('/ai-risk/analyze', {
       method: 'POST',
-      body: JSON.stringify({windowHours: Number(el('aiRiskWindowHours').value)}),
+      body: JSON.stringify(dateRange),
     });
     data.durationMs = Date.now() - startedAt;
     renderAiRiskFindings(data);
@@ -599,12 +647,16 @@ async function runAiRiskAnalysis() {
 
 async function previewAiRiskData() {
   if (aiRiskOperationInFlight) return;
+  const dateRange = aiRiskSelectedDateRange();
+  if (!dateRange) {
+    aiRiskSetStatus('aiRiskAnalysisStatus', aiRiskErrorText('invalid_ai_risk_date_range'), true);
+    return;
+  }
   aiRiskOperationInFlight = true;
   el('aiRiskPreview').disabled = true;
   aiRiskSetStatus('aiRiskAnalysisStatus', '正在生成脱敏数据预览…', false);
   try {
-    const hours = Number(el('aiRiskWindowHours').value);
-    const data = await aiRiskRequest('/ai-risk/data?windowHours=' + encodeURIComponent(hours));
+    const data = await aiRiskRequest('/ai-risk/data?' + new URLSearchParams(dateRange).toString());
     const preview = el('aiRiskDataPreview');
     preview.textContent = JSON.stringify(data.dataset, null, 2);
     preview.hidden = false;
@@ -769,7 +821,10 @@ el('aiRiskLoadModels').addEventListener('click', loadAiRiskModels);
 el('aiRiskAnalyze').addEventListener('click', runAiRiskAnalysis);
 el('aiRiskRefresh').addEventListener('click', function() { loadAiRiskDashboard(true); });
 el('aiRiskPreview').addEventListener('click', previewAiRiskData);
-el('aiRiskWindowHours').addEventListener('change', function() { loadAiRiskDashboard(true); });
+['aiRiskStartDate', 'aiRiskEndDate'].forEach(function(id) {
+  el(id).addEventListener('input', scheduleAiRiskDateRangeUpdate);
+  el(id).addEventListener('change', scheduleAiRiskDateRangeUpdate);
+});
 el('aiRiskSearch').addEventListener('input', function() {
   aiRiskSearchValue = el('aiRiskSearch').value || '';
   aiRiskRenderDashboard();
@@ -793,3 +848,5 @@ el('aiRiskClearKeys').addEventListener('change', function() {
 });
 el('aiRiskModel').addEventListener('input', updateAiRiskModelDetails);
 el('aiRiskModel').addEventListener('change', updateAiRiskModelDetails);
+
+setDefaultAiRiskDateRange();
