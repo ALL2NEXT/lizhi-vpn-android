@@ -333,7 +333,7 @@
             <span>耗时 <strong id="aiRiskAnalysisDuration">—</strong></span>
             <span>模型 <strong id="aiRiskHeaderModel">Gemini</strong></span>
             <span id="aiRiskConnectionIndicator" class="ai-risk-connection">未配置</span>
-            <button id="aiRiskSettingsToggle" class="secondary" type="button" aria-controls="aiRiskSettingsPanel" aria-expanded="true">模型设置</button>
+            <button id="aiRiskSettingsToggle" class="secondary" type="button" aria-controls="aiRiskSettingsPanel" aria-expanded="false">模型设置</button>
           </div>
         </header>
 
@@ -344,14 +344,6 @@
             <button id="aiRiskRefresh" class="secondary" type="button">刷新数据</button>
           </div>
         </div>
-
-        <section class="ai-risk-metrics" aria-label="风险数据摘要">
-          <article class="ai-risk-metric"><span>分析 IP 数量</span><strong id="aiRiskMetricIps">—</strong><small>当前时间窗内有请求的 IP</small></article>
-          <article class="ai-risk-metric risk-high"><span>高风险</span><strong id="aiRiskMetricHigh">0</strong><small>需要优先复核</small></article>
-          <article class="ai-risk-metric risk-medium"><span>中风险</span><strong id="aiRiskMetricMedium">0</strong><small>建议人工复核</small></article>
-          <article class="ai-risk-metric risk-low"><span>低风险</span><strong id="aiRiskMetricLow">0</strong><small>暂未发现明显异常</small></article>
-          <article class="ai-risk-metric"><span>总请求数</span><strong id="aiRiskMetricRequests">—</strong><small id="aiRiskCoverage">统计网络日志记录范围</small></article>
-        </section>
 
         <div class="ai-risk-list-toolbar">
           <div class="ai-risk-filter-tabs" role="tablist" aria-label="按风险筛选">
@@ -372,8 +364,8 @@
         <div id="aiRiskResults" class="ai-risk-results" aria-live="polite"><div class="loading-state">正在读取风险数据…</div></div>
       </main>
 
-      <aside id="aiRiskSettingsPanel" class="ai-risk-settings-panel" aria-label="模型设置">
-        <div class="ai-risk-settings-heading"><h3>模型设置</h3><button id="aiRiskSettingsClose" class="ai-risk-icon-button" type="button" aria-label="关闭模型设置">关闭</button></div>
+      <dialog id="aiRiskSettingsPanel" class="ai-risk-settings-panel" aria-labelledby="aiRiskSettingsTitle">
+        <div class="ai-risk-settings-heading"><h3 id="aiRiskSettingsTitle">模型设置</h3><button id="aiRiskSettingsClose" class="ai-risk-icon-button" type="button" aria-label="关闭模型设置">关闭</button></div>
         <div class="ai-risk-settings-body">
           <section class="ai-risk-settings-section">
             <h4>基础配置</h4>
@@ -388,8 +380,7 @@
           <details class="ai-risk-prompt-editor"><summary>提示词模板</summary><div><label class="field" for="aiRiskPromptTemplate"><span>Gemini 分析提示词</span><textarea id="aiRiskPromptTemplate" maxlength="12000" rows="13" spellcheck="false" placeholder="读取设置后显示当前提示词"></textarea><small>可自行调整风险分析规则；必须保留且仅保留一次 {{DATASET_JSON}}，它会在分析时替换为脱敏遥测数据。最长 12,000 字符，修改后点击“保存配置”生效。</small></label><button id="aiRiskPromptReset" class="secondary" type="button">恢复推荐模板</button></div></details>
           <details class="ai-risk-advanced"><summary>高级设置与数据说明</summary><div><p>分析仅由管理员手动触发，不会定时请求或自动采取封禁操作。</p><p>发送给 Google 的数据会将 IP 和 UID 替换为本次分析专用的随机引用标记，不包含请求正文、密码或订阅内容。</p><p>本地展示的 IP 与账户仅用于后台复核，数据受网络日志开关和保留期影响。</p><button id="aiRiskPreview" class="secondary" type="button">预览发送给 Gemini 的脱敏数据</button></div></details>
         </div>
-      </aside>
-      <button id="aiRiskSettingsScrim" class="ai-risk-settings-scrim" type="button" aria-label="关闭模型设置" hidden></button>
+      </dialog>
     </div>
   </section>
   <section class="card tab-panel" role="tabpanel" data-panel="ip-relations">

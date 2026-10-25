@@ -273,19 +273,11 @@ function aiRiskFilteredRows(rows) {
   });
 }
 
-function aiRiskUpdateMetrics(rows) {
+function aiRiskUpdateFilterCounts(rows) {
   const high = rows.filter(function(row) { return row.finding && row.finding.riskLevel === 'high'; }).length;
   const medium = rows.filter(function(row) { return row.finding && row.finding.riskLevel === 'medium'; }).length;
   const low = rows.filter(function(row) { return row.finding && row.finding.riskLevel === 'low'; }).length;
   const pending = rows.filter(function(row) { return row.finding && !row.processed; }).length;
-  const summary = aiRiskDashboard && aiRiskDashboard.summary || aiRiskAnalysis && aiRiskAnalysis.dataSummary || {};
-  const coverage = aiRiskDashboard && aiRiskDashboard.coverage || {};
-  el('aiRiskMetricIps').textContent = aiRiskFormatCount(rows.length);
-  el('aiRiskMetricHigh').textContent = aiRiskFormatCount(high);
-  el('aiRiskMetricMedium').textContent = aiRiskFormatCount(medium);
-  el('aiRiskMetricLow').textContent = aiRiskFormatCount(low);
-  el('aiRiskMetricRequests').textContent = aiRiskFormatCount(summary.requestCount);
-  el('aiRiskCoverage').textContent = coverage.requestRowsTruncated ? '展示最近采样的 10,000 条日志' : '统计网络日志记录范围';
   el('aiRiskCountAll').textContent = aiRiskFormatCount(rows.length);
   el('aiRiskCountHigh').textContent = aiRiskFormatCount(high);
   el('aiRiskCountMedium').textContent = aiRiskFormatCount(medium);
@@ -400,7 +392,7 @@ function renderAiRiskFindings(result) {
 function aiRiskRenderDashboard() {
   const host = el('aiRiskResults');
   const rows = aiRiskBuildRows();
-  aiRiskUpdateMetrics(rows);
+  aiRiskUpdateFilterCounts(rows);
   if (aiRiskAnalysis && aiRiskAnalysis.analyzedAt) {
     el('aiRiskLastAnalysis').textContent = aiRiskFormatTime(aiRiskAnalysis.analyzedAt);
     el('aiRiskAnalysisDuration').textContent = Number.isFinite(aiRiskAnalysis.durationMs) ? Math.max(1, Math.round(aiRiskAnalysis.durationMs / 1000)) + ' 秒' : '—';
@@ -588,21 +580,21 @@ function aiRiskUsageText(usage) {
 }
 
 function aiRiskSetSettingsOpen(open) {
-  const page = el('aiRiskPage');
-  page.classList.toggle('settings-closed', !open);
+  const panel = el('aiRiskSettingsPanel');
   const toggle = el('aiRiskSettingsToggle');
+  if (open && !panel.open && typeof panel.showModal === 'function') panel.showModal();
+  if (!open && panel.open && typeof panel.close === 'function') panel.close();
   if (toggle.setAttribute) toggle.setAttribute('aria-expanded', String(open));
-  el('aiRiskSettingsScrim').hidden = !open;
 }
 
 function aiRiskHandlePageClick(event) {
   const button = event.target && event.target.closest ? event.target.closest('button') : null;
   if (!button) return;
   if (button.id === 'aiRiskSettingsToggle') {
-    aiRiskSetSettingsOpen(el('aiRiskPage').classList.contains('settings-closed'));
+    aiRiskSetSettingsOpen(!el('aiRiskSettingsPanel').open);
     return;
   }
-  if (button.id === 'aiRiskSettingsClose' || button.id === 'aiRiskSettingsScrim') {
+  if (button.id === 'aiRiskSettingsClose') {
     aiRiskSetSettingsOpen(false);
     return;
   }
@@ -675,6 +667,13 @@ el('aiRiskSort').addEventListener('change', function() {
   aiRiskRenderDashboard();
 });
 el('aiRiskPage').addEventListener('click', aiRiskHandlePageClick);
+el('aiRiskSettingsPanel').addEventListener('cancel', function(event) {
+  event.preventDefault();
+  aiRiskSetSettingsOpen(false);
+});
+el('aiRiskSettingsPanel').addEventListener('click', function(event) {
+  if (event.target === el('aiRiskSettingsPanel')) aiRiskSetSettingsOpen(false);
+});
 el('aiRiskClearKeys').addEventListener('change', function() {
   if (el('aiRiskClearKeys').checked) el('aiRiskApiKeys').value = '';
 });
