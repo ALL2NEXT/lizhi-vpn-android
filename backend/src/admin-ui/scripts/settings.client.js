@@ -765,7 +765,13 @@ function moveSubscriptionToGroup(row, targetGroupId) {
 }
 
 function updateSubscriptionEditorType(type) {
-  const infoField = el('subscriptionEditor').querySelector('[data-editor-source-info]');
+  const editor = el('subscriptionEditor');
+  const infoField = editor.querySelector('[data-editor-source-info]');
+  const autoRenameField = editor.querySelector('[data-editor-auto-rename]');
+  const autoRenameControl = editor.querySelector('[data-editor-field="autoRename"]');
+  const isRemoteSource = type === 'url';
+  if (autoRenameField) autoRenameField.hidden = !isRemoteSource;
+  if (autoRenameControl) autoRenameControl.disabled = !isRemoteSource;
   const fieldName = type === 'content' ? 'content' : 'url';
   const sourceField = selectedSubscriptionRow && selectedSubscriptionRow.querySelector('[data-field="' + fieldName + '"]');
   infoField.dataset.editorField = fieldName;
