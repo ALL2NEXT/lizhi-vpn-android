@@ -170,6 +170,7 @@ function aiRiskBuildRows() {
         subscriptionRequests: 0,
         successfulSubscriptions: 0,
         clientErrors: 0,
+        badRequestCount: 0,
         serverErrors: 0,
         firstSeenAt: '',
         lastSeenAt: '',
@@ -196,6 +197,7 @@ function aiRiskBuildRows() {
     row.subscriptionRequests += subscriptions;
     row.successfulSubscriptions += Number(subject.successfulSubscriptions) || 0;
     row.clientErrors += Number(subject.clientErrors) || 0;
+    row.badRequestCount += Number(subject.badRequestCount) || 0;
     row.serverErrors += Number(subject.serverErrors) || 0;
     if (subject.firstSeenAt && (!row.firstSeenAt || subject.firstSeenAt < row.firstSeenAt)) row.firstSeenAt = subject.firstSeenAt;
     if (subject.lastSeenAt && subject.lastSeenAt > row.lastSeenAt) row.lastSeenAt = subject.lastSeenAt;
@@ -233,10 +235,11 @@ function aiRiskBuildRows() {
     const row = getRow(String(endpoint.ip || ''));
     if (!row) return;
     const key = String(endpoint.method || '') + '\u0000' + String(endpoint.path || '');
-    const current = row.endpoints.get(key) || {method: String(endpoint.method || ''), path: String(endpoint.path || ''), requests: 0, successfulRequests: 0, clientErrors: 0, serverErrors: 0};
+    const current = row.endpoints.get(key) || {method: String(endpoint.method || ''), path: String(endpoint.path || ''), requests: 0, successfulRequests: 0, clientErrors: 0, badRequestCount: 0, serverErrors: 0};
     current.requests += Number(endpoint.requests) || 0;
     current.successfulRequests += Number(endpoint.successfulRequests) || 0;
     current.clientErrors += Number(endpoint.clientErrors) || 0;
+    current.badRequestCount += Number(endpoint.badRequestCount) || 0;
     current.serverErrors += Number(endpoint.serverErrors) || 0;
     row.endpoints.set(key, current);
   });
@@ -294,10 +297,49 @@ function aiRiskRenderOverview(row) {
   return '<div class="ai-risk-overview-grid"><section class="ai-risk-activity-card"><h4>异常统计</h4><div class="ai-risk-activity-metrics">' +
     '<div><span>总请求数</span><strong>' + aiRiskFormatCount(row.requestCount) + '</strong></div>' +
     '<div><span>订阅请求</span><strong>' + aiRiskFormatCount(row.subscriptionRequests) + '</strong><small>' + successRate + '% 成功</small></div>' +
-    '<div><span>服务端错误</span><strong>' + aiRiskFormatCount(errorCount) + '</strong><small>4xx ' + aiRiskFormatCount(row.clientErrors) + ' · 5xx ' + aiRiskFormatCount(row.serverErrors) + '</small></div>' +
+    '<div><span>错误响应</span><strong>' + aiRiskFormatCount(errorCount) + '</strong><small>4xx ' + aiRiskFormatCount(row.clientErrors) + ' · 5xx ' + aiRiskFormatCount(row.serverErrors) + '</small></div>' +
+    '<div><span>参数校验候选</span><strong>' + aiRiskFormatCount(row.badRequestCount) + '</strong><small>HTTP 400 / 422</small></div>' +
     '<div><span>活跃小时</span><strong>' + aiRiskFormatCount(row.activeHourCount) + '</strong></div></div></section>' +
     '<section class="ai-risk-chart-card"><h4>请求趋势（最近 ' + esc(String(Number(el('aiRiskWindowHours').value) || 24)) + ' 小时）</h4>' + aiRiskRenderHourChart(row) + '</section></div>' +
     aiRiskRenderOverviewFinding(row);
+}
+
+function aiRiskThreatClass(finding) {
+  return finding && ['public_scanner', 'data_scraper', 'uncertain'].includes(finding.threatClass)
+    ? finding.threatClass : 'uncertain';
+}
+
+function aiRiskThreatLabel(finding) {
+  return ({
+    public_scanner: '公网扫描',
+    data_scraper: '疑似爬虫/渗透取数',
+    uncertain: '待人工判断'
+  })[aiRiskThreatClass(finding)];
+}
+
+function aiRiskBlockTarget(finding) {
+  const threatClass = aiRiskThreatClass(finding);
+  if (threatClass === 'public_scanner') return 'ip_only';
+  if (threatClass === 'uncertain') return 'manual_review_only';
+  if (finding && finding.recommendedBlockTarget === 'manual_review_only') return 'manual_review_only';
+  return finding && finding.recommendedBlockTarget === 'ip_and_accounts' && Array.isArray(finding.uids) && finding.uids.length
+    ? 'ip_and_accounts' : 'ip_only';
+}
+
+function aiRiskBlockTargetLabel(finding) {
+  return ({
+    ip_only: '仅 IP',
+    ip_and_accounts: 'IP + 指定账户',
+    manual_review_only: '仅人工复核'
+  })[aiRiskBlockTarget(finding)];
+}
+
+function aiRiskClassificationMarkup(finding) {
+  const threatClass = aiRiskThreatClass(finding);
+  const target = aiRiskBlockTarget(finding);
+  return '<div class="ai-risk-classification"><span class="ai-risk-threat-tag threat-' + threatClass + '">' +
+    esc(aiRiskThreatLabel(finding)) + '</span><span class="ai-risk-target-tag target-' + target + '">建议范围：' +
+    esc(aiRiskBlockTargetLabel(finding)) + '</span></div>';
 }
 
 function aiRiskRenderOverviewFinding(row) {
@@ -309,14 +351,15 @@ function aiRiskRenderOverviewFinding(row) {
     '<strong>' + esc(finding.title || '风控线索') + '</strong><p>' + esc(finding.rationale || 'Gemini 未提供详细理由。') + '</p>' +
     (evidence.length ? '<ul>' + evidence.slice(0, 4).map(function(item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>' : '') +
     '</section><aside class="ai-risk-overview-advice"><h4>建议人工复核</h4><p>' + esc(finding.recommendation || '由管理员进一步核验。') + '</p>' +
+    aiRiskClassificationMarkup(finding) +
     (score !== null ? '<span>风控排查优先级 ' + score + '/100</span>' : '') +
     '<small>AI 结论仅供辅助判断，系统不会自动封禁。</small></aside></div>';
 }
 
 function aiRiskRenderEndpoints(row) {
   if (!row.endpoints.length) return '<div class="ai-risk-empty-note">当前时间窗内没有接口明细。</div>';
-  return '<div class="ai-risk-endpoints"><div class="ai-risk-endpoint-row ai-risk-endpoint-heading"><span>方法与路径</span><span>请求</span><span>4xx / 5xx</span></div>' + row.endpoints.map(function(endpoint) {
-    return '<div class="ai-risk-endpoint-row"><span><b>' + esc(endpoint.method || '—') + '</b><code>' + esc(endpoint.path || '—') + '</code></span><span>' + aiRiskFormatCount(endpoint.requests) + '</span><span>' + aiRiskFormatCount(endpoint.clientErrors) + ' / ' + aiRiskFormatCount(endpoint.serverErrors) + '</span></div>';
+  return '<div class="ai-risk-endpoints"><div class="ai-risk-endpoint-row ai-risk-endpoint-heading"><span>方法与路径</span><span>请求</span><span>400 / 422</span><span>4xx / 5xx</span></div>' + row.endpoints.map(function(endpoint) {
+    return '<div class="ai-risk-endpoint-row"><span><b>' + esc(endpoint.method || '—') + '</b><code>' + esc(endpoint.path || '—') + '</code></span><span>' + aiRiskFormatCount(endpoint.requests) + '</span><span>' + aiRiskFormatCount(endpoint.badRequestCount) + '</span><span>' + aiRiskFormatCount(endpoint.clientErrors) + ' / ' + aiRiskFormatCount(endpoint.serverErrors) + '</span></div>';
   }).join('') + '</div>';
 }
 
@@ -326,13 +369,19 @@ function aiRiskRenderReasoning(row) {
   const evidence = finding.evidence || [];
   return '<div class="ai-risk-reasoning"><h4>' + esc(finding.title || '风控线索') + '</h4><p>' + esc(finding.rationale || 'Gemini 未提供详细理由。') + '</p>' +
     (evidence.length ? '<h5>支持证据</h5><ul>' + evidence.map(function(item) { return '<li>' + esc(item) + '</li>'; }).join('') + '</ul>' : '') +
-    '<div class="ai-risk-recommendation"><strong>建议</strong><p>' + esc(finding.recommendation || '由管理员进一步核验。') + '</p></div><small>AI 输出是辅助线索，仍需结合日志人工复核；系统没有执行封禁。</small></div>';
+    '<div class="ai-risk-recommendation"><strong>建议</strong><p>' + esc(finding.recommendation || '由管理员进一步核验。') + '</p>' +
+    aiRiskClassificationMarkup(finding) + '</div><small>AI 输出是辅助线索，仍需结合日志人工复核；系统没有执行封禁。</small></div>';
 }
 
 function aiRiskRenderAccounts(row) {
   if (!row.accounts.length) return '<div class="ai-risk-empty-note">当前时间窗没有识别到关联账户。</div>';
+  const targetUids = row.finding && aiRiskBlockTarget(row.finding) === 'ip_and_accounts' && Array.isArray(row.finding.uids)
+    ? new Set(row.finding.uids) : new Set();
   return '<div class="ai-risk-accounts">' + row.accounts.map(function(account) {
-    return '<div class="ai-risk-account-row"><code>' + esc(account.uid) + '</code><span>' + aiRiskFormatCount(account.requestCount) + ' 次请求</span><span>' + esc(account.accountStatus || 'unknown') + '</span><small>最近 ' + esc(aiRiskFormatTime(account.lastSeenAt)) + '</small></div>';
+    const isTarget = targetUids.has(account.uid);
+    return '<div class="ai-risk-account-row' + (isTarget ? ' account-target' : '') + '"><code>' + esc(account.uid) + '</code><span>' +
+      aiRiskFormatCount(account.requestCount) + ' 次请求</span><span>' + esc(account.accountStatus || 'unknown') + '</span><small>' +
+      (isTarget ? 'AI 指定复核对象' : '同 IP 关联，非处置目标') + ' · 最近 ' + esc(aiRiskFormatTime(account.lastSeenAt)) + '</small></div>';
   }).join('') + '</div>' + (row.finding ? '<p class="ai-risk-review-note">AI 分析结论需人工复核；系统不执行封禁。</p>' : '');
 }
 
@@ -359,12 +408,14 @@ function aiRiskRenderCard(row, index) {
     ? finding.riskScore : null;
   const accountLabel = row.accounts.length ? '关联 ' + row.accounts.length + ' 个账户' : '未识别账户';
   const title = finding && finding.title || '风控线索';
+  const threatClass = aiRiskThreatClass(finding);
+  const blockTarget = aiRiskBlockTarget(finding);
   const actionLabel = row.processed ? '撤销已处理' : '标记为已处理';
   return '<article class="ai-risk-ip-card risk-border-' + level + (expanded ? ' expanded' : '') + '" data-ip="' + esc(row.ip) + '">' +
     '<div class="ai-risk-ip-summary">' +
       '<button class="ai-risk-expand" type="button" data-ai-risk-action="expand" aria-expanded="' + expanded + '" aria-label="' + (expanded ? '收起' : '展开') + ' IP 详情">' + (expanded ? '−' : '+') + '</button>' +
       '<span class="ai-risk-badge risk-' + level + '">' + labels[level] + '</span>' +
-      '<div class="ai-risk-ip-identity"><div><strong><code>' + esc(row.ip) + '</code></strong><button class="ai-risk-copy" type="button" data-ai-risk-action="copy" aria-label="复制 IP">复制</button></div><p>' + accountLabel + ' <span>首次 ' + esc(aiRiskFormatTime(row.firstSeenAt)) + '</span><span>最近 ' + esc(aiRiskFormatTime(row.lastSeenAt)) + '</span></p></div>' +
+      '<div class="ai-risk-ip-identity"><div><strong><code>' + esc(row.ip) + '</code></strong><button class="ai-risk-copy" type="button" data-ai-risk-action="copy" aria-label="复制 IP">复制</button></div><p><span>' + accountLabel + '</span><span class="ai-risk-threat-tag threat-' + threatClass + '">' + esc(aiRiskThreatLabel(finding)) + '</span><span class="ai-risk-target-tag target-' + blockTarget + '">建议范围：' + esc(aiRiskBlockTargetLabel(finding)) + '</span><span>首次 ' + esc(aiRiskFormatTime(row.firstSeenAt)) + '</span><span>最近 ' + esc(aiRiskFormatTime(row.lastSeenAt)) + '</span></p></div>' +
       '<div class="ai-risk-confidence"><span>' + (riskScore !== null ? '风险分' : '风险级别') + '</span><strong>' + (riskScore !== null ? riskScore + '/100' : labels[level]) + '</strong>' + (riskScore !== null ? '<div class="ai-risk-confidence-track" role="img" aria-label="风控排查优先级 ' + riskScore + ' 分"><i class="' + level + '" style="--risk-width:' + riskScore + '%"></i></div>' : '<div class="ai-risk-confidence-track" aria-hidden="true"><i class="' + level + '" style="--risk-width:0%"></i></div>') + '</div>' +
       '<button class="ai-risk-review-button secondary" type="button" data-ai-risk-action="review">' + actionLabel + '</button>' +
     '</div>' +
@@ -385,8 +436,8 @@ function securityRiskRenderRuleHit(hit) {
   }).join('');
   const coverage = securityRiskRuleHits && securityRiskRuleHits.coverage || {};
   return '<article class="security-risk-rule-card"><div class="security-risk-rule-summary">' +
-    '<div class="security-risk-rule-identity"><span class="security-risk-rule-badge">规则命中</span><strong><code>' + esc(hit.ip) +
-    '</code></strong><small>' + esc(hit.ruleName || '后台规则') + ' · 同 IP 关联 ' + aiRiskFormatCount((hit.accounts || []).length) + ' 个账户</small></div>' +
+    '<div class="security-risk-rule-identity"><span class="security-risk-rule-badge">公网扫描</span><strong><code>' + esc(hit.ip) +
+    '</code></strong><small>' + esc(hit.ruleName || '后台规则') + ' · 建议范围：仅 IP · 同 IP 关联 ' + aiRiskFormatCount((hit.accounts || []).length) + ' 个账户</small></div>' +
     '<div class="security-risk-rule-metric"><span>命中次数</span><strong>' + aiRiskFormatCount(hit.hitCount) + '</strong></div>' +
     '<p class="security-risk-rule-time"><span>首次命中 ' + esc(aiRiskFormatTime(hit.firstSeenAt)) + '</span><span>最近命中 ' + esc(aiRiskFormatTime(hit.lastSeenAt)) + '</span></p>' +
     '</div><div class="security-risk-rule-details"><section><h4>命中蜜罐地址</h4><ul class="security-risk-path-list">' +
