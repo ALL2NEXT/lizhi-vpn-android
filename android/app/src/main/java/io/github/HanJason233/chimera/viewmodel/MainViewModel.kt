@@ -544,12 +544,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         listOf(SpeedTestScheme.default())
     )
 
-    val homeClickSpeedTestSchemeId = settingsRepository.homeClickSpeedTestSchemeId.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        SpeedTestScheme.DEFAULT_ID
-    )
-
     val homeLongPressSpeedTestSchemeId = settingsRepository.homeLongPressSpeedTestSchemeId.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -566,12 +560,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope,
         SharingStarted.Eagerly,
         true
-    )
-
-    val homeClickSpeedTestEnabled = settingsRepository.homeClickSpeedTestEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        false
     )
 
     val homeLongPressSpeedTestEnabled = settingsRepository.homeLongPressSpeedTestEnabled.stateIn(
@@ -2624,12 +2612,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setHomeClickSpeedTestScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.setHomeClickSpeedTestSchemeId(schemeId)
-        }
-    }
-
     fun setLanInboundEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setLanInboundEnabled(enabled)
@@ -2673,12 +2655,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setGroupManualSpeedTestEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setGroupManualSpeedTestEnabled(enabled)
-        }
-    }
-
-    fun setHomeClickSpeedTestEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setHomeClickSpeedTestEnabled(enabled)
         }
     }
 

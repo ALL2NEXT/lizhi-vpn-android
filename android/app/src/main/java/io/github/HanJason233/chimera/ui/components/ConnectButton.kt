@@ -52,7 +52,7 @@ fun ConnectButton(
     /** 是否显示按钮下方的状态文字。 */
     showStatusLabel: Boolean = true,
     /** 无障碍服务读取的单击和长按动作名称。 */
-    clickActionLabel: String = "测速方案",
+    clickActionLabel: String = "连接当前节点",
     longClickActionLabel: String = "测速方案",
     enabled: Boolean = true,
     isTesting: Boolean = false,

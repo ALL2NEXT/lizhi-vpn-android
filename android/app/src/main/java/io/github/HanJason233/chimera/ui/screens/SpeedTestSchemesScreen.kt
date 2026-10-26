@@ -64,11 +64,9 @@ fun SpeedTestSchemesScreen(
     onBack: () -> Unit
 ) {
     val schemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
-    val clickId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val longPressId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
     val groupManualId by viewModel.groupManualSpeedTestSchemeId.collectAsStateWithLifecycle()
     val groupManualEnabled by viewModel.groupManualSpeedTestEnabled.collectAsStateWithLifecycle()
-    val clickEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
     val longPressEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
     var newSchemeName by remember { mutableStateOf("") }
@@ -85,14 +83,6 @@ fun SpeedTestSchemesScreen(
                 text = "前三项为连接前测试，每项按结果保留前 X 个或百分比供后续阶段使用；后两项在连接后检测当前节点。线路详情手动测试单项会测试当前分组全部节点。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
-            )
-            SpeedTestSchemeBinding(
-                title = "点击主页图标",
-                selectedId = clickId,
-                schemes = schemes,
-                enabled = clickEnabled,
-                onSelected = viewModel::setHomeClickSpeedTestScheme,
-                onEnabledChange = viewModel::setHomeClickSpeedTestEnabled
             )
             SpeedTestSchemeBinding(
                 title = "长按主页图标",
@@ -120,7 +110,6 @@ fun SpeedTestSchemesScreen(
             schemes.forEach { scheme ->
                 SpeedTestSchemeCard(
                     scheme = scheme,
-                    assignedToClick = clickEnabled && scheme.id == clickId,
                     assignedToLongPress = longPressEnabled && scheme.id == longPressId,
                     assignedToGroupManual = groupManualEnabled && scheme.id == groupManualId,
                     onEdit = { onOpenEditor(scheme.id) },
@@ -329,7 +318,6 @@ private fun SpeedTestSchemeBinding(
 @Composable
 private fun SpeedTestSchemeCard(
     scheme: SpeedTestScheme,
-    assignedToClick: Boolean,
     assignedToLongPress: Boolean,
     assignedToGroupManual: Boolean,
     onEdit: () -> Unit,
@@ -342,9 +330,7 @@ private fun SpeedTestSchemeCard(
             .clickable(onClick = onEdit),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        border = if (
-            assignedToClick || assignedToLongPress || assignedToGroupManual
-        ) {
+        border = if (assignedToLongPress || assignedToGroupManual) {
             BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
         } else null
     ) {
@@ -398,7 +384,6 @@ private fun SpeedTestSchemeCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (assignedToClick) BindingBadge("点击")
                     if (assignedToLongPress) BindingBadge("长按")
                     if (assignedToGroupManual) BindingBadge("分组手动")
                 }

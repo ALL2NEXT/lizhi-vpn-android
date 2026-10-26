@@ -116,16 +116,12 @@ class SettingsRepository(
         private val FAILOVER_CONSECUTIVE_FAILURES = intPreferencesKey("failover_consecutive_failures")
         private val FAILOVER_TRANSFER_STRATEGY = stringPreferencesKey("failover_transfer_target")
         private val FAILOVER_TRANSFER_NODE_IDS = stringPreferencesKey("failover_transfer_node_ids")
-        private val HOME_CLICK_SPEED_TEST_SCHEME_ID =
-            stringPreferencesKey("home_click_speed_test_scheme_id")
         private val HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("home_long_press_speed_test_scheme_id")
         private val GROUP_MANUAL_SPEED_TEST_SCHEME_ID =
             stringPreferencesKey("group_manual_speed_test_scheme_id")
         private val GROUP_MANUAL_SPEED_TEST_ENABLED =
             booleanPreferencesKey("group_manual_speed_test_enabled")
-        private val HOME_CLICK_SPEED_TEST_ENABLED =
-            booleanPreferencesKey("home_click_speed_test_enabled")
         private val HOME_LONG_PRESS_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_long_press_speed_test_enabled")
         
@@ -234,16 +230,6 @@ class SettingsRepository(
         decodeFailoverSettings(preferences)
     }
 
-    /** 主页图标单击使用的测速方案。 */
-    val homeClickSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
-        val schemes = decodeSpeedTestSchemes(preferences)
-        resolveHomeSchemeId(
-            preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEFAULT_ID,
-            schemes
-        )
-    }
-
     /** 主页图标长按使用的测速方案。 */
     val homeLongPressSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
         val schemes = decodeSpeedTestSchemes(preferences)
@@ -269,22 +255,9 @@ class SettingsRepository(
         preferences[GROUP_MANUAL_SPEED_TEST_ENABLED] ?: true
     }
 
-    /** 主页图标单击是否启用测速方案；默认关闭，避免普通点击触发测速。 */
-    val homeClickSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
-        preferences[HOME_CLICK_SPEED_TEST_ENABLED] ?: false
-    }
-
     /** 主页图标长按是否启用测速方案；默认开启以保持原有行为。 */
     val homeLongPressSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
         preferences[HOME_LONG_PRESS_SPEED_TEST_ENABLED] ?: true
-    }
-
-    suspend fun setHomeClickSpeedTestSchemeId(schemeId: String) {
-        store.edit { preferences ->
-            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
-                preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = schemeId
-            }
-        }
     }
 
     suspend fun setHomeLongPressSpeedTestSchemeId(schemeId: String) {
@@ -306,12 +279,6 @@ class SettingsRepository(
     suspend fun setGroupManualSpeedTestEnabled(enabled: Boolean) {
         store.edit { preferences ->
             preferences[GROUP_MANUAL_SPEED_TEST_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setHomeClickSpeedTestEnabled(enabled: Boolean) {
-        store.edit { preferences ->
-            preferences[HOME_CLICK_SPEED_TEST_ENABLED] = enabled
         }
     }
 
@@ -965,9 +932,6 @@ class SettingsRepository(
             preferences[SPEED_TEST_SCHEMES_JSON] = encodeSpeedTestSchemes(
                 schemes.filterNot { it.id == schemeId }
             )
-            if (preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_CLICK_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
-            }
             if (preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] == schemeId) {
                 preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
             }

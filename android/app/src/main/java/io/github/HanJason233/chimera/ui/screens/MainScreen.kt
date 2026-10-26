@@ -68,9 +68,7 @@ fun MainScreen(
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val lanInbound by viewModel.lanInboundSettings.collectAsStateWithLifecycle()
     val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
-    val homeClickSchemeId by viewModel.homeClickSpeedTestSchemeId.collectAsStateWithLifecycle()
     val homeLongPressSchemeId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val homeClickSpeedTestEnabled by viewModel.homeClickSpeedTestEnabled.collectAsStateWithLifecycle()
     val homeLongPressSpeedTestEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
@@ -105,8 +103,6 @@ fun MainScreen(
         is NodeGroupKey.Country -> "地区组"
         null -> "选择分组"
     }
-    val clickScheme = speedTestSchemes.firstOrNull { it.id == homeClickSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
     val longPressScheme = speedTestSchemes.firstOrNull { it.id == homeLongPressSchemeId }
         ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
 
@@ -295,17 +291,7 @@ fun MainScreen(
                             connectedIconEffect = skinSettings.homeConnectedIconEffect,
                             onClick = {
                                 if (!isTesting) {
-                                    when (vpnState) {
-                                        VpnState.CONNECTED -> onStartVpn { viewModel.toggleVpn() }
-                                        VpnState.DISCONNECTED -> onStartVpn {
-                                            if (homeClickSpeedTestEnabled) {
-                                                clickScheme?.let { viewModel.startSpeedTestScheme(it.id) }
-                                            } else {
-                                                viewModel.startSelectedOrFirstConnection()
-                                            }
-                                        }
-                                        else -> Unit
-                                    }
+                                    onStartVpn { viewModel.toggleVpn() }
                                 }
                             },
                             onLongClick = if (
@@ -322,11 +308,7 @@ fun MainScreen(
                             },
                             // 主页连接区域只保留图标。
                             showStatusLabel = false,
-                            clickActionLabel = if (homeClickSpeedTestEnabled) {
-                                clickScheme?.name ?: "测速方案"
-                            } else {
-                                "直接连接"
-                            },
+                            clickActionLabel = "连接当前节点",
                             longClickActionLabel = if (homeLongPressSpeedTestEnabled) {
                                 longPressScheme?.name ?: "测速方案"
                             } else {
