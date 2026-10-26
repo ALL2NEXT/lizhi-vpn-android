@@ -446,7 +446,7 @@
             <label class="subscription-selection-count"><input class="subscription-select-page" type="checkbox" aria-label="选择当前页订阅"><span data-subscription-selection-meta>已选择 0 项</span></label>
             <div class="subscription-list-footer-actions">
               <div class="subscription-pagination"><span data-subscription-filtered-count>共 0 条</span><button class="secondary" type="button" data-subscription-page-prev aria-label="上一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-prev"></use></svg></button><span data-subscription-page-number>1</span><button class="secondary" type="button" data-subscription-page-next aria-label="下一页" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-next"></use></svg></button><select data-subscription-page-size aria-label="每页显示条数"><option value="20" selected>20 条/页</option><option value="50">50 条/页</option><option value="100">100 条/页</option></select></div>
-              <div class="subscription-group-add-row"><button class="danger subscription-delete-selected" type="button" data-action="delete-selected-subscriptions" aria-label="删除已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg> 删除订阅</button><button class="secondary" type="button" data-action="refresh-subscriptions" aria-label="更新已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-refresh"></use></svg><span data-refresh-label>更新订阅</span></button><button type="button" data-action="add-subscription"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 添加订阅</button></div>
+              <div class="subscription-group-add-row"><button class="secondary" type="button" data-action="move-selected-subscriptions" aria-label="移动已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-folder"></use></svg> 移动订阅</button><button class="danger subscription-delete-selected" type="button" data-action="delete-selected-subscriptions" aria-label="删除已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg> 删除订阅</button><button class="secondary" type="button" data-action="refresh-subscriptions" aria-label="更新已选订阅" disabled><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-refresh"></use></svg><span data-refresh-label>更新订阅</span></button><button type="button" data-action="add-subscription"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-plus"></use></svg> 添加订阅</button></div>
             </div>
           </footer>
         </section>
@@ -460,8 +460,6 @@
                 <label class="subscription-editor-field">订阅名称 <span class="required-mark">*</span><input data-editor-field="name" type="text" maxlength="120" required></label>
                 <label class="subscription-editor-field">订阅类型<select data-editor-field="sourceType"><option value="url">远程订阅</option><option value="content">本地文本</option></select></label>
                 <label class="subscription-editor-field">订阅信息 <span class="required-mark">*</span><span class="subscription-editor-copy-field"><textarea data-editor-source-info data-editor-field="url" rows="3" placeholder="https://example.com/sub"></textarea><button class="secondary" type="button" data-action="copy-subscription-info" aria-label="复制订阅信息"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-copy"></use></svg></button></span></label>
-                <!-- 切换所属分组会将订阅移动到目标分组。 -->
-                <label class="subscription-editor-field">所属分组<select data-editor-field="group"></select></label>
                 <label class="subscription-editor-field">备注<textarea data-editor-field="remark" maxlength="200" rows="3" placeholder="仅后台保存"></textarea></label>
               </section>
               <section class="subscription-editor-section">
@@ -469,6 +467,15 @@
                 <label class="check subscription-editor-check"><input data-editor-field="deduplicate" type="checkbox">节点去重</label>
               </section>
             </div>
+          </div>
+        </dialog>
+
+        <dialog class="subscription-editor subscription-move-dialog" id="subscriptionMoveDialog" aria-labelledby="subscriptionMoveTitle">
+          <div class="subscription-editor-header"><h3 id="subscriptionMoveTitle">移动订阅</h3><button class="secondary" type="button" data-action="close-subscription-move" aria-label="关闭移动订阅弹窗" title="关闭"><svg class="subscription-icon" aria-hidden="true"><use href="#subscription-icon-close"></use></svg></button></div>
+          <div class="subscription-move-dialog-content">
+            <p data-move-selection-count>将移动 0 条订阅。</p>
+            <label class="subscription-editor-field">目标分组<select data-move-target-group required></select></label>
+            <div class="subscription-move-dialog-actions"><button class="secondary" type="button" data-action="close-subscription-move">取消</button><button type="button" data-action="confirm-move-subscriptions" disabled>确认移动</button></div>
           </div>
         </dialog>
       </div>

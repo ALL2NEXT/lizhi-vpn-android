@@ -714,10 +714,6 @@ function selectSubscriptionSource(row) {
     if (sourceControl.type === 'checkbox') editorControl.checked = sourceControl.checked;
     else editorControl.value = sourceControl.value;
   });
-  const group = row.closest('.subscription-group');
-  const groupSelect = editor.querySelector('[data-editor-field="group"]');
-  groupSelect.innerHTML = groupsForEditorOptions();
-  groupSelect.value = group ? group.dataset.groupId : '';
   updateSubscriptionEditorType(row.querySelector('[data-field="sourceType"]').value);
 }
 
@@ -728,40 +724,76 @@ function openSubscriptionEditor(row) {
   if (!editor.open) editor.showModal();
 }
 
-function groupsForEditorOptions() {
-  return getSubscriptionGroupRows().map(function(group, index) {
+function openSubscriptionMoveDialog() {
+  // 打开移动弹窗前清理已删除或失效的勾选项。
+  Array.from(selectedSubscriptionRows).forEach(function(row) {
+    if (!row.isConnected || !row.classList.contains('source-row')) selectedSubscriptionRows.delete(row);
+  });
+  const rows = Array.from(selectedSubscriptionRows);
+  const dialog = el('subscriptionMoveDialog');
+  const groupSelect = dialog.querySelector('[data-move-target-group]');
+  const groups = getSubscriptionGroupRows();
+  groupSelect.innerHTML = '<option value="">请选择目标分组</option>' + groups.map(function(group, index) {
     const name = group.querySelector('[data-field="groupName"]').value.trim() || '分组' + (index + 1);
     return '<option value="' + esc(group.dataset.groupId) + '">' + esc(name) + '</option>';
   }).join('');
+  groupSelect.value = '';
+  dialog.querySelector('[data-move-selection-count]').textContent = rows.length
+    ? '已选择 ' + rows.length + ' 条订阅，请选择目标分组。'
+    : '请先勾选要移动的订阅。';
+  dialog.querySelector('[data-action="confirm-move-subscriptions"]').disabled = true;
+  if (!dialog.open) dialog.showModal();
 }
 
-function moveSubscriptionToGroup(row, targetGroupId) {
-  if (!row || !row.isConnected) return;
-  const currentGroup = row.closest('.subscription-group');
+function updateSubscriptionMoveConfirmState() {
+  const dialog = el('subscriptionMoveDialog');
+  const targetGroupId = dialog.querySelector('[data-move-target-group]').value;
+  const rows = Array.from(selectedSubscriptionRows).filter(function(row) {
+    return row.isConnected && row.classList.contains('source-row');
+  });
   const targetGroup = getSubscriptionGroupRows().find(function(group) {
     return group.dataset.groupId === targetGroupId;
   });
-  if (!currentGroup || !targetGroup || currentGroup === targetGroup) return;
+  const alreadyInTarget = targetGroup && rows.every(function(row) {
+    return row.closest('.subscription-group') === targetGroup;
+  });
+  dialog.querySelector('[data-action="confirm-move-subscriptions"]').disabled =
+    !targetGroup || rows.length === 0 || alreadyInTarget;
+}
 
+function moveSelectedSubscriptions(targetGroupId) {
+  Array.from(selectedSubscriptionRows).forEach(function(row) {
+    if (!row.isConnected || !row.classList.contains('source-row')) selectedSubscriptionRows.delete(row);
+  });
+  const rows = Array.from(selectedSubscriptionRows);
+  const targetGroup = getSubscriptionGroupRows().find(function(group) {
+    return group.dataset.groupId === targetGroupId;
+  });
+  if (!targetGroup || rows.length === 0) return;
   const targetSources = targetGroup.querySelector('[data-group-sources]');
   if (!targetSources) return;
-  targetSources.appendChild(row);
-  updateSubscriptionSourceOrder(currentGroup);
-  updateSubscriptionSourceOrder(targetGroup);
 
-  if (activeSubscriptionGroupId === currentGroup.dataset.groupId) {
-    selectSubscriptionGroup(targetGroup.dataset.groupId, false);
-  } else {
-    updateSourceRowsMeta();
-  }
-
-  // 移动后将列表翻到订阅所在页，避免弹窗仍开着但列表里找不到当前项。
-  const rowPosition = Number(row.style.order);
-  if (Number.isFinite(rowPosition) && rowPosition >= 0) {
-    subscriptionCurrentPage = Math.floor(rowPosition / subscriptionPageSize) + 1;
-    applySubscriptionFilters();
-  }
+  const movedRows = rows.filter(function(row) {
+    return row.closest('.subscription-group') !== targetGroup;
+  });
+  if (movedRows.length === 0) return;
+  // 将选中订阅追加到目标分组，并统一重排受影响分组的订阅顺序。
+  const affectedGroups = new Set([targetGroup]);
+  movedRows.forEach(function(row) {
+    const currentGroup = row.closest('.subscription-group');
+    if (currentGroup) affectedGroups.add(currentGroup);
+    targetSources.appendChild(row);
+  });
+  affectedGroups.forEach(updateSubscriptionSourceOrder);
+  selectedSubscriptionRows.clear();
+  rows.forEach(function(row) {
+    const checkbox = row.querySelector('[data-source-select]');
+    if (checkbox) checkbox.checked = false;
+  });
+  updateSourceRowsMeta();
   markSettingsDirty('subscriptions');
+  el('subscriptionMoveDialog').close();
+  show('已将 ' + movedRows.length + ' 条订阅移动到目标分组');
 }
 
 function updateSubscriptionEditorType(type) {
@@ -848,6 +880,8 @@ function applySubscriptionFilters() {
   if (selectedMeta) selectedMeta.textContent = '已选择 ' + selectedSubscriptionRows.size + ' 项';
   const deleteSelectedButton = document.querySelector('[data-action="delete-selected-subscriptions"]');
   if (deleteSelectedButton) deleteSelectedButton.disabled = selectedSubscriptionRows.size === 0;
+  const moveSelectedButton = document.querySelector('[data-action="move-selected-subscriptions"]');
+  if (moveSelectedButton) moveSelectedButton.disabled = selectedSubscriptionRows.size === 0;
   document.querySelectorAll('[data-action="refresh-subscriptions"]').forEach(function(button) {
     button.disabled = subscriptionRefreshInFlight || selectedSubscriptionRows.size === 0;
   });
@@ -953,6 +987,7 @@ async function refreshSubscriptions(button) {
 function initializeSubscriptionManager() {
   const panel = document.querySelector('[data-panel="subscriptions"]');
   const editor = el('subscriptionEditor');
+  const moveDialog = el('subscriptionMoveDialog');
   editor.addEventListener('close', function() {
     if (selectedSubscriptionRow) selectSubscriptionSource(null);
   });
@@ -961,10 +996,6 @@ function initializeSubscriptionManager() {
       control.addEventListener(type, function() {
         if (!selectedSubscriptionRow) return;
         const field = control.dataset.editorField;
-        if (field === 'group') {
-          if (type === 'change') moveSubscriptionToGroup(selectedSubscriptionRow, control.value);
-          return;
-        }
         const sourceControl = selectedSubscriptionRow.querySelector('[data-field="' + field + '"]');
         if (!sourceControl) return;
         if (sourceControl.type === 'checkbox') sourceControl.checked = control.checked;
@@ -991,7 +1022,15 @@ function initializeSubscriptionManager() {
     if (!group) group = addSubscriptionGroup();
     openSubscriptionImport(group);
   });
+  panel.querySelector('[data-action="move-selected-subscriptions"]').addEventListener('click', openSubscriptionMoveDialog);
   panel.querySelector('[data-action="delete-selected-subscriptions"]').addEventListener('click', deleteSelectedSubscriptions);
+  moveDialog.querySelectorAll('[data-action="close-subscription-move"]').forEach(function(button) {
+    button.addEventListener('click', function() { moveDialog.close(); });
+  });
+  moveDialog.querySelector('[data-move-target-group]').addEventListener('change', updateSubscriptionMoveConfirmState);
+  moveDialog.querySelector('[data-action="confirm-move-subscriptions"]').addEventListener('click', function() {
+    moveSelectedSubscriptions(moveDialog.querySelector('[data-move-target-group]').value);
+  });
   panel.querySelectorAll('[data-action="refresh-subscriptions"]').forEach(function(button) {
     button.addEventListener('click', function(event) {
       refreshSubscriptions(event.currentTarget);
