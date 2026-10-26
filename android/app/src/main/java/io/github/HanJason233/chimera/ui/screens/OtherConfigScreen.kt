@@ -52,7 +52,6 @@ fun OtherConfigScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
     val serviceRequestTimeoutMs by viewModel.serviceRequestTimeoutMs.collectAsStateWithLifecycle()
     var serviceRequestTimeoutSecondsInput by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(serviceRequestTimeoutMs) {
@@ -70,31 +69,6 @@ fun OtherConfigScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             RoutingConnectionSettings(viewModel = viewModel)
-
-            OtherConfigSection(
-                title = "协议核心",
-                collapsible = true,
-                initiallyExpanded = false
-            ) {
-                Text(
-                    text = "可为支持的协议选择官方 sing-box 或 Xray。XHTTP 和 Cloudflare WARP MASQUE 使用 Xray；不支持的扩展参数会在连接前提示。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-                ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
-                    ProtocolCoreRow(
-                        label = nodeType.displayName(),
-                        selectedCore = protocolCoreSettings.coreFor(nodeType),
-                        availableCores = io.github.HanJason233.chimera.core.CoreBackends.registry.availableFor(nodeType),
-                        onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
-                    )
-                }
-                Text(
-                    text = "内置 Xray ${BuildConfig.XRAY_CORE_VERSION}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
 
             OtherConfigSection(title = "服务请求超时") {
                 Text(
@@ -131,6 +105,48 @@ fun OtherConfigScreen(
                 }
             }
 
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+fun ProtocolCoreSettingsScreen(
+    viewModel: MainViewModel,
+    onBack: () -> Unit
+) {
+    val protocolCoreSettings by viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
+
+    AppScreenScaffold(
+        title = "协议核心",
+        onBack = onBack
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            OtherConfigSection(title = "按协议选择核心") {
+                Text(
+                    text = "可为支持的协议选择官方 sing-box 或 Xray。XHTTP 和 Cloudflare WARP MASQUE 使用 Xray；不支持的扩展参数会在连接前提示。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
+                    ProtocolCoreRow(
+                        label = nodeType.displayName(),
+                        selectedCore = protocolCoreSettings.coreFor(nodeType),
+                        availableCores = io.github.HanJason233.chimera.core.CoreBackends.registry.availableFor(nodeType),
+                        onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
+                    )
+                }
+                Text(
+                    text = "内置 Xray ${BuildConfig.XRAY_CORE_VERSION}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
         }
     }
 }

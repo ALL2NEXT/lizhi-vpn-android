@@ -38,6 +38,8 @@ fun MainScreen(
     viewModel: MainViewModel = viewModel(),
     onStartVpn: (action: () -> Unit) -> Unit,
     onOpenOtherConfig: () -> Unit = {},
+    onOpenDnsSettings: () -> Unit = {},
+    onOpenProtocolCoreSettings: () -> Unit = {},
     onOpenRoutingAssets: () -> Unit = {},
     onOpenRegionLookupSettings: () -> Unit = {},
     onOpenSplitRoutingSettings: () -> Unit = {},
@@ -128,6 +130,8 @@ fun MainScreen(
             ) {
                 DrawerContent(
                     onOpenOtherConfig = { closeDrawerThen(onOpenOtherConfig) },
+                    onOpenDnsSettings = { closeDrawerThen(onOpenDnsSettings) },
+                    onOpenProtocolCoreSettings = { closeDrawerThen(onOpenProtocolCoreSettings) },
                     onOpenRoutingAssets = { closeDrawerThen(onOpenRoutingAssets) },
                     onOpenRegionLookupSettings = {
                         closeDrawerThen(onOpenRegionLookupSettings)

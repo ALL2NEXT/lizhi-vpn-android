@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun DrawerContent(
     onOpenOtherConfig: () -> Unit,
+    onOpenDnsSettings: () -> Unit = {},
+    onOpenProtocolCoreSettings: () -> Unit = {},
     onOpenRoutingAssets: () -> Unit = {},
     onOpenRegionLookupSettings: () -> Unit = {},
     onOpenSplitRoutingSettings: () -> Unit = {},
@@ -65,6 +67,18 @@ fun DrawerContent(
                 onClick = {
                     onOpenOtherConfig()
                 }
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.Dns,
+                title = "DNS 设置",
+                onClick = onOpenDnsSettings
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.Memory,
+                title = "协议核心",
+                onClick = onOpenProtocolCoreSettings
             )
 
             DrawerMenuItem(

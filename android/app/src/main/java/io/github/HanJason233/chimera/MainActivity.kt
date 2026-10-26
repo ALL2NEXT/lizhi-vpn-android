@@ -51,6 +51,8 @@ import io.github.HanJason233.chimera.ui.screens.AccountSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.AccountSettingsPage
 import io.github.HanJason233.chimera.ui.screens.MainScreen
 import io.github.HanJason233.chimera.ui.screens.OtherConfigScreen
+import io.github.HanJason233.chimera.ui.screens.DnsSettingsScreen
+import io.github.HanJason233.chimera.ui.screens.ProtocolCoreSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.RegionLookupSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.InboundOutboundScreen
 import io.github.HanJason233.chimera.ui.screens.CoreRoutingScreen
@@ -276,6 +278,12 @@ class MainActivity : ComponentActivity() {
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
                                         },
+                                        onOpenDnsSettings = {
+                                            navigateTo(AppRoute.DNS_SETTINGS)
+                                        },
+                                        onOpenProtocolCoreSettings = {
+                                            navigateTo(AppRoute.PROTOCOL_CORE_SETTINGS)
+                                        },
                                         onOpenRoutingAssets = {
                                             navigateTo(AppRoute.ROUTING_ASSETS)
                                         },
@@ -434,6 +442,20 @@ class MainActivity : ComponentActivity() {
 
                             composable(AppRoute.OTHER_CONFIG) {
                                 OtherConfigScreen(
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.DNS_SETTINGS) {
+                                DnsSettingsScreen(
+                                    viewModel = viewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(AppRoute.PROTOCOL_CORE_SETTINGS) {
+                                ProtocolCoreSettingsScreen(
                                     viewModel = viewModel,
                                     onBack = { navController.popBackStack() }
                                 )

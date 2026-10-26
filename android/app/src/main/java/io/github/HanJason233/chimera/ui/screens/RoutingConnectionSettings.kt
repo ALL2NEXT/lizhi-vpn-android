@@ -47,12 +47,75 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
+import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
+
+@Composable
+fun DnsSettingsScreen(
+    viewModel: MainViewModel,
+    onBack: () -> Unit
+) {
+    val dnsSettings by viewModel.dnsSettings.collectAsStateWithLifecycle()
+
+    AppScreenScaffold(title = "DNS 设置", onBack = onBack) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            RoutingSettingsSection(title = "远程 DNS") {
+                DnsEndpointField(
+                    label = "远程 DNS 地址",
+                    value = dnsSettings.remoteDns,
+                    onSave = viewModel::setRemoteDns
+                )
+                DnsStrategySelector(
+                    label = "远程域名策略",
+                    selected = dnsSettings.remoteDomainStrategy,
+                    onSelected = viewModel::setRemoteDnsStrategy
+                )
+            }
+            RoutingSettingsSection(title = "直连 DNS") {
+                DnsEndpointField(
+                    label = "直连 DNS 地址",
+                    value = dnsSettings.directDns,
+                    onSave = viewModel::setDirectDns
+                )
+                DnsStrategySelector(
+                    label = "直连域名策略",
+                    selected = dnsSettings.directDomainStrategy,
+                    onSelected = viewModel::setDirectDnsStrategy
+                )
+            }
+            RoutingSettingsSection(title = "DNS 路由") {
+                DnsStrategySelector(
+                    label = "服务器地址域名策略",
+                    selected = dnsSettings.serverDomainStrategy,
+                    onSelected = viewModel::setServerDnsStrategy
+                )
+                DnsSwitchRow(
+                    title = "启用 DNS 路由",
+                    description = "使用直连 DNS 解析绕过路由中的 domains。注意潜在的 DNS 泄漏",
+                    checked = dnsSettings.dnsRoutingEnabled,
+                    onCheckedChange = viewModel::setDnsRoutingEnabled
+                )
+                DnsSwitchRow(
+                    title = "启用 FakeDNS",
+                    description = "可能导致其他应用程序在代理停止后需要重新启动以重新连接到网络",
+                    checked = dnsSettings.fakeDnsEnabled,
+                    onCheckedChange = viewModel::setFakeDnsEnabled
+                )
+                RoutingSettingsRuleText("DNS 请求由代理服务接管并处理。")
+                RoutingSettingsRuleText("IPv6 路由模式会影响未单独指定策略时的 DNS 地址选择。")
+            }
+        }
+    }
+}
 
 @Composable
 internal fun RoutingConnectionSettings(viewModel: MainViewModel) {
     val ipv6RoutingMode by viewModel.ipv6RoutingMode.collectAsStateWithLifecycle()
-    val dnsSettings by viewModel.dnsSettings.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -82,52 +145,6 @@ internal fun RoutingConnectionSettings(viewModel: MainViewModel) {
                     )
                 }
             )
-        }
-
-        RoutingSettingsSection(
-            title = "DNS 设置",
-            collapsible = true,
-            initiallyExpanded = false
-        ) {
-            DnsEndpointField(
-                label = "远程 DNS",
-                value = dnsSettings.remoteDns,
-                onSave = viewModel::setRemoteDns
-            )
-            DnsStrategySelector(
-                label = "域名策略（远程）",
-                selected = dnsSettings.remoteDomainStrategy,
-                onSelected = viewModel::setRemoteDnsStrategy
-            )
-            DnsEndpointField(
-                label = "直连 DNS",
-                value = dnsSettings.directDns,
-                onSave = viewModel::setDirectDns
-            )
-            DnsStrategySelector(
-                label = "域名策略（直连）",
-                selected = dnsSettings.directDomainStrategy,
-                onSelected = viewModel::setDirectDnsStrategy
-            )
-            DnsStrategySelector(
-                label = "域名策略（服务器地址）",
-                selected = dnsSettings.serverDomainStrategy,
-                onSelected = viewModel::setServerDnsStrategy
-            )
-            DnsSwitchRow(
-                title = "启用 DNS 路由",
-                description = "使用直连 DNS 解析绕过路由中的 domains。注意潜在的 DNS 泄漏",
-                checked = dnsSettings.dnsRoutingEnabled,
-                onCheckedChange = viewModel::setDnsRoutingEnabled
-            )
-            DnsSwitchRow(
-                title = "启用 FakeDNS",
-                description = "可能导致其他应用程序在代理停止后需要重新启动以重新连接到网络",
-                checked = dnsSettings.fakeDnsEnabled,
-                onCheckedChange = viewModel::setFakeDnsEnabled
-            )
-            RoutingSettingsRuleText("DNS 请求由代理服务接管并处理。")
-            RoutingSettingsRuleText("IPv6 路由模式会影响未单独指定策略时的 DNS 地址选择。")
         }
 
         RoutingSettingsSection(title = "嗅探") {
