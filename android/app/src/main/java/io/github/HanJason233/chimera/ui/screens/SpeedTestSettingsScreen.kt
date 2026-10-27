@@ -59,7 +59,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.HanJason233.chimera.data.model.SpeedTestCategory
 import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
 import io.github.HanJason233.chimera.data.model.isStageEnabled
@@ -341,18 +340,6 @@ private fun SpeedTestSettingsPage(
 
     val selectedStage = editingStage
     Column(modifier = Modifier.fillMaxSize()) {
-        if (selectedStage != null) {
-            Text(
-                text = if (!isHomeTab && selectedStage.category != SpeedTestCategory.LINK_QUALITY) {
-                    "此项仅在主页测速连接成功后执行，手动测速不会运行。"
-                } else {
-                    "修改${selectedStage.title}的测试参数。"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)
-            )
-        }
         if (selectedStage == null) {
             LazyColumn(
                 state = listState,
@@ -456,9 +443,10 @@ private fun SpeedTestSettingsPage(
                     stage = selectedStage,
                     isHomeTab = isHomeTab,
                     modifier = Modifier.fillMaxWidth().weight(1f),
-                    onSave = { updatedSettings ->
-                        onSave(updatedSettings.copy(stageOrder = displayedStages))
-                        editingStage = null
+                    onSettingsChange = { updatedSettings ->
+                        val settingsWithOrder = updatedSettings.copy(stageOrder = displayedStages)
+                        currentSettings = settingsWithOrder
+                        onSave(settingsWithOrder)
                     }
                 )
             }

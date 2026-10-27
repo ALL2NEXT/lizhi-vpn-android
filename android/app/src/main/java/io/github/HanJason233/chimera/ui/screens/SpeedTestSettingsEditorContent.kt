@@ -16,10 +16,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -43,11 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.painterResource
 import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
-import io.github.HanJason233.chimera.data.model.SpeedTestCategory
 import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
 import io.github.HanJason233.chimera.data.model.SpeedTestSettings
@@ -62,14 +57,19 @@ internal fun SpeedTestSettingsEditorContent(
     stage: SpeedTestStage,
     isHomeTab: Boolean,
     modifier: Modifier = Modifier,
-    onSave: (SpeedTestSettings) -> Unit
+    onSettingsChange: (SpeedTestSettings) -> Unit
 ) {
+    var draftSettings by remember(settings) { mutableStateOf(settings) }
+    fun persistSettings(update: (SpeedTestSettings) -> SpeedTestSettings) {
+        // 每次有效改动立即保存，未完成的数字输入暂存在编辑态。
+        val updatedSettings = update(draftSettings)
+        draftSettings = updatedSettings
+        onSettingsChange(updatedSettings)
+    }
+
     var tcpingEnabled by remember(settings.tcpingEnabled) { mutableStateOf(settings.tcpingEnabled) }
     var urlTestEnabled by remember(settings.urlTestEnabled) { mutableStateOf(settings.urlTestEnabled) }
     var bandwidthEnabled by remember(settings.bandwidthEnabled) { mutableStateOf(settings.bandwidthEnabled) }
-    var linkTypeTestEnabled by remember(settings.linkTypeTestEnabled) {
-        mutableStateOf(settings.linkTypeTestEnabled)
-    }
     var unlockTestsEnabled by remember(settings.unlockTestsEnabled) {
         mutableStateOf(settings.unlockTestsEnabled)
     }
@@ -131,35 +131,45 @@ internal fun SpeedTestSettingsEditorContent(
         mutableStateOf(settings.urlTestBackupUrl)
     }
     var bandwidthUrl by remember(settings.bandwidthTestUrl) { mutableStateOf(settings.bandwidthTestUrl) }
-    var error by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        if (stage.category == SpeedTestCategory.LINK_QUALITY) {
-            TestPhaseLabel("连接前测试")
-        }
-
         if (stage == SpeedTestStage.TCPING) {
             SpeedTestStageCard(
-                title = "${SpeedTestStage.TCPING.number}. ${SpeedTestStage.TCPING.title}",
-                enabled = tcpingEnabled,
-                onEnabledChange = { tcpingEnabled = it }
+                title = "${SpeedTestStage.TCPING.number}. ${SpeedTestStage.TCPING.title}"
             ) {
-                NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) { tcpingTimeout = it }
+                NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) {
+                    tcpingTimeout = it
+                    it.toLongOrNull()?.takeIf { value -> value >= 500L }?.let { value ->
+                        persistSettings { settings -> settings.copy(tcpingTimeoutMs = value) }
+                    }
+                }
                 ConcurrencyInput(
                     mode = tcpingConcurrencyMode,
                     value = tcpingConcurrency,
                     enabled = tcpingEnabled,
-                    onModeChange = { tcpingConcurrencyMode = it },
-                    onValueChange = { tcpingConcurrency = it }
+                    onModeChange = { mode ->
+                        tcpingConcurrencyMode = mode
+                        persistSettings { settings -> settings.copy(tcpingConcurrencyMode = mode) }
+                    },
+                    onValueChange = { text ->
+                        tcpingConcurrency = text
+                        val max = if (tcpingConcurrencyMode == SpeedTestSelectionMode.PERCENT) 100 else 512
+                        text.toIntOrNull()?.takeIf { value -> value in 1..max }?.let { value ->
+                            persistSettings { settings -> settings.copy(tcpingConcurrency = value) }
+                        }
+                    }
                 )
                 AutoDeleteSwitchRow(
                     label = "自动删除 TCPing 超时节点",
                     checked = tcpingAutoDeleteTimeoutNodes,
                     enabled = tcpingEnabled,
-                    onCheckedChange = { tcpingAutoDeleteTimeoutNodes = it }
+                    onCheckedChange = { checked ->
+                        tcpingAutoDeleteTimeoutNodes = checked
+                        persistSettings { settings -> settings.copy(tcpingAutoDeleteTimeoutNodes = checked) }
+                    }
                 )
                 Text(
                     "仅删除本项测试中超时的节点；当前正在连接的节点会保留。",
@@ -170,23 +180,35 @@ internal fun SpeedTestSettingsEditorContent(
                     mode = tcpingSelectionMode,
                     value = tcpingSelectionValue,
                     enabled = tcpingEnabled,
-                    onModeChange = { tcpingSelectionMode = it },
-                    onValueChange = { tcpingSelectionValue = it }
+                    onModeChange = { mode ->
+                        tcpingSelectionMode = mode
+                        persistSettings { settings -> settings.copy(tcpingSelectionMode = mode) }
+                    },
+                    onValueChange = { text ->
+                        tcpingSelectionValue = text
+                        text.toIntOrNull()?.takeIf { value -> value >= 1 && (tcpingSelectionMode != SpeedTestSelectionMode.PERCENT || value <= 100) }?.let { value ->
+                            persistSettings { settings -> settings.copy(tcpingSelectionValue = value) }
+                        }
+                    }
                 )
             }
         }
 
         if (stage == SpeedTestStage.URL_TEST) {
             SpeedTestStageCard(
-                title = "${SpeedTestStage.URL_TEST.number}. ${SpeedTestStage.URL_TEST.title}",
-                enabled = urlTestEnabled,
-                onEnabledChange = { urlTestEnabled = it }
+                title = "${SpeedTestStage.URL_TEST.number}. ${SpeedTestStage.URL_TEST.title}"
             ) {
                 NumberInput("预热建连超时 (ms)", urlWarmupTimeout, enabled = urlTestEnabled) {
                     urlWarmupTimeout = it
+                    it.toLongOrNull()?.takeIf { value -> value in 500L..60_000L }?.let { value ->
+                        persistSettings { settings -> settings.copy(urlTestWarmupTimeoutMs = value) }
+                    }
                 }
                 NumberInput("延迟测量超时 (ms)", urlMeasurementTimeout, enabled = urlTestEnabled) {
                     urlMeasurementTimeout = it
+                    it.toLongOrNull()?.takeIf { value -> value in 500L..60_000L }?.let { value ->
+                        persistSettings { settings -> settings.copy(urlTestMeasurementTimeoutMs = value) }
+                    }
                 }
                 Text(
                     "预热超时限制首次请求的建连和响应；测量超时只限制第二次暖连接请求。",
@@ -197,12 +219,26 @@ internal fun SpeedTestSettingsEditorContent(
                     mode = urlConcurrencyMode,
                     value = urlConcurrency,
                     enabled = urlTestEnabled,
-                    onModeChange = { urlConcurrencyMode = it },
-                    onValueChange = { urlConcurrency = it }
+                    onModeChange = { mode ->
+                        urlConcurrencyMode = mode
+                        persistSettings { settings -> settings.copy(urlTestConcurrencyMode = mode) }
+                    },
+                    onValueChange = { text ->
+                        urlConcurrency = text
+                        val max = if (urlConcurrencyMode == SpeedTestSelectionMode.PERCENT) 100 else 128
+                        text.toIntOrNull()?.takeIf { value -> value in 1..max }?.let { value ->
+                            persistSettings { settings -> settings.copy(urlTestConcurrency = value) }
+                        }
+                    }
                 )
                 OutlinedTextField(
                     value = urlTestUrl,
-                    onValueChange = { urlTestUrl = it },
+                    onValueChange = { text ->
+                        urlTestUrl = text
+                        UrlTestTargets.normalize(text)?.let { value ->
+                            persistSettings { settings -> settings.copy(urlTestUrl = value) }
+                        }
+                    },
                     label = { Text("204 URL 地址") },
                     singleLine = true,
                     enabled = urlTestEnabled,
@@ -212,7 +248,12 @@ internal fun SpeedTestSettingsEditorContent(
                 )
                 OutlinedTextField(
                     value = urlTestBackupUrl,
-                    onValueChange = { urlTestBackupUrl = it },
+                    onValueChange = { text ->
+                        urlTestBackupUrl = text
+                        UrlTestTargets.normalizeOptional(text)?.let { value ->
+                            persistSettings { settings -> settings.copy(urlTestBackupUrl = value) }
+                        }
+                    },
                     label = { Text("备用 204 URL（可留空）") },
                     singleLine = true,
                     enabled = urlTestEnabled,
@@ -230,7 +271,10 @@ internal fun SpeedTestSettingsEditorContent(
                     label = "自动删除 URL Test 超时节点",
                     checked = urlTestAutoDeleteTimeoutNodes,
                     enabled = urlTestEnabled,
-                    onCheckedChange = { urlTestAutoDeleteTimeoutNodes = it }
+                    onCheckedChange = { checked ->
+                        urlTestAutoDeleteTimeoutNodes = checked
+                        persistSettings { settings -> settings.copy(urlTestAutoDeleteTimeoutNodes = checked) }
+                    }
                 )
                 Text(
                     "仅删除本项测试中超时的节点；当前正在连接的节点会保留。",
@@ -241,29 +285,54 @@ internal fun SpeedTestSettingsEditorContent(
                     mode = urlSelectionMode,
                     value = urlSelectionValue,
                     enabled = urlTestEnabled,
-                    onModeChange = { urlSelectionMode = it },
-                    onValueChange = { urlSelectionValue = it }
+                    onModeChange = { mode ->
+                        urlSelectionMode = mode
+                        persistSettings { settings -> settings.copy(urlTestSelectionMode = mode) }
+                    },
+                    onValueChange = { text ->
+                        urlSelectionValue = text
+                        text.toIntOrNull()?.takeIf { value -> value >= 1 && (urlSelectionMode != SpeedTestSelectionMode.PERCENT || value <= 100) }?.let { value ->
+                            persistSettings { settings -> settings.copy(urlTestSelectionValue = value) }
+                        }
+                    }
                 )
             }
         }
 
         if (stage == SpeedTestStage.BANDWIDTH) {
             SpeedTestStageCard(
-                title = "${SpeedTestStage.BANDWIDTH.number}. ${SpeedTestStage.BANDWIDTH.title}",
-                enabled = bandwidthEnabled,
-                onEnabledChange = { bandwidthEnabled = it }
+                title = "${SpeedTestStage.BANDWIDTH.number}. ${SpeedTestStage.BANDWIDTH.title}"
             ) {
-                NumberInput("测速时长 (ms)", bandwidthDuration, enabled = bandwidthEnabled) { bandwidthDuration = it }
+                NumberInput("测速时长 (ms)", bandwidthDuration, enabled = bandwidthEnabled) {
+                    bandwidthDuration = it
+                    it.toLongOrNull()?.takeIf { value -> value >= 1_000L }?.let { value ->
+                        persistSettings { settings -> settings.copy(bandwidthTestDurationMs = value) }
+                    }
+                }
                 ConcurrencyInput(
                     mode = bandwidthConcurrencyMode,
                     value = bandwidthConcurrency,
                     enabled = bandwidthEnabled,
-                    onModeChange = { bandwidthConcurrencyMode = it },
-                    onValueChange = { bandwidthConcurrency = it }
+                    onModeChange = { mode ->
+                        bandwidthConcurrencyMode = mode
+                        persistSettings { settings -> settings.copy(bandwidthTestConcurrencyMode = mode) }
+                    },
+                    onValueChange = { text ->
+                        bandwidthConcurrency = text
+                        val max = if (bandwidthConcurrencyMode == SpeedTestSelectionMode.PERCENT) 100 else 3
+                        text.toIntOrNull()?.takeIf { value -> value in 1..max }?.let { value ->
+                            persistSettings { settings -> settings.copy(bandwidthTestConcurrency = value) }
+                        }
+                    }
                 )
                 OutlinedTextField(
                     value = bandwidthUrl,
-                    onValueChange = { bandwidthUrl = it },
+                    onValueChange = { text ->
+                        bandwidthUrl = text
+                        BandwidthTestTargets.normalize(text)?.let { value ->
+                            persistSettings { settings -> settings.copy(bandwidthTestUrl = value) }
+                        }
+                    },
                     label = { Text("带宽下载地址") },
                     singleLine = true,
                     enabled = bandwidthEnabled,
@@ -280,11 +349,20 @@ internal fun SpeedTestSettingsEditorContent(
                     label = "自动删除低带宽节点",
                     checked = bandwidthAutoDeleteLowSpeedNodes,
                     enabled = bandwidthEnabled,
-                    onCheckedChange = { bandwidthAutoDeleteLowSpeedNodes = it }
+                    onCheckedChange = { checked ->
+                        bandwidthAutoDeleteLowSpeedNodes = checked
+                        persistSettings { settings -> settings.copy(bandwidthAutoDeleteLowSpeedNodes = checked) }
+                    }
                 )
                 OutlinedTextField(
                     value = bandwidthAutoDeleteThreshold,
-                    onValueChange = { bandwidthAutoDeleteThreshold = it.filter(Char::isDigit) },
+                    onValueChange = { text ->
+                        val valueText = text.filter(Char::isDigit)
+                        bandwidthAutoDeleteThreshold = valueText
+                        valueText.toIntOrNull()?.takeIf { value -> value in 0..100_000 }?.let { value ->
+                            persistSettings { settings -> settings.copy(bandwidthAutoDeleteThresholdMbps = value) }
+                        }
+                    },
                     label = { Text("自动删除阈值 (Mbps)") },
                     singleLine = true,
                     enabled = bandwidthEnabled && bandwidthAutoDeleteLowSpeedNodes,
@@ -300,21 +378,23 @@ internal fun SpeedTestSettingsEditorContent(
                     mode = bandwidthSelectionMode,
                     value = bandwidthSelectionValue,
                     enabled = bandwidthEnabled,
-                    onModeChange = { bandwidthSelectionMode = it },
-                    onValueChange = { bandwidthSelectionValue = it }
+                    onModeChange = { mode ->
+                        bandwidthSelectionMode = mode
+                        persistSettings { settings -> settings.copy(bandwidthSelectionMode = mode) }
+                    },
+                    onValueChange = { text ->
+                        bandwidthSelectionValue = text
+                        text.toIntOrNull()?.takeIf { value -> value >= 1 && (bandwidthSelectionMode != SpeedTestSelectionMode.PERCENT || value <= 100) }?.let { value ->
+                            persistSettings { settings -> settings.copy(bandwidthSelectionValue = value) }
+                        }
+                    }
                 )
             }
         }
 
-        if (stage.category != SpeedTestCategory.LINK_QUALITY) {
-            TestPhaseLabel("连接后测试")
-        }
-
         if (isHomeTab && stage == SpeedTestStage.LINK_TYPE) {
                 SpeedTestStageCard(
-                    title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}",
-                    enabled = linkTypeTestEnabled,
-                    onEnabledChange = { linkTypeTestEnabled = it }
+                    title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}"
                 ) {
                     Text(
                         "直连显示落地点 IP；中转显示中转点与落地点 IP，并识别中转点的 CDN。",
@@ -327,9 +407,7 @@ internal fun SpeedTestSettingsEditorContent(
 
         if (isHomeTab && stage == SpeedTestStage.IP_QUALITY) {
                 SpeedTestStageCard(
-                    title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}",
-                    enabled = unlockTestsEnabled,
-                    onEnabledChange = { unlockTestsEnabled = it }
+                    title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}"
                 ) {
                     Text(
                         if (unlockTestIds.isEmpty()) "未选择检测项目" else "已选 ${unlockTestIds.size} 项",
@@ -355,11 +433,13 @@ internal fun SpeedTestSettingsEditorContent(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable(enabled = unlockTestsEnabled) {
-                                        unlockTestIds = if (checked) {
+                                        val updatedIds = if (checked) {
                                             unlockTestIds - definition.id
                                         } else {
                                             unlockTestIds + definition.id
                                         }
+                                        unlockTestIds = updatedIds
+                                        persistSettings { settings -> settings.copy(unlockTestIds = updatedIds) }
                                     },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -367,11 +447,13 @@ internal fun SpeedTestSettingsEditorContent(
                                     checked = checked,
                                     enabled = unlockTestsEnabled,
                                     onCheckedChange = { selected ->
-                                        unlockTestIds = if (selected) {
+                                        val updatedIds = if (selected) {
                                             unlockTestIds + definition.id
                                         } else {
                                             unlockTestIds - definition.id
                                         }
+                                        unlockTestIds = updatedIds
+                                        persistSettings { settings -> settings.copy(unlockTestIds = updatedIds) }
                                     }
                                 )
                                 Surface(
@@ -413,87 +495,7 @@ internal fun SpeedTestSettingsEditorContent(
                 }
         }
 
-        if (isHomeTab || stage.category == SpeedTestCategory.LINK_QUALITY) {
-            Button(
-                onClick = {
-                    val normalizedUrl = UrlTestTargets.normalize(urlTestUrl)
-                    val normalizedBackupUrl = UrlTestTargets.normalizeOptional(urlTestBackupUrl)
-                    val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
-                    val hasInvalidUrl = stage == SpeedTestStage.URL_TEST && urlTestEnabled &&
-                        (normalizedUrl == null || normalizedBackupUrl == null)
-                    val hasInvalidBandwidthUrl = stage == SpeedTestStage.BANDWIDTH &&
-                        bandwidthEnabled && normalizedBandwidthUrl == null
-                    if (hasInvalidUrl || hasInvalidBandwidthUrl) {
-                        error = "请检查测速地址"
-                    } else {
-                        onSave(
-                            settings.copy(
-                                tcpingEnabled = tcpingEnabled,
-                                urlTestEnabled = urlTestEnabled,
-                                bandwidthEnabled = bandwidthEnabled,
-                                linkTypeTestEnabled = linkTypeTestEnabled,
-                                unlockTestsEnabled = unlockTestsEnabled,
-                                unlockTestIds = unlockTestIds,
-                                tcpingSelectionMode = tcpingSelectionMode,
-                                tcpingSelectionValue = tcpingSelectionValue.toIntOrNull()
-                                    ?: settings.tcpingSelectionValue,
-                                urlTestSelectionMode = urlSelectionMode,
-                                urlTestSelectionValue = urlSelectionValue.toIntOrNull()
-                                    ?: settings.urlTestSelectionValue,
-                                bandwidthSelectionMode = bandwidthSelectionMode,
-                                bandwidthSelectionValue = bandwidthSelectionValue.toIntOrNull()
-                                    ?: settings.bandwidthSelectionValue,
-                                tcpingAutoDeleteTimeoutNodes = tcpingAutoDeleteTimeoutNodes,
-                                urlTestAutoDeleteTimeoutNodes = urlTestAutoDeleteTimeoutNodes,
-                                bandwidthAutoDeleteLowSpeedNodes = bandwidthAutoDeleteLowSpeedNodes,
-                                bandwidthAutoDeleteThresholdMbps = bandwidthAutoDeleteThreshold.toIntOrNull()
-                                    ?.coerceIn(0, 100_000)
-                                    ?: settings.bandwidthAutoDeleteThresholdMbps,
-                                tcpingTimeoutMs = tcpingTimeout.toLongOrNull() ?: settings.tcpingTimeoutMs,
-                                urlTestWarmupTimeoutMs = urlWarmupTimeout.toLongOrNull()
-                                    ?: settings.urlTestWarmupTimeoutMs,
-                                urlTestMeasurementTimeoutMs = urlMeasurementTimeout.toLongOrNull()
-                                    ?: settings.urlTestMeasurementTimeoutMs,
-                                bandwidthTestDurationMs = bandwidthDuration.toLongOrNull()
-                                    ?: settings.bandwidthTestDurationMs,
-                                tcpingConcurrencyMode = tcpingConcurrencyMode,
-                                tcpingConcurrency = tcpingConcurrency.toIntOrNull()
-                                    ?: settings.tcpingConcurrency,
-                                urlTestConcurrencyMode = urlConcurrencyMode,
-                                urlTestConcurrency = urlConcurrency.toIntOrNull()
-                                    ?: settings.urlTestConcurrency,
-                                bandwidthTestConcurrencyMode = bandwidthConcurrencyMode,
-                                bandwidthTestConcurrency = bandwidthConcurrency.toIntOrNull()
-                                    ?: settings.bandwidthTestConcurrency,
-                                urlTestUrl = normalizedUrl ?: settings.urlTestUrl,
-                                urlTestBackupUrl = normalizedBackupUrl ?: settings.urlTestBackupUrl,
-                                bandwidthTestUrl = normalizedBandwidthUrl ?: settings.bandwidthTestUrl
-                            )
-                        )
-                        error = null
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(if (isHomeTab) "保存主页测速设置" else "保存手动测速设置")
-            }
-
-            error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
-            }
         }
-        }
-}
-
-@Composable
-private fun TestPhaseLabel(title: String) {
-    Text(
-        text = title,
-        modifier = Modifier.padding(horizontal = 4.dp),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.SemiBold
-    )
 }
 
 @Composable
@@ -519,8 +521,6 @@ private fun AutoDeleteSwitchRow(
 @Composable
 private fun SpeedTestStageCard(
     title: String,
-    enabled: Boolean? = null,
-    onEnabledChange: ((Boolean) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     Card(
@@ -531,13 +531,7 @@ private fun SpeedTestStageCard(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, modifier = Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                if (enabled != null && onEnabledChange != null) {
-                    Switch(checked = enabled, onCheckedChange = onEnabledChange,
-                        modifier = Modifier.semantics { contentDescription = "$title 开关" })
-                }
-            }
+            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             content()
         }
     }
