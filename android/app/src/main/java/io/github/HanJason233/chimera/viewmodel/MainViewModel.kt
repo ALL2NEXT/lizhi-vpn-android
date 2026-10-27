@@ -1092,6 +1092,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 清除当前节点列表分组内的全部测试结果。 */
+    fun clearNodeTestResults(
+        groupNodes: List<Node>,
+        onComplete: (String, Boolean) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val clearedCount = nodeDao().clearNodeTestResults(groupNodes.map(Node::id))
+                onComplete("已清理 $clearedCount 个节点的测试数据", true)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                Log.e(tag, "Failed to clear node test results", e)
+                onComplete("清理测试数据失败：${e.message ?: "未知错误"}", false)
+            }
+        }
+    }
+
     /** 按手动测速设置执行当前线路详情页中的单阶段测试。 */
     fun runManualGroupTest(groupNodes: List<Node>, stage: ManualGroupTestStage) {
         viewModelScope.launch {
@@ -1999,6 +2017,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         IN_USE
     }
 
+    enum class SubscriptionNodeDeleteResult {
+        DELETED,
+        NOT_FOUND,
+        IN_USE
+    }
+
     /**
      * 创建用户本地订阅组。输入可以是订阅链接、节点链接列表，也可以为空以先创建空组。
      */
@@ -2354,6 +2378,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 settingsRepository.setSelectedNodeId(null)
             }
             onResult(LocalGroupNodeDeleteResult.DELETED)
+        }
+    }
+
+    /** 从官方订阅源屏蔽一个节点，避免后续刷新重新加入。 */
+    fun deleteSubscriptionNode(
+        node: Node,
+        onResult: (SubscriptionNodeDeleteResult) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            if (activeConnectionNode.value?.id == node.id) {
+                onResult(SubscriptionNodeDeleteResult.IN_USE)
+                return@launch
+            }
+            val sourceId = node.subscriptionSourceId?.takeIf(String::isNotBlank)
+            if (sourceId == null) {
+                onResult(SubscriptionNodeDeleteResult.NOT_FOUND)
+                return@launch
+            }
+
+            val deleted = withContext(Dispatchers.IO) {
+                nodeDao().blockSubscriptionNode(sourceId, node.id)
+            }
+            if (!deleted) {
+                onResult(SubscriptionNodeDeleteResult.NOT_FOUND)
+                return@launch
+            }
+            if (settingsRepository.selectedNodeId.first() == node.id) {
+                settingsRepository.setSelectedNodeId(null)
+            }
+            onResult(SubscriptionNodeDeleteResult.DELETED)
         }
     }
 

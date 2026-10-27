@@ -56,6 +56,7 @@ import androidx.compose.ui.window.DialogProperties
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
+import io.github.HanJason233.chimera.data.model.NodeSource
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
@@ -71,6 +72,7 @@ internal fun SubscriptionGroupingScreen(
     protocolCoreSettings: ProtocolCoreSettings,
     nodeTestResults: Map<String, NodeListTestResultSummary>,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
+    onClearTestResults: (List<Node>, (String, Boolean) -> Unit) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
     showBackNavigation: Boolean = true,
@@ -91,8 +93,11 @@ internal fun SubscriptionGroupingScreen(
     var editingNodeUri by rememberSaveable { mutableStateOf("") }
     var deleteCandidate by remember { mutableStateOf<Node?>(null) }
     var isManagingNodes by rememberSaveable { mutableStateOf(false) }
+    val canDeleteNodes = onDeleteNode != null
     var manualTestMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var manualTestDialogHidden by rememberSaveable { mutableStateOf(false) }
+    var clearTestDataDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var isClearingTestData by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(testProgress?.isManualGroupTest) {
         if (testProgress?.isManualGroupTest == true) {
@@ -179,6 +184,20 @@ internal fun SubscriptionGroupingScreen(
                         },
                         enabled = !isTesting
                     )
+                    Divider()
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "清理测试数据",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        onClick = {
+                            manualTestMenuExpanded = false
+                            clearTestDataDialogVisible = true
+                        },
+                        enabled = !isTesting
+                    )
                 }
             }
             // 节点编辑和删除已移到卡片滑动操作中；顶部只保留添加入口。
@@ -216,6 +235,7 @@ internal fun SubscriptionGroupingScreen(
                 interactionEnabled = !isClosing,
                 bottomContentPadding = bottomContentPadding,
                 canManageNodes = canManageNodes,
+                canDeleteNodes = canDeleteNodes,
                 openSwipeNodeId = openSwipeNodeId,
                 onOpenSwipeNodeChange = { nodeId -> openSwipeNodeId = nodeId },
                 onEditNode = { node ->
@@ -275,6 +295,47 @@ internal fun SubscriptionGroupingScreen(
                 }
             },
             confirmButton = {}
+        )
+    }
+
+    if (clearTestDataDialogVisible) {
+        AppAlertDialog(
+            onDismissRequest = {
+                if (!isClearingTestData) clearTestDataDialogVisible = false
+            },
+            title = { Text("清理测试数据？") },
+            text = {
+                Text(
+                    "将清除当前列表中 ${nodes.size} 个节点的 TCPing、URL Test、带宽、链路类型和解锁结果。"
+                )
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { clearTestDataDialogVisible = false },
+                    enabled = !isClearingTestData
+                ) {
+                    Text("取消")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isClearingTestData = true
+                        onClearTestResults(nodes) { message, success ->
+                            isClearingTestData = false
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                            if (success) clearTestDataDialogVisible = false
+                        }
+                    },
+                    enabled = !isClearingTestData
+                ) {
+                    if (isClearingTestData) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    } else {
+                        Text("清理", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
         )
     }
 
@@ -411,7 +472,16 @@ internal fun SubscriptionGroupingScreen(
             AppAlertDialog(
                 onDismissRequest = { if (!isManagingNodes) deleteCandidate = null },
                 title = { Text("删除节点？") },
-                text = { Text("确认从当前私人源中删除“${node.getDisplayName()}”吗？") },
+                text = {
+                    Text(
+                        when (node.source) {
+                            NodeSource.SUBSCRIPTION ->
+                                "确认从官方源“${node.subscriptionSourceName ?: screenTitle}”中移除“${node.getDisplayName()}”吗？后续刷新时也会继续忽略此节点。"
+                            NodeSource.LOCAL_GROUP ->
+                                "确认从当前私人源中删除“${node.getDisplayName()}”吗？"
+                        }
+                    )
+                },
                 dismissButton = {
                     TextButton(
                         onClick = { deleteCandidate = null },
@@ -459,6 +529,7 @@ private fun NodeListContent(
     interactionEnabled: Boolean,
     bottomContentPadding: Dp,
     canManageNodes: Boolean,
+    canDeleteNodes: Boolean,
     openSwipeNodeId: String?,
     onOpenSwipeNodeChange: (String?) -> Unit,
     onEditNode: (Node) -> Unit,
@@ -522,19 +593,23 @@ private fun NodeListContent(
                             items = displayNodes,
                             key = { it.id }
                         ) { node ->
-                            if (canManageNodes) {
+                            if (canDeleteNodes) {
                                 val swipeKey = "node:${node.id}"
                                 SwipeActionCard(
                                     itemKey = swipeKey,
-                                    actions = listOf(
-                                        SwipeCardAction(
-                                            icon = Icons.Rounded.Edit,
-                                            label = "编辑",
-                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            onClick = { onEditNode(node) }
+                                    actions = if (canManageNodes) {
+                                        listOf(
+                                            SwipeCardAction(
+                                                icon = Icons.Rounded.Edit,
+                                                label = "编辑",
+                                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                onClick = { onEditNode(node) }
+                                            )
                                         )
-                                    ),
+                                    } else {
+                                        emptyList()
+                                    },
                                     revealed = openSwipeNodeId == swipeKey,
                                     onRevealedChange = { isRevealed ->
                                         onOpenSwipeNodeChange(if (isRevealed) swipeKey else null)

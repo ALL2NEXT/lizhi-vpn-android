@@ -71,7 +71,6 @@ internal fun SwipeActionCard(
     val offsetX = remember(itemKey) { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var settleRevision by remember(itemKey) { mutableIntStateOf(0) }
-    val latestRevealed by rememberUpdatedState(revealed)
     val latestOnRevealedChange by rememberUpdatedState(onRevealedChange)
     val latestOnSwipeRight by rememberUpdatedState(onSwipeRight)
 
@@ -178,17 +177,13 @@ internal fun SwipeActionCard(
                     onDragEnd = {
                         val draggedTo = (dragStartX + dragTotal)
                             .coerceIn(-actionWidthPx, if (latestOnSwipeRight != null) deleteWidthPx else 0f)
-                        val startedOpen = latestRevealed ||
-                            dragStartX <= -actionWidthPx * 0.45f
                         snapJob?.cancel()
                         snapJob = null
                         when {
-                            dragTotal >= dismissThresholdPx && !startedOpen -> {
+                            // 以卡片最终位置判断删除阈值，已展开的卡片也能右滑删除。
+                            draggedTo >= dismissThresholdPx && latestOnSwipeRight != null -> {
                                 settleTo(false)
                                 latestOnSwipeRight?.invoke()
-                            }
-                            dragTotal >= dismissThresholdPx && startedOpen -> {
-                                settleTo(false)
                             }
                             else -> {
                                 val shouldOpen = actions.isNotEmpty() &&

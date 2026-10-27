@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.Node
+import io.github.HanJason233.chimera.data.model.NodeSource
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
@@ -120,20 +121,43 @@ internal fun SubscriptionGroupingDestination(
                 }
             }
         }
-    val onDeleteLocalNode: ((Node, (String, Boolean) -> Unit) -> Unit)? =
-        importTargetGroupId?.let { groupId ->
-            { node, onComplete ->
-                viewModel.deleteLocalGroupNode(groupId, node.id) { result ->
-                    val (message, shouldClose) = when (result) {
-                        MainViewModel.LocalGroupNodeDeleteResult.DELETED -> "节点已删除" to true
-                        MainViewModel.LocalGroupNodeDeleteResult.NOT_FOUND -> "节点不存在" to false
-                        MainViewModel.LocalGroupNodeDeleteResult.IN_USE ->
+    val onDeleteNode: (Node, (String, Boolean) -> Unit) -> Unit = { node, onComplete ->
+        when (node.source) {
+            NodeSource.LOCAL_GROUP -> {
+                val groupId = node.subscriptionSourceId
+                    ?.takeIf(String::isNotBlank)
+                    ?: importTargetGroupId
+                if (groupId == null) {
+                    onComplete("节点来源不存在", false)
+                } else {
+                    viewModel.deleteLocalGroupNode(groupId, node.id) { result ->
+                        val (message, success) = when (result) {
+                            MainViewModel.LocalGroupNodeDeleteResult.DELETED ->
+                                "节点已删除" to true
+                            MainViewModel.LocalGroupNodeDeleteResult.NOT_FOUND ->
+                                "节点不存在" to false
+                            MainViewModel.LocalGroupNodeDeleteResult.IN_USE ->
+                                "当前正在使用该节点，无法删除" to false
+                        }
+                        onComplete(message, success)
+                    }
+                }
+            }
+            NodeSource.SUBSCRIPTION -> {
+                viewModel.deleteSubscriptionNode(node) { result ->
+                    val (message, success) = when (result) {
+                        MainViewModel.SubscriptionNodeDeleteResult.DELETED ->
+                            "节点已从官方源移除" to true
+                        MainViewModel.SubscriptionNodeDeleteResult.NOT_FOUND ->
+                            "节点不存在或已更新" to false
+                        MainViewModel.SubscriptionNodeDeleteResult.IN_USE ->
                             "当前正在使用该节点，无法删除" to false
                     }
-                    onComplete(message, shouldClose)
+                    onComplete(message, success)
                 }
             }
         }
+    }
 
     SubscriptionGroupingScreen(
         nodes = nodes,
@@ -147,6 +171,9 @@ internal fun SubscriptionGroupingDestination(
         onRunManualGroupTest = { stage ->
             viewModel.runManualGroupTest(sourceNodes, stage)
         },
+        onClearTestResults = { groupNodes, onComplete ->
+            viewModel.clearNodeTestResults(groupNodes, onComplete)
+        },
         onNodeSelected = onNodeSelected,
         onBack = onBack,
         showBackNavigation = showBackNavigation,
@@ -154,6 +181,6 @@ internal fun SubscriptionGroupingDestination(
         screenTitle = screenTitle,
         onImportNodeUris = onImportNodeUris,
         onUpdateNode = onUpdateLocalNode,
-        onDeleteNode = onDeleteLocalNode
+        onDeleteNode = onDeleteNode
     )
 }

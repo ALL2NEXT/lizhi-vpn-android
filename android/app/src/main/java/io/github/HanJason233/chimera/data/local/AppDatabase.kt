@@ -6,6 +6,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeGroupEntity
@@ -19,9 +21,10 @@ import java.io.File
         Node::class,
         NodeGroupEntity::class,
         NodeGroupMemberEntity::class,
-        HomeNodeTestResultsEntity::class
+        HomeNodeTestResultsEntity::class,
+        BlockedSubscriptionNodeEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -31,6 +34,20 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         private const val TAG = "AppDatabase"
         private const val DB_NAME = "firefly_vpn.db"
+
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `blocked_subscription_nodes` (
+                        `sourceId` TEXT NOT NULL,
+                        `nodeId` TEXT NOT NULL,
+                        PRIMARY KEY(`sourceId`, `nodeId`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
 
         @Volatile
         private var sqlCipherLibLoaded = false
@@ -77,6 +94,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_14_15)
                 // 发布前开发版允许在表结构变化时重建本地数据库。
                 .fallbackToDestructiveMigration()
                 .build()
