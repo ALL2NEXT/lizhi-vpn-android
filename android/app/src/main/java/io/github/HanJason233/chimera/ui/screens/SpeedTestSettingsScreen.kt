@@ -20,13 +20,15 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -45,6 +47,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -129,6 +132,7 @@ private fun SpeedTestSettingsPage(
     onSave: (SpeedTestSettings) -> Unit
 ) {
     var editingStage by remember { mutableStateOf<SpeedTestStage?>(null) }
+    var currentSettings by remember(settings) { mutableStateOf(settings) }
     var displayedStages by remember(settings.stageOrder) {
         mutableStateOf(normalizeSpeedTestStageOrder(settings.stageOrder))
     }
@@ -146,7 +150,7 @@ private fun SpeedTestSettingsPage(
     val density = LocalDensity.current
     val autoScrollThreshold = with(density) { 56.dp.toPx() }
     val maxAutoScrollPerFrame = with(density) { 12.dp.toPx() }
-    val latestSettings by rememberUpdatedState(settings)
+    val latestSettings by rememberUpdatedState(currentSettings)
     val latestOnSave by rememberUpdatedState(onSave)
     val updateAutoScrollAmount = rememberUpdatedState<() -> Unit>(
         newValue = {
@@ -206,11 +210,25 @@ private fun SpeedTestSettingsPage(
         }
     )
 
+    fun setStageEnabled(stage: SpeedTestStage, enabled: Boolean) {
+        val updatedSettings = when (stage) {
+            SpeedTestStage.TCPING -> currentSettings.copy(tcpingEnabled = enabled)
+            SpeedTestStage.URL_TEST -> currentSettings.copy(urlTestEnabled = enabled)
+            SpeedTestStage.BANDWIDTH -> currentSettings.copy(bandwidthEnabled = enabled)
+            SpeedTestStage.LINK_TYPE -> currentSettings.copy(linkTypeTestEnabled = enabled)
+            SpeedTestStage.IP_QUALITY -> currentSettings.copy(unlockTestsEnabled = enabled)
+        }
+        currentSettings = updatedSettings
+        latestOnSave(updatedSettings)
+    }
+
     fun finishDrag() {
         val normalizedSavedOrder = normalizeSpeedTestStageOrder(latestSettings.stageOrder)
         if (displayedStages != normalizedSavedOrder) {
             // 卡片顺序按当前入口保存；执行时仍遵循各测试阶段的依赖关系。
-            latestOnSave(latestSettings.copy(stageOrder = displayedStages))
+            val updatedSettings = latestSettings.copy(stageOrder = displayedStages)
+            currentSettings = updatedSettings
+            latestOnSave(updatedSettings)
         }
         draggedStage = null
         isMoveLayoutPending = false
@@ -259,6 +277,7 @@ private fun SpeedTestSettingsPage(
         editingStage = null
     }
 
+    val selectedStage = editingStage
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
             text = if (editingStage == null) {
@@ -279,13 +298,21 @@ private fun SpeedTestSettingsPage(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)
         )
 
-        val selectedStage = editingStage
         if (selectedStage == null) {
+            Text(
+                text = "测试项设置",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+            )
+            Divider(
+                modifier = Modifier.padding(horizontal = 12.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 itemsIndexed(
                     items = displayedStages,
@@ -296,7 +323,7 @@ private fun SpeedTestSettingsPage(
                         .firstOrNull { it.key == "stage:${stage.name}" }
                     val itemOffset = itemInfo?.offset?.toFloat() ?: 0f
                     val elevation by animateDpAsState(
-                        targetValue = if (isDragging) 6.dp else 1.dp,
+                        targetValue = if (isDragging) 4.dp else 0.dp,
                         label = "SpeedTestStageDragElevation"
                     )
                     val placementModifier = if (isDragging) {
@@ -307,56 +334,65 @@ private fun SpeedTestSettingsPage(
                         Modifier.animateItemPlacement()
                     }
 
-                    SpeedTestStageSummaryCard(
-                        stage = stage,
-                        settings = settings,
-                        isHomeTab = isHomeTab,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(placementModifier)
-                            .zIndex(if (isDragging) 1f else 0f)
-                            .pointerInput(stage) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                        hapticFeedback.performHapticFeedback(
-                                            HapticFeedbackType.LongPress
-                                        )
-                                        val info = listState.layoutInfo.visibleItemsInfo
-                                            .firstOrNull { it.key == "stage:${stage.name}" }
-                                        isMoveLayoutPending = false
-                                        isDropPending = false
-                                        pendingLayoutIndex = -1
-                                        draggedStage = stage
-                                        draggedItemTop = info?.offset?.toFloat() ?: 0f
-                                        draggedItemHeight = info?.size?.toFloat() ?: 1f
-                                        dragDistance = 0f
-                                        updateAutoScrollAmount.value()
-                                    },
-                                    onDrag = { change, amount ->
-                                        change.consume()
-                                        dragDistance += amount.y
-                                        updateAutoScrollAmount.value()
-                                        draggedStage?.let(moveDraggedStage.value)
-                                    },
-                                    onDragEnd = {
-                                        if (isMoveLayoutPending) {
-                                            isDropPending = true
-                                        } else {
-                                            finishDrag()
+                    Column {
+                        SpeedTestStageSummaryCard(
+                            stage = stage,
+                            settings = currentSettings,
+                            isHomeTab = isHomeTab,
+                            enabled = currentSettings.isStageEnabled(stage),
+                            hasSwitch = isHomeTab || stage.number <= SpeedTestStage.BANDWIDTH.number,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(placementModifier)
+                                .zIndex(if (isDragging) 1f else 0f)
+                                .pointerInput(stage) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            hapticFeedback.performHapticFeedback(
+                                                HapticFeedbackType.LongPress
+                                            )
+                                            val info = listState.layoutInfo.visibleItemsInfo
+                                                .firstOrNull { it.key == "stage:${stage.name}" }
+                                            isMoveLayoutPending = false
+                                            isDropPending = false
+                                            pendingLayoutIndex = -1
+                                            draggedStage = stage
+                                            draggedItemTop = info?.offset?.toFloat() ?: 0f
+                                            draggedItemHeight = info?.size?.toFloat() ?: 1f
+                                            dragDistance = 0f
+                                            updateAutoScrollAmount.value()
+                                        },
+                                        onDrag = { change, amount ->
+                                            change.consume()
+                                            dragDistance += amount.y
+                                            updateAutoScrollAmount.value()
+                                            draggedStage?.let(moveDraggedStage.value)
+                                        },
+                                        onDragEnd = {
+                                            if (isMoveLayoutPending) {
+                                                isDropPending = true
+                                            } else {
+                                                finishDrag()
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            if (isMoveLayoutPending) {
+                                                isDropPending = true
+                                            } else {
+                                                finishDrag()
+                                            }
                                         }
-                                    },
-                                    onDragCancel = {
-                                        if (isMoveLayoutPending) {
-                                            isDropPending = true
-                                        } else {
-                                            finishDrag()
-                                        }
-                                    }
-                                )
-                            },
-                        elevation = elevation,
-                        onClick = { editingStage = stage }
-                    )
+                                    )
+                                },
+                            elevation = elevation,
+                            onClick = { editingStage = stage },
+                            onToggle = { enabled -> setStageEnabled(stage, enabled) }
+                        )
+                        Divider(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                    }
                 }
             }
         } else {
@@ -368,7 +404,7 @@ private fun SpeedTestSettingsPage(
                     Text("返回测试项")
                 }
                 SpeedTestSettingsEditorContent(
-                    settings = settings,
+                    settings = currentSettings,
                     stage = selectedStage,
                     isHomeTab = isHomeTab,
                     modifier = Modifier.fillMaxWidth().weight(1f),
@@ -387,9 +423,12 @@ private fun SpeedTestStageSummaryCard(
     stage: SpeedTestStage,
     settings: SpeedTestSettings,
     isHomeTab: Boolean,
+    enabled: Boolean,
+    hasSwitch: Boolean,
     modifier: Modifier = Modifier,
     elevation: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onToggle: (Boolean) -> Unit
 ) {
     val summary = when (stage) {
         SpeedTestStage.TCPING -> "连接可达性 · ${settings.tcpingTimeoutMs} ms 超时"
@@ -406,62 +445,62 @@ private fun SpeedTestStageSummaryCard(
             "仅在主页连接后执行"
         }
     }
-    val enabled = isHomeTab || stage.number <= SpeedTestStage.BANDWIDTH.number
+    val hasConfigSwitch = hasSwitch
 
-    Card(
+    Surface(
         modifier = modifier.clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = elevation
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Outlined.DragHandle,
-                contentDescription = "长按拖动排序",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = 10.dp).size(22.dp)
-            )
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "${stage.number}. ${stage.title}",
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = if (enabled) {
-                            if (settings.isStageEnabled(stage)) "已开启" else "已关闭"
-                        } else {
-                            "连接后检测"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (enabled && settings.isStageEnabled(stage)) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
+                Text(
+                    text = "${stage.number}. ${stage.title}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Text(
                     text = summary,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp)
                 )
+                Text(
+                    text = if (hasConfigSwitch) {
+                        if (enabled) "已开启" else "已关闭"
+                    } else {
+                        "仅主页连接后执行"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
-            Icon(
-                imageVector = Icons.Outlined.ChevronRight,
-                contentDescription = "设置${stage.title}",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 8.dp).size(20.dp)
-            )
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                IconButton(onClick = onClick) {
+                    Icon(Icons.Outlined.Edit, contentDescription = "编辑${stage.title}")
+                }
+                if (hasConfigSwitch) {
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = onToggle,
+                        modifier = Modifier.scale(0.7f),
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
+                            checkedTrackColor = MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                }
+            }
         }
     }
 }
