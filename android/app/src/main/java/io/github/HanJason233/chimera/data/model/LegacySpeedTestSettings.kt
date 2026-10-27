@@ -3,7 +3,9 @@ package io.github.HanJason233.chimera.data.model
 enum class ManualGroupTestStage {
     TCPING,
     URL_TEST,
-    BANDWIDTH
+    BANDWIDTH,
+    LINK_TYPE,
+    IP_QUALITY
 }
 
 /** How many nodes a speed-test stage should take from its upstream result. */

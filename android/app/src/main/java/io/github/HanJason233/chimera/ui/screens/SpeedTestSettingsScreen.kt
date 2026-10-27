@@ -385,9 +385,7 @@ private fun SpeedTestSettingsPage(
                         SpeedTestStageSummaryCard(
                             stage = stage,
                             settings = currentSettings,
-                            isHomeTab = isHomeTab,
                             enabled = currentSettings.isStageEnabled(stage),
-                            hasSwitch = isHomeTab || stage.number <= SpeedTestStage.BANDWIDTH.number,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .pointerInput(stage) {
@@ -458,9 +456,7 @@ private fun SpeedTestSettingsPage(
 private fun SpeedTestStageSummaryCard(
     stage: SpeedTestStage,
     settings: SpeedTestSettings,
-    isHomeTab: Boolean,
     enabled: Boolean,
-    hasSwitch: Boolean,
     modifier: Modifier = Modifier,
     elevation: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
@@ -470,20 +466,16 @@ private fun SpeedTestStageSummaryCard(
         SpeedTestStage.TCPING -> "连接可达性 · ${settings.tcpingTimeoutMs} ms 超时"
         SpeedTestStage.URL_TEST -> "204 URL 连通性 · ${settings.urlTestUrl}"
         SpeedTestStage.BANDWIDTH -> "下载测速 · ${settings.bandwidthTestDurationMs / 1_000f} 秒"
-        SpeedTestStage.LINK_TYPE -> if (isHomeTab) {
+        SpeedTestStage.LINK_TYPE -> {
             val acceptedTypes = buildList {
                 if (settings.linkTypeAcceptDirect) add("直连")
                 if (settings.linkTypeAcceptRelay) add("普通中转")
                 if (settings.linkTypeAcceptCdnRelay) add("CDN 中转")
             }
             "保留：${acceptedTypes.joinToString().ifBlank { "未选择类型" }}"
-        } else {
-            "仅在主页测速时筛选"
         }
-        SpeedTestStage.IP_QUALITY -> if (isHomeTab) {
+        SpeedTestStage.IP_QUALITY -> {
             "所选 ${settings.unlockTestIds.size} 项全部支持时保留线路"
-        } else {
-            "仅在主页测速时筛选"
         }
     }
     Surface(
@@ -510,14 +502,6 @@ private fun SpeedTestStageSummaryCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp)
                 )
-                if (!hasSwitch) {
-                    Text(
-                        text = "仅主页自动测速执行",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
             }
             Column(
                 horizontalAlignment = Alignment.End,
@@ -526,17 +510,15 @@ private fun SpeedTestStageSummaryCard(
                 IconButton(onClick = onClick) {
                     Icon(Icons.Outlined.Edit, contentDescription = "编辑${stage.title}")
                 }
-                if (hasSwitch) {
-                    Switch(
-                        checked = enabled,
-                        onCheckedChange = onToggle,
-                        modifier = Modifier.scale(0.7f),
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
-                            checkedTrackColor = MaterialTheme.colorScheme.secondary
-                        )
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onToggle,
+                    modifier = Modifier.scale(0.7f),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
+                        checkedTrackColor = MaterialTheme.colorScheme.secondary
                     )
-                }
+                )
             }
         }
     }

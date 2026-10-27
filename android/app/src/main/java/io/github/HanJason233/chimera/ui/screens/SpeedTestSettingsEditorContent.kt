@@ -372,12 +372,16 @@ internal fun SpeedTestSettingsEditorContent(
             }
         }
 
-        if (isHomeTab && stage == SpeedTestStage.LINK_TYPE) {
+        if (stage == SpeedTestStage.LINK_TYPE) {
                 SpeedTestStageCard(
                     title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}"
                 ) {
                     Text(
-                        "VPN 创建前批量检测候选线路，只保留勾选的线路类型。",
+                        if (isHomeTab) {
+                            "VPN 创建前批量检测候选线路，只保留勾选的线路类型。"
+                        } else {
+                            "对当前分组批量检测，不创建 VPN；完成后只显示勾选类型的线路。"
+                        },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -407,7 +411,7 @@ internal fun SpeedTestSettingsEditorContent(
 
         }
 
-        if (isHomeTab && stage == SpeedTestStage.IP_QUALITY) {
+        if (stage == SpeedTestStage.IP_QUALITY) {
                 SpeedTestStageCard(
                     title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}"
                 ) {
@@ -417,7 +421,11 @@ internal fun SpeedTestSettingsEditorContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "VPN 创建前批量检测候选线路；所选服务全部显示“支持”才保留线路，部分可用不算通过。",
+                        if (isHomeTab) {
+                            "VPN 创建前批量检测候选线路；所选服务全部显示“支持”才保留线路，部分可用不算通过。"
+                        } else {
+                            "对当前分组批量检测，不创建 VPN；所选服务全部支持的线路会显示，部分支持不算通过。"
+                        },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -473,26 +481,6 @@ internal fun SpeedTestSettingsEditorContent(
                             }
                         }
                     }
-                }
-        }
-
-        if (!isHomeTab && stage == SpeedTestStage.LINK_TYPE) {
-                SpeedTestStageCard(title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}") {
-                    Text(
-                        "仅主页自动测速使用此筛选；在 VPN 创建前批量检查候选线路。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-        }
-
-        if (!isHomeTab && stage == SpeedTestStage.IP_QUALITY) {
-                SpeedTestStageCard(title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}") {
-                    Text(
-                        "仅主页自动测速使用此筛选；在 VPN 创建前批量检查候选线路。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
         }
 

@@ -71,6 +71,9 @@ internal fun SubscriptionGroupingScreen(
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     groupManualSpeedTestSettings: SpeedTestSettings,
+    manualTestNodeCount: Int = nodes.size,
+    manualFilterSummary: String? = null,
+    onClearManualFilter: () -> Unit = {},
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
@@ -127,12 +130,14 @@ internal fun SubscriptionGroupingScreen(
         showBackNavigation = showBackNavigation,
         actions = {
             val testSettings = groupManualSpeedTestSettings
-            if (testSettings.tcpingEnabled || testSettings.urlTestEnabled || testSettings.bandwidthEnabled
+            if (testSettings.tcpingEnabled || testSettings.urlTestEnabled ||
+                testSettings.bandwidthEnabled || testSettings.linkTypeTestEnabled ||
+                testSettings.unlockTestsEnabled
             ) {
                 Box {
                     IconButton(
                         onClick = { manualTestMenuExpanded = true },
-                        enabled = !isTesting && nodes.isNotEmpty()
+                        enabled = !isTesting && manualTestNodeCount > 0
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Speed,
@@ -185,6 +190,34 @@ internal fun SubscriptionGroupingScreen(
                                 enabled = !isTesting
                             )
                         }
+                        if (testSettings.linkTypeTestEnabled) {
+                            DropdownMenuItem(
+                                text = { Text("链路类型检测 · 筛选当前分组线路") },
+                                onClick = {
+                                    manualTestMenuExpanded = false
+                                    onRunManualGroupTest(ManualGroupTestStage.LINK_TYPE)
+                                },
+                                enabled = !isTesting
+                            )
+                        }
+                        if (testSettings.unlockTestsEnabled) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        if (testSettings.unlockTestIds.isEmpty()) {
+                                            "流媒体与 AI 解锁 · 请先选择检测服务"
+                                        } else {
+                                            "流媒体与 AI 解锁 · 筛选当前分组线路"
+                                        }
+                                    )
+                                },
+                                onClick = {
+                                    manualTestMenuExpanded = false
+                                    onRunManualGroupTest(ManualGroupTestStage.IP_QUALITY)
+                                },
+                                enabled = !isTesting && testSettings.unlockTestIds.isNotEmpty()
+                            )
+                        }
                     }
                 }
             }
@@ -211,9 +244,37 @@ internal fun SubscriptionGroupingScreen(
         ),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (manualFilterSummary != null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = manualFilterSummary,
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        TextButton(onClick = onClearManualFilter) {
+                            Text("显示全部")
+                        }
+                    }
+                }
+            }
             NodeListContent(
+                modifier = Modifier.weight(1f),
                 nodes = nodes,
+                emptyMessage = if (manualFilterSummary != null) {
+                    "没有符合筛选条件的线路"
+                } else {
+                    "暂无可用节点"
+                },
                 selectedNodeId = selectedNodeId,
                 isTesting = isTesting,
                 nodeDisplaySettings = nodeDisplaySettings,
@@ -231,7 +292,6 @@ internal fun SubscriptionGroupingScreen(
                 },
                 onDeleteNode = { node -> deleteCandidate = node }
             )
-
         }
     }
 
@@ -456,7 +516,9 @@ internal fun SubscriptionGroupingScreen(
 
 @Composable
 private fun NodeListContent(
+    modifier: Modifier = Modifier,
     nodes: List<Node>,
+    emptyMessage: String = "暂无可用节点",
     selectedNodeId: String?,
     isTesting: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
@@ -494,7 +556,7 @@ private fun NodeListContent(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize()) {
         when {
             displayNodes.isEmpty() -> {
                 Box(
@@ -504,7 +566,7 @@ private fun NodeListContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "暂无可用节点",
+                        text = emptyMessage,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 16.sp
                     )

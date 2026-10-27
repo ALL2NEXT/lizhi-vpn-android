@@ -1087,7 +1087,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** 按手动测速设置执行当前线路详情页中的单阶段测试。 */
-    fun runManualGroupTest(groupNodes: List<Node>, stage: ManualGroupTestStage) {
+    fun runManualGroupTest(
+        groupNodes: List<Node>,
+        stage: ManualGroupTestStage,
+        onFilterResult: ((List<Node>) -> Unit)? = null
+    ) {
         viewModelScope.launch {
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
@@ -1099,9 +1103,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ManualGroupTestStage.TCPING -> settings.tcpingEnabled
                 ManualGroupTestStage.URL_TEST -> settings.urlTestEnabled
                 ManualGroupTestStage.BANDWIDTH -> settings.bandwidthEnabled
+                ManualGroupTestStage.LINK_TYPE -> settings.linkTypeTestEnabled
+                ManualGroupTestStage.IP_QUALITY -> settings.unlockTestsEnabled
             }
             if (!stageEnabled) {
                 _error.value = "手动测试设置中未启用该测试阶段"
+                return@launch
+            }
+            if (stage == ManualGroupTestStage.IP_QUALITY && settings.unlockTestIds.isEmpty()) {
+                _error.value = "请先在手动测试的第 5 项中选择要检测的服务"
                 return@launch
             }
             if (!GlobalTestExecution.tryStart("分组内手动测试：$stage")) {
@@ -1117,6 +1127,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ManualGroupTestStage.TCPING -> "TCPing"
                 ManualGroupTestStage.URL_TEST -> "URL Test"
                 ManualGroupTestStage.BANDWIDTH -> "带宽测速"
+                ManualGroupTestStage.LINK_TYPE -> "第 4 项链路类型检测"
+                ManualGroupTestStage.IP_QUALITY -> "第 5 项流媒体与 AI 解锁检测"
             }
             updateSpeedTestProgress(
                 title = progressTitle,
@@ -1253,6 +1265,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         _nodeTestResultSortMode.value =
                             NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
                     }
+
+                    ManualGroupTestStage.LINK_TYPE -> {
+                        val results = runHomeCandidateFilterTests(
+                            settings = settings,
+                            nodes = currentGroupNodes,
+                            runLinkType = true,
+                            runUnlockTests = false,
+                            title = progressTitle,
+                            progressStage = progressStage,
+                            isManualGroupTest = true
+                        )
+                        onFilterResult?.invoke(
+                            results.filter(HomeCandidateFilterResult::linkTypePassed)
+                                .map(HomeCandidateFilterResult::node)
+                        )
+                    }
+
+                    ManualGroupTestStage.IP_QUALITY -> {
+                        val results = runHomeCandidateFilterTests(
+                            settings = settings,
+                            nodes = currentGroupNodes,
+                            runLinkType = false,
+                            runUnlockTests = true,
+                            title = progressTitle,
+                            progressStage = progressStage,
+                            isManualGroupTest = true
+                        )
+                        onFilterResult?.invoke(
+                            results.filter(HomeCandidateFilterResult::unlockTestsPassed)
+                                .map(HomeCandidateFilterResult::node)
+                        )
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -1274,7 +1318,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         nodes: List<Node>,
         runLinkType: Boolean,
         runUnlockTests: Boolean,
-        title: String
+        title: String,
+        progressStage: String = "第 4、5 项筛选线路",
+        isManualGroupTest: Boolean = false
     ): List<HomeCandidateFilterResult> = coroutineScope {
         if (nodes.isEmpty()) return@coroutineScope emptyList()
 
@@ -1410,9 +1456,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     completed += 1
                     updateSpeedTestProgress(
                         title = title,
-                        stage = "第 4、5 项筛选线路",
+                        stage = progressStage,
                         completed = completed,
-                        total = nodes.size
+                        total = nodes.size,
+                        isManualGroupTest = isManualGroupTest
                     )
                 }
                 outcome
