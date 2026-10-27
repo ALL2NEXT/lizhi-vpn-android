@@ -38,6 +38,11 @@ data class LegacySpeedTestSettings(
     val unlockTestsEnabled: Boolean = false,
     /** 第五步要检测的流媒体与 AI 服务。 */
     val unlockTestIds: Set<String> = emptySet(),
+    val linkTypeConcurrencyMode: SpeedTestSelectionMode = SpeedTestSelectionMode.COUNT,
+    val linkTypeConcurrency: Int = 3,
+    val unlockTestConcurrencyMode: SpeedTestSelectionMode = SpeedTestSelectionMode.COUNT,
+    val unlockTestConcurrency: Int = 3,
+    val unlockTestRequestConcurrency: Int = 4,
     val tcpingSelectionMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
     val tcpingSelectionValue: Int = 100,
     val urlTestSelectionMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,

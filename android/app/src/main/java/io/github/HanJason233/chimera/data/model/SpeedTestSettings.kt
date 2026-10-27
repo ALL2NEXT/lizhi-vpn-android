@@ -12,6 +12,11 @@ data class SpeedTestSettings(
     val linkTypeAcceptCdnRelay: Boolean = true,
     val unlockTestsEnabled: Boolean = false,
     val unlockTestIds: Set<String> = emptySet(),
+    val linkTypeConcurrencyMode: SpeedTestSelectionMode = SpeedTestSelectionMode.COUNT,
+    val linkTypeConcurrency: Int = 3,
+    val unlockTestConcurrencyMode: SpeedTestSelectionMode = SpeedTestSelectionMode.COUNT,
+    val unlockTestConcurrency: Int = 3,
+    val unlockTestRequestConcurrency: Int = 4,
     val tcpingSelectionMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
     val tcpingSelectionValue: Int = 100,
     val urlTestSelectionMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
@@ -37,6 +42,8 @@ data class SpeedTestSettings(
     val bandwidthTestConcurrency: Int = 30
 ) {
     companion object {
+        const val MAX_PRE_VPN_TEST_CONCURRENCY = 32
+
         fun default() = SpeedTestSettings(
             tcpingEnabled = true,
             urlTestEnabled = true,

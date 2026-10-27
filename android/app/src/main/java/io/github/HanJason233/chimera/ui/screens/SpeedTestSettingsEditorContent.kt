@@ -120,6 +120,21 @@ internal fun SpeedTestSettingsEditorContent(
         mutableStateOf(settings.bandwidthTestConcurrencyMode)
     }
     var bandwidthConcurrency by remember(settings.bandwidthTestConcurrency) { mutableStateOf(settings.bandwidthTestConcurrency.toString()) }
+    var linkTypeConcurrencyMode by remember(settings.linkTypeConcurrencyMode) {
+        mutableStateOf(settings.linkTypeConcurrencyMode)
+    }
+    var linkTypeConcurrency by remember(settings.linkTypeConcurrency) {
+        mutableStateOf(settings.linkTypeConcurrency.toString())
+    }
+    var unlockTestConcurrencyMode by remember(settings.unlockTestConcurrencyMode) {
+        mutableStateOf(settings.unlockTestConcurrencyMode)
+    }
+    var unlockTestConcurrency by remember(settings.unlockTestConcurrency) {
+        mutableStateOf(settings.unlockTestConcurrency.toString())
+    }
+    var unlockTestRequestConcurrency by remember(settings.unlockTestRequestConcurrency) {
+        mutableStateOf(settings.unlockTestRequestConcurrency.toString())
+    }
     var urlTestUrl by remember(settings.urlTestUrl) { mutableStateOf(settings.urlTestUrl) }
     var urlTestBackupUrl by remember(settings.urlTestBackupUrl) {
         mutableStateOf(settings.urlTestBackupUrl)
@@ -391,6 +406,26 @@ internal fun SpeedTestSettingsEditorContent(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    ConcurrencyInput(
+                        label = "节点并发",
+                        mode = linkTypeConcurrencyMode,
+                        value = linkTypeConcurrency,
+                        onModeChange = { mode ->
+                            linkTypeConcurrencyMode = mode
+                            persistSettings { it.copy(linkTypeConcurrencyMode = mode) }
+                        },
+                        onValueChange = { text ->
+                            linkTypeConcurrency = text
+                            val max = if (linkTypeConcurrencyMode == SpeedTestSelectionMode.PERCENT) {
+                                100
+                            } else {
+                                SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
+                            }
+                            text.toIntOrNull()?.takeIf { it in 1..max }?.let { value ->
+                                persistSettings { it.copy(linkTypeConcurrency = value) }
+                            }
+                        }
+                    )
                     if (isHomeTab) {
                         Text("保留的线路类型", fontWeight = FontWeight.SemiBold)
                         LinkTypeFilterRow(
@@ -437,6 +472,34 @@ internal fun SpeedTestSettingsEditorContent(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    ConcurrencyInput(
+                        label = "节点并发",
+                        mode = unlockTestConcurrencyMode,
+                        value = unlockTestConcurrency,
+                        onModeChange = { mode ->
+                            unlockTestConcurrencyMode = mode
+                            persistSettings { it.copy(unlockTestConcurrencyMode = mode) }
+                        },
+                        onValueChange = { text ->
+                            unlockTestConcurrency = text
+                            val max = if (unlockTestConcurrencyMode == SpeedTestSelectionMode.PERCENT) {
+                                100
+                            } else {
+                                SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
+                            }
+                            text.toIntOrNull()?.takeIf { it in 1..max }?.let { value ->
+                                persistSettings { it.copy(unlockTestConcurrency = value) }
+                            }
+                        }
+                    )
+                    NumberInput("服务请求并发", unlockTestRequestConcurrency) { text ->
+                        unlockTestRequestConcurrency = text
+                        text.toIntOrNull()
+                            ?.takeIf { it in 1..SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY }
+                            ?.let { value ->
+                                persistSettings { it.copy(unlockTestRequestConcurrency = value) }
+                            }
+                    }
                     UnlockTestCategory.entries.forEach { category ->
                     Text(
                         text = category.title,
@@ -551,13 +614,14 @@ private fun SpeedTestStageCard(
 
 @Composable
 private fun ConcurrencyInput(
+    label: String = "并发",
     mode: SpeedTestSelectionMode,
     value: String,
     onModeChange: (SpeedTestSelectionMode) -> Unit,
     onValueChange: (String) -> Unit
 ) {
     ResultRetentionInput(
-        label = "并发",
+        label = label,
         mode = mode,
         value = value,
         onModeChange = onModeChange,
@@ -572,7 +636,7 @@ private fun ConcurrencyInput(
 
 @Composable
 private fun ResultRetentionInput(
-    label: String = "输出给下一项",
+    label: String = "筛选",
     mode: SpeedTestSelectionMode,
     value: String,
     onModeChange: (SpeedTestSelectionMode) -> Unit,

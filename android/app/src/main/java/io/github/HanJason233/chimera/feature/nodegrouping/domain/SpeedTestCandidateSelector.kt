@@ -47,16 +47,25 @@ internal object SpeedTestCandidateSelector {
             SpeedTestStage.TCPING -> settings.tcpingConcurrencyMode to settings.tcpingConcurrency
             SpeedTestStage.URL_TEST -> settings.urlTestConcurrencyMode to settings.urlTestConcurrency
             SpeedTestStage.BANDWIDTH -> settings.bandwidthTestConcurrencyMode to settings.bandwidthTestConcurrency
-            else -> error("连接后的测试没有节点并发数量")
+            SpeedTestStage.LINK_TYPE -> settings.linkTypeConcurrencyMode to settings.linkTypeConcurrency
+            SpeedTestStage.IP_QUALITY -> settings.unlockTestConcurrencyMode to settings.unlockTestConcurrency
         }
         val normalizedValue = value.coerceAtLeast(1)
+        val maxConcurrency = if (
+            stage == SpeedTestStage.LINK_TYPE || stage == SpeedTestStage.IP_QUALITY
+        ) {
+            SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
+        } else {
+            Int.MAX_VALUE
+        }
         return when (mode) {
             SpeedTestSelectionMode.PERCENT ->
                 ((testedCount.coerceAtLeast(1).toLong() * normalizedValue + 99L) / 100L)
                     .toInt()
                     .coerceIn(1, testedCount.coerceAtLeast(1))
+                    .coerceAtMost(maxConcurrency)
 
-            SpeedTestSelectionMode.COUNT -> normalizedValue
+            SpeedTestSelectionMode.COUNT -> normalizedValue.coerceAtMost(maxConcurrency)
         }
     }
 

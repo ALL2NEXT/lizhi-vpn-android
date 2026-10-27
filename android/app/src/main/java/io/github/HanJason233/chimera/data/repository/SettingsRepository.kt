@@ -87,7 +87,7 @@ class SettingsRepository(
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
         private const val AUTO_REFRESH_SOURCE_PREFIX = "auto_refresh_source_on_startup:"
         /** 默认测速预置与旧版主题数据迁移分别维护版本。 */
-        private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 3
+        private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 4
         private const val DEFAULT_SKIN_PARTICLE_PRESET_REVISION = 1
         private const val DEFAULT_SKIN_PRESET_REVISION = 3
         private const val MIN_SERVICE_REQUEST_TIMEOUT_MS = 5_000L
@@ -1411,6 +1411,11 @@ class SettingsRepository(
         linkTypeAcceptCdnRelay = linkTypeAcceptCdnRelay,
         unlockTestsEnabled = unlockTestsEnabled,
         unlockTestIds = unlockTestIds,
+        linkTypeConcurrencyMode = linkTypeConcurrencyMode,
+        linkTypeConcurrency = linkTypeConcurrency,
+        unlockTestConcurrencyMode = unlockTestConcurrencyMode,
+        unlockTestConcurrency = unlockTestConcurrency,
+        unlockTestRequestConcurrency = unlockTestRequestConcurrency,
         tcpingSelectionMode = tcpingSelectionMode,
         tcpingSelectionValue = tcpingSelectionValue,
         urlTestSelectionMode = urlTestSelectionMode,
@@ -1446,6 +1451,11 @@ class SettingsRepository(
         linkTypeAcceptCdnRelay = linkTypeAcceptCdnRelay,
         unlockTestsEnabled = unlockTestsEnabled,
         unlockTestIds = unlockTestIds,
+        linkTypeConcurrencyMode = linkTypeConcurrencyMode,
+        linkTypeConcurrency = linkTypeConcurrency,
+        unlockTestConcurrencyMode = unlockTestConcurrencyMode,
+        unlockTestConcurrency = unlockTestConcurrency,
+        unlockTestRequestConcurrency = unlockTestRequestConcurrency,
         tcpingSelectionMode = tcpingSelectionMode,
         tcpingSelectionValue = tcpingSelectionValue,
         urlTestSelectionMode = urlTestSelectionMode,
@@ -1492,6 +1502,11 @@ class SettingsRepository(
                                 item.put("urlTestSelectionMode", defaults.urlTestSelectionMode.name)
                                 item.put("urlTestSelectionValue", defaults.urlTestSelectionValue)
                                 item.put("linkTypeTestEnabled", defaults.linkTypeTestEnabled)
+                                item.put("linkTypeConcurrencyMode", defaults.linkTypeConcurrencyMode.name)
+                                item.put("linkTypeConcurrency", defaults.linkTypeConcurrency)
+                                item.put("unlockTestConcurrencyMode", defaults.unlockTestConcurrencyMode.name)
+                                item.put("unlockTestConcurrency", defaults.unlockTestConcurrency)
+                                item.put("unlockTestRequestConcurrency", defaults.unlockTestRequestConcurrency)
                                 item.put("tcpingConcurrencyMode", defaults.tcpingConcurrencyMode.name)
                                 item.put("tcpingConcurrency", defaults.tcpingConcurrency)
                                 item.put("urlTestConcurrencyMode", defaults.urlTestConcurrencyMode.name)
@@ -1525,6 +1540,20 @@ class SettingsRepository(
                                                 }
                                             }
                                         },
+                                        linkTypeConcurrencyMode = readConcurrencyMode(
+                                            item,
+                                            "linkTypeConcurrencyMode"
+                                        ),
+                                        linkTypeConcurrency = item.optInt("linkTypeConcurrency", 3),
+                                        unlockTestConcurrencyMode = readConcurrencyMode(
+                                            item,
+                                            "unlockTestConcurrencyMode"
+                                        ),
+                                        unlockTestConcurrency = item.optInt("unlockTestConcurrency", 3),
+                                        unlockTestRequestConcurrency = item.optInt(
+                                            "unlockTestRequestConcurrency",
+                                            4
+                                        ),
                                         tcpingSelectionMode = readSelectionMode(
                                             item,
                                             "tcping",
@@ -1698,6 +1727,30 @@ class SettingsRepository(
                 scheme.bandwidthSelectionMode,
                 scheme.bandwidthSelectionValue
             ),
+            linkTypeConcurrency = normalizeSelectionValue(
+                scheme.linkTypeConcurrencyMode,
+                scheme.linkTypeConcurrency
+            ).coerceAtMost(
+                if (scheme.linkTypeConcurrencyMode == SpeedTestSelectionMode.COUNT) {
+                    SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
+                } else {
+                    100
+                }
+            ),
+            unlockTestConcurrency = normalizeSelectionValue(
+                scheme.unlockTestConcurrencyMode,
+                scheme.unlockTestConcurrency
+            ).coerceAtMost(
+                if (scheme.unlockTestConcurrencyMode == SpeedTestSelectionMode.COUNT) {
+                    SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
+                } else {
+                    100
+                }
+            ),
+            unlockTestRequestConcurrency = scheme.unlockTestRequestConcurrency.coerceIn(
+                1,
+                SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
+            ),
             bandwidthAutoDeleteThresholdMbps = scheme.bandwidthAutoDeleteThresholdMbps.coerceIn(0, 100_000),
             tcpingTimeoutMs = scheme.tcpingTimeoutMs.coerceAtLeast(500L),
             urlTestWarmupTimeoutMs = scheme.urlTestWarmupTimeoutMs.coerceIn(500L, 60_000L),
@@ -1745,6 +1798,11 @@ class SettingsRepository(
                     put("unlockTestIds", JSONArray().apply {
                         normalized.unlockTestIds.forEach(::put)
                     })
+                    put("linkTypeConcurrencyMode", normalized.linkTypeConcurrencyMode.name)
+                    put("linkTypeConcurrency", normalized.linkTypeConcurrency)
+                    put("unlockTestConcurrencyMode", normalized.unlockTestConcurrencyMode.name)
+                    put("unlockTestConcurrency", normalized.unlockTestConcurrency)
+                    put("unlockTestRequestConcurrency", normalized.unlockTestRequestConcurrency)
                     put("tcpingSelectionMode", normalized.tcpingSelectionMode.name)
                     put("tcpingSelectionValue", normalized.tcpingSelectionValue)
                     put("urlTestSelectionMode", normalized.urlTestSelectionMode.name)

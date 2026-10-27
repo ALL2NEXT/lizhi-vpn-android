@@ -114,7 +114,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val accountManager = AccountManager(application)
     private val latencyTester = LatencyTester()
     private val bandwidthTester = NodeDownloadBandwidthTester(application)
-    private val unlockRequestSemaphore = Semaphore(MAX_CONCURRENT_UNLOCK_TESTS)
 
     private data class ParsedSubscriptionPart(
         val url: String?,
@@ -1309,8 +1308,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             emptyList()
         }
+        val linkTypeNodeConcurrency = if (runLinkType) {
+            SpeedTestCandidateSelector.concurrencyForStage(
+                settings,
+                SpeedTestStage.LINK_TYPE,
+                nodes.size
+            )
+        } else {
+            1
+        }
+        val unlockNodeConcurrency = if (runUnlockTests) {
+            SpeedTestCandidateSelector.concurrencyForStage(
+                settings,
+                SpeedTestStage.IP_QUALITY,
+                nodes.size
+            )
+        } else {
+            1
+        }
+        // 节点会话、链路检测、解锁节点数和服务请求数分别受各自并发上限约束。
         val nodeSemaphore = Semaphore(
-            nodes.size.coerceAtMost(MAX_CONCURRENT_PRE_VPN_TEST_NODES)
+            nodes.size.coerceAtMost(maxOf(linkTypeNodeConcurrency, unlockNodeConcurrency))
+        )
+        val linkTypeSemaphore = Semaphore(linkTypeNodeConcurrency)
+        val unlockNodeSemaphore = Semaphore(unlockNodeConcurrency)
+        val unlockRequestSemaphore = Semaphore(
+            settings.unlockTestRequestConcurrency.coerceIn(
+                1,
+                SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
+            )
         )
         val progressMutex = Mutex()
         var completed = 0
@@ -1361,12 +1387,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         val linkTypePassed = if (runLinkType) {
-                            val result = runLinkTypeTestForCandidate(node, session.endpoint)
-                            when (result.state) {
-                                LinkTypeTestState.DIRECT -> settings.linkTypeAcceptDirect
-                                LinkTypeTestState.RELAY -> settings.linkTypeAcceptRelay
-                                LinkTypeTestState.CDN_RELAY -> settings.linkTypeAcceptCdnRelay
-                                else -> false
+                            linkTypeSemaphore.withPermit {
+                                val result = runLinkTypeTestForCandidate(node, session.endpoint)
+                                when (result.state) {
+                                    LinkTypeTestState.DIRECT -> settings.linkTypeAcceptDirect
+                                    LinkTypeTestState.RELAY -> settings.linkTypeAcceptRelay
+                                    LinkTypeTestState.CDN_RELAY -> settings.linkTypeAcceptCdnRelay
+                                    else -> false
+                                }
                             }
                         } else {
                             true
@@ -1379,11 +1407,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 "未通过第 4 项线路类型筛选，已跳过解锁检测",
                                 UnlockTestState.NOT_CONNECTED
                             )
-                            else -> runUnlockTestsForCandidate(
-                                node = node,
-                                endpoint = session.endpoint,
-                                definitions = definitions
-                            )
+                            else -> unlockNodeSemaphore.withPermit {
+                                runUnlockTestsForCandidate(
+                                    node = node,
+                                    endpoint = session.endpoint,
+                                    definitions = definitions,
+                                    requestSemaphore = unlockRequestSemaphore
+                                )
+                            }
                         }
                         if (runUnlockTests && unlockState != null && !linkTypePassed) {
                             persistUnlockTestResult(node.id, unlockState)
@@ -1479,13 +1510,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun runUnlockTestsForCandidate(
         node: Node,
         endpoint: io.github.HanJason233.chimera.core.LocalSocksEndpoint,
-        definitions: List<UnlockTestDefinition>
+        definitions: List<UnlockTestDefinition>,
+        requestSemaphore: Semaphore
     ): UnlockTestUiState {
         val results = UnlockTestRunner(endpoint).use { runner ->
             coroutineScope {
                 definitions.map { definition ->
                     async {
-                        unlockRequestSemaphore.withPermit {
+                        requestSemaphore.withPermit {
                             try {
                                 runner.run(definition)
                             } catch (cancelled: CancellationException) {
@@ -1539,8 +1571,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private companion object {
-        const val MAX_CONCURRENT_UNLOCK_TESTS = 4
-        const val MAX_CONCURRENT_PRE_VPN_TEST_NODES = 3
         const val PRE_VPN_TEST_SESSION_START_TIMEOUT_MS = 30_000L
         const val ACCOUNT_OVERVIEW_SYNC_COOLDOWN_MS = 60_000L
         const val NOTIFICATION_REFRESH_COOLDOWN_MS = 30_000L
