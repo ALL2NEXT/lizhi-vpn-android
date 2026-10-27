@@ -107,7 +107,7 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.FlashOn,
-                title = "测速设置",
+                title = "测试",
                 onClick = onOpenSpeedTestSettings
             )
 

@@ -67,12 +67,6 @@ internal fun SpeedTestSettingsEditorContent(
         onSettingsChange(updatedSettings)
     }
 
-    var tcpingEnabled by remember(settings.tcpingEnabled) { mutableStateOf(settings.tcpingEnabled) }
-    var urlTestEnabled by remember(settings.urlTestEnabled) { mutableStateOf(settings.urlTestEnabled) }
-    var bandwidthEnabled by remember(settings.bandwidthEnabled) { mutableStateOf(settings.bandwidthEnabled) }
-    var unlockTestsEnabled by remember(settings.unlockTestsEnabled) {
-        mutableStateOf(settings.unlockTestsEnabled)
-    }
     var unlockTestIds by remember(settings.unlockTestIds) {
         mutableStateOf(settings.unlockTestIds)
     }
@@ -140,7 +134,7 @@ internal fun SpeedTestSettingsEditorContent(
             SpeedTestStageCard(
                 title = "${SpeedTestStage.TCPING.number}. ${SpeedTestStage.TCPING.title}"
             ) {
-                NumberInput("超时 (ms)", tcpingTimeout, enabled = tcpingEnabled) {
+                NumberInput("超时 (ms)", tcpingTimeout) {
                     tcpingTimeout = it
                     it.toLongOrNull()?.takeIf { value -> value >= 500L }?.let { value ->
                         persistSettings { settings -> settings.copy(tcpingTimeoutMs = value) }
@@ -149,7 +143,6 @@ internal fun SpeedTestSettingsEditorContent(
                 ConcurrencyInput(
                     mode = tcpingConcurrencyMode,
                     value = tcpingConcurrency,
-                    enabled = tcpingEnabled,
                     onModeChange = { mode ->
                         tcpingConcurrencyMode = mode
                         persistSettings { settings -> settings.copy(tcpingConcurrencyMode = mode) }
@@ -165,7 +158,6 @@ internal fun SpeedTestSettingsEditorContent(
                 AutoDeleteSwitchRow(
                     label = "自动删除 TCPing 超时节点",
                     checked = tcpingAutoDeleteTimeoutNodes,
-                    enabled = tcpingEnabled,
                     onCheckedChange = { checked ->
                         tcpingAutoDeleteTimeoutNodes = checked
                         persistSettings { settings -> settings.copy(tcpingAutoDeleteTimeoutNodes = checked) }
@@ -179,7 +171,6 @@ internal fun SpeedTestSettingsEditorContent(
                 ResultRetentionInput(
                     mode = tcpingSelectionMode,
                     value = tcpingSelectionValue,
-                    enabled = tcpingEnabled,
                     onModeChange = { mode ->
                         tcpingSelectionMode = mode
                         persistSettings { settings -> settings.copy(tcpingSelectionMode = mode) }
@@ -198,13 +189,13 @@ internal fun SpeedTestSettingsEditorContent(
             SpeedTestStageCard(
                 title = "${SpeedTestStage.URL_TEST.number}. ${SpeedTestStage.URL_TEST.title}"
             ) {
-                NumberInput("预热建连超时 (ms)", urlWarmupTimeout, enabled = urlTestEnabled) {
+                NumberInput("预热建连超时 (ms)", urlWarmupTimeout) {
                     urlWarmupTimeout = it
                     it.toLongOrNull()?.takeIf { value -> value in 500L..60_000L }?.let { value ->
                         persistSettings { settings -> settings.copy(urlTestWarmupTimeoutMs = value) }
                     }
                 }
-                NumberInput("延迟测量超时 (ms)", urlMeasurementTimeout, enabled = urlTestEnabled) {
+                NumberInput("延迟测量超时 (ms)", urlMeasurementTimeout) {
                     urlMeasurementTimeout = it
                     it.toLongOrNull()?.takeIf { value -> value in 500L..60_000L }?.let { value ->
                         persistSettings { settings -> settings.copy(urlTestMeasurementTimeoutMs = value) }
@@ -218,7 +209,6 @@ internal fun SpeedTestSettingsEditorContent(
                 ConcurrencyInput(
                     mode = urlConcurrencyMode,
                     value = urlConcurrency,
-                    enabled = urlTestEnabled,
                     onModeChange = { mode ->
                         urlConcurrencyMode = mode
                         persistSettings { settings -> settings.copy(urlTestConcurrencyMode = mode) }
@@ -241,8 +231,7 @@ internal fun SpeedTestSettingsEditorContent(
                     },
                     label = { Text("204 URL 地址") },
                     singleLine = true,
-                    enabled = urlTestEnabled,
-                    isError = urlTestEnabled && UrlTestTargets.normalize(urlTestUrl) == null,
+                    isError = UrlTestTargets.normalize(urlTestUrl) == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -256,9 +245,7 @@ internal fun SpeedTestSettingsEditorContent(
                     },
                     label = { Text("备用 204 URL（可留空）") },
                     singleLine = true,
-                    enabled = urlTestEnabled,
-                    isError = urlTestEnabled &&
-                        UrlTestTargets.normalizeOptional(urlTestBackupUrl) == null,
+                    isError = UrlTestTargets.normalizeOptional(urlTestBackupUrl) == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -270,7 +257,6 @@ internal fun SpeedTestSettingsEditorContent(
                 AutoDeleteSwitchRow(
                     label = "自动删除 URL Test 超时节点",
                     checked = urlTestAutoDeleteTimeoutNodes,
-                    enabled = urlTestEnabled,
                     onCheckedChange = { checked ->
                         urlTestAutoDeleteTimeoutNodes = checked
                         persistSettings { settings -> settings.copy(urlTestAutoDeleteTimeoutNodes = checked) }
@@ -284,7 +270,6 @@ internal fun SpeedTestSettingsEditorContent(
                 ResultRetentionInput(
                     mode = urlSelectionMode,
                     value = urlSelectionValue,
-                    enabled = urlTestEnabled,
                     onModeChange = { mode ->
                         urlSelectionMode = mode
                         persistSettings { settings -> settings.copy(urlTestSelectionMode = mode) }
@@ -303,7 +288,7 @@ internal fun SpeedTestSettingsEditorContent(
             SpeedTestStageCard(
                 title = "${SpeedTestStage.BANDWIDTH.number}. ${SpeedTestStage.BANDWIDTH.title}"
             ) {
-                NumberInput("测速时长 (ms)", bandwidthDuration, enabled = bandwidthEnabled) {
+                NumberInput("测速时长 (ms)", bandwidthDuration) {
                     bandwidthDuration = it
                     it.toLongOrNull()?.takeIf { value -> value >= 1_000L }?.let { value ->
                         persistSettings { settings -> settings.copy(bandwidthTestDurationMs = value) }
@@ -312,7 +297,6 @@ internal fun SpeedTestSettingsEditorContent(
                 ConcurrencyInput(
                     mode = bandwidthConcurrencyMode,
                     value = bandwidthConcurrency,
-                    enabled = bandwidthEnabled,
                     onModeChange = { mode ->
                         bandwidthConcurrencyMode = mode
                         persistSettings { settings -> settings.copy(bandwidthTestConcurrencyMode = mode) }
@@ -335,8 +319,7 @@ internal fun SpeedTestSettingsEditorContent(
                     },
                     label = { Text("带宽下载地址") },
                     singleLine = true,
-                    enabled = bandwidthEnabled,
-                    isError = bandwidthEnabled && BandwidthTestTargets.normalize(bandwidthUrl) == null,
+                    isError = BandwidthTestTargets.normalize(bandwidthUrl) == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -348,7 +331,6 @@ internal fun SpeedTestSettingsEditorContent(
                 AutoDeleteSwitchRow(
                     label = "自动删除低带宽节点",
                     checked = bandwidthAutoDeleteLowSpeedNodes,
-                    enabled = bandwidthEnabled,
                     onCheckedChange = { checked ->
                         bandwidthAutoDeleteLowSpeedNodes = checked
                         persistSettings { settings -> settings.copy(bandwidthAutoDeleteLowSpeedNodes = checked) }
@@ -365,7 +347,6 @@ internal fun SpeedTestSettingsEditorContent(
                     },
                     label = { Text("自动删除阈值 (Mbps)") },
                     singleLine = true,
-                    enabled = bandwidthEnabled && bandwidthAutoDeleteLowSpeedNodes,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -377,7 +358,6 @@ internal fun SpeedTestSettingsEditorContent(
                 ResultRetentionInput(
                     mode = bandwidthSelectionMode,
                     value = bandwidthSelectionValue,
-                    enabled = bandwidthEnabled,
                     onModeChange = { mode ->
                         bandwidthSelectionMode = mode
                         persistSettings { settings -> settings.copy(bandwidthSelectionMode = mode) }
@@ -432,7 +412,7 @@ internal fun SpeedTestSettingsEditorContent(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(enabled = unlockTestsEnabled) {
+                                    .clickable {
                                         val updatedIds = if (checked) {
                                             unlockTestIds - definition.id
                                         } else {
@@ -445,7 +425,6 @@ internal fun SpeedTestSettingsEditorContent(
                             ) {
                                 Checkbox(
                                     checked = checked,
-                                    enabled = unlockTestsEnabled,
                                     onCheckedChange = { selected ->
                                         val updatedIds = if (selected) {
                                             unlockTestIds + definition.id
@@ -478,7 +457,7 @@ internal fun SpeedTestSettingsEditorContent(
         if (!isHomeTab && stage == SpeedTestStage.LINK_TYPE) {
                 SpeedTestStageCard(title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}") {
                     Text(
-                        "此检测在主页测速连接后执行，手动测速不运行此项。",
+                        "此检测在主页测速连接后执行，手动测试不运行此项。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -488,7 +467,7 @@ internal fun SpeedTestSettingsEditorContent(
         if (!isHomeTab && stage == SpeedTestStage.IP_QUALITY) {
                 SpeedTestStageCard(title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}") {
                     Text(
-                        "此检测在主页测速连接后执行，手动测速不运行此项。",
+                        "此检测在主页测速连接后执行，手动测试不运行此项。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -502,7 +481,6 @@ internal fun SpeedTestSettingsEditorContent(
 private fun AutoDeleteSwitchRow(
     label: String,
     checked: Boolean,
-    enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
@@ -512,7 +490,6 @@ private fun AutoDeleteSwitchRow(
         Text(label, modifier = Modifier.weight(1f), fontSize = 14.sp)
         Switch(
             checked = checked,
-            enabled = enabled,
             onCheckedChange = onCheckedChange
         )
     }
@@ -541,7 +518,6 @@ private fun SpeedTestStageCard(
 private fun ConcurrencyInput(
     mode: SpeedTestSelectionMode,
     value: String,
-    enabled: Boolean,
     onModeChange: (SpeedTestSelectionMode) -> Unit,
     onValueChange: (String) -> Unit
 ) {
@@ -549,7 +525,6 @@ private fun ConcurrencyInput(
         label = "并发",
         mode = mode,
         value = value,
-        enabled = enabled,
         onModeChange = onModeChange,
         onValueChange = onValueChange
     )
@@ -565,7 +540,6 @@ private fun ResultRetentionInput(
     label: String = "输出给下一项",
     mode: SpeedTestSelectionMode,
     value: String,
-    enabled: Boolean,
     onModeChange: (SpeedTestSelectionMode) -> Unit,
     onValueChange: (String) -> Unit
 ) {
@@ -577,7 +551,6 @@ private fun ResultRetentionInput(
         onValueChange = { onValueChange(it.filter(Char::isDigit)) },
         label = { Text(label) },
         singleLine = true,
-        enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         trailingIcon = {
             Box {
@@ -585,7 +558,7 @@ private fun ResultRetentionInput(
                     text = unit,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .clickable(enabled = enabled) { unitMenuExpanded = true }
+                        .clickable { unitMenuExpanded = true }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 )
                 DropdownMenu(
@@ -617,7 +590,6 @@ private fun ResultRetentionInput(
 private fun NumberInput(
     label: String,
     value: String,
-    enabled: Boolean = true,
     onValueChange: (String) -> Unit
 ) {
     OutlinedTextField(
@@ -625,7 +597,6 @@ private fun NumberInput(
         onValueChange = { onValueChange(it.filter(Char::isDigit)) },
         label = { Text(label) },
         singleLine = true,
-        enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth()
     )

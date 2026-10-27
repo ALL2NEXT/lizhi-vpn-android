@@ -81,7 +81,7 @@ fun SpeedTestSettingsScreen(
     val coroutineScope = rememberCoroutineScope()
 
     AppScreenScaffold(
-        title = "测速设置",
+        title = "测试",
         onBack = onBack,
         contentPadding = PaddingValues(0.dp)
     ) {
@@ -95,7 +95,7 @@ fun SpeedTestSettingsScreen(
                 Tab(
                     selected = pagerState.currentPage == 1,
                     onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                    text = { Text("手动测速", maxLines = 1) }
+                    text = { Text("手动测试", maxLines = 1) }
                 )
             }
 
@@ -481,8 +481,6 @@ private fun SpeedTestStageSummaryCard(
             "仅在主页连接后执行"
         }
     }
-    val hasConfigSwitch = hasSwitch
-
     Surface(
         modifier = modifier.clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surface,
@@ -507,16 +505,14 @@ private fun SpeedTestStageSummaryCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp)
                 )
-                Text(
-                    text = if (hasConfigSwitch) {
-                        if (enabled) "已开启" else "已关闭"
-                    } else {
-                        "仅主页连接后执行"
-                    },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                if (!hasSwitch) {
+                    Text(
+                        text = "仅主页连接后执行",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
             Column(
                 horizontalAlignment = Alignment.End,
@@ -525,7 +521,7 @@ private fun SpeedTestStageSummaryCard(
                 IconButton(onClick = onClick) {
                     Icon(Icons.Outlined.Edit, contentDescription = "编辑${stage.title}")
                 }
-                if (hasConfigSwitch) {
+                if (hasSwitch) {
                     Switch(
                         checked = enabled,
                         onCheckedChange = onToggle,

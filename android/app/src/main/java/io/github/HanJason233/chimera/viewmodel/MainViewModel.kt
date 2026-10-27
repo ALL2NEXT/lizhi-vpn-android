@@ -1042,7 +1042,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ManualGroupTestStage.BANDWIDTH -> settings.bandwidthEnabled
             }
             if (!stageEnabled) {
-                _error.value = "手动测速设置中未启用该测试阶段"
+                _error.value = "手动测试设置中未启用该测试阶段"
                 return@launch
             }
             if (!GlobalTestExecution.tryStart("分组内手动测试：$stage")) {
@@ -1053,7 +1053,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val testJob = currentCoroutineContext()[Job]
             activeTestJob = testJob
             _isTesting.value = true
-            val progressTitle = "分组手动测速"
+            val progressTitle = "分组手动测试"
             val progressStage = when (stage) {
                 ManualGroupTestStage.TCPING -> "TCPing"
                 ManualGroupTestStage.URL_TEST -> "URL Test"
