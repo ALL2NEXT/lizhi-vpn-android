@@ -8,7 +8,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
-import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
 /** 仓库源详情页面的状态绑定入口。 */
@@ -35,14 +34,8 @@ internal fun SubscriptionGroupingDestination(
     val isRefreshingAllSubscriptions by
         viewModel.isRefreshingAllSubscriptions.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
-    val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
-    val groupManualSpeedTestSchemeId by
-        viewModel.groupManualSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val groupManualSpeedTestEnabled by
-        viewModel.groupManualSpeedTestEnabled.collectAsStateWithLifecycle()
-    val groupManualSpeedTestScheme = speedTestSchemes.firstOrNull {
-        it.id == groupManualSpeedTestSchemeId
-    } ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
+    val groupManualSpeedTestSettings by
+        viewModel.groupManualSpeedTestSettings.collectAsStateWithLifecycle()
     val nodeDisplaySettings = skinSettings.nodeDisplaySettings
     val protocolCoreSettings by
         viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
@@ -104,8 +97,7 @@ internal fun SubscriptionGroupingDestination(
         isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
-        groupManualSpeedTestScheme = groupManualSpeedTestScheme,
-        groupManualSpeedTestEnabled = groupManualSpeedTestEnabled,
+        groupManualSpeedTestSettings = groupManualSpeedTestSettings,
         onRunManualGroupTest = { stage ->
             viewModel.runManualGroupTest(nodes, stage)
         },

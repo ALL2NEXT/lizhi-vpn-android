@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -45,192 +46,98 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.painterResource
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
 import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
+import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCategory
-import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.ui.components.unlockTestIconResource
-import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
 @Composable
-fun SpeedTestSchemeEditorScreen(
-    viewModel: MainViewModel,
-    schemeId: String,
-    onBack: () -> Unit
+internal fun SpeedTestSettingsEditorContent(
+    settings: SpeedTestSettings,
+    isHomeTab: Boolean,
+    modifier: Modifier = Modifier,
+    onSave: (SpeedTestSettings) -> Unit
 ) {
-    val schemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
-    val scheme = schemes.firstOrNull { it.id == schemeId }
-    if (scheme == null) {
-        AppScreenScaffold(title = "编辑测速方案", onBack = onBack) {
-            Text("正在加载方案…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        return
+    var tcpingEnabled by remember(settings.tcpingEnabled) { mutableStateOf(settings.tcpingEnabled) }
+    var urlTestEnabled by remember(settings.urlTestEnabled) { mutableStateOf(settings.urlTestEnabled) }
+    var bandwidthEnabled by remember(settings.bandwidthEnabled) { mutableStateOf(settings.bandwidthEnabled) }
+    var linkTypeTestEnabled by remember(settings.linkTypeTestEnabled) {
+        mutableStateOf(settings.linkTypeTestEnabled)
     }
-
-    var name by remember(scheme.id, scheme.name) { mutableStateOf(scheme.name) }
-    var tcpingEnabled by remember(scheme.id, scheme.tcpingEnabled) { mutableStateOf(scheme.tcpingEnabled) }
-    var urlTestEnabled by remember(scheme.id, scheme.urlTestEnabled) { mutableStateOf(scheme.urlTestEnabled) }
-    var bandwidthEnabled by remember(scheme.id, scheme.bandwidthEnabled) { mutableStateOf(scheme.bandwidthEnabled) }
-    var linkTypeTestEnabled by remember(scheme.id, scheme.linkTypeTestEnabled) {
-        mutableStateOf(scheme.linkTypeTestEnabled)
+    var unlockTestsEnabled by remember(settings.unlockTestsEnabled) {
+        mutableStateOf(settings.unlockTestsEnabled)
     }
-    var unlockTestsEnabled by remember(scheme.id, scheme.unlockTestsEnabled) {
-        mutableStateOf(scheme.unlockTestsEnabled)
+    var unlockTestIds by remember(settings.unlockTestIds) {
+        mutableStateOf(settings.unlockTestIds)
     }
-    var unlockTestIds by remember(scheme.id, scheme.unlockTestIds) {
-        mutableStateOf(scheme.unlockTestIds)
+    var tcpingSelectionMode by remember(settings.tcpingSelectionMode) {
+        mutableStateOf(settings.tcpingSelectionMode)
     }
-    var tcpingSelectionMode by remember(scheme.id, scheme.tcpingSelectionMode) {
-        mutableStateOf(scheme.tcpingSelectionMode)
+    var tcpingSelectionValue by remember(settings.tcpingSelectionValue) {
+        mutableStateOf(settings.tcpingSelectionValue.toString())
     }
-    var tcpingSelectionValue by remember(scheme.id, scheme.tcpingSelectionValue) {
-        mutableStateOf(scheme.tcpingSelectionValue.toString())
+    var urlSelectionMode by remember(settings.urlTestSelectionMode) {
+        mutableStateOf(settings.urlTestSelectionMode)
     }
-    var urlSelectionMode by remember(scheme.id, scheme.urlTestSelectionMode) {
-        mutableStateOf(scheme.urlTestSelectionMode)
+    var urlSelectionValue by remember(settings.urlTestSelectionValue) {
+        mutableStateOf(settings.urlTestSelectionValue.toString())
     }
-    var urlSelectionValue by remember(scheme.id, scheme.urlTestSelectionValue) {
-        mutableStateOf(scheme.urlTestSelectionValue.toString())
+    var bandwidthSelectionMode by remember(settings.bandwidthSelectionMode) {
+        mutableStateOf(settings.bandwidthSelectionMode)
     }
-    var bandwidthSelectionMode by remember(scheme.id, scheme.bandwidthSelectionMode) {
-        mutableStateOf(scheme.bandwidthSelectionMode)
+    var bandwidthSelectionValue by remember(settings.bandwidthSelectionValue) {
+        mutableStateOf(settings.bandwidthSelectionValue.toString())
     }
-    var bandwidthSelectionValue by remember(scheme.id, scheme.bandwidthSelectionValue) {
-        mutableStateOf(scheme.bandwidthSelectionValue.toString())
+    var tcpingAutoDeleteTimeoutNodes by remember(settings.tcpingAutoDeleteTimeoutNodes) {
+        mutableStateOf(settings.tcpingAutoDeleteTimeoutNodes)
     }
-    var tcpingAutoDeleteTimeoutNodes by remember(scheme.id, scheme.tcpingAutoDeleteTimeoutNodes) {
-        mutableStateOf(scheme.tcpingAutoDeleteTimeoutNodes)
+    var urlTestAutoDeleteTimeoutNodes by remember(settings.urlTestAutoDeleteTimeoutNodes) {
+        mutableStateOf(settings.urlTestAutoDeleteTimeoutNodes)
     }
-    var urlTestAutoDeleteTimeoutNodes by remember(scheme.id, scheme.urlTestAutoDeleteTimeoutNodes) {
-        mutableStateOf(scheme.urlTestAutoDeleteTimeoutNodes)
+    var bandwidthAutoDeleteLowSpeedNodes by remember(settings.bandwidthAutoDeleteLowSpeedNodes) {
+        mutableStateOf(settings.bandwidthAutoDeleteLowSpeedNodes)
     }
-    var bandwidthAutoDeleteLowSpeedNodes by remember(scheme.id, scheme.bandwidthAutoDeleteLowSpeedNodes) {
-        mutableStateOf(scheme.bandwidthAutoDeleteLowSpeedNodes)
+    var bandwidthAutoDeleteThreshold by remember(settings.bandwidthAutoDeleteThresholdMbps) {
+        mutableStateOf(settings.bandwidthAutoDeleteThresholdMbps.toString())
     }
-    var bandwidthAutoDeleteThreshold by remember(scheme.id, scheme.bandwidthAutoDeleteThresholdMbps) {
-        mutableStateOf(scheme.bandwidthAutoDeleteThresholdMbps.toString())
+    var tcpingTimeout by remember(settings.tcpingTimeoutMs) { mutableStateOf(settings.tcpingTimeoutMs.toString()) }
+    var urlWarmupTimeout by remember(settings.urlTestWarmupTimeoutMs) {
+        mutableStateOf(settings.urlTestWarmupTimeoutMs.toString())
     }
-    var tcpingTimeout by remember(scheme.id, scheme.tcpingTimeoutMs) { mutableStateOf(scheme.tcpingTimeoutMs.toString()) }
-    var urlWarmupTimeout by remember(scheme.id, scheme.urlTestWarmupTimeoutMs) {
-        mutableStateOf(scheme.urlTestWarmupTimeoutMs.toString())
+    var urlMeasurementTimeout by remember(settings.urlTestMeasurementTimeoutMs) {
+        mutableStateOf(settings.urlTestMeasurementTimeoutMs.toString())
     }
-    var urlMeasurementTimeout by remember(scheme.id, scheme.urlTestMeasurementTimeoutMs) {
-        mutableStateOf(scheme.urlTestMeasurementTimeoutMs.toString())
+    var bandwidthDuration by remember(settings.bandwidthTestDurationMs) { mutableStateOf(settings.bandwidthTestDurationMs.toString()) }
+    var tcpingConcurrencyMode by remember(settings.tcpingConcurrencyMode) {
+        mutableStateOf(settings.tcpingConcurrencyMode)
     }
-    var bandwidthDuration by remember(scheme.id, scheme.bandwidthTestDurationMs) { mutableStateOf(scheme.bandwidthTestDurationMs.toString()) }
-    var tcpingConcurrencyMode by remember(scheme.id, scheme.tcpingConcurrencyMode) {
-        mutableStateOf(scheme.tcpingConcurrencyMode)
+    var tcpingConcurrency by remember(settings.tcpingConcurrency) { mutableStateOf(settings.tcpingConcurrency.toString()) }
+    var urlConcurrencyMode by remember(settings.urlTestConcurrencyMode) {
+        mutableStateOf(settings.urlTestConcurrencyMode)
     }
-    var tcpingConcurrency by remember(scheme.id, scheme.tcpingConcurrency) { mutableStateOf(scheme.tcpingConcurrency.toString()) }
-    var urlConcurrencyMode by remember(scheme.id, scheme.urlTestConcurrencyMode) {
-        mutableStateOf(scheme.urlTestConcurrencyMode)
+    var urlConcurrency by remember(settings.urlTestConcurrency) { mutableStateOf(settings.urlTestConcurrency.toString()) }
+    var bandwidthConcurrencyMode by remember(settings.bandwidthTestConcurrencyMode) {
+        mutableStateOf(settings.bandwidthTestConcurrencyMode)
     }
-    var urlConcurrency by remember(scheme.id, scheme.urlTestConcurrency) { mutableStateOf(scheme.urlTestConcurrency.toString()) }
-    var bandwidthConcurrencyMode by remember(scheme.id, scheme.bandwidthTestConcurrencyMode) {
-        mutableStateOf(scheme.bandwidthTestConcurrencyMode)
+    var bandwidthConcurrency by remember(settings.bandwidthTestConcurrency) { mutableStateOf(settings.bandwidthTestConcurrency.toString()) }
+    var urlTestUrl by remember(settings.urlTestUrl) { mutableStateOf(settings.urlTestUrl) }
+    var urlTestBackupUrl by remember(settings.urlTestBackupUrl) {
+        mutableStateOf(settings.urlTestBackupUrl)
     }
-    var bandwidthConcurrency by remember(scheme.id, scheme.bandwidthTestConcurrency) { mutableStateOf(scheme.bandwidthTestConcurrency.toString()) }
-    var urlTestUrl by remember(scheme.id, scheme.urlTestUrl) { mutableStateOf(scheme.urlTestUrl) }
-    var urlTestBackupUrl by remember(scheme.id, scheme.urlTestBackupUrl) {
-        mutableStateOf(scheme.urlTestBackupUrl)
-    }
-    var bandwidthUrl by remember(scheme.id, scheme.bandwidthTestUrl) { mutableStateOf(scheme.bandwidthTestUrl) }
+    var bandwidthUrl by remember(settings.bandwidthTestUrl) { mutableStateOf(settings.bandwidthTestUrl) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    AppScreenScaffold(
-        title = "编辑测速方案",
-        subtitle = scheme.name,
-        onBack = onBack,
-        actions = {
-            IconButton(
-                onClick = {
-                    val normalizedUrl = UrlTestTargets.normalize(urlTestUrl)
-                    val normalizedBackupUrl = UrlTestTargets.normalizeOptional(urlTestBackupUrl)
-                    val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
-                    if (name.trim().isBlank()) {
-                        error = "请输入方案名称"
-                    } else if ((urlTestEnabled && (normalizedUrl == null || normalizedBackupUrl == null)) ||
-                        (bandwidthEnabled && normalizedBandwidthUrl == null)
-                    ) {
-                        error = "请检查测速地址"
-                    } else {
-                        viewModel.upsertSpeedTestScheme(
-                            scheme.copy(
-                                name = name.trim(),
-                                tcpingEnabled = tcpingEnabled,
-                                urlTestEnabled = urlTestEnabled,
-                                bandwidthEnabled = bandwidthEnabled,
-                                linkTypeTestEnabled = linkTypeTestEnabled,
-                                unlockTestsEnabled = unlockTestsEnabled,
-                                unlockTestIds = unlockTestIds,
-                                tcpingSelectionMode = tcpingSelectionMode,
-                                tcpingSelectionValue = tcpingSelectionValue.toIntOrNull()
-                                    ?: scheme.tcpingSelectionValue,
-                                urlTestSelectionMode = urlSelectionMode,
-                                urlTestSelectionValue = urlSelectionValue.toIntOrNull()
-                                    ?: scheme.urlTestSelectionValue,
-                                bandwidthSelectionMode = bandwidthSelectionMode,
-                                bandwidthSelectionValue = bandwidthSelectionValue.toIntOrNull()
-                                    ?: scheme.bandwidthSelectionValue,
-                                tcpingAutoDeleteTimeoutNodes = tcpingAutoDeleteTimeoutNodes,
-                                urlTestAutoDeleteTimeoutNodes = urlTestAutoDeleteTimeoutNodes,
-                                bandwidthAutoDeleteLowSpeedNodes = bandwidthAutoDeleteLowSpeedNodes,
-                                bandwidthAutoDeleteThresholdMbps = bandwidthAutoDeleteThreshold.toIntOrNull()
-                                    ?.coerceIn(0, 100_000)
-                                    ?: scheme.bandwidthAutoDeleteThresholdMbps,
-                                tcpingTimeoutMs = tcpingTimeout.toLongOrNull() ?: scheme.tcpingTimeoutMs,
-                                urlTestWarmupTimeoutMs = urlWarmupTimeout.toLongOrNull()
-                                    ?: scheme.urlTestWarmupTimeoutMs,
-                                urlTestMeasurementTimeoutMs = urlMeasurementTimeout.toLongOrNull()
-                                    ?: scheme.urlTestMeasurementTimeoutMs,
-                                bandwidthTestDurationMs = bandwidthDuration.toLongOrNull()
-                                    ?: scheme.bandwidthTestDurationMs,
-                                tcpingConcurrencyMode = tcpingConcurrencyMode,
-                                tcpingConcurrency = tcpingConcurrency.toIntOrNull()
-                                    ?: scheme.tcpingConcurrency,
-                                urlTestConcurrencyMode = urlConcurrencyMode,
-                                urlTestConcurrency = urlConcurrency.toIntOrNull()
-                                    ?: scheme.urlTestConcurrency,
-                                bandwidthTestConcurrencyMode = bandwidthConcurrencyMode,
-                                bandwidthTestConcurrency = bandwidthConcurrency.toIntOrNull()
-                                    ?: scheme.bandwidthTestConcurrency,
-                                urlTestUrl = normalizedUrl ?: scheme.urlTestUrl,
-                                urlTestBackupUrl = normalizedBackupUrl ?: scheme.urlTestBackupUrl,
-                                bandwidthTestUrl = normalizedBandwidthUrl ?: scheme.bandwidthTestUrl
-                            )
-                        )
-                        error = null
-                    }
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Save,
-                    contentDescription = "保存方案"
-                )
-            }
-        }
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            SchemeCard(title = "方案信息") {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("方案名称") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+        TestPhaseLabel("连接前测试")
 
-            TestPhaseLabel("连接前测试")
-
-            SchemeCard(
+            SpeedTestStageCard(
                 title = "${SpeedTestStage.TCPING.number}. ${SpeedTestStage.TCPING.title}",
                 enabled = tcpingEnabled,
                 onEnabledChange = { tcpingEnabled = it }
@@ -263,7 +170,7 @@ fun SpeedTestSchemeEditorScreen(
                 )
             }
 
-            SchemeCard(
+            SpeedTestStageCard(
                 title = "${SpeedTestStage.URL_TEST.number}. ${SpeedTestStage.URL_TEST.title}",
                 enabled = urlTestEnabled,
                 onEnabledChange = { urlTestEnabled = it }
@@ -332,7 +239,7 @@ fun SpeedTestSchemeEditorScreen(
                 )
             }
 
-            SchemeCard(
+            SpeedTestStageCard(
                 title = "${SpeedTestStage.BANDWIDTH.number}. ${SpeedTestStage.BANDWIDTH.title}",
                 enabled = bandwidthEnabled,
                 onEnabledChange = { bandwidthEnabled = it }
@@ -391,40 +298,41 @@ fun SpeedTestSchemeEditorScreen(
 
             TestPhaseLabel("连接后测试")
 
-            SchemeCard(
-                title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}",
-                enabled = linkTypeTestEnabled,
-                onEnabledChange = { linkTypeTestEnabled = it }
-            ) {
-                Text(
-                    "直连显示落地点 IP；中转显示中转点与落地点 IP，并识别中转点的 CDN。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            if (isHomeTab) {
+                SpeedTestStageCard(
+                    title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}",
+                    enabled = linkTypeTestEnabled,
+                    onEnabledChange = { linkTypeTestEnabled = it }
+                ) {
+                    Text(
+                        "直连显示落地点 IP；中转显示中转点与落地点 IP，并识别中转点的 CDN。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-            SchemeCard(
-                title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}",
-                enabled = unlockTestsEnabled,
-                onEnabledChange = { unlockTestsEnabled = it }
-            ) {
-                Text(
-                    if (unlockTestIds.isEmpty()) "未选择检测项目" else "已选 ${unlockTestIds.size} 项",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "检测当前节点出口 IP 的流媒体与 AI 解锁能力。只启用连接后检测时复用当前连接；未连接时连接已选节点或当前组首个节点。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                UnlockTestCategory.entries.forEach { category ->
+                SpeedTestStageCard(
+                    title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}",
+                    enabled = unlockTestsEnabled,
+                    onEnabledChange = { unlockTestsEnabled = it }
+                ) {
+                    Text(
+                        if (unlockTestIds.isEmpty()) "未选择检测项目" else "已选 ${unlockTestIds.size} 项",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "检测当前节点出口 IP 的流媒体与 AI 解锁能力。检测会在主页测速连接节点后执行。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    UnlockTestCategory.entries.forEach { category ->
                     Text(
                         text = category.title,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(top = 4.dp)
                     )
-                    UnlockTestCatalog.schemeDefinitions
+                    UnlockTestCatalog.definitions
                         .filter { it.category == category }
                         .forEach { definition ->
                             val checked = definition.id in unlockTestIds
@@ -466,14 +374,91 @@ fun SpeedTestSchemeEditorScreen(
                                 Text(definition.name, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
+                    }
                 }
+            } else {
+                SpeedTestStageCard(title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}") {
+                    Text(
+                        "此检测在主页测速连接后执行，手动测速不运行此项。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                SpeedTestStageCard(title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}") {
+                    Text(
+                        "此检测在主页测速连接后执行，手动测速不运行此项。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Button(
+                onClick = {
+                    val normalizedUrl = UrlTestTargets.normalize(urlTestUrl)
+                    val normalizedBackupUrl = UrlTestTargets.normalizeOptional(urlTestBackupUrl)
+                    val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
+                    if ((urlTestEnabled && (normalizedUrl == null || normalizedBackupUrl == null)) ||
+                        (bandwidthEnabled && normalizedBandwidthUrl == null)
+                    ) {
+                        error = "请检查测速地址"
+                    } else {
+                        onSave(
+                            settings.copy(
+                                tcpingEnabled = tcpingEnabled,
+                                urlTestEnabled = urlTestEnabled,
+                                bandwidthEnabled = bandwidthEnabled,
+                                linkTypeTestEnabled = linkTypeTestEnabled,
+                                unlockTestsEnabled = unlockTestsEnabled,
+                                unlockTestIds = unlockTestIds,
+                                tcpingSelectionMode = tcpingSelectionMode,
+                                tcpingSelectionValue = tcpingSelectionValue.toIntOrNull()
+                                    ?: settings.tcpingSelectionValue,
+                                urlTestSelectionMode = urlSelectionMode,
+                                urlTestSelectionValue = urlSelectionValue.toIntOrNull()
+                                    ?: settings.urlTestSelectionValue,
+                                bandwidthSelectionMode = bandwidthSelectionMode,
+                                bandwidthSelectionValue = bandwidthSelectionValue.toIntOrNull()
+                                    ?: settings.bandwidthSelectionValue,
+                                tcpingAutoDeleteTimeoutNodes = tcpingAutoDeleteTimeoutNodes,
+                                urlTestAutoDeleteTimeoutNodes = urlTestAutoDeleteTimeoutNodes,
+                                bandwidthAutoDeleteLowSpeedNodes = bandwidthAutoDeleteLowSpeedNodes,
+                                bandwidthAutoDeleteThresholdMbps = bandwidthAutoDeleteThreshold.toIntOrNull()
+                                    ?.coerceIn(0, 100_000)
+                                    ?: settings.bandwidthAutoDeleteThresholdMbps,
+                                tcpingTimeoutMs = tcpingTimeout.toLongOrNull() ?: settings.tcpingTimeoutMs,
+                                urlTestWarmupTimeoutMs = urlWarmupTimeout.toLongOrNull()
+                                    ?: settings.urlTestWarmupTimeoutMs,
+                                urlTestMeasurementTimeoutMs = urlMeasurementTimeout.toLongOrNull()
+                                    ?: settings.urlTestMeasurementTimeoutMs,
+                                bandwidthTestDurationMs = bandwidthDuration.toLongOrNull()
+                                    ?: settings.bandwidthTestDurationMs,
+                                tcpingConcurrencyMode = tcpingConcurrencyMode,
+                                tcpingConcurrency = tcpingConcurrency.toIntOrNull()
+                                    ?: settings.tcpingConcurrency,
+                                urlTestConcurrencyMode = urlConcurrencyMode,
+                                urlTestConcurrency = urlConcurrency.toIntOrNull()
+                                    ?: settings.urlTestConcurrency,
+                                bandwidthTestConcurrencyMode = bandwidthConcurrencyMode,
+                                bandwidthTestConcurrency = bandwidthConcurrency.toIntOrNull()
+                                    ?: settings.bandwidthTestConcurrency,
+                                urlTestUrl = normalizedUrl ?: settings.urlTestUrl,
+                                urlTestBackupUrl = normalizedBackupUrl ?: settings.urlTestBackupUrl,
+                                bandwidthTestUrl = normalizedBandwidthUrl ?: settings.bandwidthTestUrl
+                            )
+                        )
+                        error = null
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (isHomeTab) "保存主页测速设置" else "保存手动测速设置")
             }
 
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
         }
-    }
 }
 
 @Composable
@@ -508,7 +493,7 @@ private fun AutoDeleteSwitchRow(
 }
 
 @Composable
-private fun SchemeCard(
+private fun SpeedTestStageCard(
     title: String,
     enabled: Boolean? = null,
     onEnabledChange: ((Boolean) -> Unit)? = null,

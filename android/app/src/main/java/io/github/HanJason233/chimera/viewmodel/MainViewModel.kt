@@ -538,34 +538,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     val failoverRuntimeStatus = ServiceManager.failoverStatus
 
-    val speedTestSchemes = settingsRepository.speedTestSchemes.stateIn(
+    val homeSpeedTestSettings = settingsRepository.homeSpeedTestSettings.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        listOf(SpeedTestScheme.default())
+        SpeedTestSettings.default()
     )
 
-    val homeLongPressSpeedTestSchemeId = settingsRepository.homeLongPressSpeedTestSchemeId.stateIn(
+    val groupManualSpeedTestSettings = settingsRepository.groupManualSpeedTestSettings.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        SpeedTestScheme.DEFAULT_ID
-    )
-
-    val groupManualSpeedTestSchemeId = settingsRepository.groupManualSpeedTestSchemeId.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        SpeedTestScheme.DEFAULT_ID
-    )
-
-    val groupManualSpeedTestEnabled = settingsRepository.groupManualSpeedTestEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        true
-    )
-
-    val homeLongPressSpeedTestEnabled = settingsRepository.homeLongPressSpeedTestEnabled.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        true
+        SpeedTestSettings.default()
     )
 
     val ipv6RoutingMode = settingsRepository.ipv6RoutingMode.stateIn(
@@ -677,6 +659,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     
     init {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.migrateLegacySpeedTestSettings()
+        }
         viewModelScope.launch {
             homeTestNodeSelection.collect { stored ->
                 val results = stored?.second
@@ -801,29 +786,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    /** 按用户选择的测速方案筛选节点并连接测速结果最好的节点。 */
-    fun startSpeedTestScheme(schemeId: String) {
+    /** 按主页图标测速设置筛选节点并连接测速结果最好的节点。 */
+    fun startHomeSpeedTest() {
         viewModelScope.launch {
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
             }
-            val scheme = speedTestSchemes.value.firstOrNull { it.id == schemeId }
-                ?: speedTestSchemes.value.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-                ?: run {
-                    _error.value = "测速方案不存在"
-                    return@launch
-                }
+            val settings = homeSpeedTestSettings.value
             val shouldRunUnlockTests =
-                scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()
-            val hasSelectionTests = scheme.enabledQualityStages.isNotEmpty()
-            if (!hasSelectionTests && !scheme.linkTypeTestEnabled && !shouldRunUnlockTests
+                settings.unlockTestsEnabled && settings.unlockTestIds.isNotEmpty()
+            val hasSelectionTests = settings.enabledQualityStages.isNotEmpty()
+            if (!hasSelectionTests && !settings.linkTypeTestEnabled && !shouldRunUnlockTests
             ) {
                 // 所有检测均关闭时按普通连接处理。
                 startSelectedOrFirstConnection()
                 return@launch
             }
-            if (!GlobalTestExecution.tryStart("测速方案：${scheme.name}")) {
+            if (!GlobalTestExecution.tryStart("主页图标测速")) {
                 _error.value = GlobalTestExecution.busyHint()
                 return@launch
             }
@@ -831,7 +811,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val testJob = currentCoroutineContext()[Job]
             activeTestJob = testJob
             _isTesting.value = true
-            val progressTitle = "测速方案：${scheme.name}"
+            val progressTitle = "主页图标测速"
             updateSpeedTestProgress(progressTitle, "准备测试")
             try {
                 // 只启用连接后检测时复用当前连接；不遍历分组，也不切换到组内首个节点。
@@ -851,7 +831,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         settingsRepository.setSelectedNodeId(node.id)
                         ServiceManager.startVpn(getApplication(), node, proxyMode.value)
                     }
-                    runPostConnectionTests(scheme, node, progressTitle)
+                    runPostConnectionTests(settings, node, progressTitle)
                     return@launch
                 }
                 val allNodes = currentNodeListSnapshot()
@@ -864,12 +844,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val stageResults = mutableMapOf<SpeedTestStage, List<Node>>()
 
                 fun stageCandidates(stage: SpeedTestStage) = SpeedTestCandidateSelector.candidatesForStage(
-                    scheme = scheme, stage = stage, currentGroupCandidates = allNodes,
+                    settings = settings, stage = stage, currentGroupCandidates = allNodes,
                     previousResults = stageResults
                 )
 
                 // 阶段顺序固定为 1 -> 2 -> 3；关闭任一阶段时跳过，但不改变后续顺序。
-                if (scheme.tcpingEnabled) {
+                if (settings.tcpingEnabled) {
                     val tcpingNodes = stageCandidates(SpeedTestStage.TCPING)
                     updateSpeedTestProgress(
                         title = progressTitle,
@@ -879,12 +859,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val tcpingResults = internalTestNodes(
                         currentNodes = tcpingNodes,
                         concurrency = SpeedTestCandidateSelector.concurrencyForStage(
-                            scheme,
+                            settings,
                             SpeedTestStage.TCPING,
                             tcpingNodes.size
                         ),
-                        timeoutMs = scheme.tcpingTimeoutMs,
-                        autoDeleteTimeoutNodes = scheme.tcpingAutoDeleteTimeoutNodes,
+                        timeoutMs = settings.tcpingTimeoutMs,
+                        autoDeleteTimeoutNodes = settings.tcpingAutoDeleteTimeoutNodes,
                         onProgress = { completed, total ->
                             updateSpeedTestProgress(
                                 title = progressTitle,
@@ -899,16 +879,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .sortedBy { it.latency }
                         .mapNotNull { nodesById[it.nodeId] }
                     val retainedResults = SpeedTestCandidateSelector.retainResultsForStage(
-                        scheme, SpeedTestStage.TCPING, candidates
+                        settings, SpeedTestStage.TCPING, candidates
                     )
                     stageResults[SpeedTestStage.TCPING] = retainedResults
                     if (retainedResults.isEmpty()) {
-                        _error.value = "${scheme.name}：TCPing 未找到可用节点"
+                        _error.value = "主页测速：TCPing 未找到可用节点"
                         return@launch
                     }
                 }
 
-                if (scheme.urlTestEnabled) {
+                if (settings.urlTestEnabled) {
                     val urlTestNodes = stageCandidates(SpeedTestStage.URL_TEST)
                     updateSpeedTestProgress(
                         title = progressTitle,
@@ -918,14 +898,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val urlTestResults = runUrlTestNodes(
                         nodes = urlTestNodes,
                         concurrency = SpeedTestCandidateSelector.concurrencyForStage(
-                            scheme,
+                            settings,
                             SpeedTestStage.URL_TEST,
                             urlTestNodes.size
                         ),
-                        warmupTimeoutMs = scheme.urlTestWarmupTimeoutMs,
-                        measurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs,
-                        targetUrl = scheme.urlTestUrl,
-                        fallbackUrl = scheme.urlTestBackupUrl,
+                        warmupTimeoutMs = settings.urlTestWarmupTimeoutMs,
+                        measurementTimeoutMs = settings.urlTestMeasurementTimeoutMs,
+                        targetUrl = settings.urlTestUrl,
+                        fallbackUrl = settings.urlTestBackupUrl,
                         onProgress = { completed, total ->
                             updateSpeedTestProgress(
                                 title = progressTitle,
@@ -937,23 +917,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     applyUrlTestResults(
                         urlTestResults,
-                        autoDeleteTimeoutNodes = scheme.urlTestAutoDeleteTimeoutNodes
+                        autoDeleteTimeoutNodes = settings.urlTestAutoDeleteTimeoutNodes
                     )
                     val candidates = urlTestResults
                         .filter { it.isAvailable && it.latency > 0 }
                         .sortedBy { it.latency }
                         .mapNotNull { nodesById[it.nodeId] }
                     val retainedResults = SpeedTestCandidateSelector.retainResultsForStage(
-                        scheme, SpeedTestStage.URL_TEST, candidates
+                        settings, SpeedTestStage.URL_TEST, candidates
                     )
                     stageResults[SpeedTestStage.URL_TEST] = retainedResults
                     if (retainedResults.isEmpty()) {
-                        _error.value = "${scheme.name}：URL Test 未找到可用节点"
+                        _error.value = "主页测速：URL Test 未找到可用节点"
                         return@launch
                     }
                 }
 
-                val bestNode = if (scheme.bandwidthEnabled) {
+                val bestNode = if (settings.bandwidthEnabled) {
                     val speedTestNodes = stageCandidates(SpeedTestStage.BANDWIDTH)
                     updateSpeedTestProgress(
                         title = progressTitle,
@@ -964,7 +944,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val speedResults = speedTestNodes
                         .chunked(
                             SpeedTestCandidateSelector.concurrencyForStage(
-                                scheme,
+                                settings,
                                 SpeedTestStage.BANDWIDTH,
                                 speedTestNodes.size
                             )
@@ -975,8 +955,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                     async {
                                         val speedMbps = testNodeDownloadBandwidthMbps(
                                             node = node,
-                                            durationMs = scheme.bandwidthTestDurationMs,
-                                            downloadUrl = scheme.bandwidthTestUrl
+                                            durationMs = settings.bandwidthTestDurationMs,
+                                            downloadUrl = settings.bandwidthTestUrl
                                         )
                                         nodeDao().updateDownloadMbps(node.id, speedMbps)
                                         node to speedMbps
@@ -994,8 +974,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     _nodeTestResultSortMode.value =
                         NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
-                    val deleteLowBandwidth = scheme.bandwidthAutoDeleteLowSpeedNodes
-                    val bandwidthThreshold = scheme.bandwidthAutoDeleteThresholdMbps
+                    val deleteLowBandwidth = settings.bandwidthAutoDeleteLowSpeedNodes
+                    val bandwidthThreshold = settings.bandwidthAutoDeleteThresholdMbps
                     if (deleteLowBandwidth) {
                         deleteNodes(
                             nodeIds = speedResults
@@ -1013,16 +993,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 .thenBy { it.first.latency }
                         )
                     SpeedTestCandidateSelector.retainResultsForStage(
-                        scheme,
+                        settings,
                         SpeedTestStage.BANDWIDTH,
                         orderedSpeedResults
                     ).firstOrNull()?.first
                 } else {
-                    stageResults[scheme.enabledQualityStages.last()]?.firstOrNull()
+                    stageResults[settings.enabledQualityStages.last()]?.firstOrNull()
                 }
                 if (bestNode == null) {
-                    _error.value = if (scheme.bandwidthEnabled && scheme.bandwidthAutoDeleteLowSpeedNodes) {
-                        "没有节点达到带宽阈值（${scheme.bandwidthAutoDeleteThresholdMbps} Mbps）"
+                    _error.value = if (settings.bandwidthEnabled && settings.bandwidthAutoDeleteLowSpeedNodes) {
+                        "没有节点达到带宽阈值（${settings.bandwidthAutoDeleteThresholdMbps} Mbps）"
                     } else {
                         "测速未找到可连接节点"
                     }
@@ -1030,13 +1010,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 settingsRepository.setSelectedNodeId(bestNode.id)
-                Log.i(tag, "Speed test scheme selected node: ${bestNode.getDisplayName()}")
+                Log.i(tag, "Speed test settings selected node: ${bestNode.getDisplayName()}")
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
-                runPostConnectionTests(scheme, bestNode, progressTitle)
+                runPostConnectionTests(settings, bestNode, progressTitle)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                Log.e(tag, "Speed test scheme failed", e)
+                Log.e(tag, "Speed test settings failed", e)
                 _error.value = "测速失败：${e.message ?: "未知错误"}"
             } finally {
                 if (activeTestJob === testJob) activeTestJob = null
@@ -1047,32 +1027,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 按配置方案的单阶段参数手动测试当前线路详情页中的节点。 */
+    /** 按手动测速设置执行当前线路详情页中的单阶段测试。 */
     fun runManualGroupTest(groupNodes: List<Node>, stage: ManualGroupTestStage) {
         viewModelScope.launch {
-            if (!groupManualSpeedTestEnabled.value) {
-                _error.value = "分组内手动测试已关闭"
-                return@launch
-            }
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
             }
-            val scheme = speedTestSchemes.value.firstOrNull {
-                it.id == groupManualSpeedTestSchemeId.value
-            } ?: speedTestSchemes.value.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-            if (scheme == null) {
-                _error.value = "测速方案不存在"
-                return@launch
-            }
+            val settings = groupManualSpeedTestSettings.value
 
             val stageEnabled = when (stage) {
-                ManualGroupTestStage.TCPING -> scheme.tcpingEnabled
-                ManualGroupTestStage.URL_TEST -> scheme.urlTestEnabled
-                ManualGroupTestStage.BANDWIDTH -> scheme.bandwidthEnabled
+                ManualGroupTestStage.TCPING -> settings.tcpingEnabled
+                ManualGroupTestStage.URL_TEST -> settings.urlTestEnabled
+                ManualGroupTestStage.BANDWIDTH -> settings.bandwidthEnabled
             }
             if (!stageEnabled) {
-                _error.value = "所选方案未启用该测试阶段"
+                _error.value = "手动测速设置中未启用该测试阶段"
                 return@launch
             }
             if (!GlobalTestExecution.tryStart("分组内手动测试：$stage")) {
@@ -1114,12 +1084,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         internalTestNodes(
                             currentNodes = candidates,
                             concurrency = SpeedTestCandidateSelector.concurrencyForStage(
-                                scheme,
+                                settings,
                                 SpeedTestStage.TCPING,
                                 candidates.size
                             ),
-                            timeoutMs = scheme.tcpingTimeoutMs,
-                            autoDeleteTimeoutNodes = scheme.tcpingAutoDeleteTimeoutNodes,
+                            timeoutMs = settings.tcpingTimeoutMs,
+                            autoDeleteTimeoutNodes = settings.tcpingAutoDeleteTimeoutNodes,
                             onProgress = { completed, total ->
                                 updateSpeedTestProgress(
                                     title = progressTitle,
@@ -1143,14 +1113,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val results = runUrlTestNodes(
                             nodes = candidates,
                             concurrency = SpeedTestCandidateSelector.concurrencyForStage(
-                                scheme,
+                                settings,
                                 SpeedTestStage.URL_TEST,
                                 candidates.size
                             ),
-                            warmupTimeoutMs = scheme.urlTestWarmupTimeoutMs,
-                            measurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs,
-                            targetUrl = scheme.urlTestUrl,
-                            fallbackUrl = scheme.urlTestBackupUrl,
+                            warmupTimeoutMs = settings.urlTestWarmupTimeoutMs,
+                            measurementTimeoutMs = settings.urlTestMeasurementTimeoutMs,
+                            targetUrl = settings.urlTestUrl,
+                            fallbackUrl = settings.urlTestBackupUrl,
                             onProgress = { completed, total ->
                                 updateSpeedTestProgress(
                                     title = progressTitle,
@@ -1167,7 +1137,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         applyUrlTestResults(
                             results,
-                            autoDeleteTimeoutNodes = scheme.urlTestAutoDeleteTimeoutNodes
+                            autoDeleteTimeoutNodes = settings.urlTestAutoDeleteTimeoutNodes
                         )
                     }
 
@@ -1183,7 +1153,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val speedResults = candidates
                             .chunked(
                                 SpeedTestCandidateSelector.concurrencyForStage(
-                                    scheme,
+                                    settings,
                                     SpeedTestStage.BANDWIDTH,
                                     candidates.size
                                 )
@@ -1194,8 +1164,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                         async {
                                             val speedMbps = testNodeDownloadBandwidthMbps(
                                                 node = node,
-                                                durationMs = scheme.bandwidthTestDurationMs,
-                                                downloadUrl = scheme.bandwidthTestUrl
+                                                durationMs = settings.bandwidthTestDurationMs,
+                                                downloadUrl = settings.bandwidthTestUrl
                                             )
                                             nodeDao().updateDownloadMbps(node.id, speedMbps)
                                             node to speedMbps
@@ -1212,8 +1182,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 )
                                 results
                             }
-                        if (scheme.bandwidthAutoDeleteLowSpeedNodes) {
-                            val threshold = scheme.bandwidthAutoDeleteThresholdMbps
+                        if (settings.bandwidthAutoDeleteLowSpeedNodes) {
+                            val threshold = settings.bandwidthAutoDeleteThresholdMbps
                             deleteNodes(
                                 nodeIds = speedResults
                                     .filter { (_, speedMbps) -> speedMbps < threshold.toFloat() }
@@ -1240,13 +1210,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** 第四、第五项按顺序执行，始终绑定方案最终连接的节点。 */
-    private suspend fun runPostConnectionTests(scheme: SpeedTestScheme, node: Node, title: String) {
-        if (scheme.linkTypeTestEnabled) {
+    private suspend fun runPostConnectionTests(settings: SpeedTestSettings, node: Node, title: String) {
+        if (settings.linkTypeTestEnabled) {
             updateSpeedTestProgress(title, "4. 链路类型检测")
             runLinkTypeTest(node)
         }
-        if (scheme.unlockTestsEnabled && scheme.unlockTestIds.isNotEmpty()) {
-            runUnlockTests(scheme.unlockTestIds, node)
+        if (settings.unlockTestsEnabled && settings.unlockTestIds.isNotEmpty()) {
+            runUnlockTests(settings.unlockTestIds, node)
         }
     }
 
@@ -1315,7 +1285,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 等待方案选出的节点连通，再运行用户勾选的流媒体与 AI 检测。 */
     private suspend fun runUnlockTests(selectedIds: Set<String>, expectedNode: Node) {
-        val definitions = UnlockTestCatalog.schemeDefinitions.filter { it.id in selectedIds }
+        val definitions = UnlockTestCatalog.definitions.filter { it.id in selectedIds }
         if (definitions.isEmpty()) return
 
         _unlockTestState.value = UnlockTestUiState(
@@ -2640,22 +2610,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsRepository.setFailoverTransferStrategy(strategy) }
     }
 
-    fun setHomeLongPressSpeedTestScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.setHomeLongPressSpeedTestSchemeId(schemeId)
-        }
+    fun setHomeSpeedTestSettings(settings: SpeedTestSettings) {
+        viewModelScope.launch { settingsRepository.setHomeSpeedTestSettings(settings) }
     }
 
-    fun setGroupManualSpeedTestScheme(schemeId: String) {
-        viewModelScope.launch {
-            settingsRepository.setGroupManualSpeedTestSchemeId(schemeId)
-        }
-    }
-
-    fun setGroupManualSpeedTestEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setGroupManualSpeedTestEnabled(enabled)
-        }
+    fun setGroupManualSpeedTestSettings(settings: SpeedTestSettings) {
+        viewModelScope.launch { settingsRepository.setGroupManualSpeedTestSettings(settings) }
     }
 
     fun setLanInboundProxyMode(mode: ProxyMode) {
@@ -2667,7 +2627,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 中断测速方案、分组手动测速和 Hy2 带宽自适应测试。 */
+    /** 中断主页测速、分组手动测速和 Hy2 带宽自适应测试。 */
     fun forceCancelAllTests() {
         activeTestJob?.takeIf { it.isActive }?.cancel(
             CancellationException("Tests forcibly interrupted by user")
@@ -2684,20 +2644,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setHomeLongPressSpeedTestEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setHomeLongPressSpeedTestEnabled(enabled)
-        }
-    }
-
-    fun upsertSpeedTestScheme(scheme: SpeedTestScheme) {
-        viewModelScope.launch { settingsRepository.upsertSpeedTestScheme(scheme) }
-    }
-
-    fun deleteSpeedTestScheme(schemeId: String) {
-        viewModelScope.launch { settingsRepository.deleteSpeedTestScheme(schemeId) }
-    }
-    
     /**
      * 切换VPN连接
      */

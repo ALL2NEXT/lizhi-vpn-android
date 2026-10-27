@@ -58,7 +58,7 @@ import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
-import io.github.HanJason233.chimera.data.model.SpeedTestScheme
+import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
 
@@ -76,8 +76,7 @@ internal fun SubscriptionGroupingScreen(
     isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
-    groupManualSpeedTestScheme: SpeedTestScheme?,
-    groupManualSpeedTestEnabled: Boolean,
+    groupManualSpeedTestSettings: SpeedTestSettings,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
@@ -133,9 +132,8 @@ internal fun SubscriptionGroupingScreen(
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
         actions = {
-            val testScheme = groupManualSpeedTestScheme
-            if (groupManualSpeedTestEnabled && testScheme != null &&
-                (testScheme.tcpingEnabled || testScheme.urlTestEnabled || testScheme.bandwidthEnabled)
+            val testSettings = groupManualSpeedTestSettings
+            if (testSettings.tcpingEnabled || testSettings.urlTestEnabled || testSettings.bandwidthEnabled
             ) {
                 Box {
                     IconButton(
@@ -151,7 +149,7 @@ internal fun SubscriptionGroupingScreen(
                         expanded = manualTestMenuExpanded,
                         onDismissRequest = { manualTestMenuExpanded = false }
                     ) {
-                        if (testScheme.tcpingEnabled) {
+                        if (testSettings.tcpingEnabled) {
                             DropdownMenuItem(
                                 text = {
                                     Text(
@@ -165,7 +163,7 @@ internal fun SubscriptionGroupingScreen(
                                 enabled = !isTesting
                             )
                         }
-                        if (testScheme.urlTestEnabled) {
+                        if (testSettings.urlTestEnabled) {
                             DropdownMenuItem(
                                 text = {
                                     Text(
@@ -179,7 +177,7 @@ internal fun SubscriptionGroupingScreen(
                                 enabled = !isTesting
                             )
                         }
-                        if (testScheme.bandwidthEnabled) {
+                        if (testSettings.bandwidthEnabled) {
                             DropdownMenuItem(
                                 text = {
                                     Text(

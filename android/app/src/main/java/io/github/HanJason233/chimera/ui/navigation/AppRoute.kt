@@ -11,8 +11,7 @@ object AppRoute {
     const val INBOUND_OUTBOUND = "inbound_outbound"
     const val CORE_ROUTING = "core_routing/{mode}"
     const val ROUTING_ASSETS = "routing_assets"
-    const val SPEED_TEST_SCHEMES = "speed_test_schemes"
-    const val SPEED_TEST_SCHEME_EDITOR = "speed_test_scheme_editor/{schemeId}"
+    const val SPEED_TEST_SETTINGS = "speed_test_settings"
     const val ACCOUNT_SETTINGS_DETAIL = "account_settings_detail/{page}"
     const val SKIN = "skin"
     const val QR_SCANNER = "qr_scanner"
@@ -20,8 +19,6 @@ object AppRoute {
     fun perAppInbound(mode: String): String = "per_app_inbound/$mode"
 
     fun coreRouting(mode: String): String = "core_routing/$mode"
-
-    fun speedTestSchemeEditor(schemeId: String): String = "speed_test_scheme_editor/$schemeId"
 
     fun accountSettingsDetail(page: String): String = "account_settings_detail/$page"
 }

@@ -32,7 +32,8 @@ import io.github.HanJason233.chimera.data.model.RegionLookupMethod
 import io.github.HanJason233.chimera.data.model.LegacySkinScheme
 import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.SkinThemeMode
-import io.github.HanJason233.chimera.data.model.SpeedTestScheme
+import io.github.HanJason233.chimera.data.model.LegacySpeedTestSettings
+import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
@@ -116,13 +117,13 @@ class SettingsRepository(
         private val FAILOVER_CONSECUTIVE_FAILURES = intPreferencesKey("failover_consecutive_failures")
         private val FAILOVER_TRANSFER_STRATEGY = stringPreferencesKey("failover_transfer_target")
         private val FAILOVER_TRANSFER_NODE_IDS = stringPreferencesKey("failover_transfer_node_ids")
-        private val HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID =
+        private val LEGACY_HOME_SPEED_TEST_SETTINGS_ID =
             stringPreferencesKey("home_long_press_speed_test_scheme_id")
-        private val GROUP_MANUAL_SPEED_TEST_SCHEME_ID =
+        private val LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID =
             stringPreferencesKey("group_manual_speed_test_scheme_id")
-        private val GROUP_MANUAL_SPEED_TEST_ENABLED =
+        private val LEGACY_GROUP_MANUAL_SPEED_TEST_ENABLED =
             booleanPreferencesKey("group_manual_speed_test_enabled")
-        private val HOME_LONG_PRESS_SPEED_TEST_ENABLED =
+        private val LEGACY_HOME_LONG_PRESS_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_long_press_speed_test_enabled")
         
         // 订阅列表缓存
@@ -173,7 +174,7 @@ class SettingsRepository(
         private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
         private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
         private val NODE_LABEL_SHOW_CORE = booleanPreferencesKey("node_label_show_core")
-        // 迁移旧版全局自动删除设置；新设置保存在测速方案各阶段中。
+        // 迁移旧版全局自动删除设置；新设置保存在各测试项中。
         private val AUTO_DELETE_TCPING_TIMEOUT_NODES =
             booleanPreferencesKey("auto_delete_tcping_timeout_nodes")
         private val AUTO_DELETE_URL_TEST_TIMEOUT_NODES =
@@ -185,7 +186,10 @@ class SettingsRepository(
         private val SKIN_SETTINGS_JSON = stringPreferencesKey("skin_settings_json")
         private val LEGACY_SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
         private val LEGACY_ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
-        private val SPEED_TEST_SCHEMES_JSON = stringPreferencesKey("speed_test_schemes_json")
+        private val LEGACY_SPEED_TEST_SETTINGS_JSON = stringPreferencesKey("speed_test_schemes_json")
+        private val HOME_SPEED_TEST_SETTINGS_JSON = stringPreferencesKey("home_speed_test_settings_json")
+        private val GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON =
+            stringPreferencesKey("group_manual_speed_test_settings_json")
 
     }
     
@@ -215,9 +219,20 @@ class SettingsRepository(
         decodePerAppInboundSettings(preferences, mode)
     }
 
-    /** 用户保存的测速方案；首次使用时提供一套当前组内置方案。 */
-    val speedTestSchemes: Flow<List<SpeedTestScheme>> = store.data.map { preferences ->
-        decodeSpeedTestSchemes(preferences)
+    val homeSpeedTestSettings: Flow<SpeedTestSettings> = store.data.map { preferences ->
+        decodeSpeedTestSettings(
+            preferences = preferences,
+            settingsKey = HOME_SPEED_TEST_SETTINGS_JSON,
+            legacySelectionKey = LEGACY_HOME_SPEED_TEST_SETTINGS_ID
+        )
+    }
+
+    val groupManualSpeedTestSettings: Flow<SpeedTestSettings> = store.data.map { preferences ->
+        decodeSpeedTestSettings(
+            preferences = preferences,
+            settingsKey = GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON,
+            legacySelectionKey = LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID
+        )
     }
 
     /** 局域网入站设置默认关闭，避免意外暴露代理端口。 */
@@ -230,61 +245,21 @@ class SettingsRepository(
         decodeFailoverSettings(preferences)
     }
 
-    /** 主页图标长按使用的测速方案。 */
-    val homeLongPressSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
-        val schemes = decodeSpeedTestSchemes(preferences)
-        resolveHomeSchemeId(
-            preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEFAULT_ID,
-            schemes
-        )
+    suspend fun migrateLegacySpeedTestSettings() {
+        store.edit { preferences -> migrateLegacySpeedTestSettings(preferences) }
     }
 
-    /** 分组线路详情中手动测试使用的测速方案。 */
-    val groupManualSpeedTestSchemeId: Flow<String> = store.data.map { preferences ->
-        val schemes = decodeSpeedTestSchemes(preferences)
-        resolveHomeSchemeId(
-            preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID],
-            SpeedTestScheme.DEFAULT_ID,
-            schemes
-        )
-    }
-
-    /** 分组线路详情中的手动测速是否启用；默认启用以保留现有入口。 */
-    val groupManualSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
-        preferences[GROUP_MANUAL_SPEED_TEST_ENABLED] ?: true
-    }
-
-    /** 主页图标长按是否启用测速方案；默认开启以保持原有行为。 */
-    val homeLongPressSpeedTestEnabled: Flow<Boolean> = store.data.map { preferences ->
-        preferences[HOME_LONG_PRESS_SPEED_TEST_ENABLED] ?: true
-    }
-
-    suspend fun setHomeLongPressSpeedTestSchemeId(schemeId: String) {
+    suspend fun setHomeSpeedTestSettings(settings: SpeedTestSettings) {
         store.edit { preferences ->
-            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
-                preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = schemeId
-            }
+            migrateLegacySpeedTestSettings(preferences)
+            preferences[HOME_SPEED_TEST_SETTINGS_JSON] = encodeSpeedTestSettings(settings)
         }
     }
 
-    suspend fun setGroupManualSpeedTestSchemeId(schemeId: String) {
+    suspend fun setGroupManualSpeedTestSettings(settings: SpeedTestSettings) {
         store.edit { preferences ->
-            if (decodeSpeedTestSchemes(preferences).any { it.id == schemeId }) {
-                preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] = schemeId
-            }
-        }
-    }
-
-    suspend fun setGroupManualSpeedTestEnabled(enabled: Boolean) {
-        store.edit { preferences ->
-            preferences[GROUP_MANUAL_SPEED_TEST_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setHomeLongPressSpeedTestEnabled(enabled: Boolean) {
-        store.edit { preferences ->
-            preferences[HOME_LONG_PRESS_SPEED_TEST_ENABLED] = enabled
+            migrateLegacySpeedTestSettings(preferences)
+            preferences[GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON] = encodeSpeedTestSettings(settings)
         }
     }
 
@@ -915,32 +890,6 @@ class SettingsRepository(
         }
     }
 
-    suspend fun upsertSpeedTestScheme(scheme: SpeedTestScheme) {
-        store.edit { preferences ->
-            val normalized = normalizeSpeedTestScheme(scheme)
-            val schemes = decodeSpeedTestSchemes(preferences)
-                .filterNot { it.id == scheme.id } + normalized
-            preferences[SPEED_TEST_SCHEMES_JSON] = encodeSpeedTestSchemes(schemes)
-        }
-    }
-
-    suspend fun deleteSpeedTestScheme(schemeId: String) {
-        store.edit { preferences ->
-            val schemes = decodeSpeedTestSchemes(preferences)
-            val target = schemes.firstOrNull { it.id == schemeId } ?: return@edit
-            if (target.builtIn) return@edit
-            preferences[SPEED_TEST_SCHEMES_JSON] = encodeSpeedTestSchemes(
-                schemes.filterNot { it.id == schemeId }
-            )
-            if (preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[HOME_LONG_PRESS_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
-            }
-            if (preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] == schemeId) {
-                preferences[GROUP_MANUAL_SPEED_TEST_SCHEME_ID] = SpeedTestScheme.DEFAULT_ID
-            }
-        }
-    }
-
     suspend fun updateSkinSettings(update: (SkinSettings) -> SkinSettings) {
         store.edit { preferences ->
             val settings = update(decodeSkinSettings(preferences))
@@ -1359,18 +1308,147 @@ class SettingsRepository(
         return 0xFF000000L or (argb and 0x00FFFFFFL)
     }
 
-    private fun resolveHomeSchemeId(
-        storedId: String?,
-        fallbackId: String,
-        schemes: List<SpeedTestScheme>
-    ): String {
-        return listOf(storedId, fallbackId)
-            .firstOrNull { id -> id != null && schemes.any { it.id == id } }
-            ?: fallbackId
+    private fun decodeSpeedTestSettings(
+        preferences: Preferences,
+        settingsKey: Preferences.Key<String>,
+        legacySelectionKey: Preferences.Key<String>
+    ): SpeedTestSettings {
+        val stored = preferences[settingsKey]?.takeIf(String::isNotBlank)
+        if (stored == null) return decodeLegacySpeedTestSettings(preferences, legacySelectionKey)
+
+        return runCatching {
+            val item = JSONObject(stored).apply {
+                put("id", LegacySpeedTestSettings.DEFAULT_ID)
+                put("name", "迁移后的测速设置")
+                put("builtIn", true)
+                put("defaultsVersion", DEFAULT_SPEED_TEST_PRESET_REVISION)
+            }
+            val legacyPreferences = preferences.toMutablePreferences().apply {
+                this[LEGACY_SPEED_TEST_SETTINGS_JSON] = JSONArray().put(item).toString()
+                this[LEGACY_HOME_SPEED_TEST_SETTINGS_ID] = LegacySpeedTestSettings.DEFAULT_ID
+            }
+            decodeLegacySpeedTestSettingsRecords(legacyPreferences).first().toSettings()
+        }.getOrElse { SpeedTestSettings.default() }
     }
 
-    private fun decodeSpeedTestSchemes(preferences: Preferences): List<SpeedTestScheme> {
-        val stored = preferences[SPEED_TEST_SCHEMES_JSON]
+    private fun decodeLegacySpeedTestSettings(
+        preferences: Preferences,
+        selectionKey: Preferences.Key<String>
+    ): SpeedTestSettings {
+        val settings = decodeLegacySpeedTestSettingsRecords(preferences)
+        val selectedId = preferences[selectionKey]
+        val selected = settings.firstOrNull { it.id == selectedId }
+            ?: settings.firstOrNull { it.id == LegacySpeedTestSettings.DEFAULT_ID }
+            ?: LegacySpeedTestSettings.default()
+        return selected.toSettings()
+    }
+
+    /** 将旧版选中的方案分别迁移到两个入口的独立配置，再清理旧方案数据。 */
+    private fun migrateLegacySpeedTestSettings(preferences: MutablePreferences) {
+        if (preferences[HOME_SPEED_TEST_SETTINGS_JSON] == null) {
+            preferences[HOME_SPEED_TEST_SETTINGS_JSON] = encodeSpeedTestSettings(
+                decodeLegacySpeedTestSettings(preferences, LEGACY_HOME_SPEED_TEST_SETTINGS_ID)
+            )
+        }
+        if (preferences[GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON] == null) {
+            preferences[GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON] = encodeSpeedTestSettings(
+                decodeLegacySpeedTestSettings(preferences, LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID)
+            )
+        }
+        preferences.remove(LEGACY_SPEED_TEST_SETTINGS_JSON)
+        preferences.remove(LEGACY_HOME_SPEED_TEST_SETTINGS_ID)
+        preferences.remove(LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID)
+        preferences.remove(LEGACY_GROUP_MANUAL_SPEED_TEST_ENABLED)
+        preferences.remove(LEGACY_HOME_LONG_PRESS_SPEED_TEST_ENABLED)
+        preferences.remove(AUTO_DELETE_TCPING_TIMEOUT_NODES)
+        preferences.remove(AUTO_DELETE_URL_TEST_TIMEOUT_NODES)
+        preferences.remove(AUTO_DELETE_LOW_BANDWIDTH_NODES)
+        preferences.remove(AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS)
+    }
+
+    private fun encodeSpeedTestSettings(settings: SpeedTestSettings): String {
+        val storedSettings = settings.toLegacySettingsRecord().let(::normalizeLegacySpeedTestSettings)
+        return JSONArray(encodeLegacySpeedTestSettingsRecords(listOf(storedSettings)))
+            .getJSONObject(0)
+            .apply {
+                remove("id")
+                remove("name")
+                remove("builtIn")
+                remove("defaultsVersion")
+                remove("tcpingPercent")
+                remove("urlTestPercent")
+                remove("bandwidthPercent")
+                remove("urlTestTimeoutMs")
+            }
+            .toString()
+    }
+
+    private fun LegacySpeedTestSettings.toSettings() = SpeedTestSettings(
+        tcpingEnabled = tcpingEnabled,
+        urlTestEnabled = urlTestEnabled,
+        bandwidthEnabled = bandwidthEnabled,
+        linkTypeTestEnabled = linkTypeTestEnabled,
+        unlockTestsEnabled = unlockTestsEnabled,
+        unlockTestIds = unlockTestIds,
+        tcpingSelectionMode = tcpingSelectionMode,
+        tcpingSelectionValue = tcpingSelectionValue,
+        urlTestSelectionMode = urlTestSelectionMode,
+        urlTestSelectionValue = urlTestSelectionValue,
+        bandwidthSelectionMode = bandwidthSelectionMode,
+        bandwidthSelectionValue = bandwidthSelectionValue,
+        tcpingAutoDeleteTimeoutNodes = tcpingAutoDeleteTimeoutNodes,
+        urlTestAutoDeleteTimeoutNodes = urlTestAutoDeleteTimeoutNodes,
+        bandwidthAutoDeleteLowSpeedNodes = bandwidthAutoDeleteLowSpeedNodes,
+        bandwidthAutoDeleteThresholdMbps = bandwidthAutoDeleteThresholdMbps,
+        tcpingTimeoutMs = tcpingTimeoutMs,
+        urlTestWarmupTimeoutMs = urlTestWarmupTimeoutMs,
+        urlTestMeasurementTimeoutMs = urlTestMeasurementTimeoutMs,
+        urlTestUrl = urlTestUrl,
+        urlTestBackupUrl = urlTestBackupUrl,
+        bandwidthTestDurationMs = bandwidthTestDurationMs,
+        bandwidthTestUrl = bandwidthTestUrl,
+        tcpingConcurrencyMode = tcpingConcurrencyMode,
+        tcpingConcurrency = tcpingConcurrency,
+        urlTestConcurrencyMode = urlTestConcurrencyMode,
+        urlTestConcurrency = urlTestConcurrency,
+        bandwidthTestConcurrencyMode = bandwidthTestConcurrencyMode,
+        bandwidthTestConcurrency = bandwidthTestConcurrency
+    )
+
+    private fun SpeedTestSettings.toLegacySettingsRecord() = LegacySpeedTestSettings.default().copy(
+        tcpingEnabled = tcpingEnabled,
+        urlTestEnabled = urlTestEnabled,
+        bandwidthEnabled = bandwidthEnabled,
+        linkTypeTestEnabled = linkTypeTestEnabled,
+        unlockTestsEnabled = unlockTestsEnabled,
+        unlockTestIds = unlockTestIds,
+        tcpingSelectionMode = tcpingSelectionMode,
+        tcpingSelectionValue = tcpingSelectionValue,
+        urlTestSelectionMode = urlTestSelectionMode,
+        urlTestSelectionValue = urlTestSelectionValue,
+        bandwidthSelectionMode = bandwidthSelectionMode,
+        bandwidthSelectionValue = bandwidthSelectionValue,
+        tcpingAutoDeleteTimeoutNodes = tcpingAutoDeleteTimeoutNodes,
+        urlTestAutoDeleteTimeoutNodes = urlTestAutoDeleteTimeoutNodes,
+        bandwidthAutoDeleteLowSpeedNodes = bandwidthAutoDeleteLowSpeedNodes,
+        bandwidthAutoDeleteThresholdMbps = bandwidthAutoDeleteThresholdMbps,
+        tcpingTimeoutMs = tcpingTimeoutMs,
+        urlTestWarmupTimeoutMs = urlTestWarmupTimeoutMs,
+        urlTestMeasurementTimeoutMs = urlTestMeasurementTimeoutMs,
+        urlTestUrl = urlTestUrl,
+        urlTestBackupUrl = urlTestBackupUrl,
+        bandwidthTestDurationMs = bandwidthTestDurationMs,
+        bandwidthTestUrl = bandwidthTestUrl,
+        tcpingConcurrencyMode = tcpingConcurrencyMode,
+        tcpingConcurrency = tcpingConcurrency,
+        urlTestConcurrencyMode = urlTestConcurrencyMode,
+        urlTestConcurrency = urlTestConcurrency,
+        bandwidthTestConcurrencyMode = bandwidthTestConcurrencyMode,
+        bandwidthTestConcurrency = bandwidthTestConcurrency
+    )
+
+    private fun decodeLegacySpeedTestSettingsRecords(preferences: Preferences): List<LegacySpeedTestSettings> {
+        val stored = preferences[LEGACY_SPEED_TEST_SETTINGS_JSON]
             ?.takeIf(String::isNotBlank)
             ?.let { json ->
                 runCatching {
@@ -1381,10 +1459,10 @@ class SettingsRepository(
                             val id = item.optString("id").trim()
                             if (id.isBlank()) continue
                             // 仅在内置预置版本升级时刷新默认字段；自定义方案保持原样。
-                            if (id == SpeedTestScheme.DEFAULT_ID &&
+                            if (id == LegacySpeedTestSettings.DEFAULT_ID &&
                                 item.optInt("defaultsVersion", 0) < DEFAULT_SPEED_TEST_PRESET_REVISION
                             ) {
-                                val defaults = SpeedTestScheme.default()
+                                val defaults = LegacySpeedTestSettings.default()
                                 item.put("tcpingSelectionMode", defaults.tcpingSelectionMode.name)
                                 item.put("tcpingSelectionValue", defaults.tcpingSelectionValue)
                                 item.put("urlTestSelectionMode", defaults.urlTestSelectionMode.name)
@@ -1401,8 +1479,8 @@ class SettingsRepository(
                                 item.put("bandwidthTestConcurrency", defaults.bandwidthTestConcurrency)
                             }
                             add(
-                                normalizeSpeedTestScheme(
-                                    SpeedTestScheme(
+                                normalizeLegacySpeedTestSettings(
+                                    LegacySpeedTestSettings(
                                         id = id,
                                         name = item.optString("name", "我的方案"),
                                         builtIn = item.optBoolean("builtIn", false),
@@ -1415,7 +1493,7 @@ class SettingsRepository(
                                             item.optJSONArray("unlockTestIds")?.let { tests ->
                                                 for (testIndex in 0 until tests.length()) {
                                                     tests.optString(testIndex).trim()
-                                                        .takeIf { id -> UnlockTestCatalog.schemeDefinitions.any { it.id == id } }
+                                                        .takeIf { id -> UnlockTestCatalog.definitions.any { it.id == id } }
                                                         ?.let(::add)
                                                 }
                                             }
@@ -1521,8 +1599,8 @@ class SettingsRepository(
                 }.getOrNull()
             }
 
-        val defaultScheme = stored?.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-            ?: SpeedTestScheme.default().copy(
+        val defaultScheme = stored?.firstOrNull { it.id == LegacySpeedTestSettings.DEFAULT_ID }
+            ?: LegacySpeedTestSettings.default().copy(
                 tcpingAutoDeleteTimeoutNodes = preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES]
                     ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES,
                 urlTestAutoDeleteTimeoutNodes = preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES]
@@ -1533,9 +1611,9 @@ class SettingsRepository(
                     ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS
             )
         val custom = stored.orEmpty()
-            .filterNot { it.id == SpeedTestScheme.DEFAULT_ID }
+            .filterNot { it.id == LegacySpeedTestSettings.DEFAULT_ID }
             .filterNot { it.builtIn }
-            .distinctBy(SpeedTestScheme::id)
+            .distinctBy(LegacySpeedTestSettings::id)
         return listOf(defaultScheme.copy(builtIn = true)) + custom
     }
 
@@ -1569,17 +1647,17 @@ class SettingsRepository(
         SpeedTestSelectionMode.COUNT -> value.coerceAtLeast(1)
     }
 
-    private fun normalizeSpeedTestScheme(scheme: SpeedTestScheme): SpeedTestScheme {
+    private fun normalizeLegacySpeedTestSettings(scheme: LegacySpeedTestSettings): LegacySpeedTestSettings {
         // 规范空名称，同时保留用户对方案名称的自定义修改。
         val trimmedName = scheme.name.trim()
         val normalizedName = when {
-            scheme.id == SpeedTestScheme.DEFAULT_ID && trimmedName.isBlank() -> "默认测速"
+            scheme.id == LegacySpeedTestSettings.DEFAULT_ID && trimmedName.isBlank() -> "默认测速"
             else -> trimmedName.ifBlank { if (scheme.builtIn) "测速方案" else "我的方案" }
         }
         return scheme.copy(
             name = normalizedName,
             unlockTestIds = scheme.unlockTestIds.intersect(
-                UnlockTestCatalog.schemeDefinitions.mapTo(mutableSetOf()) { it.id }
+                UnlockTestCatalog.definitions.mapTo(mutableSetOf()) { it.id }
             ),
             tcpingSelectionValue = normalizeSelectionValue(
                 scheme.tcpingSelectionMode,
@@ -1617,14 +1695,14 @@ class SettingsRepository(
         )
     }
 
-    private fun encodeSpeedTestSchemes(schemes: List<SpeedTestScheme>): String {
+    private fun encodeLegacySpeedTestSettingsRecords(schemes: List<LegacySpeedTestSettings>): String {
         val array = JSONArray()
-        schemes.distinctBy(SpeedTestScheme::id).forEach { scheme ->
-            val normalized = normalizeSpeedTestScheme(scheme)
+        schemes.distinctBy(LegacySpeedTestSettings::id).forEach { scheme ->
+            val normalized = normalizeLegacySpeedTestSettings(scheme)
             array.put(
                 JSONObject().apply {
                     put("id", normalized.id)
-                    if (normalized.id == SpeedTestScheme.DEFAULT_ID) {
+                    if (normalized.id == LegacySpeedTestSettings.DEFAULT_ID) {
                         put("defaultsVersion", DEFAULT_SPEED_TEST_PRESET_REVISION)
                     }
                     put("name", normalized.name)

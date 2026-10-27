@@ -33,7 +33,7 @@ sealed interface SpeedTestStageScope {
 
 data class SpeedTestStageSelection(val mode: SpeedTestSelectionMode, val value: Int)
 
-fun SpeedTestScheme.isStageEnabled(stage: SpeedTestStage): Boolean = when (stage) {
+fun SpeedTestSettings.isStageEnabled(stage: SpeedTestStage): Boolean = when (stage) {
     SpeedTestStage.TCPING -> tcpingEnabled
     SpeedTestStage.URL_TEST -> urlTestEnabled
     SpeedTestStage.BANDWIDTH -> bandwidthEnabled
@@ -41,27 +41,27 @@ fun SpeedTestScheme.isStageEnabled(stage: SpeedTestStage): Boolean = when (stage
     SpeedTestStage.IP_QUALITY -> unlockTestsEnabled
 }
 
-val SpeedTestScheme.enabledQualityStages: List<SpeedTestStage>
+val SpeedTestSettings.enabledQualityStages: List<SpeedTestStage>
     get() = SpeedTestStage.entries.filter {
         it.category == SpeedTestCategory.LINK_QUALITY && isStageEnabled(it)
     }
 
 /** 跳过关闭的质量测试，承接最近一项已开启的测试；第四、第五项始终使用连接节点。 */
-fun SpeedTestScheme.inputScopeFor(stage: SpeedTestStage): SpeedTestStageScope {
+fun SpeedTestSettings.inputScopeFor(stage: SpeedTestStage): SpeedTestStageScope {
     if (stage.category != SpeedTestCategory.LINK_QUALITY) return SpeedTestStageScope.ConnectedNode
     val previousStage = enabledQualityStages.lastOrNull { it.number < stage.number }
     return previousStage?.let { SpeedTestStageScope.PreviousResult(it) }
         ?: SpeedTestStageScope.CurrentGroup
 }
 
-fun SpeedTestScheme.selectionFor(stage: SpeedTestStage): SpeedTestStageSelection = when (stage) {
+fun SpeedTestSettings.selectionFor(stage: SpeedTestStage): SpeedTestStageSelection = when (stage) {
     SpeedTestStage.TCPING -> SpeedTestStageSelection(tcpingSelectionMode, tcpingSelectionValue)
     SpeedTestStage.URL_TEST -> SpeedTestStageSelection(urlTestSelectionMode, urlTestSelectionValue)
     SpeedTestStage.BANDWIDTH -> SpeedTestStageSelection(bandwidthSelectionMode, bandwidthSelectionValue)
     else -> error("连接后的测试不筛选节点")
 }
 
-fun SpeedTestScheme.inputScopeLabel(stage: SpeedTestStage): String = when (val input = inputScopeFor(stage)) {
+fun SpeedTestSettings.inputScopeLabel(stage: SpeedTestStage): String = when (val input = inputScopeFor(stage)) {
     SpeedTestStageScope.CurrentGroup -> "当前组"
     is SpeedTestStageScope.PreviousResult -> "${input.stage.number}. ${input.stage.shortTitle} 的可用结果"
     SpeedTestStageScope.ConnectedNode -> "连接后的当前节点（1 个）"

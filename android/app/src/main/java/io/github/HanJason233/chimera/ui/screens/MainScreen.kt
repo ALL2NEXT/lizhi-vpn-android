@@ -26,7 +26,6 @@ import kotlinx.coroutines.launch
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
-import io.github.HanJason233.chimera.data.model.SpeedTestScheme
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.*
 import io.github.HanJason233.chimera.ui.theme.*
@@ -44,7 +43,7 @@ fun MainScreen(
     onOpenRegionLookupSettings: () -> Unit = {},
     onOpenSplitRoutingSettings: () -> Unit = {},
     onOpenInboundOutbound: () -> Unit = {},
-    onOpenSpeedTestSchemes: () -> Unit = {},
+    onOpenSpeedTestSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     onOpenCurrentGroupDetails: (NodeGroupKey?, String) -> Unit = { _, _ -> },
     navigationStyle: HomeNavigationStyle = HomeNavigationStyle.CLASSIC,
@@ -67,9 +66,6 @@ fun MainScreen(
     // Collect状态
     val proxyMode by viewModel.proxyMode.collectAsStateWithLifecycle()
     val lanInbound by viewModel.lanInboundSettings.collectAsStateWithLifecycle()
-    val speedTestSchemes by viewModel.speedTestSchemes.collectAsStateWithLifecycle()
-    val homeLongPressSchemeId by viewModel.homeLongPressSpeedTestSchemeId.collectAsStateWithLifecycle()
-    val homeLongPressSpeedTestEnabled by viewModel.homeLongPressSpeedTestEnabled.collectAsStateWithLifecycle()
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
     val linkTypeTestResult by viewModel.linkTypeTestResult.collectAsStateWithLifecycle()
@@ -103,9 +99,6 @@ fun MainScreen(
         is NodeGroupKey.Country -> "地区组"
         null -> "选择分组"
     }
-    val longPressScheme = speedTestSchemes.firstOrNull { it.id == homeLongPressSchemeId }
-        ?: speedTestSchemes.firstOrNull { it.id == SpeedTestScheme.DEFAULT_ID }
-
     // 移动网络提醒
     val cellularWarning by io.github.HanJason233.chimera.service.ServiceManager.cellularWarning.collectAsStateWithLifecycle()
     LaunchedEffect(cellularWarning) {
@@ -134,7 +127,7 @@ fun MainScreen(
                     },
                     onOpenSplitRoutingSettings = { closeDrawerThen(onOpenSplitRoutingSettings) },
                     onOpenInboundOutbound = { closeDrawerThen(onOpenInboundOutbound) },
-                    onOpenSpeedTestSchemes = { closeDrawerThen(onOpenSpeedTestSchemes) },
+                    onOpenSpeedTestSettings = { closeDrawerThen(onOpenSpeedTestSettings) },
                     onOpenSkin = { closeDrawerThen(onOpenSkin) },
                     appDisplayName = LauncherIdentityPresets.find(
                         skinSettings.appIconPresetId
@@ -296,11 +289,11 @@ fun MainScreen(
                             },
                             onLongClick = if (
                                 vpnState == VpnState.DISCONNECTED &&
-                                    homeLongPressSpeedTestEnabled && !isTesting
+                                    !isTesting
                             ) {
                                 {
                                     onStartVpn {
-                                        longPressScheme?.let { viewModel.startSpeedTestScheme(it.id) }
+                                        viewModel.startHomeSpeedTest()
                                     }
                                 }
                             } else {
@@ -309,11 +302,7 @@ fun MainScreen(
                             // 主页连接区域只保留图标。
                             showStatusLabel = false,
                             clickActionLabel = "连接当前节点",
-                            longClickActionLabel = if (homeLongPressSpeedTestEnabled) {
-                                longPressScheme?.name ?: "测速方案"
-                            } else {
-                                "点击连接"
-                            }
+                            longClickActionLabel = "主页图标测速"
                         )
 
                         HomeSelectionCard(

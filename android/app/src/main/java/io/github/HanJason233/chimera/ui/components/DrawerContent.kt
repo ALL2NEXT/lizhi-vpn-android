@@ -29,7 +29,7 @@ fun DrawerContent(
     onOpenRegionLookupSettings: () -> Unit = {},
     onOpenSplitRoutingSettings: () -> Unit = {},
     onOpenInboundOutbound: () -> Unit = {},
-    onOpenSpeedTestSchemes: () -> Unit = {},
+    onOpenSpeedTestSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
     appDisplayName: String = "Chimera"
 ) {
@@ -107,8 +107,8 @@ fun DrawerContent(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.FlashOn,
-                title = "测试",
-                onClick = onOpenSpeedTestSchemes
+                title = "测速设置",
+                onClick = onOpenSpeedTestSettings
             )
 
             DrawerMenuItem(

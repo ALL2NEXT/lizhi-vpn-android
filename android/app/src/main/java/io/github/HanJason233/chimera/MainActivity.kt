@@ -61,8 +61,7 @@ import io.github.HanJason233.chimera.ui.screens.RoutingAssetsScreen
 import io.github.HanJason233.chimera.ui.screens.QrScannerScreen
 import io.github.HanJason233.chimera.ui.screens.SkinSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.StartupAccountScreen
-import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemeEditorScreen
-import io.github.HanJason233.chimera.ui.screens.SpeedTestSchemesScreen
+import io.github.HanJason233.chimera.ui.screens.SpeedTestSettingsScreen
 import io.github.HanJason233.chimera.ui.theme.ChimeraTheme
 import io.github.HanJason233.chimera.platform.LauncherIdentityManager
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
@@ -296,8 +295,8 @@ class MainActivity : ComponentActivity() {
                                         onOpenInboundOutbound = {
                                             navigateTo(AppRoute.INBOUND_OUTBOUND)
                                         },
-                                        onOpenSpeedTestSchemes = {
-                                            navigateTo(AppRoute.SPEED_TEST_SCHEMES)
+                                        onOpenSpeedTestSettings = {
+                                            navigateTo(AppRoute.SPEED_TEST_SETTINGS)
                                         },
                                         onOpenSkin = { navigateTo(AppRoute.SKIN) },
                                         onOpenCurrentGroupDetails = { groupKey, groupName ->
@@ -524,20 +523,9 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            composable(AppRoute.SPEED_TEST_SCHEMES) {
-                                SpeedTestSchemesScreen(
+                            composable(AppRoute.SPEED_TEST_SETTINGS) {
+                                SpeedTestSettingsScreen(
                                     viewModel = viewModel,
-                                    onOpenEditor = { schemeId ->
-                                        navigateTo(AppRoute.speedTestSchemeEditor(schemeId))
-                                    },
-                                    onBack = { navController.popBackStack() }
-                                )
-                            }
-
-                            composable(AppRoute.SPEED_TEST_SCHEME_EDITOR) { backStackEntry ->
-                                SpeedTestSchemeEditorScreen(
-                                    viewModel = viewModel,
-                                    schemeId = backStackEntry.arguments?.getString("schemeId").orEmpty(),
                                     onBack = { navController.popBackStack() }
                                 )
                             }

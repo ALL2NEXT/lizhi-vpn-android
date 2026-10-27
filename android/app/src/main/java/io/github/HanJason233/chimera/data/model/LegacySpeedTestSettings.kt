@@ -1,7 +1,5 @@
 package io.github.HanJason233.chimera.data.model
 
-import java.util.UUID
-
 enum class ManualGroupTestStage {
     TCPING,
     URL_TEST,
@@ -20,10 +18,9 @@ fun formatSpeedTestSelection(mode: SpeedTestSelectionMode, value: Int): String =
 }
 
 /**
- * 可复用的节点选择方案。测速阶段按 TCPing、204 URL、带宽测速的顺序执行，
- * 前三项为链路质量测试；第四项为链路类型测试，第五项为 IP 质量测试。
+ * Legacy representation used only while importing settings from older app versions.
  */
-data class SpeedTestScheme(
+data class LegacySpeedTestSettings(
     val id: String,
     val name: String,
     val builtIn: Boolean = false,
@@ -64,10 +61,10 @@ data class SpeedTestScheme(
     val bandwidthTestConcurrency: Int = 30
 ) {
     companion object {
-        /** 当前版本唯一的内置测速方案；旧的标准/全面方案不再展示。 */
+        /** Identifier used by the former built-in speed-test settings record. */
         const val DEFAULT_ID = "builtin_speed_test_default"
 
-        fun default() = SpeedTestScheme(
+        fun default() = LegacySpeedTestSettings(
             id = DEFAULT_ID,
             name = "默认测速",
             builtIn = true,
@@ -93,11 +90,5 @@ data class SpeedTestScheme(
             bandwidthTestConcurrency = 30
         )
 
-        fun create(name: String, template: SpeedTestScheme = default()): SpeedTestScheme =
-            template.copy(
-                id = UUID.randomUUID().toString(),
-                name = name.trim().ifBlank { "我的方案" },
-                builtIn = false
-            )
     }
 }
