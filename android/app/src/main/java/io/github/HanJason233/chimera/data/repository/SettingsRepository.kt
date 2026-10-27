@@ -35,6 +35,8 @@ import io.github.HanJason233.chimera.data.model.SkinThemeMode
 import io.github.HanJason233.chimera.data.model.LegacySpeedTestSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
+import io.github.HanJason233.chimera.data.model.SpeedTestStage
+import io.github.HanJason233.chimera.data.model.normalizeSpeedTestStageOrder
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
@@ -1317,7 +1319,17 @@ class SettingsRepository(
         if (stored == null) return decodeLegacySpeedTestSettings(preferences, legacySelectionKey)
 
         return runCatching {
-            val item = JSONObject(stored).apply {
+            val item = JSONObject(stored)
+            val stageOrder = item.optJSONArray("stageOrder")?.let { savedOrder ->
+                buildList {
+                    repeat(savedOrder.length()) { index ->
+                        SpeedTestStage.entries
+                            .firstOrNull { it.name == savedOrder.optString(index) }
+                            ?.let(::add)
+                    }
+                }
+            } ?: SpeedTestStage.entries
+            item.apply {
                 put("id", LegacySpeedTestSettings.DEFAULT_ID)
                 put("name", "迁移后的测速设置")
                 put("builtIn", true)
@@ -1327,7 +1339,9 @@ class SettingsRepository(
                 this[LEGACY_SPEED_TEST_SETTINGS_JSON] = JSONArray().put(item).toString()
                 this[LEGACY_HOME_SPEED_TEST_SETTINGS_ID] = LegacySpeedTestSettings.DEFAULT_ID
             }
-            decodeLegacySpeedTestSettingsRecords(legacyPreferences).first().toSettings()
+            decodeLegacySpeedTestSettingsRecords(legacyPreferences).first().toSettings().copy(
+                stageOrder = normalizeSpeedTestStageOrder(stageOrder)
+            )
         }.getOrElse { SpeedTestSettings.default() }
     }
 
@@ -1379,6 +1393,10 @@ class SettingsRepository(
                 remove("urlTestPercent")
                 remove("bandwidthPercent")
                 remove("urlTestTimeoutMs")
+                put(
+                    "stageOrder",
+                    JSONArray(normalizeSpeedTestStageOrder(settings.stageOrder).map { it.name })
+                )
             }
             .toString()
     }

@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.data.model
 
 /** 一个测速入口对应一份固定配置，主页图标与手动测速互不影响。 */
 data class SpeedTestSettings(
+    val stageOrder: List<SpeedTestStage> = SpeedTestStage.entries,
     val tcpingEnabled: Boolean = true,
     val urlTestEnabled: Boolean = true,
     val bandwidthEnabled: Boolean = false,
@@ -55,4 +56,10 @@ data class SpeedTestSettings(
             bandwidthTestConcurrency = 30
         )
     }
+}
+
+/** 保持已有拖动顺序，并把数据缺失的测试项补到列表末尾。 */
+fun normalizeSpeedTestStageOrder(order: List<SpeedTestStage>): List<SpeedTestStage> {
+    val uniqueOrder = order.distinct()
+    return uniqueOrder + SpeedTestStage.entries.filterNot(uniqueOrder::contains)
 }

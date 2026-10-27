@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.painterResource
 import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
+import io.github.HanJason233.chimera.data.model.SpeedTestCategory
 import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
 import io.github.HanJason233.chimera.data.model.SpeedTestSettings
@@ -58,6 +59,7 @@ import io.github.HanJason233.chimera.ui.components.unlockTestIconResource
 @Composable
 internal fun SpeedTestSettingsEditorContent(
     settings: SpeedTestSettings,
+    stage: SpeedTestStage,
     isHomeTab: Boolean,
     modifier: Modifier = Modifier,
     onSave: (SpeedTestSettings) -> Unit
@@ -135,8 +137,11 @@ internal fun SpeedTestSettingsEditorContent(
         modifier = modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        TestPhaseLabel("连接前测试")
+        if (stage.category == SpeedTestCategory.LINK_QUALITY) {
+            TestPhaseLabel("连接前测试")
+        }
 
+        if (stage == SpeedTestStage.TCPING) {
             SpeedTestStageCard(
                 title = "${SpeedTestStage.TCPING.number}. ${SpeedTestStage.TCPING.title}",
                 enabled = tcpingEnabled,
@@ -169,7 +174,9 @@ internal fun SpeedTestSettingsEditorContent(
                     onValueChange = { tcpingSelectionValue = it }
                 )
             }
+        }
 
+        if (stage == SpeedTestStage.URL_TEST) {
             SpeedTestStageCard(
                 title = "${SpeedTestStage.URL_TEST.number}. ${SpeedTestStage.URL_TEST.title}",
                 enabled = urlTestEnabled,
@@ -238,7 +245,9 @@ internal fun SpeedTestSettingsEditorContent(
                     onValueChange = { urlSelectionValue = it }
                 )
             }
+        }
 
+        if (stage == SpeedTestStage.BANDWIDTH) {
             SpeedTestStageCard(
                 title = "${SpeedTestStage.BANDWIDTH.number}. ${SpeedTestStage.BANDWIDTH.title}",
                 enabled = bandwidthEnabled,
@@ -295,10 +304,13 @@ internal fun SpeedTestSettingsEditorContent(
                     onValueChange = { bandwidthSelectionValue = it }
                 )
             }
+        }
 
+        if (stage.category != SpeedTestCategory.LINK_QUALITY) {
             TestPhaseLabel("连接后测试")
+        }
 
-            if (isHomeTab) {
+        if (isHomeTab && stage == SpeedTestStage.LINK_TYPE) {
                 SpeedTestStageCard(
                     title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}",
                     enabled = linkTypeTestEnabled,
@@ -311,6 +323,9 @@ internal fun SpeedTestSettingsEditorContent(
                     )
                 }
 
+        }
+
+        if (isHomeTab && stage == SpeedTestStage.IP_QUALITY) {
                 SpeedTestStageCard(
                     title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}",
                     enabled = unlockTestsEnabled,
@@ -376,7 +391,9 @@ internal fun SpeedTestSettingsEditorContent(
                         }
                     }
                 }
-            } else {
+        }
+
+        if (!isHomeTab && stage == SpeedTestStage.LINK_TYPE) {
                 SpeedTestStageCard(title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}") {
                     Text(
                         "此检测在主页测速连接后执行，手动测速不运行此项。",
@@ -384,6 +401,9 @@ internal fun SpeedTestSettingsEditorContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+        }
+
+        if (!isHomeTab && stage == SpeedTestStage.IP_QUALITY) {
                 SpeedTestStageCard(title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}") {
                     Text(
                         "此检测在主页测速连接后执行，手动测速不运行此项。",
@@ -391,16 +411,19 @@ internal fun SpeedTestSettingsEditorContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
+        }
 
+        if (isHomeTab || stage.category == SpeedTestCategory.LINK_QUALITY) {
             Button(
                 onClick = {
                     val normalizedUrl = UrlTestTargets.normalize(urlTestUrl)
                     val normalizedBackupUrl = UrlTestTargets.normalizeOptional(urlTestBackupUrl)
                     val normalizedBandwidthUrl = BandwidthTestTargets.normalize(bandwidthUrl)
-                    if ((urlTestEnabled && (normalizedUrl == null || normalizedBackupUrl == null)) ||
-                        (bandwidthEnabled && normalizedBandwidthUrl == null)
-                    ) {
+                    val hasInvalidUrl = stage == SpeedTestStage.URL_TEST && urlTestEnabled &&
+                        (normalizedUrl == null || normalizedBackupUrl == null)
+                    val hasInvalidBandwidthUrl = stage == SpeedTestStage.BANDWIDTH &&
+                        bandwidthEnabled && normalizedBandwidthUrl == null
+                    if (hasInvalidUrl || hasInvalidBandwidthUrl) {
                         error = "请检查测速地址"
                     } else {
                         onSave(
@@ -458,6 +481,7 @@ internal fun SpeedTestSettingsEditorContent(
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
+        }
         }
 }
 
