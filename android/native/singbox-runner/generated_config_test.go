@@ -14,7 +14,7 @@ func TestKotlinConfigurationFixtures(t *testing.T) {
 	// An "unknown" version only warns about removed configuration fields;
 	// match the actual Android build so these regressions fail here too.
 	originalVersion := C.Version
-	C.Version = "1.14.2"
+	C.Version = "1.14.4"
 	defer func() { C.Version = originalVersion }()
 	files, err := filepath.Glob("../../app/build/singbox-config-fixtures/*.json")
 	if err != nil {

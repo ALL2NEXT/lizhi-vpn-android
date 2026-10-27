@@ -34,9 +34,9 @@
 
 ## 固定版本与双核心原生接入
 
-- sing-box：`af6e64c3b69e6132ebaee0e1a3d24e93903f6709`，`v1.14.2`。
+- sing-box：`c005f35300ce76427dc285481ec5695f5b179cd2`，`v1.14.4`。
 - Xray：`701af60772cda123492f86e383e1fdba066614a9`，官方稳定版 `v26.10.10`。
-- sing-box runner 依赖 `github.com/sagernet/sing` `v0.9.6-0.20260922013354-87c33f17688f` 与 `github.com/sagernet/sing-tun` `v0.9.6-0.20260924001923-ddaa4ca25e3b`；Xray runner 继续依赖 `github.com/sagernet/sing` `v0.5.1`，维持独立 Go 构建。
+- sing-box runner 依赖 `github.com/sagernet/sing` `v0.9.7-0.20261023115459-5dc452e537bf` 与 `github.com/sagernet/sing-tun` `v0.9.7-0.20261023115432-040db71fcd33`；Xray runner 继续依赖 `github.com/sagernet/sing` `v0.5.1`，维持独立 Go 构建。
 
 `libsingbox.so` 和 `libxray.so` 都是打包到 `nativeLibraryDir` 的 Android PIE 可执行文件，通过
 `ProcessBuilder` 运行；它们不是供 Kotlin 加载的 JNI 动态库。两个核心只提供 loopback
