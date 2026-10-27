@@ -1406,6 +1406,9 @@ class SettingsRepository(
         urlTestEnabled = urlTestEnabled,
         bandwidthEnabled = bandwidthEnabled,
         linkTypeTestEnabled = linkTypeTestEnabled,
+        linkTypeAcceptDirect = linkTypeAcceptDirect,
+        linkTypeAcceptRelay = linkTypeAcceptRelay,
+        linkTypeAcceptCdnRelay = linkTypeAcceptCdnRelay,
         unlockTestsEnabled = unlockTestsEnabled,
         unlockTestIds = unlockTestIds,
         tcpingSelectionMode = tcpingSelectionMode,
@@ -1438,6 +1441,9 @@ class SettingsRepository(
         urlTestEnabled = urlTestEnabled,
         bandwidthEnabled = bandwidthEnabled,
         linkTypeTestEnabled = linkTypeTestEnabled,
+        linkTypeAcceptDirect = linkTypeAcceptDirect,
+        linkTypeAcceptRelay = linkTypeAcceptRelay,
+        linkTypeAcceptCdnRelay = linkTypeAcceptCdnRelay,
         unlockTestsEnabled = unlockTestsEnabled,
         unlockTestIds = unlockTestIds,
         tcpingSelectionMode = tcpingSelectionMode,
@@ -1506,6 +1512,9 @@ class SettingsRepository(
                                         urlTestEnabled = item.optBoolean("urlTestEnabled", true),
                                         bandwidthEnabled = item.optBoolean("bandwidthEnabled", true),
                                         linkTypeTestEnabled = item.optBoolean("linkTypeTestEnabled", false),
+                                        linkTypeAcceptDirect = item.optBoolean("linkTypeAcceptDirect", true),
+                                        linkTypeAcceptRelay = item.optBoolean("linkTypeAcceptRelay", true),
+                                        linkTypeAcceptCdnRelay = item.optBoolean("linkTypeAcceptCdnRelay", true),
                                         unlockTestsEnabled = item.optBoolean("unlockTestsEnabled", false),
                                         unlockTestIds = buildSet {
                                             item.optJSONArray("unlockTestIds")?.let { tests ->
@@ -1729,6 +1738,9 @@ class SettingsRepository(
                     put("urlTestEnabled", normalized.urlTestEnabled)
                     put("bandwidthEnabled", normalized.bandwidthEnabled)
                     put("linkTypeTestEnabled", normalized.linkTypeTestEnabled)
+                    put("linkTypeAcceptDirect", normalized.linkTypeAcceptDirect)
+                    put("linkTypeAcceptRelay", normalized.linkTypeAcceptRelay)
+                    put("linkTypeAcceptCdnRelay", normalized.linkTypeAcceptCdnRelay)
                     put("unlockTestsEnabled", normalized.unlockTestsEnabled)
                     put("unlockTestIds", JSONArray().apply {
                         normalized.unlockTestIds.forEach(::put)

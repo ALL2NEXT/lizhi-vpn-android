@@ -377,9 +377,31 @@ internal fun SpeedTestSettingsEditorContent(
                     title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}"
                 ) {
                     Text(
-                        "直连显示落地点 IP；中转显示中转点与落地点 IP，并识别中转点的 CDN。",
+                        "VPN 创建前批量检测候选线路，只保留勾选的线路类型。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text("保留的线路类型", fontWeight = FontWeight.SemiBold)
+                    LinkTypeFilterRow(
+                        label = "直连",
+                        checked = draftSettings.linkTypeAcceptDirect,
+                        onCheckedChange = { checked ->
+                            persistSettings { it.copy(linkTypeAcceptDirect = checked) }
+                        }
+                    )
+                    LinkTypeFilterRow(
+                        label = "普通中转",
+                        checked = draftSettings.linkTypeAcceptRelay,
+                        onCheckedChange = { checked ->
+                            persistSettings { it.copy(linkTypeAcceptRelay = checked) }
+                        }
+                    )
+                    LinkTypeFilterRow(
+                        label = "CDN 中转",
+                        checked = draftSettings.linkTypeAcceptCdnRelay,
+                        onCheckedChange = { checked ->
+                            persistSettings { it.copy(linkTypeAcceptCdnRelay = checked) }
+                        }
                     )
                 }
 
@@ -395,7 +417,7 @@ internal fun SpeedTestSettingsEditorContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "检测当前节点出口 IP 的流媒体与 AI 解锁能力。检测会在主页测速连接节点后执行。",
+                        "VPN 创建前批量检测候选线路；所选服务全部显示“支持”才保留线路，部分可用不算通过。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -457,7 +479,7 @@ internal fun SpeedTestSettingsEditorContent(
         if (!isHomeTab && stage == SpeedTestStage.LINK_TYPE) {
                 SpeedTestStageCard(title = "${SpeedTestStage.LINK_TYPE.number}. ${SpeedTestStage.LINK_TYPE.title}") {
                     Text(
-                        "此检测在主页测速连接后执行，手动测试不运行此项。",
+                        "仅主页自动测速使用此筛选；在 VPN 创建前批量检查候选线路。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -467,7 +489,7 @@ internal fun SpeedTestSettingsEditorContent(
         if (!isHomeTab && stage == SpeedTestStage.IP_QUALITY) {
                 SpeedTestStageCard(title = "${SpeedTestStage.IP_QUALITY.number}. ${SpeedTestStage.IP_QUALITY.title}") {
                     Text(
-                        "此检测在主页测速连接后执行，手动测试不运行此项。",
+                        "仅主页自动测速使用此筛选；在 VPN 创建前批量检查候选线路。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -475,6 +497,23 @@ internal fun SpeedTestSettingsEditorContent(
         }
 
         }
+}
+
+@Composable
+private fun LinkTypeFilterRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Text(label)
+    }
 }
 
 @Composable

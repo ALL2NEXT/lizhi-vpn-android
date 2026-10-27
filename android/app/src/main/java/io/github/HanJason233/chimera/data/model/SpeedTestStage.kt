@@ -46,10 +46,13 @@ val SpeedTestSettings.enabledQualityStages: List<SpeedTestStage>
         it.category == SpeedTestCategory.LINK_QUALITY && isStageEnabled(it)
     }
 
-/** 跳过关闭的质量测试，承接最近一项已开启的测试；第四、第五项始终使用连接节点。 */
+/** 跳过关闭的测试项，后续阶段承接最近一项已开启测试筛选后的线路。 */
 fun SpeedTestSettings.inputScopeFor(stage: SpeedTestStage): SpeedTestStageScope {
-    if (stage.category != SpeedTestCategory.LINK_QUALITY) return SpeedTestStageScope.ConnectedNode
-    val previousStage = enabledQualityStages.lastOrNull { it.number < stage.number }
+    val previousStage = SpeedTestStage.entries
+        .asSequence()
+        .filter { it.number < stage.number && isStageEnabled(it) }
+        .filterNot { it == SpeedTestStage.IP_QUALITY && unlockTestIds.isEmpty() }
+        .maxByOrNull { it.number }
     return previousStage?.let { SpeedTestStageScope.PreviousResult(it) }
         ?: SpeedTestStageScope.CurrentGroup
 }
@@ -58,7 +61,7 @@ fun SpeedTestSettings.selectionFor(stage: SpeedTestStage): SpeedTestStageSelecti
     SpeedTestStage.TCPING -> SpeedTestStageSelection(tcpingSelectionMode, tcpingSelectionValue)
     SpeedTestStage.URL_TEST -> SpeedTestStageSelection(urlTestSelectionMode, urlTestSelectionValue)
     SpeedTestStage.BANDWIDTH -> SpeedTestStageSelection(bandwidthSelectionMode, bandwidthSelectionValue)
-    else -> error("连接后的测试不筛选节点")
+    else -> error("线路筛选阶段使用检测条件，不使用前 N 个保留数")
 }
 
 fun SpeedTestSettings.inputScopeLabel(stage: SpeedTestStage): String = when (val input = inputScopeFor(stage)) {

@@ -20,6 +20,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.data.local.AppDatabase
@@ -40,6 +42,7 @@ import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
 import io.github.HanJason233.chimera.network.nodetest.latency.LatencyTester
 import io.github.HanJason233.chimera.network.nodetest.bandwidth.NodeDownloadBandwidthTester
 import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
+import io.github.HanJason233.chimera.network.nodetest.common.NodeTestProxyManager
 import io.github.HanJason233.chimera.network.nodetest.bandwidth.SpeedTestService
 import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
 import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.PersonalSourceIconStore
@@ -68,6 +71,7 @@ import io.github.HanJason233.chimera.util.DatabasePassphraseManager
 import java.io.File
 import kotlin.math.ceil
 import java.util.UUID
+import java.net.InetAddress
 
 internal data class UnlockTestUiState(
     val items: List<UnlockTestResult> = emptyList(),
@@ -84,6 +88,12 @@ internal data class SpeedTestProgress(
     val completed: Int = 0,
     val total: Int = 0,
     val isManualGroupTest: Boolean = false
+)
+
+private data class HomeCandidateFilterResult(
+    val node: Node,
+    val linkTypePassed: Boolean,
+    val unlockTestsPassed: Boolean
 )
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -104,6 +114,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val accountManager = AccountManager(application)
     private val latencyTester = LatencyTester()
     private val bandwidthTester = NodeDownloadBandwidthTester(application)
+    private val unlockRequestSemaphore = Semaphore(MAX_CONCURRENT_UNLOCK_TESTS)
 
     private data class ParsedSubscriptionPart(
         val url: String?,
@@ -814,26 +825,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val progressTitle = "主页图标测速"
             updateSpeedTestProgress(progressTitle, "准备测试")
             try {
-                // 只启用连接后检测时复用当前连接；不遍历分组，也不切换到组内首个节点。
-                if (!hasSelectionTests) {
-                    val node = ServiceManager.currentNode.value
-                        ?.takeIf { vpnState.value == VpnState.CONNECTED || vpnState.value == VpnState.CONNECTING }
-                        ?: run {
-                            val nodes = currentNodeListSnapshot()
-                            val selectedId = settingsRepository.selectedNodeId.first()
-                            nodes.firstOrNull { it.id == selectedId } ?: nodes.firstOrNull()
-                        }
-                    if (node == null) {
-                        _error.value = "没有可用节点"
-                        return@launch
-                    }
-                    if (vpnState.value != VpnState.CONNECTED && vpnState.value != VpnState.CONNECTING) {
-                        settingsRepository.setSelectedNodeId(node.id)
-                        ServiceManager.startVpn(getApplication(), node, proxyMode.value)
-                    }
-                    runPostConnectionTests(settings, node, progressTitle)
-                    return@launch
-                }
                 val allNodes = currentNodeListSnapshot()
                 if (allNodes.isEmpty()) {
                     _error.value = "没有可用节点"
@@ -933,7 +924,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                val bestNode = if (settings.bandwidthEnabled) {
+                var eligibleNodes = if (settings.bandwidthEnabled) {
                     val speedTestNodes = stageCandidates(SpeedTestStage.BANDWIDTH)
                     updateSpeedTestProgress(
                         title = progressTitle,
@@ -992,14 +983,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             compareByDescending<Pair<Node, Float>> { it.second }
                                 .thenBy { it.first.latency }
                         )
-                    SpeedTestCandidateSelector.retainResultsForStage(
+                    val retainedNodes = SpeedTestCandidateSelector.retainResultsForStage(
                         settings,
                         SpeedTestStage.BANDWIDTH,
                         orderedSpeedResults
-                    ).firstOrNull()?.first
+                    ).map { it.first }
+                    stageResults[SpeedTestStage.BANDWIDTH] = retainedNodes
+                    retainedNodes
                 } else {
-                    stageResults[settings.enabledQualityStages.last()]?.firstOrNull()
+                    settings.enabledQualityStages.lastOrNull()
+                        ?.let { stageResults[it] }
+                        ?: allNodes
                 }
+
+                if (settings.linkTypeTestEnabled || shouldRunUnlockTests) {
+                    val firstFilterStage = if (settings.linkTypeTestEnabled) {
+                        SpeedTestStage.LINK_TYPE
+                    } else {
+                        SpeedTestStage.IP_QUALITY
+                    }
+                    val candidates = stageCandidates(firstFilterStage)
+                    updateSpeedTestProgress(
+                        title = progressTitle,
+                        stage = "第 4、5 项筛选线路",
+                        total = candidates.size
+                    )
+                    val filterResults = runHomeCandidateFilterTests(
+                        settings = settings,
+                        nodes = candidates,
+                        runLinkType = settings.linkTypeTestEnabled,
+                        runUnlockTests = shouldRunUnlockTests,
+                        title = progressTitle
+                    )
+                    if (settings.linkTypeTestEnabled) {
+                        val linkTypeCandidates = filterResults
+                            .filter(HomeCandidateFilterResult::linkTypePassed)
+                            .map(HomeCandidateFilterResult::node)
+                        stageResults[SpeedTestStage.LINK_TYPE] = linkTypeCandidates
+                        if (linkTypeCandidates.isEmpty()) {
+                            _error.value = "主页测速：没有线路符合第 4 项的类型筛选"
+                            return@launch
+                        }
+                    }
+                    if (shouldRunUnlockTests) {
+                        val unlockCandidates = filterResults
+                            .filter(HomeCandidateFilterResult::unlockTestsPassed)
+                            .map(HomeCandidateFilterResult::node)
+                        stageResults[SpeedTestStage.IP_QUALITY] = unlockCandidates
+                        if (unlockCandidates.isEmpty()) {
+                            _error.value = "主页测速：没有线路通过全部所选解锁测试"
+                            return@launch
+                        }
+                    }
+                    eligibleNodes = when {
+                        shouldRunUnlockTests -> stageResults[SpeedTestStage.IP_QUALITY].orEmpty()
+                        settings.linkTypeTestEnabled -> stageResults[SpeedTestStage.LINK_TYPE].orEmpty()
+                        else -> eligibleNodes
+                    }
+                }
+
+                val bestNode = eligibleNodes.firstOrNull()
                 if (bestNode == null) {
                     _error.value = if (settings.bandwidthEnabled && settings.bandwidthAutoDeleteLowSpeedNodes) {
                         "没有节点达到带宽阈值（${settings.bandwidthAutoDeleteThresholdMbps} Mbps）"
@@ -1009,10 +1052,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
+                val storedResults = nodeDao().getHomeNodeTestResults(bestNode.id)
+                if (settings.linkTypeTestEnabled) {
+                    _linkTypeTestResult.value = storedResults?.linkTypeResultJson
+                        ?.takeIf(String::isNotBlank)
+                        ?.let(HomeTestResultCodec::decodeLinkType)
+                        ?: LinkTypeTestResult()
+                }
+                if (shouldRunUnlockTests) {
+                    _unlockTestState.value = storedResults?.unlockTestResultJson
+                        ?.takeIf(String::isNotBlank)
+                        ?.let(HomeTestResultCodec::decodeUnlockTests)
+                        ?: UnlockTestUiState()
+                }
                 settingsRepository.setSelectedNodeId(bestNode.id)
-                Log.i(tag, "Speed test settings selected node: ${bestNode.getDisplayName()}")
+                Log.i(
+                    tag,
+                    "Speed test filters retained ${eligibleNodes.size} routes; " +
+                        "selected ${bestNode.getDisplayName()}"
+                )
                 ServiceManager.startVpn(getApplication(), bestNode, proxyMode.value)
-                runPostConnectionTests(settings, bestNode, progressTitle)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
@@ -1209,69 +1268,234 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 第四、第五项按顺序执行，始终绑定方案最终连接的节点。 */
-    private suspend fun runPostConnectionTests(settings: SpeedTestSettings, node: Node, title: String) {
-        if (settings.linkTypeTestEnabled) {
-            updateSpeedTestProgress(title, "4. 链路类型检测")
-            runLinkTypeTest(node)
+    /** 在不创建 TUN/VPN 的情况下，用临时代理会话批量筛选候选线路。 */
+    private suspend fun runHomeCandidateFilterTests(
+        settings: SpeedTestSettings,
+        nodes: List<Node>,
+        runLinkType: Boolean,
+        runUnlockTests: Boolean,
+        title: String
+    ): List<HomeCandidateFilterResult> = coroutineScope {
+        if (nodes.isEmpty()) return@coroutineScope emptyList()
+
+        val definitions = if (runUnlockTests) {
+            UnlockTestCatalog.definitions.filter { it.id in settings.unlockTestIds }
+        } else {
+            emptyList()
         }
-        if (settings.unlockTestsEnabled && settings.unlockTestIds.isNotEmpty()) {
-            runUnlockTests(settings.unlockTestIds, node)
-        }
+        val nodeSemaphore = Semaphore(
+            nodes.size.coerceAtMost(MAX_CONCURRENT_PRE_VPN_TEST_NODES)
+        )
+        val progressMutex = Mutex()
+        var completed = 0
+
+        nodes.map { node ->
+            async {
+                val outcome = nodeSemaphore.withPermit {
+                    var proxySession: NodeTestProxyManager.Session? = null
+                    try {
+                        val session = NodeTestProxyManager.createSession(
+                            context = getApplication(),
+                            node = node,
+                            hysteriaUpMbps = hysteriaUpMbps.value,
+                            hysteriaDownMbps = hysteriaDownMbps.value,
+                            core = protocolCoreSettings.value.coreFor(node.type)
+                        )
+                        proxySession = session
+                        val started = withTimeoutOrNull(PRE_VPN_TEST_SESSION_START_TIMEOUT_MS) {
+                            session.start()
+                        } == true
+                        if (!started) {
+                            val message = "节点临时代理启动失败，无法执行筛选"
+                            if (runLinkType) {
+                                persistLinkTypeTestResult(
+                                    node.id,
+                                    LinkTypeTestResult(
+                                        state = LinkTypeTestState.ERROR,
+                                        serverAddress = node.server,
+                                        message = message
+                                    )
+                                )
+                            }
+                            if (runUnlockTests) {
+                                persistUnlockTestResult(
+                                    node.id,
+                                    unlockTestFailureState(
+                                        definitions,
+                                        message,
+                                        UnlockTestState.ERROR
+                                    )
+                                )
+                            }
+                            return@withPermit HomeCandidateFilterResult(
+                                node = node,
+                                linkTypePassed = false,
+                                unlockTestsPassed = false
+                            )
+                        }
+
+                        val linkTypePassed = if (runLinkType) {
+                            val result = runLinkTypeTestForCandidate(node, session.endpoint)
+                            when (result.state) {
+                                LinkTypeTestState.DIRECT -> settings.linkTypeAcceptDirect
+                                LinkTypeTestState.RELAY -> settings.linkTypeAcceptRelay
+                                LinkTypeTestState.CDN_RELAY -> settings.linkTypeAcceptCdnRelay
+                                else -> false
+                            }
+                        } else {
+                            true
+                        }
+
+                        val unlockState = when {
+                            !runUnlockTests -> null
+                            !linkTypePassed -> unlockTestFailureState(
+                                definitions,
+                                "未通过第 4 项线路类型筛选，已跳过解锁检测",
+                                UnlockTestState.NOT_CONNECTED
+                            )
+                            else -> runUnlockTestsForCandidate(
+                                node = node,
+                                endpoint = session.endpoint,
+                                definitions = definitions
+                            )
+                        }
+                        if (runUnlockTests && unlockState != null && !linkTypePassed) {
+                            persistUnlockTestResult(node.id, unlockState)
+                        }
+                        val unlockResults = unlockState?.items.orEmpty()
+                        val unlockTestsPassed = !runUnlockTests || (
+                            unlockResults.size == definitions.size &&
+                                unlockResults.all { it.state == UnlockTestState.UNLOCKED }
+                            )
+                        HomeCandidateFilterResult(
+                            node = node,
+                            linkTypePassed = linkTypePassed,
+                            unlockTestsPassed = unlockTestsPassed
+                        )
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        Log.w(tag, "Pre-VPN candidate test failed for ${node.id}", error)
+                        val message = "临时代理测试失败：${error.message ?: "未知错误"}"
+                        if (runLinkType) {
+                            persistLinkTypeTestResult(
+                                node.id,
+                                LinkTypeTestResult(
+                                    state = LinkTypeTestState.ERROR,
+                                    serverAddress = node.server,
+                                    message = message
+                                )
+                            )
+                        }
+                        if (runUnlockTests) {
+                            persistUnlockTestResult(
+                                node.id,
+                                unlockTestFailureState(definitions, message, UnlockTestState.ERROR)
+                            )
+                        }
+                        HomeCandidateFilterResult(
+                            node = node,
+                            linkTypePassed = false,
+                            unlockTestsPassed = false
+                        )
+                    } finally {
+                        proxySession?.let { session ->
+                            withContext(NonCancellable + Dispatchers.IO) {
+                                runCatching { session.stop() }
+                            }
+                        }
+                    }
+                }
+                progressMutex.withLock {
+                    completed += 1
+                    updateSpeedTestProgress(
+                        title = title,
+                        stage = "第 4、5 项筛选线路",
+                        completed = completed,
+                        total = nodes.size
+                    )
+                }
+                outcome
+            }
+        }.awaitAll()
     }
 
-    private suspend fun runLinkTypeTest(node: Node) {
-        _linkTypeTestResult.value = LinkTypeTestResult(
-            state = LinkTypeTestState.TESTING,
-            serverAddress = node.server,
-            message = "等待 VPN 节点连接"
-        )
-        val finalState = withTimeoutOrNull(90_000L) {
-            ServiceManager.vpnState.first { it == VpnState.CONNECTED || it == VpnState.DISCONNECTED }
-        }
-        val endpoint = BoxVpnService.activeSocksEndpoint()
-        if (finalState != VpnState.CONNECTED || endpoint == null || !isCurrentTestNode(node)) {
-            val result = LinkTypeTestResult(
-                state = LinkTypeTestState.NOT_CONNECTED,
-                serverAddress = node.server,
-                message = if (finalState == null) "等待 VPN 连接超时" else "当前节点未连接或连接已切换"
-            )
-            _linkTypeTestResult.value = result
-            persistLinkTypeTestResult(node.id, result)
-            return
-        }
-        _linkTypeTestResult.update { it.copy(message = "正在检测中转点与落地点") }
+    private suspend fun runLinkTypeTestForCandidate(
+        node: Node,
+        endpoint: io.github.HanJason233.chimera.core.LocalSocksEndpoint
+    ): LinkTypeTestResult {
         val result = try {
-            LinkTypeTestRunner(endpoint, resolveServer = { server ->
-                val host = server.trim().removePrefix("[").removeSuffix("]")
-                LinkIpAddress.normalize(host)?.let { listOf(it) }
-                    ?: checkNotNull(BoxVpnService.activePhysicalNetwork()) { "当前物理网络不可用" }
-                        .getAllByName(host).mapNotNull { it.hostAddress }
-            }).run(node.server)
+            LinkTypeTestRunner(endpoint, resolveServer = ::resolveNodeServerAddresses)
+                .run(node.server)
         } catch (cancelled: CancellationException) {
-            _linkTypeTestResult.update { current ->
-                if (current.state == LinkTypeTestState.TESTING) {
-                    current.copy(state = LinkTypeTestState.IDLE, message = "检测已中断")
-                } else {
-                    current
-                }
-            }
             throw cancelled
-        } catch (_: Exception) {
-            LinkTypeTestResult(LinkTypeTestState.ERROR, node.server, message = "链路检测失败，请稍后重试")
+        } catch (error: Exception) {
+            LinkTypeTestResult(
+                state = LinkTypeTestState.ERROR,
+                serverAddress = node.server,
+                message = "链路检测失败：${error.message ?: "请稍后重试"}"
+            )
         }
-        // A result from a replaced session must not be shown as the new node's result.
-        if (!isCurrentTestNode(node) || BoxVpnService.activeSocksEndpoint() != endpoint) {
-            _linkTypeTestResult.value = nodeDao().getHomeNodeTestResults(node.id)
-                ?.linkTypeResultJson
-                ?.takeIf(String::isNotBlank)
-                ?.let(HomeTestResultCodec::decodeLinkType)
-                ?: LinkTypeTestResult()
-            return
-        }
-        _linkTypeTestResult.value = result
         persistLinkTypeTestResult(node.id, result)
+        return result
     }
+
+    private fun resolveNodeServerAddresses(server: String): List<String> {
+        val host = server.trim().removePrefix("[").removeSuffix("]")
+        LinkIpAddress.normalize(host)?.let { return listOf(it) }
+        val physicalNetwork = BoxVpnService.activePhysicalNetwork()
+            ?: NetworkUtils.physicalNetwork(getApplication())
+        val addresses = physicalNetwork?.getAllByName(host) ?: InetAddress.getAllByName(host)
+        return addresses.mapNotNull { it.hostAddress }
+    }
+
+    private suspend fun runUnlockTestsForCandidate(
+        node: Node,
+        endpoint: io.github.HanJason233.chimera.core.LocalSocksEndpoint,
+        definitions: List<UnlockTestDefinition>
+    ): UnlockTestUiState {
+        val results = UnlockTestRunner(endpoint).use { runner ->
+            coroutineScope {
+                definitions.map { definition ->
+                    async {
+                        unlockRequestSemaphore.withPermit {
+                            try {
+                                runner.run(definition)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (error: Throwable) {
+                                UnlockTestClassifier.error(definition, error)
+                            }
+                        }
+                    }
+                }.awaitAll()
+            }
+        }
+        val fullySupported = results.count { it.state == UnlockTestState.UNLOCKED }
+        val state = UnlockTestUiState(
+            items = results,
+            isRunning = false,
+            message = "检测完成：${fullySupported}/${results.size} 项完全支持"
+        )
+        persistUnlockTestResult(node.id, state)
+        return state
+    }
+
+    private fun unlockTestFailureState(
+        definitions: List<UnlockTestDefinition>,
+        message: String,
+        state: UnlockTestState
+    ) = UnlockTestUiState(
+        items = definitions.map { definition ->
+            UnlockTestResult(
+                definition = definition,
+                state = state,
+                statusText = if (state == UnlockTestState.NOT_CONNECTED) "未检测" else "检测失败",
+                description = message
+            )
+        },
+        message = message
+    )
 
     private suspend fun persistLinkTypeTestResult(nodeId: String, result: LinkTypeTestResult) {
         runCatching {
@@ -1279,123 +1503,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }.onFailure { error -> Log.w(tag, "Failed to persist link type result", error) }
     }
 
-    private fun isCurrentTestNode(node: Node): Boolean =
-        ServiceManager.vpnState.value == VpnState.CONNECTED &&
-            ServiceManager.currentNode.value?.getRawLinkPlain() == node.getRawLinkPlain()
-
-    /** 等待方案选出的节点连通，再运行用户勾选的流媒体与 AI 检测。 */
-    private suspend fun runUnlockTests(selectedIds: Set<String>, expectedNode: Node) {
-        val definitions = UnlockTestCatalog.definitions.filter { it.id in selectedIds }
-        if (definitions.isEmpty()) return
-
-        _unlockTestState.value = UnlockTestUiState(
-            items = definitions.map { definition ->
-                UnlockTestResult(
-                    definition = definition,
-                    state = UnlockTestState.TESTING,
-                    statusText = "等待连接",
-                    description = definition.testingDescription
-                )
-            },
-            isRunning = true,
-            message = "等待 VPN 节点连接"
-        )
-
-        val finalVpnState = withTimeoutOrNull(90_000L) {
-            ServiceManager.vpnState.first {
-                it == VpnState.CONNECTED || it == VpnState.DISCONNECTED
-            }
-        }
-        if (finalVpnState != VpnState.CONNECTED) {
-            finishUnlockTestsAsNotConnected(
-                definitions,
-                expectedNode.id,
-                if (finalVpnState == null) "等待 VPN 连接超时" else "VPN 连接失败"
-            )
-            return
-        }
-
-        val endpoint = BoxVpnService.activeSocksEndpoint()
-        if (endpoint == null || !isCurrentTestNode(expectedNode)) {
-            finishUnlockTestsAsNotConnected(
-                definitions,
-                expectedNode.id,
-                "当前节点未连接或连接已切换"
-            )
-            return
-        }
-
-        _unlockTestState.update { it.copy(message = "正在通过当前节点检测") }
-        try {
-            val semaphore = Semaphore(MAX_CONCURRENT_UNLOCK_TESTS)
-            UnlockTestRunner(endpoint).use { runner ->
-                coroutineScope {
-                    definitions.map { definition ->
-                        async {
-                            val result = semaphore.withPermit {
-                                try {
-                                    runner.run(definition)
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (throwable: Throwable) {
-                                    UnlockTestClassifier.error(definition, throwable)
-                                }
-                            }
-                            _unlockTestState.update { state ->
-                                state.copy(items = state.items.map {
-                                    if (it.definition.id == definition.id) result else it
-                                })
-                            }
-                        }
-                    }.awaitAll()
-                }
-            }
-            _unlockTestState.update { state ->
-                val usable = state.items.count {
-                    it.state == UnlockTestState.UNLOCKED || it.state == UnlockTestState.PARTIAL
-                }
-                state.copy(
-                    isRunning = false,
-                    message = "检测完成：${state.items.size} 项中 $usable 项可用或部分可用"
-                )
-            }
-            persistUnlockTestResult(expectedNode.id, _unlockTestState.value)
-        } catch (cancelled: CancellationException) {
-            _unlockTestState.update { state ->
-                state.copy(
-                    items = state.items.map { item ->
-                        if (item.state == UnlockTestState.TESTING) {
-                            item.copy(
-                                state = UnlockTestState.IDLE,
-                                statusText = "已取消",
-                                description = "用户已取消测试"
-                            )
-                        } else {
-                            item
-                        }
-                    },
-                    isRunning = false,
-                    message = "测试已取消"
-                )
-            }
-            throw cancelled
-        } catch (throwable: Throwable) {
-            _unlockTestState.update { state ->
-                state.copy(
-                    items = state.items.map { item ->
-                        if (item.state == UnlockTestState.TESTING) {
-                            UnlockTestClassifier.error(item.definition, throwable)
-                        } else {
-                            item
-                        }
-                    },
-                    isRunning = false,
-                    message = "检测未能完成，请稍后重试"
-                )
-            }
-            persistUnlockTestResult(expectedNode.id, _unlockTestState.value)
-        }
-    }
 
     private suspend fun persistUnlockTestResult(nodeId: String, state: UnlockTestUiState) {
         if (state.isRunning || state.items.isEmpty()) return
@@ -1404,27 +1511,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }.onFailure { error -> Log.w(tag, "Failed to persist IP test results", error) }
     }
 
-    private suspend fun finishUnlockTestsAsNotConnected(
-        definitions: List<UnlockTestDefinition>,
-        nodeId: String,
-        message: String
-    ) {
-        _unlockTestState.value = UnlockTestUiState(
-            items = definitions.map { definition ->
-                UnlockTestResult(
-                    definition = definition,
-                    state = UnlockTestState.NOT_CONNECTED,
-                    statusText = "未连接",
-                    description = message
-                )
-            },
-            message = message
-        )
-        persistUnlockTestResult(nodeId, _unlockTestState.value)
-    }
-
     private companion object {
         const val MAX_CONCURRENT_UNLOCK_TESTS = 4
+        const val MAX_CONCURRENT_PRE_VPN_TEST_NODES = 3
+        const val PRE_VPN_TEST_SESSION_START_TIMEOUT_MS = 30_000L
         const val ACCOUNT_OVERVIEW_SYNC_COOLDOWN_MS = 60_000L
         const val NOTIFICATION_REFRESH_COOLDOWN_MS = 30_000L
     }

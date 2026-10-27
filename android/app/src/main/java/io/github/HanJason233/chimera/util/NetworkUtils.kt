@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.util
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -20,6 +21,20 @@ object NetworkUtils {
         return activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
             activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
             activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    }
+
+    /** 获取不经过 VPN 的互联网网络，用于在 TUN 建立前解析节点入口域名。 */
+    fun physicalNetwork(context: Context): Network? {
+        val connectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        fun isPhysicalInternet(network: Network): Boolean {
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+            return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+        }
+
+        return connectivityManager.activeNetwork?.takeIf(::isPhysicalInternet)
+            ?: connectivityManager.allNetworks.firstOrNull(::isPhysicalInternet)
     }
 
     /** 获取可供局域网设备连接的当前 Wi-Fi/以太网 IPv4 地址。 */

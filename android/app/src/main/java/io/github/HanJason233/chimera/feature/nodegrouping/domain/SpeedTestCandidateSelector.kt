@@ -23,7 +23,7 @@ internal object SpeedTestCandidateSelector {
             is SpeedTestStageScope.PreviousResult -> checkNotNull(previousResults[scope.stage]) {
                 "前项测试尚未完成：${scope.stage}"
             }
-            SpeedTestStageScope.ConnectedNode -> error("连接后的测试不参与节点筛选")
+            SpeedTestStageScope.ConnectedNode -> error("当前测速方案不能用单个连接节点作为批量筛选输入")
         }
         return candidates
     }

@@ -27,11 +27,14 @@ data class LegacySpeedTestSettings(
     val tcpingEnabled: Boolean = true,
     val urlTestEnabled: Boolean = true,
     val bandwidthEnabled: Boolean = false,
-    /** 第四步只检测连接后的当前节点，无额外参数。 */
+    /** 第四步保留的链路类型；测试在 VPN 创建前通过临时代理批量执行。 */
     val linkTypeTestEnabled: Boolean = false,
-    /** 第五步解锁检测的总开关。 */
+    val linkTypeAcceptDirect: Boolean = true,
+    val linkTypeAcceptRelay: Boolean = true,
+    val linkTypeAcceptCdnRelay: Boolean = true,
+    /** 第五步按所选服务全部通过来保留线路。 */
     val unlockTestsEnabled: Boolean = false,
-    /** 第五步要在 VPN 连接后执行的流媒体与 AI 解锁检测项目。 */
+    /** 第五步要检测的流媒体与 AI 服务。 */
     val unlockTestIds: Set<String> = emptySet(),
     val tcpingSelectionMode: SpeedTestSelectionMode = SpeedTestSelectionMode.PERCENT,
     val tcpingSelectionValue: Int = 100,
