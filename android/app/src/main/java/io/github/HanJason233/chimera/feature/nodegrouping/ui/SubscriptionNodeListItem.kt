@@ -1,7 +1,6 @@
 package io.github.HanJason233.chimera.feature.nodegrouping.ui
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,23 @@ import io.github.HanJason233.chimera.ui.theme.LatencyGood
 import io.github.HanJason233.chimera.ui.theme.LatencyMedium
 import io.github.HanJason233.chimera.util.protocolDisplayLabel
 
+internal enum class NodeTestResultTone {
+    NEUTRAL,
+    POSITIVE,
+    WARNING,
+    ERROR
+}
+
+internal data class NodeListTestResultSummary(
+    val tcpingLatency: Int = -1,
+    val urlTestLatency: Int = -1,
+    val downloadMbps: Float = 0f,
+    val linkType: String? = null,
+    val linkTypeTone: NodeTestResultTone = NodeTestResultTone.NEUTRAL,
+    val unlockRatio: String? = null,
+    val unlockTone: NodeTestResultTone = NodeTestResultTone.NEUTRAL
+)
+
 @Composable
 internal fun NodeListItem(
     modifier: Modifier = Modifier,
@@ -41,6 +59,7 @@ internal fun NodeListItem(
     enabled: Boolean,
     displaySettings: NodeDisplaySettings,
     coreSettings: ProtocolCoreSettings,
+    testResults: NodeListTestResultSummary,
     onClick: () -> Unit
 ) {
     val backgroundColor = if (isSelected) {
@@ -61,7 +80,7 @@ internal fun NodeListItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 36.dp, vertical = 16.dp),
+                .padding(horizontal = 36.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -100,35 +119,48 @@ internal fun NodeListItem(
 
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    NodeMetric(
-                        label = "TCPing",
-                        value = formatNodeLatency(node.tcpingLatency),
-                        valueColor = nodeMetricColor(node.tcpingLatency),
-                        modifier = Modifier.weight(1f)
-                    )
-                    NodeMetric(
-                        label = "204 URLTest",
-                        value = formatNodeLatency(node.urlTestLatency),
-                        valueColor = nodeMetricColor(node.urlTestLatency),
-                        modifier = Modifier.weight(1f)
-                    )
-                    NodeMetric(
-                        label = "带宽",
-                        value = formatBandwidth(node.downloadMbps),
-                        valueColor = if (node.downloadMbps > 0f) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                val tcpingLatency = testResults.tcpingLatency.takeIf { it != -1 }
+                    ?: node.tcpingLatency
+                val urlTestLatency = testResults.urlTestLatency.takeIf { it != -1 }
+                    ?: node.urlTestLatency
+                val downloadMbps = testResults.downloadMbps.takeIf { it > 0f }
+                    ?: node.downloadMbps
+                val testValues = listOf(
+                    formatNodeLatency(tcpingLatency) to nodeMetricColor(tcpingLatency),
+                    formatNodeLatency(urlTestLatency) to nodeMetricColor(urlTestLatency),
+                    formatBandwidth(downloadMbps) to if (downloadMbps > 0f) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    (testResults.linkType ?: "—") to resultToneColor(testResults.linkTypeTone),
+                    (testResults.unlockRatio ?: "—") to resultToneColor(testResults.unlockTone)
+                )
+                Text(
+                    text = buildAnnotatedString {
+                        testValues.forEachIndexed { index, (value, color) ->
+                            if (index > 0) {
+                                withStyle(SpanStyle(color = MaterialTheme.colorScheme.outline)) {
+                                    append("/")
+                                }
+                            }
+                            withStyle(
+                                SpanStyle(
+                                    color = color,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            ) {
+                                append(value)
+                            }
+                        }
+                    },
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -152,48 +184,31 @@ private fun NodeProtocolDetailsBadge(label: String, modifier: Modifier = Modifie
     }
 }
 
-@Composable
-private fun NodeMetric(
-    label: String,
-    value: String,
-    valueColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = value,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = valueColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
 private fun formatNodeLatency(latency: Int): String = when {
     latency > 0 -> "${latency}ms"
-    latency == -2 -> "失败"
-    else -> "未测试"
+    latency == -2 -> "×"
+    else -> "—"
 }
 
 private fun formatBandwidth(downloadMbps: Float): String = if (downloadMbps > 0f) {
-    String.format(Locale.US, "%.1f Mbps", downloadMbps)
+    String.format(Locale.US, "%.1fMbps", downloadMbps)
 } else {
-    "未测试"
+    "—"
 }
 
 @Composable
 private fun nodeMetricColor(latency: Int): Color = when {
+    latency == -2 -> LatencyBad
     latency < 0 -> MaterialTheme.colorScheme.onSurfaceVariant
     latency <= 200 -> LatencyGood
     latency <= 400 -> LatencyMedium
     else -> LatencyBad
+}
+
+@Composable
+private fun resultToneColor(tone: NodeTestResultTone): Color = when (tone) {
+    NodeTestResultTone.NEUTRAL -> MaterialTheme.colorScheme.onSurfaceVariant
+    NodeTestResultTone.POSITIVE -> LatencyGood
+    NodeTestResultTone.WARNING -> LatencyMedium
+    NodeTestResultTone.ERROR -> LatencyBad
 }

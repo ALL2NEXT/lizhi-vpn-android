@@ -358,6 +358,9 @@ interface NodeDao {
     @Query("SELECT * FROM home_node_test_results WHERE nodeId = :nodeId LIMIT 1")
     fun observeHomeNodeTestResults(nodeId: String): Flow<HomeNodeTestResultsEntity?>
 
+    @Query("SELECT * FROM home_node_test_results")
+    fun observeAllHomeNodeTestResults(): Flow<List<HomeNodeTestResultsEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveHomeNodeTestResults(results: HomeNodeTestResultsEntity)
 

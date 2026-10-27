@@ -69,6 +69,7 @@ internal fun SubscriptionGroupingScreen(
     isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
+    nodeTestResults: Map<String, NodeListTestResultSummary>,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
@@ -139,7 +140,7 @@ internal fun SubscriptionGroupingScreen(
                     onDismissRequest = { manualTestMenuExpanded = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("TCPing · 测试当前分组全部节点") },
+                        text = { Text("TCPing") },
                         onClick = {
                             manualTestMenuExpanded = false
                             onRunManualGroupTest(ManualGroupTestStage.TCPING)
@@ -147,7 +148,7 @@ internal fun SubscriptionGroupingScreen(
                         enabled = !isTesting
                     )
                     DropdownMenuItem(
-                        text = { Text("URL Test · 测试当前分组全部节点") },
+                        text = { Text("URL Test") },
                         onClick = {
                             manualTestMenuExpanded = false
                             onRunManualGroupTest(ManualGroupTestStage.URL_TEST)
@@ -155,7 +156,7 @@ internal fun SubscriptionGroupingScreen(
                         enabled = !isTesting
                     )
                     DropdownMenuItem(
-                        text = { Text("带宽测速 · 测试当前分组全部节点") },
+                        text = { Text("带宽测速") },
                         onClick = {
                             manualTestMenuExpanded = false
                             onRunManualGroupTest(ManualGroupTestStage.BANDWIDTH)
@@ -163,7 +164,7 @@ internal fun SubscriptionGroupingScreen(
                         enabled = !isTesting
                     )
                     DropdownMenuItem(
-                        text = { Text("链路类型检测 · 测试当前分组全部节点") },
+                        text = { Text("链路类型检测") },
                         onClick = {
                             manualTestMenuExpanded = false
                             onRunManualGroupTest(ManualGroupTestStage.LINK_TYPE)
@@ -171,7 +172,7 @@ internal fun SubscriptionGroupingScreen(
                         enabled = !isTesting
                     )
                     DropdownMenuItem(
-                        text = { Text("流媒体与 AI 解锁 · 测试当前分组全部节点") },
+                        text = { Text("流媒体与 AI 解锁") },
                         onClick = {
                             manualTestMenuExpanded = false
                             onRunManualGroupTest(ManualGroupTestStage.IP_QUALITY)
@@ -210,6 +211,7 @@ internal fun SubscriptionGroupingScreen(
                 isTesting = isTesting,
                 nodeDisplaySettings = nodeDisplaySettings,
                 protocolCoreSettings = protocolCoreSettings,
+                nodeTestResults = nodeTestResults,
                 onNodeSelected = handleNodeSelected,
                 interactionEnabled = !isClosing,
                 bottomContentPadding = bottomContentPadding,
@@ -452,6 +454,7 @@ private fun NodeListContent(
     isTesting: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
+    nodeTestResults: Map<String, NodeListTestResultSummary>,
     onNodeSelected: (Node) -> Unit,
     interactionEnabled: Boolean,
     bottomContentPadding: Dp,
@@ -548,6 +551,8 @@ private fun NodeListContent(
                                         enabled = interactionEnabled,
                                         displaySettings = nodeDisplaySettings,
                                         coreSettings = protocolCoreSettings,
+                                        testResults = nodeTestResults[node.id]
+                                            ?: NodeListTestResultSummary(),
                                         onClick = {
                                             onOpenSwipeNodeChange(null)
                                             onNodeSelected(node)
@@ -561,6 +566,8 @@ private fun NodeListContent(
                                     enabled = interactionEnabled,
                                     displaySettings = nodeDisplaySettings,
                                     coreSettings = protocolCoreSettings,
+                                    testResults = nodeTestResults[node.id]
+                                        ?: NodeListTestResultSummary(),
                                     onClick = { onNodeSelected(node) }
                                 )
                             }

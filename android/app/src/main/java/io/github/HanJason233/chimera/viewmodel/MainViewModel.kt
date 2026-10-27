@@ -25,6 +25,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.data.local.AppDatabase
+import io.github.HanJason233.chimera.data.local.HomeNodeTestResultsEntity
 import io.github.HanJason233.chimera.data.local.NodeLatencyUpdate
 import io.github.HanJason233.chimera.data.local.NodeLocationUpdate
 import io.github.HanJason233.chimera.data.local.NodeDao
@@ -640,6 +641,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    /** 节点列表卡片批量读取每个节点最近一次的独立测试结果。 */
+    internal val allNodeTestResults = nodeDaoFlow
+        .flatMapLatest { dao -> dao.observeAllHomeNodeTestResults() }
+        .map { results -> results.associateBy(HomeNodeTestResultsEntity::nodeId) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     private val storedHomeTestResultsForCurrentNode = currentNode.flatMapLatest { node ->
         if (node == null) {
