@@ -12,11 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,15 +35,13 @@ import io.github.HanJason233.chimera.util.protocolDisplayLabel
 
 @Composable
 internal fun NodeListItem(
+    modifier: Modifier = Modifier,
     node: Node,
     isSelected: Boolean,
     enabled: Boolean,
     displaySettings: NodeDisplaySettings,
     coreSettings: ProtocolCoreSettings,
-    actionMode: NodeActionMode?,
-    onClick: () -> Unit,
-    onEditNode: () -> Unit,
-    onDeleteNode: () -> Unit
+    onClick: () -> Unit
 ) {
     val backgroundColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer
@@ -60,7 +53,7 @@ internal fun NodeListItem(
     }
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(enabled = enabled) { onClick() },
         color = backgroundColor
@@ -105,33 +98,6 @@ internal fun NodeListItem(
                         )
                     }
 
-                    when (actionMode) {
-                        null -> Unit
-                        NodeActionMode.EDIT -> IconButton(
-                            onClick = onEditNode,
-                            enabled = enabled,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Edit,
-                                contentDescription = "编辑节点",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        NodeActionMode.DELETE -> IconButton(
-                            onClick = onDeleteNode,
-                            enabled = enabled,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Delete,
-                                contentDescription = "删除节点",
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))

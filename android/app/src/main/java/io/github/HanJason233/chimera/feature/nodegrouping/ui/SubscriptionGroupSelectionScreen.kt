@@ -37,19 +37,15 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.InsertDriveFile
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Subscriptions
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -110,12 +106,6 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private enum class GroupActionMode {
-    UPDATE,
-    EDIT,
-    DELETE
-}
 
 private enum class SubscriptionTrafficStatus {
     UNKNOWN,
@@ -267,7 +257,6 @@ private fun SubscriptionGroupSelectionScreen(
     var editingGroupId by rememberSaveable { mutableStateOf("") }
     var deletingOfficialSubscription by rememberSaveable { mutableStateOf(false) }
     var officialSettingDialogVisible by rememberSaveable { mutableStateOf(false) }
-    var groupActionMode by rememberSaveable { mutableStateOf<GroupActionMode?>(null) }
     var importStatus by rememberSaveable { mutableStateOf<String?>(null) }
     var countryDialogVisible by rememberSaveable { mutableStateOf(false) }
     var officialGroupsExpanded by rememberSaveable { mutableStateOf(true) }
@@ -286,6 +275,7 @@ private fun SubscriptionGroupSelectionScreen(
     var stagedLocalIconFile by remember { mutableStateOf<String?>(null) }
     var iconUrlError by remember { mutableStateOf<String?>(null) }
     var isImportingLocalIcon by remember { mutableStateOf(false) }
+    var openSwipeCardId by rememberSaveable { mutableStateOf<String?>(null) }
     val importScope = rememberCoroutineScope()
     val availableCountryCodes = remember(countryOptions) {
         countryOptions.mapTo(mutableSetOf()) { it.code }
@@ -392,7 +382,6 @@ private fun SubscriptionGroupSelectionScreen(
         userAgentError = null
         stagedLocalIconFile = null
         iconUrlError = null
-        groupActionMode = null
         editDialogVisible = true
     }
 
@@ -400,7 +389,6 @@ private fun SubscriptionGroupSelectionScreen(
         editingOfficialGroup = group
         editingGroupId = group.sourceId
         editingAutoRefreshOnStartup = autoRefreshOnStartup
-        groupActionMode = null
         officialSettingDialogVisible = true
     }
 
@@ -547,31 +535,68 @@ private fun SubscriptionGroupSelectionScreen(
                                     items = subscriptionGroups,
                                     key = { "subscription:${it.sourceId}" }
                                 ) { group ->
-                                    SubscriptionGroupCard(
-                                        group = group,
-                                        nodeCount = nodeCounts[group.sourceId] ?: 0,
-                                        selected = selectedNodeGroupId ==
-                                            NodeGroupKey.Subscription(group.sourceId).value,
-                                        actionMode = groupActionMode,
-                                        onClick = { onSubscriptionSelected(group) },
-                                        onViewDetails = { onViewSubscriptionDetails(group) },
-                                        onRefresh = {
-                                            onRefreshOfficialSubscription(group.sourceId) { success ->
-                                                Toast.makeText(
-                                                    context,
-                                                    if (success) "官方源已更新" else "官方源更新失败或当前操作繁忙",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                        },
-                                        onDelete = { confirmDeleteOfficialSubscription(group) },
-                                        onEdit = {
-                                            editOfficialSubscription(
-                                                group,
-                                                autoRefreshOnStartupOverrides[group.sourceId] ?: true
-                                            )
+                                    val swipeKey = "subscription:${group.sourceId}"
+                                    val refresh = {
+                                        onRefreshOfficialSubscription(group.sourceId) { success ->
+                                            Toast.makeText(
+                                                context,
+                                                if (success) "官方源已更新" else "官方源更新失败或当前操作繁忙",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
-                                    )
+                                    }
+                                    val edit = {
+                                        editOfficialSubscription(
+                                            group,
+                                            autoRefreshOnStartupOverrides[group.sourceId] ?: true
+                                        )
+                                    }
+                                    SwipeActionCard(
+                                        itemKey = swipeKey,
+                                        actions = listOf(
+                                            SwipeCardAction(
+                                                icon = Icons.Rounded.ChevronRight,
+                                                label = "详情",
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                onClick = { onViewSubscriptionDetails(group) }
+                                            ),
+                                            SwipeCardAction(
+                                                icon = Icons.Rounded.Refresh,
+                                                label = "刷新",
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                onClick = refresh
+                                            ),
+                                            SwipeCardAction(
+                                                icon = Icons.Rounded.Edit,
+                                                label = "编辑",
+                                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                onClick = edit
+                                            )
+                                        ),
+                                        revealed = openSwipeCardId == swipeKey,
+                                        onRevealedChange = { isRevealed ->
+                                            openSwipeCardId = if (isRevealed) swipeKey else null
+                                        },
+                                        onSwipeRight = {
+                                            openSwipeCardId = null
+                                            confirmDeleteOfficialSubscription(group)
+                                        }
+                                    ) { swipeModifier ->
+                                        SubscriptionGroupCard(
+                                            modifier = swipeModifier,
+                                            group = group,
+                                            nodeCount = nodeCounts[group.sourceId] ?: 0,
+                                            selected = selectedNodeGroupId ==
+                                                NodeGroupKey.Subscription(group.sourceId).value,
+                                            onClick = {
+                                                openSwipeCardId = null
+                                                onSubscriptionSelected(group)
+                                            }
+                                        )
+                                    }
                                     Divider(
                                         modifier = Modifier.fillMaxWidth(),
                                         color = MaterialTheme.colorScheme.outlineVariant
@@ -594,35 +619,72 @@ private fun SubscriptionGroupSelectionScreen(
                                     items = userGroups,
                                     key = NodeGroupSummary::id
                                 ) { group ->
-                                    UserSubscriptionGroupCard(
-                                        group = group,
-                                        nodeCount = personalNodeCounts[
-                                            group.id.removePrefix("imported:")
-                                        ] ?: 0,
-                                        selected = selectedNodeGroupId == group.id,
-                                        actionMode = groupActionMode,
-                                        onClick = { onUserGroupSelected(group) },
-                                        onViewDetails = { onViewUserGroupDetails(group) },
-                                        onEdit = { editGroup(group) },
-                                        onDelete = { confirmDeleteGroup(group) },
-                                        onRefresh = {
-                                            onRefreshUserGroup(group.id.removePrefix("imported:")) { result ->
-                                                val message = when (result) {
-                                                    MainViewModel.SubscriptionGroupRefreshResult.REFRESHED ->
-                                                        "私人源已更新"
-                                                    MainViewModel.SubscriptionGroupRefreshResult.INVALID ->
-                                                        "订阅内容中未找到可用节点"
-                                                    MainViewModel.SubscriptionGroupRefreshResult.FETCH_FAILED ->
-                                                        "订阅链接获取失败"
-                                                    MainViewModel.SubscriptionGroupRefreshResult.NOT_FOUND ->
-                                                        "私人源不存在"
-                                                    MainViewModel.SubscriptionGroupRefreshResult.BUSY ->
-                                                        "当前操作繁忙，请稍后重试"
-                                                }
-                                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                    val swipeKey = group.id
+                                    val refresh = {
+                                        onRefreshUserGroup(group.id.removePrefix("imported:")) { result ->
+                                            val message = when (result) {
+                                                MainViewModel.SubscriptionGroupRefreshResult.REFRESHED ->
+                                                    "私人源已更新"
+                                                MainViewModel.SubscriptionGroupRefreshResult.INVALID ->
+                                                    "订阅内容中未找到可用节点"
+                                                MainViewModel.SubscriptionGroupRefreshResult.FETCH_FAILED ->
+                                                    "订阅链接获取失败"
+                                                MainViewModel.SubscriptionGroupRefreshResult.NOT_FOUND ->
+                                                    "私人源不存在"
+                                                MainViewModel.SubscriptionGroupRefreshResult.BUSY ->
+                                                    "当前操作繁忙，请稍后重试"
                                             }
+                                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                         }
-                                    )
+                                    }
+                                    val edit = { editGroup(group) }
+                                    SwipeActionCard(
+                                        itemKey = swipeKey,
+                                        actions = listOf(
+                                            SwipeCardAction(
+                                                icon = Icons.Rounded.ChevronRight,
+                                                label = "详情",
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                onClick = { onViewUserGroupDetails(group) }
+                                            ),
+                                            SwipeCardAction(
+                                                icon = Icons.Rounded.Refresh,
+                                                label = "刷新",
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                onClick = refresh
+                                            ),
+                                            SwipeCardAction(
+                                                icon = Icons.Rounded.Edit,
+                                                label = "编辑",
+                                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                onClick = edit
+                                            )
+                                        ),
+                                        revealed = openSwipeCardId == swipeKey,
+                                        onRevealedChange = { isRevealed ->
+                                            openSwipeCardId = if (isRevealed) swipeKey else null
+                                        },
+                                        onSwipeRight = {
+                                            openSwipeCardId = null
+                                            confirmDeleteGroup(group)
+                                        }
+                                    ) { swipeModifier ->
+                                        UserSubscriptionGroupCard(
+                                            modifier = swipeModifier,
+                                            group = group,
+                                            nodeCount = personalNodeCounts[
+                                                group.id.removePrefix("imported:")
+                                            ] ?: 0,
+                                            selected = selectedNodeGroupId == group.id,
+                                            onClick = {
+                                                openSwipeCardId = null
+                                                onUserGroupSelected(group)
+                                            }
+                                        )
+                                    }
                                     Divider(
                                         modifier = Modifier.fillMaxWidth(),
                                         color = MaterialTheme.colorScheme.outlineVariant
@@ -1151,7 +1213,6 @@ private fun SubscriptionGroupSelectionScreen(
                             if (success) {
                                 deleteDialogVisible = false
                                 editDialogVisible = false
-                                groupActionMode = null
                                 deletingOfficialSubscription = false
                             }
                         }
@@ -1265,53 +1326,33 @@ private fun PersonalSourceUserAgentOption(
 
 @Composable
 private fun SubscriptionGroupCard(
+    modifier: Modifier = Modifier,
     group: SubscriptionGroup,
     nodeCount: Int,
     selected: Boolean,
-    actionMode: GroupActionMode?,
-    onClick: () -> Unit,
-    onViewDetails: () -> Unit,
-    onRefresh: () -> Unit,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit
+    onClick: () -> Unit
 ) {
-    val subscriptionActionMode = actionMode.takeIf {
-        it == GroupActionMode.UPDATE || it == GroupActionMode.DELETE
-    }
     GroupCard(
+        modifier = modifier,
         name = group.name,
         nodeCount = nodeCount,
         updatedAt = group.updatedAt,
         status = "长期有效",
         selected = selected,
-        onClick = onClick,
-        onViewDetails = onViewDetails,
-        actionMode = subscriptionActionMode,
-        onGroupAction = when (subscriptionActionMode) {
-            GroupActionMode.UPDATE -> onRefresh
-            GroupActionMode.DELETE -> onDelete
-            else -> onViewDetails
-        },
-        onRefresh = onRefresh,
-        onEdit = onEdit,
-        onDelete = onDelete
+        onClick = onClick
     )
 }
 
 @Composable
 private fun UserSubscriptionGroupCard(
+    modifier: Modifier = Modifier,
     group: NodeGroupSummary,
     nodeCount: Int,
     selected: Boolean,
-    actionMode: GroupActionMode?,
-    onClick: () -> Unit,
-    onViewDetails: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onRefresh: () -> Unit
+    onClick: () -> Unit
 ) {
-    val supportsRefresh = !group.subscriptionUrl.isNullOrBlank()
     GroupCard(
+        modifier = modifier,
         name = group.name,
         subscriptionUrl = group.subscriptionUrl,
         iconMode = group.iconMode,
@@ -1322,19 +1363,7 @@ private fun UserSubscriptionGroupCard(
         updatedAt = group.subscriptionUpdatedAt,
         status = personalSubscriptionStatus(group),
         selected = selected,
-        onClick = onClick,
-        onViewDetails = onViewDetails,
-        actionMode = actionMode,
-        onGroupAction = when (actionMode) {
-            GroupActionMode.UPDATE -> onRefresh
-            GroupActionMode.EDIT -> onEdit
-            GroupActionMode.DELETE -> onDelete
-            null -> onViewDetails
-        },
-        actionEnabled = actionMode != GroupActionMode.UPDATE || supportsRefresh,
-        onRefresh = onRefresh,
-        onEdit = onEdit,
-        onDelete = onDelete
+        onClick = onClick
     )
 }
 
@@ -1403,6 +1432,7 @@ private fun SubscriptionImportOption(
 
 @Composable
 private fun GroupCard(
+    modifier: Modifier = Modifier,
     name: String,
     subscriptionUrl: String? = null,
     iconMode: String = PersonalSourceIconMode.AUTO_REMOTE.name,
@@ -1413,16 +1443,10 @@ private fun GroupCard(
     updatedAt: Long? = null,
     status: String? = null,
     selected: Boolean,
-    onClick: () -> Unit,
-    onViewDetails: () -> Unit,
-    actionMode: GroupActionMode? = null,
-    onGroupAction: () -> Unit = onViewDetails,
-    actionEnabled: Boolean = true,
-    onRefresh: (() -> Unit)? = null,
-    onEdit: (() -> Unit)? = null,
-    onDelete: (() -> Unit)? = null
+    onClick: () -> Unit
 ) {
     ModernGroupCard(
+        modifier = modifier,
         name = name,
         subscriptionUrl = subscriptionUrl,
         iconMode = iconMode,
@@ -1433,19 +1457,13 @@ private fun GroupCard(
         updatedAt = updatedAt,
         status = status,
         selected = selected,
-        onClick = onClick,
-        onViewDetails = onViewDetails,
-        onRefresh = onRefresh,
-        onEdit = onEdit,
-        onDelete = onDelete,
-        actionMode = actionMode,
-        onGroupAction = onGroupAction,
-        actionEnabled = actionEnabled
+        onClick = onClick
     )
 }
 
 @Composable
 private fun ModernGroupCard(
+    modifier: Modifier = Modifier,
     name: String,
     subscriptionUrl: String?,
     iconMode: String,
@@ -1456,16 +1474,8 @@ private fun ModernGroupCard(
     updatedAt: Long?,
     status: String?,
     selected: Boolean,
-    onClick: () -> Unit,
-    onViewDetails: () -> Unit,
-    onRefresh: (() -> Unit)?,
-    onEdit: (() -> Unit)?,
-    onDelete: (() -> Unit)?,
-    actionMode: GroupActionMode?,
-    onGroupAction: () -> Unit,
-    actionEnabled: Boolean
+    onClick: () -> Unit
 ) {
-    var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val parsedIconMode = remember(iconMode) {
         PersonalSourceIconMode.fromStorage(iconMode)
     }
@@ -1542,7 +1552,7 @@ private fun ModernGroupCard(
         )
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         color = if (selected) {
@@ -1617,108 +1627,6 @@ private fun ModernGroupCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                    }
-                    Box {
-                        if (actionMode == null) {
-                            IconButton(
-                                onClick = { menuExpanded = true },
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.MoreVert,
-                                    contentDescription = "更多操作",
-                                    tint = if (selected) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.primary
-                                    }
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = menuExpanded,
-                                onDismissRequest = { menuExpanded = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("查看详情") },
-                                    leadingIcon = {
-                                        Icon(Icons.Rounded.ChevronRight, contentDescription = null)
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onViewDetails()
-                                    }
-                                )
-                                onRefresh?.let { refresh ->
-                                    DropdownMenuItem(
-                                        text = { Text("刷新") },
-                                        leadingIcon = {
-                                            Icon(Icons.Rounded.Refresh, contentDescription = null)
-                                        },
-                                        onClick = {
-                                            menuExpanded = false
-                                            refresh()
-                                        }
-                                    )
-                                }
-                                onEdit?.let { edit ->
-                                    DropdownMenuItem(
-                                        text = { Text("编辑") },
-                                        leadingIcon = {
-                                            Icon(Icons.Rounded.Edit, contentDescription = null)
-                                        },
-                                        onClick = {
-                                            menuExpanded = false
-                                            edit()
-                                        }
-                                    )
-                                }
-                                onDelete?.let { delete ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = "删除",
-                                                color = MaterialTheme.colorScheme.error
-                                            )
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                Icons.Rounded.Delete,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.error
-                                            )
-                                        },
-                                        onClick = {
-                                            menuExpanded = false
-                                            delete()
-                                        }
-                                    )
-                                }
-                            }
-                        } else {
-                            val actionIcon = when (actionMode) {
-                                GroupActionMode.UPDATE -> Icons.Rounded.Refresh
-                                GroupActionMode.EDIT -> Icons.Rounded.Edit
-                                GroupActionMode.DELETE -> Icons.Rounded.Delete
-                                null -> Icons.Rounded.MoreVert
-                            }
-                            IconButton(
-                                onClick = onGroupAction,
-                                enabled = actionEnabled,
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = actionIcon,
-                                    contentDescription = "仓库源操作",
-                                    tint = if (actionMode == GroupActionMode.DELETE) {
-                                        MaterialTheme.colorScheme.error
-                                    } else if (selected) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.primary
-                                    }
-                                )
-                            }
-                        }
                     }
                 }
 

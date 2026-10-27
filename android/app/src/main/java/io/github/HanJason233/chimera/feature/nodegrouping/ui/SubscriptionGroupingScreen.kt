@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.DropdownMenu
@@ -62,11 +61,6 @@ import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
 
-internal enum class NodeActionMode {
-    EDIT,
-    DELETE
-}
-
 @Composable
 internal fun SubscriptionGroupingScreen(
     nodes: List<Node>,
@@ -90,9 +84,9 @@ internal fun SubscriptionGroupingScreen(
     var isClosing by remember { mutableStateOf(false) }
     val canManageNodes = onImportNodeUris != null && onUpdateNode != null && onDeleteNode != null
     val context = LocalContext.current
-    var actionMode by rememberSaveable { mutableStateOf<NodeActionMode?>(null) }
     var addNodeDialogVisible by rememberSaveable { mutableStateOf(false) }
     var nodeUris by rememberSaveable { mutableStateOf("") }
+    var openSwipeNodeId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingNode by remember { mutableStateOf<Node?>(null) }
     var editingNodeName by rememberSaveable { mutableStateOf("") }
     var editingNodeUri by rememberSaveable { mutableStateOf("") }
@@ -194,11 +188,10 @@ internal fun SubscriptionGroupingScreen(
                     }
                 }
             }
-            // 私人源详情沿用仓库源页面的顶部操作栏，只保留添加、编辑和删除。
+            // 节点编辑和删除已移到卡片滑动操作中；顶部只保留添加入口。
             if (canManageNodes) {
                 IconButton(
                     onClick = {
-                        actionMode = null
                         nodeUris = ""
                         addNodeDialogVisible = true
                     }
@@ -206,52 +199,6 @@ internal fun SubscriptionGroupingScreen(
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "添加节点"
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        actionMode = if (actionMode == NodeActionMode.EDIT) {
-                            null
-                        } else {
-                            NodeActionMode.EDIT
-                        }
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = if (actionMode == NodeActionMode.EDIT) {
-                            "退出编辑节点模式"
-                        } else {
-                            "进入编辑节点模式"
-                        },
-                        tint = if (actionMode == NodeActionMode.EDIT) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        actionMode = if (actionMode == NodeActionMode.DELETE) {
-                            null
-                        } else {
-                            NodeActionMode.DELETE
-                        }
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Delete,
-                        contentDescription = if (actionMode == NodeActionMode.DELETE) {
-                            "退出删除节点模式"
-                        } else {
-                            "进入删除节点模式"
-                        },
-                        tint = if (actionMode == NodeActionMode.DELETE) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
                     )
                 }
             }
@@ -274,12 +221,13 @@ internal fun SubscriptionGroupingScreen(
                 onNodeSelected = handleNodeSelected,
                 interactionEnabled = !isClosing,
                 bottomContentPadding = bottomContentPadding,
-                actionMode = actionMode,
+                canManageNodes = canManageNodes,
+                openSwipeNodeId = openSwipeNodeId,
+                onOpenSwipeNodeChange = { nodeId -> openSwipeNodeId = nodeId },
                 onEditNode = { node ->
                     editingNode = node
                     editingNodeName = node.name
                     editingNodeUri = node.rawLink
-                    actionMode = null
                 },
                 onDeleteNode = { node -> deleteCandidate = node }
             )
@@ -488,7 +436,6 @@ internal fun SubscriptionGroupingScreen(
                                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                 if (success) {
                                     deleteCandidate = null
-                                    actionMode = null
                                 }
                             }
                         },
@@ -517,7 +464,9 @@ private fun NodeListContent(
     onNodeSelected: (Node) -> Unit,
     interactionEnabled: Boolean,
     bottomContentPadding: Dp,
-    actionMode: NodeActionMode?,
+    canManageNodes: Boolean,
+    openSwipeNodeId: String?,
+    onOpenSwipeNodeChange: (String?) -> Unit,
     onEditNode: (Node) -> Unit,
     onDeleteNode: (Node) -> Unit
 ) {
@@ -579,17 +528,51 @@ private fun NodeListContent(
                             items = displayNodes,
                             key = { it.id }
                         ) { node ->
-                            NodeListItem(
-                                node = node,
-                                isSelected = node.id == selectedNodeId,
-                                enabled = interactionEnabled,
-                                displaySettings = nodeDisplaySettings,
-                                coreSettings = protocolCoreSettings,
-                                onClick = { onNodeSelected(node) },
-                                actionMode = actionMode,
-                                onEditNode = { onEditNode(node) },
-                                onDeleteNode = { onDeleteNode(node) }
-                            )
+                            if (canManageNodes) {
+                                val swipeKey = "node:${node.id}"
+                                SwipeActionCard(
+                                    itemKey = swipeKey,
+                                    actions = listOf(
+                                        SwipeCardAction(
+                                            icon = Icons.Rounded.Edit,
+                                            label = "编辑",
+                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            onClick = { onEditNode(node) }
+                                        )
+                                    ),
+                                    revealed = openSwipeNodeId == swipeKey,
+                                    onRevealedChange = { isRevealed ->
+                                        onOpenSwipeNodeChange(if (isRevealed) swipeKey else null)
+                                    },
+                                    onSwipeRight = {
+                                        onOpenSwipeNodeChange(null)
+                                        onDeleteNode(node)
+                                    }
+                                ) { swipeModifier ->
+                                    NodeListItem(
+                                        modifier = swipeModifier,
+                                        node = node,
+                                        isSelected = node.id == selectedNodeId,
+                                        enabled = interactionEnabled,
+                                        displaySettings = nodeDisplaySettings,
+                                        coreSettings = protocolCoreSettings,
+                                        onClick = {
+                                            onOpenSwipeNodeChange(null)
+                                            onNodeSelected(node)
+                                        },
+                                    )
+                                }
+                            } else {
+                                NodeListItem(
+                                    node = node,
+                                    isSelected = node.id == selectedNodeId,
+                                    enabled = interactionEnabled,
+                                    displaySettings = nodeDisplaySettings,
+                                    coreSettings = protocolCoreSettings,
+                                    onClick = { onNodeSelected(node) }
+                                )
+                            }
                             Divider(
                                 modifier = Modifier.fillMaxWidth(),
                                 color = MaterialTheme.colorScheme.outlineVariant
