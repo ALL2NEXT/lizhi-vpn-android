@@ -172,7 +172,7 @@ fun RegionLookupSettingsScreen(
     val endDrag = rememberUpdatedState<(RegionLookupMethod) -> Unit>(::finishDrag)
 
     AppScreenScaffold(
-        title = "地区组查询",
+        title = "地区查询",
         onBack = onBack,
         contentPadding = PaddingValues(0.dp),
         actions = {

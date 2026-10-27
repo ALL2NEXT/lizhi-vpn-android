@@ -88,8 +88,8 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Public,
-                title = "地区组查询",
+                icon = Icons.Outlined.Search,
+                title = "地区查询",
                 onClick = onOpenRegionLookupSettings
             )
 
