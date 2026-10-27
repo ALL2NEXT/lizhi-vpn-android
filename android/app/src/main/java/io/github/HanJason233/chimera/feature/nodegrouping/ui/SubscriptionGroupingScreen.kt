@@ -57,7 +57,6 @@ import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
-import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
 
@@ -70,10 +69,6 @@ internal fun SubscriptionGroupingScreen(
     isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
-    groupManualSpeedTestSettings: SpeedTestSettings,
-    manualTestNodeCount: Int = nodes.size,
-    manualFilterSummary: String? = null,
-    onClearManualFilter: () -> Unit = {},
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
@@ -129,96 +124,60 @@ internal fun SubscriptionGroupingScreen(
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
         actions = {
-            val testSettings = groupManualSpeedTestSettings
-            if (testSettings.tcpingEnabled || testSettings.urlTestEnabled ||
-                testSettings.bandwidthEnabled || testSettings.linkTypeTestEnabled ||
-                testSettings.unlockTestsEnabled
-            ) {
-                Box {
-                    IconButton(
-                        onClick = { manualTestMenuExpanded = true },
-                        enabled = !isTesting && manualTestNodeCount > 0
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Speed,
-                            contentDescription = "分组内手动测试"
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = manualTestMenuExpanded,
-                        onDismissRequest = { manualTestMenuExpanded = false }
-                    ) {
-                        if (testSettings.tcpingEnabled) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "TCPing · 测试当前分组全部节点"
-                                    )
-                                },
-                                onClick = {
-                                    manualTestMenuExpanded = false
-                                    onRunManualGroupTest(ManualGroupTestStage.TCPING)
-                                },
-                                enabled = !isTesting
-                            )
-                        }
-                        if (testSettings.urlTestEnabled) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "URL Test · 测试当前分组全部节点"
-                                    )
-                                },
-                                onClick = {
-                                    manualTestMenuExpanded = false
-                                    onRunManualGroupTest(ManualGroupTestStage.URL_TEST)
-                                },
-                                enabled = !isTesting
-                            )
-                        }
-                        if (testSettings.bandwidthEnabled) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "带宽测速 · 测试当前分组全部节点"
-                                    )
-                                },
-                                onClick = {
-                                    manualTestMenuExpanded = false
-                                    onRunManualGroupTest(ManualGroupTestStage.BANDWIDTH)
-                                },
-                                enabled = !isTesting
-                            )
-                        }
-                        if (testSettings.linkTypeTestEnabled) {
-                            DropdownMenuItem(
-                                text = { Text("链路类型检测 · 筛选当前分组线路") },
-                                onClick = {
-                                    manualTestMenuExpanded = false
-                                    onRunManualGroupTest(ManualGroupTestStage.LINK_TYPE)
-                                },
-                                enabled = !isTesting
-                            )
-                        }
-                        if (testSettings.unlockTestsEnabled) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        if (testSettings.unlockTestIds.isEmpty()) {
-                                            "流媒体与 AI 解锁 · 请先选择检测服务"
-                                        } else {
-                                            "流媒体与 AI 解锁 · 筛选当前分组线路"
-                                        }
-                                    )
-                                },
-                                onClick = {
-                                    manualTestMenuExpanded = false
-                                    onRunManualGroupTest(ManualGroupTestStage.IP_QUALITY)
-                                },
-                                enabled = !isTesting && testSettings.unlockTestIds.isNotEmpty()
-                            )
-                        }
-                    }
+            Box {
+                IconButton(
+                    onClick = { manualTestMenuExpanded = true },
+                    enabled = !isTesting && nodes.isNotEmpty()
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Speed,
+                        contentDescription = "分组内手动测试"
+                    )
+                }
+                DropdownMenu(
+                    expanded = manualTestMenuExpanded,
+                    onDismissRequest = { manualTestMenuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("TCPing · 测试当前分组全部节点") },
+                        onClick = {
+                            manualTestMenuExpanded = false
+                            onRunManualGroupTest(ManualGroupTestStage.TCPING)
+                        },
+                        enabled = !isTesting
+                    )
+                    DropdownMenuItem(
+                        text = { Text("URL Test · 测试当前分组全部节点") },
+                        onClick = {
+                            manualTestMenuExpanded = false
+                            onRunManualGroupTest(ManualGroupTestStage.URL_TEST)
+                        },
+                        enabled = !isTesting
+                    )
+                    DropdownMenuItem(
+                        text = { Text("带宽测速 · 测试当前分组全部节点") },
+                        onClick = {
+                            manualTestMenuExpanded = false
+                            onRunManualGroupTest(ManualGroupTestStage.BANDWIDTH)
+                        },
+                        enabled = !isTesting
+                    )
+                    DropdownMenuItem(
+                        text = { Text("链路类型检测 · 测试当前分组全部节点") },
+                        onClick = {
+                            manualTestMenuExpanded = false
+                            onRunManualGroupTest(ManualGroupTestStage.LINK_TYPE)
+                        },
+                        enabled = !isTesting
+                    )
+                    DropdownMenuItem(
+                        text = { Text("流媒体与 AI 解锁 · 测试当前分组全部节点") },
+                        onClick = {
+                            manualTestMenuExpanded = false
+                            onRunManualGroupTest(ManualGroupTestStage.IP_QUALITY)
+                        },
+                        enabled = !isTesting
+                    )
                 }
             }
             // 节点编辑和删除已移到卡片滑动操作中；顶部只保留添加入口。
@@ -244,37 +203,9 @@ internal fun SubscriptionGroupingScreen(
         ),
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            if (manualFilterSummary != null) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = manualFilterSummary,
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        TextButton(onClick = onClearManualFilter) {
-                            Text("显示全部")
-                        }
-                    }
-                }
-            }
+        Box(modifier = Modifier.fillMaxSize()) {
             NodeListContent(
-                modifier = Modifier.weight(1f),
                 nodes = nodes,
-                emptyMessage = if (manualFilterSummary != null) {
-                    "没有符合筛选条件的线路"
-                } else {
-                    "暂无可用节点"
-                },
                 selectedNodeId = selectedNodeId,
                 isTesting = isTesting,
                 nodeDisplaySettings = nodeDisplaySettings,
@@ -516,9 +447,7 @@ internal fun SubscriptionGroupingScreen(
 
 @Composable
 private fun NodeListContent(
-    modifier: Modifier = Modifier,
     nodes: List<Node>,
-    emptyMessage: String = "暂无可用节点",
     selectedNodeId: String?,
     isTesting: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
@@ -556,7 +485,7 @@ private fun NodeListContent(
         }
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) {
         when {
             displayNodes.isEmpty() -> {
                 Box(
@@ -566,7 +495,7 @@ private fun NodeListContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = emptyMessage,
+                        text = "暂无可用节点",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 16.sp
                     )

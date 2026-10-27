@@ -1,23 +1,14 @@
 package io.github.HanJason233.chimera.feature.nodegrouping.ui
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
-
-private data class ManualGroupFilterState(
-    val stage: ManualGroupTestStage,
-    val sourceNodeIds: Set<String>,
-    val matchedNodeIds: Set<String>
-)
 
 /** 仓库源详情页面的状态绑定入口。 */
 @Composable
@@ -34,21 +25,8 @@ internal fun SubscriptionGroupingDestination(
     val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
     val resultSortMode by viewModel.nodeTestResultSortMode.collectAsStateWithLifecycle()
     val sourceNodes = nodesOverride ?: viewModelNodes
-    val sourceNodeIds = remember(sourceNodes) { sourceNodes.mapTo(mutableSetOf()) { it.id } }
-    var manualFilter by remember(importTargetGroupId, screenTitle) {
-        mutableStateOf<ManualGroupFilterState?>(null)
-    }
-    LaunchedEffect(sourceNodeIds) {
-        if (manualFilter?.sourceNodeIds != null && manualFilter?.sourceNodeIds != sourceNodeIds) {
-            manualFilter = null
-        }
-    }
     val nodes = remember(sourceNodes, resultSortMode) {
         viewModel.sortNodesByTestResult(sourceNodes, resultSortMode)
-    }
-    val activeManualFilter = manualFilter?.takeIf { it.sourceNodeIds == sourceNodeIds }
-    val visibleNodes = remember(nodes, activeManualFilter) {
-        activeManualFilter?.let { filter -> nodes.filter { it.id in filter.matchedNodeIds } } ?: nodes
     }
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
@@ -56,8 +34,6 @@ internal fun SubscriptionGroupingDestination(
     val isRefreshingAllSubscriptions by
         viewModel.isRefreshingAllSubscriptions.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
-    val groupManualSpeedTestSettings by
-        viewModel.groupManualSpeedTestSettings.collectAsStateWithLifecycle()
     val nodeDisplaySettings = skinSettings.nodeDisplaySettings
     val protocolCoreSettings by
         viewModel.protocolCoreSettings.collectAsStateWithLifecycle()
@@ -112,33 +88,15 @@ internal fun SubscriptionGroupingDestination(
         }
 
     SubscriptionGroupingScreen(
-        nodes = visibleNodes,
+        nodes = nodes,
         selectedNodeId = selectedNodeId,
         isTesting = isTesting,
         testProgress = speedTestProgress,
         isRefreshingAllSubscriptions = isRefreshingAllSubscriptions,
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
-        groupManualSpeedTestSettings = groupManualSpeedTestSettings,
-        manualTestNodeCount = sourceNodes.size,
-        manualFilterSummary = activeManualFilter?.let { filter ->
-            val stageTitle = when (filter.stage) {
-                ManualGroupTestStage.LINK_TYPE -> "第 4 项链路类型检测"
-                ManualGroupTestStage.IP_QUALITY -> "第 5 项流媒体与 AI 解锁检测"
-                else -> filter.stage.name
-            }
-            "$stageTitle：保留 ${filter.matchedNodeIds.size} / ${filter.sourceNodeIds.size} 条线路"
-        },
-        onClearManualFilter = { manualFilter = null },
         onRunManualGroupTest = { stage ->
-            manualFilter = null
-            viewModel.runManualGroupTest(sourceNodes, stage) { matchedNodes ->
-                manualFilter = ManualGroupFilterState(
-                    stage = stage,
-                    sourceNodeIds = sourceNodeIds,
-                    matchedNodeIds = matchedNodes.mapTo(mutableSetOf()) { it.id }
-                )
-            }
+            viewModel.runManualGroupTest(sourceNodes, stage)
         },
         onNodeSelected = onNodeSelected,
         onBack = onBack,

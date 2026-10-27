@@ -168,20 +168,22 @@ internal fun SpeedTestSettingsEditorContent(
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                ResultRetentionInput(
-                    mode = tcpingSelectionMode,
-                    value = tcpingSelectionValue,
-                    onModeChange = { mode ->
-                        tcpingSelectionMode = mode
-                        persistSettings { settings -> settings.copy(tcpingSelectionMode = mode) }
-                    },
-                    onValueChange = { text ->
-                        tcpingSelectionValue = text
-                        text.toIntOrNull()?.takeIf { value -> value >= 1 && (tcpingSelectionMode != SpeedTestSelectionMode.PERCENT || value <= 100) }?.let { value ->
-                            persistSettings { settings -> settings.copy(tcpingSelectionValue = value) }
+                if (isHomeTab) {
+                    ResultRetentionInput(
+                        mode = tcpingSelectionMode,
+                        value = tcpingSelectionValue,
+                        onModeChange = { mode ->
+                            tcpingSelectionMode = mode
+                            persistSettings { settings -> settings.copy(tcpingSelectionMode = mode) }
+                        },
+                        onValueChange = { text ->
+                            tcpingSelectionValue = text
+                            text.toIntOrNull()?.takeIf { value -> value >= 1 && (tcpingSelectionMode != SpeedTestSelectionMode.PERCENT || value <= 100) }?.let { value ->
+                                persistSettings { settings -> settings.copy(tcpingSelectionValue = value) }
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
 
@@ -267,20 +269,22 @@ internal fun SpeedTestSettingsEditorContent(
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                ResultRetentionInput(
-                    mode = urlSelectionMode,
-                    value = urlSelectionValue,
-                    onModeChange = { mode ->
-                        urlSelectionMode = mode
-                        persistSettings { settings -> settings.copy(urlTestSelectionMode = mode) }
-                    },
-                    onValueChange = { text ->
-                        urlSelectionValue = text
-                        text.toIntOrNull()?.takeIf { value -> value >= 1 && (urlSelectionMode != SpeedTestSelectionMode.PERCENT || value <= 100) }?.let { value ->
-                            persistSettings { settings -> settings.copy(urlTestSelectionValue = value) }
+                if (isHomeTab) {
+                    ResultRetentionInput(
+                        mode = urlSelectionMode,
+                        value = urlSelectionValue,
+                        onModeChange = { mode ->
+                            urlSelectionMode = mode
+                            persistSettings { settings -> settings.copy(urlTestSelectionMode = mode) }
+                        },
+                        onValueChange = { text ->
+                            urlSelectionValue = text
+                            text.toIntOrNull()?.takeIf { value -> value >= 1 && (urlSelectionMode != SpeedTestSelectionMode.PERCENT || value <= 100) }?.let { value ->
+                                persistSettings { settings -> settings.copy(urlTestSelectionValue = value) }
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
 
@@ -355,20 +359,22 @@ internal fun SpeedTestSettingsEditorContent(
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                ResultRetentionInput(
-                    mode = bandwidthSelectionMode,
-                    value = bandwidthSelectionValue,
-                    onModeChange = { mode ->
-                        bandwidthSelectionMode = mode
-                        persistSettings { settings -> settings.copy(bandwidthSelectionMode = mode) }
-                    },
-                    onValueChange = { text ->
-                        bandwidthSelectionValue = text
-                        text.toIntOrNull()?.takeIf { value -> value >= 1 && (bandwidthSelectionMode != SpeedTestSelectionMode.PERCENT || value <= 100) }?.let { value ->
-                            persistSettings { settings -> settings.copy(bandwidthSelectionValue = value) }
+                if (isHomeTab) {
+                    ResultRetentionInput(
+                        mode = bandwidthSelectionMode,
+                        value = bandwidthSelectionValue,
+                        onModeChange = { mode ->
+                            bandwidthSelectionMode = mode
+                            persistSettings { settings -> settings.copy(bandwidthSelectionMode = mode) }
+                        },
+                        onValueChange = { text ->
+                            bandwidthSelectionValue = text
+                            text.toIntOrNull()?.takeIf { value -> value >= 1 && (bandwidthSelectionMode != SpeedTestSelectionMode.PERCENT || value <= 100) }?.let { value ->
+                                persistSettings { settings -> settings.copy(bandwidthSelectionValue = value) }
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
 
@@ -380,33 +386,35 @@ internal fun SpeedTestSettingsEditorContent(
                         if (isHomeTab) {
                             "VPN 创建前批量检测候选线路，只保留勾选的线路类型。"
                         } else {
-                            "对当前分组批量检测，不创建 VPN；完成后只显示勾选类型的线路。"
+                            "对当前分组批量检测并记录线路类型，不创建 VPN，也不会筛选线路。"
                         },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text("保留的线路类型", fontWeight = FontWeight.SemiBold)
-                    LinkTypeFilterRow(
-                        label = "直连",
-                        checked = draftSettings.linkTypeAcceptDirect,
-                        onCheckedChange = { checked ->
-                            persistSettings { it.copy(linkTypeAcceptDirect = checked) }
-                        }
-                    )
-                    LinkTypeFilterRow(
-                        label = "普通中转",
-                        checked = draftSettings.linkTypeAcceptRelay,
-                        onCheckedChange = { checked ->
-                            persistSettings { it.copy(linkTypeAcceptRelay = checked) }
-                        }
-                    )
-                    LinkTypeFilterRow(
-                        label = "CDN 中转",
-                        checked = draftSettings.linkTypeAcceptCdnRelay,
-                        onCheckedChange = { checked ->
-                            persistSettings { it.copy(linkTypeAcceptCdnRelay = checked) }
-                        }
-                    )
+                    if (isHomeTab) {
+                        Text("保留的线路类型", fontWeight = FontWeight.SemiBold)
+                        LinkTypeFilterRow(
+                            label = "直连",
+                            checked = draftSettings.linkTypeAcceptDirect,
+                            onCheckedChange = { checked ->
+                                persistSettings { it.copy(linkTypeAcceptDirect = checked) }
+                            }
+                        )
+                        LinkTypeFilterRow(
+                            label = "普通中转",
+                            checked = draftSettings.linkTypeAcceptRelay,
+                            onCheckedChange = { checked ->
+                                persistSettings { it.copy(linkTypeAcceptRelay = checked) }
+                            }
+                        )
+                        LinkTypeFilterRow(
+                            label = "CDN 中转",
+                            checked = draftSettings.linkTypeAcceptCdnRelay,
+                            onCheckedChange = { checked ->
+                                persistSettings { it.copy(linkTypeAcceptCdnRelay = checked) }
+                            }
+                        )
+                    }
                 }
 
         }
@@ -424,7 +432,7 @@ internal fun SpeedTestSettingsEditorContent(
                         if (isHomeTab) {
                             "VPN 创建前批量检测候选线路；所选服务全部显示“支持”才保留线路，部分可用不算通过。"
                         } else {
-                            "对当前分组批量检测，不创建 VPN；所选服务全部支持的线路会显示，部分支持不算通过。"
+                            "对当前分组检测所选服务并记录结果，不创建 VPN，也不会筛选线路。"
                         },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

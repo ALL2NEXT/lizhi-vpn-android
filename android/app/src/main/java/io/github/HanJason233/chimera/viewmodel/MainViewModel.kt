@@ -1087,29 +1087,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** 按手动测速设置执行当前线路详情页中的单阶段测试。 */
-    fun runManualGroupTest(
-        groupNodes: List<Node>,
-        stage: ManualGroupTestStage,
-        onFilterResult: ((List<Node>) -> Unit)? = null
-    ) {
+    fun runManualGroupTest(groupNodes: List<Node>, stage: ManualGroupTestStage) {
         viewModelScope.launch {
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
             }
             val settings = groupManualSpeedTestSettings.value
-
-            val stageEnabled = when (stage) {
-                ManualGroupTestStage.TCPING -> settings.tcpingEnabled
-                ManualGroupTestStage.URL_TEST -> settings.urlTestEnabled
-                ManualGroupTestStage.BANDWIDTH -> settings.bandwidthEnabled
-                ManualGroupTestStage.LINK_TYPE -> settings.linkTypeTestEnabled
-                ManualGroupTestStage.IP_QUALITY -> settings.unlockTestsEnabled
-            }
-            if (!stageEnabled) {
-                _error.value = "手动测试设置中未启用该测试阶段"
-                return@launch
-            }
             if (stage == ManualGroupTestStage.IP_QUALITY && settings.unlockTestIds.isEmpty()) {
                 _error.value = "请先在手动测试的第 5 项中选择要检测的服务"
                 return@launch
@@ -1267,8 +1251,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     ManualGroupTestStage.LINK_TYPE -> {
-                        val results = runHomeCandidateFilterTests(
-                            settings = settings,
+                        runHomeCandidateFilterTests(
+                            settings = settings.copy(
+                                linkTypeAcceptDirect = true,
+                                linkTypeAcceptRelay = true,
+                                linkTypeAcceptCdnRelay = true
+                            ),
                             nodes = currentGroupNodes,
                             runLinkType = true,
                             runUnlockTests = false,
@@ -1276,14 +1264,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             progressStage = progressStage,
                             isManualGroupTest = true
                         )
-                        onFilterResult?.invoke(
-                            results.filter(HomeCandidateFilterResult::linkTypePassed)
-                                .map(HomeCandidateFilterResult::node)
-                        )
                     }
 
                     ManualGroupTestStage.IP_QUALITY -> {
-                        val results = runHomeCandidateFilterTests(
+                        runHomeCandidateFilterTests(
                             settings = settings,
                             nodes = currentGroupNodes,
                             runLinkType = false,
@@ -1291,10 +1275,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             title = progressTitle,
                             progressStage = progressStage,
                             isManualGroupTest = true
-                        )
-                        onFilterResult?.invoke(
-                            results.filter(HomeCandidateFilterResult::unlockTestsPassed)
-                                .map(HomeCandidateFilterResult::node)
                         )
                     }
                 }
