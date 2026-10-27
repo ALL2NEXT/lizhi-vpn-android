@@ -1,7 +1,10 @@
 package io.github.HanJason233.chimera.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -21,7 +24,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -89,12 +91,7 @@ fun SpeedTestSettingsScreen(
                 Tab(
                     selected = pagerState.currentPage == 0,
                     onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Outlined.Home,
-                            contentDescription = "主页图标测速设置"
-                        )
-                    }
+                    text = { Text("优选测试", maxLines = 1) }
                 )
                 Tab(
                     selected = pagerState.currentPage == 1,
@@ -133,10 +130,13 @@ private fun SpeedTestSettingsPage(
 ) {
     var editingStage by remember { mutableStateOf<SpeedTestStage?>(null) }
     var currentSettings by remember(settings) { mutableStateOf(settings) }
-    var displayedStages by remember(settings.stageOrder) {
+    var displayedStages by remember {
         mutableStateOf(normalizeSpeedTestStageOrder(settings.stageOrder))
     }
     var draggedStage by remember { mutableStateOf<SpeedTestStage?>(null) }
+    var predictedDraggedItemTop by remember { mutableFloatStateOf(0f) }
+    var settlingStage by remember { mutableStateOf<SpeedTestStage?>(null) }
+    var pendingSettleOffset by remember { mutableFloatStateOf(0f) }
     var draggedItemTop by remember { mutableFloatStateOf(0f) }
     var draggedItemHeight by remember { mutableFloatStateOf(1f) }
     var dragDistance by remember { mutableFloatStateOf(0f) }
@@ -144,6 +144,7 @@ private fun SpeedTestSettingsPage(
     var isMoveLayoutPending by remember { mutableStateOf(false) }
     var isDropPending by remember { mutableStateOf(false) }
     var pendingLayoutIndex by remember { mutableIntStateOf(-1) }
+    val settleOffsetAnimation = remember { Animatable(0f) }
 
     val listState = rememberLazyListState()
     val hapticFeedback = LocalHapticFeedback.current
@@ -152,6 +153,17 @@ private fun SpeedTestSettingsPage(
     val maxAutoScrollPerFrame = with(density) { 12.dp.toPx() }
     val latestSettings by rememberUpdatedState(currentSettings)
     val latestOnSave by rememberUpdatedState(onSave)
+
+    LaunchedEffect(settings.stageOrder) {
+        val latestStages = normalizeSpeedTestStageOrder(settings.stageOrder)
+        if (draggedStage == null) {
+            displayedStages = latestStages
+        } else {
+            val latestByStage = latestStages.associateBy { it }
+            val displayed = displayedStages.mapNotNull(latestByStage::get)
+            displayedStages = displayed + latestStages.filterNot(displayed::contains)
+        }
+    }
     val updateAutoScrollAmount = rememberUpdatedState<() -> Unit>(
         newValue = {
             val layoutInfo = listState.layoutInfo
@@ -197,10 +209,17 @@ private fun SpeedTestSettingsPage(
                 val sourceIndex = displayedStages.indexOf(activeStage)
                 val targetIndex = displayedStages.indexOf(targetStage)
 
-                if (targetStage != null && sourceIndex >= 0 && targetIndex >= 0 &&
+                if (targetStage != null &&
+                    sourceIndex >= 0 && targetIndex >= 0 &&
                     sourceIndex != targetIndex
                 ) {
-                    pendingLayoutIndex = targetIndex
+                    // 等待 LazyColumn 完成换位布局，再响应下一次拖动位置变化。
+                    predictedDraggedItemTop = if (targetIndex > sourceIndex) {
+                        (targetInfo.offset + targetInfo.size - draggedItemHeight).toFloat()
+                    } else {
+                        targetInfo.offset.toFloat()
+                    }
+                    pendingLayoutIndex = targetInfo.index
                     isMoveLayoutPending = true
                     displayedStages = displayedStages.toMutableList().apply {
                         add(targetIndex, removeAt(sourceIndex))
@@ -222,21 +241,6 @@ private fun SpeedTestSettingsPage(
         latestOnSave(updatedSettings)
     }
 
-    fun finishDrag() {
-        val normalizedSavedOrder = normalizeSpeedTestStageOrder(latestSettings.stageOrder)
-        if (displayedStages != normalizedSavedOrder) {
-            // 卡片顺序按当前入口保存；执行时仍遵循各测试阶段的依赖关系。
-            val updatedSettings = latestSettings.copy(stageOrder = displayedStages)
-            currentSettings = updatedSettings
-            latestOnSave(updatedSettings)
-        }
-        draggedStage = null
-        isMoveLayoutPending = false
-        isDropPending = false
-        pendingLayoutIndex = -1
-        autoScrollAmount = 0f
-    }
-
     LaunchedEffect(isMoveLayoutPending, pendingLayoutIndex, draggedStage) {
         val activeStage = draggedStage
         val expectedIndex = pendingLayoutIndex
@@ -255,9 +259,57 @@ private fun SpeedTestSettingsPage(
         }
     }
 
+    val finishStageDrag = rememberUpdatedState<() -> Unit>(
+        newValue = {
+            val activeStage = draggedStage
+            val activeItemOffset = activeStage?.let { stage ->
+                val activeItemInfo = listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.key == "stage:${stage.name}" }
+                if (
+                    isMoveLayoutPending ||
+                    (pendingLayoutIndex >= 0 && activeItemInfo?.index != pendingLayoutIndex)
+                ) {
+                    predictedDraggedItemTop
+                } else {
+                    activeItemInfo?.offset?.toFloat()
+                }
+            }
+            if (activeStage != null && activeItemOffset != null) {
+                val currentTranslation = draggedItemTop + dragDistance - activeItemOffset
+                if (kotlin.math.abs(currentTranslation) > 0.5f) {
+                    pendingSettleOffset = currentTranslation
+                    settlingStage = activeStage
+                }
+            }
+
+            val normalizedSavedOrder = normalizeSpeedTestStageOrder(latestSettings.stageOrder)
+            if (displayedStages != normalizedSavedOrder) {
+                // 松手时一次性保存卡片顺序。
+                val updatedSettings = latestSettings.copy(stageOrder = displayedStages)
+                currentSettings = updatedSettings
+                latestOnSave(updatedSettings)
+            }
+            draggedStage = null
+            isMoveLayoutPending = false
+            pendingLayoutIndex = -1
+            isDropPending = false
+            autoScrollAmount = 0f
+        }
+    )
+
+    val requestFinishStageDrag = rememberUpdatedState<() -> Unit>(
+        newValue = {
+            if (isMoveLayoutPending) {
+                isDropPending = true
+            } else {
+                finishStageDrag.value()
+            }
+        }
+    )
+
     LaunchedEffect(isDropPending, isMoveLayoutPending, draggedStage) {
         if (isDropPending && !isMoveLayoutPending && draggedStage != null) {
-            finishDrag()
+            finishStageDrag.value()
         }
     }
 
@@ -273,41 +325,35 @@ private fun SpeedTestSettingsPage(
         }
     }
 
+    LaunchedEffect(settlingStage) {
+        val stage = settlingStage ?: return@LaunchedEffect
+        settleOffsetAnimation.snapTo(pendingSettleOffset)
+        settleOffsetAnimation.animateTo(
+            targetValue = 0f,
+            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+        )
+        if (settlingStage == stage) settlingStage = null
+    }
+
     BackHandler(enabled = editingStage != null) {
         editingStage = null
     }
 
     val selectedStage = editingStage
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = if (editingStage == null) {
-                if (isHomeTab) {
-                    "主页图标长按测速使用此配置。长按卡片拖动排序，点击卡片进入详细设置。"
-                } else {
-                    "分组详情中的手动测速使用此配置。长按卡片拖动排序，点击卡片进入详细设置。"
-                }
-            } else if (!isHomeTab && editingStage?.category !=
-                SpeedTestCategory.LINK_QUALITY
-            ) {
-                "此项仅在主页测速连接成功后执行，手动测速不会运行。"
-            } else {
-                "修改${editingStage?.title}的测试参数。"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)
-        )
-
-        if (selectedStage == null) {
+        if (selectedStage != null) {
             Text(
-                text = "测试项设置",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                text = if (!isHomeTab && selectedStage.category != SpeedTestCategory.LINK_QUALITY) {
+                    "此项仅在主页测速连接成功后执行，手动测速不会运行。"
+                } else {
+                    "修改${selectedStage.title}的测试参数。"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)
             )
-            Divider(
-                modifier = Modifier.padding(horizontal = 12.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
+        }
+        if (selectedStage == null) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -319,22 +365,36 @@ private fun SpeedTestSettingsPage(
                     key = { _, stage -> "stage:${stage.name}" }
                 ) { _, stage ->
                     val isDragging = draggedStage == stage
-                    val itemInfo = listState.layoutInfo.visibleItemsInfo
-                        .firstOrNull { it.key == "stage:${stage.name}" }
-                    val itemOffset = itemInfo?.offset?.toFloat() ?: 0f
+                    val isSettling = settlingStage == stage
                     val elevation by animateDpAsState(
                         targetValue = if (isDragging) 4.dp else 0.dp,
                         label = "SpeedTestStageDragElevation"
                     )
-                    val placementModifier = if (isDragging) {
+                    val placementModifier = if (isDragging || isSettling) {
+                        val itemOffset = if (isDragging && isMoveLayoutPending) {
+                            predictedDraggedItemTop
+                        } else {
+                            listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.key == "stage:${stage.name}" }
+                                ?.offset
+                                ?.toFloat() ?: draggedItemTop
+                        }
                         Modifier.graphicsLayer {
-                            translationY = draggedItemTop + dragDistance - itemOffset
+                            translationY = if (isDragging) {
+                                draggedItemTop + dragDistance - itemOffset
+                            } else {
+                                settleOffsetAnimation.value
+                            }
                         }
                     } else {
                         Modifier.animateItemPlacement()
                     }
 
-                    Column {
+                    Column(
+                        modifier = Modifier
+                            .zIndex(if (isDragging || isSettling) 1f else 0f)
+                            .then(placementModifier)
+                    ) {
                         SpeedTestStageSummaryCard(
                             stage = stage,
                             settings = currentSettings,
@@ -343,14 +403,13 @@ private fun SpeedTestSettingsPage(
                             hasSwitch = isHomeTab || stage.number <= SpeedTestStage.BANDWIDTH.number,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .then(placementModifier)
-                                .zIndex(if (isDragging) 1f else 0f)
                                 .pointerInput(stage) {
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
                                             hapticFeedback.performHapticFeedback(
                                                 HapticFeedbackType.LongPress
                                             )
+                                            settlingStage = null
                                             val info = listState.layoutInfo.visibleItemsInfo
                                                 .firstOrNull { it.key == "stage:${stage.name}" }
                                             isMoveLayoutPending = false
@@ -359,6 +418,7 @@ private fun SpeedTestSettingsPage(
                                             draggedStage = stage
                                             draggedItemTop = info?.offset?.toFloat() ?: 0f
                                             draggedItemHeight = info?.size?.toFloat() ?: 1f
+                                            predictedDraggedItemTop = draggedItemTop
                                             dragDistance = 0f
                                             updateAutoScrollAmount.value()
                                         },
@@ -368,20 +428,8 @@ private fun SpeedTestSettingsPage(
                                             updateAutoScrollAmount.value()
                                             draggedStage?.let(moveDraggedStage.value)
                                         },
-                                        onDragEnd = {
-                                            if (isMoveLayoutPending) {
-                                                isDropPending = true
-                                            } else {
-                                                finishDrag()
-                                            }
-                                        },
-                                        onDragCancel = {
-                                            if (isMoveLayoutPending) {
-                                                isDropPending = true
-                                            } else {
-                                                finishDrag()
-                                            }
-                                        }
+                                        onDragEnd = { requestFinishStageDrag.value() },
+                                        onDragCancel = { requestFinishStageDrag.value() }
                                     )
                                 },
                             elevation = elevation,
