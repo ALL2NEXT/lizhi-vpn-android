@@ -258,7 +258,7 @@ fun MainScreen(
                             progressFlow = viewModel.speedTestProgress,
                             ipTestState = unlockTestState,
                             linkTypeResult = linkTypeTestResult,
-                            onStartTests = viewModel::startHomeSpeedTest,
+                            onStartTests = viewModel::startCurrentNodeDataTest,
                             onInterruptTests = viewModel::forceCancelAllTests,
                             modifier = Modifier.onSizeChanged { testsCardHeightPx = it.height }
                         )

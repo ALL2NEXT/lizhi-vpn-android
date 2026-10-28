@@ -803,6 +803,168 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /** 对当前选中节点执行主页已启用的测试，只保存结果，不筛选或连接节点。 */
+    fun startCurrentNodeDataTest() {
+        viewModelScope.launch {
+            if (GlobalTestExecution.isFetching()) {
+                _error.value = GlobalTestExecution.fetchingHint()
+                return@launch
+            }
+
+            val settings = homeSpeedTestSettings.value
+            val enabledStages = normalizeSpeedTestStageOrder(settings.stageOrder).filter { stage ->
+                when (stage) {
+                    SpeedTestStage.TCPING -> settings.tcpingEnabled
+                    SpeedTestStage.URL_TEST -> settings.urlTestEnabled
+                    SpeedTestStage.BANDWIDTH -> settings.bandwidthEnabled
+                    SpeedTestStage.LINK_TYPE -> settings.linkTypeTestEnabled
+                    SpeedTestStage.IP_QUALITY ->
+                        settings.unlockTestsEnabled && settings.unlockTestIds.isNotEmpty()
+                }
+            }
+            if (enabledStages.isEmpty()) {
+                _error.value = "请先在主页测速设置中启用至少一项测试"
+                return@launch
+            }
+            if (!GlobalTestExecution.tryStart("当前节点数据测试")) {
+                _error.value = GlobalTestExecution.busyHint()
+                return@launch
+            }
+
+            val testJob = currentCoroutineContext()[Job]
+            activeTestJob = testJob
+            _isTesting.value = true
+            val progressTitle = "当前节点数据测试"
+            updateSpeedTestProgress(progressTitle, "准备测试")
+            try {
+                val nodeId = activeConnectionNode.value?.id
+                    ?: settingsRepository.selectedNodeId.first()
+                val node = nodeId?.let { nodeDao().getNodeById(it) }
+                if (node == null) {
+                    _error.value = "请先选择一个节点"
+                    return@launch
+                }
+
+                for (stage in enabledStages) {
+                    currentCoroutineContext().ensureActive()
+                    val progressStage = when (stage) {
+                        SpeedTestStage.TCPING -> "TCPing"
+                        SpeedTestStage.URL_TEST -> "URL Test"
+                        SpeedTestStage.BANDWIDTH -> "带宽测速"
+                        SpeedTestStage.LINK_TYPE -> "第 4 项链路类型检测"
+                        SpeedTestStage.IP_QUALITY -> "第 5 项流媒体与 AI 解锁检测"
+                    }
+                    updateSpeedTestProgress(progressTitle, progressStage, total = 1)
+
+                    when (stage) {
+                        SpeedTestStage.TCPING -> {
+                            internalTestNodes(
+                                currentNodes = listOf(node),
+                                concurrency = 1,
+                                timeoutMs = settings.tcpingTimeoutMs,
+                                autoDeleteTimeoutNodes = false,
+                                updateSortMode = false,
+                                onProgress = { completed, total ->
+                                    updateSpeedTestProgress(
+                                        progressTitle,
+                                        progressStage,
+                                        completed,
+                                        total
+                                    )
+                                }
+                            )
+                        }
+
+                        SpeedTestStage.URL_TEST -> {
+                            val results = runUrlTestNodes(
+                                nodes = listOf(node),
+                                concurrency = 1,
+                                warmupTimeoutMs = settings.urlTestWarmupTimeoutMs,
+                                measurementTimeoutMs = settings.urlTestMeasurementTimeoutMs,
+                                targetUrl = settings.urlTestUrl,
+                                fallbackUrl = settings.urlTestBackupUrl,
+                                onProgress = { completed, total ->
+                                    updateSpeedTestProgress(
+                                        progressTitle,
+                                        progressStage,
+                                        completed,
+                                        total
+                                    )
+                                }
+                            )
+                            applyUrlTestResults(
+                                results,
+                                autoDeleteTimeoutNodes = false,
+                                updateSortMode = false
+                            )
+                        }
+
+                        SpeedTestStage.BANDWIDTH -> {
+                            val speedMbps = testNodeDownloadBandwidthMbps(
+                                node = node,
+                                durationMs = settings.bandwidthTestDurationMs,
+                                downloadUrl = settings.bandwidthTestUrl
+                            )
+                            nodeDao().updateDownloadMbps(node.id, speedMbps)
+                            updateSpeedTestProgress(
+                                progressTitle,
+                                progressStage,
+                                completed = 1,
+                                total = 1
+                            )
+                        }
+
+                        SpeedTestStage.LINK_TYPE -> {
+                            runHomeCandidateFilterTests(
+                                settings = settings.copy(
+                                    linkTypeAcceptDirect = true,
+                                    linkTypeAcceptRelay = true,
+                                    linkTypeAcceptCdnRelay = true
+                                ),
+                                nodes = listOf(node),
+                                runLinkType = true,
+                                runUnlockTests = false,
+                                title = progressTitle,
+                                progressStage = progressStage
+                            )
+                            val storedResults = nodeDao().getHomeNodeTestResults(node.id)
+                            _linkTypeTestResult.value = storedResults?.linkTypeResultJson
+                                ?.takeIf(String::isNotBlank)
+                                ?.let(HomeTestResultCodec::decodeLinkType)
+                                ?: LinkTypeTestResult()
+                        }
+
+                        SpeedTestStage.IP_QUALITY -> {
+                            runHomeCandidateFilterTests(
+                                settings = settings,
+                                nodes = listOf(node),
+                                runLinkType = false,
+                                runUnlockTests = true,
+                                title = progressTitle,
+                                progressStage = progressStage
+                            )
+                            val storedResults = nodeDao().getHomeNodeTestResults(node.id)
+                            _unlockTestState.value = storedResults?.unlockTestResultJson
+                                ?.takeIf(String::isNotBlank)
+                                ?.let(HomeTestResultCodec::decodeUnlockTests)
+                                ?: UnlockTestUiState()
+                        }
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e(tag, "Current node data test failed", error)
+                _error.value = "当前节点测试失败：${error.message ?: "未知错误"}"
+            } finally {
+                if (activeTestJob === testJob) activeTestJob = null
+                _isTesting.value = false
+                _speedTestProgress.value = null
+                GlobalTestExecution.finish()
+            }
+        }
+    }
+
     /** 按主页图标测速设置筛选节点并连接测速结果最好的节点。 */
     fun startHomeSpeedTest() {
         viewModelScope.launch {
@@ -1812,7 +1974,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun applyUrlTestResults(
         results: List<LatencyTester.LatencyResult>,
-        autoDeleteTimeoutNodes: Boolean
+        autoDeleteTimeoutNodes: Boolean,
+        updateSortMode: Boolean = true
     ) {
 
         val updates = results.map { result ->
@@ -1822,7 +1985,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (updatedRows != updates.size) {
             Log.w(tag, "Only $updatedRows/${updates.size} URL test results were applied")
         }
-        _nodeTestResultSortMode.value = NodeTestResultSortMode.URL_TEST_LATENCY
+        if (updateSortMode) {
+            _nodeTestResultSortMode.value = NodeTestResultSortMode.URL_TEST_LATENCY
+        }
         deleteTimedOutNodes(results, isTcping = false, enabled = autoDeleteTimeoutNodes)
     }
 
@@ -1879,6 +2044,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         concurrency: Int = tcpingConcurrency.value,
         timeoutMs: Long = tcpingTestTimeoutMs.value,
         autoDeleteTimeoutNodes: Boolean,
+        updateSortMode: Boolean = true,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
         if (currentNodes.isEmpty()) return emptyList()
@@ -1899,7 +2065,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
         }
         nodeDao().updateTcpingResults(updates, System.currentTimeMillis())
-        _nodeTestResultSortMode.value = NodeTestResultSortMode.TCPING_LATENCY
+        if (updateSortMode) {
+            _nodeTestResultSortMode.value = NodeTestResultSortMode.TCPING_LATENCY
+        }
         deleteTimedOutNodes(results, isTcping = true, enabled = autoDeleteTimeoutNodes)
         return results
     }
