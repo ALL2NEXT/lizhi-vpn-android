@@ -344,6 +344,8 @@ private fun HomeIpTestItem(result: UnlockTestResult, modifier: Modifier) {
 internal fun unlockTestIconResource(id: String): Int = when (id) {
     "google_cn" -> R.drawable.ic_unlock_google
     "chatgpt" -> R.drawable.ic_unlock_chatgpt
+    "sora" -> R.drawable.ic_unlock_chatgpt
+    "copilot", "llama", "perplexity", "grok" -> R.drawable.ic_vpn_key
     "claude" -> R.drawable.ic_unlock_anthropic
     "gemini" -> R.drawable.ic_unlock_gemini
     "netflix" -> R.drawable.ic_unlock_netflix
@@ -354,7 +356,8 @@ internal fun unlockTestIconResource(id: String): Int = when (id) {
     "tiktok" -> R.drawable.ic_unlock_tiktok
     "spotify" -> R.drawable.ic_unlock_spotify
     "wikipedia" -> R.drawable.ic_unlock_wikipedia
-    else -> R.drawable.ic_unlock_google
+    "bilibili", "dazn", "abema", "bahamut", "steam" -> R.drawable.ic_vpn_key
+    else -> R.drawable.ic_vpn_key
 }
 
 @Composable

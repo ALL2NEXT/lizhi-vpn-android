@@ -67,7 +67,9 @@ internal object HomeTestResultCodec {
             buildList {
                 for (index in 0 until storedItems.length()) {
                     val stored = storedItems.optJSONObject(index) ?: continue
-                    val definition = definitions[stored.optString("definitionId")] ?: continue
+                    val storedDefinitionId = stored.optString("definitionId")
+                    val definitionId = if (storedDefinitionId == "openai") "chatgpt" else storedDefinitionId
+                    val definition = definitions[definitionId] ?: continue
                     val testState = runCatching {
                         UnlockTestState.valueOf(stored.optString("state"))
                     }.getOrDefault(UnlockTestState.IDLE)

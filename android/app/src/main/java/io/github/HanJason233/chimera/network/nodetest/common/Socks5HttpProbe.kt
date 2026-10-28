@@ -35,7 +35,14 @@ internal object Socks5HttpProbe {
         val statusCode: Int,
         val body: String,
         val location: String?,
-        val delayMs: Int
+        val delayMs: Int,
+        val finalUrl: String = "",
+        val setCookieHeaders: List<String> = emptyList()
+    )
+
+    private data class ParsedHeaders(
+        val values: Map<String, String>,
+        val setCookies: List<String>
     )
 
     /** 关闭进行中的 IP/服务探测和 URL Test 请求。 */
@@ -54,18 +61,44 @@ internal object Socks5HttpProbe {
         timeoutMs: Long,
         headers: Map<String, String> = emptyMap(),
         followRedirects: Boolean = true,
-        maxBodyBytes: Int = DEFAULT_MAX_BODY_BYTES
+        maxBodyBytes: Int = DEFAULT_MAX_BODY_BYTES,
+        method: String = "GET",
+        requestBody: ByteArray? = null
     ): HttpResponse {
         require(maxBodyBytes in 1..MAX_ALLOWED_BODY_BYTES)
+        require(method.matches(Regex("[A-Za-z]+"))) { "Invalid HTTP method" }
+        require(requestBody == null || requestBody.size <= MAX_REQUEST_BODY_BYTES) {
+            "HTTP request body is too large"
+        }
         var currentUrl = targetUrl
+        var currentMethod = method.uppercase()
+        var currentBody = requestBody
+        var currentHeaders = headers
         repeat(MAX_REDIRECTS + 1) { redirectCount ->
-            val response = fetchOnce(endpoint, currentUrl, timeoutMs, headers, maxBodyBytes)
+            val response = fetchOnce(
+                endpoint, currentUrl, timeoutMs, currentHeaders, maxBodyBytes, currentMethod, currentBody
+            )
             val location = response.location
             if (!followRedirects || response.statusCode !in REDIRECT_CODES || location.isNullOrBlank()) {
                 return response
             }
             check(redirectCount < MAX_REDIRECTS) { "HTTP 重定向次数过多" }
-            currentUrl = URI(currentUrl).resolve(location).toString()
+            val nextUrl = URI(currentUrl).resolve(location).toString()
+            if (!sameOrigin(currentUrl, nextUrl)) {
+                currentHeaders = currentHeaders.filterKeys {
+                    !it.equals("Authorization", ignoreCase = true) &&
+                        !it.equals("Cookie", ignoreCase = true)
+                }
+            }
+            if (response.statusCode in setOf(301, 302, 303) && currentMethod !in setOf("GET", "HEAD")) {
+                currentMethod = "GET"
+                currentBody = null
+                currentHeaders = currentHeaders.filterKeys {
+                    !it.equals("Content-Type", ignoreCase = true) &&
+                        !it.equals("Content-Length", ignoreCase = true)
+                }
+            }
+            currentUrl = nextUrl
         }
         error("HTTP 重定向次数过多")
     }
@@ -199,7 +232,9 @@ internal object Socks5HttpProbe {
         targetUrl: String,
         timeoutMs: Long,
         headers: Map<String, String>,
-        maxBodyBytes: Int
+        maxBodyBytes: Int,
+        method: String,
+        requestBody: ByteArray?
     ): HttpResponse {
         val target = URI(targetUrl)
         val host = requireNotNull(target.host) { "Probe URL has no host" }
@@ -231,21 +266,23 @@ internal object Socks5HttpProbe {
             }
             transport.use {
                 it.soTimeout = remainingMillis(deadline)
-                writeRequest(it, target, host, port, secure, "GET", headers)
+                writeRequest(it, target, host, port, secure, method, headers, requestBody)
                 val input = BufferedInputStream(it.getInputStream())
                 val statusLine = readHttpLine(input)
                 val statusCode = statusLine.split(' ').getOrNull(1)?.toIntOrNull()
                     ?: error("Invalid HTTP status line")
                 val responseHeaders = readHeaders(input)
                 val headersAt = System.nanoTime()
-                val bodyBytes = readResponseBody(input, statusCode, responseHeaders, maxBodyBytes)
+                val bodyBytes = readResponseBody(input, statusCode, responseHeaders.values, maxBodyBytes)
                 if (System.nanoTime() > deadline) throw SocketTimeoutException("HTTP 探测超时")
                 return HttpResponse(
                     statusCode = statusCode,
-                    body = decodeBody(bodyBytes, responseHeaders, maxBodyBytes),
-                    location = responseHeaders["location"],
+                    body = decodeBody(bodyBytes, responseHeaders.values, maxBodyBytes),
+                    location = responseHeaders.values["location"],
                     delayMs = ((headersAt - startedAt) / NANOS_PER_MILLISECOND)
-                        .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+                        .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt(),
+                    finalUrl = target.toString(),
+                    setCookieHeaders = responseHeaders.setCookies
                 )
             }
         } finally {
@@ -254,16 +291,21 @@ internal object Socks5HttpProbe {
         }
     }
 
-    private fun readHeaders(input: BufferedInputStream): Map<String, String> {
+    private fun readHeaders(input: BufferedInputStream): ParsedHeaders {
         val headers = linkedMapOf<String, String>()
+        val setCookies = mutableListOf<String>()
         repeat(MAX_HEADER_COUNT) {
             val line = readHttpLine(input)
-            if (line.isEmpty()) return headers
+            if (line.isEmpty()) return ParsedHeaders(headers, setCookies)
             val separator = line.indexOf(':')
             if (separator > 0) {
                 val name = line.substring(0, separator).trim().lowercase()
                 val value = line.substring(separator + 1).trim()
-                headers[name] = headers[name]?.let { "$it, $value" } ?: value
+                if (name == "set-cookie") {
+                    setCookies += value
+                } else {
+                    headers[name] = headers[name]?.let { "$it, $value" } ?: value
+                }
             }
         }
         error("HTTP response has too many headers")
@@ -449,7 +491,8 @@ internal object Socks5HttpProbe {
         port: Int,
         secure: Boolean,
         method: String,
-        headers: Map<String, String> = emptyMap()
+        headers: Map<String, String> = emptyMap(),
+        requestBody: ByteArray? = null
     ) {
         val path = buildString {
             append(target.rawPath?.takeIf { it.isNotEmpty() } ?: "/")
@@ -472,6 +515,11 @@ internal object Socks5HttpProbe {
                 effectiveHeaders[name] = value
             }
         }
+        if (requestBody != null) {
+            effectiveHeaders.keys.firstOrNull { it.equals("Content-Length", ignoreCase = true) }
+                ?.let(effectiveHeaders::remove)
+            effectiveHeaders["Content-Length"] = requestBody.size.toString()
+        }
         val encodedRequest = buildString {
             append(method).append(' ').append(path).append(" HTTP/1.1\r\n")
             effectiveHeaders.forEach { (name, value) ->
@@ -482,7 +530,22 @@ internal object Socks5HttpProbe {
         socket.getOutputStream().write(
             encodedRequest
         )
+        if (requestBody != null) socket.getOutputStream().write(requestBody)
         socket.getOutputStream().flush()
+    }
+
+    private fun sameOrigin(first: String, second: String): Boolean {
+        val firstUri = URI(first)
+        val secondUri = URI(second)
+        return firstUri.scheme.equals(secondUri.scheme, ignoreCase = true) &&
+            firstUri.host.equals(secondUri.host, ignoreCase = true) &&
+            effectivePort(firstUri) == effectivePort(secondUri)
+    }
+
+    private fun effectivePort(uri: URI): Int = when {
+        uri.port >= 0 -> uri.port
+        uri.scheme.equals("https", ignoreCase = true) -> 443
+        else -> 80
     }
 
     private fun readStatus(socket: Socket): Int {
@@ -520,6 +583,7 @@ internal object Socks5HttpProbe {
     private const val MAX_STATUS_LINE = 8_192
     private const val MAX_HEADER_COUNT = 100
     private const val MAX_REDIRECTS = 5
+    private const val MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024
     private const val DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024
     private const val MAX_ALLOWED_BODY_BYTES = 4 * 1024 * 1024
     private const val NANOS_PER_MILLISECOND = 1_000_000L

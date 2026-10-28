@@ -1534,7 +1534,7 @@ class SettingsRepository(
                                         unlockTestIds = buildSet {
                                             item.optJSONArray("unlockTestIds")?.let { tests ->
                                                 for (testIndex in 0 until tests.length()) {
-                                                    tests.optString(testIndex).trim()
+                                                    canonicalUnlockTestId(tests.optString(testIndex).trim())
                                                         .takeIf { id -> UnlockTestCatalog.definitions.any { it.id == id } }
                                                         ?.let(::add)
                                                 }
@@ -1703,6 +1703,11 @@ class SettingsRepository(
         SpeedTestSelectionMode.COUNT -> value.coerceAtLeast(1)
     }
 
+    private fun canonicalUnlockTestId(id: String): String = when (id) {
+        "openai" -> "chatgpt"
+        else -> id
+    }
+
     private fun normalizeLegacySpeedTestSettings(scheme: LegacySpeedTestSettings): LegacySpeedTestSettings {
         // 规范空名称，同时保留用户对方案名称的自定义修改。
         val trimmedName = scheme.name.trim()
@@ -1712,7 +1717,7 @@ class SettingsRepository(
         }
         return scheme.copy(
             name = normalizedName,
-            unlockTestIds = scheme.unlockTestIds.intersect(
+            unlockTestIds = scheme.unlockTestIds.map(::canonicalUnlockTestId).toSet().intersect(
                 UnlockTestCatalog.definitions.mapTo(mutableSetOf()) { it.id }
             ),
             tcpingSelectionValue = normalizeSelectionValue(

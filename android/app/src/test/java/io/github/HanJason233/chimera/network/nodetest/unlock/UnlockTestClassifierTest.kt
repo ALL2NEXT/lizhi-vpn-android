@@ -56,7 +56,7 @@ class UnlockTestClassifierTest {
     fun `Netflix 仅原创内容可用判定为部分解锁`() {
         val result = UnlockTestClassifier.netflix(
             definition("netflix"),
-            UnlockHttpResponse(404, "page-404"),
+            UnlockHttpResponse(200, "Oh no! This title is unavailable in your region."),
             UnlockHttpResponse(200, "Watch House of Cards title/80018499")
         )
 
@@ -68,7 +68,7 @@ class UnlockTestClassifierTest {
     fun `YouTube Premium 提取区域并判定可用`() {
         val result = UnlockTestClassifier.youtube(
             definition("youtube"),
-            UnlockHttpResponse(200, "{\"countryCode\":\"US\",\"product\":\"Premium\"}")
+            UnlockHttpResponse(200, "{\"gl\":\"US\",\"product\":\"Premium\"}")
         )
 
         assertEquals(UnlockTestState.UNLOCKED, result.state)
