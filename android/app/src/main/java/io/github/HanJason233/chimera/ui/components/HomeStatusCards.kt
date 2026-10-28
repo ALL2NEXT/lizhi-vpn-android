@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dns
@@ -144,6 +145,7 @@ internal fun HomeTestsCard(
     progressFlow: StateFlow<SpeedTestProgress?>,
     ipTestState: UnlockTestUiState,
     linkTypeResult: LinkTypeTestResult,
+    onStartTests: () -> Unit,
     onInterruptTests: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -178,67 +180,79 @@ internal fun HomeTestsCard(
         LinkTypeTestState.NOT_CONNECTED -> "未连接"
         LinkTypeTestState.ERROR -> "失败"
     }
-    HomeInfoCard(
-        compact = true,
-        modifier = modifier
+    Card(
+        modifier = modifier.widthIn(max = 520.dp).fillMaxWidth(),
+        shape = RoundedCornerShape(percent = 50),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        )
     ) {
-        // 五项测试并排显示；链路类型和解锁结果可点击查看详情。
+        // 五项测试并排显示；右侧操作按钮常驻，并在启动和中断状态间切换。
         Row(
-            Modifier.fillMaxWidth().height(52.dp),
+            Modifier.fillMaxWidth().height(64.dp).padding(start = 8.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            HomeTestTableCell(
-                label = "TCPing",
-                value = tcping.homeLatency(),
-                modifier = Modifier.weight(1f),
-                color = tcping.latencyColor(),
-                isTesting = isTesting && progress?.stage == "TCPing"
-            )
+            Row(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HomeTestTableCell(
+                    label = "TCPing",
+                    value = tcping.homeLatency(),
+                    modifier = Modifier.weight(1f),
+                    color = tcping.latencyColor(),
+                    isTesting = isTesting && progress?.stage == "TCPing"
+                )
+                HomeTestTableDivider()
+                HomeTestTableCell(
+                    label = "URLTest",
+                    value = urlTest.homeLatency(),
+                    modifier = Modifier.weight(1f),
+                    color = urlTest.latencyColor(),
+                    isTesting = isTesting && progress?.stage == "URL Test"
+                )
+                HomeTestTableDivider()
+                HomeTestTableCell(
+                    label = "下载",
+                    value = (node?.downloadMbps ?: 0f).homeSpeedCompact(),
+                    modifier = Modifier.weight(1f),
+                    isTesting = isHysteriaBandwidthAdapting ||
+                        (isTesting && progress?.stage == "带宽测速")
+                )
+                HomeTestTableDivider()
+                HomeTestTableCell(
+                    label = "链路",
+                    value = linkTypeSummary,
+                    modifier = Modifier.weight(1f),
+                    color = linkTypeColor,
+                    isTesting = isLinkTypeTesting,
+                    onClick = { detailsDialog = HomeTestDetails.LINK_TYPE }
+                )
+                HomeTestTableDivider()
+                HomeTestTableCell(
+                    label = "解锁",
+                    value = unlockSummary,
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.primary,
+                    isTesting = isUnlockTesting,
+                    onClick = { detailsDialog = HomeTestDetails.UNLOCK }
+                )
+            }
             HomeTestTableDivider()
-            HomeTestTableCell(
-                label = "URLTest",
-                value = urlTest.homeLatency(),
-                modifier = Modifier.weight(1f),
-                color = urlTest.latencyColor(),
-                isTesting = isTesting && progress?.stage == "URL Test"
-            )
-            HomeTestTableDivider()
-            HomeTestTableCell(
-                label = "下载",
-                value = (node?.downloadMbps ?: 0f).homeSpeedCompact(),
-                modifier = Modifier.weight(1f),
-                isTesting = isHysteriaBandwidthAdapting ||
-                    (isTesting && progress?.stage == "带宽测速")
-            )
-            HomeTestTableDivider()
-            HomeTestTableCell(
-                label = "链路",
-                value = linkTypeSummary,
-                modifier = Modifier.weight(1f),
-                color = linkTypeColor,
-                isTesting = isLinkTypeTesting,
-                onClick = { detailsDialog = HomeTestDetails.LINK_TYPE }
-            )
-            HomeTestTableDivider()
-            HomeTestTableCell(
-                label = "解锁",
-                value = unlockSummary,
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.primary,
-                isTesting = isUnlockTesting,
-                onClick = { detailsDialog = HomeTestDetails.UNLOCK }
-            )
-        }
-        // 仅在测试运行期间显示强制中断按钮。
-        if (hasActiveTest) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                IconButton(onClick = onInterruptTests) {
-                    Icon(
-                        imageVector = Icons.Outlined.StopCircle,
-                        contentDescription = "强制中断测试",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+            IconButton(
+                onClick = if (hasActiveTest) onInterruptTests else onStartTests,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = if (hasActiveTest) Icons.Outlined.StopCircle else Icons.Filled.PlayArrow,
+                    contentDescription = if (hasActiveTest) "强制中断测试" else "开始测速",
+                    tint = if (hasActiveTest) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
+                )
             }
         }
     }
