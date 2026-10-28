@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -143,55 +144,29 @@ internal fun HomeTestsCard(
     modifier: Modifier = Modifier
 ) {
     val progress by progressFlow.collectAsStateWithLifecycle()
-    val activeTestLabel = when {
-        ipTestState.isRunning -> ipTestState.message.ifBlank { "IP 与服务测试进行中" }
-        linkTypeResult.state == LinkTypeTestState.TESTING ->
-            linkTypeResult.message.ifBlank { "链路类型检测中" }
-        isHysteriaBandwidthAdapting -> "Hy2 带宽自适应测试中"
-        isTesting -> progress?.title ?: "节点测试中"
-        else -> null
-    }
+    val hasActiveTest = isTesting || isHysteriaBandwidthAdapting || ipTestState.isRunning ||
+        linkTypeResult.state == LinkTypeTestState.TESTING
     HomeInfoCard(
         compact = true,
         modifier = modifier
     ) {
-        if (activeTestLabel != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = activeTestLabel,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                TextButton(
-                    onClick = onInterruptTests,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                ) {
-                    Text("强制中断", maxLines = 1)
-                }
-            }
-            if (isTesting && !ipTestState.isRunning &&
-                linkTypeResult.state != LinkTypeTestState.TESTING
-            ) {
-                HomeTestProgress(progress)
-            }
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        }
+        // 将当前阶段的运行状态显示在对应测速指标旁。
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val tcping = node?.tcpingLatency ?: -1
             val urlTest = node?.urlTestLatency ?: -1
-            HomeLinkMetric("TCPing", tcping.homeLatency(), Modifier.weight(1f), tcping.latencyColor())
-            HomeLinkMetric("URLTest", urlTest.homeLatency(), Modifier.weight(1f), urlTest.latencyColor())
-            HomeLinkMetric("下载", (node?.downloadMbps ?: 0f).homeSpeed(), Modifier.weight(1f))
+            HomeLinkMetric(
+                "TCPing", tcping.homeLatency(), Modifier.weight(1f), tcping.latencyColor(),
+                isTesting = isTesting && progress?.stage == "TCPing"
+            )
+            HomeLinkMetric(
+                "URLTest", urlTest.homeLatency(), Modifier.weight(1f), urlTest.latencyColor(),
+                isTesting = isTesting && progress?.stage == "URL Test"
+            )
+            HomeLinkMetric(
+                "下载", (node?.downloadMbps ?: 0f).homeSpeed(), Modifier.weight(1f),
+                isTesting = isHysteriaBandwidthAdapting ||
+                    (isTesting && progress?.stage == "带宽测速")
+            )
         }
         if (linkTypeResult.state != LinkTypeTestState.IDLE) {
             Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -208,6 +183,18 @@ internal fun HomeTestsCard(
             }
             HomeIpTestGrid(ipTestState.items)
         }
+        // 仅在测试运行期间显示强制中断按钮。
+        if (hasActiveTest) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                IconButton(onClick = onInterruptTests) {
+                    Icon(
+                        imageVector = Icons.Outlined.StopCircle,
+                        contentDescription = "强制中断测试",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -221,6 +208,10 @@ private fun HomeLinkTypeResult(result: LinkTypeTestResult) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("链路类型", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (result.state == LinkTypeTestState.TESTING) {
+            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = color)
+            Spacer(Modifier.width(6.dp))
+        }
         Text(result.state.title, style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold, color = color)
     }
@@ -243,28 +234,6 @@ private fun HomeLinkTypeResult(result: LinkTypeTestResult) {
     }
     if (result.message.isNotBlank()) {
         Text(result.message, style = MaterialTheme.typography.labelSmall, color = color)
-    }
-}
-
-@Composable
-private fun HomeTestProgress(progress: SpeedTestProgress?) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(progress?.stage ?: "准备测试", modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (progress != null && progress.total > 0) {
-            Text("${progress.completed}/${progress.total}", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary)
-        }
-    }
-    if (progress != null && progress.total > 0) {
-        LinearProgressIndicator(
-            progress = (progress.completed.toFloat() / progress.total).coerceIn(0f, 1f),
-            modifier = Modifier.fillMaxWidth(),
-            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-        )
-    } else {
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(),
-            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
     }
 }
 
@@ -402,10 +371,20 @@ private fun HomeLinkMetric(
     label: String,
     value: String,
     modifier: Modifier,
-    color: Color = MaterialTheme.colorScheme.onSurface
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    isTesting: Boolean = false
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (isTesting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 1.5.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
         Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = color)
     }
 }
