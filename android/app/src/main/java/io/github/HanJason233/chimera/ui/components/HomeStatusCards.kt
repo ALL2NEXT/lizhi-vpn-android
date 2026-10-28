@@ -430,12 +430,7 @@ private fun HomeUnlockTestDetails(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                Image(
-                    painter = painterResource(unlockTestIconResource(result.definition.id)),
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    contentScale = ContentScale.Fit
-                )
+                HomeUnlockTestIcon(result.definition.id)
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -473,11 +468,15 @@ private fun HomeUnlockTestDetails(
     }
 }
 
+// 测试选项列表与结果明细共用同一套品牌图标。
 internal fun unlockTestIconResource(id: String): Int = when (id) {
     "google_cn" -> R.drawable.ic_unlock_google
     "chatgpt" -> R.drawable.ic_unlock_chatgpt
+    "copilot" -> R.drawable.ic_unlock_copilot
     "sora" -> R.drawable.ic_unlock_chatgpt
-    "copilot", "llama", "perplexity", "grok" -> R.drawable.ic_vpn_key
+    "grok" -> R.drawable.ic_unlock_grok
+    "llama" -> R.drawable.ic_unlock_meta
+    "perplexity" -> R.drawable.ic_unlock_perplexity
     "claude" -> R.drawable.ic_unlock_anthropic
     "gemini" -> R.drawable.ic_unlock_gemini
     "netflix" -> R.drawable.ic_unlock_netflix
@@ -488,8 +487,22 @@ internal fun unlockTestIconResource(id: String): Int = when (id) {
     "tiktok" -> R.drawable.ic_unlock_tiktok
     "spotify" -> R.drawable.ic_unlock_spotify
     "wikipedia" -> R.drawable.ic_unlock_wikipedia
-    "bilibili", "dazn", "abema", "bahamut", "steam" -> R.drawable.ic_vpn_key
+    "bilibili" -> R.drawable.ic_unlock_bilibili
+    "dazn" -> R.drawable.ic_unlock_dazn
+    "abema" -> R.drawable.ic_unlock_abema
+    "bahamut" -> R.drawable.ic_unlock_bahamut
+    "steam" -> R.drawable.ic_unlock_steam
     else -> R.drawable.ic_vpn_key
+}
+
+@Composable
+private fun HomeUnlockTestIcon(id: String) {
+    Image(
+        painter = painterResource(unlockTestIconResource(id)),
+        contentDescription = null,
+        modifier = Modifier.size(32.dp),
+        contentScale = ContentScale.Fit
+    )
 }
 
 @Composable
