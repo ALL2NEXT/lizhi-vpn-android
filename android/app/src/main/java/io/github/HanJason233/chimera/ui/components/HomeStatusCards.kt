@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,20 +11,23 @@ import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -144,44 +148,86 @@ internal fun HomeTestsCard(
     modifier: Modifier = Modifier
 ) {
     val progress by progressFlow.collectAsStateWithLifecycle()
+    var detailsDialog by remember { mutableStateOf<HomeTestDetails?>(null) }
     val hasActiveTest = isTesting || isHysteriaBandwidthAdapting || ipTestState.isRunning ||
         linkTypeResult.state == LinkTypeTestState.TESTING
+    val tcping = node?.tcpingLatency ?: -1
+    val urlTest = node?.urlTestLatency ?: -1
+    val progressStage = progress?.stage
+    val isLinkTypeTesting = linkTypeResult.state == LinkTypeTestState.TESTING ||
+        (isTesting && (progressStage == "第 4 项链路类型检测" || progressStage == "第 4、5 项筛选线路"))
+    val isUnlockTesting = ipTestState.isRunning ||
+        ipTestState.items.any { it.state == UnlockTestState.TESTING } ||
+        (isTesting && (progressStage == "第 5 项流媒体与 AI 解锁检测" || progressStage == "第 4、5 项筛选线路"))
+    val linkTypeColor = when (linkTypeResult.state) {
+        LinkTypeTestState.ERROR, LinkTypeTestState.NOT_CONNECTED -> MaterialTheme.colorScheme.error
+        LinkTypeTestState.TESTING, LinkTypeTestState.IDLE -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val unlockSummary = if (ipTestState.items.isEmpty()) {
+        "未测"
+    } else {
+        "${ipTestState.items.count { it.state == UnlockTestState.UNLOCKED }}/${ipTestState.items.size}"
+    }
+    val linkTypeSummary = when (linkTypeResult.state) {
+        LinkTypeTestState.IDLE -> "未测"
+        LinkTypeTestState.TESTING -> "检测中"
+        LinkTypeTestState.DIRECT -> "直连"
+        LinkTypeTestState.RELAY -> "中转"
+        LinkTypeTestState.CDN_RELAY -> "CDN中转"
+        LinkTypeTestState.NOT_CONNECTED -> "未连接"
+        LinkTypeTestState.ERROR -> "失败"
+    }
     HomeInfoCard(
         compact = true,
         modifier = modifier
     ) {
-        // 将当前阶段的运行状态显示在对应测速指标旁。
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val tcping = node?.tcpingLatency ?: -1
-            val urlTest = node?.urlTestLatency ?: -1
-            HomeLinkMetric(
-                "TCPing", tcping.homeLatency(), Modifier.weight(1f), tcping.latencyColor(),
+        // 五项测试并排显示；链路类型和解锁结果可点击查看详情。
+        Row(
+            Modifier.fillMaxWidth().height(52.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HomeTestTableCell(
+                label = "TCPing",
+                value = tcping.homeLatency(),
+                modifier = Modifier.weight(1f),
+                color = tcping.latencyColor(),
                 isTesting = isTesting && progress?.stage == "TCPing"
             )
-            HomeLinkMetric(
-                "URLTest", urlTest.homeLatency(), Modifier.weight(1f), urlTest.latencyColor(),
+            HomeTestTableDivider()
+            HomeTestTableCell(
+                label = "URLTest",
+                value = urlTest.homeLatency(),
+                modifier = Modifier.weight(1f),
+                color = urlTest.latencyColor(),
                 isTesting = isTesting && progress?.stage == "URL Test"
             )
-            HomeLinkMetric(
-                "下载", (node?.downloadMbps ?: 0f).homeSpeed(), Modifier.weight(1f),
+            HomeTestTableDivider()
+            HomeTestTableCell(
+                label = "下载",
+                value = (node?.downloadMbps ?: 0f).homeSpeedCompact(),
+                modifier = Modifier.weight(1f),
                 isTesting = isHysteriaBandwidthAdapting ||
                     (isTesting && progress?.stage == "带宽测速")
             )
-        }
-        if (linkTypeResult.state != LinkTypeTestState.IDLE) {
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            HomeLinkTypeResult(linkTypeResult)
-        }
-        if (ipTestState.items.isNotEmpty()) {
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            if (ipTestState.isRunning) {
-                LinearProgressIndicator(
-                    progress = (ipTestState.completedCount.toFloat() / ipTestState.items.size).coerceIn(0f, 1f),
-                    modifier = Modifier.fillMaxWidth(),
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                )
-            }
-            HomeIpTestGrid(ipTestState.items)
+            HomeTestTableDivider()
+            HomeTestTableCell(
+                label = "链路",
+                value = linkTypeSummary,
+                modifier = Modifier.weight(1f),
+                color = linkTypeColor,
+                isTesting = isLinkTypeTesting,
+                onClick = { detailsDialog = HomeTestDetails.LINK_TYPE }
+            )
+            HomeTestTableDivider()
+            HomeTestTableCell(
+                label = "解锁",
+                value = unlockSummary,
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.primary,
+                isTesting = isUnlockTesting,
+                onClick = { detailsDialog = HomeTestDetails.UNLOCK }
+            )
         }
         // 仅在测试运行期间显示强制中断按钮。
         if (hasActiveTest) {
@@ -196,10 +242,51 @@ internal fun HomeTestsCard(
             }
         }
     }
+
+    when (detailsDialog) {
+        HomeTestDetails.LINK_TYPE -> AlertDialog(
+            onDismissRequest = { detailsDialog = null },
+            confirmButton = {
+                TextButton(onClick = { detailsDialog = null }) { Text("关闭") }
+            },
+            title = { Text("链路类型详情") },
+            text = {
+                Column(
+                    modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    when {
+                        linkTypeResult.state != LinkTypeTestState.IDLE -> HomeLinkTypeDetails(linkTypeResult)
+                        isLinkTypeTesting -> Text("正在检测链路类型…")
+                        else -> Text("当前节点暂无链路类型检测结果。")
+                    }
+                }
+            }
+        )
+        HomeTestDetails.UNLOCK -> AlertDialog(
+            onDismissRequest = { detailsDialog = null },
+            confirmButton = {
+                TextButton(onClick = { detailsDialog = null }) { Text("关闭") }
+            },
+            title = { Text("解锁检测详情") },
+            text = {
+                if (ipTestState.items.isEmpty()) {
+                    Text(if (isUnlockTesting) "正在检测流媒体与 AI 服务…" else "当前节点暂无解锁检测结果。")
+                } else {
+                    HomeUnlockTestDetails(
+                        items = ipTestState.items,
+                        isRunning = ipTestState.isRunning,
+                        completedCount = ipTestState.completedCount
+                    )
+                }
+            }
+        )
+        null -> Unit
+    }
 }
 
 @Composable
-private fun HomeLinkTypeResult(result: LinkTypeTestResult) {
+private fun HomeLinkTypeDetails(result: LinkTypeTestResult) {
     val color = when (result.state) {
         LinkTypeTestState.ERROR, LinkTypeTestState.NOT_CONNECTED -> MaterialTheme.colorScheme.error
         LinkTypeTestState.TESTING -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -237,75 +324,151 @@ private fun HomeLinkTypeResult(result: LinkTypeTestResult) {
     }
 }
 
+private enum class HomeTestDetails {
+    LINK_TYPE,
+    UNLOCK
+}
+
 @Composable
-private fun HomeIpTestGrid(items: List<UnlockTestResult>) {
-    val fontScale = LocalDensity.current.fontScale
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // 宽屏增加列数，大字体减少列数，保证项目名称和状态可读。
-        val columns = (maxWidth / (92.dp * fontScale)).toInt().coerceIn(2, 4)
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            items.chunked(columns).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { result -> HomeIpTestItem(result, Modifier.weight(1f)) }
-                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-                }
+private fun HomeTestTableDivider() {
+    Box(
+        Modifier.width(1.dp).height(38.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+    )
+}
+
+@Composable
+private fun HomeTestTableCell(
+    label: String,
+    value: String,
+    modifier: Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    isTesting: Boolean = false,
+    onClick: (() -> Unit)? = null
+) {
+    val clickableModifier = if (onClick != null) {
+        Modifier.clickable(role = Role.Button, onClick = onClick)
+    } else {
+        Modifier
+    }
+    Column(
+        modifier = modifier.fillMaxHeight().then(clickableModifier).padding(horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (onClick != null) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = "查看详情",
+                    modifier = Modifier.padding(start = 2.dp).size(11.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
+        }
+        Spacer(Modifier.height(3.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            if (isTesting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(10.dp),
+                    strokeWidth = 1.5.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(3.dp))
+            }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = color,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
 
 @Composable
-private fun HomeIpTestItem(result: UnlockTestResult, modifier: Modifier) {
-    val color = when (result.state) {
-        UnlockTestState.UNLOCKED -> MaterialTheme.colorScheme.primary
-        UnlockTestState.BLOCKED, UnlockTestState.ERROR -> MaterialTheme.colorScheme.error
-        UnlockTestState.PARTIAL, UnlockTestState.WARNING -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+private fun HomeUnlockTestDetails(
+    items: List<UnlockTestResult>,
+    isRunning: Boolean,
+    completedCount: Int
+) {
     Column(
-        modifier = modifier.semantics(mergeDescendants = true) {},
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // 品牌图标随 APK 本地打包，检测状态由外围颜色表示。
-        Surface(
-            modifier = Modifier.size(52.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = color.copy(alpha = 0.1f),
-            border = BorderStroke(1.dp, color.copy(alpha = 0.25f))
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White
+        if (isRunning) {
+            LinearProgressIndicator(
+                progress = (completedCount.toFloat() / items.size).coerceIn(0f, 1f),
+                modifier = Modifier.fillMaxWidth(),
+                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            )
+        }
+        items.forEachIndexed { index, result ->
+            val color = when (result.state) {
+                UnlockTestState.UNLOCKED -> MaterialTheme.colorScheme.primary
+                UnlockTestState.BLOCKED, UnlockTestState.ERROR -> MaterialTheme.colorScheme.error
+                UnlockTestState.PARTIAL, UnlockTestState.WARNING -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Image(
+                    painter = painterResource(unlockTestIconResource(result.definition.id)),
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize().padding(3.dp),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Image(
-                            painter = painterResource(unlockTestIconResource(result.definition.id)),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
+                        Text(
+                            text = result.definition.name,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
                         )
+                        Text(result.statusText, style = MaterialTheme.typography.labelSmall, color = color)
                     }
-                }
-                if (result.state == UnlockTestState.TESTING) {
-                    CircularProgressIndicator(Modifier.align(Alignment.BottomEnd).padding(3.dp).size(12.dp),
-                        strokeWidth = 2.dp, color = color)
+                    Text(result.description, style = MaterialTheme.typography.bodySmall)
+                    val metadata = listOfNotNull(
+                        result.definition.category.title,
+                        result.region.takeIf { it.isNotBlank() }?.let { "地区：$it" },
+                        result.delayMs?.let { "延迟：${it} ms" }
+                    ).joinToString(" · ")
+                    Text(
+                        text = metadata,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
-        }
-        Text(result.definition.name, style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-            maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(result.statusText, style = MaterialTheme.typography.labelSmall, color = color,
-            textAlign = TextAlign.Center)
-        if (result.region.isNotBlank()) {
-            Text(result.region, style = MaterialTheme.typography.labelSmall,
-                textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (index < items.lastIndex) {
+                Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            }
         }
     }
 }
@@ -366,29 +529,6 @@ private fun HomeInfoCard(
     }
 }
 
-@Composable
-private fun HomeLinkMetric(
-    label: String,
-    value: String,
-    modifier: Modifier,
-    color: Color = MaterialTheme.colorScheme.onSurface,
-    isTesting: Boolean = false
-) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (isTesting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-        Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = color)
-    }
-}
-
 private fun Int.homeLatency(): String = when {
     this >= 0 -> "${this} ms"
     this == -2 -> "超时"
@@ -402,5 +542,5 @@ private fun Int.latencyColor(): Color = when {
     else -> MaterialTheme.colorScheme.onSurface
 }
 
-private fun Float.homeSpeed(): String =
-    if (isFinite() && this > 0f) "${"%.2f".format(Locale.ROOT, this)} Mbps" else "未测速"
+private fun Float.homeSpeedCompact(): String =
+    if (isFinite() && this > 0f) "${"%.1f".format(Locale.ROOT, this)}M" else "未测"
