@@ -33,6 +33,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.Node
+import io.github.HanJason233.chimera.data.model.SpeedTestSettings
+import io.github.HanJason233.chimera.data.model.SpeedTestStage
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.R
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestResult
@@ -140,6 +142,7 @@ internal fun HomeSelectionCard(
 @Composable
 internal fun HomeTestsCard(
     node: Node?,
+    testSettings: SpeedTestSettings,
     isTesting: Boolean,
     isHysteriaBandwidthAdapting: Boolean,
     progressFlow: StateFlow<SpeedTestProgress?>,
@@ -151,6 +154,15 @@ internal fun HomeTestsCard(
 ) {
     val progress by progressFlow.collectAsStateWithLifecycle()
     var detailsDialog by remember { mutableStateOf<HomeTestDetails?>(null) }
+    val enabledStages = buildList {
+        if (testSettings.tcpingEnabled) add(SpeedTestStage.TCPING)
+        if (testSettings.urlTestEnabled) add(SpeedTestStage.URL_TEST)
+        if (testSettings.bandwidthEnabled) add(SpeedTestStage.BANDWIDTH)
+        if (testSettings.linkTypeTestEnabled) add(SpeedTestStage.LINK_TYPE)
+        if (testSettings.unlockTestsEnabled && testSettings.unlockTestIds.isNotEmpty()) {
+            add(SpeedTestStage.IP_QUALITY)
+        }
+    }
     val hasActiveTest = isTesting || isHysteriaBandwidthAdapting || ipTestState.isRunning ||
         linkTypeResult.state == LinkTypeTestState.TESTING
     val tcping = node?.tcpingLatency ?: -1
@@ -188,7 +200,7 @@ internal fun HomeTestsCard(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
         )
     ) {
-        // 五项测试并排显示；右侧操作按钮常驻，并在启动和中断状态间切换。
+        // 仅显示已启用的测试项；右侧操作按钮常驻，并在启动和中断状态间切换。
         Row(
             Modifier.fillMaxWidth().height(64.dp).padding(start = 8.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -197,47 +209,52 @@ internal fun HomeTestsCard(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                HomeTestTableCell(
-                    label = "TCPing",
-                    value = tcping.homeLatency(),
-                    modifier = Modifier.weight(1f),
-                    color = tcping.latencyColor(),
-                    isTesting = isTesting && progress?.stage == "TCPing"
-                )
-                HomeTestTableDivider()
-                HomeTestTableCell(
-                    label = "URLTest",
-                    value = urlTest.homeLatency(),
-                    modifier = Modifier.weight(1f),
-                    color = urlTest.latencyColor(),
-                    isTesting = isTesting && progress?.stage == "URL Test"
-                )
-                HomeTestTableDivider()
-                HomeTestTableCell(
-                    label = "下载",
-                    value = (node?.downloadMbps ?: 0f).homeSpeedCompact(),
-                    modifier = Modifier.weight(1f),
-                    isTesting = isHysteriaBandwidthAdapting ||
-                        (isTesting && progress?.stage == "带宽测速")
-                )
-                HomeTestTableDivider()
-                HomeTestTableCell(
-                    label = "链路",
-                    value = linkTypeSummary,
-                    modifier = Modifier.weight(1f),
-                    color = linkTypeColor,
-                    isTesting = isLinkTypeTesting,
-                    onClick = { detailsDialog = HomeTestDetails.LINK_TYPE }
-                )
-                HomeTestTableDivider()
-                HomeTestTableCell(
-                    label = "解锁",
-                    value = unlockSummary,
-                    modifier = Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.primary,
-                    isTesting = isUnlockTesting,
-                    onClick = { detailsDialog = HomeTestDetails.UNLOCK }
-                )
+                enabledStages.forEachIndexed { index, stage ->
+                    if (index > 0) HomeTestTableDivider()
+                    when (stage) {
+                        SpeedTestStage.TCPING -> HomeTestTableCell(
+                            label = "TCPing",
+                            value = tcping.homeLatency(),
+                            modifier = Modifier.weight(1f),
+                            color = tcping.latencyColor(),
+                            isTesting = isTesting && progress?.stage == "TCPing"
+                        )
+
+                        SpeedTestStage.URL_TEST -> HomeTestTableCell(
+                            label = "URLTest",
+                            value = urlTest.homeLatency(),
+                            modifier = Modifier.weight(1f),
+                            color = urlTest.latencyColor(),
+                            isTesting = isTesting && progress?.stage == "URL Test"
+                        )
+
+                        SpeedTestStage.BANDWIDTH -> HomeTestTableCell(
+                            label = "下载",
+                            value = (node?.downloadMbps ?: 0f).homeSpeedCompact(),
+                            modifier = Modifier.weight(1f),
+                            isTesting = isHysteriaBandwidthAdapting ||
+                                (isTesting && progress?.stage == "带宽测速")
+                        )
+
+                        SpeedTestStage.LINK_TYPE -> HomeTestTableCell(
+                            label = "链路",
+                            value = linkTypeSummary,
+                            modifier = Modifier.weight(1f),
+                            color = linkTypeColor,
+                            isTesting = isLinkTypeTesting,
+                            onClick = { detailsDialog = HomeTestDetails.LINK_TYPE }
+                        )
+
+                        SpeedTestStage.IP_QUALITY -> HomeTestTableCell(
+                            label = "解锁",
+                            value = unlockSummary,
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.primary,
+                            isTesting = isUnlockTesting,
+                            onClick = { detailsDialog = HomeTestDetails.UNLOCK }
+                        )
+                    }
+                }
             }
             HomeTestTableDivider()
             IconButton(

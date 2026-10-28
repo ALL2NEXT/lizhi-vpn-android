@@ -69,6 +69,7 @@ fun MainScreen(
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
     val linkTypeTestResult by viewModel.linkTypeTestResult.collectAsStateWithLifecycle()
+    val homeSpeedTestSettings by viewModel.homeSpeedTestSettings.collectAsStateWithLifecycle()
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val homeTestNode by viewModel.homeTestNode.collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
@@ -253,6 +254,7 @@ fun MainScreen(
                     ) {
                         HomeTestsCard(
                             node = homeTestNode,
+                            testSettings = homeSpeedTestSettings,
                             isTesting = isTesting,
                             isHysteriaBandwidthAdapting = isHysteriaBandwidthAdapting,
                             progressFlow = viewModel.speedTestProgress,
