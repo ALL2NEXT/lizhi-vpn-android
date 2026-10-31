@@ -9,6 +9,6 @@ enum class SkinThemeMode(val storageName: String) {
     companion object {
         fun fromStorage(value: String?): SkinThemeMode = entries.firstOrNull {
             it.storageName == value
-        } ?: SYSTEM
+        } ?: LIGHT
     }
 }

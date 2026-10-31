@@ -31,8 +31,8 @@ internal data class LegacySkinScheme(
     val appDisplayName: String = SkinSettings.DEFAULT_APP_DISPLAY_NAME,
     val appIconPresetId: String = SkinSettings.DEFAULT_APP_ICON_PRESET_ID,
     val baseColorArgb: Long = SkinSettings.DEFAULT_BASE_COLOR_ARGB,
-    /** 主题模式，默认跟随系统。 */
-    val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,
+    /** 主题模式，默认明亮。 */
+    val themeMode: SkinThemeMode = SkinThemeMode.LIGHT,
     /** 主题方案的底部导航栏样式。 */
     val navigationStyle: HomeNavigationStyle = HomeNavigationStyle.CLASSIC,
     /** Android 12 及以上使用系统壁纸生成的动态配色，低版本回退到基础颜色。 */
@@ -72,7 +72,7 @@ internal data class LegacySkinScheme(
 
         fun default(): LegacySkinScheme = LegacySkinScheme(
             id = DEFAULT_SCHEME_ID,
-            themeMode = SkinThemeMode.SYSTEM,
+            themeMode = SkinThemeMode.LIGHT,
             monetEnabled = true,
             homeIconEffectEnabled = false,
             homeConnectingIconEffect = HomeIconMotionEffect.ROTATE,
@@ -92,7 +92,7 @@ data class SkinSettings(
     val appDisplayName: String = DEFAULT_APP_DISPLAY_NAME,
     val appIconPresetId: String = DEFAULT_APP_ICON_PRESET_ID,
     val baseColorArgb: Long = DEFAULT_BASE_COLOR_ARGB,
-    val themeMode: SkinThemeMode = SkinThemeMode.SYSTEM,
+    val themeMode: SkinThemeMode = SkinThemeMode.LIGHT,
     val navigationStyle: HomeNavigationStyle = HomeNavigationStyle.CLASSIC,
     val monetEnabled: Boolean = true,
     /** 旧版自定义启动器图标路径，仅保留用于兼容读取。 */
