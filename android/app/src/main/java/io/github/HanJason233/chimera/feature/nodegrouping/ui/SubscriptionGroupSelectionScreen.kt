@@ -1451,14 +1451,17 @@ private fun ModernGroupCard(
         PersonalSourceIconMode.CUSTOM_REMOTE -> "remote:$remoteIconUrl"
         PersonalSourceIconMode.LOCAL -> "local:$localIconFile"
     }
+    val iconCacheRevision by SubscriptionFaviconLoader.cacheRevision
+        .collectAsStateWithLifecycle()
+    val iconLoadStateKey = "$iconLoadKey:$iconCacheRevision"
     val appContext = LocalContext.current.applicationContext
-    val groupIcon by produceState<ImageBitmap?>(initialValue = null, key1 = iconLoadKey) {
+    val groupIcon by produceState<ImageBitmap?>(initialValue = null, key1 = iconLoadStateKey) {
         value = when (parsedIconMode) {
             PersonalSourceIconMode.DEFAULT -> null
             PersonalSourceIconMode.AUTO_REMOTE,
             PersonalSourceIconMode.CUSTOM_REMOTE -> remoteIconUrl?.let { url ->
                 withContext(Dispatchers.IO) {
-                    SubscriptionFaviconLoader.load(appContext, url)?.asImageBitmap()
+                    SubscriptionFaviconLoader.loadCached(appContext, url)?.asImageBitmap()
                 }
             }
             PersonalSourceIconMode.LOCAL -> withContext(Dispatchers.IO) {

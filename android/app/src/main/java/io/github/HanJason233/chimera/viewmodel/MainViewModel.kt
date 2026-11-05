@@ -47,6 +47,7 @@ import io.github.HanJason233.chimera.network.nodetest.common.NodeTestProxyManage
 import io.github.HanJason233.chimera.network.nodetest.bandwidth.SpeedTestService
 import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
 import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.PersonalSourceIconStore
+import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.SubscriptionFaviconLoader
 import io.github.HanJason233.chimera.network.subscription.importer.LocalSubscriptionContent
 import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionImportInput
 import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionInputDetector
@@ -2341,6 +2342,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
             }
+            preparedGroups.forEach { prepared ->
+                fetchPersonalSourceIconForGroup(prepared.group.id)
+            }
             settingsRepository.setSelectedNodeGroup(
                 NodeGroupKey.Imported(preparedGroups.first().group.id)
             )
@@ -2892,7 +2896,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     localIconFile = localIconFile
                 ) > 0
             }
+            if (updated) fetchPersonalSourceIconForGroup(groupId)
             onResult(updated)
+        }
+    }
+
+    private fun fetchPersonalSourceIconForGroup(groupId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val group = nodeDao().getNodeGroupById(groupId) ?: return@launch
+            val iconUrl = when (PersonalSourceIconMode.fromStorage(group.iconMode)) {
+                PersonalSourceIconMode.AUTO_REMOTE ->
+                    SubscriptionFaviconLoader.faviconUrl(group.subscriptionUrl)
+                PersonalSourceIconMode.CUSTOM_REMOTE ->
+                    SubscriptionFaviconLoader.customImageUrl(group.customIconUrl)
+                PersonalSourceIconMode.DEFAULT,
+                PersonalSourceIconMode.LOCAL -> null
+            } ?: return@launch
+
+            SubscriptionFaviconLoader.fetchAndCache(
+                getApplication<Application>().applicationContext,
+                iconUrl
+            )
         }
     }
 
