@@ -228,7 +228,7 @@ fun AccountSettingsScreen(
         title = if (offlineModeEnabled) "我的" else page.title,
         onBack = onBack,
         showBackNavigation = !offlineModeEnabled && page != AccountSettingsPage.OVERVIEW,
-        containerColor = accountSettingsBackground,
+        containerColor = MaterialTheme.colorScheme.background,
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         actions = {
             if (!offlineModeEnabled && account != null && page == AccountSettingsPage.OVERVIEW) {

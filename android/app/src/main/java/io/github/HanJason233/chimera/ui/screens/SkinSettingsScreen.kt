@@ -7,7 +7,9 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -34,12 +35,13 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,10 +50,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -68,17 +75,7 @@ import io.github.HanJason233.chimera.platform.LauncherIdentityPreset
 import io.github.HanJason233.chimera.platform.LauncherIdentityPresets
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import java.io.File
-import java.util.Locale
 import io.github.HanJason233.chimera.data.model.SkinThemeMode
-
-private val EDITOR_PRESET_COLORS = listOf(
-    "青绿色" to 0xFF00BFA5L,
-    "蓝色" to 0xFF2979FFL,
-    "紫色" to 0xFF7C4DFFL,
-    "橙色" to 0xFFFF7043L,
-    "粉色" to 0xFFEC407AL,
-    "深灰色" to 0xFF37474FL
-)
 
 // 固定图标、动画和粒子列宽，让各状态设置按表格纵向对齐。
 @Composable
@@ -266,6 +263,93 @@ private fun SkinColorOption(
 }
 
 @Composable
+private fun SkinColorPalette(
+    selectedColor: Color,
+    onColorChange: (Color) -> Unit
+) {
+    val initialHsv = remember(selectedColor) { selectedColor.toSkinHsv() }
+    var hue by remember { mutableStateOf(initialHsv[0]) }
+    var saturation by remember { mutableStateOf(initialHsv[1]) }
+    var value by remember { mutableStateOf(initialHsv[2]) }
+    LaunchedEffect(selectedColor) {
+        val hsv = selectedColor.toSkinHsv()
+        hue = hsv[0]
+        saturation = hsv[1]
+        value = hsv[2]
+    }
+    val hueColor = Color.hsv(hue, 1f, 1f)
+
+    fun updateTone(position: Offset, width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        saturation = (position.x / width).coerceIn(0f, 1f)
+        value = (1f - position.y / height).coerceIn(0f, 1f)
+    }
+
+    Column {
+        Text(
+            text = "自定义颜色",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(176.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .semantics { contentDescription = "饱和度和明度调色盘" }
+                .pointerInput(Unit) {
+                    detectTapGestures { position ->
+                        updateTone(position, size.width, size.height)
+                        onColorChange(Color.hsv(hue, saturation, value))
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { position ->
+                            updateTone(position, size.width, size.height)
+                        },
+                        onDragEnd = {
+                            onColorChange(Color.hsv(hue, saturation, value))
+                        },
+                        onDrag = { change, _ ->
+                            updateTone(change.position, size.width, size.height)
+                            change.consume()
+                        }
+                    )
+                }
+        ) {
+            drawRect(Brush.horizontalGradient(listOf(Color.White, hueColor)))
+            drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
+
+            val selector = Offset(saturation * size.width, (1f - value) * size.height)
+            drawCircle(Color.Black, radius = 12.dp.toPx(), center = selector)
+            drawCircle(Color.White, radius = 9.dp.toPx(), center = selector)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "色相",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Slider(
+            value = hue,
+            onValueChange = { hue = it },
+            onValueChangeFinished = {
+                onColorChange(Color.hsv(hue, saturation, value))
+            },
+            valueRange = 0f..360f
+        )
+    }
+}
+
+private fun Color.toSkinHsv(): FloatArray {
+    return FloatArray(3).also { hsv ->
+        android.graphics.Color.colorToHSV(toArgb(), hsv)
+    }
+}
+
+@Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun SkinSettingsScreen(
     viewModel: MainViewModel,
@@ -275,10 +359,6 @@ fun SkinSettingsScreen(
     val scope = rememberCoroutineScope()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
     val settings = skinSettings
-    var colorInput by remember(settings.baseColorArgb) {
-        mutableStateOf(settings.baseColorArgb.toSkinHex())
-    }
-    var colorError by remember { mutableStateOf(false) }
 
     fun updateGlobalSettings(update: SkinSettings.() -> SkinSettings) {
         viewModel.updateSkinSettings { current -> current.update() }
@@ -714,20 +794,20 @@ fun SkinSettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "莫奈色会根据系统壁纸自适应（Android 12 及以上）。",
+                        text = "选择莫奈取色、默认颜色，或使用调色盘自定义颜色。莫奈取色需要 Android 12 及以上。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(14.dp))
+                    val monetSwatchColor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        dynamicLightColorScheme(context).primary
+                    } else {
+                        Color(settings.baseColorArgb)
+                    }
                     Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        val monetSwatchColor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            dynamicLightColorScheme(context).primary
-                        } else {
-                            Color(settings.baseColorArgb)
-                        }
                         SkinColorOption(
                             name = "莫奈色",
                             color = monetSwatchColor,
@@ -736,50 +816,50 @@ fun SkinSettingsScreen(
                                 updateGlobalSettings { copy(monetEnabled = true) }
                             }
                         )
-                        EDITOR_PRESET_COLORS.forEach { (name, colorArgb) ->
-                            SkinColorOption(
-                                name = name,
-                                color = Color(colorArgb),
-                                selected = !settings.monetEnabled && settings.baseColorArgb == colorArgb,
-                                onClick = {
-                                    colorInput = colorArgb.toSkinHex()
-                                    colorError = false
-                                    updateGlobalSettings {
-                                        copy(baseColorArgb = colorArgb, monetEnabled = false)
-                                    }
-                                }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(14.dp))
-                    OutlinedTextField(
-                        value = colorInput,
-                        onValueChange = { value ->
-                            val normalizedValue = value
-                                .uppercase(Locale.US)
-                                .filter { it == '#' || it in '0'..'9' || it in 'A'..'F' }
-                                .take(7)
-                            colorInput = normalizedValue
-                            val color = parseSkinColor(normalizedValue)
-                            colorError = normalizedValue.length == 7 && color == null
-                            if (color != null) {
+                        SkinColorOption(
+                            name = "默认颜色",
+                            color = Color(SkinSettings.DEFAULT_BASE_COLOR_ARGB),
+                            selected = !settings.monetEnabled &&
+                                settings.baseColorArgb == SkinSettings.DEFAULT_BASE_COLOR_ARGB,
+                            onClick = {
                                 updateGlobalSettings {
-                                    copy(baseColorArgb = color, monetEnabled = false)
+                                    copy(
+                                        baseColorArgb = SkinSettings.DEFAULT_BASE_COLOR_ARGB,
+                                        monetEnabled = false
+                                    )
                                 }
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("颜色代码") },
-                        placeholder = { Text("例如 #2979FF") },
-                        supportingText = {
-                            Text(
-                                if (colorError) "请输入 6 位十六进制颜色代码"
-                                else "输入完整颜色代码后立即生效"
-                            )
-                        },
-                        isError = colorError,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val previewColor = if (settings.monetEnabled) monetSwatchColor
+                        else Color(settings.baseColorArgb)
+                        Surface(
+                            modifier = Modifier.size(32.dp),
+                            shape = CircleShape,
+                            color = previewColor,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                        ) {}
+                        Text(
+                            text = if (settings.monetEnabled) "当前使用莫奈取色"
+                            else "当前颜色 ${settings.baseColorArgb.toSkinHex()}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                    SkinColorPalette(
+                        selectedColor = Color(settings.baseColorArgb),
+                        onColorChange = { color ->
+                            val argb = color.toArgb().toLong() and 0xFFFFFFFFL
+                            updateGlobalSettings {
+                                copy(baseColorArgb = argb, monetEnabled = false)
+                            }
+                        }
                     )
                 }
             }

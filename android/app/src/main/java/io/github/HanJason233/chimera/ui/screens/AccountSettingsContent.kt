@@ -57,17 +57,6 @@ import io.github.HanJason233.chimera.data.model.AccountTrafficInfo
 import io.github.HanJason233.chimera.data.model.AccountTrafficPeriod
 import io.github.HanJason233.chimera.util.TrafficUsageFormatter
 
-internal val accountSettingsBackground = Color(0xFFF2F3F6)
-
-private val settingsCardColor = Color.White
-private val settingsBorderColor = Color(0xFFE8EAF0)
-private val settingsDividerColor = Color(0xFFE9EBF0)
-private val settingsTextColor = Color(0xFF20232B)
-private val settingsMutedColor = Color(0xFF687080)
-private val settingsBlue = Color(0xFF4167B2)
-private val settingsVipOrange = Color(0xFFF2A51D)
-private val settingsDanger = Color(0xFFE33A38)
-
 @Composable
 internal fun AccountSettingsOverviewContent(
     account: AccountInfo,
@@ -88,8 +77,8 @@ internal fun AccountSettingsOverviewContent(
                 .fillMaxWidth()
                 .clickable(role = Role.Button, onClick = onOpenAccountInfo),
             shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, settingsBorderColor),
-            colors = CardDefaults.cardColors(containerColor = settingsCardColor),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Row(
@@ -102,14 +91,14 @@ internal fun AccountSettingsOverviewContent(
                 Surface(
                     modifier = Modifier.size(54.dp),
                     shape = CircleShape,
-                    color = Color(0xFFE7EAF1)
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Filled.Person,
                             contentDescription = null,
                             modifier = Modifier.size(34.dp),
-                            tint = Color(0xFF747E91)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -117,7 +106,7 @@ internal fun AccountSettingsOverviewContent(
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(
                         text = accountDisplayName(account),
-                        color = settingsTextColor,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -125,7 +114,7 @@ internal fun AccountSettingsOverviewContent(
                     )
                     Text(
                         text = accountIdentityText(account),
-                        color = settingsMutedColor,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp,
                         maxLines = 1
                     )
@@ -133,7 +122,7 @@ internal fun AccountSettingsOverviewContent(
                 Icon(
                     imageVector = Icons.Outlined.ChevronRight,
                     contentDescription = "查看账户信息",
-                    tint = settingsMutedColor,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -152,7 +141,7 @@ internal fun AccountSettingsOverviewContent(
                 icon = Icons.Outlined.WorkspacePremium,
                 title = "VIP 会员",
                 subtitle = vipSummary(account),
-                iconTint = settingsVipOrange,
+                iconTint = MaterialTheme.colorScheme.tertiary,
                 onClick = onOpenVip
             )
             SettingsDivider(startInset = 54.dp)
@@ -160,7 +149,7 @@ internal fun AccountSettingsOverviewContent(
                 icon = Icons.Filled.BarChart,
                 title = "流量信息",
                 subtitle = trafficSummary(account.traffic),
-                iconTint = Color(0xFF687080),
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                 onClick = onOpenTraffic
             )
             SettingsDivider(startInset = 54.dp)
@@ -175,7 +164,7 @@ internal fun AccountSettingsOverviewContent(
         Text(
             text = "应用信息",
             modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 1.dp),
-            color = settingsMutedColor,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 13.sp
         )
         AccountSettingsCard {
@@ -190,7 +179,7 @@ internal fun AccountSettingsOverviewContent(
         Text(
             text = "账户操作",
             modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 1.dp),
-            color = settingsMutedColor,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 13.sp
         )
         AccountSettingsCard {
@@ -223,8 +212,8 @@ internal fun OfflineAccountSettingsOverviewContent(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, settingsBorderColor),
-            colors = CardDefaults.cardColors(containerColor = settingsCardColor),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Row(
@@ -237,14 +226,14 @@ internal fun OfflineAccountSettingsOverviewContent(
                 Surface(
                     modifier = Modifier.size(54.dp),
                     shape = CircleShape,
-                    color = Color(0xFFE7EAF1)
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Filled.Person,
                             contentDescription = null,
                             modifier = Modifier.size(34.dp),
-                            tint = Color(0xFF747E91)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -255,13 +244,13 @@ internal fun OfflineAccountSettingsOverviewContent(
                 ) {
                     Text(
                         text = "离线用户",
-                        color = settingsTextColor,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = "仅使用本地功能",
-                        color = settingsMutedColor,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp
                     )
                 }
@@ -271,7 +260,7 @@ internal fun OfflineAccountSettingsOverviewContent(
         Text(
             text = "应用信息",
             modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 1.dp),
-            color = settingsMutedColor,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 13.sp
         )
         AccountSettingsCard {
@@ -286,7 +275,7 @@ internal fun OfflineAccountSettingsOverviewContent(
         Text(
             text = "账户操作",
             modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 1.dp),
-            color = settingsMutedColor,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 13.sp
         )
         AccountSettingsCard {
@@ -322,7 +311,7 @@ internal fun AccountInfoDetailContent(
                     Icon(
                         imageVector = Icons.Filled.Edit,
                         contentDescription = "修改昵称",
-                        tint = settingsMutedColor
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -343,7 +332,7 @@ internal fun AccountInfoDetailContent(
                     ) {
                         Text(
                             text = if (registrationEnabled) "注册正式用户" else "注册未开放",
-                            color = settingsBlue,
+                            color = MaterialTheme.colorScheme.primary,
                             maxLines = 1
                         )
                     }
@@ -376,38 +365,38 @@ internal fun VipDetailContent(
                     Surface(
                         modifier = Modifier.size(46.dp),
                         shape = CircleShape,
-                        color = Color(0xFFFFEBCB)
+                        color = MaterialTheme.colorScheme.tertiaryContainer
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Outlined.WorkspacePremium,
                                 contentDescription = null,
-                                tint = settingsVipOrange,
+                                tint = MaterialTheme.colorScheme.tertiary,
                                 modifier = Modifier.size(27.dp)
                             )
                         }
                     }
                     Spacer(Modifier.width(13.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("会员状态", color = settingsTextColor, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("会员状态", color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text(
                             text = if (account.vipActive) "VIP 已开通" else "VIP 未开通",
-                            color = settingsMutedColor,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )
                     }
                 }
                 SettingsDivider(startInset = 0.dp, endInset = 0.dp)
                 Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("有效期至", color = settingsTextColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text("有效期至", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     Text(
                         text = formattedAccountTimestamp(account.vipExpiresAt) ?: "暂无有效期",
-                        color = settingsMutedColor,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )
                 }
                 SettingsDivider(startInset = 0.dp, endInset = 0.dp)
-                Text("VIP 卡密", color = settingsTextColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("VIP 卡密", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     value = vipCode,
                     onValueChange = onVipCodeChange,
@@ -422,8 +411,8 @@ internal fun VipDetailContent(
                     enabled = canActivateVip,
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = settingsBlue,
-                        contentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -434,7 +423,7 @@ internal fun VipDetailContent(
                             modifier = Modifier
                                 .padding(end = 8.dp)
                                 .size(18.dp),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             strokeWidth = 2.dp
                         )
                     }
@@ -445,7 +434,7 @@ internal fun VipDetailContent(
         Text(
             text = "兑换卡密会在当前有效期后继续增加 VIP 时长。",
             modifier = Modifier.padding(horizontal = 6.dp),
-            color = settingsMutedColor,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp
         )
     }
@@ -492,8 +481,8 @@ internal fun AccountSettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, settingsBorderColor),
-        colors = CardDefaults.cardColors(containerColor = settingsCardColor),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(content = content)
@@ -505,7 +494,7 @@ private fun SettingsLinkRow(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    iconTint: Color = settingsMutedColor,
+    iconTint: Color? = null,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
@@ -520,7 +509,8 @@ private fun SettingsLinkRow(
         Icon(
             icon,
             contentDescription = null,
-            tint = iconTint.copy(alpha = if (enabled) 1f else 0.5f),
+            tint = (iconTint ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                .copy(alpha = if (enabled) 1f else 0.5f),
             modifier = Modifier.size(23.dp)
         )
         Column(
@@ -531,13 +521,13 @@ private fun SettingsLinkRow(
         ) {
             Text(
                 title,
-                color = settingsTextColor.copy(alpha = if (enabled) 1f else 0.55f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.55f),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
                 subtitle,
-                color = settingsMutedColor.copy(alpha = if (enabled) 1f else 0.65f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.65f),
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -546,7 +536,7 @@ private fun SettingsLinkRow(
         Icon(
             imageVector = Icons.Outlined.ChevronRight,
             contentDescription = null,
-            tint = settingsMutedColor.copy(alpha = if (enabled) 1f else 0.5f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.5f),
             modifier = Modifier.size(21.dp)
         )
     }
@@ -561,7 +551,7 @@ private fun SettingsOperationRow(
     danger: Boolean = false,
     onClick: () -> Unit
 ) {
-    val tint = if (danger) settingsDanger else settingsMutedColor
+    val tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -586,7 +576,7 @@ private fun SettingsOperationRow(
             Icon(
                 imageVector = Icons.Outlined.ChevronRight,
                 contentDescription = null,
-                tint = settingsMutedColor,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(21.dp)
             )
         }
@@ -609,10 +599,10 @@ private fun AccountDetailRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Text(label, color = settingsTextColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(label, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             Text(
                 value,
-                color = settingsMutedColor,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
@@ -636,17 +626,17 @@ private fun TrafficDetailRow(
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Text(label, color = settingsTextColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         Text(
             text = if (hasReported) TrafficUsageFormatter.formatBytes(period.displayTotalBytes()) else "暂无统计",
-            color = settingsTextColor,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold
         )
         if (hasReported) {
             Text(
                 text = "上行 ${TrafficUsageFormatter.formatBytes(upload)} · 下行 ${TrafficUsageFormatter.formatBytes(download)}",
-                color = settingsMutedColor,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp
             )
         }
@@ -660,7 +650,7 @@ private fun SettingsDivider(startInset: Dp = 18.dp, endInset: Dp = 18.dp) {
             .fillMaxWidth()
             .padding(start = startInset, end = endInset)
             .height(1.dp)
-            .background(settingsDividerColor)
+            .background(MaterialTheme.colorScheme.outlineVariant)
     )
 }
 
