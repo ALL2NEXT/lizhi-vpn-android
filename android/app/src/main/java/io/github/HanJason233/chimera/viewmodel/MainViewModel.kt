@@ -231,8 +231,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // UI状态
     val isLoading = subscriptionDataLoader.isLoading
 
-    // 暴露正在获取节点的官方源，用于在对应仓库组图标显示刷新动画。
-    val refreshingSubscriptionSourceIds = subscriptionDataLoader.fetchingSubscriptionSourceIds
+    // 手动点击后立即显示动画；真正请求节点时再与加载器状态合并。
+    private val _pendingOfficialSourceRefreshCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val refreshingSubscriptionSourceIds = combine(
+        subscriptionDataLoader.fetchingSubscriptionSourceIds,
+        _pendingOfficialSourceRefreshCounts
+    ) { fetchingSourceIds, pendingRefreshCounts ->
+        fetchingSourceIds + pendingRefreshCounts.keys
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
@@ -3702,23 +3708,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sourceId: String?,
         onResult: ((Boolean) -> Unit)?
     ) {
+        val pendingSourceId = sourceId?.takeIf(String::isNotBlank)
+        if (pendingSourceId != null) {
+            _pendingOfficialSourceRefreshCounts.update { counts ->
+                counts + (pendingSourceId to ((counts[pendingSourceId] ?: 0) + 1))
+            }
+        }
         viewModelScope.launch {
-            if (GlobalTestExecution.isFetching()) {
-                _error.value = GlobalTestExecution.fetchingHint()
-                onResult?.invoke(false)
-                return@launch
+            try {
+                if (GlobalTestExecution.isFetching()) {
+                    _error.value = GlobalTestExecution.fetchingHint()
+                    onResult?.invoke(false)
+                    return@launch
+                }
+                if (_isTesting.value || GlobalTestExecution.mutex.isLocked) {
+                    _error.value = GlobalTestExecution.busyHint()
+                    onResult?.invoke(false)
+                    return@launch
+                }
+                val fetchOk = initializeSubscriptionsWithRefreshState(
+                    forceRefresh = true,
+                    sourceId = sourceId,
+                    forceSourceRefresh = true
+                )
+                onResult?.invoke(fetchOk)
+            } finally {
+                if (pendingSourceId != null) {
+                    _pendingOfficialSourceRefreshCounts.update { counts ->
+                        val count = counts[pendingSourceId] ?: return@update counts
+                        if (count <= 1) {
+                            counts - pendingSourceId
+                        } else {
+                            counts + (pendingSourceId to count - 1)
+                        }
+                    }
+                }
             }
-            if (_isTesting.value || GlobalTestExecution.mutex.isLocked) {
-                _error.value = GlobalTestExecution.busyHint()
-                onResult?.invoke(false)
-                return@launch
-            }
-            val fetchOk = initializeSubscriptionsWithRefreshState(
-                forceRefresh = true,
-                sourceId = sourceId,
-                forceSourceRefresh = true
-            )
-            onResult?.invoke(fetchOk)
         }
     }
 
