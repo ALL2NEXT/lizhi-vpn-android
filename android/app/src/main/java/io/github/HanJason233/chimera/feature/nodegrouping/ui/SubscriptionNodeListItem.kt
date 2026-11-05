@@ -22,6 +22,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,10 +84,15 @@ internal fun NodeListItem(
                 .padding(horizontal = 36.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val regionMarker = node.getRegionMarker()
+            val isRegionCode = regionMarker.length == 2 && regionMarker.all { it in 'A'..'Z' }
             Text(
-                text = node.getRegionMarker(),
-                fontSize = 34.sp,
-                lineHeight = 38.sp,
+                text = regionMarker,
+                fontSize = if (isRegionCode) 22.sp else 34.sp,
+                lineHeight = if (isRegionCode) 28.sp else 38.sp,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .offset(x = (-8).dp)
                     .width(48.dp)
