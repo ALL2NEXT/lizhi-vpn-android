@@ -90,6 +90,7 @@ import type {
 } from "./types/models.ts";
 import {
   createObservedEnv,
+  deleteAllSystemLogs,
   deleteSystemLogs,
   isSystemLogScheduleActive,
   pruneSystemLogs,
@@ -158,6 +159,7 @@ const routeDeps = {
   writeState,
   normalizeState,
   deleteSystemLogs,
+  deleteAllSystemLogs,
   readSystemLogPayload,
   readSystemLogs,
   readSystemLogRecordingSettings,

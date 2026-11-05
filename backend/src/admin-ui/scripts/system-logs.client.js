@@ -58,6 +58,7 @@ function updateSystemLogSelectionControls(records) {
   const selectionSummary = el('systemLogsSelectionSummary');
   const selectPageButton = el('systemLogsSelectPageButton');
   const deleteButton = el('systemLogsDeleteSelectedButton');
+  const deleteAllButton = el('systemLogsDeleteAllButton');
   const pageCheckbox = document.querySelector('[data-system-log-select-page]');
 
   if (selectionSummary) selectionSummary.textContent = selectedCount ? '已选 ' + selectedCount + ' 条' : '未选择日志';
@@ -68,6 +69,10 @@ function updateSystemLogSelectionControls(records) {
   if (deleteButton) {
     deleteButton.disabled = busy || selectedCount === 0;
     deleteButton.textContent = selectedCount ? '删除所选（' + selectedCount + '）' : '删除所选';
+  }
+  if (deleteAllButton) {
+    deleteAllButton.disabled = busy;
+    deleteAllButton.textContent = systemLogsDeleting ? '正在删除…' : '删除所有日志';
   }
   if (pageCheckbox) {
     pageCheckbox.checked = allSelected;
@@ -717,6 +722,43 @@ async function deleteSelectedSystemLogs() {
   }
 }
 
+async function deleteAllSystemLogs() {
+  if (systemLogsDeleting || systemLogsLoading) return;
+  if (!window.confirm('确认删除全部网络日志（包括当前筛选条件以外的记录）及请求/响应详情？此操作不可撤销。')) return;
+
+  systemLogsDeleting = true;
+  updateSystemLogSelectionControls(systemLogsData && systemLogsData.records || []);
+  try {
+    const response = await fetch(ADMIN_API_BASE + '/system-logs', {
+      method: 'DELETE',
+      headers: headers(),
+      body: JSON.stringify({all: true}),
+      cache: 'no-store'
+    });
+    const responseText = await response.text();
+    const data = parseResponseJson(responseText);
+    if (!response.ok || data.ok === false) {
+      throw new Error(adminErrorMessage(data.error, '网络日志删除失败（HTTP ' + response.status + '）'));
+    }
+
+    const deletedCount = Math.max(0, Number(data.deleted) || 0);
+    if (systemLogDetailRecord) closeSystemLogDetails();
+    systemLogSelectedIds.clear();
+    systemLogEndpointRowsCache = null;
+    systemLogEndpointRowsCacheKey = '';
+    systemLogsOffset = 0;
+    systemLogsData = null;
+    systemLogsDeleting = false;
+    await loadSystemLogs(true);
+    show('已删除 ' + deletedCount + ' 条网络日志');
+  } catch (error) {
+    show(error.message || '网络日志删除失败', true);
+  } finally {
+    systemLogsDeleting = false;
+    updateSystemLogSelectionControls(systemLogsData && systemLogsData.records || []);
+  }
+}
+
 function toggleSystemLogPageSelection() {
   if (systemLogsDeleting || systemLogsLoading) return;
   const records = systemLogsData && Array.isArray(systemLogsData.records) ? systemLogsData.records : [];
@@ -988,6 +1030,7 @@ el('systemLogsPager').addEventListener('click', function(event) {
 
 el('systemLogsSelectPageButton').addEventListener('click', toggleSystemLogPageSelection);
 el('systemLogsDeleteSelectedButton').addEventListener('click', deleteSelectedSystemLogs);
+el('systemLogsDeleteAllButton').addEventListener('click', deleteAllSystemLogs);
 
 el('systemLogSearch').addEventListener('input', function() {
   if (systemLogsSearchTimer) clearTimeout(systemLogsSearchTimer);

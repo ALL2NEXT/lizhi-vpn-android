@@ -28,6 +28,7 @@ export function createAdminAccessRoutes(deps: Pick<
   | "json"
   | "readSystemLogs"
   | "deleteSystemLogs"
+  | "deleteAllSystemLogs"
   | "readSystemLogPayload"
   | "readSystemLogRecordingSettings"
   | "updateSystemLogRecordingSetting"
@@ -38,6 +39,7 @@ export function createAdminAccessRoutes(deps: Pick<
     json,
     readSystemLogs,
     deleteSystemLogs,
+    deleteAllSystemLogs,
     readSystemLogPayload,
     readSystemLogRecordingSettings,
     updateSystemLogRecordingSetting,
@@ -173,7 +175,9 @@ export function createAdminAccessRoutes(deps: Pick<
     if (path === "/api/system-logs" && request.method === "DELETE") {
       try {
         const incoming = await readJsonObject(request);
-        const deleted = await deleteSystemLogs(env, incoming.ids);
+        const deleted = incoming.all === true
+          ? await deleteAllSystemLogs(env)
+          : await deleteSystemLogs(env, incoming.ids);
         return json({ ok: true, deleted });
       } catch (error) {
         const invalidIds = error instanceof Error && error.message === "invalid_system_log_ids";

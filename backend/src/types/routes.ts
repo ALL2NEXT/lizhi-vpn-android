@@ -66,6 +66,7 @@ export interface RouteDependencies {
   normalizeState: typeof state.normalizeState;
   readSystemLogs: typeof systemLogs.readSystemLogs;
   deleteSystemLogs: typeof systemLogs.deleteSystemLogs;
+  deleteAllSystemLogs: typeof systemLogs.deleteAllSystemLogs;
   readSystemLogPayload: typeof systemLogs.readSystemLogPayload;
   readSystemLogRecordingSettings: typeof systemLogs.readSystemLogRecordingSettings;
   updateSystemLogRecordingSetting: typeof systemLogs.updateSystemLogRecordingSetting;

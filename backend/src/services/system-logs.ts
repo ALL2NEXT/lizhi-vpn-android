@@ -585,6 +585,16 @@ export async function deleteSystemLogs(env: Env, rawIds: unknown) {
   return Number(results[0]?.meta?.changes) || 0;
 }
 
+export async function deleteAllSystemLogs(env: Env) {
+  if (!env.USERS_DB) return 0;
+  const db = await ensureUserSchema(env);
+  const results = await db.batch([
+    db.prepare("DELETE FROM system_logs_mb"),
+    db.prepare("DELETE FROM system_log_payload_parts_mb"),
+  ]);
+  return Number(results[0]?.meta?.changes) || 0;
+}
+
 export async function pruneSystemLogs(env: Env) {
   if (!env.USERS_DB) return 0;
   const db = await ensureUserSchema(env);
