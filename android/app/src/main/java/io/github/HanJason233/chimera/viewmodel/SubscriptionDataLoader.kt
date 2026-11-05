@@ -14,6 +14,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import io.github.HanJason233.chimera.AppConfig
@@ -58,6 +60,11 @@ internal class SubscriptionDataLoader(
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
+    private val initializeMutex = Mutex()
+
+    private val _fetchingSubscriptionSourceIds = MutableStateFlow<Set<String>>(emptySet())
+    val fetchingSubscriptionSourceIds = _fetchingSubscriptionSourceIds.asStateFlow()
+
     private val _backendSettings = MutableStateFlow(BackendAppSettings())
     val backendSettings = _backendSettings.asStateFlow()
 
@@ -80,11 +87,13 @@ internal class SubscriptionDataLoader(
             onMessage("离线模式下不会连接 Chimera 后台刷新线路")
             return false
         }
-        _isLoading.value = true
-        return try {
-            initializeInternal(forceRefresh, sourceId, forceSourceRefresh)
-        } finally {
-            _isLoading.value = false
+        return initializeMutex.withLock {
+            _isLoading.value = true
+            try {
+                initializeInternal(forceRefresh, sourceId, forceSourceRefresh)
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
@@ -313,6 +322,7 @@ internal class SubscriptionDataLoader(
         }
 
         GlobalTestExecution.beginFetching("请求节点中")
+        _fetchingSubscriptionSourceIds.value = sourcesToRefresh.mapTo(mutableSetOf()) { it.id }
         try {
             if (!NetworkUtils.isNetworkAvailable(context)) {
                 onMessage("当前无网络连接，无法获取节点")
@@ -374,6 +384,7 @@ internal class SubscriptionDataLoader(
             onMessage("网络错误")
             return false
         } finally {
+            _fetchingSubscriptionSourceIds.value = emptySet()
             GlobalTestExecution.endFetching()
         }
     }

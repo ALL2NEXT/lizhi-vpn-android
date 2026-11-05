@@ -1,5 +1,11 @@
 package io.github.HanJason233.chimera.feature.nodegrouping.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
@@ -11,6 +17,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -151,6 +158,8 @@ internal fun SubscriptionGroupSelectionDestination(
         .collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val refreshingSourceIds by viewModel.refreshingSubscriptionSourceIds
+        .collectAsStateWithLifecycle()
     val countryOptions = remember(allWarehouseNodes) {
         CountryGroupingStrategy.groups(allWarehouseNodes)
     }
@@ -173,6 +182,7 @@ internal fun SubscriptionGroupSelectionDestination(
 
     SubscriptionGroupSelectionScreen(
         subscriptionGroups = subscriptionGroups,
+        refreshingSourceIds = refreshingSourceIds,
         userGroups = userGroups,
         selectedNodeGroupId = selectedNodeGroupId,
         nodeCounts = nodeCounts,
@@ -210,6 +220,7 @@ internal fun SubscriptionGroupSelectionDestination(
 @Composable
 private fun SubscriptionGroupSelectionScreen(
     subscriptionGroups: List<SubscriptionGroup>,
+    refreshingSourceIds: Set<String>,
     userGroups: List<NodeGroupSummary>,
     selectedNodeGroupId: String?,
     nodeCounts: Map<String, Int>,
@@ -563,6 +574,7 @@ private fun SubscriptionGroupSelectionScreen(
                                             modifier = swipeModifier,
                                             group = group,
                                             nodeCount = nodeCounts[group.sourceId] ?: 0,
+                                            isRefreshing = group.sourceId in refreshingSourceIds,
                                             selected = selectedNodeGroupId ==
                                                 NodeGroupKey.Subscription(group.sourceId).value,
                                             onClick = {
@@ -1270,6 +1282,7 @@ private fun SubscriptionGroupCard(
     modifier: Modifier = Modifier,
     group: SubscriptionGroup,
     nodeCount: Int,
+    isRefreshing: Boolean,
     selected: Boolean,
     onClick: () -> Unit
 ) {
@@ -1277,6 +1290,7 @@ private fun SubscriptionGroupCard(
         modifier = modifier,
         name = group.name,
         nodeCount = nodeCount,
+        isRefreshing = isRefreshing,
         updatedAt = group.updatedAt,
         status = "长期有效",
         selected = selected,
@@ -1380,6 +1394,7 @@ private fun GroupCard(
     customIconUrl: String? = null,
     localIconFile: String? = null,
     nodeCount: Int,
+    isRefreshing: Boolean = false,
     traffic: SubscriptionTrafficInfo? = null,
     updatedAt: Long? = null,
     status: String? = null,
@@ -1394,6 +1409,7 @@ private fun GroupCard(
         customIconUrl = customIconUrl,
         localIconFile = localIconFile,
         nodeCount = nodeCount,
+        isRefreshing = isRefreshing,
         traffic = traffic,
         updatedAt = updatedAt,
         status = status,
@@ -1411,6 +1427,7 @@ private fun ModernGroupCard(
     customIconUrl: String?,
     localIconFile: String?,
     nodeCount: Int,
+    isRefreshing: Boolean,
     traffic: SubscriptionTrafficInfo?,
     updatedAt: Long?,
     status: String?,
@@ -1515,7 +1532,15 @@ private fun ModernGroupCard(
                 contentAlignment = Alignment.CenterStart
             ) {
                 val loadedIcon = groupIcon
-                if (loadedIcon != null) {
+                if (isRefreshing) {
+                    RefreshingSubscriptionGroupIcon(
+                        tint = if (selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    )
+                } else if (loadedIcon != null) {
                     Image(
                         bitmap = loadedIcon,
                         contentDescription = null,
@@ -1615,6 +1640,28 @@ private fun ModernGroupCard(
             }
         }
     }
+}
+
+@Composable
+private fun RefreshingSubscriptionGroupIcon(tint: Color) {
+    val transition = rememberInfiniteTransition(label = "subscription_group_refresh")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "subscription_group_refresh_rotation"
+    )
+    Icon(
+        imageVector = Icons.Rounded.Refresh,
+        contentDescription = "正在刷新节点",
+        tint = tint,
+        modifier = Modifier
+            .size(36.dp)
+            .rotate(rotation)
+    )
 }
 
 private val subscriptionExpireFormatter: DateTimeFormatter =

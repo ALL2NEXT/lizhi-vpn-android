@@ -67,7 +67,6 @@ internal fun SubscriptionGroupingScreen(
     selectedNodeId: String?,
     isTesting: Boolean,
     testProgress: SpeedTestProgress?,
-    isRefreshingAllSubscriptions: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     nodeTestResults: Map<String, NodeListTestResultSummary>,
@@ -121,11 +120,7 @@ internal fun SubscriptionGroupingScreen(
 
     AppScreenScaffold(
         title = screenTitle,
-        subtitle = if (isRefreshingAllSubscriptions) {
-            "节点刷新中..."
-        } else {
-            null
-        },
+        subtitle = null,
         onBack = handleBack,
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,

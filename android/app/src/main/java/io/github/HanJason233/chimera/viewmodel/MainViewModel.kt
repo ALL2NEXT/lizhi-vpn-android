@@ -231,9 +231,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // UI状态
     val isLoading = subscriptionDataLoader.isLoading
 
-    // 全部官方源更新或右上角手动刷新时显示顶部提示；单组下拉刷新使用列表内置动效。
-    private val _isRefreshingAllSubscriptions = MutableStateFlow(false)
-    val isRefreshingAllSubscriptions = _isRefreshingAllSubscriptions.asStateFlow()
+    // 暴露正在获取节点的官方源，用于在对应仓库组图标显示刷新动画。
+    val refreshingSubscriptionSourceIds = subscriptionDataLoader.fetchingSubscriptionSourceIds
     
     private val _isTesting = MutableStateFlow(false)
     val isTesting = _isTesting.asStateFlow()
@@ -2713,7 +2712,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch {
             if (
-                subscriptionDataLoader.isLoading.value ||
                 GlobalTestExecution.isFetching() ||
                 _isTesting.value ||
                 GlobalTestExecution.mutex.isLocked
@@ -3705,10 +3703,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         onResult: ((Boolean) -> Unit)?
     ) {
         viewModelScope.launch {
-            if (subscriptionDataLoader.isLoading.value) {
-                onResult?.invoke(false)
-                return@launch
-            }
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 onResult?.invoke(false)
@@ -3728,7 +3722,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 统一维护官方源刷新提示，覆盖启动更新和手动刷新。 */
+    /** 统一执行官方源初始化与刷新流程。 */
     private suspend fun initializeSubscriptionsWithRefreshState(
         forceRefresh: Boolean,
         sourceId: String? = null,
@@ -3738,17 +3732,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _error.value = "离线模式下不会连接 Chimera 后台刷新线路"
             return false
         }
-        val isRefreshAll = sourceId.isNullOrBlank()
-        if (isRefreshAll) _isRefreshingAllSubscriptions.value = true
-        return try {
-            subscriptionDataLoader.initialize(
-                forceRefresh = forceRefresh,
-                sourceId = sourceId,
-                forceSourceRefresh = forceSourceRefresh
-            )
-        } finally {
-            if (isRefreshAll) _isRefreshingAllSubscriptions.value = false
-        }
+        return subscriptionDataLoader.initialize(
+            forceRefresh = forceRefresh,
+            sourceId = sourceId,
+            forceSourceRefresh = forceSourceRefresh
+        )
     }
 
     private suspend fun <T> requestWithAutoRetry(
