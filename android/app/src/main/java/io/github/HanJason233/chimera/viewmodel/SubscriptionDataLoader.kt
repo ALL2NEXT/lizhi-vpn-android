@@ -74,7 +74,7 @@ internal class SubscriptionDataLoader(
     suspend fun initialize(
         forceRefresh: Boolean = false,
         sourceId: String? = null,
-        shouldRefreshSource: ((String) -> Boolean)? = null
+        forceSourceRefresh: Boolean = false
     ): Boolean {
         if (accountManager.isOfflineMode()) {
             onMessage("离线模式下不会连接 Chimera 后台刷新线路")
@@ -82,7 +82,7 @@ internal class SubscriptionDataLoader(
         }
         _isLoading.value = true
         return try {
-            initializeInternal(forceRefresh, sourceId, shouldRefreshSource)
+            initializeInternal(forceRefresh, sourceId, forceSourceRefresh)
         } finally {
             _isLoading.value = false
         }
@@ -91,7 +91,7 @@ internal class SubscriptionDataLoader(
     private suspend fun initializeInternal(
         forceRefresh: Boolean = false,
         sourceId: String? = null,
-        shouldRefreshSource: ((String) -> Boolean)? = null
+        forceSourceRefresh: Boolean = false
     ): Boolean = coroutineScope {
         discardCacheForChangedAccount()
         val listRequest = async { fetchSubscriptionList(forceRefresh) }
@@ -105,19 +105,28 @@ internal class SubscriptionDataLoader(
 
         // 后台已经按账号、设备和版本筛选；客户端直接使用返回的可用列表。
         val accessibleSources = subscriptionList.sources
+        val cacheScope = currentCacheScope()
+        val localSubscriptionVersion = settingsRepository.officialSubscriptionVersion(cacheScope)
+        val serverSubscriptionVersion = subscriptionList.subscriptionVersion
         if (accessibleSources.isEmpty()) {
             persistNodes(emptyList())
+            if (!forceSourceRefresh && (localSubscriptionVersion == null ||
+                    localSubscriptionVersion < serverSubscriptionVersion)
+            ) {
+                settingsRepository.setOfficialSubscriptionVersion(serverSubscriptionVersion, cacheScope)
+            }
             return@coroutineScope true
         }
 
         val cachedNodes = nodeDao().getSubscriptionNodes().first()
         val accessibleSourceIds = accessibleSources.mapTo(mutableSetOf()) { it.id }
         val targetSources = when {
-            shouldRefreshSource != null -> accessibleSources.filter {
-                shouldRefreshSource(it.id)
-            }
-            sourceId.isNullOrBlank() -> accessibleSources
-            else -> accessibleSources.filter { it.id == sourceId }
+            forceSourceRefresh && sourceId.isNullOrBlank() -> accessibleSources
+            forceSourceRefresh || !sourceId.isNullOrBlank() ->
+                accessibleSources.filter { it.id == sourceId }
+            localSubscriptionVersion == null || localSubscriptionVersion < serverSubscriptionVersion ->
+                accessibleSources
+            else -> emptyList()
         }
         val cachedAccessibleNodes = cachedNodes.filter {
             it.subscriptionSourceId in accessibleSourceIds
@@ -132,6 +141,9 @@ internal class SubscriptionDataLoader(
             subscriptionList.copy(sources = accessibleSources),
             sourcesToRefresh = targetSources,
             cachedNodes = cachedAccessibleNodes,
+            subscriptionVersionToApply = serverSubscriptionVersion,
+            subscriptionVersionScope = cacheScope,
+            allAccessibleSourceIds = accessibleSourceIds,
         )
         fetched
     }
@@ -287,6 +299,9 @@ internal class SubscriptionDataLoader(
         subscriptionList: SubscriptionList,
         sourcesToRefresh: List<SubscriptionSource> = subscriptionList.sources,
         cachedNodes: List<Node>,
+        subscriptionVersionToApply: Long,
+        subscriptionVersionScope: String,
+        allAccessibleSourceIds: Set<String>,
     ): Boolean {
         if (GlobalTestExecution.mutex.isLocked) {
             onMessage(GlobalTestExecution.busyHint())
@@ -344,6 +359,14 @@ internal class SubscriptionDataLoader(
             nodeDao().replaceSubscriptionNodes(nodesToPersist)
             lastFetchedNodes = nodesToPersist
             onNodesPersisted(nodesToPersist)
+            if (refreshedSourceIds.containsAll(allAccessibleSourceIds) &&
+                fetchedResult.failedSourceIds.isEmpty()
+            ) {
+                settingsRepository.setOfficialSubscriptionVersion(
+                    subscriptionVersionToApply,
+                    subscriptionVersionScope
+                )
+            }
             Log.d(TAG, "Fetched ${fetchedNodes.size} nodes, persisted ${nodesToPersist.size}")
             return true
         } catch (error: Exception) {

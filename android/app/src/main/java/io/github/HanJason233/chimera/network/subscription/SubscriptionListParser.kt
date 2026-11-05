@@ -42,7 +42,17 @@ class SubscriptionListParser {
             }
             .filter { it.enabled }
 
-        SubscriptionList(sources = sources)
+        val subscriptionVersion = rootObject
+            ?.get("subscriptionVersion")
+            ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
+            ?.let { runCatching { it.asLong }.getOrNull() }
+            ?.takeIf { it >= 0L }
+            ?: 0L
+
+        SubscriptionList(
+            sources = sources,
+            subscriptionVersion = subscriptionVersion
+        )
     }
 
     private fun findSourceArray(root: JsonObject): JsonArray? {

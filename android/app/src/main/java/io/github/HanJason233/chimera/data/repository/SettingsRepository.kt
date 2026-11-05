@@ -131,6 +131,9 @@ class SettingsRepository(
         // 订阅列表缓存
         private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
         private val SUBSCRIPTION_LIST_SCOPE = stringPreferencesKey("subscription_list_scope")
+        private val OFFICIAL_SUBSCRIPTION_VERSION = longPreferencesKey("official_subscription_version")
+        private val OFFICIAL_SUBSCRIPTION_VERSION_SCOPE =
+            stringPreferencesKey("official_subscription_version_scope")
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
@@ -337,6 +340,19 @@ class SettingsRepository(
         store.edit { preferences ->
             preferences.remove(SUBSCRIPTION_LIST_JSON)
             preferences.remove(SUBSCRIPTION_LIST_SCOPE)
+        }
+    }
+
+    suspend fun officialSubscriptionVersion(scope: String): Long? {
+        val preferences = store.data.first()
+        return preferences[OFFICIAL_SUBSCRIPTION_VERSION]
+            ?.takeIf { preferences[OFFICIAL_SUBSCRIPTION_VERSION_SCOPE] == scope }
+    }
+
+    suspend fun setOfficialSubscriptionVersion(version: Long, scope: String) {
+        store.edit { preferences ->
+            preferences[OFFICIAL_SUBSCRIPTION_VERSION] = version.coerceAtLeast(0L)
+            preferences[OFFICIAL_SUBSCRIPTION_VERSION_SCOPE] = scope
         }
     }
 

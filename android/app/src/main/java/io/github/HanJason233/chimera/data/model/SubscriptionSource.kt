@@ -23,5 +23,7 @@ data class SubscriptionSource(
 )
 
 data class SubscriptionList(
-    val sources: List<SubscriptionSource>
+    val sources: List<SubscriptionSource>,
+    /** 后台管理的官方订阅版本；本地只在版本落后时自动更新节点。 */
+    val subscriptionVersion: Long = 0L
 )

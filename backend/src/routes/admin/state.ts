@@ -86,7 +86,7 @@ export function createAdminStateRoutes(deps: Pick<
           .map((id) => id.trim())
         : []);
       if (requestedIds.size === 0) return json({ ok: false, error: "subscription_ids_required" }, 400);
-      const state = await readState(env);
+      const state = await readState(env, { includeSubscriptionContent: true });
       const sources = state.subscriptionGroups.flatMap((group) =>
         group.subscriptions.filter((source) =>
           requestedIds.has(source.id) && source.url && !source.content && source.enabled !== false
@@ -107,6 +107,13 @@ export function createAdminStateRoutes(deps: Pick<
       }
       const updated = results.filter((result) => result.ok).length;
       const failed = results.length - updated;
+      if (updated > 0) {
+        await writeState(env, {
+          ...state,
+          subscriptionVersion: Math.min(Number.MAX_SAFE_INTEGER, state.subscriptionVersion + 1),
+          updatedAt: beijingTimestamp(),
+        });
+      }
       return json({
         ok: failed === 0,
         attempted: results.length,
@@ -126,6 +133,13 @@ export function createAdminStateRoutes(deps: Pick<
       try {
         const next = normalizeState(incoming);
         const current = await readState(env);
+        // 仅订阅配置变更递增版本，普通设置保存不触发客户端重拉节点。
+        const subscriptionConfigurationChanged =
+          JSON.stringify(next.subscriptionGroups) !== JSON.stringify(current.subscriptionGroups);
+        next.subscriptionVersion = Math.min(
+          Number.MAX_SAFE_INTEGER,
+          current.subscriptionVersion + (subscriptionConfigurationChanged ? 1 : 0),
+        );
         const currentSources = new Map(current.subscriptionGroups.flatMap((group) =>
           group.subscriptions.map((source) => [source.id, {
             url: source.url,

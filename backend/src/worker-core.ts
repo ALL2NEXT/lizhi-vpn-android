@@ -49,6 +49,7 @@ import { createClientRoutes } from "./routes/client.ts";
 import {
   autoRenameSubscriptionContent,
   deduplicateSubscriptionContent,
+  isExternalSubscriptionRefreshDue,
   isAppVersionAtLeast,
   readExternalSubscription,
   readExternalSubscriptionTraffic,
@@ -107,6 +108,7 @@ const routeDeps = {
   beijingTimestamp,
   normalizeAccountId,
   isAppVersionAtLeast,
+  isExternalSubscriptionRefreshDue,
   readExternalSubscription,
   readExternalSubscriptionTraffic,
   autoRenameSubscriptionContent,

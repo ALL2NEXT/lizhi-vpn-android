@@ -432,6 +432,11 @@ async function readSubscriptionCache(env: Env, source: SubscriptionSource) {
       ? contentValue
       : null,
     metadata,
+    contentCachedAt: metadataMatches
+      ? metadata?.contentCachedAt ?? null
+      : legacyMatches
+        ? legacy?.cachedAt ?? null
+        : null,
   };
 }
 
@@ -574,6 +579,22 @@ export async function readExternalSubscription(
   const fetched = await fetchExternalSubscription(source.url, { deduplicate: false, env });
   await cacheExternalSubscription(env, source, fetched, Date.now());
   return fetched.content;
+}
+
+export async function isExternalSubscriptionRefreshDue(
+  env: Env,
+  source: SubscriptionSource,
+  cacheMinutesValue: unknown,
+  updateEnabled: boolean,
+) {
+  if (!updateEnabled || !source?.url) return false;
+  const cacheMinutes = normalizeSubscriptionCacheMinutes(cacheMinutesValue);
+  if (cacheMinutes <= 0) return true;
+
+  const cached = await readSubscriptionCache(env, source);
+  const cachedAt = Number(cached.contentCachedAt);
+  return typeof cached.content !== "string" || !Number.isFinite(cachedAt) ||
+    cachedAt + cacheMinutes * 60 * 1000 <= Date.now();
 }
 
 export async function readExternalSubscriptionTraffic(

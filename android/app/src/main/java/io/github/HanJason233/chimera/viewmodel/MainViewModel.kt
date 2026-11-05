@@ -231,7 +231,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // UI状态
     val isLoading = subscriptionDataLoader.isLoading
 
-    // 全部订阅刷新（启动自动刷新或右上角手动刷新）显示顶部提示；单组下拉刷新使用列表内置动效。
+    // 全部官方源更新或右上角手动刷新时显示顶部提示；单组下拉刷新使用列表内置动效。
     private val _isRefreshingAllSubscriptions = MutableStateFlow(false)
     val isRefreshingAllSubscriptions = _isRefreshingAllSubscriptions.asStateFlow()
     
@@ -326,9 +326,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     val subscriptionGroups = nodeDaoFlow.flatMapLatest { it.getSubscriptionGroups() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    val autoRefreshOnStartupOverrides = settingsRepository.autoRefreshOnStartupOverrides
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     private val storedSubscriptionSourceId = settingsRepository.selectedSubscriptionSourceId
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -3390,13 +3387,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (accountManager.isOfflineMode() || accountManager.currentAccount() == null) return
         try {
             val autoRefreshOverrides = settingsRepository.autoRefreshOnStartupOverrides.first()
-            if (!initializeSubscriptionsWithRefreshState(
-                    forceRefresh = true,
-                    shouldRefreshSource = { sourceId ->
-                        autoRefreshOverrides[sourceId] ?: true
-                    }
-                )
-            ) {
+            if (!initializeSubscriptionsWithRefreshState(forceRefresh = true)) {
                 scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
             }
             refreshUserSubscriptionGroupsOnStartup(autoRefreshOverrides)
@@ -3730,7 +3721,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val fetchOk = initializeSubscriptionsWithRefreshState(
                 forceRefresh = true,
-                sourceId = sourceId
+                sourceId = sourceId,
+                forceSourceRefresh = true
             )
             onResult?.invoke(fetchOk)
         }
@@ -3740,7 +3732,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun initializeSubscriptionsWithRefreshState(
         forceRefresh: Boolean,
         sourceId: String? = null,
-        shouldRefreshSource: ((String) -> Boolean)? = null
+        forceSourceRefresh: Boolean = false
     ): Boolean {
         if (accountManager.isOfflineMode()) {
             _error.value = "离线模式下不会连接 Chimera 后台刷新线路"
@@ -3752,7 +3744,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             subscriptionDataLoader.initialize(
                 forceRefresh = forceRefresh,
                 sourceId = sourceId,
-                shouldRefreshSource = shouldRefreshSource
+                forceSourceRefresh = forceSourceRefresh
             )
         } finally {
             if (isRefreshAll) _isRefreshingAllSubscriptions.value = false

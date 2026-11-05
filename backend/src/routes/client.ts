@@ -27,11 +27,13 @@ export function createClientRoutes(deps: Pick<
   | "beijingTimestamp"
   | "normalizeAccountId"
   | "isAppVersionAtLeast"
+  | "isExternalSubscriptionRefreshDue"
   | "readExternalSubscription"
   | "readSubscriptionContent"
   | "autoRenameSubscriptionContent"
   | "deduplicateSubscriptionContent"
   | "readState"
+  | "writeState"
   | "resolveUserIdentity"
   | "publicClientSettings"
   | "corsHeaders"
@@ -43,11 +45,13 @@ export function createClientRoutes(deps: Pick<
     beijingTimestamp,
     normalizeAccountId,
     isAppVersionAtLeast,
+    isExternalSubscriptionRefreshDue,
     readExternalSubscription,
     readSubscriptionContent,
     autoRenameSubscriptionContent,
     deduplicateSubscriptionContent,
     readState,
+    writeState,
     resolveUserIdentity,
     publicClientSettings,
     corsHeaders,
@@ -70,12 +74,43 @@ async function handleClient(request: Request, env: Env) {
     return json({ ok: false, error: "account_access_denied" }, 403);
   }
   const origin = requestUrl.origin;
-  const state = await readState(env);
-  const groups = state.subscriptionGroups.filter((group) =>
+  let state = await readState(env);
+  let groups = state.subscriptionGroups.filter((group) =>
     subscriptionGroupAccessError(group, access, isAppVersionAtLeast) === null
   );
 
+  // 缓存到期由后台策略决定是否递增版本，客户端据此判断是否需要拉取节点。
+  const refreshDue = await Promise.all(groups.flatMap((group) =>
+    group.subscriptions
+      .filter((source) => source.enabled && source.url && !isLocalSubscription(source))
+      .map(async (source) => {
+        try {
+          return await isExternalSubscriptionRefreshDue(
+            env,
+            source,
+            group.cacheMinutes,
+            group.updateEnabled,
+          );
+        } catch {
+          return false;
+        }
+      })
+  ));
+  if (refreshDue.some(Boolean)) {
+    const latestState = await readState(env, { includeSubscriptionContent: true });
+    state = {
+      ...latestState,
+      subscriptionVersion: Math.min(Number.MAX_SAFE_INTEGER, latestState.subscriptionVersion + 1),
+      updatedAt: beijingTimestamp(),
+    };
+    await writeState(env, state);
+    groups = state.subscriptionGroups.filter((group) =>
+      subscriptionGroupAccessError(group, access, isAppVersionAtLeast) === null
+    );
+  }
+
   return json({
+    subscriptionVersion: state.subscriptionVersion,
     subscriptions: groups.flatMap((group) => {
       const sources = group.subscriptions.filter((source) =>
         source.enabled && hasSubscriptionData(source)

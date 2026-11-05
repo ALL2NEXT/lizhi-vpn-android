@@ -145,8 +145,6 @@ internal fun SubscriptionGroupSelectionDestination(
     bottomContentPadding: Dp = 16.dp
 ) {
     val subscriptionGroups by viewModel.subscriptionGroups.collectAsStateWithLifecycle()
-    val autoRefreshOnStartupOverrides by viewModel.autoRefreshOnStartupOverrides
-        .collectAsStateWithLifecycle()
     val userGroups by viewModel.userSubscriptionGroups.collectAsStateWithLifecycle()
     val allWarehouseNodes by viewModel.allWarehouseNodes.collectAsStateWithLifecycle()
     val selectedCountryCodes by viewModel.warehouseGroupingCountryCodes
@@ -175,7 +173,6 @@ internal fun SubscriptionGroupSelectionDestination(
 
     SubscriptionGroupSelectionScreen(
         subscriptionGroups = subscriptionGroups,
-        autoRefreshOnStartupOverrides = autoRefreshOnStartupOverrides,
         userGroups = userGroups,
         selectedNodeGroupId = selectedNodeGroupId,
         nodeCounts = nodeCounts,
@@ -213,7 +210,6 @@ internal fun SubscriptionGroupSelectionDestination(
 @Composable
 private fun SubscriptionGroupSelectionScreen(
     subscriptionGroups: List<SubscriptionGroup>,
-    autoRefreshOnStartupOverrides: Map<String, Boolean>,
     userGroups: List<NodeGroupSummary>,
     selectedNodeGroupId: String?,
     nodeCounts: Map<String, Int>,
@@ -256,14 +252,12 @@ private fun SubscriptionGroupSelectionScreen(
     var deleteDialogVisible by rememberSaveable { mutableStateOf(false) }
     var editingGroupId by rememberSaveable { mutableStateOf("") }
     var deletingOfficialSubscription by rememberSaveable { mutableStateOf(false) }
-    var officialSettingDialogVisible by rememberSaveable { mutableStateOf(false) }
     var importStatus by rememberSaveable { mutableStateOf<String?>(null) }
     var countryDialogVisible by rememberSaveable { mutableStateOf(false) }
     var officialGroupsExpanded by rememberSaveable { mutableStateOf(true) }
     var personalGroupsExpanded by rememberSaveable { mutableStateOf(true) }
     var draftCountryCodes by remember { mutableStateOf(emptySet<String>()) }
     var editingUserGroup by remember { mutableStateOf<NodeGroupSummary?>(null) }
-    var editingOfficialGroup by remember { mutableStateOf<SubscriptionGroup?>(null) }
     var editingAutoRefreshOnStartup by rememberSaveable { mutableStateOf(false) }
     var editingIconMode by rememberSaveable { mutableStateOf(PersonalSourceIconMode.AUTO_REMOTE.name) }
     var editingCustomIconUrl by rememberSaveable { mutableStateOf("") }
@@ -383,13 +377,6 @@ private fun SubscriptionGroupSelectionScreen(
         stagedLocalIconFile = null
         iconUrlError = null
         editDialogVisible = true
-    }
-
-    fun editOfficialSubscription(group: SubscriptionGroup, autoRefreshOnStartup: Boolean) {
-        editingOfficialGroup = group
-        editingGroupId = group.sourceId
-        editingAutoRefreshOnStartup = autoRefreshOnStartup
-        officialSettingDialogVisible = true
     }
 
     val localIconPicker = rememberLauncherForActivityResult(
@@ -545,12 +532,6 @@ private fun SubscriptionGroupSelectionScreen(
                                             ).show()
                                         }
                                     }
-                                    val edit = {
-                                        editOfficialSubscription(
-                                            group,
-                                            autoRefreshOnStartupOverrides[group.sourceId] ?: true
-                                        )
-                                    }
                                     SwipeActionCard(
                                         itemKey = swipeKey,
                                         actions = listOf(
@@ -568,13 +549,6 @@ private fun SubscriptionGroupSelectionScreen(
                                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                                                 onClick = refresh
                                             ),
-                                            SwipeCardAction(
-                                                icon = Icons.Rounded.Edit,
-                                                label = "编辑",
-                                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                onClick = edit
-                                            )
                                         ),
                                         revealed = openSwipeCardId == swipeKey,
                                         onRevealedChange = { isRevealed ->
@@ -1145,39 +1119,6 @@ private fun SubscriptionGroupSelectionScreen(
                     } else {
                         Text("保存")
                     }
-                }
-            }
-        )
-    }
-
-    if (officialSettingDialogVisible) {
-        val group = editingOfficialGroup
-        AppAlertDialog(
-            onDismissRequest = { officialSettingDialogVisible = false },
-            title = { Text("编辑官方源") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    group?.let {
-                        Text(
-                            text = it.name,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                    AutoRefreshOnStartupRow(
-                        checked = editingAutoRefreshOnStartup,
-                        onCheckedChange = { enabled ->
-                            editingAutoRefreshOnStartup = enabled
-                            group?.let {
-                                onSetAutoRefreshOnStartup(it.sourceId, enabled)
-                            }
-                        }
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { officialSettingDialogVisible = false }) {
-                    Text("完成")
                 }
             }
         )

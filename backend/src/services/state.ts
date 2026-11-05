@@ -186,6 +186,11 @@ export async function writeState(env: Env, state: AppState) {
 
 export function normalizeState(input: unknown): AppState {
   const value = plainObject(input) ? input : {};
+  const requestedSubscriptionVersion = Number(value.subscriptionVersion);
+  const subscriptionVersion = Number.isSafeInteger(requestedSubscriptionVersion) &&
+      requestedSubscriptionVersion >= 0
+    ? requestedSubscriptionVersion
+    : 1;
   const storedGroups = Array.isArray(value.subscriptionGroups)
     ? value.subscriptionGroups
     : [];
@@ -262,6 +267,7 @@ export function normalizeState(input: unknown): AppState {
       });
   return {
     version: 2,
+    subscriptionVersion,
     subscriptionGroups,
     settings: normalizeSettings(value.settings),
     ...(value.updatedAt ? { updatedAt: String(value.updatedAt) } : {}),
