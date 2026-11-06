@@ -158,7 +158,7 @@ internal fun SubscriptionGroupSelectionDestination(
         .collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val refreshingSourceIds by viewModel.refreshingSubscriptionSourceIds
+    val refreshingSourceIds by viewModel.refreshingWarehouseGroupIds
         .collectAsStateWithLifecycle()
     val countryOptions = remember(allWarehouseNodes) {
         CountryGroupingStrategy.groups(allWarehouseNodes)
@@ -664,6 +664,7 @@ private fun SubscriptionGroupSelectionScreen(
                                             nodeCount = personalNodeCounts[
                                                 group.id.removePrefix("imported:")
                                             ] ?: 0,
+                                            isRefreshing = group.id in refreshingSourceIds,
                                             selected = selectedNodeGroupId == group.id,
                                             onClick = {
                                                 openSwipeCardId = null
@@ -1303,6 +1304,7 @@ private fun UserSubscriptionGroupCard(
     modifier: Modifier = Modifier,
     group: NodeGroupSummary,
     nodeCount: Int,
+    isRefreshing: Boolean,
     selected: Boolean,
     onClick: () -> Unit
 ) {
@@ -1314,6 +1316,7 @@ private fun UserSubscriptionGroupCard(
         customIconUrl = group.customIconUrl,
         localIconFile = group.localIconFile,
         nodeCount = nodeCount,
+        isRefreshing = isRefreshing,
         traffic = personalSubscriptionTrafficV2(group),
         updatedAt = group.subscriptionUpdatedAt,
         status = personalSubscriptionStatus(group),

@@ -232,13 +232,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // UI状态
     val isLoading = subscriptionDataLoader.isLoading
 
-    // 手动点击后立即显示动画；真正请求节点时再与加载器状态合并。
+    // 官方源点击后立即显示动画；私人源在刷新任务开始时登记到同一状态流。
     private val _pendingOfficialSourceRefreshCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
-    val refreshingSubscriptionSourceIds = combine(
+    private val _refreshingPersonalSourceCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val refreshingWarehouseGroupIds = combine(
         subscriptionDataLoader.fetchingSubscriptionSourceIds,
-        _pendingOfficialSourceRefreshCounts
-    ) { fetchingSourceIds, pendingRefreshCounts ->
-        fetchingSourceIds + pendingRefreshCounts.keys
+        _pendingOfficialSourceRefreshCounts,
+        _refreshingPersonalSourceCounts
+    ) { fetchingSourceIds, pendingRefreshCounts, personalRefreshCounts ->
+        fetchingSourceIds + pendingRefreshCounts.keys +
+            personalRefreshCounts.keys.map { NodeGroupKey.Imported(it).value }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
     
     private val _isTesting = MutableStateFlow(false)
@@ -2720,17 +2723,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         groupId: String,
         onResult: (SubscriptionGroupRefreshResult) -> Unit = {}
     ) {
+        updatePersonalSourceRefreshCount(groupId, increment = true)
         viewModelScope.launch {
-            if (
-                GlobalTestExecution.isFetching() ||
-                _isTesting.value ||
-                GlobalTestExecution.mutex.isLocked
-            ) {
-                onResult(SubscriptionGroupRefreshResult.BUSY)
-                return@launch
-            }
+            try {
+                if (
+                    GlobalTestExecution.isFetching() ||
+                    _isTesting.value ||
+                    GlobalTestExecution.mutex.isLocked
+                ) {
+                    onResult(SubscriptionGroupRefreshResult.BUSY)
+                    return@launch
+                }
 
-            onResult(refreshUserSubscriptionGroupInternal(groupId))
+                onResult(refreshUserSubscriptionGroupInternal(groupId))
+            } finally {
+                updatePersonalSourceRefreshCount(groupId, increment = false)
+            }
+        }
+    }
+
+    private fun updatePersonalSourceRefreshCount(groupId: String, increment: Boolean) {
+        _refreshingPersonalSourceCounts.update { counts ->
+            val count = counts[groupId] ?: 0
+            if (increment) {
+                counts + (groupId to count + 1)
+            } else if (count <= 1) {
+                counts - groupId
+            } else {
+                counts + (groupId to count - 1)
+            }
+        }
+    }
+
+    private suspend fun <T> withPersonalSourceRefreshing(
+        groupId: String,
+        action: suspend () -> T
+    ): T {
+        updatePersonalSourceRefreshCount(groupId, increment = true)
+        return try {
+            action()
+        } finally {
+            updatePersonalSourceRefreshCount(groupId, increment = false)
         }
     }
 
@@ -2748,7 +2781,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     (importInput is SubscriptionImportInput.RemoteSubscription ||
                         importInput is SubscriptionImportInput.MultipleRemoteSubscriptions)
             ) {
-                when (refreshUserSubscriptionGroupInternal(group.id)) {
+                when (withPersonalSourceRefreshing(group.id) {
+                    refreshUserSubscriptionGroupInternal(group.id)
+                }) {
                     SubscriptionGroupRefreshResult.REFRESHED -> Unit
                     else -> Log.w(tag, "Unable to refresh personal subscription group on startup: ${group.id}")
                 }
