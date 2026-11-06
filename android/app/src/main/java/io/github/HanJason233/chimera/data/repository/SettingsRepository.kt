@@ -131,9 +131,10 @@ class SettingsRepository(
         // 订阅列表缓存
         private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
         private val SUBSCRIPTION_LIST_SCOPE = stringPreferencesKey("subscription_list_scope")
-        private val OFFICIAL_SUBSCRIPTION_VERSION = longPreferencesKey("official_subscription_version")
-        private val OFFICIAL_SUBSCRIPTION_VERSION_SCOPE =
-            stringPreferencesKey("official_subscription_version_scope")
+        private val OFFICIAL_SUBSCRIPTION_VERSIONS =
+            stringPreferencesKey("official_subscription_versions")
+        private val OFFICIAL_SUBSCRIPTION_VERSIONS_SCOPE =
+            stringPreferencesKey("official_subscription_versions_scope")
         
         // IPv6 路由设置
         private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
@@ -343,16 +344,29 @@ class SettingsRepository(
         }
     }
 
-    suspend fun officialSubscriptionVersion(scope: String): Long? {
+    suspend fun officialSubscriptionVersions(scope: String): Map<String, Long>? {
         val preferences = store.data.first()
-        return preferences[OFFICIAL_SUBSCRIPTION_VERSION]
-            ?.takeIf { preferences[OFFICIAL_SUBSCRIPTION_VERSION_SCOPE] == scope }
+        if (preferences[OFFICIAL_SUBSCRIPTION_VERSIONS_SCOPE] != scope) return null
+        val encoded = preferences[OFFICIAL_SUBSCRIPTION_VERSIONS] ?: return null
+        return runCatching {
+            val json = JSONObject(encoded)
+            buildMap {
+                val keys = json.keys()
+                while (keys.hasNext()) {
+                    val subscriptionId = keys.next()
+                    val version = json.optLong(subscriptionId, -1L)
+                    if (version >= 0L) put(subscriptionId, version)
+                }
+            }
+        }.getOrNull()
     }
 
-    suspend fun setOfficialSubscriptionVersion(version: Long, scope: String) {
+    suspend fun setOfficialSubscriptionVersions(versions: Map<String, Long>, scope: String) {
         store.edit { preferences ->
-            preferences[OFFICIAL_SUBSCRIPTION_VERSION] = version.coerceAtLeast(0L)
-            preferences[OFFICIAL_SUBSCRIPTION_VERSION_SCOPE] = scope
+            preferences[OFFICIAL_SUBSCRIPTION_VERSIONS] = JSONObject().apply {
+                versions.forEach { (subscriptionId, version) -> put(subscriptionId, version.coerceAtLeast(0L)) }
+            }.toString()
+            preferences[OFFICIAL_SUBSCRIPTION_VERSIONS_SCOPE] = scope
         }
     }
 

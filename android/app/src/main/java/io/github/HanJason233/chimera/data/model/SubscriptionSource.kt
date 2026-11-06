@@ -19,11 +19,11 @@ data class SubscriptionSource(
     /** 分组要求的最低客户端版本。 */
     val minAppVersion: String = "",
     /** 分组允许访问的最高客户端版本；空值表示不设上限。 */
-    val maxAppVersion: String = ""
+    val maxAppVersion: String = "",
 )
 
 data class SubscriptionList(
     val sources: List<SubscriptionSource>,
-    /** 后台管理的官方订阅版本；本地只在版本落后时自动更新节点。 */
-    val subscriptionVersion: Long = 0L
+    /** 后台按客户端可见的订阅 ID 返回各自版本号。 */
+    val subscriptionVersions: Map<String, Long> = emptyMap()
 )

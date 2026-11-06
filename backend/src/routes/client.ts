@@ -9,6 +9,7 @@ import {
   readClientNotifications,
 } from "../services/notifications.ts";
 import { observedFetch } from "../services/system-logs.ts";
+import { incrementSubscriptionVersions } from "../services/state.ts";
 
 /*
  * Client routes.
@@ -79,9 +80,10 @@ async function handleClient(request: Request, env: Env) {
     subscriptionGroupAccessError(group, access, isAppVersionAtLeast) === null
   );
 
-  // 缓存到期由后台策略决定是否递增版本，客户端据此判断是否需要拉取节点。
-  const refreshDue = await Promise.all(groups.flatMap((group) =>
-    group.subscriptions
+  // 缓存到期时只递增对应订阅的版本。
+  const refreshDueSubscriptionIds = new Set<string>();
+  await Promise.all(groups.map(async (group) => {
+    const refreshDue = await Promise.all(group.subscriptions
       .filter((source) => source.enabled && source.url && !isLocalSubscription(source))
       .map(async (source) => {
         try {
@@ -90,17 +92,26 @@ async function handleClient(request: Request, env: Env) {
             source,
             group.cacheMinutes,
             group.updateEnabled,
-          );
+          ) ? source.id : null;
         } catch {
-          return false;
+          return null;
         }
-      })
-  ));
-  if (refreshDue.some(Boolean)) {
+      }));
+    const dueIds = refreshDue.filter((id): id is string => Boolean(id));
+    if (group.groupType === "load_balanced" && dueIds.length) {
+      refreshDueSubscriptionIds.add(`load-balanced:${group.id}`);
+    } else {
+      dueIds.forEach((id) => refreshDueSubscriptionIds.add(id));
+    }
+  }));
+  if (refreshDueSubscriptionIds.size > 0) {
     const latestState = await readState(env, { includeSubscriptionContent: true });
     state = {
       ...latestState,
-      subscriptionVersion: Math.min(Number.MAX_SAFE_INTEGER, latestState.subscriptionVersion + 1),
+      subscriptionVersions: incrementSubscriptionVersions(
+        latestState.subscriptionVersions,
+        refreshDueSubscriptionIds,
+      ),
       updatedAt: beijingTimestamp(),
     };
     await writeState(env, state);
@@ -109,28 +120,32 @@ async function handleClient(request: Request, env: Env) {
     );
   }
 
-  return json({
-    subscriptionVersion: state.subscriptionVersion,
-    subscriptions: groups.flatMap((group) => {
-      const sources = group.subscriptions.filter((source) =>
-        source.enabled && hasSubscriptionData(source)
-      );
-      if (!sources.length) return [];
-      if (group.groupType === "load_balanced") {
-        return [{
-          enabled: true,
-          id: `load-balanced:${group.id}`,
-          name: group.name,
-          url: `${origin}/api/subscription/lb/${encodeURIComponent(group.id)}`,
-        }];
-      }
-      return sources.map((source) => ({
+  const subscriptions = groups.flatMap((group) => {
+    const sources = group.subscriptions.filter((source) =>
+      source.enabled && hasSubscriptionData(source)
+    );
+    if (!sources.length) return [];
+    if (group.groupType === "load_balanced") {
+      return [{
         enabled: true,
-        id: source.id,
-        name: source.name,
-        url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
-      }));
-    }),
+        id: `load-balanced:${group.id}`,
+        name: group.name,
+        url: `${origin}/api/subscription/lb/${encodeURIComponent(group.id)}`,
+      }];
+    }
+    return sources.map((source) => ({
+      enabled: true,
+      id: source.id,
+      name: source.name,
+      url: `${origin}/api/subscription/${encodeURIComponent(source.id)}`,
+    }));
+  });
+  return json({
+    subscriptionVersions: Object.fromEntries(subscriptions.map((subscription) => [
+      subscription.id,
+      state.subscriptionVersions[subscription.id] ?? 0,
+    ])),
+    subscriptions,
     settings: publicClientSettings(state.settings),
     generatedAt: beijingTimestamp(),
   });

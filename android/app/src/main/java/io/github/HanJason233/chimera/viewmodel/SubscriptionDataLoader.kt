@@ -115,27 +115,35 @@ internal class SubscriptionDataLoader(
         // 后台已经按账号、设备和版本筛选；客户端直接使用返回的可用列表。
         val accessibleSources = subscriptionList.sources
         val cacheScope = currentCacheScope()
-        val localSubscriptionVersion = settingsRepository.officialSubscriptionVersion(cacheScope)
-        val serverSubscriptionVersion = subscriptionList.subscriptionVersion
+        val serverSubscriptionVersions = subscriptionList.subscriptionVersions
+        val accessibleSourceIds = accessibleSources.mapTo(mutableSetOf()) { it.id }
+        val storedSubscriptionVersions = settingsRepository.officialSubscriptionVersions(cacheScope)
+        val localSubscriptionVersions = storedSubscriptionVersions?.filterKeys { it in accessibleSourceIds }
+        if (storedSubscriptionVersions != null && localSubscriptionVersions != storedSubscriptionVersions) {
+            settingsRepository.setOfficialSubscriptionVersions(localSubscriptionVersions.orEmpty(), cacheScope)
+        }
         if (accessibleSources.isEmpty()) {
             persistNodes(emptyList())
-            if (!forceSourceRefresh && (localSubscriptionVersion == null ||
-                    localSubscriptionVersion < serverSubscriptionVersion)
-            ) {
-                settingsRepository.setOfficialSubscriptionVersion(serverSubscriptionVersion, cacheScope)
-            }
+            settingsRepository.setOfficialSubscriptionVersions(emptyMap(), cacheScope)
             return@coroutineScope true
         }
 
         val cachedNodes = nodeDao().getSubscriptionNodes().first()
-        val accessibleSourceIds = accessibleSources.mapTo(mutableSetOf()) { it.id }
+        // 仅拉取版本变化的订阅，并在拉取成功后单独确认对应版本。
+        val changedSubscriptionIds = if (localSubscriptionVersions == null) {
+            accessibleSourceIds
+        } else {
+            accessibleSourceIds.filterTo(mutableSetOf()) { subscriptionId ->
+                !localSubscriptionVersions.containsKey(subscriptionId) ||
+                    localSubscriptionVersions[subscriptionId] !=
+                    (serverSubscriptionVersions[subscriptionId] ?: 0L)
+            }
+        }
         val targetSources = when {
             forceSourceRefresh && sourceId.isNullOrBlank() -> accessibleSources
             forceSourceRefresh || !sourceId.isNullOrBlank() ->
                 accessibleSources.filter { it.id == sourceId }
-            localSubscriptionVersion == null || localSubscriptionVersion < serverSubscriptionVersion ->
-                accessibleSources
-            else -> emptyList()
+            else -> accessibleSources.filter { it.id in changedSubscriptionIds }
         }
         val cachedAccessibleNodes = cachedNodes.filter {
             it.subscriptionSourceId in accessibleSourceIds
@@ -150,9 +158,10 @@ internal class SubscriptionDataLoader(
             subscriptionList.copy(sources = accessibleSources),
             sourcesToRefresh = targetSources,
             cachedNodes = cachedAccessibleNodes,
-            subscriptionVersionToApply = serverSubscriptionVersion,
-            subscriptionVersionScope = cacheScope,
-            allAccessibleSourceIds = accessibleSourceIds,
+            subscriptionVersionsToApply = accessibleSourceIds.associateWith {
+                serverSubscriptionVersions[it] ?: 0L
+            },
+            subscriptionVersionsScope = cacheScope,
         )
         fetched
     }
@@ -191,6 +200,7 @@ internal class SubscriptionDataLoader(
             ) throw error
             if (error is HttpException && error.code() in setOf(401, 403)) {
                 settingsRepository.clearSubscriptionList()
+                settingsRepository.setOfficialSubscriptionVersions(emptyMap(), currentCacheScope())
                 persistNodes(emptyList())
             }
             Log.e(TAG, "Failed to fetch subscription list", error)
@@ -308,9 +318,8 @@ internal class SubscriptionDataLoader(
         subscriptionList: SubscriptionList,
         sourcesToRefresh: List<SubscriptionSource> = subscriptionList.sources,
         cachedNodes: List<Node>,
-        subscriptionVersionToApply: Long,
-        subscriptionVersionScope: String,
-        allAccessibleSourceIds: Set<String>,
+        subscriptionVersionsToApply: Map<String, Long>,
+        subscriptionVersionsScope: String,
     ): Boolean {
         if (GlobalTestExecution.mutex.isLocked) {
             onMessage(GlobalTestExecution.busyHint())
@@ -369,12 +378,16 @@ internal class SubscriptionDataLoader(
             nodeDao().replaceSubscriptionNodes(nodesToPersist)
             lastFetchedNodes = nodesToPersist
             onNodesPersisted(nodesToPersist)
-            if (refreshedSourceIds.containsAll(allAccessibleSourceIds) &&
-                fetchedResult.failedSourceIds.isEmpty()
-            ) {
-                settingsRepository.setOfficialSubscriptionVersion(
-                    subscriptionVersionToApply,
-                    subscriptionVersionScope
+            val refreshedSubscriptionVersions = fetchedResult.successfulSourceIds.mapNotNull { subscriptionId ->
+                subscriptionVersionsToApply[subscriptionId]?.let { subscriptionId to it }
+            }.toMap()
+            if (refreshedSubscriptionVersions.isNotEmpty()) {
+                val currentVersions = settingsRepository
+                    .officialSubscriptionVersions(subscriptionVersionsScope)
+                    .orEmpty()
+                settingsRepository.setOfficialSubscriptionVersions(
+                    currentVersions + refreshedSubscriptionVersions,
+                    subscriptionVersionsScope,
                 )
             }
             Log.d(TAG, "Fetched ${fetchedNodes.size} nodes, persisted ${nodesToPersist.size}")

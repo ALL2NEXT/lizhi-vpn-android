@@ -562,7 +562,7 @@ export function resolveAdminBasePath(value: unknown): string | null {
 
 export const DEFAULT_STATE: AppState = {
   version: 2,
-  subscriptionVersion: 1,
+  subscriptionVersions: {},
   subscriptionGroups: [],
   settings: {
     websiteUrl: "",

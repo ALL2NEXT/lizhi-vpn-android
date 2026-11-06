@@ -29,6 +29,62 @@ const SUBSCRIPTION_ACCOUNT_TYPES = ["guest", "formal"] as const;
 const SUBSCRIPTION_IDENTITY_TYPES: UserIdentityType[] = ["human", "bot"];
 const SUBSCRIPTION_MEMBERSHIP_TYPES: SubscriptionMembershipStatus[] = ["member", "non_member"];
 
+/** 按订阅配置签名维护版本；普通订阅彼此独立，负载均衡订阅作为一项整体管理。 */
+export function reconcileSubscriptionVersions(
+  currentGroups: SubscriptionGroup[],
+  nextGroups: SubscriptionGroup[],
+  currentVersions: Record<string, number>,
+) {
+  const currentSignatures = subscriptionSignatures(currentGroups);
+  const nextVersions = { ...currentVersions };
+  for (const group of nextGroups) {
+    for (const [subscriptionId, signature] of groupSubscriptionSignatures(group)) {
+      const version = nextVersions[subscriptionId] ?? 0;
+      nextVersions[subscriptionId] = currentSignatures.get(subscriptionId) === signature
+        ? version
+        : Math.min(Number.MAX_SAFE_INTEGER, version + 1);
+    }
+  }
+  return nextVersions;
+}
+
+function subscriptionSignatures(groups: SubscriptionGroup[]) {
+  return new Map(groups.flatMap((group) => [...groupSubscriptionSignatures(group)]));
+}
+
+function groupSubscriptionSignatures(group: SubscriptionGroup) {
+  if (group.groupType === "load_balanced") {
+    return [[`load-balanced:${group.id}`, JSON.stringify({
+      groupId: group.id,
+      maxUsersPerSubscription: group.maxUsersPerSubscription,
+      resetPeriodDays: group.resetPeriodDays,
+      subscriptions: group.subscriptions.map(subscriptionSignatureSource),
+    })] as const];
+  }
+  return group.subscriptions.map((source) => [
+    source.id,
+    JSON.stringify(subscriptionSignatureSource(source)),
+  ] as const);
+}
+
+function subscriptionSignatureSource(source: SubscriptionSource) {
+  const signatureSource = { ...source };
+  delete signatureSource.contentKey;
+  delete signatureSource.assignmentKey;
+  return signatureSource;
+}
+
+export function incrementSubscriptionVersions(
+  versions: Record<string, number>,
+  subscriptionIds: Iterable<string>,
+) {
+  const next = { ...versions };
+  for (const subscriptionId of subscriptionIds) {
+    next[subscriptionId] = Math.min(Number.MAX_SAFE_INTEGER, (next[subscriptionId] ?? 0) + 1);
+  }
+  return next;
+}
+
 function normalizeSelection<T extends string>(value: unknown, allowed: readonly T[], fallback: T[]): T[] {
   const input = Array.isArray(value) ? value : fallback;
   return Array.from(new Set(input.filter((item): item is T =>
@@ -186,11 +242,12 @@ export async function writeState(env: Env, state: AppState) {
 
 export function normalizeState(input: unknown): AppState {
   const value = plainObject(input) ? input : {};
-  const requestedSubscriptionVersion = Number(value.subscriptionVersion);
-  const subscriptionVersion = Number.isSafeInteger(requestedSubscriptionVersion) &&
-      requestedSubscriptionVersion >= 0
-    ? requestedSubscriptionVersion
-    : 1;
+  const subscriptionVersions = plainObject(value.subscriptionVersions)
+    ? Object.fromEntries(Object.entries(value.subscriptionVersions).filter(([, rawVersion]) => {
+      const version = Number(rawVersion);
+      return Number.isSafeInteger(version) && version >= 0;
+    }).map(([subscriptionId, rawVersion]) => [subscriptionId, Number(rawVersion)]))
+    : {};
   const storedGroups = Array.isArray(value.subscriptionGroups)
     ? value.subscriptionGroups
     : [];
@@ -267,7 +324,7 @@ export function normalizeState(input: unknown): AppState {
       });
   return {
     version: 2,
-    subscriptionVersion,
+    subscriptionVersions,
     subscriptionGroups,
     settings: normalizeSettings(value.settings),
     ...(value.updatedAt ? { updatedAt: String(value.updatedAt) } : {}),

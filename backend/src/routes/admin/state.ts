@@ -7,6 +7,10 @@ import type { RouteDependencies } from "../../types/routes.ts";
 
 import { readJsonObject } from "../../http/request.ts";
 import { importSubscriptionSources } from "../../services/subscription-import.ts";
+import {
+  incrementSubscriptionVersions,
+  reconcileSubscriptionVersions,
+} from "../../services/state.ts";
 
 export function createAdminStateRoutes(deps: Pick<
   RouteDependencies,
@@ -108,9 +112,20 @@ export function createAdminStateRoutes(deps: Pick<
       const updated = results.filter((result) => result.ok).length;
       const failed = results.length - updated;
       if (updated > 0) {
+        const updatedIds = new Set(results.filter((result) => result.ok).map((result) => result.id));
+        const updatedSubscriptionIds = state.subscriptionGroups.flatMap((group) => {
+          const updatedGroupSources = group.subscriptions.filter((source) => updatedIds.has(source.id));
+          if (!updatedGroupSources.length) return [];
+          return group.groupType === "load_balanced"
+            ? [`load-balanced:${group.id}`]
+            : updatedGroupSources.map((source) => source.id);
+        });
         await writeState(env, {
           ...state,
-          subscriptionVersion: Math.min(Number.MAX_SAFE_INTEGER, state.subscriptionVersion + 1),
+          subscriptionVersions: incrementSubscriptionVersions(
+            state.subscriptionVersions,
+            updatedSubscriptionIds,
+          ),
           updatedAt: beijingTimestamp(),
         });
       }
@@ -132,13 +147,12 @@ export function createAdminStateRoutes(deps: Pick<
       const incoming = await request.json();
       try {
         const next = normalizeState(incoming);
-        const current = await readState(env);
-        // 仅订阅配置变更递增版本，普通设置保存不触发客户端重拉节点。
-        const subscriptionConfigurationChanged =
-          JSON.stringify(next.subscriptionGroups) !== JSON.stringify(current.subscriptionGroups);
-        next.subscriptionVersion = Math.min(
-          Number.MAX_SAFE_INTEGER,
-          current.subscriptionVersion + (subscriptionConfigurationChanged ? 1 : 0),
+        const current = await readState(env, { includeSubscriptionContent: true });
+        // 仅为配置发生变化的客户端订阅递增版本。
+        next.subscriptionVersions = reconcileSubscriptionVersions(
+          current.subscriptionGroups,
+          next.subscriptionGroups,
+          current.subscriptionVersions,
         );
         const currentSources = new Map(current.subscriptionGroups.flatMap((group) =>
           group.subscriptions.map((source) => [source.id, {

@@ -42,16 +42,23 @@ class SubscriptionListParser {
             }
             .filter { it.enabled }
 
-        val subscriptionVersion = rootObject
-            ?.get("subscriptionVersion")
-            ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
-            ?.let { runCatching { it.asLong }.getOrNull() }
-            ?.takeIf { it >= 0L }
-            ?: 0L
+        val subscriptionVersions = rootObject
+            ?.get("subscriptionVersions")
+            ?.takeIf { it.isJsonObject }
+            ?.asJsonObject
+            ?.entrySet()
+            ?.mapNotNull { (subscriptionId, value) ->
+                value.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
+                    ?.let { runCatching { it.asLong }.getOrNull() }
+                    ?.takeIf { it >= 0L }
+                    ?.let { subscriptionId to it }
+            }
+            ?.toMap()
+            ?: emptyMap()
 
         SubscriptionList(
             sources = sources,
-            subscriptionVersion = subscriptionVersion
+            subscriptionVersions = subscriptionVersions
         )
     }
 
@@ -73,6 +80,7 @@ class SubscriptionListParser {
             ?.trim()
             ?: ""
         val enabled = source.get("enabled")?.let { readBoolean(it) } ?: true
+        val id = readString(source, "id")?.trim().orEmpty()
         val minAccountType = normalizeSubscriptionAccountType(
             readString(source, "minAccountType", "requiredAccountType", "minimumAccountType")
         )
@@ -82,7 +90,7 @@ class SubscriptionListParser {
         val minAppVersion = readString(source, "minAppVersion")?.trim().orEmpty()
         val maxAppVersion = readString(source, "maxAppVersion")?.trim().orEmpty()
         return SubscriptionSource(
-            id = readString(source, "id")?.trim().orEmpty(),
+            id = id,
             name = name,
             url = url,
             enabled = enabled,

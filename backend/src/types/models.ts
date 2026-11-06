@@ -50,8 +50,8 @@ export interface Settings {
 
 export interface AppState {
   version: 2;
-  /** 客户端本地版本低于此值时才自动更新官方订阅节点。 */
-  subscriptionVersion: number;
+  /** 按客户端可见的订阅 ID 分别记录版本号。 */
+  subscriptionVersions: Record<string, number>;
   subscriptionGroups: SubscriptionGroup[];
   settings: Settings;
   updatedAt?: string;
