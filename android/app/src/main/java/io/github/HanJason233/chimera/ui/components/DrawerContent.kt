@@ -1,7 +1,5 @@
 package io.github.HanJason233.chimera.ui.components
 
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
@@ -11,8 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -131,9 +127,6 @@ private fun DrawerMenuItem(
     subtitle: String? = null,
     onClick: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
     NavigationDrawerItem(
         label = {
             Column {
@@ -152,7 +145,8 @@ private fun DrawerMenuItem(
                 }
             }
         },
-        selected = isPressed,
+        // 抽屉菜单项用于页面导航，按压反馈由组件自带的涟漪效果提供。
+        selected = false,
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 12.dp),
         icon = {
@@ -170,7 +164,6 @@ private fun DrawerMenuItem(
             unselectedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
             unselectedTextColor = MaterialTheme.colorScheme.onBackground
-        ),
-        interactionSource = interactionSource
+        )
     )
 }
