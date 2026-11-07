@@ -2,10 +2,9 @@
 <resources>
     <style name="Theme.Chimera"
         parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">@color/white</item>
-        <item name="android:navigationBarColor">@color/white</item>
-        <item name="android:windowBackground">@color/white</item>
-        <!-- 状态栏文字变黑 -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/window_background</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

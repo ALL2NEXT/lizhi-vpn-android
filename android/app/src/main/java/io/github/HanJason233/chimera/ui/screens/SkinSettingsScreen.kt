@@ -7,9 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,13 +33,12 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,13 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -75,7 +66,6 @@ import io.github.HanJason233.chimera.platform.LauncherIdentityPreset
 import io.github.HanJason233.chimera.platform.LauncherIdentityPresets
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import java.io.File
-import io.github.HanJason233.chimera.data.model.SkinThemeMode
 
 // 固定图标、动画和粒子列宽，让各状态设置按表格纵向对齐。
 @Composable
@@ -116,7 +106,6 @@ private fun HomeStateSettingsHeader() {
         )
     }
 }
-
 @Composable
 private fun HomeStateSettingsRow(
     title: String,
@@ -233,6 +222,7 @@ private fun SkinColorOption(
     name: String,
     color: Color,
     selected: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Column(
@@ -245,107 +235,23 @@ private fun SkinColorOption(
                 .size(42.dp)
                 .clip(CircleShape),
             shape = CircleShape,
-            color = color,
+            color = if (enabled) color else color.copy(alpha = 0.38f),
             border = if (selected) {
                 BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface)
             } else {
                 BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             },
-            onClick = onClick
+            onClick = onClick,
+            enabled = enabled
         ) {}
         Text(
             text = name,
             fontSize = 10.sp,
             maxLines = 1,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                alpha = if (enabled) 1f else 0.38f
+            )
         )
-    }
-}
-
-@Composable
-private fun SkinColorPalette(
-    selectedColor: Color,
-    onColorChange: (Color) -> Unit
-) {
-    val initialHsv = remember(selectedColor) { selectedColor.toSkinHsv() }
-    var hue by remember { mutableStateOf(initialHsv[0]) }
-    var saturation by remember { mutableStateOf(initialHsv[1]) }
-    var value by remember { mutableStateOf(initialHsv[2]) }
-    LaunchedEffect(selectedColor) {
-        val hsv = selectedColor.toSkinHsv()
-        hue = hsv[0]
-        saturation = hsv[1]
-        value = hsv[2]
-    }
-    val hueColor = Color.hsv(hue, 1f, 1f)
-
-    fun updateTone(position: Offset, width: Int, height: Int) {
-        if (width <= 0 || height <= 0) return
-        saturation = (position.x / width).coerceIn(0f, 1f)
-        value = (1f - position.y / height).coerceIn(0f, 1f)
-    }
-
-    Column {
-        Text(
-            text = "自定义颜色",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(176.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .semantics { contentDescription = "饱和度和明度调色盘" }
-                .pointerInput(Unit) {
-                    detectTapGestures { position ->
-                        updateTone(position, size.width, size.height)
-                        onColorChange(Color.hsv(hue, saturation, value))
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { position ->
-                            updateTone(position, size.width, size.height)
-                        },
-                        onDragEnd = {
-                            onColorChange(Color.hsv(hue, saturation, value))
-                        },
-                        onDrag = { change, _ ->
-                            updateTone(change.position, size.width, size.height)
-                            change.consume()
-                        }
-                    )
-                }
-        ) {
-            drawRect(Brush.horizontalGradient(listOf(Color.White, hueColor)))
-            drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
-
-            val selector = Offset(saturation * size.width, (1f - value) * size.height)
-            drawCircle(Color.Black, radius = 12.dp.toPx(), center = selector)
-            drawCircle(Color.White, radius = 9.dp.toPx(), center = selector)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "色相",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Slider(
-            value = hue,
-            onValueChange = { hue = it },
-            onValueChangeFinished = {
-                onColorChange(Color.hsv(hue, saturation, value))
-            },
-            valueRange = 0f..360f
-        )
-    }
-}
-
-private fun Color.toSkinHsv(): FloatArray {
-    return FloatArray(3).also { hsv ->
-        android.graphics.Color.colorToHSV(toArgb(), hsv)
     }
 }
 
@@ -541,44 +447,6 @@ fun SkinSettingsScreen(
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(18.dp))
-                    Text(
-                        text = "主题模式",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SkinThemeMode.entries.forEach { mode ->
-                            // “跟随系统”文字较长，增加按钮宽度并保持单行显示。
-                            val buttonModifier = Modifier.weight(
-                                if (mode == SkinThemeMode.SYSTEM) 1.5f else 1f
-                            )
-                            if (settings.themeMode == mode) {
-                                Button(
-                                    onClick = {
-                                        updateGlobalSettings { copy(themeMode = mode) }
-                                    },
-                                    modifier = buttonModifier
-                                ) {
-                                    Text(mode.displayName(), maxLines = 1, softWrap = false)
-                                }
-                            } else {
-                                OutlinedButton(
-                                    onClick = {
-                                        updateGlobalSettings { copy(themeMode = mode) }
-                                    },
-                                    modifier = buttonModifier
-                                ) {
-                                    Text(mode.displayName(), maxLines = 1, softWrap = false)
-                                }
-                            }
-                        }
-                    }
                     Spacer(modifier = Modifier.height(18.dp))
                     Text(
                         text = "导航栏样式",
@@ -787,47 +655,50 @@ fun SkinSettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "颜色",
+                        text = "配色",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "选择莫奈取色、默认颜色，或使用调色盘自定义颜色。莫奈取色需要 Android 12 及以上。",
+                        text = "选择莫奈取色或黑白配色。黑白配色自动跟随系统明暗；莫奈取色需要 Android 12 及以上。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(14.dp))
-                    val monetSwatchColor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        dynamicLightColorScheme(context).primary
+                    val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                    val isDarkTheme = isSystemInDarkTheme()
+                    val useMonetColors = settings.monetEnabled && monetSupported
+                    val monetSwatchColor = when {
+                        !monetSupported -> MaterialTheme.colorScheme.outline
+                        isDarkTheme -> dynamicDarkColorScheme(context).primary
+                        else -> dynamicLightColorScheme(context).primary
+                    }
+                    val monochromeSwatchColor = if (isDarkTheme) {
+                        Color(0xFFC0C0C0)
                     } else {
-                        Color(settings.baseColorArgb)
+                        Color.Black
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         SkinColorOption(
-                            name = "莫奈色",
+                            name = "莫奈取色",
                             color = monetSwatchColor,
-                            selected = settings.monetEnabled,
+                            selected = useMonetColors,
+                            enabled = monetSupported,
                             onClick = {
                                 updateGlobalSettings { copy(monetEnabled = true) }
                             }
                         )
                         SkinColorOption(
-                            name = "默认颜色",
-                            color = Color(SkinSettings.DEFAULT_BASE_COLOR_ARGB),
-                            selected = !settings.monetEnabled &&
-                                settings.baseColorArgb == SkinSettings.DEFAULT_BASE_COLOR_ARGB,
+                            name = "黑白配色",
+                            color = monochromeSwatchColor,
+                            selected = !useMonetColors,
                             onClick = {
-                                updateGlobalSettings {
-                                    copy(
-                                        baseColorArgb = SkinSettings.DEFAULT_BASE_COLOR_ARGB,
-                                        monetEnabled = false
-                                    )
-                                }
+                                updateGlobalSettings { copy(monetEnabled = false) }
                             }
                         )
                     }
@@ -836,8 +707,8 @@ fun SkinSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val previewColor = if (settings.monetEnabled) monetSwatchColor
-                        else Color(settings.baseColorArgb)
+                        val previewColor = if (useMonetColors) monetSwatchColor
+                        else monochromeSwatchColor
                         Surface(
                             modifier = Modifier.size(32.dp),
                             shape = CircleShape,
@@ -845,22 +716,12 @@ fun SkinSettingsScreen(
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                         ) {}
                         Text(
-                            text = if (settings.monetEnabled) "当前使用莫奈取色"
-                            else "当前颜色 ${settings.baseColorArgb.toSkinHex()}",
+                            text = if (useMonetColors) "当前使用莫奈取色"
+                            else "当前使用黑白配色",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Spacer(modifier = Modifier.height(14.dp))
-                    SkinColorPalette(
-                        selectedColor = Color(settings.baseColorArgb),
-                        onColorChange = { color ->
-                            val argb = color.toArgb().toLong() and 0xFFFFFFFFL
-                            updateGlobalSettings {
-                                copy(baseColorArgb = argb, monetEnabled = false)
-                            }
-                        }
-                    )
                 }
             }
 
@@ -885,10 +746,4 @@ private fun NodeDisplaySettingsSwitchRow(
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
-}
-
-private fun SkinThemeMode.displayName(): String = when (this) {
-    SkinThemeMode.LIGHT -> "明亮"
-    SkinThemeMode.DARK -> "暗黑"
-    SkinThemeMode.SYSTEM -> "跟随系统"
 }

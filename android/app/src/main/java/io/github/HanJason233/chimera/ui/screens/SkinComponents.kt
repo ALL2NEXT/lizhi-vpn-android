@@ -7,7 +7,6 @@ import androidx.compose.ui.Modifier
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.HomeConnectStateIcon
 import java.io.File
-import java.util.Locale
 
 @Composable
 internal fun SkinImagePreview(
@@ -44,14 +43,4 @@ internal fun copySkinAsset(
         }
         target.absolutePath
     }.getOrNull()
-}
-
-internal fun parseSkinColor(value: String): Long? {
-    val hex = value.trim().removePrefix("#")
-    if (hex.length != 6) return null
-    return runCatching { 0xFF000000L or hex.toLong(16) }.getOrNull()
-}
-
-internal fun Long.toSkinHex(): String {
-    return "#%06X".format(Locale.US, (this and 0x00FFFFFFL))
 }
