@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +42,7 @@ fun AppScreenScaffold(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    titleFontSize: TextUnit = 20.sp,
     backEnabled: Boolean = true,
     showBackNavigation: Boolean = true,
     onBackBlocked: (() -> Unit)? = null,
@@ -78,7 +80,7 @@ fun AppScreenScaffold(
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
                                 text = title,
-                                fontSize = 20.sp,
+                                fontSize = titleFontSize,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,

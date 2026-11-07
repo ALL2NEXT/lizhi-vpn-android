@@ -224,12 +224,17 @@ fun AccountSettingsScreen(
         account.accountType != "banned" &&
         !isDeletingAccount &&
         !isSwitchingAccount
+    val isOverviewPage = offlineModeEnabled || page == AccountSettingsPage.OVERVIEW
     AppScreenScaffold(
         title = if (offlineModeEnabled) "我的" else page.title,
+        titleFontSize = if (offlineModeEnabled || page == AccountSettingsPage.OVERVIEW) 30.sp else 20.sp,
         onBack = onBack,
         showBackNavigation = !offlineModeEnabled && page != AccountSettingsPage.OVERVIEW,
         containerColor = MaterialTheme.colorScheme.background,
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(
+            horizontal = if (isOverviewPage) 0.dp else 18.dp,
+            vertical = 14.dp
+        ),
         actions = {
             if (!offlineModeEnabled && account != null && page == AccountSettingsPage.OVERVIEW) {
                 Box {
@@ -263,6 +268,7 @@ fun AccountSettingsScreen(
             accountMessage?.let { message ->
                 Text(
                     text = message,
+                    modifier = Modifier.padding(horizontal = if (isOverviewPage) 24.dp else 0.dp),
                     color = if (
                         message.contains("成功") ||
                             message.contains("已更新") ||
@@ -281,15 +287,19 @@ fun AccountSettingsScreen(
                     onAbout = { showAboutDialog = true }
                 )
             } else if (account == null) {
-                AccountSettingsCard {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "账户信息同步中…",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                if (page == AccountSettingsPage.OVERVIEW) {
+                    AccountSettingsLoadingOverviewContent()
+                } else {
+                    AccountSettingsCard {
+                        Column(
+                            modifier = Modifier.padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "账户信息同步中…",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             } else {
