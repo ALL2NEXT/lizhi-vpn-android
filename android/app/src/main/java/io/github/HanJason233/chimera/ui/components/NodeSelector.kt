@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 
 @Composable
 fun ProxyModeToggle(
@@ -24,11 +25,11 @@ fun ProxyModeToggle(
 ) {
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MonetThemeOverlay.controlSurface,
         shape = RoundedCornerShape(50),
         border = BorderStroke(
             1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+            MonetThemeOverlay.outline.copy(alpha = 0.45f)
         )
     ) {
         Row(
@@ -62,14 +63,14 @@ private fun ProxyModeToggleOption(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .clickable(onClick = onClick),
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        color = if (selected) MonetThemeOverlay.selectedControl else MonetThemeOverlay.controlSurface,
         shape = RoundedCornerShape(50)
     ) {
         Text(
             text = label,
             modifier = Modifier.padding(horizontal = if (compact) 5.dp else 9.dp, vertical = 5.dp),
             color = if (selected) {
-                MaterialTheme.colorScheme.onPrimary
+                MonetThemeOverlay.onSelectedControl
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },

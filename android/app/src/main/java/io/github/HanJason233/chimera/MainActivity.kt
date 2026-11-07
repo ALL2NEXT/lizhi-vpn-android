@@ -64,6 +64,7 @@ import io.github.HanJason233.chimera.ui.screens.SkinSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.StartupAccountScreen
 import io.github.HanJason233.chimera.ui.screens.SpeedTestSettingsScreen
 import io.github.HanJason233.chimera.ui.theme.ChimeraTheme
+import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 import io.github.HanJason233.chimera.platform.LauncherIdentityManager
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import io.github.HanJason233.chimera.viewmodel.RoutingAssetsViewModel
@@ -110,7 +111,7 @@ class MainActivity : ComponentActivity() {
             ChimeraTheme(skinSettings = skinSettings) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MonetThemeOverlay.screenBackground
                 ) {
                     val navController = rememberNavController()
                     var scannedSubscriptionText by rememberSaveable { mutableStateOf<String?>(null) }

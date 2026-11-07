@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
+import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 
 enum class HomeDestination {
     HOME,
@@ -109,7 +110,7 @@ private fun CapsuleHomeNavigationBar(
                 .widthIn(max = 420.dp)
                 .fillMaxWidth(),
             shape = RoundedCornerShape(34.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.98f),
+            color = MonetThemeOverlay.controlSurface.copy(alpha = 0.98f),
             tonalElevation = 10.dp,
             shadowElevation = 12.dp
         ) {
@@ -203,11 +204,11 @@ private fun RowScope.CapsuleNavigationItem(
     modifier: Modifier = Modifier
 ) {
     val containerColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        targetValue = if (selected) MonetThemeOverlay.selectedControl else Color.Transparent,
         label = "capsule-navigation-container"
     )
     val contentColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        targetValue = if (selected) MonetThemeOverlay.onSelectedControl
         else MaterialTheme.colorScheme.onSurfaceVariant,
         label = "capsule-navigation-content"
     )
@@ -257,8 +258,9 @@ private fun RowScope.NativeNavigationItem(
     label: String,
     onClick: () -> Unit
 ) {
-    val contentColor = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-    val indicatorColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+    val iconColor = if (selected) MonetThemeOverlay.onSelectedControl else MaterialTheme.colorScheme.onSurfaceVariant
+    val labelColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val indicatorColor = if (selected) MonetThemeOverlay.selectedControl else Color.Transparent
 
     Column(
         modifier = Modifier
@@ -283,13 +285,13 @@ private fun RowScope.NativeNavigationItem(
             Icon(
                 imageVector = if (selected) selectedIcon else unselectedIcon,
                 contentDescription = label,
-                tint = contentColor,
+                tint = iconColor,
                 modifier = Modifier.size(24.dp)
             )
         }
         Text(
             text = label,
-            color = contentColor,
+            color = labelColor,
             fontSize = 12.sp,
             lineHeight = 16.sp,
             maxLines = 1,
@@ -307,7 +309,7 @@ fun HomeNavigationBar(
     // 导航背景与主页一致，顶部用细线区分；底部系统手势区域单独保留。
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.background,
+        color = MonetThemeOverlay.screenBackground,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
@@ -316,7 +318,7 @@ fun HomeNavigationBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                    .background(MonetThemeOverlay.outline.copy(alpha = 0.45f))
             )
             Row(
                 modifier = Modifier

@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -12,6 +13,44 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import io.github.HanJason233.chimera.data.model.SkinSettings
+import io.github.HanJason233.chimera.R
+
+/**
+ * Compose equivalents of the app-specific roles Gmail layers over Android's Monet palette.
+ * dynamicColorScheme supplies the wallpaper-derived colors; these roles keep page and control
+ * surfaces on the same palette while giving selected controls a softer container overlay.
+ */
+object MonetThemeOverlay {
+    val screenBackground: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.background
+
+    val dialogSurface: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.surface
+
+    val controlSurface: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.surfaceVariant
+
+    val selectedControl: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.primaryContainer
+
+    val onSelectedControl: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.onPrimaryContainer
+
+    val outline: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.outlineVariant
+}
 
 private val MonochromeLightColorScheme = lightColorScheme(
     primary = Color(0xFF000000),
@@ -85,17 +124,32 @@ fun ChimeraTheme(
     val context = LocalContext.current
     val isDarkTheme = isSystemInDarkTheme()
     val useMonetColors = skinSettings.monetEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val colorScheme = when {
+    val baseColorScheme = when {
         useMonetColors && isDarkTheme -> dynamicDarkColorScheme(context)
         useMonetColors -> dynamicLightColorScheme(context)
         isDarkTheme -> MonochromeDarkColorScheme
         else -> MonochromeLightColorScheme
+    }
+    // Gmail's Material 3 canvas uses surface_container, whose Android 12 Monet
+    // resource is system_neutral2_600 with the requested L* applied. The older
+    // Compose BOM in this project predates surfaceContainer roles, so mirror the
+    // platform color resource directly instead of substituting background.
+    val colorScheme = if (useMonetColors) {
+        val surfaceContainer = if (isDarkTheme) {
+            context.getColor(R.color.monet_surface_container_dark)
+        } else {
+            context.getColor(R.color.monet_surface_container)
+        }
+        baseColorScheme.copy(background = Color(surfaceContainer))
+    } else {
+        baseColorScheme
     }
     val view = LocalView.current
 
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
+            window.statusBarColor = colorScheme.background.toArgb()
             window.navigationBarColor = colorScheme.background.toArgb()
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = !isDarkTheme

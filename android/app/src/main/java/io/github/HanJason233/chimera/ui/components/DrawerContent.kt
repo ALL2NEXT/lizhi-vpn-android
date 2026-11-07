@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -163,9 +164,9 @@ private fun DrawerMenuItem(
         },
         shape = RoundedCornerShape(50),
         colors = NavigationDrawerItemDefaults.colors(
-            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            selectedContainerColor = MonetThemeOverlay.selectedControl,
+            selectedIconColor = MonetThemeOverlay.onSelectedControl,
+            selectedTextColor = MonetThemeOverlay.onSelectedControl,
             unselectedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
             unselectedTextColor = MaterialTheme.colorScheme.onBackground

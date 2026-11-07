@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 
 /** 标准提示弹窗统一使用 Material 3。 */
 @Composable
@@ -39,7 +40,7 @@ fun AppAlertDialog(
 @Composable
 fun AppDialogSurface(
     modifier: Modifier = Modifier,
-    color: Color = Material3Theme.colorScheme.surface,
+    color: Color = MonetThemeOverlay.dialogSurface,
     contentColor: Color = Material3Theme.colorScheme.onSurface,
     m3Shape: Shape = Material3Theme.shapes.extraLarge,
     m3TonalElevation: Dp = 0.dp,

@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
+import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,7 +48,7 @@ fun AppScreenScaffold(
     showBackNavigation: Boolean = true,
     onBackBlocked: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
-    containerColor: Color = MaterialTheme.colorScheme.surface,
+    containerColor: Color = MonetThemeOverlay.screenBackground,
     contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
     contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
     content: @Composable () -> Unit

@@ -229,11 +229,11 @@ fun MainScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
+                        containerColor = MonetThemeOverlay.screenBackground
                     )
                 )
                 },
-                containerColor = MaterialTheme.colorScheme.background
+                containerColor = MonetThemeOverlay.screenBackground
             ) { paddingValues ->
                 BoxWithConstraints(
                     modifier = Modifier.fillMaxSize().padding(paddingValues)
