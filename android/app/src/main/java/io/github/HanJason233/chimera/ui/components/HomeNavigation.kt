@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,11 +28,11 @@ import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Contacts
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
+import io.github.HanJason233.chimera.R
 import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 
 enum class HomeDestination {
@@ -146,10 +148,11 @@ private fun CapsuleHomeNavigationBar(
                 )
                 CapsuleNavigationItem(
                     selected = selectedDestination == HomeDestination.MY,
-                    selectedIcon = Icons.Rounded.Person,
-                    unselectedIcon = Icons.Outlined.Person,
+                    selectedIcon = Icons.Rounded.Contacts,
+                    unselectedIcon = Icons.Outlined.Contacts,
                     label = "我的",
                     onClick = { onDestinationSelected(HomeDestination.MY) },
+                    useGmailContactsIcon = true,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -186,10 +189,11 @@ private fun NativeHomeNavigationBar(
         )
         NativeNavigationItem(
             selected = selectedDestination == HomeDestination.MY,
-            selectedIcon = Icons.Rounded.Person,
-            unselectedIcon = Icons.Outlined.Person,
+            selectedIcon = Icons.Rounded.Contacts,
+            unselectedIcon = Icons.Outlined.Contacts,
             label = "我的",
-            onClick = { onDestinationSelected(HomeDestination.MY) }
+            onClick = { onDestinationSelected(HomeDestination.MY) },
+            useGmailContactsIcon = true
         )
     }
 }
@@ -201,6 +205,7 @@ private fun RowScope.CapsuleNavigationItem(
     unselectedIcon: ImageVector,
     label: String,
     onClick: () -> Unit,
+    useGmailContactsIcon: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val containerColor by animateColorAsState(
@@ -232,12 +237,21 @@ private fun RowScope.CapsuleNavigationItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = if (selected) selectedIcon else unselectedIcon,
-                contentDescription = label,
-                tint = contentColor,
-                modifier = Modifier.size(22.dp)
-            )
+            if (useGmailContactsIcon) {
+                Icon(
+                    painter = painterResource(R.drawable.gmail_drawer_contacts),
+                    contentDescription = label,
+                    tint = contentColor,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = if (selected) selectedIcon else unselectedIcon,
+                    contentDescription = label,
+                    tint = contentColor,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
             Text(
                 text = label,
                 color = contentColor,
@@ -256,7 +270,8 @@ private fun RowScope.NativeNavigationItem(
     selectedIcon: ImageVector,
     unselectedIcon: ImageVector,
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    useGmailContactsIcon: Boolean = false
 ) {
     val iconColor = if (selected) MonetThemeOverlay.onSelectedControl else MaterialTheme.colorScheme.onSurfaceVariant
     val labelColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -282,12 +297,21 @@ private fun RowScope.NativeNavigationItem(
                 .background(indicatorColor),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = if (selected) selectedIcon else unselectedIcon,
-                contentDescription = label,
-                tint = iconColor,
-                modifier = Modifier.size(24.dp)
-            )
+            if (useGmailContactsIcon) {
+                Icon(
+                    painter = painterResource(R.drawable.gmail_drawer_contacts),
+                    contentDescription = label,
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = if (selected) selectedIcon else unselectedIcon,
+                    contentDescription = label,
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
         Text(
             text = label,
@@ -348,10 +372,11 @@ fun HomeNavigationBar(
                 )
                 HomeNavigationItem(
                     selected = selectedDestination == HomeDestination.MY,
-                    selectedIcon = Icons.Rounded.Person,
-                    unselectedIcon = Icons.Outlined.Person,
+                    selectedIcon = Icons.Rounded.Contacts,
+                    unselectedIcon = Icons.Outlined.Contacts,
                     label = "我的",
-                    onClick = { onDestinationSelected(HomeDestination.MY) }
+                    onClick = { onDestinationSelected(HomeDestination.MY) },
+                    useGmailContactsIcon = true
                 )
             }
             Spacer(
@@ -367,7 +392,8 @@ private fun RowScope.HomeNavigationItem(
     selectedIcon: ImageVector,
     unselectedIcon: ImageVector,
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    useGmailContactsIcon: Boolean = false
 ) {
     val contentColor = if (selected) {
         MaterialTheme.colorScheme.primary
@@ -390,12 +416,21 @@ private fun RowScope.HomeNavigationItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Icon(
-                imageVector = if (selected) selectedIcon else unselectedIcon,
-                contentDescription = label,
-                tint = contentColor,
-                modifier = Modifier.size(24.dp)
-            )
+            if (useGmailContactsIcon) {
+                Icon(
+                    painter = painterResource(R.drawable.gmail_drawer_contacts),
+                    contentDescription = label,
+                    tint = contentColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = if (selected) selectedIcon else unselectedIcon,
+                    contentDescription = label,
+                    tint = contentColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
             Text(
                 text = label,
                 color = contentColor,

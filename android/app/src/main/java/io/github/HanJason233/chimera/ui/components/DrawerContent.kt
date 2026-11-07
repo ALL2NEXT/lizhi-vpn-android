@@ -11,10 +11,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
+import io.github.HanJason233.chimera.R
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -59,7 +61,8 @@ fun DrawerContent(
             )
 
             DrawerMenuItem(
-                icon = Icons.Outlined.Tune,
+                icon = Icons.Outlined.Settings,
+                iconResource = R.drawable.gmail_drawer_settings,
                 title = "设置",
                 onClick = {
                     onOpenOtherConfig()
@@ -123,6 +126,7 @@ fun DrawerContent(
 @Composable
 private fun DrawerMenuItem(
     icon: ImageVector,
+    iconResource: Int? = null,
     title: String,
     subtitle: String? = null,
     onClick: () -> Unit
@@ -148,15 +152,26 @@ private fun DrawerMenuItem(
         // 抽屉菜单项用于页面导航，按压反馈由组件自带的涟漪效果提供。
         selected = false,
         onClick = onClick,
-        modifier = Modifier.padding(horizontal = 12.dp),
+        modifier = Modifier
+            .padding(horizontal = 12.dp)
+            .height(48.dp),
         icon = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp)
-            )
+            if (iconResource != null) {
+                Icon(
+                    painter = painterResource(iconResource),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         },
-        shape = RoundedCornerShape(50),
+        shape = RoundedCornerShape(24.dp),
         colors = NavigationDrawerItemDefaults.colors(
             selectedContainerColor = MonetThemeOverlay.selectedControl,
             selectedIconColor = MonetThemeOverlay.onSelectedControl,
