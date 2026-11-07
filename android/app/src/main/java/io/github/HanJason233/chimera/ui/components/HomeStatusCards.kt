@@ -53,7 +53,7 @@ internal fun HomeSelectionCard(
     groupType: String,
     node: Node?,
     vpnState: VpnState,
-    onGroupClick: () -> Unit,
+    onGroupSwitchClick: () -> Unit,
     onNodeClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -63,7 +63,7 @@ internal fun HomeSelectionCard(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onGroupClick),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -99,8 +99,24 @@ internal fun HomeSelectionCard(
                         maxLines = 1
                     )
                 }
-                Text("切换", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Row(
+                    modifier = Modifier
+                        .clickable(role = Role.Button, onClick = onGroupSwitchClick)
+                        .padding(start = 4.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        "切换",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
             Divider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),

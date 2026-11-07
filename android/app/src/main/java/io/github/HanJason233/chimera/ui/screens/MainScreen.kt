@@ -313,7 +313,7 @@ fun MainScreen(
                             groupType = selectedGroupType,
                             node = currentNode,
                             vpnState = vpnState,
-                            onGroupClick = {
+                            onGroupSwitchClick = {
                                 onBottomNavigationDestinationSelected(
                                     if (selectedGroup is NodeGroupKey.Country) {
                                         HomeDestination.NODE_GROUPING
