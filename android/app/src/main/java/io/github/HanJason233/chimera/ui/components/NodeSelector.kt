@@ -25,7 +25,7 @@ fun ProxyModeToggle(
 ) {
     Surface(
         modifier = modifier,
-        color = MonetThemeOverlay.controlSurface,
+        color = MonetThemeOverlay.homePanelSurface,
         shape = RoundedCornerShape(50),
         border = BorderStroke(
             1.dp,
@@ -63,7 +63,7 @@ private fun ProxyModeToggleOption(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .clickable(onClick = onClick),
-        color = if (selected) MonetThemeOverlay.selectedControl else MonetThemeOverlay.controlSurface,
+        color = if (selected) MonetThemeOverlay.selectedControl else MonetThemeOverlay.homePanelSurface,
         shape = RoundedCornerShape(50)
     ) {
         Text(

@@ -36,6 +36,11 @@ object MonetThemeOverlay {
         @ReadOnlyComposable
         get() = MaterialTheme.colorScheme.surfaceVariant
 
+    val homePanelSurface: Color
+        @Composable
+        @ReadOnlyComposable
+        get() = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surface else Color.White
+
     val selectedControl: Color
         @Composable
         @ReadOnlyComposable

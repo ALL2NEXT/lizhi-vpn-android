@@ -37,6 +37,7 @@ import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.R
+import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestResult
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestResult
@@ -213,7 +214,7 @@ internal fun HomeTestsCard(
         shape = RoundedCornerShape(percent = 50),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            containerColor = MonetThemeOverlay.homePanelSurface
         )
     ) {
         // 仅显示已启用的测试项；右侧操作按钮常驻，并在启动和中断状态间切换。
@@ -565,7 +566,7 @@ private fun HomeInfoCard(
         modifier = modifier.widthIn(max = 520.dp).fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+        colors = CardDefaults.cardColors(containerColor = MonetThemeOverlay.homePanelSurface)
     ) {
         Column(
             Modifier.padding(if (compact) 12.dp else 14.dp),
