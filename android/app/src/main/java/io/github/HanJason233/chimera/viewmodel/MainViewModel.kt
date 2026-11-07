@@ -2082,19 +2082,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun selectNodeGroup(group: NodeGroupKey) {
         pendingSelectedNodeGroup.value = group
         viewModelScope.launch {
-            try {
-                settingsRepository.setSelectedNodeGroup(group)
-            } finally {
-                if (pendingSelectedNodeGroup.value == group) {
-                    pendingSelectedNodeGroup.value = null
-                }
+            persistSelectedNodeGroup(group)
+        }
+    }
+
+    private suspend fun persistSelectedNodeGroup(group: NodeGroupKey) {
+        try {
+            settingsRepository.setSelectedNodeGroup(group)
+        } finally {
+            if (pendingSelectedNodeGroup.value == group) {
+                pendingSelectedNodeGroup.value = null
             }
         }
     }
 
-    /** Select a node from the node list and connect to it immediately. */
-    fun selectAndConnectNode(node: Node) {
+    /** 选择节点所属组并连接该节点。 */
+    fun selectAndConnectNode(node: Node, group: NodeGroupKey) {
+        pendingSelectedNodeGroup.value = group
         viewModelScope.launch {
+            persistSelectedNodeGroup(group)
             connectNode(node)
         }
     }

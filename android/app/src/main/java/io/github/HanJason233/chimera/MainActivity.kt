@@ -343,10 +343,10 @@ class MainActivity : ComponentActivity() {
                                                 onCountrySelected = { countryCode ->
                                                     viewModel.selectCountry(countryCode)
                                                 },
-                                                onNodeSelected = { node ->
+                                                onNodeSelected = { node, group ->
                                                     selectedDestination = HomeDestination.HOME
                                                     requestVpnPermission {
-                                                        viewModel.selectAndConnectNode(node)
+                                                        viewModel.selectAndConnectNode(node, group)
                                                     }
                                                 },
                                                 onCreateSubscriptionGroup = { input, onComplete ->

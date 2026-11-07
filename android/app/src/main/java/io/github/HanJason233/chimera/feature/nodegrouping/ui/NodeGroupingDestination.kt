@@ -39,6 +39,12 @@ private sealed interface NodeGroupingDetail {
     ) : NodeGroupingDetail
 }
 
+private fun NodeGroupingDetail.toGroupKey(): NodeGroupKey = when (this) {
+    is NodeGroupingDetail.Country -> NodeGroupKey.Country(countryCode)
+    is NodeGroupingDetail.Subscription -> NodeGroupKey.Subscription(sourceId)
+    is NodeGroupingDetail.UserGroup -> NodeGroupKey.Imported(groupId)
+}
+
 private val NodeGroupingDetailSaver = listSaver<NodeGroupingDetail?, String>(
     save = { detail ->
         when (detail) {
@@ -82,7 +88,7 @@ fun NodeGroupingDestination(
     groupingMode: NodeGroupingMode,
     viewModel: MainViewModel,
     onCountrySelected: (String) -> Unit,
-    onNodeSelected: (Node) -> Unit,
+    onNodeSelected: (Node, NodeGroupKey) -> Unit,
     onCreateSubscriptionGroup: (String?, (Boolean) -> Unit) -> Unit,
     onUpdateSubscriptionGroup: (
         String,
@@ -140,7 +146,7 @@ fun NodeGroupingDestination(
                 viewModel = viewModel,
                 nodesOverride = countryNodes,
                 screenTitle = currentDetail.countryName,
-                onNodeSelected = onNodeSelected,
+                onNodeSelected = { node -> onNodeSelected(node, currentDetail.toGroupKey()) },
                 onBack = { detail = null },
                 showBackNavigation = true,
                 bottomContentPadding = bottomContentPadding
@@ -164,7 +170,7 @@ fun NodeGroupingDestination(
                 viewModel = viewModel,
                 nodesOverride = subscriptionNodes,
                 screenTitle = currentDetail.sourceName,
-                onNodeSelected = onNodeSelected,
+                onNodeSelected = { node -> onNodeSelected(node, currentDetail.toGroupKey()) },
                 onBack = { detail = null },
                 showBackNavigation = true,
                 bottomContentPadding = bottomContentPadding
@@ -180,7 +186,7 @@ fun NodeGroupingDestination(
                 nodesOverride = groupNodes,
                 screenTitle = currentDetail.groupName,
                 importTargetGroupId = currentDetail.groupId,
-                onNodeSelected = onNodeSelected,
+                onNodeSelected = { node -> onNodeSelected(node, currentDetail.toGroupKey()) },
                 onBack = { detail = null },
                 showBackNavigation = true,
                 bottomContentPadding = bottomContentPadding
