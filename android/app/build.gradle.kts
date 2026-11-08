@@ -322,6 +322,7 @@ android {
         targetSdk = 35
         versionCode = 23
         versionName = "1.0.0"
+        buildConfigField("String", "SING_BOX_CORE_VERSION", "\"$singBoxCoreVersion\"")
         buildConfigField("String", "XRAY_CORE_VERSION", "\"$xrayCoreVersion\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

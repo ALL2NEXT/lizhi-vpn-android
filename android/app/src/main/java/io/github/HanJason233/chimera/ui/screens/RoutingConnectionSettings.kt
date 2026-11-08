@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,14 +23,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,11 +45,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
+import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
+import io.github.HanJason233.chimera.ui.components.SettingsListChoiceRow
+import io.github.HanJason233.chimera.ui.components.SettingsListRow
+import io.github.HanJason233.chimera.ui.components.SettingsListSectionHeader
+import io.github.HanJason233.chimera.ui.components.SettingsListSwitchRow
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
 @Composable
@@ -57,58 +65,80 @@ fun DnsSettingsScreen(
 ) {
     val dnsSettings by viewModel.dnsSettings.collectAsStateWithLifecycle()
 
-    AppScreenScaffold(title = "DNS 设置", onBack = onBack) {
+    AppScreenScaffold(
+        title = "DNS 设置",
+        onBack = onBack,
+        contentPadding = PaddingValues(0.dp)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            RoutingSettingsSection(title = "远程 DNS") {
-                DnsEndpointField(
-                    label = "远程 DNS 地址",
-                    value = dnsSettings.remoteDns,
-                    onSave = viewModel::setRemoteDns
-                )
-                DnsStrategySelector(
-                    label = "远程域名策略",
-                    selected = dnsSettings.remoteDomainStrategy,
-                    onSelected = viewModel::setRemoteDnsStrategy
-                )
-            }
-            RoutingSettingsSection(title = "直连 DNS") {
-                DnsEndpointField(
-                    label = "直连 DNS 地址",
-                    value = dnsSettings.directDns,
-                    onSave = viewModel::setDirectDns
-                )
-                DnsStrategySelector(
-                    label = "直连域名策略",
-                    selected = dnsSettings.directDomainStrategy,
-                    onSelected = viewModel::setDirectDnsStrategy
-                )
-            }
-            RoutingSettingsSection(title = "DNS 路由") {
-                DnsStrategySelector(
-                    label = "服务器地址域名策略",
-                    selected = dnsSettings.serverDomainStrategy,
-                    onSelected = viewModel::setServerDnsStrategy
-                )
-                DnsSwitchRow(
-                    title = "启用 DNS 路由",
-                    description = "使用直连 DNS 解析绕过路由中的 domains。注意潜在的 DNS 泄漏",
-                    checked = dnsSettings.dnsRoutingEnabled,
-                    onCheckedChange = viewModel::setDnsRoutingEnabled
-                )
-                DnsSwitchRow(
-                    title = "启用 FakeDNS",
-                    description = "可能导致其他应用程序在代理停止后需要重新启动以重新连接到网络",
-                    checked = dnsSettings.fakeDnsEnabled,
-                    onCheckedChange = viewModel::setFakeDnsEnabled
-                )
-                RoutingSettingsRuleText("DNS 请求由代理服务接管并处理。")
-                RoutingSettingsRuleText("IPv6 路由模式会影响未单独指定策略时的 DNS 地址选择。")
-            }
+            SettingsListSectionHeader("DNS 服务器")
+            DnsEndpointListRow(
+                icon = Icons.Outlined.Dns,
+                title = "远程 DNS 地址",
+                value = dnsSettings.remoteDns,
+                onSave = viewModel::setRemoteDns
+            )
+            DnsEndpointListRow(
+                icon = Icons.Outlined.Dns,
+                title = "直连 DNS 地址",
+                value = dnsSettings.directDns,
+                onSave = viewModel::setDirectDns
+            )
+
+            SettingsListSectionHeader("解析策略")
+            SettingsListChoiceRow(
+                icon = Icons.Outlined.SwapHoriz,
+                title = "远程域名策略",
+                subtitle = dnsSettings.remoteDomainStrategy.displayName,
+                options = DnsDomainStrategy.entries,
+                selected = dnsSettings.remoteDomainStrategy,
+                optionLabel = { "${it.displayName}（${it.configValue}）" },
+                onSelected = viewModel::setRemoteDnsStrategy
+            )
+            SettingsListChoiceRow(
+                icon = Icons.Outlined.SwapHoriz,
+                title = "直连域名策略",
+                subtitle = dnsSettings.directDomainStrategy.displayName,
+                options = DnsDomainStrategy.entries,
+                selected = dnsSettings.directDomainStrategy,
+                optionLabel = { "${it.displayName}（${it.configValue}）" },
+                onSelected = viewModel::setDirectDnsStrategy
+            )
+            SettingsListChoiceRow(
+                icon = Icons.Outlined.SwapHoriz,
+                title = "服务器地址域名策略",
+                subtitle = dnsSettings.serverDomainStrategy.displayName,
+                options = DnsDomainStrategy.entries,
+                selected = dnsSettings.serverDomainStrategy,
+                optionLabel = { "${it.displayName}（${it.configValue}）" },
+                onSelected = viewModel::setServerDnsStrategy
+            )
+
+            SettingsListSectionHeader("DNS 路由")
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Route,
+                title = "启用 DNS 路由",
+                subtitle = "使用直连 DNS 解析绕过路由中的 domains。注意潜在的 DNS 泄漏。",
+                checked = dnsSettings.dnsRoutingEnabled,
+                onCheckedChange = viewModel::setDnsRoutingEnabled
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Memory,
+                title = "启用 FakeDNS",
+                subtitle = "代理停止后，其他应用可能需要重新启动才能恢复网络连接。",
+                checked = dnsSettings.fakeDnsEnabled,
+                onCheckedChange = viewModel::setFakeDnsEnabled
+            )
+            Text(
+                text = "DNS 请求由代理服务接管并处理。IPv6 路由模式会影响未单独指定策略时的 DNS 地址选择。",
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -273,118 +303,87 @@ private fun RoutingSettingsRuleText(text: String) {
 }
 
 @Composable
-private fun DnsEndpointField(
-    label: String,
+private fun DnsEndpointListRow(
+    icon: ImageVector,
+    title: String,
     value: String,
     onSave: (String) -> Unit
 ) {
-    var input by rememberSaveable(value) { mutableStateOf(value) }
-    OutlinedTextField(
-        value = input,
-        onValueChange = { input = it },
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(label) },
-        supportingText = { Text("支持 UDP、TCP、TLS 或 HTTPS 地址") },
-        singleLine = false,
-        minLines = 1,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+    var editing by rememberSaveable { mutableStateOf(false) }
+
+    SettingsListRow(
+        icon = icon,
+        title = title,
+        subtitle = value,
+        onClick = { editing = true }
     )
-    if (input != value) {
-        androidx.compose.material3.TextButton(
-            onClick = { onSave(input) },
-            enabled = DnsSettings.normalizeServerList(input) != null,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("应用 DNS 地址")
-        }
-    }
-}
 
-@Composable
-private fun DnsStrategySelector(
-    label: String,
-    selected: DnsDomainStrategy,
-    onSelected: (DnsDomainStrategy) -> Unit
-) {
-    var expanded by rememberSaveable(label) { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = label,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
+    if (editing) {
+        DnsEndpointEditDialog(
+            title = title,
+            value = value,
+            onDismiss = { editing = false },
+            onSave = onSave
         )
-        Box {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = true },
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = selected.configValue,
-                        modifier = Modifier.weight(1f),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Icon(
-                        imageVector = if (expanded) {
-                            Icons.Default.KeyboardArrowUp
-                        } else {
-                            Icons.Default.KeyboardArrowDown
-                        },
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                DnsDomainStrategy.entries.forEach { strategy ->
-                    DropdownMenuItem(
-                        text = { Text(strategy.configValue) },
-                        onClick = {
-                            expanded = false
-                            onSelected(strategy)
-                        }
-                    )
-                }
-            }
-        }
     }
 }
 
 @Composable
-private fun DnsSwitchRow(
+private fun DnsEndpointEditDialog(
     title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    value: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = description,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+    var input by rememberSaveable(value) { mutableStateOf(value) }
+    val normalizedValue = DnsSettings.normalizeServerList(input)
+
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "支持 UDP、TCP、TLS 或 HTTPS 地址；多个 DNS 地址可分行填写。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("DNS 地址") },
+                    supportingText = {
+                        Text(
+                            if (normalizedValue == null) {
+                                "请填写有效的 DNS 地址和端口。"
+                            } else {
+                                "每行一个地址，# 开头的行为注释。"
+                            }
+                        )
+                    },
+                    isError = normalizedValue == null,
+                    minLines = 2,
+                    maxLines = 5,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = normalizedValue != null,
+                onClick = {
+                    normalizedValue?.let(onSave)
+                    onDismiss()
+                }
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
+    )
 }

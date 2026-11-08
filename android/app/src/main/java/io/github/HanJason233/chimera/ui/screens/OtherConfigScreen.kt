@@ -1,10 +1,9 @@
 package io.github.HanJason233.chimera.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -15,9 +14,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.FlashOn
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -34,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -44,10 +47,12 @@ import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.data.model.ProxyCore
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
+import io.github.HanJason233.chimera.ui.components.SettingsListChoiceRow
+import io.github.HanJason233.chimera.ui.components.SettingsListRow
+import io.github.HanJason233.chimera.ui.components.SettingsListSectionHeader
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
 @Composable
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 fun OtherConfigScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
@@ -110,7 +115,6 @@ fun OtherConfigScreen(
 }
 
 @Composable
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 fun ProtocolCoreSettingsScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
@@ -119,69 +123,93 @@ fun ProtocolCoreSettingsScreen(
 
     AppScreenScaffold(
         title = "协议核心",
-        onBack = onBack
+        onBack = onBack,
+        contentPadding = PaddingValues(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            OtherConfigSection(title = "按协议选择核心") {
-                Text(
-                    text = "可为支持的协议选择官方 sing-box 或 Xray。XHTTP 和 Cloudflare WARP MASQUE 使用 Xray；不支持的扩展参数会在连接前提示。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 13.sp
-                )
-                ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
-                    ProtocolCoreRow(
-                        label = nodeType.displayName(),
-                        selectedCore = protocolCoreSettings.coreFor(nodeType),
-                        availableCores = io.github.HanJason233.chimera.core.CoreBackends.registry.availableFor(nodeType),
-                        onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
-                    )
-                }
-                Text(
-                    text = "内置 Xray ${BuildConfig.XRAY_CORE_VERSION}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
+            SettingsListSectionHeader("按协议选择核心")
+            Text(
+                text = "可为支持的协议选择 sing-box 或 Xray。XHTTP 和 Cloudflare WARP MASQUE 使用 Xray；不支持的扩展参数会在连接前提示。",
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp
+            )
+            ProtocolCoreSettings.DISPLAY_PROTOCOLS.forEach { nodeType ->
+                ProtocolCoreListRow(
+                    nodeType = nodeType,
+                    selectedCore = protocolCoreSettings.coreFor(nodeType),
+                    availableCores = io.github.HanJason233.chimera.core.CoreBackends.registry.availableFor(nodeType),
+                    onSelected = { core -> viewModel.setProtocolCore(nodeType, core) }
                 )
             }
+            SettingsListRow(
+                icon = Icons.Outlined.Memory,
+                title = "内置 sing-box 核心",
+                subtitle = "版本 ${BuildConfig.SING_BOX_CORE_VERSION}"
+            )
+            SettingsListRow(
+                icon = Icons.Outlined.Memory,
+                title = "内置 Xray 核心",
+                subtitle = "版本 ${BuildConfig.XRAY_CORE_VERSION}"
+            )
         }
     }
 }
 
 @Composable
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
-private fun ProtocolCoreRow(
-    label: String,
+private fun ProtocolCoreListRow(
+    nodeType: NodeType,
     selectedCore: ProxyCore,
     availableCores: List<ProxyCore>,
     onSelected: (ProxyCore) -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        FlowRow(
-            modifier = Modifier.weight(2f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
-        ) {
-            availableCores.forEach { core ->
-                FilterChip(
-                    selected = selectedCore == core,
-                    onClick = { onSelected(core) },
-                    label = { Text(core.displayName) }
-                )
-            }
-        }
+    val subtitle = when {
+        availableCores.isEmpty() -> "当前版本没有可用核心"
+        availableCores.size == 1 -> "仅支持 ${availableCores.single().displayName}"
+        else -> "当前使用 ${selectedCore.displayName} · 点击切换"
     }
+
+    if (availableCores.size > 1) {
+        SettingsListChoiceRow(
+            icon = nodeType.settingsIcon(),
+            title = nodeType.displayName(),
+            subtitle = subtitle,
+            options = availableCores,
+            selected = selectedCore,
+            optionLabel = ProxyCore::displayName,
+            onSelected = onSelected
+        )
+    } else {
+        SettingsListRow(
+            icon = nodeType.settingsIcon(),
+            title = nodeType.displayName(),
+            subtitle = subtitle
+        )
+    }
+}
+
+private fun NodeType.settingsIcon(): ImageVector = when (this) {
+    NodeType.VLESS,
+    NodeType.VMESS,
+    NodeType.TROJAN,
+    NodeType.ANYTLS -> Icons.Outlined.VpnKey
+
+    NodeType.HYSTERIA2,
+    NodeType.TUIC -> Icons.Outlined.FlashOn
+
+    NodeType.NAIVE,
+    NodeType.HTTP -> Icons.Outlined.Language
+
+    NodeType.WIREGUARD,
+    NodeType.MASQUE,
+    NodeType.SHADOWSOCKS,
+    NodeType.SOCKS -> Icons.Outlined.Route
+
+    NodeType.UNKNOWN -> Icons.Outlined.Memory
 }
 
 private fun NodeType.displayName(): String = when (this) {
