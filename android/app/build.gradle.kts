@@ -1,10 +1,26 @@
 import java.io.FileInputStream
 import java.util.Properties
+import javax.inject.Inject
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.process.ExecOperations
+import org.gradle.api.tasks.OutputDirectory
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+}
+
+interface InjectedExecOperations {
+    @get:Inject
+    val execOperations: ExecOperations
+}
+
+abstract class NativeBinaryBuildTask : DefaultTask() {
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
 }
 
 val singBoxNdkVersion = "28.0.13004108"
@@ -29,9 +45,10 @@ val hevTunnelVersion = "2.16.0"
 
 // sing-box is compiled as a standalone Android PIE process and packaged into
 // nativeLibraryDir. HEV owns TUN; LAN sharing can add a separate SOCKS inbound.
-val buildSingBoxCore = tasks.register("buildSingBoxCore") {
+val buildSingBoxCore = tasks.register<NativeBinaryBuildTask>("buildSingBoxCore") {
     group = "sing-box"
     description = "Build the pinned sing-box source for the Android ABIs"
+    outputDirectory.set(generatedSingBoxJniDir)
 
     inputs.files(fileTree(singBoxSourceDir) {
         exclude(".git/**")
@@ -43,7 +60,7 @@ val buildSingBoxCore = tasks.register("buildSingBoxCore") {
     inputs.property("version", singBoxCoreVersion)
     inputs.property("ndkVersion", singBoxNdkVersion)
     inputs.property("androidApi", 24)
-    outputs.files(targetAbis.map { generatedSingBoxJniDir.map { dir -> dir.file("$it/libsingbox.so") } })
+    val processRunner = project.objects.newInstance<InjectedExecOperations>().execOperations
 
     doLast {
         val goExecutable = if (System.getProperty("os.name").startsWith("Windows")) "go.exe" else "go"
@@ -94,7 +111,7 @@ val buildSingBoxCore = tasks.register("buildSingBoxCore") {
             output.parentFile.mkdirs()
             val clang = clangBin.resolve("${abi.clangTarget}24-clang$clangSuffix")
             check(clang.isFile) { "Android clang not found at ${clang.absolutePath}" }
-            exec {
+            processRunner.exec {
                 workingDir(singBoxRunnerDir)
                 environment("GOOS", "android")
                 environment("GOARCH", abi.goArch)
@@ -112,16 +129,17 @@ val buildSingBoxCore = tasks.register("buildSingBoxCore") {
                     "-o", output.absolutePath,
                     "."
                 )
-            }
+            }.assertNormalExitValue()
         }
     }
 }
 
 // Xray is compiled as a standalone PIE process and packaged into nativeLibraryDir.
 // HEV owns the Android TUN; this runner only handles core lifecycle control.
-val buildXrayCore = tasks.register("buildXrayCore") {
+val buildXrayCore = tasks.register<NativeBinaryBuildTask>("buildXrayCore") {
     group = "xray"
     description = "Build the pinned Xray-core source for the Android ABIs"
+    outputDirectory.set(generatedXrayJniDir)
 
     inputs.files(fileTree(xraySourceDir) {
         exclude(".git/**")
@@ -131,7 +149,7 @@ val buildXrayCore = tasks.register("buildXrayCore") {
     inputs.files(fileTree(xrayRunnerDir) { exclude("*.exe") })
     inputs.property("ndkVersion", singBoxNdkVersion)
     inputs.property("androidApi", 24)
-    outputs.files(targetAbis.map { generatedXrayJniDir.map { dir -> dir.file("$it/libxray.so") } })
+    val processRunner = project.objects.newInstance<InjectedExecOperations>().execOperations
 
     doLast {
         val goExecutable = if (System.getProperty("os.name").startsWith("Windows")) "go.exe" else "go"
@@ -171,7 +189,7 @@ val buildXrayCore = tasks.register("buildXrayCore") {
             output.parentFile.mkdirs()
             val clang = clangBin.resolve("${abi.clangTarget}24-clang$clangSuffix")
             check(clang.isFile) { "Android clang not found at ${clang.absolutePath}" }
-            exec {
+            processRunner.exec {
                 workingDir(xrayRunnerDir)
                 environment("GOOS", "android")
                 environment("GOARCH", abi.goArch)
@@ -189,7 +207,7 @@ val buildXrayCore = tasks.register("buildXrayCore") {
                     output.absolutePath,
                     "."
                 )
-            }
+            }.assertNormalExitValue()
         }
     }
 }
@@ -197,9 +215,10 @@ val buildXrayCore = tasks.register("buildXrayCore") {
 // HEV is the TUN-to-SOCKS data plane. It is compiled as
 // an Android PIE executable instead of loaded into the app process, so a
 // native teardown failure cannot take down the UI or VPN controller process.
-val buildHevTunnel = tasks.register("buildHevTunnel") {
+val buildHevTunnel = tasks.register<NativeBinaryBuildTask>("buildHevTunnel") {
     group = "hev"
     description = "Build the pinned HEV tun2socks compatibility runner"
+    outputDirectory.set(generatedHevJniDir)
 
     inputs.files(fileTree(hevSourceDir) {
         exclude(".git/**")
@@ -210,7 +229,7 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
     inputs.property("version", hevTunnelVersion)
     inputs.property("ndkVersion", singBoxNdkVersion)
     inputs.property("androidApi", 24)
-    outputs.files(targetAbis.map { generatedHevJniDir.map { dir -> dir.file("$it/libhev.so") } })
+    val processRunner = project.objects.newInstance<InjectedExecOperations>().execOperations
 
     doLast {
         check(hevSourceDir.resolve("Android.mk").isFile &&
@@ -268,7 +287,7 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
                 .replace("static size_t stat_", "static _Atomic size_t stat_"),
             Charsets.UTF_8
         )
-        exec {
+        processRunner.exec {
             commandLine(ndkBuild.absolutePath,
                 "NDK_PROJECT_PATH=null",
                 "APP_BUILD_SCRIPT=${hevRunnerDir.resolve("Android.mk").absolutePath}",
@@ -279,7 +298,7 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
                 "HEV_ROOT=${stagedSource.absolutePath}",
                 "REV_ID=$hevTunnelVersion",
                 "V=1")
-        }
+        }.assertNormalExitValue()
         targetAbis.forEach { abi ->
             val binary = outputRoot.resolve("local/$abi/hev-runner")
             check(binary.isFile) { "HEV runner was not built for $abi" }
@@ -293,18 +312,9 @@ val buildHevTunnel = tasks.register("buildHevTunnel") {
     }
 }
 
-// Native core/data-plane binaries are required only when JNI folders are merged.
-tasks.configureEach {
-    if (name.startsWith("merge") && name.endsWith("JniLibFolders")) {
-        dependsOn(buildSingBoxCore)
-        dependsOn(buildXrayCore)
-        dependsOn(buildHevTunnel)
-    }
-}
-
 android {
     namespace = "io.github.HanJason233.chimera"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "io.github.HanJason233.chimera"
@@ -389,10 +399,6 @@ android {
         buildConfig = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.6"
-    }
-
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -404,10 +410,6 @@ android {
         }
     }
 
-    sourceSets.getByName("main").jniLibs.srcDir(generatedXrayJniDir)
-    sourceSets.getByName("main").jniLibs.srcDir(generatedSingBoxJniDir)
-    sourceSets.getByName("main").jniLibs.srcDir(generatedHevJniDir)
-
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -415,6 +417,21 @@ android {
         }
     }
     ndkVersion = singBoxNdkVersion
+}
+
+androidComponents.onVariants { variant ->
+    variant.sources.jniLibs?.addGeneratedSourceDirectory(
+        buildSingBoxCore,
+        NativeBinaryBuildTask::outputDirectory
+    )
+    variant.sources.jniLibs?.addGeneratedSourceDirectory(
+        buildXrayCore,
+        NativeBinaryBuildTask::outputDirectory
+    )
+    variant.sources.jniLibs?.addGeneratedSourceDirectory(
+        buildHevTunnel,
+        NativeBinaryBuildTask::outputDirectory
+    )
 }
 
 dependencies {
@@ -425,7 +442,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     
     // Jetpack Compose - using stable BOM version
-    implementation(platform("androidx.compose:compose-bom:2023.10.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material:material")
@@ -458,9 +475,9 @@ dependencies {
     implementation("org.yaml:snakeyaml:2.2")
     
     // Room Database
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.room:room-runtime:2.8.5")
+    implementation("androidx.room:room-ktx:2.8.5")
+    ksp("androidx.room:room-compiler:2.8.5")
     implementation("net.zetetic:sqlcipher-android:4.13.0")
     
     // DataStore
@@ -471,7 +488,7 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.16.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2023.10.01"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

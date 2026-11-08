@@ -424,7 +424,7 @@ fun CoreRoutingScreen(
                                     }
                                 }
                             } else {
-                                Modifier.animateItemPlacement()
+                                Modifier.animateItem()
                             }
                         )
                 ) {

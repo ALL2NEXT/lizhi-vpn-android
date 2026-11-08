@@ -355,7 +355,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, NodeGroupingMode.REGION)
 
     /** 所有节点组共用的当前选中标识，仅由统一节点组字段决定。 */
-    val selectedNodeGroupId = combine(
+    val selectedNodeGroupId: StateFlow<String?> = combine(
         settingsRepository.selectedNodeGroupId,
         activeSubscriptionSourceId
     ) { groupId, sourceId ->
@@ -416,7 +416,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map(CountryGroupingSourceResolver::resolve)
 
     /** 地区组只汇总所选仓库源中的节点；首次使用时包含全部官方源和私人源。 */
-    val countryGroupingNodes = nodeDaoFlow.flatMapLatest { dao ->
+    val countryGroupingNodes: StateFlow<List<Node>> = nodeDaoFlow.flatMapLatest { dao ->
         combine(allWarehouseNodes, countryGroupingSources) { allNodes, sources ->
             allNodes to sources
         }.flatMapLatest { (allNodes, sources) ->
@@ -444,7 +444,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map(CountryGroupingStrategy::groups)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    private val subscriptionNodes = nodeDaoFlow
+    private val subscriptionNodes: Flow<List<Node>> = nodeDaoFlow
         .flatMapLatest { dao ->
             activeSubscriptionSourceId.flatMapLatest { sourceId ->
                 if (sourceId.isNullOrBlank()) {
@@ -482,7 +482,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
     /** 当前选中私人源的节点；没有选中私人源时不参与主页列表。 */
-    private val importedNodes = selectedNodeGroupId.flatMapLatest { groupId ->
+    private val importedNodes: Flow<List<Node>> = selectedNodeGroupId.flatMapLatest { groupId ->
         val group = NodeGroupKey.parse(groupId) as? NodeGroupKey.Imported
         if (group == null) {
             flowOf(emptyList())
@@ -492,12 +492,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Data
-    private val visibleNodes = combine(
+    private val visibleNodes: Flow<List<Node>> = combine(
         subscriptionNodes,
         importedNodes,
         countryGroupingNodes,
         selectedNodeGroupId
-    ) { subscription, imported, warehouseNodes, groupId ->
+    ) { subscription: List<Node>, imported: List<Node>, warehouseNodes: List<Node>, groupId: String? ->
         when (val group = NodeGroupKey.parse(groupId)) {
             is NodeGroupKey.Imported -> imported
             is NodeGroupKey.Country -> warehouseNodes.filter {
@@ -507,10 +507,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    val nodes = combine(
+    val nodes: StateFlow<List<Node>> = combine(
         visibleNodes,
         activeConnectionNode
-    ) { visibleNodes, connectedNode ->
+    ) { visibleNodes: List<Node>, connectedNode: Node? ->
         sortNodesForList(visibleNodes, pinnedNodeId = connectedNode?.id)
     }
         .flowOn(Dispatchers.Default)

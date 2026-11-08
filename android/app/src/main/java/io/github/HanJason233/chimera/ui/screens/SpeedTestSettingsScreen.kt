@@ -374,7 +374,7 @@ private fun SpeedTestSettingsPage(
                             }
                         }
                     } else {
-                        Modifier.animateItemPlacement()
+                        Modifier.animateItem()
                     }
 
                     Column(

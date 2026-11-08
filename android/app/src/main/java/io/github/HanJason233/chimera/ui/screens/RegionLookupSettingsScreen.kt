@@ -242,7 +242,7 @@ fun RegionLookupSettingsScreen(
                         if (isDragging || isSettling) {
                             Modifier.graphicsLayer { translationY = cardTranslation }
                         } else {
-                            Modifier.animateItemPlacement()
+                            Modifier.animateItem()
                         }
                     )
                     .pointerInput(method) {

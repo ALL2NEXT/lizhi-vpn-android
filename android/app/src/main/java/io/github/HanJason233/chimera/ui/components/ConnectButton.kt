@@ -16,7 +16,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material.ripple
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -200,7 +200,7 @@ fun ConnectButton(
                             .clip(CircleShape)
                             .combinedClickable(
                                 enabled = gestureEnabled,
-                                indication = rememberRipple(bounded = true),
+                                indication = ripple(bounded = true),
                                 interactionSource = interactionSource,
                                 onClickLabel = if (!isTesting && vpnState == VpnState.DISCONNECTED) clickActionLabel else null,
                                 onLongClickLabel = if (onLongClick != null) longClickActionLabel else null,
