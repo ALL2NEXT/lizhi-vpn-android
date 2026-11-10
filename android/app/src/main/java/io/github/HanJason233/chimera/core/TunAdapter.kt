@@ -1,7 +1,7 @@
 package io.github.HanJason233.chimera.core
 
 import android.content.Context
-import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
+import io.github.HanJason233.chimera.data.model.IpFamilyRoutingSettings
 import io.github.HanJason233.chimera.platform.TunProvider
 
 /**
@@ -13,7 +13,7 @@ internal interface TunAdapter {
         context: Context,
         tunProvider: TunProvider,
         endpoint: LocalSocksEndpoint,
-        ipv6RoutingMode: IPv6RoutingMode,
+        ipFamilySettings: IpFamilyRoutingSettings,
         onFailure: (String) -> Unit
     ): TunAdapterSession
 }

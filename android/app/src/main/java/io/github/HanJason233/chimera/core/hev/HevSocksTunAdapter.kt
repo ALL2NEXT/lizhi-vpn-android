@@ -7,7 +7,7 @@ import android.util.Log
 import com.google.gson.JsonParser
 import kotlinx.coroutines.*
 import io.github.HanJason233.chimera.core.*
-import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
+import io.github.HanJason233.chimera.data.model.IpFamilyRoutingSettings
 import io.github.HanJason233.chimera.platform.TunProvider
 import io.github.HanJason233.chimera.platform.awaitExit
 import io.github.HanJason233.chimera.platform.isRunningCompat
@@ -27,10 +27,10 @@ internal class HevSocksTunAdapter : TunAdapter {
         context: Context,
         tunProvider: TunProvider,
         endpoint: LocalSocksEndpoint,
-        ipv6RoutingMode: IPv6RoutingMode,
+        ipFamilySettings: IpFamilyRoutingSettings,
         onFailure: (String) -> Unit
     ): TunAdapterSession {
-        tunProvider.openTun(HevSocksTunConfig.tunnel(ipv6RoutingMode))
+        tunProvider.openTun(HevSocksTunConfig.tunnel(ipFamilySettings))
         return try {
             HevNativeSession(context, tunProvider, onFailure)
                 .start(HevSocksTunConfig.render(endpoint))

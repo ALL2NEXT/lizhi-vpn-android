@@ -64,6 +64,7 @@ import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestRunne
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
 import io.github.HanJason233.chimera.network.location.NodeLocationResolver
 import io.github.HanJason233.chimera.network.account.AccountManager
+import io.github.HanJason233.chimera.network.ip.PublicIpAddressDetector
 import io.github.HanJason233.chimera.service.ServiceManager
 import io.github.HanJason233.chimera.service.BoxVpnService
 import io.github.HanJason233.chimera.util.NetworkUtils
@@ -567,11 +568,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SpeedTestSettings.default()
     )
 
-    val ipv6RoutingMode = settingsRepository.ipv6RoutingMode.stateIn(
+    val ipFamilySettings = settingsRepository.ipFamilySettings.stateIn(
         viewModelScope,
         SharingStarted.Lazily,
-        IPv6RoutingMode.DISABLED
+        IpFamilyRoutingSettings.DEFAULT
     )
+
+    private val _ipAddressDetectionState = MutableStateFlow(IpAddressDetectionState())
+    val ipAddressDetectionState = _ipAddressDetectionState.asStateFlow()
 
     val dnsSettings = settingsRepository.dnsSettings.stateIn(
         viewModelScope,
@@ -3133,15 +3137,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    /**
-     * 设置 IPv6 路由模式
-     */
-    fun setIPv6RoutingMode(mode: IPv6RoutingMode) {
+    fun setIpFamilyEnabled(family: IpAddressFamily, enabled: Boolean) {
         viewModelScope.launch {
-
-            settingsRepository.setIPv6RoutingMode(mode)
-            // 如果 VPN 正在运行，重启以应用新设置
+            settingsRepository.setIpFamilyEnabled(family, enabled)
             restartVpnIfNeeded()
+        }
+    }
+
+    fun setPreferredIpFamily(family: IpAddressFamily) {
+        viewModelScope.launch {
+            settingsRepository.setPreferredIpFamily(family)
+            restartVpnIfNeeded()
+        }
+    }
+
+    /** 通过当前 VPN 会话（如已连接）并发检测 IPv4 和 IPv6 出口。 */
+    fun detectCurrentIpAddresses() {
+        if (_ipAddressDetectionState.value.isChecking) return
+        _ipAddressDetectionState.value = IpAddressDetectionState(isChecking = true)
+        viewModelScope.launch {
+            val lookup = PublicIpAddressDetector.detect(BoxVpnService.activeSocksEndpoint())
+            _ipAddressDetectionState.value = IpAddressDetectionState(
+                hasChecked = true,
+                ipv4Results = lookup.ipv4Results,
+                ipv6Results = lookup.ipv6Results
+            )
         }
     }
 

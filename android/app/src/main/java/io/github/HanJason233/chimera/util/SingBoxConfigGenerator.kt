@@ -9,7 +9,9 @@ import io.github.HanJason233.chimera.core.LocalSocksEndpoint
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.ProxyMode
+import io.github.HanJason233.chimera.data.model.IpFamilyRoutingSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
+import io.github.HanJason233.chimera.data.model.toIpFamilyRoutingSettings
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
@@ -42,7 +44,7 @@ class SingBoxConfigGenerator {
      * 生成完整的sing-box配置
      * @param nodes 所有可用节点列表
      * @param selectedNodeId 当前选择的节点ID（如果为null则默认选择auto）
-     * @param ipv6Mode IPv6 路由模式
+     * @param ipv6Mode 兼容旧调用方的 IPv6 路由模式。
      */
     fun generateConfig(
         nodes: List<Node>,
@@ -57,7 +59,8 @@ class SingBoxConfigGenerator {
         smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings(),
         ruleSetDirectory: File? = null,
         ruleSetUrls: Map<String, String> = emptyMap(),
-        failoverProbeEndpoints: Map<String, LocalSocksEndpoint> = emptyMap()
+        failoverProbeEndpoints: Map<String, LocalSocksEndpoint> = emptyMap(),
+        ipFamilySettings: IpFamilyRoutingSettings = ipv6Mode.toIpFamilyRoutingSettings()
     ): String {
         // 如果没有节点，生成一个空配置防止崩溃
         if (nodes.isEmpty()) {
@@ -87,7 +90,7 @@ class SingBoxConfigGenerator {
                 "dns",
                 createDnsConfig(
                     nodeDomains,
-                    ipv6Mode,
+                    ipFamilySettings,
                     dnsSettings,
                     lanInbound.enabled,
                     smartRoutingSettings,
@@ -377,6 +380,7 @@ class SingBoxConfigGenerator {
         }
     }
     
+    @Deprecated("Use IpFamilyRoutingSettings")
     private fun createDnsConfig(
         proxyMode: ProxyMode,
         nodeDomains: List<String>,
@@ -384,8 +388,22 @@ class SingBoxConfigGenerator {
         dnsSettings: DnsSettings,
         lanInboundEnabled: Boolean
     ): JsonObject = createDnsConfig(
+        proxyMode,
         nodeDomains,
-        ipv6Mode,
+        ipv6Mode.toIpFamilyRoutingSettings(),
+        dnsSettings,
+        lanInboundEnabled
+    )
+
+    private fun createDnsConfig(
+        proxyMode: ProxyMode,
+        nodeDomains: List<String>,
+        ipFamilySettings: IpFamilyRoutingSettings,
+        dnsSettings: DnsSettings,
+        lanInboundEnabled: Boolean
+    ): JsonObject = createDnsConfig(
+        nodeDomains,
+        ipFamilySettings,
         dnsSettings,
         lanInboundEnabled,
         SmartRoutingSettings(),
@@ -397,9 +415,26 @@ class SingBoxConfigGenerator {
         } else emptyList()
     )
 
+    @Deprecated("Use IpFamilyRoutingSettings")
     private fun createDnsConfig(
         nodeDomains: List<String>,
         ipv6Mode: IPv6RoutingMode,
+        dnsSettings: DnsSettings,
+        lanInboundEnabled: Boolean,
+        smartRoutingSettings: SmartRoutingSettings,
+        smartInboundTags: List<String>
+    ): JsonObject = createDnsConfig(
+        nodeDomains,
+        ipv6Mode.toIpFamilyRoutingSettings(),
+        dnsSettings,
+        lanInboundEnabled,
+        smartRoutingSettings,
+        smartInboundTags
+    )
+
+    private fun createDnsConfig(
+        nodeDomains: List<String>,
+        ipFamilySettings: IpFamilyRoutingSettings,
         dnsSettings: DnsSettings,
         lanInboundEnabled: Boolean,
         smartRoutingSettings: SmartRoutingSettings,
@@ -422,7 +457,7 @@ class SingBoxConfigGenerator {
                         domainResolver = "dns-local",
                         serverAddressStrategy = resolveDnsStrategy(
                             dnsSettings.serverDomainStrategy,
-                            ipv6Mode,
+                            ipFamilySettings,
                             forServerAddress = true
                         )
                     )
@@ -438,7 +473,7 @@ class SingBoxConfigGenerator {
                         domainResolver = "dns-direct",
                         serverAddressStrategy = resolveDnsStrategy(
                             dnsSettings.serverDomainStrategy,
-                            ipv6Mode,
+                            ipFamilySettings,
                             forServerAddress = true
                         )
                     )
@@ -454,7 +489,7 @@ class SingBoxConfigGenerator {
                 addProperty("server", "dns-direct")
                 addProperty("strategy", resolveDnsStrategy(
                     dnsSettings.directDomainStrategy,
-                    ipv6Mode
+                    ipFamilySettings
                 ))
             })
         }
@@ -493,7 +528,7 @@ class SingBoxConfigGenerator {
                     addProperty("server", "dns-direct")
                     addProperty("strategy", resolveDnsStrategy(
                         dnsSettings.directDomainStrategy,
-                        ipv6Mode
+                        ipFamilySettings
                     ))
                 })
             }
@@ -503,7 +538,7 @@ class SingBoxConfigGenerator {
                 addProperty("server", "dns-direct")
                 addProperty("strategy", resolveDnsStrategy(
                     dnsSettings.directDomainStrategy,
-                    ipv6Mode
+                    ipFamilySettings
                 ))
             })
         }
@@ -513,8 +548,12 @@ class SingBoxConfigGenerator {
             servers.add(JsonObject().apply {
                 addProperty("type", "fakeip")
                 addProperty("tag", "dns-fake")
-                addProperty("inet4_range", "198.18.0.0/15")
-                addProperty("inet6_range", "fc00::/18")
+                if (ipFamilySettings.normalized().ipv4Enabled) {
+                    addProperty("inet4_range", "198.18.0.0/15")
+                }
+                if (ipFamilySettings.normalized().ipv6Enabled) {
+                    addProperty("inet6_range", "fc00::/18")
+                }
             })
             rules.add(JsonObject().apply {
                 add("inbound", JsonArray().apply {
@@ -532,7 +571,7 @@ class SingBoxConfigGenerator {
             addProperty("final", "dns-remote")
             addProperty("strategy", resolveDnsStrategy(
                 dnsSettings.remoteDomainStrategy,
-                ipv6Mode
+                ipFamilySettings
             ))
         }
     }
@@ -578,23 +617,18 @@ class SingBoxConfigGenerator {
         })
     }
 
+    @Deprecated("Use IpFamilyRoutingSettings")
     private fun resolveDnsStrategy(
         strategy: DnsDomainStrategy,
         ipv6Mode: IPv6RoutingMode,
         forServerAddress: Boolean = false
-    ): String = when (strategy) {
-        DnsDomainStrategy.AUTO -> if (forServerAddress) {
-            // 与 NekoBox 一致：DNS 服务器地址默认优先使用 IPv4，减少启动时的解析失败。
-            "prefer_ipv4"
-        } else {
-            when (ipv6Mode) {
-                IPv6RoutingMode.PREFER -> "prefer_ipv6"
-                IPv6RoutingMode.ENABLED -> "prefer_ipv4"
-                IPv6RoutingMode.DISABLED -> "ipv4_only"
-            }
-        }
-        else -> strategy.configValue
-    }
+    ): String = resolveDnsStrategy(strategy, ipv6Mode.toIpFamilyRoutingSettings(), forServerAddress)
+
+    private fun resolveDnsStrategy(
+        strategy: DnsDomainStrategy,
+        ipFamilySettings: IpFamilyRoutingSettings,
+        forServerAddress: Boolean = false
+    ): String = ipFamilySettings.resolveDnsStrategy(strategy, forServerAddress).configValue
     
     private fun createInbounds(endpoint: LocalSocksEndpoint?): JsonArray =
         createInbounds(endpoint, LanInboundSettings())

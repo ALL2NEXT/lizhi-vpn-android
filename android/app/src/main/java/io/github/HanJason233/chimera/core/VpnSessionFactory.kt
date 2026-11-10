@@ -75,7 +75,7 @@ internal class VpnSessionFactory(
                 context,
                 host,
                 prepared.endpoint,
-                prepared.core.request.settings!!.ipv6RoutingMode,
+                prepared.core.request.settings!!.ipFamilySettings,
                 onFailure
             )
             combineCoreSession(core, adapter)

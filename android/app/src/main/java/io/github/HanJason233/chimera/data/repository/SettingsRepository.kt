@@ -12,7 +12,11 @@ import org.json.JSONObject
 import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
+import io.github.HanJason233.chimera.data.model.IpAddressFamily
+import io.github.HanJason233.chimera.data.model.IpFamilyRoutingSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
+import io.github.HanJason233.chimera.data.model.toIpFamilyRoutingSettings
+import io.github.HanJason233.chimera.data.model.toLegacyIPv6RoutingMode
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconEffect
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
@@ -52,7 +56,7 @@ import java.util.UUID
 
 data class VpnRuntimeSettings(
     val proxyMode: ProxyMode,
-    val ipv6RoutingMode: IPv6RoutingMode,
+    val ipFamilySettings: IpFamilyRoutingSettings,
     val hysteriaUpMbps: Int,
     val hysteriaDownMbps: Int,
     val protocolCoreSettings: ProtocolCoreSettings,
@@ -60,7 +64,34 @@ data class VpnRuntimeSettings(
     val dnsSettings: DnsSettings = DnsSettings(),
     val smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings(),
     val perAppInboundSettings: PerAppInboundSettings = PerAppInboundSettings()
-)
+) {
+    @Deprecated("Use ipFamilySettings")
+    val ipv6RoutingMode: IPv6RoutingMode
+        get() = ipFamilySettings.toLegacyIPv6RoutingMode()
+
+    @Deprecated("Use the IpFamilyRoutingSettings constructor")
+    constructor(
+        proxyMode: ProxyMode,
+        ipv6RoutingMode: IPv6RoutingMode,
+        hysteriaUpMbps: Int,
+        hysteriaDownMbps: Int,
+        protocolCoreSettings: ProtocolCoreSettings,
+        lanInbound: LanInboundSettings = LanInboundSettings(),
+        dnsSettings: DnsSettings = DnsSettings(),
+        smartRoutingSettings: SmartRoutingSettings = SmartRoutingSettings(),
+        perAppInboundSettings: PerAppInboundSettings = PerAppInboundSettings()
+    ) : this(
+        proxyMode,
+        ipv6RoutingMode.toIpFamilyRoutingSettings(),
+        hysteriaUpMbps,
+        hysteriaDownMbps,
+        protocolCoreSettings,
+        lanInbound,
+        dnsSettings,
+        smartRoutingSettings,
+        perAppInboundSettings
+    )
+}
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -136,8 +167,11 @@ class SettingsRepository(
         private val OFFICIAL_SUBSCRIPTION_VERSIONS_SCOPE =
             stringPreferencesKey("official_subscription_versions_scope")
         
-        // IPv6 路由设置
-        private val IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
+        // 旧版模式仅用于兼容读取，并迁移到新的地址族设置。
+        private val LEGACY_IPV6_ROUTING_MODE = stringPreferencesKey("ipv6_routing_mode")
+        private val IPV4_ROUTING_ENABLED = booleanPreferencesKey("ipv4_routing_enabled")
+        private val IPV6_ROUTING_ENABLED = booleanPreferencesKey("ipv6_routing_enabled")
+        private val IP_ROUTING_PREFERRED_FAMILY = stringPreferencesKey("ip_routing_preferred_family")
 
         // DNS 设置（与 NekoBox 的远程/直连及策略分组对应）
         private val DNS_REMOTE = stringPreferencesKey("dns_remote")
@@ -396,10 +430,7 @@ class SettingsRepository(
             ?: io.github.HanJason233.chimera.AppConfig.HYSTERIA_BANDWIDTH_ENABLED
         return VpnRuntimeSettings(
             proxyMode = mode,
-            ipv6RoutingMode = enumValueOrDefault(
-                preferences[IPV6_ROUTING_MODE],
-                IPv6RoutingMode.DISABLED
-            ),
+            ipFamilySettings = decodeIpFamilySettings(preferences),
             // 关闭 Hy2 带宽参数时必须向所有核心都传 0，避免运行时仍启用 Brutal。
             hysteriaUpMbps = if (hysteriaBandwidthEnabled) {
                 (preferences[HYSTERIA_UP_MBPS]
@@ -945,20 +976,63 @@ class SettingsRepository(
         }
     }
     
-    // IPv6 路由模式
-    val ipv6RoutingMode: Flow<IPv6RoutingMode> = store.data.map { preferences ->
-        val mode = preferences[IPV6_ROUTING_MODE] ?: IPv6RoutingMode.DISABLED.name
-        try {
-            IPv6RoutingMode.valueOf(mode)
-        } catch (e: Exception) {
-            IPv6RoutingMode.DISABLED
+    val ipFamilySettings: Flow<IpFamilyRoutingSettings> = store.data.map(::decodeIpFamilySettings)
+
+    suspend fun setIpFamilySettings(settings: IpFamilyRoutingSettings) {
+        store.edit { preferences ->
+            preferences.writeIpFamilySettings(settings)
         }
     }
-    
-    suspend fun setIPv6RoutingMode(mode: IPv6RoutingMode) {
+
+    suspend fun setIpFamilyEnabled(family: IpAddressFamily, enabled: Boolean) {
         store.edit { preferences ->
-            preferences[IPV6_ROUTING_MODE] = mode.name
+            val current = decodeIpFamilySettings(preferences)
+            val updated = when (family) {
+                IpAddressFamily.IPV4 -> current.withIpv4Enabled(enabled)
+                IpAddressFamily.IPV6 -> current.withIpv6Enabled(enabled)
+            }
+            preferences.writeIpFamilySettings(updated)
         }
+    }
+
+    suspend fun setPreferredIpFamily(family: IpAddressFamily) {
+        store.edit { preferences ->
+            val current = decodeIpFamilySettings(preferences)
+            preferences.writeIpFamilySettings(current.withPreferredFamily(family))
+        }
+    }
+
+    @Deprecated("Use ipFamilySettings")
+    val ipv6RoutingMode: Flow<IPv6RoutingMode> = ipFamilySettings.map { it.toLegacyIPv6RoutingMode() }
+
+    @Deprecated("Use setIpFamilySettings")
+    suspend fun setIPv6RoutingMode(mode: IPv6RoutingMode) = setIpFamilySettings(mode.toIpFamilyRoutingSettings())
+
+    private fun decodeIpFamilySettings(preferences: Preferences): IpFamilyRoutingSettings {
+        val hasNewSettings = IPV4_ROUTING_ENABLED in preferences ||
+            IPV6_ROUTING_ENABLED in preferences || IP_ROUTING_PREFERRED_FAMILY in preferences
+        if (!hasNewSettings) {
+            val legacyMode = preferences[LEGACY_IPV6_ROUTING_MODE]
+                ?.let { runCatching { IPv6RoutingMode.valueOf(it) }.getOrNull() }
+            return (legacyMode?.toIpFamilyRoutingSettings() ?: IpFamilyRoutingSettings.DEFAULT).normalized()
+        }
+
+        val preferredFamily = preferences[IP_ROUTING_PREFERRED_FAMILY]
+            ?.let { runCatching { IpAddressFamily.valueOf(it) }.getOrNull() }
+            ?: IpAddressFamily.IPV4
+        return IpFamilyRoutingSettings(
+            ipv4Enabled = preferences[IPV4_ROUTING_ENABLED] ?: true,
+            ipv6Enabled = preferences[IPV6_ROUTING_ENABLED] ?: false,
+            preferredFamily = preferredFamily
+        ).normalized()
+    }
+
+    private fun MutablePreferences.writeIpFamilySettings(settings: IpFamilyRoutingSettings) {
+        val normalized = settings.normalized()
+        this[IPV4_ROUTING_ENABLED] = normalized.ipv4Enabled
+        this[IPV6_ROUTING_ENABLED] = normalized.ipv6Enabled
+        this[IP_ROUTING_PREFERRED_FAMILY] = normalized.preferredFamily.name
+        remove(LEGACY_IPV6_ROUTING_MODE)
     }
 
     val dnsSettings: Flow<DnsSettings> = store.data.map { preferences ->

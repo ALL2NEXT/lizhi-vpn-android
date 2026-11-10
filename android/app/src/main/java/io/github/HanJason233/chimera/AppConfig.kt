@@ -116,6 +116,7 @@ object AppConfig {
     // VPN
     const val VPN_MTU = 9000 // 固定核心 MTU，不提供用户配置入口
     const val VPN_DNS_PRIMARY = "8.8.8.8"
+    const val VPN_DNS_PRIMARY_IPV6 = "2001:4860:4860::8888"
     const val VPN_DNS_CHINA = "223.5.5.5" // 国内 DNS（智能分流模式使用）
     val HTTP_USER_AGENT: String
         get() = "Chimera/${io.github.HanJason233.chimera.BuildConfig.VERSION_NAME}"

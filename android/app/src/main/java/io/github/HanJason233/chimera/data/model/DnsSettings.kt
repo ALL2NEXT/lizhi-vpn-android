@@ -2,7 +2,7 @@ package io.github.HanJason233.chimera.data.model
 
 import java.net.URI
 
-/** DNS 域名解析策略；auto 会根据 IPv6 路由模式选择实际策略。 */
+/** DNS 域名解析策略；auto 会根据启用的 IP 协议和优先项选择实际策略。 */
 enum class DnsDomainStrategy(
     val configValue: String,
     val displayName: String

@@ -2,21 +2,36 @@ package io.github.HanJason233.chimera.core.hev
 
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
+import io.github.HanJason233.chimera.data.model.IpFamilyRoutingSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
+import io.github.HanJason233.chimera.data.model.toIpFamilyRoutingSettings
 import io.github.HanJason233.chimera.platform.IpPrefix
 import io.github.HanJason233.chimera.platform.TunnelSpec
 
-/** HEV's external-TUN configuration; the core behind it only needs SOCKS5. */
+/** HEV 的外部 TUN 配置；后端核心只需提供 SOCKS5 入站。 */
 internal object HevSocksTunConfig {
-    fun tunnel(mode: IPv6RoutingMode): TunnelSpec {
-        val addresses = mutableListOf(IpPrefix("172.19.0.1", 30))
-        val routes = mutableListOf(IpPrefix("0.0.0.0", 0))
-        if (mode != IPv6RoutingMode.DISABLED) {
+    fun tunnel(settings: IpFamilyRoutingSettings): TunnelSpec {
+        val normalized = settings.normalized()
+        val addresses = mutableListOf<IpPrefix>()
+        val routes = mutableListOf<IpPrefix>()
+        if (normalized.ipv4Enabled) {
+            addresses += IpPrefix("172.19.0.1", 30)
+            routes += IpPrefix("0.0.0.0", 0)
+        }
+        if (normalized.ipv6Enabled) {
             addresses += IpPrefix("fdfe:dcba:9876::1", 126)
             routes += IpPrefix("::", 0)
         }
-        return TunnelSpec(AppConfig.VPN_MTU, addresses, routes, listOf(AppConfig.VPN_DNS_PRIMARY))
+        val dnsServer = if (normalized.ipv4Enabled) {
+            AppConfig.VPN_DNS_PRIMARY
+        } else {
+            AppConfig.VPN_DNS_PRIMARY_IPV6
+        }
+        return TunnelSpec(AppConfig.VPN_MTU, addresses, routes, listOf(dnsServer))
     }
+
+    @Deprecated("Use IpFamilyRoutingSettings")
+    fun tunnel(mode: IPv6RoutingMode): TunnelSpec = tunnel(mode.toIpFamilyRoutingSettings())
 
     fun render(endpoint: LocalSocksEndpoint): String = buildString {
         appendLine("tunnel:")

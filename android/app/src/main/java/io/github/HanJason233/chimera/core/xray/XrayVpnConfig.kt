@@ -7,7 +7,7 @@ import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.core.CoreRequest
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
-import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
+import io.github.HanJason233.chimera.data.model.IpFamilyRoutingSettings
 import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
@@ -127,6 +127,7 @@ internal object XrayVpnConfig {
         }
         if (request.isVpn) {
             val settings = request.settings!!
+            val ipFamilySettings = settings.ipFamilySettings.normalized()
             val dnsSettings = settings.dnsSettings
             // 全局与智能模式使用各自的规则集，均需作用于 VPN 的 SOCKS 入站。
             val routingInboundTags = buildList {
@@ -135,11 +136,7 @@ internal object XrayVpnConfig {
                     add("lan-socks-in")
                 }
             }
-            val strategy = when (settings.ipv6RoutingMode) {
-                IPv6RoutingMode.DISABLED -> "UseIPv4"
-                IPv6RoutingMode.PREFER -> "UseIPv6v4"
-                IPv6RoutingMode.ENABLED -> "UseIPv4v6"
-            }
+            val strategy = ipFamilySettings.xrayTargetStrategy()
             base.getAsJsonArray("outbounds").forEach { element ->
                 val outbound = element.asJsonObject
                 if (outbound.get("protocol").asString == "freedom") {
@@ -171,13 +168,8 @@ internal object XrayVpnConfig {
                 })
             })
             if (dnsSettings.fakeDnsEnabled) {
-                base.add("fakeDns", if (settings.ipv6RoutingMode == IPv6RoutingMode.DISABLED) {
-                    JsonObject().apply {
-                        addProperty("ipPool", "198.18.0.0/15")
-                        addProperty("poolSize", 65_535)
-                    }
-                } else {
-                    JsonArray().apply {
+                base.add("fakeDns", when {
+                    ipFamilySettings.ipv4Enabled && ipFamilySettings.ipv6Enabled -> JsonArray().apply {
                         add(JsonObject().apply {
                             addProperty("ipPool", "198.18.0.0/15")
                             addProperty("poolSize", 32_768)
@@ -186,6 +178,14 @@ internal object XrayVpnConfig {
                             addProperty("ipPool", "fc00::/18")
                             addProperty("poolSize", 32_768)
                         })
+                    }
+                    ipFamilySettings.ipv4Enabled -> JsonObject().apply {
+                        addProperty("ipPool", "198.18.0.0/15")
+                        addProperty("poolSize", 65_535)
+                    }
+                    else -> JsonObject().apply {
+                        addProperty("ipPool", "fc00::/18")
+                        addProperty("poolSize", 65_535)
                     }
                 })
                 base.getAsJsonArray("inbounds").forEach { element ->
@@ -276,7 +276,7 @@ internal object XrayVpnConfig {
             base.add("dns", JsonObject().apply {
                 addProperty("queryStrategy", resolveXrayDnsStrategy(
                     dnsSettings.remoteDomainStrategy,
-                    settings.ipv6RoutingMode
+                    ipFamilySettings
                 ))
                 addProperty("disableFallbackIfMatch", true)
                 add("servers", JsonArray().apply {
@@ -289,7 +289,7 @@ internal object XrayVpnConfig {
                         addProperty("skipFallback", true)
                         addProperty("queryStrategy", resolveXrayDnsStrategy(
                             dnsSettings.directDomainStrategy,
-                            settings.ipv6RoutingMode
+                            ipFamilySettings
                         ))
                         add("domains", localDomains)
                     })
@@ -300,7 +300,7 @@ internal object XrayVpnConfig {
                             addProperty("finalQuery", true)
                             addProperty("queryStrategy", resolveXrayDnsStrategy(
                                 dnsSettings.remoteDomainStrategy,
-                                settings.ipv6RoutingMode
+                                ipFamilySettings
                             ))
                         })
                     }
@@ -312,7 +312,7 @@ internal object XrayVpnConfig {
                         addProperty("tag", "dns-remote")
                         addProperty("queryStrategy", resolveXrayDnsStrategy(
                             dnsSettings.remoteDomainStrategy,
-                            settings.ipv6RoutingMode
+                            ipFamilySettings
                         ))
                     })
                 })
@@ -401,16 +401,12 @@ internal object XrayVpnConfig {
 
     private fun resolveXrayDnsStrategy(
         strategy: DnsDomainStrategy,
-        ipv6Mode: IPv6RoutingMode
-    ): String = when (strategy) {
-        DnsDomainStrategy.AUTO -> when (ipv6Mode) {
-            IPv6RoutingMode.DISABLED -> "UseIPv4"
-            IPv6RoutingMode.PREFER -> "UseIPv6v4"
-            IPv6RoutingMode.ENABLED -> "UseIPv4v6"
-        }
+        ipFamilySettings: IpFamilyRoutingSettings
+    ): String = when (ipFamilySettings.resolveDnsStrategy(strategy)) {
         DnsDomainStrategy.IPV4_ONLY -> "UseIPv4"
         DnsDomainStrategy.IPV6_ONLY -> "UseIPv6"
         DnsDomainStrategy.PREFER_IPV6 -> "UseIPv6v4"
         DnsDomainStrategy.PREFER_IPV4 -> "UseIPv4v6"
+        DnsDomainStrategy.AUTO -> ipFamilySettings.xrayTargetStrategy()
     }
 }

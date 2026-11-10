@@ -1,24 +1,31 @@
 package io.github.HanJason233.chimera.data.model
 
-/**
- * IPv6 路由模式
- */
+/** 为迁移旧版本保存的 IPv6 路由设置而保留的兼容枚举。 */
+@Deprecated("Use IpFamilyRoutingSettings")
 enum class IPv6RoutingMode {
-    /**
-     * 禁用 IPv6 (默认)
-     * DNS策略: prefer_ipv4, 无 inet6_address
-     */
     DISABLED,
-    
-    /**
-     * 启用 IPv6 (双栈)
-     * DNS策略: prefer_ipv4, 添加 inet6_address
-     */
     ENABLED,
-    
-    /**
-     * 优先 IPv6
-     * DNS策略: prefer_ipv6, 添加 inet6_address
-     */
     PREFER
+}
+
+@Deprecated("Use IpFamilyRoutingSettings")
+fun IPv6RoutingMode.toIpFamilyRoutingSettings(): IpFamilyRoutingSettings = when (this) {
+    IPv6RoutingMode.DISABLED -> IpFamilyRoutingSettings()
+    IPv6RoutingMode.ENABLED -> IpFamilyRoutingSettings(
+        ipv4Enabled = true,
+        ipv6Enabled = true,
+        preferredFamily = IpAddressFamily.IPV4
+    )
+    IPv6RoutingMode.PREFER -> IpFamilyRoutingSettings(
+        ipv4Enabled = true,
+        ipv6Enabled = true,
+        preferredFamily = IpAddressFamily.IPV6
+    )
+}
+
+@Deprecated("Use IpFamilyRoutingSettings")
+fun IpFamilyRoutingSettings.toLegacyIPv6RoutingMode(): IPv6RoutingMode = when {
+    !ipv6Enabled -> IPv6RoutingMode.DISABLED
+    preferredFamily == IpAddressFamily.IPV6 -> IPv6RoutingMode.PREFER
+    else -> IPv6RoutingMode.ENABLED
 }
