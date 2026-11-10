@@ -6,6 +6,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import io.github.HanJason233.chimera.data.model.IpAddressProbeResult
+import io.github.HanJason233.chimera.data.model.IpAddressProbeSource
+import io.github.HanJason233.chimera.data.model.IpAddressTestSettings
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
 import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
 import okhttp3.OkHttpClient
@@ -22,7 +24,7 @@ internal data class PublicIpAddressLookup(
 /** 并发请求多个 IPv4、IPv6 回显服务，供设置页汇总出口地址。 */
 internal object PublicIpAddressDetector {
     private data class ProbeEndpoint(
-        val source: String,
+        val source: IpAddressProbeSource,
         val url: String,
         val isIpv6: Boolean
     )
@@ -32,43 +34,71 @@ internal object PublicIpAddressDetector {
         val normalized: String
     )
 
-    // 使用不同服务和主机名，覆盖可能按域名或线路分流的出口。
-    private val endpoints = listOf(
-        ProbeEndpoint("ipify", "https://api.ipify.org", isIpv6 = false),
-        ProbeEndpoint("IPLark", "https://iplark.com/ipapi/public/ip", isIpv6 = false),
-        ProbeEndpoint("icanhazip", "https://ipv4.icanhazip.com", isIpv6 = false),
-        ProbeEndpoint("ipify", "https://api6.ipify.org", isIpv6 = true),
-        ProbeEndpoint("IPLark", "https://6.iplark.com/ip", isIpv6 = true),
-        ProbeEndpoint("icanhazip", "https://ipv6.icanhazip.com", isIpv6 = true)
-    )
-
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .callTimeout(8, TimeUnit.SECONDS)
-        .build()
+    private val baseClient = OkHttpClient()
 
     /** VPN 在线时经当前会话的 SOCKS 入站探测，否则使用手机当前网络直连。 */
-    suspend fun detect(socksEndpoint: LocalSocksEndpoint?): PublicIpAddressLookup = coroutineScope {
+    suspend fun detect(
+        socksEndpoint: LocalSocksEndpoint?,
+        settings: IpAddressTestSettings
+    ): PublicIpAddressLookup = coroutineScope {
+        val normalized = settings.normalized()
+        val sources = normalized.enabledProbeSources.sortedBy { it.ordinal }
+        val endpoints = buildList {
+            if (normalized.ipv4Enabled) {
+                sources.forEach { source -> add(ProbeEndpoint(source, endpointUrl(source, false), false)) }
+            }
+            if (normalized.ipv6Enabled) {
+                sources.forEach { source -> add(ProbeEndpoint(source, endpointUrl(source, true), true)) }
+            }
+        }
+        val timeoutSeconds = normalized.timeoutSeconds.toLong()
+        val timeoutMs = timeoutSeconds * 1_000L
+        val client = baseClient.newBuilder()
+            .connectTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .callTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .build()
         val results = endpoints.map { probe ->
-            async(Dispatchers.IO) { queryAddress(probe, endpoint = socksEndpoint) }
+            async(Dispatchers.IO) {
+                probe to queryAddress(probe, socksEndpoint, client, timeoutMs)
+            }
         }.awaitAll()
         PublicIpAddressLookup(
-            ipv4Results = results.filterIndexed { index, _ -> !endpoints[index].isIpv6 },
-            ipv6Results = results.filterIndexed { index, _ -> endpoints[index].isIpv6 }
+            ipv4Results = results.filterNot { (probe, _) -> probe.isIpv6 }.map { it.second },
+            ipv6Results = results.filter { (probe, _) -> probe.isIpv6 }.map { it.second }
         )
+    }
+
+    private fun endpointUrl(source: IpAddressProbeSource, isIpv6: Boolean): String = when (source) {
+        IpAddressProbeSource.IPIFY -> if (isIpv6) {
+            "https://api6.ipify.org"
+        } else {
+            "https://api.ipify.org"
+        }
+        IpAddressProbeSource.IPLARK -> if (isIpv6) {
+            "https://6.iplark.com/ip"
+        } else {
+            "https://iplark.com/ipapi/public/ip"
+        }
+        IpAddressProbeSource.ICANHAZIP -> if (isIpv6) {
+            "https://ipv6.icanhazip.com"
+        } else {
+            "https://ipv4.icanhazip.com"
+        }
     }
 
     private fun queryAddress(
         probe: ProbeEndpoint,
-        endpoint: LocalSocksEndpoint?
+        endpoint: LocalSocksEndpoint?,
+        client: OkHttpClient,
+        timeoutMs: Long
     ): IpAddressProbeResult {
         return try {
             val value = if (endpoint != null) {
                 val response = Socks5HttpProbe.fetch(
                     endpoint = endpoint,
                     targetUrl = probe.url,
-                    timeoutMs = 8_000L,
+                    timeoutMs = timeoutMs,
                     followRedirects = false,
                     maxBodyBytes = 2_048
                 )
@@ -80,11 +110,11 @@ internal object PublicIpAddressDetector {
                 }
             }
             val parsed = value?.trim()?.let { parseAddress(it, probe.isIpv6) }
-            IpAddressProbeResult(probe.source, parsed?.display, parsed?.normalized)
+            IpAddressProbeResult(probe.source.displayName, parsed?.display, parsed?.normalized)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            IpAddressProbeResult(probe.source, null)
+            IpAddressProbeResult(probe.source.displayName, null)
         }
     }
 

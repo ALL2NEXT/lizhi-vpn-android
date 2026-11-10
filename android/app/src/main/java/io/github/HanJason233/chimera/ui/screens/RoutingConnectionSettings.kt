@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -19,7 +18,6 @@ import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.SwapHoriz
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -44,9 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
-import io.github.HanJason233.chimera.data.model.IpAddressDetectionState
 import io.github.HanJason233.chimera.data.model.IpAddressFamily
-import io.github.HanJason233.chimera.data.model.IpAddressProbeResult
 import io.github.HanJason233.chimera.ui.components.AppAlertDialog
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.ui.components.SettingsListChoiceRow
@@ -143,38 +139,18 @@ fun DnsSettingsScreen(
 @Composable
 internal fun RoutingConnectionSettings(viewModel: MainViewModel) {
     val ipFamilySettings by viewModel.ipFamilySettings.collectAsStateWithLifecycle()
-    val ipAddressDetectionState by viewModel.ipAddressDetectionState.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         RoutingSettingsSection(title = "路由设置") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "IP 协议",
-                    modifier = Modifier.weight(1f),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                TextButton(
-                    enabled = !ipAddressDetectionState.isChecking,
-                    onClick = viewModel::detectCurrentIpAddresses
-                ) {
-                    if (ipAddressDetectionState.isChecking) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(if (ipAddressDetectionState.hasChecked) "重新检测" else "检测")
-                    }
-                }
-            }
+            Text(
+                text = "IP 协议",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             val canSelectPriority = ipFamilySettings.ipv4Enabled && ipFamilySettings.ipv6Enabled
             IpFamilySettingRow(
                 title = "IPv4",
@@ -194,39 +170,10 @@ internal fun RoutingConnectionSettings(viewModel: MainViewModel) {
                 onEnabledChange = { viewModel.setIpFamilyEnabled(IpAddressFamily.IPV6, it) },
                 onPrioritySelected = { viewModel.setPreferredIpFamily(IpAddressFamily.IPV6) }
             )
-            when {
-                ipAddressDetectionState.isChecking -> Text(
-                    text = "正在并发检测 6 个探针…",
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                ipAddressDetectionState.hasChecked -> Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    IpFamilyProbeSummary("IPv4", ipAddressDetectionState.ipv4Results)
-                    IpFamilyProbeSummary("IPv6", ipAddressDetectionState.ipv6Results)
-                }
-            }
             Text(
                 text = "双栈时可选择优先协议；只启用一种时自动使用该协议。至少保留一种协议开启。关闭后，该类型流量不会进入 Chimera VPN，可能改走当前网络。",
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "6 个探针并发查询并合并相同地址，探针来自 ipify、IPLark 和 icanhazip。",
-                modifier = Modifier.padding(horizontal = 8.dp),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "VPN 已连接时经当前 Chimera 会话检测；未连接时直连手机网络。",
-                modifier = Modifier.padding(horizontal = 8.dp),
-                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -299,44 +246,6 @@ private fun IpFamilySettingRow(
                     .semantics { contentDescription = "启用 $title 路由" }
             )
         }
-    }
-}
-
-@Composable
-private fun IpFamilyProbeSummary(
-    title: String,
-    results: List<IpAddressProbeResult>
-) {
-    val uniqueAddresses = results
-        .mapNotNull { result -> result.address?.let { result.normalizedAddress to it } }
-        .distinctBy { it.first }
-        .map { it.second }
-
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(
-            text = if (uniqueAddresses.isEmpty()) {
-                "$title 出口：未检测到"
-            } else {
-                "$title 出口：${uniqueAddresses.size} 个不同地址"
-            },
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        if (uniqueAddresses.isNotEmpty()) {
-            Text(
-                text = uniqueAddresses.joinToString("、"),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Text(
-            text = "探针：" + results.joinToString("；") { result ->
-                "${result.source}：${result.address ?: "失败"}"
-            },
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 

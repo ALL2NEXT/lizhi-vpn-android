@@ -70,6 +70,8 @@ fun MainScreen(
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
     val linkTypeTestResult by viewModel.linkTypeTestResult.collectAsStateWithLifecycle()
     val homeSpeedTestSettings by viewModel.homeSpeedTestSettings.collectAsStateWithLifecycle()
+    val ipAddressTestSettings by viewModel.ipAddressTestSettings.collectAsStateWithLifecycle()
+    val ipAddressDetectionState by viewModel.ipAddressDetectionState.collectAsStateWithLifecycle()
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val homeTestNode by viewModel.homeTestNode.collectAsStateWithLifecycle()
     val selectedNodeGroupId by viewModel.selectedNodeGroupId.collectAsStateWithLifecycle()
@@ -239,9 +241,12 @@ fun MainScreen(
                     modifier = Modifier.fillMaxSize().padding(paddingValues)
                 ) {
                     var testsCardHeightPx by remember { mutableIntStateOf(0) }
+                    var ipTestCardHeightPx by remember { mutableIntStateOf(0) }
                     var selectionCardHeightPx by remember { mutableIntStateOf(0) }
                     val measuredCardsHeight = with(LocalDensity.current) {
-                        testsCardHeightPx.toDp() + selectionCardHeightPx.toDp()
+                        testsCardHeightPx.toDp() +
+                            (if (ipAddressTestSettings.showOnHome) ipTestCardHeightPx else 0).toDp() +
+                            selectionCardHeightPx.toDp()
                     }
                     val connectButtonSize = ((maxHeight - 48.dp - measuredCardsHeight) / 1.42f)
                         .coerceIn(84.dp, 215.dp)
@@ -264,6 +269,17 @@ fun MainScreen(
                             onInterruptTests = viewModel::forceCancelAllTests,
                             modifier = Modifier.onSizeChanged { testsCardHeightPx = it.height }
                         )
+
+                        if (ipAddressTestSettings.showOnHome) {
+                            HomeIpAddressTestCard(
+                                state = ipAddressDetectionState,
+                                settings = ipAddressTestSettings,
+                                onDetect = viewModel::detectCurrentIpAddresses,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onSizeChanged { ipTestCardHeightPx = it.height }
+                            )
+                        }
 
                         Spacer(modifier = Modifier.weight(1f))
 

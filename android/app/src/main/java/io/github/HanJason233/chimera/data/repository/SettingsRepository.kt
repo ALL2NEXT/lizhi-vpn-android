@@ -13,6 +13,8 @@ import io.github.HanJason233.chimera.data.model.BandwidthTestTargets
 import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
 import io.github.HanJason233.chimera.data.model.IpAddressFamily
+import io.github.HanJason233.chimera.data.model.IpAddressProbeSource
+import io.github.HanJason233.chimera.data.model.IpAddressTestSettings
 import io.github.HanJason233.chimera.data.model.IpFamilyRoutingSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
 import io.github.HanJason233.chimera.data.model.toIpFamilyRoutingSettings
@@ -158,6 +160,8 @@ class SettingsRepository(
             booleanPreferencesKey("group_manual_speed_test_enabled")
         private val LEGACY_HOME_LONG_PRESS_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_long_press_speed_test_enabled")
+        private val LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED =
+            booleanPreferencesKey("manual_ip_address_test_panel_enabled")
         
         // 订阅列表缓存
         private val SUBSCRIPTION_LIST_JSON = stringPreferencesKey("subscription_list_json")
@@ -230,6 +234,8 @@ class SettingsRepository(
         private val HOME_SPEED_TEST_SETTINGS_JSON = stringPreferencesKey("home_speed_test_settings_json")
         private val GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON =
             stringPreferencesKey("group_manual_speed_test_settings_json")
+        private val IP_ADDRESS_TEST_SETTINGS_JSON =
+            stringPreferencesKey("ip_address_test_settings_json")
 
     }
     
@@ -978,6 +984,16 @@ class SettingsRepository(
     
     val ipFamilySettings: Flow<IpFamilyRoutingSettings> = store.data.map(::decodeIpFamilySettings)
 
+    val ipAddressTestSettings: Flow<IpAddressTestSettings> = store.data.map(::decodeIpAddressTestSettings)
+
+    suspend fun setIpAddressTestSettings(settings: IpAddressTestSettings) {
+        store.edit { preferences ->
+            val normalized = settings.normalized()
+            preferences[IP_ADDRESS_TEST_SETTINGS_JSON] = encodeIpAddressTestSettings(normalized)
+            preferences.remove(LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED)
+        }
+    }
+
     suspend fun setIpFamilySettings(settings: IpFamilyRoutingSettings) {
         store.edit { preferences ->
             preferences.writeIpFamilySettings(settings)
@@ -1034,6 +1050,45 @@ class SettingsRepository(
         this[IP_ROUTING_PREFERRED_FAMILY] = normalized.preferredFamily.name
         remove(LEGACY_IPV6_ROUTING_MODE)
     }
+
+    private fun decodeIpAddressTestSettings(preferences: Preferences): IpAddressTestSettings {
+        val defaults = IpAddressTestSettings.DEFAULT.copy(
+            showOnHome = preferences[LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED]
+                ?: IpAddressTestSettings.DEFAULT.showOnHome
+        )
+        val json = runCatching {
+            JSONObject(preferences[IP_ADDRESS_TEST_SETTINGS_JSON].orEmpty())
+        }.getOrNull() ?: return defaults
+        val enabledSources = json.optJSONArray("enabledProbeSources")?.let { array ->
+            buildSet {
+                for (index in 0 until array.length()) {
+                    runCatching { IpAddressProbeSource.valueOf(array.optString(index)) }
+                        .getOrNull()
+                        ?.let(::add)
+                }
+            }
+        } ?: defaults.enabledProbeSources
+        return IpAddressTestSettings(
+            showOnHome = json.optBoolean("showOnHome", defaults.showOnHome),
+            ipv4Enabled = json.optBoolean("ipv4Enabled", defaults.ipv4Enabled),
+            ipv6Enabled = json.optBoolean("ipv6Enabled", defaults.ipv6Enabled),
+            enabledProbeSources = enabledSources,
+            timeoutSeconds = json.optInt("timeoutSeconds", defaults.timeoutSeconds)
+        ).normalized()
+    }
+
+    private fun encodeIpAddressTestSettings(settings: IpAddressTestSettings): String =
+        JSONObject().apply {
+            put("showOnHome", settings.showOnHome)
+            put("ipv4Enabled", settings.ipv4Enabled)
+            put("ipv6Enabled", settings.ipv6Enabled)
+            put("enabledProbeSources", JSONArray().apply {
+                IpAddressProbeSource.entries
+                    .filter(settings.enabledProbeSources::contains)
+                    .forEach { put(it.name) }
+            })
+            put("timeoutSeconds", settings.timeoutSeconds)
+        }.toString()
 
     val dnsSettings: Flow<DnsSettings> = store.data.map { preferences ->
         decodeDnsSettings(preferences)

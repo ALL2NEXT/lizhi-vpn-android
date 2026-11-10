@@ -574,6 +574,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         IpFamilyRoutingSettings.DEFAULT
     )
 
+    val ipAddressTestSettings = settingsRepository.ipAddressTestSettings.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        IpAddressTestSettings.DEFAULT
+    )
+
     private val _ipAddressDetectionState = MutableStateFlow(IpAddressDetectionState())
     val ipAddressDetectionState = _ipAddressDetectionState.asStateFlow()
 
@@ -3155,13 +3161,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun detectCurrentIpAddresses() {
         if (_ipAddressDetectionState.value.isChecking) return
         _ipAddressDetectionState.value = IpAddressDetectionState(isChecking = true)
+        val settings = ipAddressTestSettings.value.normalized()
         viewModelScope.launch {
-            val lookup = PublicIpAddressDetector.detect(BoxVpnService.activeSocksEndpoint())
+            val lookup = PublicIpAddressDetector.detect(
+                socksEndpoint = BoxVpnService.activeSocksEndpoint(),
+                settings = settings
+            )
             _ipAddressDetectionState.value = IpAddressDetectionState(
                 hasChecked = true,
                 ipv4Results = lookup.ipv4Results,
                 ipv6Results = lookup.ipv6Results
             )
+        }
+    }
+
+    fun setIpAddressTestSettings(settings: IpAddressTestSettings) {
+        viewModelScope.launch {
+            settingsRepository.setIpAddressTestSettings(settings)
         }
     }
 

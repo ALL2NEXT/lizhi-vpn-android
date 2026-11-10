@@ -59,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.HanJason233.chimera.data.model.IpAddressTestSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
 import io.github.HanJason233.chimera.data.model.isStageEnabled
@@ -77,6 +78,7 @@ fun SpeedTestSettingsScreen(
 ) {
     val homeSettings by viewModel.homeSpeedTestSettings.collectAsStateWithLifecycle()
     val manualSettings by viewModel.groupManualSpeedTestSettings.collectAsStateWithLifecycle()
+    val ipAddressTestSettings by viewModel.ipAddressTestSettings.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
 
@@ -107,6 +109,8 @@ fun SpeedTestSettingsScreen(
                 SpeedTestSettingsPage(
                     settings = if (isHomeTab) homeSettings else manualSettings,
                     isHomeTab = isHomeTab,
+                    ipAddressTestSettings = ipAddressTestSettings,
+                    onIpAddressTestSettingsChange = viewModel::setIpAddressTestSettings,
                     onSave = { settings ->
                         if (isHomeTab) {
                             viewModel.setHomeSpeedTestSettings(settings)
@@ -125,9 +129,12 @@ fun SpeedTestSettingsScreen(
 private fun SpeedTestSettingsPage(
     settings: SpeedTestSettings,
     isHomeTab: Boolean,
+    ipAddressTestSettings: IpAddressTestSettings,
+    onIpAddressTestSettingsChange: (IpAddressTestSettings) -> Unit,
     onSave: (SpeedTestSettings) -> Unit
 ) {
     var editingStage by remember { mutableStateOf<SpeedTestStage?>(null) }
+    var editingIpAddressSettings by remember { mutableStateOf(false) }
     var currentSettings by remember(settings) { mutableStateOf(settings) }
     var displayedStages by remember {
         mutableStateOf(normalizeSpeedTestStageOrder(settings.stageOrder))
@@ -334,13 +341,13 @@ private fun SpeedTestSettingsPage(
         if (settlingStage == stage) settlingStage = null
     }
 
-    BackHandler(enabled = editingStage != null) {
-        editingStage = null
+    BackHandler(enabled = editingStage != null || editingIpAddressSettings) {
+        if (editingIpAddressSettings) editingIpAddressSettings = false else editingStage = null
     }
 
     val selectedStage = editingStage
     Column(modifier = Modifier.fillMaxSize()) {
-        if (selectedStage == null) {
+        if (selectedStage == null && !editingIpAddressSettings) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -429,6 +436,32 @@ private fun SpeedTestSettingsPage(
                         )
                     }
                 }
+                if (!isHomeTab) {
+                    item(key = "ip-address-test-settings") {
+                        IpAddressTestSettingsSummaryCard(
+                            settings = ipAddressTestSettings,
+                            onClick = { editingIpAddressSettings = true }
+                        )
+                        Divider(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                    }
+                }
+            }
+        } else if (editingIpAddressSettings) {
+            Column(
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp)
+            ) {
+                TextButton(onClick = { editingIpAddressSettings = false }) {
+                    Icon(Icons.Outlined.ArrowBack, contentDescription = null)
+                    Text("返回测试项")
+                }
+                IpAddressTestSettingsEditorContent(
+                    settings = ipAddressTestSettings,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    onSettingsChange = onIpAddressTestSettingsChange
+                )
             }
         } else {
             Column(
@@ -440,7 +473,7 @@ private fun SpeedTestSettingsPage(
                 }
                 SpeedTestSettingsEditorContent(
                     settings = currentSettings,
-                    stage = selectedStage,
+                    stage = requireNotNull(selectedStage),
                     isHomeTab = isHomeTab,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     onSettingsChange = { updatedSettings ->
@@ -449,6 +482,47 @@ private fun SpeedTestSettingsPage(
                         onSave(settingsWithOrder)
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun IpAddressTestSettingsSummaryCard(
+    settings: IpAddressTestSettings,
+    onClick: () -> Unit
+) {
+    val enabledFamilies = buildList {
+        if (settings.ipv4Enabled) add("IPv4")
+        if (settings.ipv6Enabled) add("IPv6")
+    }.joinToString("/")
+    val enabledProbeCount = settings.enabledProbeSources.size *
+        (if (settings.ipv4Enabled) 1 else 0) +
+        settings.enabledProbeSources.size * (if (settings.ipv6Enabled) 1 else 0)
+    val summary = buildList {
+        add(if (settings.showOnHome) "首页显示" else "首页隐藏")
+        add(enabledFamilies)
+        add("$enabledProbeCount 个探针")
+        add("${settings.timeoutSeconds} 秒超时")
+    }.filter(String::isNotBlank).joinToString(" · ")
+
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("6. IP 出口检测", style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(summary, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+            }
+            IconButton(onClick = onClick) {
+                Icon(Icons.Outlined.Edit, contentDescription = "编辑 IP 出口检测设置")
             }
         }
     }
