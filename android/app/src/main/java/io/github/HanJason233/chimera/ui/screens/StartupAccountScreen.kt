@@ -132,9 +132,9 @@ fun StartupAccountScreen(
                     )
                     Text(
                         text = if (isRegistration) {
-                            "注册 Chimera，开启全新体验"
+                            "注册荔枝VPN，开启全新体验"
                         } else {
-                            "登录 Chimera，继续你的旅程"
+                            "登录荔枝VPN，继续你的旅程"
                         },
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

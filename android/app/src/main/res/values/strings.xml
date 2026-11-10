@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Chimera</string>
-    <string name="launcher_name_chimera">Chimera</string>
-    <string name="launcher_name_shield">Chimera Shield</string>
-    <string name="launcher_name_bolt">星桥</string>
+    <string name="app_name">荔枝VPN</string>
+    <string name="launcher_name_chimera">荔枝VPN</string>
+    <string name="launcher_name_shield">荔枝VPN（盾牌）</string>
+    <string name="launcher_name_bolt">荔枝VPN（闪电）</string>
     <string name="version">版本</string>
     <string name="vpn_notification_channel">VPN服务</string>
     <string name="per_app_inbound_settings">VPN作用范围</string>

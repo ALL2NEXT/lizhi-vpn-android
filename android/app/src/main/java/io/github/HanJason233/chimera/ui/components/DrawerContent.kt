@@ -30,7 +30,7 @@ fun DrawerContent(
     onOpenInboundOutbound: () -> Unit = {},
     onOpenSpeedTestSettings: () -> Unit = {},
     onOpenSkin: () -> Unit = {},
-    appDisplayName: String = "Chimera"
+    appDisplayName: String = "荔枝VPN"
 ) {
     Column(
         modifier = Modifier

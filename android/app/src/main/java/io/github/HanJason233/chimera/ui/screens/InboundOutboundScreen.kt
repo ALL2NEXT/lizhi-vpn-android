@@ -259,7 +259,7 @@ private fun InboundContent(viewModel: MainViewModel) {
                             onCopy = { uri ->
                                 val clipboard = context.getSystemService(ClipboardManager::class.java)
                                 clipboard?.setPrimaryClip(
-                                    ClipData.newPlainText("Chimera SOCKS5", uri)
+                                    ClipData.newPlainText("荔枝VPN SOCKS5", uri)
                                 )
                                 Toast.makeText(context, "URI 已复制", Toast.LENGTH_SHORT).show()
                             }
@@ -1053,7 +1053,7 @@ private fun buildSocksImportUri(address: String, settings: LanInboundSettings): 
     // v2rayN 等客户端的 SOCKS 导入器要求明文 URL 结构，不能使用整段 Base64。
     val username = Uri.encode(settings.username)
     val password = Uri.encode(settings.password)
-    return "socks://${username}:${password}@${address}:${settings.port}#Chimera-LAN"
+    return "socks://${username}:${password}@${address}:${settings.port}#LizhiVPN-LAN"
 }
 
 @Composable

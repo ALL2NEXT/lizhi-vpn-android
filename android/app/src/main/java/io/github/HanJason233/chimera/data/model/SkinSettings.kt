@@ -125,7 +125,7 @@ data class SkinSettings(
         )
 
     companion object {
-        const val DEFAULT_APP_DISPLAY_NAME = "Chimera"
+        const val DEFAULT_APP_DISPLAY_NAME = "荔枝VPN"
         const val DEFAULT_APP_ICON_PRESET_ID = "android"
         const val DEFAULT_BASE_COLOR_ARGB: Long = 0xFF37474FL
     }

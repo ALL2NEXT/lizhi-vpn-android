@@ -171,7 +171,7 @@ internal fun RoutingConnectionSettings(viewModel: MainViewModel) {
                 onPrioritySelected = { viewModel.setPreferredIpFamily(IpAddressFamily.IPV6) }
             )
             Text(
-                text = "双栈时可选择优先协议；只启用一种时自动使用该协议。至少保留一种协议开启。关闭后，该类型流量不会进入 Chimera VPN，可能改走当前网络。",
+                text = "双栈时可选择优先协议；只启用一种时自动使用该协议。至少保留一种协议开启。关闭后，该类型流量不会进入荔枝VPN，可能改走当前网络。",
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -220,7 +220,7 @@ private fun IpFamilySettingRow(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = if (enabled) "纳入 VPN 路由" else "不经 Chimera VPN",
+                text = if (enabled) "纳入 VPN 路由" else "不经荔枝VPN",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

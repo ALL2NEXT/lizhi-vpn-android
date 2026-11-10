@@ -331,7 +331,7 @@ fun CoreRoutingScreen(
                                         as? ClipboardManager
                                     clipboard?.setPrimaryClip(
                                         ClipData.newPlainText(
-                                            "Chimera 路由规则",
+                                            "荔枝VPN 路由规则",
                                             SmartRoutingRulesCodec.encode(routingSettings.rules)
                                         )
                                     )

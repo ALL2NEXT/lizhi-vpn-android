@@ -44,7 +44,7 @@ fun AboutDialog(
     feedbackUrl: String = "",
     onOpenBackendDialog: () -> Unit = {},
     telegramUrl: String = "",
-    appDisplayName: String = "Chimera",
+    appDisplayName: String = "荔枝VPN",
     appIconResourceId: Int = R.mipmap.ic_launcher,
     onDismiss: () -> Unit
 ) {
@@ -161,7 +161,7 @@ fun AboutDialog(
 
                     // App名字
                     Text(
-                        text = appDisplayName.trim().ifBlank { "Chimera" },
+                        text = appDisplayName.trim().ifBlank { "荔枝VPN" },
                         fontSize = if (isLargeScreen) 24.sp else 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -176,7 +176,7 @@ fun AboutDialog(
 
                     // 标语
                     Text(
-                        text = appDisplayName.trim().ifBlank { "Chimera" },
+                        text = appDisplayName.trim().ifBlank { "荔枝VPN" },
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

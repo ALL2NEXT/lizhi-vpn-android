@@ -118,7 +118,7 @@ internal class AndroidVpnHost(
         require(spec.addresses.isNotEmpty() && spec.routes.isNotEmpty()) {
             "TUN addresses and routes must not be empty"
         }
-        val builder = service.Builder().setSession("Chimera").setMtu(spec.mtu)
+        val builder = service.Builder().setSession("荔枝VPN").setMtu(spec.mtu)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
         spec.addresses.forEach { builder.addAddress(it.address, it.length) }
         spec.routes.forEach { builder.addRoute(it.address, it.length) }

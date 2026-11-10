@@ -12,9 +12,9 @@ data class LauncherIdentityPreset(
 object LauncherIdentityPresets {
     // 仅保留前三种名称和图标组合，供主题设置与桌面入口共用。
     val all = listOf(
-        LauncherIdentityPreset("android", "Chimera", R.mipmap.ic_launcher, "LauncherAliasAndroid"),
-        LauncherIdentityPreset("shield", "Chimera Shield", R.mipmap.ic_launcher_shield, "LauncherAliasShield"),
-        LauncherIdentityPreset("bolt", "星桥", R.mipmap.ic_launcher_bolt, "LauncherAliasBolt")
+        LauncherIdentityPreset("android", "荔枝VPN", R.mipmap.ic_launcher, "LauncherAliasAndroid"),
+        LauncherIdentityPreset("shield", "荔枝VPN（盾牌）", R.mipmap.ic_launcher_shield, "LauncherAliasShield"),
+        LauncherIdentityPreset("bolt", "荔枝VPN（闪电）", R.mipmap.ic_launcher_bolt, "LauncherAliasBolt")
     )
 
     fun find(id: String): LauncherIdentityPreset =
