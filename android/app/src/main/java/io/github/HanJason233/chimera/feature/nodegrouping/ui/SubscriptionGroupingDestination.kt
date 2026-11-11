@@ -124,10 +124,14 @@ internal fun SubscriptionGroupingDestination(
         testResults = testResults,
         displayedTestStage = testResultDisplaySelection.stage,
         testRunStartedAt = testResultDisplaySelection.runStartedAt,
+        testedNodeIds = testResultDisplaySelection.testedNodeIds,
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
         onRunManualGroupTest = { stage ->
             viewModel.runManualGroupTest(sourceNodes, stage)
+        },
+        onRunManualNodeTest = { node, stage ->
+            viewModel.runManualGroupTest(listOf(node), stage)
         },
         onClearTestResults = { groupNodes, onComplete ->
             viewModel.clearNodeTestResults(groupNodes, onComplete)

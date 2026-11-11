@@ -22,13 +22,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -161,11 +167,14 @@ internal fun NodeListItem(
     testStage: ManualGroupTestStage,
     testRunStartedAt: Long,
     isTestRunning: Boolean,
+    canStartTest: Boolean,
+    onTest: ((ManualGroupTestStage) -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     onEdit: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    var testMenuExpanded by remember(node.id) { mutableStateOf(false) }
     val protocolLabel = remember(node.type, node.rawLink, displaySettings, coreSettings) {
         node.nodeListProtocolLabel(displaySettings, coreSettings)
     }
@@ -261,8 +270,38 @@ internal fun NodeListItem(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (onShare != null || onEdit != null || onDelete != null) {
+                    if (onTest != null || onShare != null || onEdit != null || onDelete != null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            onTest?.let { test ->
+                                Box {
+                                    IconButton(
+                                        onClick = { testMenuExpanded = true },
+                                        enabled = canStartTest,
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Speed,
+                                            contentDescription = "测试节点",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = testMenuExpanded,
+                                        onDismissRequest = { testMenuExpanded = false }
+                                    ) {
+                                        ManualGroupTestStage.values().forEach { stage ->
+                                            DropdownMenuItem(
+                                                text = { Text(stage.displayName()) },
+                                                onClick = {
+                                                    testMenuExpanded = false
+                                                    test(stage)
+                                                },
+                                                enabled = canStartTest
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             onShare?.let { share ->
                                 IconButton(
                                     onClick = share,
@@ -374,4 +413,12 @@ internal fun NodeListItem(
             }
         }
     }
+}
+
+private fun ManualGroupTestStage.displayName(): String = when (this) {
+    ManualGroupTestStage.TCPING -> "TCPing"
+    ManualGroupTestStage.URL_TEST -> "URL Test"
+    ManualGroupTestStage.BANDWIDTH -> "带宽测速"
+    ManualGroupTestStage.LINK_TYPE -> "链路类型检测"
+    ManualGroupTestStage.IP_QUALITY -> "流媒体与 AI 解锁"
 }

@@ -195,6 +195,8 @@ class SettingsRepository(
         private val SELECTED_NODE_GROUP_ID = stringPreferencesKey("selected_node_group_id")
         private val NODE_LIST_TEST_RESULT_STAGE = stringPreferencesKey("node_list_test_result_stage")
         private val NODE_LIST_TEST_RUN_STARTED_AT = longPreferencesKey("node_list_test_run_started_at")
+        private val NODE_LIST_TEST_RESULT_NODE_IDS =
+            stringSetPreferencesKey("node_list_test_result_node_ids")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         // 请求超时保存在本机，首次获取后台配置时也能读取。
         private val SERVICE_REQUEST_TIMEOUT_MS = longPreferencesKey("service_request_timeout_ms")
@@ -287,7 +289,8 @@ class SettingsRepository(
             }.getOrDefault(ManualGroupTestStage.TCPING)
             NodeTestResultDisplaySelection(
                 stage = stage,
-                runStartedAt = preferences[NODE_LIST_TEST_RUN_STARTED_AT] ?: 0L
+                runStartedAt = preferences[NODE_LIST_TEST_RUN_STARTED_AT] ?: 0L,
+                testedNodeIds = preferences[NODE_LIST_TEST_RESULT_NODE_IDS] ?: emptySet()
             )
         }
 
@@ -325,6 +328,7 @@ class SettingsRepository(
         store.edit { preferences ->
             preferences[NODE_LIST_TEST_RESULT_STAGE] = selection.stage.name
             preferences[NODE_LIST_TEST_RUN_STARTED_AT] = selection.runStartedAt
+            preferences[NODE_LIST_TEST_RESULT_NODE_IDS] = selection.testedNodeIds
         }
     }
 

@@ -734,7 +734,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun runManualGroupTest(groupNodes: List<Node>, stage: ManualGroupTestStage) {
         val selection = NodeTestResultDisplaySelection(
             stage = stage,
-            runStartedAt = System.currentTimeMillis()
+            runStartedAt = System.currentTimeMillis(),
+            testedNodeIds = groupNodes.mapTo(mutableSetOf(), Node::id)
         )
         viewModelScope.launch {
             settingsRepository.setNodeTestResultDisplaySelection(selection)

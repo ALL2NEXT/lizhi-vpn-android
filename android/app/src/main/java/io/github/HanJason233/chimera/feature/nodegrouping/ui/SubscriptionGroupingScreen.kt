@@ -70,9 +70,11 @@ internal fun SubscriptionGroupingScreen(
     testResults: Map<String, HomeNodeTestResultsEntity>,
     displayedTestStage: ManualGroupTestStage,
     testRunStartedAt: Long,
+    testedNodeIds: Set<String>,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
+    onRunManualNodeTest: (Node, ManualGroupTestStage) -> Unit,
     onClearTestResults: (List<Node>, (String, Boolean) -> Unit) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
@@ -224,11 +226,13 @@ internal fun SubscriptionGroupingScreen(
                 testResults = testResults,
                 testStage = displayedTestStage,
                 testRunStartedAt = testRunStartedAt,
+                testedNodeIds = testedNodeIds,
                 selectedNodeId = selectedNodeId,
                 isTesting = isTesting,
                 nodeDisplaySettings = nodeDisplaySettings,
                 protocolCoreSettings = protocolCoreSettings,
                 onNodeSelected = handleNodeSelected,
+                onRunManualNodeTest = onRunManualNodeTest,
                 onShareNode = { node ->
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -237,6 +241,7 @@ internal fun SubscriptionGroupingScreen(
                     context.startActivity(Intent.createChooser(sendIntent, "分享节点链接"))
                 },
                 interactionEnabled = !isClosing,
+                canStartTest = !isTesting && !isClosing,
                 bottomContentPadding = bottomContentPadding,
                 canManageNodes = canManageNodes,
                 canDeleteNodes = canDeleteNodes,
@@ -485,13 +490,16 @@ private fun NodeListContent(
     testResults: Map<String, HomeNodeTestResultsEntity>,
     testStage: ManualGroupTestStage,
     testRunStartedAt: Long,
+    testedNodeIds: Set<String>,
     selectedNodeId: String?,
     isTesting: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onNodeSelected: (Node) -> Unit,
+    onRunManualNodeTest: (Node, ManualGroupTestStage) -> Unit,
     onShareNode: (Node) -> Unit,
     interactionEnabled: Boolean,
+    canStartTest: Boolean,
     bottomContentPadding: Dp,
     canManageNodes: Boolean,
     canDeleteNodes: Boolean,
@@ -556,6 +564,7 @@ private fun NodeListContent(
                             items = displayNodes,
                             key = { it.id }
                         ) { node ->
+                            val isTestTarget = node.id in testedNodeIds
                             NodeListItem(
                                 node = node,
                                 isSelected = node.id == selectedNodeId,
@@ -564,8 +573,10 @@ private fun NodeListContent(
                                 coreSettings = protocolCoreSettings,
                                 testResult = testResults[node.id],
                                 testStage = testStage,
-                                testRunStartedAt = testRunStartedAt,
-                                isTestRunning = isTesting && testRunStartedAt > 0L,
+                                testRunStartedAt = if (isTestTarget) testRunStartedAt else 0L,
+                                isTestRunning = isTesting && testRunStartedAt > 0L && isTestTarget,
+                                canStartTest = canStartTest,
+                                onTest = { stage -> onRunManualNodeTest(node, stage) },
                                 onShare = { onShareNode(node) },
                                 onEdit = if (canManageNodes) {
                                     { onEditNode(node) }
