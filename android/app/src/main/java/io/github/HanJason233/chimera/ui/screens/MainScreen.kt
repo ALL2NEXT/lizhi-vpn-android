@@ -71,6 +71,7 @@ fun MainScreen(
     val linkTypeTestResult by viewModel.linkTypeTestResult.collectAsStateWithLifecycle()
     val homeSpeedTestSettings by viewModel.homeSpeedTestSettings.collectAsStateWithLifecycle()
     val ipAddressTestSettings by viewModel.ipAddressTestSettings.collectAsStateWithLifecycle()
+    val homeModuleSettings by viewModel.homeModuleSettings.collectAsStateWithLifecycle()
     val ipAddressDetectionState by viewModel.ipAddressDetectionState.collectAsStateWithLifecycle()
     val currentNode by viewModel.currentNode.collectAsStateWithLifecycle()
     val homeTestNode by viewModel.homeTestNode.collectAsStateWithLifecycle()
@@ -245,8 +246,12 @@ fun MainScreen(
                     var selectionCardHeightPx by remember { mutableIntStateOf(0) }
                     val measuredCardsHeight = with(LocalDensity.current) {
                         testsCardHeightPx.toDp() +
-                            (if (ipAddressTestSettings.showOnHome) ipTestCardHeightPx else 0).toDp() +
-                            selectionCardHeightPx.toDp()
+                            (if (homeModuleSettings.showIpAddressTest) ipTestCardHeightPx else 0).toDp() +
+                            (if (homeModuleSettings.showSelectedGroup || homeModuleSettings.showSelectedNode) {
+                                selectionCardHeightPx
+                            } else {
+                                0
+                            }).toDp()
                     }
                     val connectButtonSize = ((maxHeight - 48.dp - measuredCardsHeight) / 1.42f)
                         .coerceIn(84.dp, 215.dp)
@@ -270,7 +275,7 @@ fun MainScreen(
                             modifier = Modifier.onSizeChanged { testsCardHeightPx = it.height }
                         )
 
-                        if (ipAddressTestSettings.showOnHome) {
+                        if (homeModuleSettings.showIpAddressTest) {
                             HomeIpAddressTestCard(
                                 state = ipAddressDetectionState,
                                 settings = ipAddressTestSettings,
@@ -324,25 +329,31 @@ fun MainScreen(
                             longClickActionLabel = "主页图标测速"
                         )
 
-                        HomeSelectionCard(
-                            name = selectedGroupName,
-                            groupType = selectedGroupType,
-                            node = currentNode,
-                            vpnState = vpnState,
-                            onGroupSwitchClick = {
-                                onBottomNavigationDestinationSelected(
-                                    if (selectedGroup is NodeGroupKey.Country) {
-                                        HomeDestination.NODE_GROUPING
-                                    } else {
-                                        HomeDestination.SUBSCRIPTION_GROUPING
-                                    }
-                                )
-                            },
-                            onNodeClick = { onOpenCurrentGroupDetails(selectedGroup, selectedGroupName) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .onSizeChanged { selectionCardHeightPx = it.height }
-                        )
+                        if (homeModuleSettings.showSelectedGroup || homeModuleSettings.showSelectedNode) {
+                            HomeSelectionCard(
+                                name = selectedGroupName,
+                                groupType = selectedGroupType,
+                                node = currentNode,
+                                vpnState = vpnState,
+                                showSelectedGroup = homeModuleSettings.showSelectedGroup,
+                                showSelectedNode = homeModuleSettings.showSelectedNode,
+                                onGroupSwitchClick = {
+                                    onBottomNavigationDestinationSelected(
+                                        if (selectedGroup is NodeGroupKey.Country) {
+                                            HomeDestination.NODE_GROUPING
+                                        } else {
+                                            HomeDestination.SUBSCRIPTION_GROUPING
+                                        }
+                                    )
+                                },
+                                onNodeClick = {
+                                    onOpenCurrentGroupDetails(selectedGroup, selectedGroupName)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onSizeChanged { selectionCardHeightPx = it.height }
+                            )
+                        }
                     }
                 }
             }

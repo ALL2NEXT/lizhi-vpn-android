@@ -16,6 +16,7 @@ import io.github.HanJason233.chimera.data.model.IpAddressFamily
 import io.github.HanJason233.chimera.data.model.IpAddressProbeSource
 import io.github.HanJason233.chimera.data.model.IpAddressTestSettings
 import io.github.HanJason233.chimera.data.model.IpFamilyRoutingSettings
+import io.github.HanJason233.chimera.data.model.HomeModuleSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
 import io.github.HanJason233.chimera.data.model.toIpFamilyRoutingSettings
 import io.github.HanJason233.chimera.data.model.toLegacyIPv6RoutingMode
@@ -236,6 +237,8 @@ class SettingsRepository(
             stringPreferencesKey("group_manual_speed_test_settings_json")
         private val IP_ADDRESS_TEST_SETTINGS_JSON =
             stringPreferencesKey("ip_address_test_settings_json")
+        private val HOME_MODULE_SETTINGS_JSON =
+            stringPreferencesKey("home_module_settings_json")
 
     }
     
@@ -985,11 +988,24 @@ class SettingsRepository(
     val ipFamilySettings: Flow<IpFamilyRoutingSettings> = store.data.map(::decodeIpFamilySettings)
 
     val ipAddressTestSettings: Flow<IpAddressTestSettings> = store.data.map(::decodeIpAddressTestSettings)
+    val homeModuleSettings: Flow<HomeModuleSettings> = store.data.map(::decodeHomeModuleSettings)
 
     suspend fun setIpAddressTestSettings(settings: IpAddressTestSettings) {
         store.edit { preferences ->
+            // 写入新版检测设置前，先把旧版面板开关迁移到首页模块配置。
+            if (HOME_MODULE_SETTINGS_JSON !in preferences) {
+                preferences[HOME_MODULE_SETTINGS_JSON] =
+                    encodeHomeModuleSettings(decodeHomeModuleSettings(preferences))
+            }
             val normalized = settings.normalized()
             preferences[IP_ADDRESS_TEST_SETTINGS_JSON] = encodeIpAddressTestSettings(normalized)
+            preferences.remove(LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED)
+        }
+    }
+
+    suspend fun setHomeModuleSettings(settings: HomeModuleSettings) {
+        store.edit { preferences ->
+            preferences[HOME_MODULE_SETTINGS_JSON] = encodeHomeModuleSettings(settings)
             preferences.remove(LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED)
         }
     }
@@ -1052,10 +1068,7 @@ class SettingsRepository(
     }
 
     private fun decodeIpAddressTestSettings(preferences: Preferences): IpAddressTestSettings {
-        val defaults = IpAddressTestSettings.DEFAULT.copy(
-            showOnHome = preferences[LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED]
-                ?: IpAddressTestSettings.DEFAULT.showOnHome
-        )
+        val defaults = IpAddressTestSettings.DEFAULT
         val json = runCatching {
             JSONObject(preferences[IP_ADDRESS_TEST_SETTINGS_JSON].orEmpty())
         }.getOrNull() ?: return defaults
@@ -1069,7 +1082,6 @@ class SettingsRepository(
             }
         } ?: defaults.enabledProbeSources
         return IpAddressTestSettings(
-            showOnHome = json.optBoolean("showOnHome", defaults.showOnHome),
             ipv4Enabled = json.optBoolean("ipv4Enabled", defaults.ipv4Enabled),
             ipv6Enabled = json.optBoolean("ipv6Enabled", defaults.ipv6Enabled),
             enabledProbeSources = enabledSources,
@@ -1079,7 +1091,6 @@ class SettingsRepository(
 
     private fun encodeIpAddressTestSettings(settings: IpAddressTestSettings): String =
         JSONObject().apply {
-            put("showOnHome", settings.showOnHome)
             put("ipv4Enabled", settings.ipv4Enabled)
             put("ipv6Enabled", settings.ipv6Enabled)
             put("enabledProbeSources", JSONArray().apply {
@@ -1088,6 +1099,36 @@ class SettingsRepository(
                     .forEach { put(it.name) }
             })
             put("timeoutSeconds", settings.timeoutSeconds)
+        }.toString()
+
+    private fun decodeHomeModuleSettings(preferences: Preferences): HomeModuleSettings {
+        val legacyIpPanelVisible = runCatching {
+            JSONObject(preferences[IP_ADDRESS_TEST_SETTINGS_JSON].orEmpty())
+                .optBoolean(
+                    "showOnHome",
+                    preferences[LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED]
+                        ?: HomeModuleSettings.DEFAULT.showIpAddressTest
+                )
+        }.getOrElse {
+            preferences[LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED]
+                ?: HomeModuleSettings.DEFAULT.showIpAddressTest
+        }
+        val defaults = HomeModuleSettings.DEFAULT.copy(showIpAddressTest = legacyIpPanelVisible)
+        val json = runCatching {
+            JSONObject(preferences[HOME_MODULE_SETTINGS_JSON].orEmpty())
+        }.getOrNull() ?: return defaults
+        return HomeModuleSettings(
+            showIpAddressTest = json.optBoolean("showIpAddressTest", defaults.showIpAddressTest),
+            showSelectedGroup = json.optBoolean("showSelectedGroup", defaults.showSelectedGroup),
+            showSelectedNode = json.optBoolean("showSelectedNode", defaults.showSelectedNode)
+        )
+    }
+
+    private fun encodeHomeModuleSettings(settings: HomeModuleSettings): String =
+        JSONObject().apply {
+            put("showIpAddressTest", settings.showIpAddressTest)
+            put("showSelectedGroup", settings.showSelectedGroup)
+            put("showSelectedNode", settings.showSelectedNode)
         }.toString()
 
     val dnsSettings: Flow<DnsSettings> = store.data.map { preferences ->

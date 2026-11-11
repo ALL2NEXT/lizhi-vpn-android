@@ -38,17 +38,6 @@ internal fun IpAddressTestSettingsEditorContent(
         modifier = modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        SettingsListSectionHeader("首页面板")
-        SettingsListSwitchRow(
-            icon = Icons.Outlined.Public,
-            title = "在首页显示检测面板",
-            subtitle = "面板只在首页手动点击检测，不参与优选测试或节点列表测试",
-            checked = settings.showOnHome,
-            onCheckedChange = { enabled ->
-                onSettingsChange(settings.copy(showOnHome = enabled))
-            }
-        )
-
         SettingsListSectionHeader("地址类型")
         SettingsListSwitchRow(
             icon = Icons.Outlined.Public,

@@ -500,7 +500,6 @@ private fun IpAddressTestSettingsSummaryCard(
         (if (settings.ipv4Enabled) 1 else 0) +
         settings.enabledProbeSources.size * (if (settings.ipv6Enabled) 1 else 0)
     val summary = buildList {
-        add(if (settings.showOnHome) "首页显示" else "首页隐藏")
         add(enabledFamilies)
         add("$enabledProbeCount 个探针")
         add("${settings.timeoutSeconds} 秒超时")

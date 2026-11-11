@@ -580,6 +580,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         IpAddressTestSettings.DEFAULT
     )
 
+    val homeModuleSettings = settingsRepository.homeModuleSettings.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        HomeModuleSettings.DEFAULT
+    )
+
     private val _ipAddressDetectionState = MutableStateFlow(IpAddressDetectionState())
     val ipAddressDetectionState = _ipAddressDetectionState.asStateFlow()
 
@@ -3178,6 +3184,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setIpAddressTestSettings(settings: IpAddressTestSettings) {
         viewModelScope.launch {
             settingsRepository.setIpAddressTestSettings(settings)
+        }
+    }
+
+    fun setHomeModuleSettings(settings: HomeModuleSettings) {
+        viewModelScope.launch {
+            settingsRepository.setHomeModuleSettings(settings)
         }
     }
 

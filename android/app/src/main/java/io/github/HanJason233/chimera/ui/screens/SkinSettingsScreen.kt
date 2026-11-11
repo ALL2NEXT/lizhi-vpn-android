@@ -35,9 +35,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VpnKey
@@ -270,6 +273,7 @@ fun SkinSettingsScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
+    val homeModuleSettings by viewModel.homeModuleSettings.collectAsStateWithLifecycle()
     val settings = skinSettings
 
     fun updateGlobalSettings(update: SkinSettings.() -> SkinSettings) {
@@ -388,6 +392,41 @@ fun SkinSettingsScreen(
                 optionLabel = { it.displayName },
                 onSelected = { style ->
                     updateGlobalSettings { copy(navigationStyle = style) }
+                }
+            )
+
+            SettingsListSectionHeader("首页模块")
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Public,
+                title = "显示 IP 出口检测",
+                subtitle = "",
+                checked = homeModuleSettings.showIpAddressTest,
+                onCheckedChange = { enabled ->
+                    viewModel.setHomeModuleSettings(
+                        homeModuleSettings.copy(showIpAddressTest = enabled)
+                    )
+                }
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.FolderOpen,
+                title = "显示选中组",
+                subtitle = "",
+                checked = homeModuleSettings.showSelectedGroup,
+                onCheckedChange = { enabled ->
+                    viewModel.setHomeModuleSettings(
+                        homeModuleSettings.copy(showSelectedGroup = enabled)
+                    )
+                }
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Dns,
+                title = "显示选中节点",
+                subtitle = "",
+                checked = homeModuleSettings.showSelectedNode,
+                onCheckedChange = { enabled ->
+                    viewModel.setHomeModuleSettings(
+                        homeModuleSettings.copy(showSelectedNode = enabled)
+                    )
                 }
             )
 

@@ -6,9 +6,8 @@ enum class IpAddressProbeSource(val displayName: String) {
     ICANHAZIP("icanhazip")
 }
 
-/** 首页手动 IP 出口检测的显示、协议、探针来源和超时设置。 */
+/** 首页手动 IP 出口检测的协议、探针来源和超时设置。 */
 data class IpAddressTestSettings(
-    val showOnHome: Boolean = true,
     val ipv4Enabled: Boolean = true,
     val ipv6Enabled: Boolean = true,
     val enabledProbeSources: Set<IpAddressProbeSource> = IpAddressProbeSource.entries.toSet(),
