@@ -27,6 +27,8 @@ import io.github.HanJason233.chimera.data.model.FailoverTransferSettings
 import io.github.HanJason233.chimera.data.model.FailoverTransferStrategy
 import io.github.HanJason233.chimera.data.model.FailoverProbeStepSettings
 import io.github.HanJason233.chimera.data.model.NodeGroupKey
+import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
+import io.github.HanJason233.chimera.data.model.NodeTestResultDisplaySelection
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.PerAppInboundSettings
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
@@ -191,6 +193,8 @@ class SettingsRepository(
             stringSetPreferencesKey("warehouse_grouping_country_codes")
         private val NODE_GROUPING_MODE = stringPreferencesKey("node_grouping_mode")
         private val SELECTED_NODE_GROUP_ID = stringPreferencesKey("selected_node_group_id")
+        private val NODE_LIST_TEST_RESULT_STAGE = stringPreferencesKey("node_list_test_result_stage")
+        private val NODE_LIST_TEST_RUN_STARTED_AT = longPreferencesKey("node_list_test_run_started_at")
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         // 请求超时保存在本机，首次获取后台配置时也能读取。
         private val SERVICE_REQUEST_TIMEOUT_MS = longPreferencesKey("service_request_timeout_ms")
@@ -273,6 +277,20 @@ class SettingsRepository(
         )
     }
 
+    /** 节点列表当前展示的测试项和本轮起始时间，进程重启后仍可恢复。 */
+    val nodeTestResultDisplaySelection: Flow<NodeTestResultDisplaySelection> =
+        store.data.map { preferences ->
+            val stage = runCatching {
+                ManualGroupTestStage.valueOf(
+                    preferences[NODE_LIST_TEST_RESULT_STAGE].orEmpty()
+                )
+            }.getOrDefault(ManualGroupTestStage.TCPING)
+            NodeTestResultDisplaySelection(
+                stage = stage,
+                runStartedAt = preferences[NODE_LIST_TEST_RUN_STARTED_AT] ?: 0L
+            )
+        }
+
     /** 局域网入站设置默认关闭，避免意外暴露代理端口。 */
     val lanInboundSettings: Flow<LanInboundSettings> = store.data.map { preferences ->
         decodeLanInboundSettings(preferences)
@@ -298,6 +316,15 @@ class SettingsRepository(
         store.edit { preferences ->
             SpeedTestSettingsCodec.migrateLegacySpeedTestSettings(preferences)
             preferences[GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON] = SpeedTestSettingsCodec.encodeSpeedTestSettings(settings)
+        }
+    }
+
+    suspend fun setNodeTestResultDisplaySelection(
+        selection: NodeTestResultDisplaySelection
+    ) {
+        store.edit { preferences ->
+            preferences[NODE_LIST_TEST_RESULT_STAGE] = selection.stage.name
+            preferences[NODE_LIST_TEST_RUN_STARTED_AT] = selection.runStartedAt
         }
     }
 
