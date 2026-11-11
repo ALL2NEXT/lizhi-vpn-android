@@ -294,8 +294,8 @@ internal object SkinSettingsCodec {
                                     "showNodeCore",
                                     preferences[SettingsRepository.NODE_LABEL_SHOW_CORE] ?: false
                                 ),
-                                showNodeAddress = item.optBoolean("showNodeAddress", true),
-                                showNodePort = item.optBoolean("showNodePort", true),
+                                showNodeAddress = item.optBoolean("showNodeAddress", false),
+                                showNodePort = item.optBoolean("showNodePort", false),
                                 themeMode = SkinThemeMode.fromStorage(
                                     item.optString("themeMode").takeIf { it.isNotBlank() }
                                 ),

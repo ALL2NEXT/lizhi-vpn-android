@@ -63,8 +63,8 @@ internal data class LegacySkinScheme(
     val showNodeSecurity: Boolean = false,
     val showNodeTransport: Boolean = false,
     val showNodeCore: Boolean = false,
-    val showNodeAddress: Boolean = true,
-    val showNodePort: Boolean = true
+    val showNodeAddress: Boolean = false,
+    val showNodePort: Boolean = false
 ) {
     val isDefault: Boolean
         get() = id == DEFAULT_SCHEME_ID
@@ -117,8 +117,8 @@ data class SkinSettings(
     val showNodeSecurity: Boolean = false,
     val showNodeTransport: Boolean = false,
     val showNodeCore: Boolean = false,
-    val showNodeAddress: Boolean = true,
-    val showNodePort: Boolean = true
+    val showNodeAddress: Boolean = false,
+    val showNodePort: Boolean = false
 ) {
     val nodeDisplaySettings: NodeDisplaySettings
         get() = NodeDisplaySettings(
