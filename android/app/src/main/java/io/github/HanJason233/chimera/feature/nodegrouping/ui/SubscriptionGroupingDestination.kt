@@ -1,5 +1,10 @@
 package io.github.HanJason233.chimera.feature.nodegrouping.ui
 
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionGroupNodeImportResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.LocalGroupNodeEditResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.LocalGroupNodeDeleteResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionNodeDeleteResult
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -8,7 +13,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeSource
-import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
 import io.github.HanJason233.chimera.viewmodel.HomeTestResultCodec
@@ -89,15 +93,15 @@ internal fun SubscriptionGroupingDestination(
             { input, onComplete ->
                 viewModel.importNodeUrisIntoSubscriptionGroup(groupId, input) { result, count ->
                     val (message, shouldClose) = when (result) {
-                        MainViewModel.SubscriptionGroupNodeImportResult.IMPORTED ->
+                        SubscriptionGroupNodeImportResult.IMPORTED ->
                             "已导入 $count 个节点" to true
-                        MainViewModel.SubscriptionGroupNodeImportResult.ALREADY_EXISTS ->
+                        SubscriptionGroupNodeImportResult.ALREADY_EXISTS ->
                             "这些节点已在当前分组中" to true
-                        MainViewModel.SubscriptionGroupNodeImportResult.INVALID ->
+                        SubscriptionGroupNodeImportResult.INVALID ->
                             "未找到可导入节点，请检查 URI" to false
-                        MainViewModel.SubscriptionGroupNodeImportResult.FETCH_FAILED ->
+                        SubscriptionGroupNodeImportResult.FETCH_FAILED ->
                             "订阅链接获取失败，请检查地址和网络" to false
-                        MainViewModel.SubscriptionGroupNodeImportResult.NOT_FOUND ->
+                        SubscriptionGroupNodeImportResult.NOT_FOUND ->
                             "当前分组不存在" to false
                     }
                     onComplete(message, shouldClose)
@@ -110,10 +114,10 @@ internal fun SubscriptionGroupingDestination(
             { node, name, rawLink, onComplete ->
                 viewModel.updateLocalGroupNode(groupId, node.id, name, rawLink) { result ->
                     val (message, shouldClose) = when (result) {
-                        MainViewModel.LocalGroupNodeEditResult.UPDATED -> "节点已更新" to true
-                        MainViewModel.LocalGroupNodeEditResult.INVALID ->
+                        LocalGroupNodeEditResult.UPDATED -> "节点已更新" to true
+                        LocalGroupNodeEditResult.INVALID ->
                             "节点 URI 无效或与当前内核不兼容" to false
-                        MainViewModel.LocalGroupNodeEditResult.NOT_FOUND -> "节点不存在" to false
+                        LocalGroupNodeEditResult.NOT_FOUND -> "节点不存在" to false
                     }
                     onComplete(message, shouldClose)
                 }
@@ -130,11 +134,11 @@ internal fun SubscriptionGroupingDestination(
                 } else {
                     viewModel.deleteLocalGroupNode(groupId, node.id) { result ->
                         val (message, success) = when (result) {
-                            MainViewModel.LocalGroupNodeDeleteResult.DELETED ->
+                            LocalGroupNodeDeleteResult.DELETED ->
                                 "节点已删除" to true
-                            MainViewModel.LocalGroupNodeDeleteResult.NOT_FOUND ->
+                            LocalGroupNodeDeleteResult.NOT_FOUND ->
                                 "节点不存在" to false
-                            MainViewModel.LocalGroupNodeDeleteResult.IN_USE ->
+                            LocalGroupNodeDeleteResult.IN_USE ->
                                 "当前正在使用该节点，无法删除" to false
                         }
                         onComplete(message, success)
@@ -144,11 +148,11 @@ internal fun SubscriptionGroupingDestination(
             NodeSource.SUBSCRIPTION -> {
                 viewModel.deleteSubscriptionNode(node) { result ->
                     val (message, success) = when (result) {
-                        MainViewModel.SubscriptionNodeDeleteResult.DELETED ->
+                        SubscriptionNodeDeleteResult.DELETED ->
                             "节点已从官方源移除" to true
-                        MainViewModel.SubscriptionNodeDeleteResult.NOT_FOUND ->
+                        SubscriptionNodeDeleteResult.NOT_FOUND ->
                             "节点不存在或已更新" to false
-                        MainViewModel.SubscriptionNodeDeleteResult.IN_USE ->
+                        SubscriptionNodeDeleteResult.IN_USE ->
                             "当前正在使用该节点，无法删除" to false
                     }
                     onComplete(message, success)

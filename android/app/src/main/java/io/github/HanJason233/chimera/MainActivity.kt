@@ -1,5 +1,8 @@
 package io.github.HanJason233.chimera
 
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionGroupCreateResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionGroupEditResult
+
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
@@ -18,7 +21,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -126,26 +128,26 @@ class MainActivity : ComponentActivity() {
                             { input, onComplete ->
                                 viewModel.createSubscriptionGroup(input) { result, importedCount, createdGroupCount, failedGroupCount ->
                                     val message = when (result) {
-                                        MainViewModel.SubscriptionGroupCreateResult.CREATED ->
+                                        SubscriptionGroupCreateResult.CREATED ->
                                             if (importedCount > 0) {
                                                 "已添加订阅组，导入${importedCount}个节点"
                                             } else {
                                                 "订阅组已创建"
                                             }
-                                        MainViewModel.SubscriptionGroupCreateResult.MULTIPLE_CREATED ->
+                                        SubscriptionGroupCreateResult.MULTIPLE_CREATED ->
                                             "已分别创建${createdGroupCount}个私人源，共导入${importedCount}个节点"
-                                        MainViewModel.SubscriptionGroupCreateResult.PARTIAL_CREATED ->
+                                        SubscriptionGroupCreateResult.PARTIAL_CREATED ->
                                             "成功创建${createdGroupCount}个私人源，${failedGroupCount}个来源未能导入，共导入${importedCount}个节点"
-                                        MainViewModel.SubscriptionGroupCreateResult.INVALID ->
+                                        SubscriptionGroupCreateResult.INVALID ->
                                             "未找到可导入节点或链接无效"
-                                        MainViewModel.SubscriptionGroupCreateResult.FETCH_FAILED ->
+                                        SubscriptionGroupCreateResult.FETCH_FAILED ->
                                             "订阅链接获取失败，请检查地址和网络"
                                     }
                                     Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
                                     onComplete(
-                                        result == MainViewModel.SubscriptionGroupCreateResult.CREATED ||
-                                            result == MainViewModel.SubscriptionGroupCreateResult.MULTIPLE_CREATED ||
-                                            result == MainViewModel.SubscriptionGroupCreateResult.PARTIAL_CREATED
+                                        result == SubscriptionGroupCreateResult.CREATED ||
+                                            result == SubscriptionGroupCreateResult.MULTIPLE_CREATED ||
+                                            result == SubscriptionGroupCreateResult.PARTIAL_CREATED
                                     )
                                 }
                             }
@@ -166,22 +168,22 @@ class MainActivity : ComponentActivity() {
                                     customUserAgent
                                 ) { result, importedCount ->
                                     val message = when (result) {
-                                        MainViewModel.SubscriptionGroupEditResult.UPDATED ->
+                                        SubscriptionGroupEditResult.UPDATED ->
                                             if (importedCount > 0) {
                                                 "订阅组已更新，导入${importedCount}个节点"
                                             } else {
                                                 "订阅组已更新"
                                             }
-                                        MainViewModel.SubscriptionGroupEditResult.INVALID ->
+                                        SubscriptionGroupEditResult.INVALID ->
                                             "未找到可导入节点或链接无效"
-                                        MainViewModel.SubscriptionGroupEditResult.FETCH_FAILED ->
+                                        SubscriptionGroupEditResult.FETCH_FAILED ->
                                             "订阅链接获取失败，请检查地址和网络"
-                                        MainViewModel.SubscriptionGroupEditResult.NOT_FOUND ->
+                                        SubscriptionGroupEditResult.NOT_FOUND ->
                                             "订阅组不存在"
                                     }
                                     Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
                                     onComplete(
-                                        result == MainViewModel.SubscriptionGroupEditResult.UPDATED
+                                        result == SubscriptionGroupEditResult.UPDATED
                                     )
                                 }
                             }

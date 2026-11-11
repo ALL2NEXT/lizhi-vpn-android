@@ -1,6 +1,17 @@
 package io.github.HanJason233.chimera.viewmodel
+
+import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionImportService
+import io.github.HanJason233.chimera.network.nodetest.common.GlobalTestExecution
+
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionGroupCoordinator
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionGroupCreateResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionGroupEditResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionGroupRefreshResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionGroupNodeImportResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.LocalGroupNodeEditResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.LocalGroupNodeDeleteResult
+import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionNodeDeleteResult
 import android.app.Application
-import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,6 +42,7 @@ import io.github.HanJason233.chimera.data.local.NodeLocationUpdate
 import io.github.HanJason233.chimera.data.local.NodeDao
 import io.github.HanJason233.chimera.data.model.*
 import io.github.HanJason233.chimera.data.repository.SettingsRepository
+import io.github.HanJason233.chimera.feature.account.AccountSessionCoordinator
 import io.github.HanJason233.chimera.data.repository.RoutingAssetsRepository
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingStrategy
 import io.github.HanJason233.chimera.feature.nodegrouping.domain.CountryGroupingSourceResolver
@@ -45,13 +57,6 @@ import io.github.HanJason233.chimera.network.nodetest.bandwidth.NodeDownloadBand
 import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
 import io.github.HanJason233.chimera.network.nodetest.common.NodeTestProxyManager
 import io.github.HanJason233.chimera.network.nodetest.bandwidth.SpeedTestService
-import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
-import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.PersonalSourceIconStore
-import io.github.HanJason233.chimera.feature.nodegrouping.data.icon.SubscriptionFaviconLoader
-import io.github.HanJason233.chimera.network.subscription.importer.LocalSubscriptionContent
-import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionImportInput
-import io.github.HanJason233.chimera.network.subscription.importer.SubscriptionInputDetector
-import io.github.HanJason233.chimera.network.subscription.ParsedSubscription
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestClassifier
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestDefinition
@@ -68,12 +73,9 @@ import io.github.HanJason233.chimera.network.ip.PublicIpAddressDetector
 import io.github.HanJason233.chimera.service.ServiceManager
 import io.github.HanJason233.chimera.service.BoxVpnService
 import io.github.HanJason233.chimera.util.NetworkUtils
-import io.github.HanJason233.chimera.util.SingBoxConfigGenerator
-import io.github.HanJason233.chimera.util.XrayConfigGenerator
 import io.github.HanJason233.chimera.util.DatabasePassphraseManager
 import java.io.File
 import kotlin.math.ceil
-import java.util.UUID
 import java.net.InetAddress
 
 internal data class UnlockTestUiState(
@@ -113,112 +115,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun nodeDao(): NodeDao = nodeDaoDeferred.await()
     private val settingsRepository = SettingsRepository(application)
-    private val subscriptionParser = SubscriptionParser()
+    private val subscriptionImportService = SubscriptionImportService()
     private val accountManager = AccountManager(application)
     private val latencyTester = LatencyTester()
     private val bandwidthTester = NodeDownloadBandwidthTester(application)
 
-    private data class ParsedSubscriptionPart(
-        val url: String?,
-        val subscription: ParsedSubscription,
-        val groupLabel: String? = null
-    )
-
-    private suspend fun fetchRemoteSubscriptionResults(
-        urls: List<String>,
-        userAgentMode: PersonalSourceUserAgentMode = PersonalSourceUserAgentMode.AUTO,
-        customUserAgent: String? = null
-    ): List<Result<ParsedSubscription>> = coroutineScope {
-        urls.map { url ->
-            async(Dispatchers.IO) {
-                subscriptionParser.fetchAndParseWithMetadata(
-                    url = url,
-                    userAgentMode = userAgentMode,
-                    customUserAgent = customUserAgent
-                )
-            }
-        }.awaitAll()
-    }
-
-    private suspend fun fetchRemoteSubscriptions(
-        urls: List<String>,
-        userAgentMode: PersonalSourceUserAgentMode = PersonalSourceUserAgentMode.AUTO,
-        customUserAgent: String? = null
-    ): Result<List<ParsedSubscription>> {
-        val results = fetchRemoteSubscriptionResults(urls, userAgentMode, customUserAgent)
-        val failure = results.firstOrNull { it.isFailure }
-        return if (failure != null) {
-            Result.failure(
-                failure.exceptionOrNull()
-                    ?: IllegalStateException("Failed to fetch remote subscription")
-            )
-        } else {
-            Result.success(results.map { it.getOrThrow() })
-        }
-    }
-
-    private suspend fun parseFullSubscriptionContent(content: LocalSubscriptionContent): ParsedSubscription =
-        withContext(Dispatchers.Default) {
-            ParsedSubscription(subscriptionParser.parseSubscription(content))
-        }
-
-    private suspend fun parseSubscriptionInput(
-        input: SubscriptionImportInput,
-        userAgentMode: PersonalSourceUserAgentMode = PersonalSourceUserAgentMode.AUTO,
-        customUserAgent: String? = null
-    ): Result<List<ParsedSubscriptionPart>> {
-        return when (input) {
-            is SubscriptionImportInput.RemoteSubscription -> {
-                fetchRemoteSubscriptions(listOf(input.url), userAgentMode, customUserAgent).map { parsed ->
-                    listOf(ParsedSubscriptionPart(input.url, parsed.single()))
-                }
-            }
-
-            is SubscriptionImportInput.MultipleRemoteSubscriptions -> {
-                fetchRemoteSubscriptions(input.urls, userAgentMode, customUserAgent).map { parsed ->
-                    input.urls.mapIndexed { index, url ->
-                        ParsedSubscriptionPart(url, parsed[index])
-                    }
-                }
-            }
-
-            is SubscriptionImportInput.MixedSubscription -> {
-                fetchRemoteSubscriptions(input.urls, userAgentMode, customUserAgent).map { parsed ->
-                    buildList {
-                        add(
-                            ParsedSubscriptionPart(
-                                url = null,
-                                subscription = parseFullSubscriptionContent(input.content),
-                                groupLabel = "导入内容"
-                            )
-                        )
-                        input.urls.forEachIndexed { index, url ->
-                            add(
-                                ParsedSubscriptionPart(
-                                    url = url,
-                                    subscription = parsed[index]
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            is SubscriptionImportInput.FullContent -> if (input.content.isBlank()) {
-                Result.success(emptyList())
-            } else {
-                Result.success(
-                    listOf(
-                        ParsedSubscriptionPart(
-                            url = null,
-                            subscription = parseFullSubscriptionContent(input.content)
-                        )
-                    )
-                )
-            }
-        }
-    }
-    // 节流控制
     private var nodeLocationEnrichmentJob: Job? = null
     private val subscriptionDataLoader = SubscriptionDataLoader(
         context = application,
@@ -276,43 +177,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     val backendSettings = subscriptionDataLoader.backendSettings
 
-    val accountInfo = accountManager.accountInfo
-    private val _clientNotifications = MutableStateFlow<List<ClientNotification>>(emptyList())
-    val clientNotifications = _clientNotifications.asStateFlow()
-    private val _notificationUnreadCount = MutableStateFlow(0)
-    val notificationUnreadCount = _notificationUnreadCount.asStateFlow()
-    private val _isLoadingNotifications = MutableStateFlow(false)
-    val isLoadingNotifications = _isLoadingNotifications.asStateFlow()
-    private val _notificationError = MutableStateFlow<String?>(null)
-    val notificationError = _notificationError.asStateFlow()
-    private var notificationLoadJob: Job? = null
-    private var notificationScopeKey = ""
-    private var lastNotificationLoadAt = 0L
-    private var lastOverviewSyncUid = ""
-    private var lastOverviewSyncAt = 0L
-    private val _offlineModeEnabled = MutableStateFlow(accountManager.isOfflineMode())
-    val offlineModeEnabled = _offlineModeEnabled.asStateFlow()
-    private val _isActivatingVip = MutableStateFlow(false)
-    val isActivatingVip = _isActivatingVip.asStateFlow()
-    private val _isUpdatingNickname = MutableStateFlow(false)
-
-    val isUpdatingNickname = _isUpdatingNickname.asStateFlow()
-    private val _isSyncingAccount = MutableStateFlow(false)
-    val isSyncingAccount = _isSyncingAccount.asStateFlow()
-    private val _isStartupAccountActionInProgress = MutableStateFlow(false)
-    val isStartupAccountActionInProgress = _isStartupAccountActionInProgress.asStateFlow()
-    private val _startupAccountAuthenticated = MutableStateFlow(
-        accountManager.currentAccount() != null || accountManager.isOfflineMode()
-    )
-    val startupAccountAuthenticated = _startupAccountAuthenticated.asStateFlow()
-    private val _isBindingAccount = MutableStateFlow(false)
-    val isBindingAccount = _isBindingAccount.asStateFlow()
-    private val _isSwitchingAccount = MutableStateFlow(false)
-    val isSwitchingAccount = _isSwitchingAccount.asStateFlow()
-    private val _isDeletingAccount = MutableStateFlow(false)
-    val isDeletingAccount = _isDeletingAccount.asStateFlow()
-    private val _accountMessage = MutableStateFlow<String?>(null)
-    val accountMessage = _accountMessage.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
 
     val error = _error.asStateFlow()
@@ -348,6 +212,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val selectedSubscriptionSourceId = activeSubscriptionSourceId
+
+    private val subscriptionGroupCoordinator = SubscriptionGroupCoordinator(
+        context = application.applicationContext,
+        scope = viewModelScope,
+        settingsRepository = settingsRepository,
+        nodeDao = { nodeDao() },
+        subscriptionImportService = subscriptionImportService,
+        nodeCompatibilityCheck = { node -> this.isNodeCoreConfigCompatible(node) },
+        isTesting = isTesting,
+        activeConnectionNode = activeConnectionNode,
+        activeSubscriptionSourceId = activeSubscriptionSourceId,
+        refreshingPersonalSourceCounts = _refreshingPersonalSourceCounts
+    )
 
     val selectedCountryCode = settingsRepository.selectedCountryCode
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -616,6 +493,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         SharingStarted.Eagerly,
         SettingsRepository.DEFAULT_SERVICE_REQUEST_TIMEOUT_MS
     )
+    private val accountSession = AccountSessionCoordinator(
+        scope = viewModelScope,
+        accountManager = accountManager,
+        serviceRequestTimeoutMs = serviceRequestTimeoutMs,
+        vpnState = vpnState,
+        onError = { message -> _error.value = message },
+        refreshSubscriptions = { forceRefresh ->
+            initializeSubscriptionsWithRefreshState(forceRefresh = forceRefresh)
+        },
+        loadStartupData = { loadStartupDataAfterAuthentication() },
+        clearLocalData = { clearLocalApplicationData() }
+    )
+
+    val accountInfo = accountSession.accountInfo
+    val clientNotifications = accountSession.clientNotifications
+    val notificationUnreadCount = accountSession.notificationUnreadCount
+    val isLoadingNotifications = accountSession.isLoadingNotifications
+    val notificationError = accountSession.notificationError
+    val offlineModeEnabled = accountSession.offlineModeEnabled
+    val isActivatingVip = accountSession.isActivatingVip
+    val isUpdatingNickname = accountSession.isUpdatingNickname
+    val isSyncingAccount = accountSession.isSyncingAccount
+    val isStartupAccountActionInProgress = accountSession.isStartupAccountActionInProgress
+    val startupAccountAuthenticated = accountSession.startupAccountAuthenticated
+    val isBindingAccount = accountSession.isBindingAccount
+    val isSwitchingAccount = accountSession.isSwitchingAccount
+    val isDeletingAccount = accountSession.isDeletingAccount
+    val accountMessage = accountSession.accountMessage
+
     val regionLookupMethods = settingsRepository.regionLookupMethods.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -1781,8 +1687,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val PRE_VPN_TEST_SESSION_START_TIMEOUT_MS = 30_000L
-        const val ACCOUNT_OVERVIEW_SYNC_COOLDOWN_MS = 60_000L
-        const val NOTIFICATION_REFRESH_COOLDOWN_MS = 30_000L
     }
 
     /** Connect to the selected node, or to the first node in the active subscription. */
@@ -2170,447 +2074,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    enum class SubscriptionGroupCreateResult {
-        CREATED,
-        MULTIPLE_CREATED,
-        PARTIAL_CREATED,
-        INVALID,
-        FETCH_FAILED
-    }
-
-    enum class SubscriptionGroupEditResult {
-        UPDATED,
-        INVALID,
-        FETCH_FAILED,
-        NOT_FOUND
-    }
-
-    enum class SubscriptionGroupRefreshResult {
-        REFRESHED,
-        INVALID,
-        FETCH_FAILED,
-        NOT_FOUND,
-        BUSY
-    }
-
-    enum class SubscriptionGroupNodeImportResult {
-        IMPORTED,
-        ALREADY_EXISTS,
-        INVALID,
-        FETCH_FAILED,
-        NOT_FOUND
-    }
-
-    enum class LocalGroupNodeEditResult {
-        UPDATED,
-        INVALID,
-        NOT_FOUND
-    }
-
-    enum class LocalGroupNodeDeleteResult {
-        DELETED,
-        NOT_FOUND,
-        IN_USE
-    }
-
-    enum class SubscriptionNodeDeleteResult {
-        DELETED,
-        NOT_FOUND,
-        IN_USE
-    }
-
-    /**
-     * 创建用户本地订阅组。输入可以是订阅链接、节点链接列表，也可以为空以先创建空组。
-     */
     fun createSubscriptionGroup(
         input: String?,
         onResult: (SubscriptionGroupCreateResult, Int, Int, Int) -> Unit = { _, _, _, _ -> }
-    ) {
-        viewModelScope.launch {
-            val normalizedInput = input?.trim().orEmpty()
-            val importInput = SubscriptionInputDetector.detect(normalizedInput)
-            var failedSourceCount = 0
-            val hasMultipleRemoteInput = importInput is SubscriptionImportInput.MultipleRemoteSubscriptions ||
-                importInput is SubscriptionImportInput.MixedSubscription
-            // 多个远程订阅逐条处理，单个链接失败不阻断其他链接创建。
-            val parsedParts = if (hasMultipleRemoteInput) {
-                val remoteUrls = when (importInput) {
-                    is SubscriptionImportInput.MultipleRemoteSubscriptions -> importInput.urls
-                    is SubscriptionImportInput.MixedSubscription -> importInput.urls
-                    else -> emptyList()
-                }
-                val contentParts = if (importInput is SubscriptionImportInput.MixedSubscription) {
-                    val contentPart = parseFullSubscriptionContent(importInput.content)
-                    if (contentPart.nodes.isEmpty()) {
-                        // 本地配置只提取可用节点，其余内容丢弃，不创建空的本地来源。
-                        emptyList()
-                    } else {
-                        listOf(ParsedSubscriptionPart(null, contentPart, "导入内容"))
-                    }
-                } else {
-                    emptyList()
-                }
-                val remoteParts = fetchRemoteSubscriptionResults(remoteUrls)
-                    .mapIndexedNotNull { index, result ->
-                        val parsed = result.getOrNull()
-                        if (parsed == null || parsed.nodes.isEmpty()) {
-                            failedSourceCount++
-                            Log.e(
-                                tag,
-                                "Unable to import remote subscription #${index + 1}",
-                                result.exceptionOrNull()
-                            )
-                            null
-                        } else {
-                            val groupLabel = if (importInput is SubscriptionImportInput.MixedSubscription) {
-                                "远程 ${index + 1}"
-                            } else {
-                                null
-                            }
-                            ParsedSubscriptionPart(remoteUrls[index], parsed, groupLabel)
-                        }
-                    }
-                contentParts + remoteParts
-            } else {
-                val parsedSubscriptions = parseSubscriptionInput(importInput)
-                if (parsedSubscriptions.isFailure) {
-                    Log.e(
-                        tag,
-                        "Unable to fetch user subscription group",
-                        parsedSubscriptions.exceptionOrNull()
-                    )
-                    onResult(SubscriptionGroupCreateResult.FETCH_FAILED, 0, 0, 1)
-                    return@launch
-                }
-                parsedSubscriptions.getOrThrow()
-            }.ifEmpty {
-                listOf(ParsedSubscriptionPart(null, ParsedSubscription(emptyList())))
-            }
+    ) = subscriptionGroupCoordinator.createSubscriptionGroup(input, onResult)
 
-            if (
-                hasMultipleRemoteInput &&
-                parsedParts.all { it.subscription.nodes.isEmpty() }
-            ) {
-                onResult(
-                    SubscriptionGroupCreateResult.FETCH_FAILED,
-                    0,
-                    0,
-                    failedSourceCount
-                )
-                return@launch
-            }
-
-            // 订阅导入不应依赖当前选中的核心。
-            // 保留原始 URI，等实际准备核心会话时再校验兼容性。
-            if (normalizedInput.isNotBlank() && parsedParts.any { it.subscription.nodes.isEmpty() }) {
-                onResult(SubscriptionGroupCreateResult.INVALID, 0, 0, failedSourceCount)
-                return@launch
-            }
-
-            data class PreparedGroup(
-                val group: NodeGroupEntity,
-                val nodes: List<Node>,
-                val members: List<NodeGroupMemberEntity>
-            )
-
-            val preparedGroups = parsedParts.map { part ->
-                val groupId = "group_${UUID.randomUUID()}"
-                val groupName = subscriptionGroupName(part)
-                val parsed = part.subscription
-                val createdAt = System.currentTimeMillis()
-                val group = NodeGroupEntity(
-                    id = groupId,
-                    name = groupName,
-                    type = NodeGroupStorageType.SUBSCRIPTION.name,
-                    subscriptionUrl = part.url,
-                    subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
-                    subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
-                    subscriptionTotalBytes = parsed.userInfo?.totalBytes,
-                    subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
-                    subscriptionUpdatedAt = createdAt,
-                    createdAt = createdAt
-                )
-                val localNodes = parsed.nodes
-                    .distinctBy(Node::getRawLinkPlain)
-                    .mapIndexed { index, node ->
-                        node.copy(
-                            id = "${groupId}_$index",
-                            source = NodeSource.LOCAL_GROUP,
-                            subscriptionSourceId = groupId,
-                            subscriptionSourceName = groupName,
-                            latency = -1,
-                            tcpingLatency = -1,
-                            urlTestLatency = -1,
-                            isAvailable = true,
-                            lastTestedAt = 0L,
-                            downloadMbps = 0f,
-                            uploadMbps = 0f
-                        )
-                    }
-                val members = localNodes.mapIndexed { index, node ->
-                    NodeGroupMemberEntity(
-                        groupId = groupId,
-                        nodeId = node.id,
-                        sortOrder = index
-                    )
-                }
-                PreparedGroup(group, localNodes, members)
-            }
-
-            withContext(Dispatchers.IO) {
-                val dao = nodeDao()
-                preparedGroups.forEach { prepared ->
-                    dao.insertNodeGroupWithNodes(
-                        prepared.group,
-                        prepared.nodes,
-                        prepared.members
-                    )
-                }
-            }
-            preparedGroups.forEach { prepared ->
-                fetchPersonalSourceIconForGroup(prepared.group.id)
-            }
-            settingsRepository.setSelectedNodeGroup(
-                NodeGroupKey.Imported(preparedGroups.first().group.id)
-            )
-            val totalImportedNodes = preparedGroups.sumOf { it.nodes.size }
-            val result = if (failedSourceCount > 0) {
-                SubscriptionGroupCreateResult.PARTIAL_CREATED
-            } else if (preparedGroups.size > 1) {
-                SubscriptionGroupCreateResult.MULTIPLE_CREATED
-            } else {
-                SubscriptionGroupCreateResult.CREATED
-            }
-            onResult(result, totalImportedNodes, preparedGroups.size, failedSourceCount)
-        }
-    }
-
-    private fun subscriptionGroupName(part: ParsedSubscriptionPart): String =
-        part.subscription.name?.trim()?.takeIf(String::isNotEmpty)
-            ?: part.url?.let { url ->
-                Uri.parse(url).host
-                    ?.removePrefix("www.")
-                    ?.takeIf(String::isNotEmpty)
-            }
-            ?: part.groupLabel?.trim()?.takeIf(String::isNotEmpty)
-            ?: if (part.subscription.nodes.isEmpty()) "新建私人源" else "导入内容"
-
-    /** 将节点 URI 追加到本地订阅组，保留组内已有节点。 */
     fun importNodeUrisIntoSubscriptionGroup(
         groupId: String,
         input: String,
         onResult: (SubscriptionGroupNodeImportResult, Int) -> Unit = { _, _ -> }
-    ) {
-        viewModelScope.launch {
-            val normalizedInput = input.trim()
-            if (normalizedInput.isBlank()) {
-                onResult(SubscriptionGroupNodeImportResult.INVALID, 0)
-                return@launch
-            }
+    ) = subscriptionGroupCoordinator.importNodeUrisIntoSubscriptionGroup(groupId, input, onResult)
 
-            val dao = nodeDao()
-            val group = withContext(Dispatchers.IO) {
-                dao.getNodeGroupById(groupId)
-            }
-            if (group == null || group.type !in setOf(
-                    NodeGroupStorageType.IMPORTED.name,
-                    NodeGroupStorageType.SUBSCRIPTION.name
-                )
-            ) {
-                onResult(SubscriptionGroupNodeImportResult.NOT_FOUND, 0)
-                return@launch
-            }
-
-            val importInput = SubscriptionInputDetector.detect(normalizedInput)
-            val parsedSubscriptions = parseSubscriptionInput(importInput)
-            if (parsedSubscriptions.isFailure) {
-                Log.e(
-                    tag,
-                    "Unable to import nodes into local subscription group",
-                    parsedSubscriptions.exceptionOrNull()
-                )
-                onResult(SubscriptionGroupNodeImportResult.FETCH_FAILED, 0)
-                return@launch
-            }
-
-            // 即使当前核心无法处理包含 ECH 或证书字段的 URI，也要保留订阅节点。
-            val nodesToImport = parsedSubscriptions.getOrThrow().flatMap { it.subscription.nodes }
-            if (nodesToImport.isEmpty()) {
-                onResult(SubscriptionGroupNodeImportResult.INVALID, 0)
-                return@launch
-            }
-
-            val existingNodes = withContext(Dispatchers.IO) {
-                dao.getNodesByGroup(groupId).first()
-            }
-            val existingRawLinks = existingNodes.map(Node::getRawLinkPlain).toSet()
-            val nodesToAdd = nodesToImport
-                .distinctBy(Node::getRawLinkPlain)
-                .filterNot { it.getRawLinkPlain() in existingRawLinks }
-            if (nodesToAdd.isEmpty()) {
-                onResult(SubscriptionGroupNodeImportResult.ALREADY_EXISTS, 0)
-                return@launch
-            }
-
-            val localNodes = nodesToAdd.mapIndexed { index, node ->
-                node.copy(
-                    id = "${groupId}_${UUID.randomUUID()}",
-                    source = NodeSource.LOCAL_GROUP,
-                    subscriptionSourceId = groupId,
-                    subscriptionSourceName = group.name,
-                    latency = -1,
-                    tcpingLatency = -1,
-                    urlTestLatency = -1,
-                    isAvailable = true,
-                    lastTestedAt = 0L,
-                    sortOrder = existingNodes.size + index,
-                    downloadMbps = 0f,
-                    uploadMbps = 0f
-                )
-            }
-            val members = localNodes.mapIndexed { index, node ->
-                NodeGroupMemberEntity(
-                    groupId = groupId,
-                    nodeId = node.id,
-                    sortOrder = existingNodes.size + index
-                )
-            }
-
-            withContext(Dispatchers.IO) {
-                dao.appendNodesToGroup(localNodes, members)
-            }
-            onResult(SubscriptionGroupNodeImportResult.IMPORTED, localNodes.size)
-        }
-    }
-
-    /** 更新本地订阅组中的单个节点，保留节点 ID 和组内排序。 */
     fun updateLocalGroupNode(
         groupId: String,
         nodeId: String,
         name: String,
         rawLink: String,
         onResult: (LocalGroupNodeEditResult) -> Unit = {}
-    ) {
-        viewModelScope.launch {
-            val normalizedName = name.trim()
-            if (normalizedName.isBlank()) {
-                onResult(LocalGroupNodeEditResult.INVALID)
-                return@launch
-            }
+    ) = subscriptionGroupCoordinator.updateLocalGroupNode(groupId, nodeId, name, rawLink, onResult)
 
-            val dao = nodeDao()
-            val group = withContext(Dispatchers.IO) {
-                dao.getNodeGroupById(groupId)
-            } ?: run {
-                onResult(LocalGroupNodeEditResult.NOT_FOUND)
-                return@launch
-            }
-            val existingNode = withContext(Dispatchers.IO) {
-                dao.getNodesByGroup(groupId).first().firstOrNull { it.id == nodeId }
-            } ?: run {
-                onResult(LocalGroupNodeEditResult.NOT_FOUND)
-                return@launch
-            }
-
-            val normalizedLink = rawLink.trim()
-            if (normalizedLink.isBlank() || normalizedLink == existingNode.rawLink) {
-                withContext(Dispatchers.IO) {
-                    dao.insertNode(existingNode.copy(name = normalizedName))
-                }
-                onResult(LocalGroupNodeEditResult.UPDATED)
-                return@launch
-            }
-
-            val parsedNode = withContext(Dispatchers.Default) {
-                subscriptionParser.parseSubscription(normalizedLink).singleOrNull()
-            } ?: run {
-                onResult(LocalGroupNodeEditResult.INVALID)
-                return@launch
-            }
-            if (!withContext(Dispatchers.IO) { isNodeCoreConfigCompatible(parsedNode) }) {
-                onResult(LocalGroupNodeEditResult.INVALID)
-                return@launch
-            }
-
-            val updatedNode = parsedNode.copy(
-                id = existingNode.id,
-                name = normalizedName,
-                subscriptionSourceId = groupId,
-                subscriptionSourceName = group.name,
-                source = NodeSource.LOCAL_GROUP,
-                latency = -1,
-                tcpingLatency = -1,
-                urlTestLatency = -1,
-                isAvailable = true,
-                lastTestedAt = 0L,
-                sortOrder = existingNode.sortOrder,
-                downloadMbps = 0f,
-                uploadMbps = 0f
-            )
-            withContext(Dispatchers.IO) {
-                dao.insertNode(updatedNode)
-            }
-            onResult(LocalGroupNodeEditResult.UPDATED)
-        }
-    }
-
-    /** 从本地订阅组移除一个节点；当前正在使用的节点不能删除。 */
     fun deleteLocalGroupNode(
         groupId: String,
         nodeId: String,
         onResult: (LocalGroupNodeDeleteResult) -> Unit = {}
-    ) {
-        viewModelScope.launch {
-            if (activeConnectionNode.value?.id == nodeId) {
-                onResult(LocalGroupNodeDeleteResult.IN_USE)
-                return@launch
-            }
+    ) = subscriptionGroupCoordinator.deleteLocalGroupNode(groupId, nodeId, onResult)
 
-            val deleted = withContext(Dispatchers.IO) {
-                nodeDao().deleteLocalGroupNodeFromGroup(groupId, nodeId)
-            }
-            if (!deleted) {
-                onResult(LocalGroupNodeDeleteResult.NOT_FOUND)
-                return@launch
-            }
-            if (settingsRepository.selectedNodeId.first() == nodeId) {
-                settingsRepository.setSelectedNodeId(null)
-            }
-            onResult(LocalGroupNodeDeleteResult.DELETED)
-        }
-    }
-
-    /** 从官方订阅源屏蔽一个节点，避免后续刷新重新加入。 */
     fun deleteSubscriptionNode(
         node: Node,
         onResult: (SubscriptionNodeDeleteResult) -> Unit = {}
-    ) {
-        viewModelScope.launch {
-            if (activeConnectionNode.value?.id == node.id) {
-                onResult(SubscriptionNodeDeleteResult.IN_USE)
-                return@launch
-            }
-            val sourceId = node.subscriptionSourceId?.takeIf(String::isNotBlank)
-            if (sourceId == null) {
-                onResult(SubscriptionNodeDeleteResult.NOT_FOUND)
-                return@launch
-            }
+    ) = subscriptionGroupCoordinator.deleteSubscriptionNode(node, onResult)
 
-            val deleted = withContext(Dispatchers.IO) {
-                nodeDao().blockSubscriptionNode(sourceId, node.id)
-            }
-            if (!deleted) {
-                onResult(SubscriptionNodeDeleteResult.NOT_FOUND)
-                return@launch
-            }
-            if (settingsRepository.selectedNodeId.first() == node.id) {
-                settingsRepository.setSelectedNodeId(null)
-            }
-            onResult(SubscriptionNodeDeleteResult.DELETED)
-        }
-    }
-
-    /** 更新本地订阅组名称及可选订阅内容。输入链接变化时会重新导入组内节点。 */
     fun updateSubscriptionGroup(
         groupId: String,
         name: String,
@@ -2618,399 +2111,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         userAgentMode: PersonalSourceUserAgentMode,
         customUserAgent: String?,
         onResult: (SubscriptionGroupEditResult, Int) -> Unit = { _, _ -> }
-    ) {
-        viewModelScope.launch {
-            val normalizedName = name.trim()
-            if (normalizedName.isBlank()) {
-                onResult(SubscriptionGroupEditResult.INVALID, 0)
-                return@launch
-            }
-            val normalizedCustomUserAgent = customUserAgent?.trim()
-                ?.takeIf(String::isNotBlank)
-                ?.takeIf { userAgentMode == PersonalSourceUserAgentMode.CUSTOM }
-            if (userAgentMode == PersonalSourceUserAgentMode.CUSTOM &&
-                normalizedCustomUserAgent == null
-            ) {
-                onResult(SubscriptionGroupEditResult.INVALID, 0)
-                return@launch
-            }
+    ) = subscriptionGroupCoordinator.updateSubscriptionGroup(
+        groupId, name, input, userAgentMode, customUserAgent, onResult
+    )
 
-            val dao = nodeDao()
-            val existingGroup = withContext(Dispatchers.IO) {
-                dao.getNodeGroupById(groupId)
-            }
-            if (existingGroup == null) {
-                onResult(SubscriptionGroupEditResult.NOT_FOUND, 0)
-                return@launch
-            }
-
-            val normalizedInput = input?.trim().orEmpty()
-            val currentUrl = existingGroup.subscriptionUrl.orEmpty()
-            if (normalizedInput.isBlank() || normalizedInput == currentUrl) {
-                val updated = withContext(Dispatchers.IO) {
-                    dao.updateNodeGroupMetadata(
-                        groupId = groupId,
-                        name = normalizedName,
-                        subscriptionUrl = existingGroup.subscriptionUrl,
-                        userAgentMode = userAgentMode.name,
-                        customUserAgent = normalizedCustomUserAgent
-                    )
-                }
-                onResult(
-                    if (updated) SubscriptionGroupEditResult.UPDATED
-                    else SubscriptionGroupEditResult.NOT_FOUND,
-                    0
-                )
-                return@launch
-            }
-
-            val importInput = SubscriptionInputDetector.detect(normalizedInput)
-            val parsedSubscriptions = parseSubscriptionInput(
-                importInput,
-                userAgentMode,
-                normalizedCustomUserAgent
-            )
-            if (parsedSubscriptions.isFailure) {
-                Log.e(
-                    tag,
-                    "Unable to fetch updated user subscription group",
-                    parsedSubscriptions.exceptionOrNull()
-                )
-                onResult(SubscriptionGroupEditResult.FETCH_FAILED, 0)
-                return@launch
-            }
-            val parsedParts = parsedSubscriptions.getOrThrow()
-            val parsed = ParsedSubscription(
-                nodes = parsedParts.flatMap { it.subscription.nodes },
-                userInfo = parsedParts.singleOrNull()?.subscription?.userInfo
-            )
-            val subscriptionUrl = parsedParts.mapNotNull { it.url }.joinToString("\n").ifBlank { null }
-
-            val importedNodes = parsed.nodes
-            if (importedNodes.isEmpty()) {
-                onResult(SubscriptionGroupEditResult.INVALID, 0)
-                return@launch
-            }
-
-            val localNodes = importedNodes
-                .distinctBy(Node::getRawLinkPlain)
-                .mapIndexed { index, node ->
-                    node.copy(
-                        id = "${groupId}_$index",
-                        source = NodeSource.LOCAL_GROUP,
-                        subscriptionSourceId = groupId,
-                        subscriptionSourceName = normalizedName,
-                        latency = -1,
-                        tcpingLatency = -1,
-                        urlTestLatency = -1,
-                        isAvailable = true,
-                        lastTestedAt = 0L,
-                        downloadMbps = 0f,
-                        uploadMbps = 0f
-                    )
-                }
-            val members = localNodes.mapIndexed { index, node ->
-                NodeGroupMemberEntity(
-                    groupId = groupId,
-                    nodeId = node.id,
-                    sortOrder = index
-                )
-            }
-            val updated = withContext(Dispatchers.IO) {
-                dao.replaceLocalGroupNodes(
-                    groupId = groupId,
-                    name = normalizedName,
-                    subscriptionUrl = subscriptionUrl,
-                    userAgentMode = userAgentMode.name,
-                    customUserAgent = normalizedCustomUserAgent,
-                    subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
-                    subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
-                    subscriptionTotalBytes = parsed.userInfo?.totalBytes,
-                    subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
-                    subscriptionUpdatedAt = System.currentTimeMillis(),
-                    nodes = localNodes,
-                    members = members
-                )
-            }
-            onResult(
-                if (updated) SubscriptionGroupEditResult.UPDATED
-                else SubscriptionGroupEditResult.NOT_FOUND,
-                localNodes.size
-            )
-        }
-    }
-
-    /** 立即重新获取带订阅链接的本地分组，并替换组内节点。 */
     fun refreshUserSubscriptionGroup(
         groupId: String,
         onResult: (SubscriptionGroupRefreshResult) -> Unit = {}
-    ) {
-        updatePersonalSourceRefreshCount(groupId, increment = true)
-        viewModelScope.launch {
-            try {
-                if (
-                    GlobalTestExecution.isFetching() ||
-                    _isTesting.value ||
-                    GlobalTestExecution.mutex.isLocked
-                ) {
-                    onResult(SubscriptionGroupRefreshResult.BUSY)
-                    return@launch
-                }
+    ) = subscriptionGroupCoordinator.refreshUserSubscriptionGroup(groupId, onResult)
 
-                onResult(refreshUserSubscriptionGroupInternal(groupId))
-            } finally {
-                updatePersonalSourceRefreshCount(groupId, increment = false)
-            }
-        }
-    }
+    fun deleteSubscriptionGroup(groupId: String, onResult: (Boolean) -> Unit = {}) =
+        subscriptionGroupCoordinator.deleteSubscriptionGroup(groupId, onResult)
 
-    private fun updatePersonalSourceRefreshCount(groupId: String, increment: Boolean) {
-        _refreshingPersonalSourceCounts.update { counts ->
-            val count = counts[groupId] ?: 0
-            if (increment) {
-                counts + (groupId to count + 1)
-            } else if (count <= 1) {
-                counts - groupId
-            } else {
-                counts + (groupId to count - 1)
-            }
-        }
-    }
-
-    private suspend fun <T> withPersonalSourceRefreshing(
-        groupId: String,
-        action: suspend () -> T
-    ): T {
-        updatePersonalSourceRefreshCount(groupId, increment = true)
-        return try {
-            action()
-        } finally {
-            updatePersonalSourceRefreshCount(groupId, increment = false)
-        }
-    }
-
-    /** 冷启动时顺序更新启用了自动更新的远程私人源。 */
-    private suspend fun refreshUserSubscriptionGroupsOnStartup(
-        autoRefreshOverrides: Map<String, Boolean>
-    ) {
-        val groups = withContext(Dispatchers.IO) {
-            nodeDao().getUserSubscriptionGroups().first()
-        }
-        groups.forEach { group ->
-            val importInput = SubscriptionInputDetector.detect(group.subscriptionUrl.orEmpty())
-            if (
-                autoRefreshOverrides[group.id] == true &&
-                    (importInput is SubscriptionImportInput.RemoteSubscription ||
-                        importInput is SubscriptionImportInput.MultipleRemoteSubscriptions)
-            ) {
-                when (withPersonalSourceRefreshing(group.id) {
-                    refreshUserSubscriptionGroupInternal(group.id)
-                }) {
-                    SubscriptionGroupRefreshResult.REFRESHED -> Unit
-                    else -> Log.w(tag, "Unable to refresh personal subscription group on startup: ${group.id}")
-                }
-            }
-        }
-    }
-
-    private suspend fun refreshUserSubscriptionGroupInternal(
-        groupId: String
-    ): SubscriptionGroupRefreshResult {
-        val dao = nodeDao()
-        val group = withContext(Dispatchers.IO) {
-            dao.getNodeGroupById(groupId)
-        } ?: return SubscriptionGroupRefreshResult.NOT_FOUND
-        if (group.type !in setOf(
-                NodeGroupStorageType.IMPORTED.name,
-                NodeGroupStorageType.SUBSCRIPTION.name
-            )
-        ) {
-            return SubscriptionGroupRefreshResult.NOT_FOUND
-        }
-
-        val importInput = SubscriptionInputDetector.detect(group.subscriptionUrl.orEmpty())
-        if (
-            importInput !is SubscriptionImportInput.RemoteSubscription &&
-            importInput !is SubscriptionImportInput.MultipleRemoteSubscriptions
-        ) {
-            return SubscriptionGroupRefreshResult.INVALID
-        }
-        val parsedSubscriptions = parseSubscriptionInput(
-            importInput,
-            PersonalSourceUserAgentMode.fromStorage(group.userAgentMode),
-            group.customUserAgent
-        )
-        if (parsedSubscriptions.isFailure) {
-            Log.e(
-                tag,
-                "Unable to refresh user subscription group",
-                parsedSubscriptions.exceptionOrNull()
-            )
-            return SubscriptionGroupRefreshResult.FETCH_FAILED
-        }
-        val parsedParts = parsedSubscriptions.getOrThrow()
-        val parsed = ParsedSubscription(
-            nodes = parsedParts.flatMap { it.subscription.nodes },
-            userInfo = parsedParts.singleOrNull()?.subscription?.userInfo
-        )
-        val subscriptionUrl = parsedParts.mapNotNull { it.url }.joinToString("\n")
-
-        val importedNodes = parsed.nodes.distinctBy(Node::getRawLinkPlain)
-        if (importedNodes.isEmpty()) {
-            return SubscriptionGroupRefreshResult.INVALID
-        }
-
-        val localNodes = importedNodes.mapIndexed { index, node ->
-            node.copy(
-                id = "${groupId}_$index",
-                source = NodeSource.LOCAL_GROUP,
-                subscriptionSourceId = groupId,
-                subscriptionSourceName = group.name,
-                latency = -1,
-                tcpingLatency = -1,
-                urlTestLatency = -1,
-                isAvailable = true,
-                lastTestedAt = 0L,
-                sortOrder = index,
-                downloadMbps = 0f,
-                uploadMbps = 0f
-            )
-        }
-        val members = localNodes.mapIndexed { index, node ->
-            NodeGroupMemberEntity(
-                groupId = groupId,
-                nodeId = node.id,
-                sortOrder = index
-            )
-        }
-        val refreshed = withContext(Dispatchers.IO) {
-            dao.replaceLocalGroupNodes(
-                groupId = groupId,
-                name = group.name,
-                subscriptionUrl = subscriptionUrl,
-                userAgentMode = group.userAgentMode,
-                customUserAgent = group.customUserAgent,
-                subscriptionUploadBytes = parsed.userInfo?.uploadBytes,
-                subscriptionDownloadBytes = parsed.userInfo?.downloadBytes,
-                subscriptionTotalBytes = parsed.userInfo?.totalBytes,
-                subscriptionExpireAt = parsed.userInfo?.expireAtMillis,
-                subscriptionUpdatedAt = System.currentTimeMillis(),
-                nodes = localNodes,
-                members = members
-            )
-        }
-        return if (refreshed) {
-            SubscriptionGroupRefreshResult.REFRESHED
-        } else {
-            SubscriptionGroupRefreshResult.NOT_FOUND
-        }
-    }
-
-    /** 删除本地订阅组及其节点。 */
-    fun deleteSubscriptionGroup(groupId: String, onResult: (Boolean) -> Unit = {}) {
-        viewModelScope.launch {
-            val deleted = withContext(Dispatchers.IO) {
-                val selectedGroupId = settingsRepository.selectedNodeGroupId.first()
-                val dao = nodeDao()
-                val group = dao.getNodeGroupById(groupId)
-                if (group == null) {
-                    false
-                } else {
-                    dao.deleteNodeGroupWithNodes(groupId)
-                    PersonalSourceIconStore.delete(getApplication<Application>(), group.localIconFile)
-                    if (selectedGroupId == NodeGroupKey.Imported(groupId).value) {
-                        val fallbackSourceId = activeSubscriptionSourceId.value
-                        settingsRepository.setSelectedCountryCode(null)
-                        settingsRepository.setSelectedSubscriptionSourceId(fallbackSourceId)
-                        settingsRepository.setSelectedNodeGroupId(
-                            fallbackSourceId
-                                ?.takeIf(String::isNotBlank)
-                                ?.let { NodeGroupKey.Subscription(it).value }
-                        )
-                        settingsRepository.setSelectedNodeId(null)
-                    }
-                    true
-                }
-            }
-            onResult(deleted)
-        }
-    }
-
-    /** 保存私人源卡片图标来源及可选远程链接/本地图片。 */
     fun updatePersonalSourceIcon(
         groupId: String,
         iconMode: String,
         customIconUrl: String?,
         localIconFile: String?,
         onResult: (Boolean) -> Unit = {}
-    ) {
-        viewModelScope.launch {
-            val updated = withContext(Dispatchers.IO) {
-                nodeDao().updateNodeGroupIcon(
-                    groupId = groupId,
-                    iconMode = iconMode,
-                    customIconUrl = customIconUrl,
-                    localIconFile = localIconFile
-                ) > 0
-            }
-            if (updated) fetchPersonalSourceIconForGroup(groupId)
-            onResult(updated)
-        }
-    }
+    ) = subscriptionGroupCoordinator.updatePersonalSourceIcon(
+        groupId, iconMode, customIconUrl, localIconFile, onResult
+    )
 
-    private fun fetchPersonalSourceIconForGroup(groupId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val group = nodeDao().getNodeGroupById(groupId) ?: return@launch
-            val iconUrl = when (PersonalSourceIconMode.fromStorage(group.iconMode)) {
-                PersonalSourceIconMode.AUTO_REMOTE ->
-                    SubscriptionFaviconLoader.faviconUrl(group.subscriptionUrl)
-                PersonalSourceIconMode.CUSTOM_REMOTE ->
-                    SubscriptionFaviconLoader.customImageUrl(group.customIconUrl)
-                PersonalSourceIconMode.DEFAULT,
-                PersonalSourceIconMode.LOCAL -> null
-            } ?: return@launch
-
-            SubscriptionFaviconLoader.fetchAndCache(
-                getApplication<Application>().applicationContext,
-                iconUrl
-            )
-        }
-    }
-
-    /** 从本机移除一个官方订阅源的节点；远端订阅源仍可在后续刷新时重新导入。 */
-    fun deleteOfficialSubscription(sourceId: String, onResult: (Boolean) -> Unit = {}) {
-        viewModelScope.launch {
-            if (sourceId.isBlank()) {
-                onResult(false)
-                return@launch
-            }
-
-            val dao = nodeDao()
-            val sourceNodes = withContext(Dispatchers.IO) {
-                dao.getSubscriptionNodesBySource(sourceId).first()
-            }
-            if (sourceNodes.isEmpty()) {
-                onResult(false)
-                return@launch
-            }
-
-            withContext(Dispatchers.IO) {
-                dao.deleteSubscriptionNodesBySource(sourceId)
-            }
-
-            val sourceNodeIds = sourceNodes.mapTo(mutableSetOf(), Node::id)
-            if (settingsRepository.selectedNodeId.first() in sourceNodeIds) {
-                settingsRepository.setSelectedNodeId(null)
-            }
-            if (settingsRepository.selectedNodeGroupId.first() == NodeGroupKey.Subscription(sourceId).value) {
-                settingsRepository.setSelectedNodeGroupId(null)
-            }
-            if (settingsRepository.selectedSubscriptionSourceId.first() == sourceId) {
-                settingsRepository.setSelectedSubscriptionSourceId(null)
-            }
-            onResult(true)
-        }
-    }
+    fun deleteOfficialSubscription(sourceId: String, onResult: (Boolean) -> Unit = {}) =
+        subscriptionGroupCoordinator.deleteOfficialSubscription(sourceId, onResult)
 
     private suspend fun isNodeCoreConfigCompatible(node: Node): Boolean {
         return try {
@@ -3201,390 +2325,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _infoDialogMessage.value = null
     }
 
-    fun updateNickname(nickname: String) {
-        if (_isUpdatingNickname.value || _isActivatingVip.value) return
-        viewModelScope.launch {
-            _isUpdatingNickname.value = true
-            _accountMessage.value = null
-            try {
-                accountManager.updateNickname(
-                    nickname = nickname,
-                    timeoutMs = serviceRequestTimeoutMs.value
-                ).onFailure { error ->
-                    Log.w(tag, "Failed to update nickname", error)
-                    val message = error.message ?: "昵称修改失败"
-                    _error.value = message
-                    _accountMessage.value = message
-                }.onSuccess {
-                    _accountMessage.value = "昵称已更新"
-                }
-            } finally {
-                _isUpdatingNickname.value = false
-            }
-        }
-    }
+    fun updateNickname(nickname: String) = accountSession.updateNickname(nickname)
 
-    fun activateVipCard(code: String) {
-        if (
-            _isActivatingVip.value || _isSyncingAccount.value || _isUpdatingNickname.value ||
-            _isBindingAccount.value || _isSwitchingAccount.value || _isDeletingAccount.value
-        ) return
-        viewModelScope.launch {
-            _isActivatingVip.value = true
-            _accountMessage.value = null
-            try {
-                accountManager.activateVipCard(
-                    code = code,
-                    timeoutMs = serviceRequestTimeoutMs.value
-                ).onSuccess {
-                    _accountMessage.value = "VIP 激活成功，有效期已更新"
-                    initializeSubscriptionsWithRefreshState(forceRefresh = true)
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to activate VIP card", error)
-                    _accountMessage.value = accountActionErrorMessage(error)
-                }
-            } finally {
-                _isActivatingVip.value = false
-            }
-        }
-    }
+    fun activateVipCard(code: String) = accountSession.activateVipCard(code)
 
-    fun syncCurrentAccount() {
-        if (
-            _isSyncingAccount.value ||
-            _isUpdatingNickname.value ||
-            _isBindingAccount.value ||
-            _isSwitchingAccount.value ||
-            _isDeletingAccount.value ||
-            _isActivatingVip.value
-        ) return
-        viewModelScope.launch {
-            _isSyncingAccount.value = true
-            _accountMessage.value = null
-            try {
-                accountManager.syncCurrentAccount(
-                    timeoutMs = serviceRequestTimeoutMs.value
-                ).onSuccess {
-                    _accountMessage.value = "账户信息已同步"
-                    initializeSubscriptionsWithRefreshState(forceRefresh = true)
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to sync account information", error)
-                    _accountMessage.value = accountActionErrorMessage(error)
-                }
-            } finally {
-                _isSyncingAccount.value = false
-            }
-        }
-    }
+    fun syncCurrentAccount() = accountSession.syncCurrentAccount()
 
-    /** 移除顶栏刷新图标后，在打开“我的”页时低频同步账户状态。 */
-    fun syncAccountOnOverviewEntry() {
-        val current = accountManager.currentAccount() ?: return
-        if (accountManager.isOfflineMode() || _isSyncingAccount.value ||
-            _isUpdatingNickname.value || _isBindingAccount.value ||
-            _isSwitchingAccount.value || _isDeletingAccount.value || _isActivatingVip.value
-        ) return
+    fun syncAccountOnOverviewEntry() = accountSession.syncAccountOnOverviewEntry()
 
-        val now = System.currentTimeMillis()
-        if (lastOverviewSyncUid != current.uid) {
-            lastOverviewSyncUid = current.uid
-            lastOverviewSyncAt = 0L
-        }
-        if (now - lastOverviewSyncAt < ACCOUNT_OVERVIEW_SYNC_COOLDOWN_MS) return
-        lastOverviewSyncAt = now
+    fun refreshClientNotifications(force: Boolean = false) =
+        accountSession.refreshClientNotifications(force)
 
-        viewModelScope.launch {
-            val previous = accountManager.currentAccount()
-            _isSyncingAccount.value = true
-            try {
-                accountManager.syncCurrentAccount(
-                    timeoutMs = serviceRequestTimeoutMs.value
-                ).onSuccess { synced ->
-                    val accessChanged = previous == null ||
-                        previous.accountType != synced.accountType ||
-                        previous.deviceBlocked != synced.deviceBlocked ||
-                        previous.vipActive != synced.vipActive ||
-                        previous.vipExpiresAt != synced.vipExpiresAt
-                    if (accessChanged) {
-                        initializeSubscriptionsWithRefreshState(forceRefresh = true)
-                    }
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to sync account when opening My page", error)
-                }
-            } finally {
-                _isSyncingAccount.value = false
-            }
-        }
-    }
+    fun clearClientNotifications() = accountSession.clearClientNotifications()
 
-    fun refreshClientNotifications(force: Boolean = false) {
-        if (accountManager.isOfflineMode()) {
-            clearClientNotifications()
-            return
-        }
-        val account = accountManager.currentAccount() ?: run {
-            clearClientNotifications()
-            return
-        }
-        val scope = "${AppConfig.BACKEND_URL.trimEnd('/')}|${account.uid}"
-        if (scope != notificationScopeKey) {
-            notificationLoadJob?.cancel()
-            notificationScopeKey = scope
-            lastNotificationLoadAt = 0L
-            _clientNotifications.value = emptyList()
-            _notificationUnreadCount.value = 0
-            _notificationError.value = null
-        }
-        if (notificationLoadJob?.isActive == true) return
-        val now = System.currentTimeMillis()
-        if (!force && now - lastNotificationLoadAt < NOTIFICATION_REFRESH_COOLDOWN_MS) return
-        lastNotificationLoadAt = now
-        _isLoadingNotifications.value = true
-        _notificationError.value = null
-        notificationLoadJob = viewModelScope.launch {
-            try {
-                accountManager.getClientNotifications().onSuccess { feed ->
-                    if (scope == currentNotificationScope()) {
-                        _clientNotifications.value = feed.items
-                        _notificationUnreadCount.value = feed.unreadCount.coerceAtLeast(0)
-                    }
-                }.onFailure { error ->
-                    if (scope == currentNotificationScope()) {
-                        Log.w(tag, "Failed to load client notifications", error)
-                        _notificationError.value = "通知加载失败，请检查网络后重试。"
-                    }
-                }
-            } finally {
-                if (scope == notificationScopeKey) _isLoadingNotifications.value = false
-            }
-        }
-    }
+    fun markClientNotificationRead(notificationId: Long) =
+        accountSession.markClientNotificationRead(notificationId)
 
-    fun clearClientNotifications() {
-        notificationLoadJob?.cancel()
-        notificationLoadJob = null
-        notificationScopeKey = ""
-        lastNotificationLoadAt = 0L
-        _clientNotifications.value = emptyList()
-        _notificationUnreadCount.value = 0
-        _isLoadingNotifications.value = false
-        _notificationError.value = null
-    }
-
-    fun markClientNotificationRead(notificationId: Long) {
-        val notification = _clientNotifications.value.firstOrNull { it.id == notificationId } ?: return
-        if (notification.isRead) return
-        _clientNotifications.value = _clientNotifications.value.map { item ->
-            if (item.id == notificationId) item.copy(isRead = true) else item
-        }
-        _notificationUnreadCount.value = (_notificationUnreadCount.value - 1).coerceAtLeast(0)
-        viewModelScope.launch {
-            accountManager.markClientNotificationRead(notificationId).onFailure { error ->
-                Log.w(tag, "Failed to mark notification as read", error)
-                refreshClientNotifications(force = true)
-            }
-        }
-    }
-
-    fun markAllClientNotificationsRead() {
-        if (_notificationUnreadCount.value <= 0) return
-        _clientNotifications.value = _clientNotifications.value.map { it.copy(isRead = true) }
-        _notificationUnreadCount.value = 0
-        viewModelScope.launch {
-            accountManager.markAllClientNotificationsRead().onFailure { error ->
-                Log.w(tag, "Failed to mark all notifications as read", error)
-                refreshClientNotifications(force = true)
-            }
-        }
-    }
-
-    private fun currentNotificationScope(): String =
-        "${AppConfig.BACKEND_URL.trimEnd('/')}|${accountManager.currentAccount()?.uid.orEmpty()}"
+    fun markAllClientNotificationsRead() = accountSession.markAllClientNotificationsRead()
 
     fun bindEmailPassword(
         email: String,
         password: String,
-        registrationCode: String = "",
-    ) {
-        if (_isBindingAccount.value || _isActivatingVip.value) return
-        viewModelScope.launch {
-            _isBindingAccount.value = true
-            _accountMessage.value = null
-            try {
-                accountManager.bindEmailPassword(
-                    email = email,
-                    password = password,
-                    registrationCode = registrationCode,
-                    timeoutMs = serviceRequestTimeoutMs.value
-                ).onSuccess {
-                    _accountMessage.value = "绑定成功，已获得绑定经验"
-                    initializeSubscriptionsWithRefreshState(forceRefresh = true)
-                }.onFailure { error ->
-                    Log.w(tag, "Failed to bind account credentials", error)
-                    _accountMessage.value = accountBindingErrorMessage(error)
-                }
-            } finally {
-                _isBindingAccount.value = false
-            }
-        }
-    }
+        registrationCode: String = ""
+    ) = accountSession.bindEmailPassword(email, password, registrationCode)
 
-    fun loginAtStartup(email: String, password: String) {
-        runStartupAccountAction {
-            accountManager.loginAccount(
-                email = email,
-                password = password,
-                timeoutMs = serviceRequestTimeoutMs.value
-            ).getOrThrow()
-        }
-    }
+    fun loginAtStartup(email: String, password: String) =
+        accountSession.loginAtStartup(email, password)
 
-    fun registerAtStartup(
-        email: String,
-        password: String,
-        registrationCode: String
-    ) {
-        runStartupAccountAction {
-            if (accountManager.currentAccount() == null) {
-                accountManager.register(serviceRequestTimeoutMs.value).getOrThrow()
-            }
-            accountManager.bindEmailPassword(
-                email = email,
-                password = password,
-                registrationCode = registrationCode,
-                timeoutMs = serviceRequestTimeoutMs.value
-            ).getOrThrow()
-        }
-    }
+    fun registerAtStartup(email: String, password: String, registrationCode: String) =
+        accountSession.registerAtStartup(email, password, registrationCode)
 
-    fun continueAsGuestAtStartup() {
-        runStartupAccountAction {
-            accountManager.register(serviceRequestTimeoutMs.value).getOrThrow()
-        }
-    }
+    fun continueAsGuestAtStartup() = accountSession.continueAsGuestAtStartup()
 
-    fun continueOfflineAtStartup() {
-        if (_isStartupAccountActionInProgress.value || _startupAccountAuthenticated.value) return
-        // 仅保存本地状态并进入主界面，不调用账户或订阅后台端点。
-        accountManager.setOfflineMode(true)
-        _offlineModeEnabled.value = true
-        _accountMessage.value = null
-        _startupAccountAuthenticated.value = true
-    }
+    fun continueOfflineAtStartup() = accountSession.continueOfflineAtStartup()
 
-    fun exitOfflineMode() {
-        if (!accountManager.isOfflineMode()) return
-        accountManager.setOfflineMode(false)
-        _offlineModeEnabled.value = false
-        _startupAccountAuthenticated.value = false
-    }
+    fun exitOfflineMode() = accountSession.exitOfflineMode()
 
-    private fun runStartupAccountAction(action: suspend () -> AccountInfo) {
-        if (_isStartupAccountActionInProgress.value || _startupAccountAuthenticated.value) return
-        viewModelScope.launch {
-            _isStartupAccountActionInProgress.value = true
-            _accountMessage.value = null
-            try {
-                action()
-                _offlineModeEnabled.value = accountManager.isOfflineMode()
-                _startupAccountAuthenticated.value = true
-                viewModelScope.launch { loadStartupDataAfterAuthentication() }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                Log.w(tag, "Startup account action failed", error)
-                _accountMessage.value = startupAccountErrorMessage(error)
-            } finally {
-                _isStartupAccountActionInProgress.value = false
-            }
-        }
-    }
+    fun clearAccountMessage() = accountSession.clearAccountMessage()
 
-    private suspend fun loadStartupDataAfterAuthentication() {
-        if (accountManager.isOfflineMode() || accountManager.currentAccount() == null) return
-        try {
-            val autoRefreshOverrides = settingsRepository.autoRefreshOnStartupOverrides.first()
-            if (!initializeSubscriptionsWithRefreshState(forceRefresh = true)) {
-                scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
-            }
-            refreshUserSubscriptionGroupsOnStartup(autoRefreshOverrides)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            Log.e(tag, "Post-authentication startup refresh failed", error)
-        }
-    }
+    fun switchAccount(email: String, password: String) =
+        accountSession.switchAccount(email, password)
 
-    fun clearAccountMessage() {
-        _accountMessage.value = null
-    }
+    fun deleteAccount(password: String, onDeleted: () -> Unit = {}) =
+        accountSession.deleteAccount(password, onDeleted)
 
-    fun switchAccount(email: String, password: String) {
-        if (_isSwitchingAccount.value || _isDeletingAccount.value || _isActivatingVip.value) return
-        if (vpnState.value != VpnState.DISCONNECTED) {
-            _accountMessage.value = "请先断开 VPN，再切换账户"
-            return
-        }
-        viewModelScope.launch {
-            _isSwitchingAccount.value = true
-            _accountMessage.value = null
-            try {
-                val result = accountManager.loginAccount(
-                    email = email,
-                    password = password,
-                    timeoutMs = serviceRequestTimeoutMs.value
-                )
-                result.onFailure { error ->
-                    Log.w(tag, "Failed to switch account", error)
-                    _accountMessage.value = accountActionErrorMessage(error)
-                }
-                if (result.isSuccess) {
-
-                    val refreshed = initializeSubscriptionsWithRefreshState(forceRefresh = true)
-                    _accountMessage.value = if (refreshed) {
-                        "账户切换成功"
-                    } else {
-                        "账户切换成功，但订阅线路刷新失败"
-                    }
-                }
-            } finally {
-                _isSwitchingAccount.value = false
-            }
-        }
-    }
-
-    fun deleteAccount(password: String, onDeleted: () -> Unit = {}) {
-        if (_isDeletingAccount.value || _isSwitchingAccount.value || _isActivatingVip.value) return
-        if (vpnState.value != VpnState.DISCONNECTED) {
-            _accountMessage.value = "请先断开 VPN，再注销账户"
-            return
-        }
-        viewModelScope.launch {
-            _isDeletingAccount.value = true
-            _accountMessage.value = null
-            try {
-                val result = accountManager.deleteAccount(
-                    password = password,
-                    timeoutMs = serviceRequestTimeoutMs.value
-                )
-                result.onFailure { error ->
-                    Log.w(tag, "Failed to delete account", error)
-                    _accountMessage.value = accountActionErrorMessage(error)
-                }
-                if (result.isSuccess) {
-                    runCatching { clearLocalApplicationData() }
-                        .onFailure { error ->
-                            Log.e(tag, "Failed to clear local application data after account deletion", error)
-                        }
-                    onDeleted()
-                }
-            } finally {
-                _isDeletingAccount.value = false
-            }
-        }
-    }
-
-    /** 注销成功后清除本地数据，避免退出前再次自动注册游客账户。 */
     private suspend fun clearLocalApplicationData() {
         val appContext = getApplication<Application>()
         withContext(Dispatchers.IO) {
@@ -3597,50 +2381,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun startupAccountErrorMessage(error: Throwable): String = when (error.message) {
-        "invalid_email" -> "邮箱格式无效"
-        "invalid_password" -> "密码长度需在 8～128 个字符之间"
-        "device_banned" -> "当前设备已被封禁"
-        "registration_disabled",
-        "registration_code_required",
-        "invalid_registration_code",
-        "formal_registration_closed",
-        "invalid_bind_credentials",
-        "account_already_bound",
-        "email_already_bound" -> accountBindingErrorMessage(error)
-        else -> accountActionErrorMessage(error)
-    }
-
-    private fun accountBindingErrorMessage(error: Throwable): String {
-        return when (error.message) {
-            "registration_disabled" -> "用户注册暂未开放"
-            "registration_code_required" -> "必须使用管理员发放的注册码注册"
-            "invalid_registration_code" -> "注册码无效或已使用"
-            "formal_registration_closed" -> "正式用户注册暂未开放"
-            "invalid_bind_credentials" -> "邮箱或密码格式无效"
-            "account_banned" -> "账户已被封禁，无法绑定"
-            "account_already_bound" -> "账户已经绑定邮箱"
-            "email_already_bound" -> "该邮箱已经绑定其他账户"
-            "account_not_found" -> "账户不存在，请重新同步账户"
-            else -> error.message ?: "账户绑定失败"
+    private suspend fun loadStartupDataAfterAuthentication() {
+        if (accountManager.isOfflineMode() || accountManager.currentAccount() == null) return
+        try {
+            val autoRefreshOverrides = settingsRepository.autoRefreshOnStartupOverrides.first()
+            if (!initializeSubscriptionsWithRefreshState(forceRefresh = true)) {
+                scheduleNodeLocationEnrichment(nodeDao().getAllNodes().first())
+            }
+            subscriptionGroupCoordinator.refreshUserSubscriptionGroupsOnStartup(autoRefreshOverrides)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.e(tag, "Post-authentication startup refresh failed", error)
         }
     }
-
-    private fun accountActionErrorMessage(error: Throwable): String {
-        return when (error.message) {
-            "offline_mode_enabled" -> "离线模式下无法访问后台服务"
-            "backend_url_missing" -> "未配置服务地址"
-            "invalid_login_credentials" -> "邮箱或密码错误"
-            "invalid_account_password" -> "当前账户密码错误"
-            "account_banned" -> "账户已被封禁，无法切换"
-            "account_not_found" -> "账户不存在，请重新同步账户"
-            "invalid_vip_activation_request" -> "VIP 卡密格式无效"
-            "invalid_or_used_vip_card" -> "VIP 卡密无效或已兑换"
-            "vip_activation_failed" -> "VIP 激活失败，请稍后重试"
-            else -> error.message ?: "账户操作失败"
-        }
-    }
-
 
     private suspend fun currentNodeListSnapshot(): List<Node> = withContext(Dispatchers.Default) {
         val selectedGroup = pendingSelectedNodeGroup.value

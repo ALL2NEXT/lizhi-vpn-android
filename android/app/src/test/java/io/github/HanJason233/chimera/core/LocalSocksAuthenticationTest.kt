@@ -1,4 +1,4 @@
-package io.github.HanJason233.chimera.util
+package io.github.HanJason233.chimera.core
 
 import android.app.Application
 import com.google.gson.JsonArray
@@ -14,8 +14,8 @@ import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeType
 import com.google.gson.JsonParser
-import io.github.HanJason233.chimera.core.LocalSocksEndpoint
-import io.github.HanJason233.chimera.core.SocksCredentials
+import io.github.HanJason233.chimera.core.singbox.SingBoxConfigGenerator
+import io.github.HanJason233.chimera.core.xray.XrayConfigGenerator
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], manifest = Config.NONE, application = Application::class)

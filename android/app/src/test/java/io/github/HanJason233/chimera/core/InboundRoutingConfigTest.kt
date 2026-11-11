@@ -1,10 +1,9 @@
-package io.github.HanJason233.chimera.util
+package io.github.HanJason233.chimera.core
 
 import android.app.Application
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import io.github.HanJason233.chimera.core.CoreRequest
-import io.github.HanJason233.chimera.core.LocalSocksEndpoint
+import io.github.HanJason233.chimera.core.singbox.SingBoxConfigGenerator
 import io.github.HanJason233.chimera.core.xray.XrayVpnConfig
 import io.github.HanJason233.chimera.data.model.*
 import io.github.HanJason233.chimera.data.repository.VpnRuntimeSettings

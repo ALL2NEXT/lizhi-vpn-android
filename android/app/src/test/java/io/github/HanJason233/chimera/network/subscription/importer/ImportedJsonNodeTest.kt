@@ -7,8 +7,8 @@ import android.net.Uri
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.github.HanJason233.chimera.data.model.Node
-import io.github.HanJason233.chimera.util.SingBoxConfigGenerator
-import io.github.HanJason233.chimera.util.XrayConfigGenerator
+import io.github.HanJason233.chimera.core.singbox.SingBoxConfigGenerator
+import io.github.HanJason233.chimera.core.xray.XrayConfigGenerator
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith

@@ -1,4 +1,4 @@
-package io.github.HanJason233.chimera.util
+package io.github.HanJason233.chimera.core.xray
 
 import android.net.Uri
 import com.google.gson.Gson
@@ -10,6 +10,19 @@ import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
+import io.github.HanJason233.chimera.util.applyXrayEch
+import io.github.HanJason233.chimera.util.decodeBase64Compat
+import io.github.HanJason233.chimera.util.parseCsvParams
+import io.github.HanJason233.chimera.util.parseJsonBoolean
+import io.github.HanJason233.chimera.util.parseJsonInt
+import io.github.HanJason233.chimera.util.parseJsonString
+import io.github.HanJason233.chimera.util.parseJsonStringList
+import io.github.HanJason233.chimera.util.parseShadowsocksMethodPassword
+import io.github.HanJason233.chimera.util.parseSubscriptionEch
+import io.github.HanJason233.chimera.util.parseWireGuardReserved
+import io.github.HanJason233.chimera.util.queryParamEnabled
+import io.github.HanJason233.chimera.util.queryParamFirst
+import io.github.HanJason233.chimera.util.uriTlsParameters
 
 /** Builds a single-node native Xray configuration with a local probe/API entry. */
 class XrayConfigGenerator {

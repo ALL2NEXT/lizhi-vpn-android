@@ -20,9 +20,6 @@ import io.github.HanJason233.chimera.data.model.HomeModuleSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
 import io.github.HanJason233.chimera.data.model.toIpFamilyRoutingSettings
 import io.github.HanJason233.chimera.data.model.toLegacyIPv6RoutingMode
-import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
-import io.github.HanJason233.chimera.data.model.HomeIconEffect
-import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.LanInboundSettings
 import io.github.HanJason233.chimera.data.model.FailoverDetectionSettings
 import io.github.HanJason233.chimera.data.model.FailoverSettings
@@ -36,14 +33,8 @@ import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.data.model.ProxyCore
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.data.model.RegionLookupMethod
-import io.github.HanJason233.chimera.data.model.LegacySkinScheme
 import io.github.HanJason233.chimera.data.model.SkinSettings
-import io.github.HanJason233.chimera.data.model.SkinThemeMode
-import io.github.HanJason233.chimera.data.model.LegacySpeedTestSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestSettings
-import io.github.HanJason233.chimera.data.model.SpeedTestSelectionMode
-import io.github.HanJason233.chimera.data.model.SpeedTestStage
-import io.github.HanJason233.chimera.data.model.normalizeSpeedTestStageOrder
 import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleAction
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
@@ -51,9 +42,7 @@ import io.github.HanJason233.chimera.data.model.SmartRoutingDomainStrategy
 import io.github.HanJason233.chimera.data.model.SmartRoutingSettings
 import io.github.HanJason233.chimera.data.model.SmartRoutingRulesCodec
 import io.github.HanJason233.chimera.data.model.decodeRoutingRuleValues
-import io.github.HanJason233.chimera.data.model.UrlTestTargets
 import io.github.HanJason233.chimera.feature.nodegrouping.model.NodeGroupingMode
-import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
 import io.github.HanJason233.chimera.util.CountryCodeResolver
 import java.util.UUID
 
@@ -121,9 +110,9 @@ class SettingsRepository(
         const val DEFAULT_SERVICE_REQUEST_TIMEOUT_MS = 25_000L
         private const val AUTO_REFRESH_SOURCE_PREFIX = "auto_refresh_source_on_startup:"
         /** 默认测速预置与旧版主题数据迁移分别维护版本。 */
-        private const val DEFAULT_SPEED_TEST_PRESET_REVISION = 4
-        private const val DEFAULT_SKIN_PARTICLE_PRESET_REVISION = 1
-        private const val DEFAULT_SKIN_PRESET_REVISION = 3
+        internal const val DEFAULT_SPEED_TEST_PRESET_REVISION = 4
+        internal const val DEFAULT_SKIN_PARTICLE_PRESET_REVISION = 1
+        internal const val DEFAULT_SKIN_PRESET_REVISION = 3
         private const val MIN_SERVICE_REQUEST_TIMEOUT_MS = 5_000L
         private const val MAX_SERVICE_REQUEST_TIMEOUT_MS = 60_000L
 
@@ -153,13 +142,13 @@ class SettingsRepository(
         private val FAILOVER_CONSECUTIVE_FAILURES = intPreferencesKey("failover_consecutive_failures")
         private val FAILOVER_TRANSFER_STRATEGY = stringPreferencesKey("failover_transfer_target")
         private val FAILOVER_TRANSFER_NODE_IDS = stringPreferencesKey("failover_transfer_node_ids")
-        private val LEGACY_HOME_SPEED_TEST_SETTINGS_ID =
+        internal val LEGACY_HOME_SPEED_TEST_SETTINGS_ID =
             stringPreferencesKey("home_long_press_speed_test_scheme_id")
-        private val LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID =
+        internal val LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID =
             stringPreferencesKey("group_manual_speed_test_scheme_id")
-        private val LEGACY_GROUP_MANUAL_SPEED_TEST_ENABLED =
+        internal val LEGACY_GROUP_MANUAL_SPEED_TEST_ENABLED =
             booleanPreferencesKey("group_manual_speed_test_enabled")
-        private val LEGACY_HOME_LONG_PRESS_SPEED_TEST_ENABLED =
+        internal val LEGACY_HOME_LONG_PRESS_SPEED_TEST_ENABLED =
             booleanPreferencesKey("home_long_press_speed_test_enabled")
         private val LEGACY_MANUAL_IP_ADDRESS_TEST_PANEL_ENABLED =
             booleanPreferencesKey("manual_ip_address_test_panel_enabled")
@@ -205,7 +194,7 @@ class SettingsRepository(
         private val TCPING_TEST_TIMEOUT_MS = longPreferencesKey("tcping_test_timeout_ms")
         // 请求超时保存在本机，首次获取后台配置时也能读取。
         private val SERVICE_REQUEST_TIMEOUT_MS = longPreferencesKey("service_request_timeout_ms")
-        private val SPEED_TEST_DOWNLOAD_URL = stringPreferencesKey("speed_test_download_url")
+        internal val SPEED_TEST_DOWNLOAD_URL = stringPreferencesKey("speed_test_download_url")
         private val SPEED_TEST_DURATION_MS = longPreferencesKey("speed_test_duration_ms")
         private val TCPING_CONCURRENCY = intPreferencesKey("tcping_concurrency")
         private val BANDWIDTH_TEST_CONCURRENCY = intPreferencesKey("bandwidth_test_concurrency")
@@ -215,25 +204,25 @@ class SettingsRepository(
         private val HYSTERIA_DOWN_MBPS = intPreferencesKey("hysteria_down_mbps")
         private val CORE_ASSIGNMENTS = stringSetPreferencesKey("protocol_core_assignments")
         // 迁移旧版全局节点标签设置；新值并入全局外观配置。
-        private val NODE_LABEL_SHOW_PROTOCOL = booleanPreferencesKey("node_label_show_protocol")
-        private val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
-        private val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
-        private val NODE_LABEL_SHOW_CORE = booleanPreferencesKey("node_label_show_core")
+        internal val NODE_LABEL_SHOW_PROTOCOL = booleanPreferencesKey("node_label_show_protocol")
+        internal val NODE_LABEL_SHOW_SECURITY = booleanPreferencesKey("node_label_show_security")
+        internal val NODE_LABEL_SHOW_TRANSPORT = booleanPreferencesKey("node_label_show_transport")
+        internal val NODE_LABEL_SHOW_CORE = booleanPreferencesKey("node_label_show_core")
         // 迁移旧版全局自动删除设置；新设置保存在各测试项中。
-        private val AUTO_DELETE_TCPING_TIMEOUT_NODES =
+        internal val AUTO_DELETE_TCPING_TIMEOUT_NODES =
             booleanPreferencesKey("auto_delete_tcping_timeout_nodes")
-        private val AUTO_DELETE_URL_TEST_TIMEOUT_NODES =
+        internal val AUTO_DELETE_URL_TEST_TIMEOUT_NODES =
             booleanPreferencesKey("auto_delete_url_test_timeout_nodes")
-        private val AUTO_DELETE_LOW_BANDWIDTH_NODES =
+        internal val AUTO_DELETE_LOW_BANDWIDTH_NODES =
             booleanPreferencesKey("auto_delete_low_bandwidth_nodes")
-        private val AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS =
+        internal val AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS =
             intPreferencesKey("auto_delete_bandwidth_threshold_mbps")
-        private val SKIN_SETTINGS_JSON = stringPreferencesKey("skin_settings_json")
-        private val LEGACY_SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
-        private val LEGACY_ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
-        private val LEGACY_SPEED_TEST_SETTINGS_JSON = stringPreferencesKey("speed_test_schemes_json")
-        private val HOME_SPEED_TEST_SETTINGS_JSON = stringPreferencesKey("home_speed_test_settings_json")
-        private val GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON =
+        internal val SKIN_SETTINGS_JSON = stringPreferencesKey("skin_settings_json")
+        internal val LEGACY_SKIN_SCHEMES_JSON = stringPreferencesKey("skin_schemes_json")
+        internal val LEGACY_ACTIVE_SKIN_SCHEME_ID = stringPreferencesKey("active_skin_scheme_id")
+        internal val LEGACY_SPEED_TEST_SETTINGS_JSON = stringPreferencesKey("speed_test_schemes_json")
+        internal val HOME_SPEED_TEST_SETTINGS_JSON = stringPreferencesKey("home_speed_test_settings_json")
+        internal val GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON =
             stringPreferencesKey("group_manual_speed_test_settings_json")
         private val IP_ADDRESS_TEST_SETTINGS_JSON =
             stringPreferencesKey("ip_address_test_settings_json")
@@ -269,7 +258,7 @@ class SettingsRepository(
     }
 
     val homeSpeedTestSettings: Flow<SpeedTestSettings> = store.data.map { preferences ->
-        decodeSpeedTestSettings(
+        SpeedTestSettingsCodec.decodeSpeedTestSettings(
             preferences = preferences,
             settingsKey = HOME_SPEED_TEST_SETTINGS_JSON,
             legacySelectionKey = LEGACY_HOME_SPEED_TEST_SETTINGS_ID
@@ -277,7 +266,7 @@ class SettingsRepository(
     }
 
     val groupManualSpeedTestSettings: Flow<SpeedTestSettings> = store.data.map { preferences ->
-        decodeSpeedTestSettings(
+        SpeedTestSettingsCodec.decodeSpeedTestSettings(
             preferences = preferences,
             settingsKey = GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON,
             legacySelectionKey = LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID
@@ -295,25 +284,27 @@ class SettingsRepository(
     }
 
     suspend fun migrateLegacySpeedTestSettings() {
-        store.edit { preferences -> migrateLegacySpeedTestSettings(preferences) }
+        store.edit { preferences -> SpeedTestSettingsCodec.migrateLegacySpeedTestSettings(preferences) }
     }
 
     suspend fun setHomeSpeedTestSettings(settings: SpeedTestSettings) {
         store.edit { preferences ->
-            migrateLegacySpeedTestSettings(preferences)
-            preferences[HOME_SPEED_TEST_SETTINGS_JSON] = encodeSpeedTestSettings(settings)
+            SpeedTestSettingsCodec.migrateLegacySpeedTestSettings(preferences)
+            preferences[HOME_SPEED_TEST_SETTINGS_JSON] = SpeedTestSettingsCodec.encodeSpeedTestSettings(settings)
         }
     }
 
     suspend fun setGroupManualSpeedTestSettings(settings: SpeedTestSettings) {
         store.edit { preferences ->
-            migrateLegacySpeedTestSettings(preferences)
-            preferences[GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON] = encodeSpeedTestSettings(settings)
+            SpeedTestSettingsCodec.migrateLegacySpeedTestSettings(preferences)
+            preferences[GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON] = SpeedTestSettingsCodec.encodeSpeedTestSettings(settings)
         }
     }
 
     /** 全局外观配置；旧版多主题数据在首次修改时迁移当前选中的主题。 */
-    val skinSettings: Flow<SkinSettings> = store.data.map(::decodeSkinSettings)
+    val skinSettings: Flow<SkinSettings> = store.data.map { preferences ->
+        SkinSettingsCodec.decodeSkinSettings(preferences)
+    }
     
     val selectedSubscriptionSourceId: Flow<String?> = store.data.map { preferences ->
         preferences[SELECTED_SUBSCRIPTION_SOURCE_ID]
@@ -964,11 +955,11 @@ class SettingsRepository(
 
     suspend fun updateSkinSettings(update: (SkinSettings) -> SkinSettings) {
         store.edit { preferences ->
-            val settings = update(decodeSkinSettings(preferences))
+            val settings = update(SkinSettingsCodec.decodeSkinSettings(preferences))
             val normalizedSettings = settings.copy(
-                baseColorArgb = normalizeSkinColor(settings.baseColorArgb)
+                baseColorArgb = SkinSettingsCodec.normalizeSkinColor(settings.baseColorArgb)
             )
-            preferences[SKIN_SETTINGS_JSON] = encodeSkinSettings(normalizedSettings)
+            preferences[SKIN_SETTINGS_JSON] = SkinSettingsCodec.encodeSkinSettings(normalizedSettings)
             preferences.remove(LEGACY_SKIN_SCHEMES_JSON)
             preferences.remove(LEGACY_ACTIVE_SKIN_SCHEME_ID)
             preferences.remove(NODE_LABEL_SHOW_PROTOCOL)
@@ -1504,909 +1495,6 @@ class SettingsRepository(
         store.edit { preferences ->
             preferences[HYSTERIA_DOWN_MBPS] = value.coerceIn(0, 100_000)
         }
-    }
-
-    private fun normalizeSkinColor(argb: Long): Long {
-        return 0xFF000000L or (argb and 0x00FFFFFFL)
-    }
-
-    private fun decodeSpeedTestSettings(
-        preferences: Preferences,
-        settingsKey: Preferences.Key<String>,
-        legacySelectionKey: Preferences.Key<String>
-    ): SpeedTestSettings {
-        val stored = preferences[settingsKey]?.takeIf(String::isNotBlank)
-        if (stored == null) return decodeLegacySpeedTestSettings(preferences, legacySelectionKey)
-
-        return runCatching {
-            val item = JSONObject(stored)
-            val stageOrder = item.optJSONArray("stageOrder")?.let { savedOrder ->
-                buildList {
-                    repeat(savedOrder.length()) { index ->
-                        SpeedTestStage.entries
-                            .firstOrNull { it.name == savedOrder.optString(index) }
-                            ?.let(::add)
-                    }
-                }
-            } ?: SpeedTestStage.entries
-            item.apply {
-                put("id", LegacySpeedTestSettings.DEFAULT_ID)
-                put("name", "迁移后的测速设置")
-                put("builtIn", true)
-                put("defaultsVersion", DEFAULT_SPEED_TEST_PRESET_REVISION)
-            }
-            val legacyPreferences = preferences.toMutablePreferences().apply {
-                this[LEGACY_SPEED_TEST_SETTINGS_JSON] = JSONArray().put(item).toString()
-                this[LEGACY_HOME_SPEED_TEST_SETTINGS_ID] = LegacySpeedTestSettings.DEFAULT_ID
-            }
-            decodeLegacySpeedTestSettingsRecords(legacyPreferences).first().toSettings().copy(
-                stageOrder = normalizeSpeedTestStageOrder(stageOrder)
-            )
-        }.getOrElse { SpeedTestSettings.default() }
-    }
-
-    private fun decodeLegacySpeedTestSettings(
-        preferences: Preferences,
-        selectionKey: Preferences.Key<String>
-    ): SpeedTestSettings {
-        val settings = decodeLegacySpeedTestSettingsRecords(preferences)
-        val selectedId = preferences[selectionKey]
-        val selected = settings.firstOrNull { it.id == selectedId }
-            ?: settings.firstOrNull { it.id == LegacySpeedTestSettings.DEFAULT_ID }
-            ?: LegacySpeedTestSettings.default()
-        return selected.toSettings()
-    }
-
-    /** 将旧版选中的方案分别迁移到两个入口的独立配置，再清理旧方案数据。 */
-    private fun migrateLegacySpeedTestSettings(preferences: MutablePreferences) {
-        if (preferences[HOME_SPEED_TEST_SETTINGS_JSON] == null) {
-            preferences[HOME_SPEED_TEST_SETTINGS_JSON] = encodeSpeedTestSettings(
-                decodeLegacySpeedTestSettings(preferences, LEGACY_HOME_SPEED_TEST_SETTINGS_ID)
-            )
-        }
-        if (preferences[GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON] == null) {
-            preferences[GROUP_MANUAL_SPEED_TEST_SETTINGS_JSON] = encodeSpeedTestSettings(
-                decodeLegacySpeedTestSettings(preferences, LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID)
-            )
-        }
-        preferences.remove(LEGACY_SPEED_TEST_SETTINGS_JSON)
-        preferences.remove(LEGACY_HOME_SPEED_TEST_SETTINGS_ID)
-        preferences.remove(LEGACY_GROUP_MANUAL_SPEED_TEST_SETTINGS_ID)
-        preferences.remove(LEGACY_GROUP_MANUAL_SPEED_TEST_ENABLED)
-        preferences.remove(LEGACY_HOME_LONG_PRESS_SPEED_TEST_ENABLED)
-        preferences.remove(AUTO_DELETE_TCPING_TIMEOUT_NODES)
-        preferences.remove(AUTO_DELETE_URL_TEST_TIMEOUT_NODES)
-        preferences.remove(AUTO_DELETE_LOW_BANDWIDTH_NODES)
-        preferences.remove(AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS)
-    }
-
-    private fun encodeSpeedTestSettings(settings: SpeedTestSettings): String {
-        val storedSettings = settings.toLegacySettingsRecord().let(::normalizeLegacySpeedTestSettings)
-        return JSONArray(encodeLegacySpeedTestSettingsRecords(listOf(storedSettings)))
-            .getJSONObject(0)
-            .apply {
-                remove("id")
-                remove("name")
-                remove("builtIn")
-                remove("defaultsVersion")
-                remove("tcpingPercent")
-                remove("urlTestPercent")
-                remove("bandwidthPercent")
-                remove("urlTestTimeoutMs")
-                put(
-                    "stageOrder",
-                    JSONArray(normalizeSpeedTestStageOrder(settings.stageOrder).map { it.name })
-                )
-            }
-            .toString()
-    }
-
-    private fun LegacySpeedTestSettings.toSettings() = SpeedTestSettings(
-        tcpingEnabled = tcpingEnabled,
-        urlTestEnabled = urlTestEnabled,
-        bandwidthEnabled = bandwidthEnabled,
-        linkTypeTestEnabled = linkTypeTestEnabled,
-        linkTypeAcceptDirect = linkTypeAcceptDirect,
-        linkTypeAcceptRelay = linkTypeAcceptRelay,
-        linkTypeAcceptCdnRelay = linkTypeAcceptCdnRelay,
-        unlockTestsEnabled = unlockTestsEnabled,
-        unlockTestIds = unlockTestIds,
-        linkTypeConcurrencyMode = linkTypeConcurrencyMode,
-        linkTypeConcurrency = linkTypeConcurrency,
-        unlockTestConcurrencyMode = unlockTestConcurrencyMode,
-        unlockTestConcurrency = unlockTestConcurrency,
-        unlockTestRequestConcurrency = unlockTestRequestConcurrency,
-        tcpingSelectionMode = tcpingSelectionMode,
-        tcpingSelectionValue = tcpingSelectionValue,
-        urlTestSelectionMode = urlTestSelectionMode,
-        urlTestSelectionValue = urlTestSelectionValue,
-        bandwidthSelectionMode = bandwidthSelectionMode,
-        bandwidthSelectionValue = bandwidthSelectionValue,
-        tcpingAutoDeleteTimeoutNodes = tcpingAutoDeleteTimeoutNodes,
-        urlTestAutoDeleteTimeoutNodes = urlTestAutoDeleteTimeoutNodes,
-        bandwidthAutoDeleteLowSpeedNodes = bandwidthAutoDeleteLowSpeedNodes,
-        bandwidthAutoDeleteThresholdMbps = bandwidthAutoDeleteThresholdMbps,
-        tcpingTimeoutMs = tcpingTimeoutMs,
-        urlTestWarmupTimeoutMs = urlTestWarmupTimeoutMs,
-        urlTestMeasurementTimeoutMs = urlTestMeasurementTimeoutMs,
-        urlTestUrl = urlTestUrl,
-        urlTestBackupUrl = urlTestBackupUrl,
-        bandwidthTestDurationMs = bandwidthTestDurationMs,
-        bandwidthTestUrl = bandwidthTestUrl,
-        tcpingConcurrencyMode = tcpingConcurrencyMode,
-        tcpingConcurrency = tcpingConcurrency,
-        urlTestConcurrencyMode = urlTestConcurrencyMode,
-        urlTestConcurrency = urlTestConcurrency,
-        bandwidthTestConcurrencyMode = bandwidthTestConcurrencyMode,
-        bandwidthTestConcurrency = bandwidthTestConcurrency
-    )
-
-    private fun SpeedTestSettings.toLegacySettingsRecord() = LegacySpeedTestSettings.default().copy(
-        tcpingEnabled = tcpingEnabled,
-        urlTestEnabled = urlTestEnabled,
-        bandwidthEnabled = bandwidthEnabled,
-        linkTypeTestEnabled = linkTypeTestEnabled,
-        linkTypeAcceptDirect = linkTypeAcceptDirect,
-        linkTypeAcceptRelay = linkTypeAcceptRelay,
-        linkTypeAcceptCdnRelay = linkTypeAcceptCdnRelay,
-        unlockTestsEnabled = unlockTestsEnabled,
-        unlockTestIds = unlockTestIds,
-        linkTypeConcurrencyMode = linkTypeConcurrencyMode,
-        linkTypeConcurrency = linkTypeConcurrency,
-        unlockTestConcurrencyMode = unlockTestConcurrencyMode,
-        unlockTestConcurrency = unlockTestConcurrency,
-        unlockTestRequestConcurrency = unlockTestRequestConcurrency,
-        tcpingSelectionMode = tcpingSelectionMode,
-        tcpingSelectionValue = tcpingSelectionValue,
-        urlTestSelectionMode = urlTestSelectionMode,
-        urlTestSelectionValue = urlTestSelectionValue,
-        bandwidthSelectionMode = bandwidthSelectionMode,
-        bandwidthSelectionValue = bandwidthSelectionValue,
-        tcpingAutoDeleteTimeoutNodes = tcpingAutoDeleteTimeoutNodes,
-        urlTestAutoDeleteTimeoutNodes = urlTestAutoDeleteTimeoutNodes,
-        bandwidthAutoDeleteLowSpeedNodes = bandwidthAutoDeleteLowSpeedNodes,
-        bandwidthAutoDeleteThresholdMbps = bandwidthAutoDeleteThresholdMbps,
-        tcpingTimeoutMs = tcpingTimeoutMs,
-        urlTestWarmupTimeoutMs = urlTestWarmupTimeoutMs,
-        urlTestMeasurementTimeoutMs = urlTestMeasurementTimeoutMs,
-        urlTestUrl = urlTestUrl,
-        urlTestBackupUrl = urlTestBackupUrl,
-        bandwidthTestDurationMs = bandwidthTestDurationMs,
-        bandwidthTestUrl = bandwidthTestUrl,
-        tcpingConcurrencyMode = tcpingConcurrencyMode,
-        tcpingConcurrency = tcpingConcurrency,
-        urlTestConcurrencyMode = urlTestConcurrencyMode,
-        urlTestConcurrency = urlTestConcurrency,
-        bandwidthTestConcurrencyMode = bandwidthTestConcurrencyMode,
-        bandwidthTestConcurrency = bandwidthTestConcurrency
-    )
-
-    private fun decodeLegacySpeedTestSettingsRecords(preferences: Preferences): List<LegacySpeedTestSettings> {
-        val stored = preferences[LEGACY_SPEED_TEST_SETTINGS_JSON]
-            ?.takeIf(String::isNotBlank)
-            ?.let { json ->
-                runCatching {
-                    val array = JSONArray(json)
-                    buildList {
-                        for (index in 0 until array.length()) {
-                            val item = array.optJSONObject(index) ?: continue
-                            val id = item.optString("id").trim()
-                            if (id.isBlank()) continue
-                            // 仅在内置预置版本升级时刷新默认字段；自定义方案保持原样。
-                            if (id == LegacySpeedTestSettings.DEFAULT_ID &&
-                                item.optInt("defaultsVersion", 0) < DEFAULT_SPEED_TEST_PRESET_REVISION
-                            ) {
-                                val defaults = LegacySpeedTestSettings.default()
-                                item.put("tcpingSelectionMode", defaults.tcpingSelectionMode.name)
-                                item.put("tcpingSelectionValue", defaults.tcpingSelectionValue)
-                                item.put("urlTestSelectionMode", defaults.urlTestSelectionMode.name)
-                                item.put("urlTestSelectionValue", defaults.urlTestSelectionValue)
-                                item.put("linkTypeTestEnabled", defaults.linkTypeTestEnabled)
-                                item.put("linkTypeConcurrencyMode", defaults.linkTypeConcurrencyMode.name)
-                                item.put("linkTypeConcurrency", defaults.linkTypeConcurrency)
-                                item.put("unlockTestConcurrencyMode", defaults.unlockTestConcurrencyMode.name)
-                                item.put("unlockTestConcurrency", defaults.unlockTestConcurrency)
-                                item.put("unlockTestRequestConcurrency", defaults.unlockTestRequestConcurrency)
-                                item.put("tcpingConcurrencyMode", defaults.tcpingConcurrencyMode.name)
-                                item.put("tcpingConcurrency", defaults.tcpingConcurrency)
-                                item.put("urlTestConcurrencyMode", defaults.urlTestConcurrencyMode.name)
-                                item.put("urlTestConcurrency", defaults.urlTestConcurrency)
-                                item.put(
-                                    "bandwidthTestConcurrencyMode",
-                                    defaults.bandwidthTestConcurrencyMode.name
-                                )
-                                item.put("bandwidthTestConcurrency", defaults.bandwidthTestConcurrency)
-                            }
-                            add(
-                                normalizeLegacySpeedTestSettings(
-                                    LegacySpeedTestSettings(
-                                        id = id,
-                                        name = item.optString("name", "我的方案"),
-                                        builtIn = item.optBoolean("builtIn", false),
-                                        tcpingEnabled = item.optBoolean("tcpingEnabled", true),
-                                        urlTestEnabled = item.optBoolean("urlTestEnabled", true),
-                                        bandwidthEnabled = item.optBoolean("bandwidthEnabled", true),
-                                        linkTypeTestEnabled = item.optBoolean("linkTypeTestEnabled", false),
-                                        linkTypeAcceptDirect = item.optBoolean("linkTypeAcceptDirect", true),
-                                        linkTypeAcceptRelay = item.optBoolean("linkTypeAcceptRelay", true),
-                                        linkTypeAcceptCdnRelay = item.optBoolean("linkTypeAcceptCdnRelay", true),
-                                        unlockTestsEnabled = item.optBoolean("unlockTestsEnabled", false),
-                                        unlockTestIds = buildSet {
-                                            item.optJSONArray("unlockTestIds")?.let { tests ->
-                                                for (testIndex in 0 until tests.length()) {
-                                                    canonicalUnlockTestId(tests.optString(testIndex).trim())
-                                                        .takeIf { id -> UnlockTestCatalog.definitions.any { it.id == id } }
-                                                        ?.let(::add)
-                                                }
-                                            }
-                                        },
-                                        linkTypeConcurrencyMode = readConcurrencyMode(
-                                            item,
-                                            "linkTypeConcurrencyMode"
-                                        ),
-                                        linkTypeConcurrency = item.optInt("linkTypeConcurrency", 3),
-                                        unlockTestConcurrencyMode = readConcurrencyMode(
-                                            item,
-                                            "unlockTestConcurrencyMode"
-                                        ),
-                                        unlockTestConcurrency = item.optInt("unlockTestConcurrency", 3),
-                                        unlockTestRequestConcurrency = item.optInt(
-                                            "unlockTestRequestConcurrency",
-                                            4
-                                        ),
-                                        tcpingSelectionMode = readSelectionMode(
-                                            item,
-                                            "tcping",
-                                            SpeedTestSelectionMode.PERCENT
-                                        ),
-                                        tcpingSelectionValue = readSelectionValue(
-                                            item,
-                                            "tcping",
-                                            legacyKey = "tcpingPercent",
-                                            legacyDefault = 100
-                                        ),
-                                        urlTestSelectionMode = readSelectionMode(
-                                            item,
-                                            "urlTest",
-                                            SpeedTestSelectionMode.PERCENT
-                                        ),
-                                        urlTestSelectionValue = readSelectionValue(
-                                            item,
-                                            "urlTest",
-                                            legacyKey = "urlTestPercent",
-                                            legacyDefault = 50
-                                        ),
-                                        bandwidthSelectionMode = readSelectionMode(
-                                            item,
-                                            "bandwidth",
-                                            SpeedTestSelectionMode.PERCENT
-                                        ),
-                                        bandwidthSelectionValue = readSelectionValue(
-                                            item,
-                                            "bandwidth",
-                                            legacyKey = "bandwidthPercent",
-                                            legacyDefault = 50
-                                        ),
-                                        tcpingAutoDeleteTimeoutNodes = item.optBoolean(
-                                            "tcpingAutoDeleteTimeoutNodes",
-                                            preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES]
-                                                ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES
-                                        ),
-                                        urlTestAutoDeleteTimeoutNodes = item.optBoolean(
-                                            "urlTestAutoDeleteTimeoutNodes",
-                                            preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES]
-                                                ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES
-                                        ),
-                                        bandwidthAutoDeleteLowSpeedNodes = item.optBoolean(
-                                            "bandwidthAutoDeleteLowSpeedNodes",
-                                            preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES]
-                                                ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_LOW_BANDWIDTH_NODES
-                                        ),
-                                        bandwidthAutoDeleteThresholdMbps = item.optInt(
-                                            "bandwidthAutoDeleteThresholdMbps",
-                                            preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS]
-                                                ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS
-                                        ),
-                                        tcpingTimeoutMs = item.optLong("tcpingTimeoutMs", 1_000L),
-                                        urlTestWarmupTimeoutMs = item.optLong(
-                                            "urlTestWarmupTimeoutMs",
-                                            io.github.HanJason233.chimera.AppConfig.URL_TEST_WARMUP_TIMEOUT
-                                        ),
-                                        urlTestMeasurementTimeoutMs = item.optLong(
-                                            "urlTestMeasurementTimeoutMs",
-                                            io.github.HanJason233.chimera.AppConfig.URL_TEST_MEASUREMENT_TIMEOUT
-                                        ),
-                                        urlTestUrl = item.optString("urlTestUrl", UrlTestTargets.DEFAULT_URL),
-                                        urlTestBackupUrl = item.optString(
-                                            "urlTestBackupUrl",
-                                            UrlTestTargets.DEFAULT_BACKUP_URL
-                                        ),
-                                        bandwidthTestDurationMs = item.optLong(
-                                            "bandwidthTestDurationMs",
-                                            3_000L
-                                        ),
-                                        bandwidthTestUrl = item.optString(
-                                            "bandwidthTestUrl",
-                                            io.github.HanJason233.chimera.AppConfig.SPEED_TEST_DOWNLOAD_URL
-                                        ),
-                                        tcpingConcurrencyMode = readConcurrencyMode(
-                                            item,
-                                            "tcpingConcurrencyMode"
-                                        ),
-                                        tcpingConcurrency = item.optInt("tcpingConcurrency", 16),
-                                        urlTestConcurrencyMode = readConcurrencyMode(
-                                            item,
-                                            "urlTestConcurrencyMode"
-                                        ),
-                                        urlTestConcurrency = item.optInt("urlTestConcurrency", 10),
-                                        bandwidthTestConcurrencyMode = readConcurrencyMode(
-                                            item,
-                                            "bandwidthTestConcurrencyMode"
-                                        ),
-                                        bandwidthTestConcurrency = item.optInt(
-                                            "bandwidthTestConcurrency",
-                                            1
-                                        )
-                                    )
-                                )
-                            )
-                        }
-                    }
-                }.getOrNull()
-            }
-
-        val defaultScheme = stored?.firstOrNull { it.id == LegacySpeedTestSettings.DEFAULT_ID }
-            ?: LegacySpeedTestSettings.default().copy(
-                tcpingAutoDeleteTimeoutNodes = preferences[AUTO_DELETE_TCPING_TIMEOUT_NODES]
-                    ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_TCPING_TIMEOUT_NODES,
-                urlTestAutoDeleteTimeoutNodes = preferences[AUTO_DELETE_URL_TEST_TIMEOUT_NODES]
-                    ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_URL_TEST_TIMEOUT_NODES,
-                bandwidthAutoDeleteLowSpeedNodes = preferences[AUTO_DELETE_LOW_BANDWIDTH_NODES]
-                    ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_LOW_BANDWIDTH_NODES,
-                bandwidthAutoDeleteThresholdMbps = preferences[AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS]
-                    ?: io.github.HanJason233.chimera.AppConfig.AUTO_DELETE_BANDWIDTH_THRESHOLD_MBPS
-            )
-        val custom = stored.orEmpty()
-            .filterNot { it.id == LegacySpeedTestSettings.DEFAULT_ID }
-            .filterNot { it.builtIn }
-            .distinctBy(LegacySpeedTestSettings::id)
-        return listOf(defaultScheme.copy(builtIn = true)) + custom
-    }
-
-    private fun readSelectionMode(
-        item: JSONObject,
-        prefix: String,
-        default: SpeedTestSelectionMode
-    ): SpeedTestSelectionMode = runCatching {
-        SpeedTestSelectionMode.valueOf(item.optString("${prefix}SelectionMode"))
-    }.getOrDefault(default)
-
-    private fun readSelectionValue(
-        item: JSONObject,
-        prefix: String,
-        legacyKey: String,
-        legacyDefault: Int
-    ): Int = item.optInt(
-        "${prefix}SelectionValue",
-        item.optInt(legacyKey, legacyDefault)
-    )
-
-    private fun readConcurrencyMode(item: JSONObject, key: String): SpeedTestSelectionMode = runCatching {
-        SpeedTestSelectionMode.valueOf(item.optString(key))
-    }.getOrDefault(SpeedTestSelectionMode.COUNT)
-
-    private fun normalizeSelectionValue(
-        mode: SpeedTestSelectionMode,
-        value: Int
-    ): Int = when (mode) {
-        SpeedTestSelectionMode.PERCENT -> value.coerceIn(1, 100)
-        SpeedTestSelectionMode.COUNT -> value.coerceAtLeast(1)
-    }
-
-    private fun canonicalUnlockTestId(id: String): String = when (id) {
-        "openai" -> "chatgpt"
-        else -> id
-    }
-
-    private fun normalizeLegacySpeedTestSettings(scheme: LegacySpeedTestSettings): LegacySpeedTestSettings {
-        // 规范空名称，同时保留用户对方案名称的自定义修改。
-        val trimmedName = scheme.name.trim()
-        val normalizedName = when {
-            scheme.id == LegacySpeedTestSettings.DEFAULT_ID && trimmedName.isBlank() -> "默认测速"
-            else -> trimmedName.ifBlank { if (scheme.builtIn) "测速方案" else "我的方案" }
-        }
-        return scheme.copy(
-            name = normalizedName,
-            unlockTestIds = scheme.unlockTestIds.map(::canonicalUnlockTestId).toSet().intersect(
-                UnlockTestCatalog.definitions.mapTo(mutableSetOf()) { it.id }
-            ),
-            tcpingSelectionValue = normalizeSelectionValue(
-                scheme.tcpingSelectionMode,
-                scheme.tcpingSelectionValue
-            ),
-            urlTestSelectionValue = normalizeSelectionValue(
-                scheme.urlTestSelectionMode,
-                scheme.urlTestSelectionValue
-            ),
-            bandwidthSelectionValue = normalizeSelectionValue(
-                scheme.bandwidthSelectionMode,
-                scheme.bandwidthSelectionValue
-            ),
-            linkTypeConcurrency = normalizeSelectionValue(
-                scheme.linkTypeConcurrencyMode,
-                scheme.linkTypeConcurrency
-            ).coerceAtMost(
-                if (scheme.linkTypeConcurrencyMode == SpeedTestSelectionMode.COUNT) {
-                    SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
-                } else {
-                    100
-                }
-            ),
-            unlockTestConcurrency = normalizeSelectionValue(
-                scheme.unlockTestConcurrencyMode,
-                scheme.unlockTestConcurrency
-            ).coerceAtMost(
-                if (scheme.unlockTestConcurrencyMode == SpeedTestSelectionMode.COUNT) {
-                    SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
-                } else {
-                    100
-                }
-            ),
-            unlockTestRequestConcurrency = scheme.unlockTestRequestConcurrency.coerceIn(
-                1,
-                SpeedTestSettings.MAX_PRE_VPN_TEST_CONCURRENCY
-            ),
-            bandwidthAutoDeleteThresholdMbps = scheme.bandwidthAutoDeleteThresholdMbps.coerceIn(0, 100_000),
-            tcpingTimeoutMs = scheme.tcpingTimeoutMs.coerceAtLeast(500L),
-            urlTestWarmupTimeoutMs = scheme.urlTestWarmupTimeoutMs.coerceIn(500L, 60_000L),
-            urlTestMeasurementTimeoutMs = scheme.urlTestMeasurementTimeoutMs.coerceIn(500L, 60_000L),
-            urlTestUrl = UrlTestTargets.normalize(scheme.urlTestUrl) ?: UrlTestTargets.DEFAULT_URL,
-            urlTestBackupUrl = UrlTestTargets.normalizeOptional(scheme.urlTestBackupUrl) ?: "",
-            bandwidthTestDurationMs = scheme.bandwidthTestDurationMs.coerceAtLeast(1_000L),
-            bandwidthTestUrl = BandwidthTestTargets.normalize(scheme.bandwidthTestUrl)
-                ?: io.github.HanJason233.chimera.AppConfig.SPEED_TEST_DOWNLOAD_URL,
-            tcpingConcurrency = normalizeSelectionValue(
-                scheme.tcpingConcurrencyMode,
-                scheme.tcpingConcurrency
-            ).coerceAtMost(if (scheme.tcpingConcurrencyMode == SpeedTestSelectionMode.COUNT) 512 else 100),
-            urlTestConcurrency = normalizeSelectionValue(
-                scheme.urlTestConcurrencyMode,
-                scheme.urlTestConcurrency
-            ).coerceAtMost(if (scheme.urlTestConcurrencyMode == SpeedTestSelectionMode.COUNT) 128 else 100),
-            bandwidthTestConcurrency = normalizeSelectionValue(
-                scheme.bandwidthTestConcurrencyMode,
-                scheme.bandwidthTestConcurrency
-            ).coerceAtMost(if (scheme.bandwidthTestConcurrencyMode == SpeedTestSelectionMode.COUNT) 3 else 100)
-        )
-    }
-
-    private fun encodeLegacySpeedTestSettingsRecords(schemes: List<LegacySpeedTestSettings>): String {
-        val array = JSONArray()
-        schemes.distinctBy(LegacySpeedTestSettings::id).forEach { scheme ->
-            val normalized = normalizeLegacySpeedTestSettings(scheme)
-            array.put(
-                JSONObject().apply {
-                    put("id", normalized.id)
-                    if (normalized.id == LegacySpeedTestSettings.DEFAULT_ID) {
-                        put("defaultsVersion", DEFAULT_SPEED_TEST_PRESET_REVISION)
-                    }
-                    put("name", normalized.name)
-                    put("builtIn", normalized.builtIn)
-                    put("tcpingEnabled", normalized.tcpingEnabled)
-                    put("urlTestEnabled", normalized.urlTestEnabled)
-                    put("bandwidthEnabled", normalized.bandwidthEnabled)
-                    put("linkTypeTestEnabled", normalized.linkTypeTestEnabled)
-                    put("linkTypeAcceptDirect", normalized.linkTypeAcceptDirect)
-                    put("linkTypeAcceptRelay", normalized.linkTypeAcceptRelay)
-                    put("linkTypeAcceptCdnRelay", normalized.linkTypeAcceptCdnRelay)
-                    put("unlockTestsEnabled", normalized.unlockTestsEnabled)
-                    put("unlockTestIds", JSONArray().apply {
-                        normalized.unlockTestIds.forEach(::put)
-                    })
-                    put("linkTypeConcurrencyMode", normalized.linkTypeConcurrencyMode.name)
-                    put("linkTypeConcurrency", normalized.linkTypeConcurrency)
-                    put("unlockTestConcurrencyMode", normalized.unlockTestConcurrencyMode.name)
-                    put("unlockTestConcurrency", normalized.unlockTestConcurrency)
-                    put("unlockTestRequestConcurrency", normalized.unlockTestRequestConcurrency)
-                    put("tcpingSelectionMode", normalized.tcpingSelectionMode.name)
-                    put("tcpingSelectionValue", normalized.tcpingSelectionValue)
-                    put("urlTestSelectionMode", normalized.urlTestSelectionMode.name)
-                    put("urlTestSelectionValue", normalized.urlTestSelectionValue)
-                    put("bandwidthSelectionMode", normalized.bandwidthSelectionMode.name)
-                    put("bandwidthSelectionValue", normalized.bandwidthSelectionValue)
-                    put("tcpingAutoDeleteTimeoutNodes", normalized.tcpingAutoDeleteTimeoutNodes)
-                    put("urlTestAutoDeleteTimeoutNodes", normalized.urlTestAutoDeleteTimeoutNodes)
-                    put("bandwidthAutoDeleteLowSpeedNodes", normalized.bandwidthAutoDeleteLowSpeedNodes)
-                    put("bandwidthAutoDeleteThresholdMbps", normalized.bandwidthAutoDeleteThresholdMbps)
-                    // Keep the legacy percentage keys so older builds fall back to a safe full test.
-                    put(
-                        "tcpingPercent",
-                        normalized.tcpingSelectionValue.takeIf {
-                            normalized.tcpingSelectionMode == SpeedTestSelectionMode.PERCENT
-                        } ?: 100
-                    )
-                    put(
-                        "urlTestPercent",
-                        normalized.urlTestSelectionValue.takeIf {
-                            normalized.urlTestSelectionMode == SpeedTestSelectionMode.PERCENT
-                        } ?: 100
-                    )
-                    put(
-                        "bandwidthPercent",
-                        normalized.bandwidthSelectionValue.takeIf {
-                            normalized.bandwidthSelectionMode == SpeedTestSelectionMode.PERCENT
-                        } ?: 100
-                    )
-                    put("tcpingTimeoutMs", normalized.tcpingTimeoutMs)
-                    // Keep the old key for downgrade compatibility.
-                    put("urlTestTimeoutMs", normalized.urlTestWarmupTimeoutMs)
-                    put("urlTestWarmupTimeoutMs", normalized.urlTestWarmupTimeoutMs)
-                    put("urlTestMeasurementTimeoutMs", normalized.urlTestMeasurementTimeoutMs)
-                    put("urlTestUrl", normalized.urlTestUrl)
-                    put("urlTestBackupUrl", normalized.urlTestBackupUrl)
-                    put("bandwidthTestDurationMs", normalized.bandwidthTestDurationMs)
-                    put("bandwidthTestUrl", normalized.bandwidthTestUrl)
-                    put("tcpingConcurrencyMode", normalized.tcpingConcurrencyMode.name)
-                    put("tcpingConcurrency", normalized.tcpingConcurrency)
-                    put("urlTestConcurrencyMode", normalized.urlTestConcurrencyMode.name)
-                    put("urlTestConcurrency", normalized.urlTestConcurrency)
-                    put("bandwidthTestConcurrencyMode", normalized.bandwidthTestConcurrencyMode.name)
-                    put("bandwidthTestConcurrency", normalized.bandwidthTestConcurrency)
-                }
-            )
-        }
-        return array.toString()
-    }
-
-    private fun decodeSkinSettings(preferences: Preferences): SkinSettings {
-        val storedSettings = preferences[SKIN_SETTINGS_JSON]
-            ?.takeIf(String::isNotBlank)
-            ?.let { runCatching { JSONObject(it) }.getOrNull() }
-        if (storedSettings != null) {
-            val defaults = SkinSettings()
-            fun optionalPath(key: String): String? = storedSettings.optString(key)
-                .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() }
-
-            return SkinSettings(
-                appDisplayName = storedSettings.optString(
-                    "appDisplayName",
-                    SkinSettings.DEFAULT_APP_DISPLAY_NAME
-                ).trim().ifBlank { SkinSettings.DEFAULT_APP_DISPLAY_NAME }
-                    .let { if (it == "Firefly") "Chimera" else it },
-                appIconPresetId = storedSettings.optString(
-                    "appIconPresetId",
-                    SkinSettings.DEFAULT_APP_ICON_PRESET_ID
-                ).trim().ifBlank { SkinSettings.DEFAULT_APP_ICON_PRESET_ID },
-                baseColorArgb = normalizeSkinColor(
-                    storedSettings.optLong("baseColorArgb", defaults.baseColorArgb)
-                ),
-                themeMode = SkinThemeMode.fromStorage(
-                    storedSettings.optString("themeMode").takeIf(String::isNotBlank)
-                ),
-                navigationStyle = HomeNavigationStyle.fromStorage(
-                    storedSettings.optString("navigationStyle").takeIf(String::isNotBlank)
-                ),
-                monetEnabled = storedSettings.optBoolean("monetEnabled", defaults.monetEnabled),
-                customImagePath = optionalPath("customImagePath"),
-                homeDisconnectedImagePath = optionalPath("homeDisconnectedImagePath"),
-                homeConnectingImagePath = optionalPath("homeConnectingImagePath"),
-                homeDisconnectingImagePath = optionalPath("homeDisconnectingImagePath"),
-                homeConnectedImagePath = optionalPath("homeConnectedImagePath"),
-                homeIconEffect = HomeIconEffect.fromStorage(
-                    storedSettings.optString("homeIconEffect").takeIf(String::isNotBlank)
-                ),
-                homeIconEffectEnabled = storedSettings.optBoolean(
-                    "homeIconEffectEnabled",
-                    defaults.homeIconEffectEnabled
-                ),
-                homeDisconnectedIconEffect = HomeIconMotionEffect.fromStorage(
-                    storedSettings.optString(
-                        "homeDisconnectedIconEffect",
-                        defaults.homeDisconnectedIconEffect.storageName
-                    ).takeIf(String::isNotBlank)
-                ),
-                homeConnectingIconEffect = HomeIconMotionEffect.fromStorage(
-                    storedSettings.optString(
-                        "homeConnectingIconEffect",
-                        defaults.homeConnectingIconEffect.storageName
-                    ).takeIf(String::isNotBlank)
-                ),
-                homeDisconnectingIconEffect = HomeIconMotionEffect.fromStorage(
-                    storedSettings.optString(
-                        "homeDisconnectingIconEffect",
-                        defaults.homeDisconnectingIconEffect.storageName
-                    ).takeIf(String::isNotBlank)
-                ),
-                homeConnectedIconEffect = HomeIconMotionEffect.fromStorage(
-                    storedSettings.optString(
-                        "homeConnectedIconEffect",
-                        defaults.homeConnectedIconEffect.storageName
-                    ).takeIf(String::isNotBlank)
-                ),
-                homeDisconnectedParticleEffectEnabled = storedSettings.optBoolean(
-                    "homeDisconnectedParticleEffectEnabled",
-                    defaults.homeDisconnectedParticleEffectEnabled
-                ),
-                homeConnectingParticleEffectEnabled = storedSettings.optBoolean(
-                    "homeConnectingParticleEffectEnabled",
-                    defaults.homeConnectingParticleEffectEnabled
-                ),
-                homeDisconnectingParticleEffectEnabled = storedSettings.optBoolean(
-                    "homeDisconnectingParticleEffectEnabled",
-                    defaults.homeDisconnectingParticleEffectEnabled
-                ),
-                homeConnectedParticleEffectEnabled = storedSettings.optBoolean(
-                    "homeConnectedParticleEffectEnabled",
-                    defaults.homeConnectedParticleEffectEnabled
-                ),
-                showNodeProtocol = storedSettings.optBoolean(
-                    "showNodeProtocol",
-                    defaults.showNodeProtocol
-                ),
-                showNodeSecurity = storedSettings.optBoolean(
-                    "showNodeSecurity",
-                    defaults.showNodeSecurity
-                ),
-                showNodeTransport = storedSettings.optBoolean(
-                    "showNodeTransport",
-                    defaults.showNodeTransport
-                ),
-                showNodeCore = storedSettings.optBoolean("showNodeCore", defaults.showNodeCore)
-            )
-        }
-
-        // 迁移时沿用旧版当前选中的主题；没有选择记录时与旧版一样优先采用首个自定义主题。
-        val legacySchemes = decodeLegacySkinSchemes(preferences)
-        val activeId = preferences[LEGACY_ACTIVE_SKIN_SCHEME_ID]
-            ?.takeIf { id -> legacySchemes.any { it.id == id } }
-            ?: legacySchemes.firstOrNull { !it.isDefault }?.id
-            ?: LegacySkinScheme.DEFAULT_SCHEME_ID
-        return legacySchemes.firstOrNull { it.id == activeId }
-            ?.toSkinSettings()
-            ?: LegacySkinScheme.default().toSkinSettings()
-    }
-
-    private fun LegacySkinScheme.toSkinSettings() = SkinSettings(
-        appDisplayName = appDisplayName,
-        appIconPresetId = appIconPresetId,
-        baseColorArgb = baseColorArgb,
-        themeMode = themeMode,
-        navigationStyle = navigationStyle,
-        monetEnabled = monetEnabled,
-        customImagePath = customImagePath,
-        homeDisconnectedImagePath = homeDisconnectedImagePath,
-        homeConnectingImagePath = homeConnectingImagePath,
-        homeDisconnectingImagePath = homeDisconnectingImagePath,
-        homeConnectedImagePath = homeConnectedImagePath,
-        homeIconEffect = homeIconEffect,
-        homeIconEffectEnabled = homeIconEffectEnabled,
-        homeDisconnectedIconEffect = homeDisconnectedIconEffect,
-        homeConnectingIconEffect = homeConnectingIconEffect,
-        homeDisconnectingIconEffect = homeDisconnectingIconEffect,
-        homeConnectedIconEffect = homeConnectedIconEffect,
-        homeDisconnectedParticleEffectEnabled = homeDisconnectedParticleEffectEnabled,
-        homeConnectingParticleEffectEnabled = homeConnectingParticleEffectEnabled,
-        homeDisconnectingParticleEffectEnabled = homeDisconnectingParticleEffectEnabled,
-        homeConnectedParticleEffectEnabled = homeConnectedParticleEffectEnabled,
-        showNodeProtocol = showNodeProtocol,
-        showNodeSecurity = showNodeSecurity,
-        showNodeTransport = showNodeTransport,
-        showNodeCore = showNodeCore
-    )
-
-    private fun encodeSkinSettings(settings: SkinSettings): String = JSONObject().apply {
-        put("appDisplayName", settings.appDisplayName)
-        put("appIconPresetId", settings.appIconPresetId)
-        put("baseColorArgb", normalizeSkinColor(settings.baseColorArgb))
-        put("themeMode", settings.themeMode.storageName)
-        put("navigationStyle", settings.navigationStyle.storageName)
-        put("monetEnabled", settings.monetEnabled)
-        settings.customImagePath?.let { put("customImagePath", it) }
-        settings.homeDisconnectedImagePath?.let { put("homeDisconnectedImagePath", it) }
-        settings.homeConnectingImagePath?.let { put("homeConnectingImagePath", it) }
-        settings.homeDisconnectingImagePath?.let { put("homeDisconnectingImagePath", it) }
-        settings.homeConnectedImagePath?.let { put("homeConnectedImagePath", it) }
-        put("homeIconEffect", settings.homeIconEffect.storageName)
-        put("homeIconEffectEnabled", settings.homeIconEffectEnabled)
-        put("homeDisconnectedIconEffect", settings.homeDisconnectedIconEffect.storageName)
-        put("homeConnectingIconEffect", settings.homeConnectingIconEffect.storageName)
-        put("homeDisconnectingIconEffect", settings.homeDisconnectingIconEffect.storageName)
-        put("homeConnectedIconEffect", settings.homeConnectedIconEffect.storageName)
-        put("homeDisconnectedParticleEffectEnabled", settings.homeDisconnectedParticleEffectEnabled)
-        put("homeConnectingParticleEffectEnabled", settings.homeConnectingParticleEffectEnabled)
-        put("homeDisconnectingParticleEffectEnabled", settings.homeDisconnectingParticleEffectEnabled)
-        put("homeConnectedParticleEffectEnabled", settings.homeConnectedParticleEffectEnabled)
-        put("showNodeProtocol", settings.showNodeProtocol)
-        put("showNodeSecurity", settings.showNodeSecurity)
-        put("showNodeTransport", settings.showNodeTransport)
-        put("showNodeCore", settings.showNodeCore)
-    }.toString()
-
-    private fun decodeLegacySkinSchemes(preferences: Preferences): List<LegacySkinScheme> {
-        fun defaultSchemeWithLegacyNodeDisplaySettings(): LegacySkinScheme =
-            LegacySkinScheme.default().copy(
-                showNodeProtocol = preferences[NODE_LABEL_SHOW_PROTOCOL] ?: false,
-                showNodeSecurity = preferences[NODE_LABEL_SHOW_SECURITY] ?: false,
-                showNodeTransport = preferences[NODE_LABEL_SHOW_TRANSPORT] ?: false,
-                showNodeCore = preferences[NODE_LABEL_SHOW_CORE] ?: false
-            )
-
-        val storedJson = preferences[LEGACY_SKIN_SCHEMES_JSON]
-        if (!storedJson.isNullOrBlank()) {
-            val storedSchemes = runCatching {
-                val array = JSONArray(storedJson)
-                buildList {
-                    for (index in 0 until array.length()) {
-                        val item = array.optJSONObject(index) ?: continue
-                        val id = item.optString("id").trim()
-                        if (id.isBlank()) continue
-                        // 旧版统一旋转开关只作用于连接中和断开中，读取时映射到这两个状态。
-                        val legacyHomeIconRotationEnabled = item.optBoolean(
-                            "homeIconRotationEnabled",
-                            false
-                        )
-                        val defaultsVersion = item.optInt("defaultsVersion", 0)
-                        if (id == LegacySkinScheme.DEFAULT_SCHEME_ID &&
-                            defaultsVersion < DEFAULT_SKIN_PARTICLE_PRESET_REVISION
-                        ) {
-                            item.put("homeIconEffectEnabled", LegacySkinScheme.default().homeIconEffectEnabled)
-                        }
-                        if (id == LegacySkinScheme.DEFAULT_SCHEME_ID &&
-                            defaultsVersion < DEFAULT_SKIN_PRESET_REVISION
-                        ) {
-                            val defaultScheme = LegacySkinScheme.default()
-                            // Revert the just introduced defaults when upgrading from revision 2.
-                            if (defaultsVersion >= 2 &&
-                                item.optString("homeDisconnectedIconEffect") ==
-                                HomeIconMotionEffect.BREATHE.storageName
-                            ) {
-                                item.put(
-                                    "homeDisconnectedIconEffect",
-                                    HomeIconMotionEffect.NONE.storageName
-                                )
-                            }
-                            if (defaultsVersion >= 2 &&
-                                item.optString("homeConnectedIconEffect") ==
-                                HomeIconMotionEffect.ROTATE.storageName
-                            ) {
-                                item.put(
-                                    "homeConnectedIconEffect",
-                                    HomeIconMotionEffect.NONE.storageName
-                                )
-                            }
-                            if (item.optString("homeConnectingIconEffect") in setOf("", "none")) {
-                                item.put(
-                                    "homeConnectingIconEffect",
-                                    defaultScheme.homeConnectingIconEffect.storageName
-                                )
-                            }
-                            if (item.optString("homeDisconnectingIconEffect") in setOf("", "none") &&
-                                !legacyHomeIconRotationEnabled
-                            ) {
-                                item.put(
-                                    "homeDisconnectingIconEffect",
-                                    defaultScheme.homeDisconnectingIconEffect.storageName
-                                )
-                            }
-                        }
-                        // 旧版只有统一粒子开关，新字段缺失时沿用旧设置作为四种状态的初始值。
-                        val legacyHomeIconEffectEnabled = item.optBoolean(
-                            "homeIconEffectEnabled",
-                            id != LegacySkinScheme.DEFAULT_SCHEME_ID
-                        )
-                        add(
-                            LegacySkinScheme(
-                                id = id,
-                                appDisplayName = item.optString(
-                                    "appDisplayName",
-                                    SkinSettings.DEFAULT_APP_DISPLAY_NAME
-                                ).trim().ifBlank { SkinSettings.DEFAULT_APP_DISPLAY_NAME }
-                                    .let { if (it == "Firefly") "Chimera" else it },
-                                appIconPresetId = item.optString(
-                                    "appIconPresetId",
-                                    SkinSettings.DEFAULT_APP_ICON_PRESET_ID
-                                ).trim().ifBlank { SkinSettings.DEFAULT_APP_ICON_PRESET_ID },
-                                baseColorArgb = normalizeSkinColor(
-                                    item.optLong(
-                                        "baseColorArgb",
-                                        SkinSettings.DEFAULT_BASE_COLOR_ARGB
-                                    )
-                                ),
-                                showNodeProtocol = item.optBoolean(
-                                    "showNodeProtocol",
-                                    preferences[NODE_LABEL_SHOW_PROTOCOL] ?: false
-                                ),
-                                showNodeSecurity = item.optBoolean(
-                                    "showNodeSecurity",
-                                    preferences[NODE_LABEL_SHOW_SECURITY] ?: false
-                                ),
-                                showNodeTransport = item.optBoolean(
-                                    "showNodeTransport",
-                                    preferences[NODE_LABEL_SHOW_TRANSPORT] ?: false
-                                ),
-                                showNodeCore = item.optBoolean(
-                                    "showNodeCore",
-                                    preferences[NODE_LABEL_SHOW_CORE] ?: false
-                                ),
-                                themeMode = SkinThemeMode.fromStorage(
-                                    item.optString("themeMode").takeIf { it.isNotBlank() }
-                                ),
-                                navigationStyle = HomeNavigationStyle.fromStorage(
-                                    item.optString("navigationStyle").takeIf { it.isNotBlank() }
-                                ),
-                                monetEnabled = item.optBoolean("monetEnabled", false),
-                                customImagePath = item.optString("customImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeDisconnectedImagePath = item.optString("homeDisconnectedImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeConnectingImagePath = item.optString("homeConnectingImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeDisconnectingImagePath = item.optString("homeDisconnectingImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeConnectedImagePath = item.optString("homeConnectedImagePath")
-                                    .takeIf { it.isNotBlank() && it != JSONObject.NULL.toString() },
-                                homeIconEffect = HomeIconEffect.fromStorage(
-                                    item.optString("homeIconEffect").takeIf { it.isNotBlank() }
-                                ),
-                                homeIconEffectEnabled = item.optBoolean(
-                                    "homeIconEffectEnabled",
-                                    id != LegacySkinScheme.DEFAULT_SCHEME_ID
-                                ),
-                                homeDisconnectedParticleEffectEnabled = item.optBoolean(
-                                    "homeDisconnectedParticleEffectEnabled",
-                                    legacyHomeIconEffectEnabled
-                                ),
-                                homeConnectingParticleEffectEnabled = item.optBoolean(
-                                    "homeConnectingParticleEffectEnabled",
-                                    legacyHomeIconEffectEnabled
-                                ),
-                                homeDisconnectingParticleEffectEnabled = item.optBoolean(
-                                    "homeDisconnectingParticleEffectEnabled",
-                                    legacyHomeIconEffectEnabled
-                                ),
-                                homeConnectedParticleEffectEnabled = item.optBoolean(
-                                    "homeConnectedParticleEffectEnabled",
-                                    legacyHomeIconEffectEnabled
-                                ),
-                                homeDisconnectedIconEffect = HomeIconMotionEffect.fromStorage(
-                                    item.optString("homeDisconnectedIconEffect")
-                                        .takeIf { it.isNotBlank() }
-                                ),
-                                homeConnectingIconEffect = HomeIconMotionEffect.fromStorage(
-                                        item.optString("homeConnectingIconEffect")
-                                            .takeIf { it.isNotBlank() }
-                                        ?: if (legacyHomeIconRotationEnabled) {
-                                            HomeIconMotionEffect.ROTATE.storageName
-                                        } else {
-                                            null
-                                        }
-                                ),
-                                homeDisconnectingIconEffect = HomeIconMotionEffect.fromStorage(
-                                        item.optString("homeDisconnectingIconEffect")
-                                            .takeIf { it.isNotBlank() }
-                                        ?: if (legacyHomeIconRotationEnabled) {
-                                            HomeIconMotionEffect.ROTATE.storageName
-                                        } else {
-                                            null
-                                        }
-                                ),
-                                homeConnectedIconEffect = HomeIconMotionEffect.fromStorage(
-                                    item.optString("homeConnectedIconEffect")
-                                        .takeIf { it.isNotBlank() }
-                                )
-                            )
-                        )
-                    }
-                }
-            }.getOrDefault(emptyList())
-            val defaultScheme = storedSchemes.firstOrNull { it.isDefault }
-                ?: defaultSchemeWithLegacyNodeDisplaySettings()
-            return listOf(defaultScheme) + storedSchemes
-                .filterNot { it.isDefault }
-                .distinctBy { it.id }
-        }
-
-        return listOf(defaultSchemeWithLegacyNodeDisplaySettings())
     }
 
 }

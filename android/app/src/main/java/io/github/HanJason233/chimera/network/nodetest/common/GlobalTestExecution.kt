@@ -1,4 +1,4 @@
-package io.github.HanJason233.chimera.viewmodel
+package io.github.HanJason233.chimera.network.nodetest.common
 
 import kotlinx.coroutines.sync.Mutex
 

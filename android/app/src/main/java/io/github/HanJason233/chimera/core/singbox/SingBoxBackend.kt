@@ -19,7 +19,6 @@ import io.github.HanJason233.chimera.platform.awaitExit
 import io.github.HanJason233.chimera.platform.isRunningCompat
 import io.github.HanJason233.chimera.platform.terminateCompat
 import io.github.HanJason233.chimera.util.RuleManager
-import io.github.HanJason233.chimera.util.SingBoxConfigGenerator
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeUnit

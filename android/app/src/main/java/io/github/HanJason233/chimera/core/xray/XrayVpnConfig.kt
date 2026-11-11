@@ -9,13 +9,10 @@ import io.github.HanJason233.chimera.data.model.DnsDomainStrategy
 import io.github.HanJason233.chimera.data.model.DnsSettings
 import io.github.HanJason233.chimera.data.model.IpFamilyRoutingSettings
 import io.github.HanJason233.chimera.data.model.LinkTypeTestTargets
-import io.github.HanJason233.chimera.data.model.ProxyMode
-import io.github.HanJason233.chimera.data.model.SmartRoutingRule
 import io.github.HanJason233.chimera.data.model.SmartRoutingRuleType
 import io.github.HanJason233.chimera.data.model.decodeRoutingRuleValues
 import io.github.HanJason233.chimera.data.model.effectiveOutboundTag
 import io.github.HanJason233.chimera.data.model.normalizeRoutingRuleValue
-import io.github.HanJason233.chimera.util.XrayConfigGenerator
 
 internal object XrayVpnConfig {
     fun generate(request: CoreRequest): String {

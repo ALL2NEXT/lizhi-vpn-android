@@ -12,7 +12,7 @@ import io.github.HanJason233.chimera.core.LocalSocksEndpoint
 import io.github.HanJason233.chimera.core.PortReservation
 import io.github.HanJason233.chimera.core.singbox.SingBoxNativeSession
 import io.github.HanJason233.chimera.data.model.Node
-import io.github.HanJason233.chimera.util.SingBoxConfigGenerator
+import io.github.HanJason233.chimera.core.singbox.SingBoxConfigGenerator
 
 /** All sing-box nodes in one URL-test batch share one native process. */
 internal class SingBoxUrlTestBatch(

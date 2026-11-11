@@ -1,4 +1,4 @@
-package io.github.HanJason233.chimera.util
+package io.github.HanJason233.chimera.core.singbox
 
 import com.google.gson.JsonParser
 import org.junit.Assert.assertEquals
@@ -6,6 +6,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
+import io.github.HanJason233.chimera.util.normalizeTransportType
+import io.github.HanJason233.chimera.util.parseHysteria2ServerPorts
 import io.github.HanJason233.chimera.data.model.DnsSettings
 import io.github.HanJason233.chimera.data.model.IPv6RoutingMode
 import io.github.HanJason233.chimera.data.model.Node

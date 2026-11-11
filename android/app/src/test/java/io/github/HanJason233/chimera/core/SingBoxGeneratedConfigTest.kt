@@ -1,13 +1,19 @@
-package io.github.HanJason233.chimera.util
+package io.github.HanJason233.chimera.core
 
 import android.app.Application
 import android.net.Uri
 import com.google.gson.JsonParser
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
+import io.github.HanJason233.chimera.core.singbox.SingBoxConfigGenerator
+import io.github.HanJason233.chimera.core.xray.XrayConfigGenerator
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeType
 import io.github.HanJason233.chimera.data.model.ProxyMode
 import io.github.HanJason233.chimera.network.subscription.SubscriptionParser
+import io.github.HanJason233.chimera.util.normalizeEchConfig
+import io.github.HanJason233.chimera.util.parseShadowsocksMethodPassword
+import io.github.HanJason233.chimera.util.parseSubscriptionEch
+import io.github.HanJason233.chimera.util.uriTlsParameters
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
