@@ -57,6 +57,7 @@ import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
+import io.github.HanJason233.chimera.data.local.HomeNodeTestResultsEntity
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.feature.nodetest.model.SpeedTestProgress
 
@@ -66,6 +67,7 @@ internal fun SubscriptionGroupingScreen(
     selectedNodeId: String?,
     isTesting: Boolean,
     testProgress: SpeedTestProgress?,
+    testResults: Map<String, HomeNodeTestResultsEntity>,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
@@ -88,11 +90,19 @@ internal fun SubscriptionGroupingScreen(
     var editingNodeName by rememberSaveable { mutableStateOf("") }
     var editingNodeUri by rememberSaveable { mutableStateOf("") }
     var isManagingNodes by rememberSaveable { mutableStateOf(false) }
+    var displayedTestStage by remember { mutableStateOf(ManualGroupTestStage.TCPING) }
+    var testRunStartedAt by remember { mutableStateOf(0L) }
     val canDeleteNodes = onDeleteNode != null
     var manualTestMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var manualTestDialogHidden by rememberSaveable { mutableStateOf(false) }
     var clearTestDataDialogVisible by rememberSaveable { mutableStateOf(false) }
     var isClearingTestData by rememberSaveable { mutableStateOf(false) }
+
+    val runManualTest: (ManualGroupTestStage) -> Unit = { stage ->
+        displayedTestStage = stage
+        testRunStartedAt = System.currentTimeMillis()
+        onRunManualGroupTest(stage)
+    }
 
     LaunchedEffect(testProgress?.isManualGroupTest) {
         if (testProgress?.isManualGroupTest == true) {
@@ -139,7 +149,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("TCPing") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            onRunManualGroupTest(ManualGroupTestStage.TCPING)
+                            runManualTest(ManualGroupTestStage.TCPING)
                         },
                         enabled = !isTesting
                     )
@@ -147,7 +157,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("URL Test") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            onRunManualGroupTest(ManualGroupTestStage.URL_TEST)
+                            runManualTest(ManualGroupTestStage.URL_TEST)
                         },
                         enabled = !isTesting
                     )
@@ -155,7 +165,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("带宽测速") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            onRunManualGroupTest(ManualGroupTestStage.BANDWIDTH)
+                            runManualTest(ManualGroupTestStage.BANDWIDTH)
                         },
                         enabled = !isTesting
                     )
@@ -163,7 +173,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("链路类型检测") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            onRunManualGroupTest(ManualGroupTestStage.LINK_TYPE)
+                            runManualTest(ManualGroupTestStage.LINK_TYPE)
                         },
                         enabled = !isTesting
                     )
@@ -171,7 +181,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("流媒体与 AI 解锁") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            onRunManualGroupTest(ManualGroupTestStage.IP_QUALITY)
+                            runManualTest(ManualGroupTestStage.IP_QUALITY)
                         },
                         enabled = !isTesting
                     )
@@ -217,6 +227,9 @@ internal fun SubscriptionGroupingScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             NodeListContent(
                 nodes = nodes,
+                testResults = testResults,
+                testStage = displayedTestStage,
+                testRunStartedAt = testRunStartedAt,
                 selectedNodeId = selectedNodeId,
                 isTesting = isTesting,
                 nodeDisplaySettings = nodeDisplaySettings,
@@ -475,6 +488,9 @@ internal fun SubscriptionGroupingScreen(
 @Composable
 private fun NodeListContent(
     nodes: List<Node>,
+    testResults: Map<String, HomeNodeTestResultsEntity>,
+    testStage: ManualGroupTestStage,
+    testRunStartedAt: Long,
     selectedNodeId: String?,
     isTesting: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
@@ -552,6 +568,10 @@ private fun NodeListContent(
                                 enabled = interactionEnabled,
                                 displaySettings = nodeDisplaySettings,
                                 coreSettings = protocolCoreSettings,
+                                testResult = testResults[node.id],
+                                testStage = testStage,
+                                testRunStartedAt = testRunStartedAt,
+                                isTestRunning = isTesting && testRunStartedAt > 0L,
                                 onShare = { onShareNode(node) },
                                 onEdit = if (canManageNodes) {
                                     { onEditNode(node) }
