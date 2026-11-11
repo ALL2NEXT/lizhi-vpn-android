@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.feature.nodegrouping.ui
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -23,7 +24,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,7 +85,6 @@ internal fun SubscriptionGroupingScreen(
     val context = LocalContext.current
     var addNodeDialogVisible by rememberSaveable { mutableStateOf(false) }
     var nodeUris by rememberSaveable { mutableStateOf("") }
-    var openSwipeNodeId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingNode by remember { mutableStateOf<Node?>(null) }
     var editingNodeName by rememberSaveable { mutableStateOf("") }
     var editingNodeUri by rememberSaveable { mutableStateOf("") }
@@ -225,12 +224,17 @@ internal fun SubscriptionGroupingScreen(
                 nodeDisplaySettings = nodeDisplaySettings,
                 protocolCoreSettings = protocolCoreSettings,
                 onNodeSelected = handleNodeSelected,
+                onShareNode = { node ->
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, node.rawLink)
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, "分享节点链接"))
+                },
                 interactionEnabled = !isClosing,
                 bottomContentPadding = bottomContentPadding,
                 canManageNodes = canManageNodes,
                 canDeleteNodes = canDeleteNodes,
-                openSwipeNodeId = openSwipeNodeId,
-                onOpenSwipeNodeChange = { nodeId -> openSwipeNodeId = nodeId },
                 onEditNode = { node ->
                     editingNode = node
                     editingNodeName = node.name
@@ -518,12 +522,11 @@ private fun NodeListContent(
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onNodeSelected: (Node) -> Unit,
+    onShareNode: (Node) -> Unit,
     interactionEnabled: Boolean,
     bottomContentPadding: Dp,
     canManageNodes: Boolean,
     canDeleteNodes: Boolean,
-    openSwipeNodeId: String?,
-    onOpenSwipeNodeChange: (String?) -> Unit,
     onEditNode: (Node) -> Unit,
     onDeleteNode: (Node) -> Unit
 ) {
@@ -585,57 +588,29 @@ private fun NodeListContent(
                             items = displayNodes,
                             key = { it.id }
                         ) { node ->
-                            if (canDeleteNodes) {
-                                val swipeKey = "node:${node.id}"
-                                SwipeActionCard(
-                                    itemKey = swipeKey,
-                                    actions = if (canManageNodes) {
-                                        listOf(
-                                            SwipeCardAction(
-                                                icon = Icons.Rounded.Edit,
-                                                label = "编辑",
-                                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                onClick = { onEditNode(node) }
-                                            )
-                                        )
-                                    } else {
-                                        emptyList()
-                                    },
-                                    revealed = openSwipeNodeId == swipeKey,
-                                    onRevealedChange = { isRevealed ->
-                                        onOpenSwipeNodeChange(if (isRevealed) swipeKey else null)
-                                    },
-                                    onSwipeRight = {
-                                        onOpenSwipeNodeChange(null)
-                                        onDeleteNode(node)
-                                    }
-                                ) { swipeModifier ->
-                                    NodeListItem(
-                                        modifier = swipeModifier,
-                                        node = node,
-                                        isSelected = node.id == selectedNodeId,
-                                        enabled = interactionEnabled,
-                                        displaySettings = nodeDisplaySettings,
-                                        coreSettings = protocolCoreSettings,
-                                        onClick = {
-                                            onOpenSwipeNodeChange(null)
-                                            onNodeSelected(node)
-                                        },
-                                    )
-                                }
-                            } else {
-                                NodeListItem(
-                                    node = node,
-                                    isSelected = node.id == selectedNodeId,
-                                    enabled = interactionEnabled,
-                                    displaySettings = nodeDisplaySettings,
-                                    coreSettings = protocolCoreSettings,
-                                    onClick = { onNodeSelected(node) }
-                                )
-                            }
+                            NodeListItem(
+                                node = node,
+                                isSelected = node.id == selectedNodeId,
+                                enabled = interactionEnabled,
+                                displaySettings = nodeDisplaySettings,
+                                coreSettings = protocolCoreSettings,
+                                onShare = { onShareNode(node) },
+                                onEdit = if (canManageNodes) {
+                                    { onEditNode(node) }
+                                } else {
+                                    null
+                                },
+                                onDelete = if (canDeleteNodes) {
+                                    { onDeleteNode(node) }
+                                } else {
+                                    null
+                                },
+                                onClick = { onNodeSelected(node) }
+                            )
                             Divider(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant
                             )
                         }

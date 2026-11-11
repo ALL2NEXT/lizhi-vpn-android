@@ -15,50 +15,9 @@ internal fun Node.protocolDisplayLabel(
     coreSettings: ProtocolCoreSettings = ProtocolCoreSettings()
 ): String {
     val rawLink = getRawLinkPlain()
-    val protocol = when (type) {
-        NodeType.VLESS -> "vless"
-        NodeType.VMESS -> "vmess"
-        NodeType.TROJAN -> "trojan"
-        NodeType.HYSTERIA2 -> "hy2"
-        NodeType.ANYTLS -> "anytls"
-        NodeType.TUIC -> "tuic"
-        NodeType.NAIVE -> "naive"
-        NodeType.WIREGUARD -> "wg"
-        NodeType.MASQUE -> "masque"
-        NodeType.SHADOWSOCKS -> "ss"
-        NodeType.SOCKS -> socksProtocolLabel(rawLink)
-        NodeType.HTTP -> "http"
-        NodeType.UNKNOWN -> "unknown"
-    }
+    val protocol = protocolDisplayName(type, rawLink)
 
-    // 安全层和传输层分别解析，避免 Reality/TLS 覆盖 TCP/QUIC 信息。
-    val layers = when (type) {
-        NodeType.VLESS -> DisplayLayers(
-            security = uriSecurity(rawLink) ?: "none",
-            transport = uriTransport(rawLink) ?: "tcp"
-        )
-        NodeType.TROJAN -> DisplayLayers(
-            security = uriSecurity(rawLink) ?: "tls",
-            transport = uriTransport(rawLink) ?: "tcp"
-        )
-        NodeType.VMESS -> vmessLayers(rawLink)
-        NodeType.HYSTERIA2 -> DisplayLayers(security = "tls", transport = "quic")
-        NodeType.ANYTLS -> DisplayLayers(security = "tls", transport = "tcp")
-        NodeType.TUIC -> DisplayLayers(security = "tls", transport = "quic")
-        NodeType.NAIVE -> DisplayLayers(
-            security = "tls",
-            transport = if (queryFlag(rawLink, "quic")) "quic" else "h2"
-        )
-        NodeType.WIREGUARD -> DisplayLayers(transport = "udp")
-        NodeType.MASQUE -> DisplayLayers(security = "tls", transport = "quic")
-        NodeType.SHADOWSOCKS -> shadowsocksLayers(rawLink)
-        NodeType.SOCKS -> DisplayLayers(security = "none", transport = "tcp")
-        NodeType.HTTP -> DisplayLayers(
-            security = if (rawLink.startsWith("https://", true)) "tls" else "none",
-            transport = "tcp"
-        )
-        NodeType.UNKNOWN -> DisplayLayers()
-    }
+    val layers = displayLayers(type, rawLink)
 
     return listOfNotNull(
         protocol.takeIf { settings.showProtocol },
@@ -66,6 +25,70 @@ internal fun Node.protocolDisplayLabel(
         layers.transport?.takeIf { settings.showTransport },
         coreSettings.coreFor(type).displayLabel().takeIf { settings.showCore }
     ).joinToString("+")
+}
+
+/** 按节点标签设置生成节点列表中的协议、安全层、传输方式和核心标签。 */
+internal fun Node.nodeListProtocolLabel(
+    settings: NodeDisplaySettings = NodeDisplaySettings(),
+    coreSettings: ProtocolCoreSettings = ProtocolCoreSettings()
+): String {
+    val layers = displayLayers(type, getRawLinkPlain())
+    val protocol = if (type == NodeType.SOCKS) {
+        socksProtocolLabel(getRawLinkPlain())
+    } else {
+        type.name
+    }
+    return buildList {
+        protocol.takeIf { settings.showProtocol }?.let(::add)
+        layers.transport?.takeIf { settings.showTransport }?.let(::add)
+        layers.security?.takeIf { settings.showSecurity }?.let(::add)
+        coreSettings.coreFor(type).displayLabel().takeIf { settings.showCore }?.let(::add)
+    }.joinToString(" / ")
+}
+
+private fun protocolDisplayName(type: NodeType, rawLink: String): String = when (type) {
+    NodeType.VLESS -> "vless"
+    NodeType.VMESS -> "vmess"
+    NodeType.TROJAN -> "trojan"
+    NodeType.HYSTERIA2 -> "hy2"
+    NodeType.ANYTLS -> "anytls"
+    NodeType.TUIC -> "tuic"
+    NodeType.NAIVE -> "naive"
+    NodeType.WIREGUARD -> "wg"
+    NodeType.MASQUE -> "masque"
+    NodeType.SHADOWSOCKS -> "ss"
+    NodeType.SOCKS -> socksProtocolLabel(rawLink)
+    NodeType.HTTP -> "http"
+    NodeType.UNKNOWN -> "unknown"
+}
+
+// 安全层和传输层分别解析，避免 Reality/TLS 覆盖 TCP/QUIC 信息。
+private fun displayLayers(type: NodeType, rawLink: String): DisplayLayers = when (type) {
+    NodeType.VLESS -> DisplayLayers(
+        security = uriSecurity(rawLink) ?: "none",
+        transport = uriTransport(rawLink) ?: "tcp"
+    )
+    NodeType.TROJAN -> DisplayLayers(
+        security = uriSecurity(rawLink) ?: "tls",
+        transport = uriTransport(rawLink) ?: "tcp"
+    )
+    NodeType.VMESS -> vmessLayers(rawLink)
+    NodeType.HYSTERIA2 -> DisplayLayers(security = "tls", transport = "quic")
+    NodeType.ANYTLS -> DisplayLayers(security = "tls", transport = "tcp")
+    NodeType.TUIC -> DisplayLayers(security = "tls", transport = "quic")
+    NodeType.NAIVE -> DisplayLayers(
+        security = "tls",
+        transport = if (queryFlag(rawLink, "quic")) "quic" else "h2"
+    )
+    NodeType.WIREGUARD -> DisplayLayers(transport = "udp")
+    NodeType.MASQUE -> DisplayLayers(security = "tls", transport = "quic")
+    NodeType.SHADOWSOCKS -> shadowsocksLayers(rawLink)
+    NodeType.SOCKS -> DisplayLayers(security = "none", transport = "tcp")
+    NodeType.HTTP -> DisplayLayers(
+        security = if (rawLink.startsWith("https://", true)) "tls" else "none",
+        transport = "tcp"
+    )
+    NodeType.UNKNOWN -> DisplayLayers()
 }
 
 private fun ProxyCore.displayLabel(): String = when (this) {
