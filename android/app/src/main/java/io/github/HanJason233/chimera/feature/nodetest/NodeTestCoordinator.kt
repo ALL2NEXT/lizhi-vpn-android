@@ -78,27 +78,23 @@ internal class NodeTestCoordinator(
         )
     }
 
-    /** 对当前选中节点执行主页已启用的测试，只保存结果，不筛选或连接节点。 */
-    fun startCurrentNodeDataTest() {
+    /** 对当前节点执行面板展示的测试项，并读取手动测试参数；只保存结果，不筛选或连接节点。 */
+    fun startCurrentNodeDataTest(displayStages: List<SpeedTestStage>) {
         scope.launch {
             if (GlobalTestExecution.isFetching()) {
                 _error.value = GlobalTestExecution.fetchingHint()
                 return@launch
             }
 
-            val settings = homeSpeedTestSettings.value
-            val enabledStages = normalizeSpeedTestStageOrder(settings.stageOrder).filter { stage ->
-                when (stage) {
-                    SpeedTestStage.TCPING -> settings.tcpingEnabled
-                    SpeedTestStage.URL_TEST -> settings.urlTestEnabled
-                    SpeedTestStage.BANDWIDTH -> settings.bandwidthEnabled
-                    SpeedTestStage.LINK_TYPE -> settings.linkTypeTestEnabled
-                    SpeedTestStage.IP_QUALITY ->
-                        settings.unlockTestsEnabled && settings.unlockTestIds.isNotEmpty()
-                }
+            val settings = groupManualSpeedTestSettings.value
+            val stagesToRun = normalizeSpeedTestStageOrder(settings.stageOrder)
+                .filter { it in displayStages }
+            if (stagesToRun.isEmpty()) {
+                _error.value = "请先在主题设置中选择首页测试面板的展示项"
+                return@launch
             }
-            if (enabledStages.isEmpty()) {
-                _error.value = "请先在主页测速设置中启用至少一项测试"
+            if (SpeedTestStage.IP_QUALITY in stagesToRun && settings.unlockTestIds.isEmpty()) {
+                _error.value = "请先在手动测试设置中选择解锁测试项"
                 return@launch
             }
             if (!GlobalTestExecution.tryStart("当前节点数据测试")) {
@@ -120,7 +116,7 @@ internal class NodeTestCoordinator(
                     return@launch
                 }
 
-                for (stage in enabledStages) {
+                for (stage in stagesToRun) {
                     currentCoroutineContext().ensureActive()
                     val progressStage = when (stage) {
                         SpeedTestStage.TCPING -> "TCPing"

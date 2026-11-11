@@ -722,7 +722,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (updates.isNotEmpty()) nodeDao().updateNodeLocations(updates)
     }
 
-    fun startCurrentNodeDataTest() = nodeTestCoordinator.startCurrentNodeDataTest()
+    fun startCurrentNodeDataTest(displayStages: List<SpeedTestStage>) =
+        nodeTestCoordinator.startCurrentNodeDataTest(displayStages)
 
     fun startHomeSpeedTest() = nodeTestCoordinator.startHomeSpeedTest()
 

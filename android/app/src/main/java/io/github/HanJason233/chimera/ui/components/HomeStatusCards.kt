@@ -37,7 +37,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.Node
-import io.github.HanJason233.chimera.data.model.SpeedTestSettings
 import io.github.HanJason233.chimera.data.model.SpeedTestStage
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.R
@@ -173,7 +172,7 @@ internal fun HomeSelectionCard(
 @Composable
 internal fun HomeTestsCard(
     node: Node?,
-    testSettings: SpeedTestSettings,
+    displayStages: List<SpeedTestStage>,
     isTesting: Boolean,
     isHysteriaBandwidthAdapting: Boolean,
     progressFlow: StateFlow<SpeedTestProgress?>,
@@ -185,15 +184,7 @@ internal fun HomeTestsCard(
 ) {
     val progress by progressFlow.collectAsStateWithLifecycle()
     var detailsDialog by remember { mutableStateOf<HomeTestDetails?>(null) }
-    val enabledStages = buildList {
-        if (testSettings.tcpingEnabled) add(SpeedTestStage.TCPING)
-        if (testSettings.urlTestEnabled) add(SpeedTestStage.URL_TEST)
-        if (testSettings.bandwidthEnabled) add(SpeedTestStage.BANDWIDTH)
-        if (testSettings.linkTypeTestEnabled) add(SpeedTestStage.LINK_TYPE)
-        if (testSettings.unlockTestsEnabled && testSettings.unlockTestIds.isNotEmpty()) {
-            add(SpeedTestStage.IP_QUALITY)
-        }
-    }
+    val displayedStages = SpeedTestStage.entries.filter { it in displayStages }
     val hasActiveTest = isTesting || isHysteriaBandwidthAdapting || ipTestState.isRunning ||
         linkTypeResult.state == LinkTypeTestState.TESTING
     val tcping = node?.tcpingLatency ?: -1
@@ -224,7 +215,7 @@ internal fun HomeTestsCard(
         LinkTypeTestState.NOT_CONNECTED -> "未连接"
         LinkTypeTestState.ERROR -> "失败"
     }
-    val metrics = enabledStages.map { stage ->
+    val metrics = displayedStages.map { stage ->
         when (stage) {
             SpeedTestStage.TCPING -> HomeTestSectorItem(
                 label = "TCPing",

@@ -67,6 +67,7 @@ import kotlinx.coroutines.withContext
 import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
+import io.github.HanJason233.chimera.data.model.SpeedTestStage
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.ui.components.SettingsListChoiceRow
@@ -431,6 +432,63 @@ fun SkinSettingsScreen(
                 }
             )
 
+            SettingsListSectionHeader("首页测试面板展示项")
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Dns,
+                title = "TCPing",
+                subtitle = "",
+                checked = SpeedTestStage.TCPING in settings.homeTestDisplayStages,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings {
+                        withHomeTestStageVisible(SpeedTestStage.TCPING, enabled)
+                    }
+                }
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Public,
+                title = "204Test",
+                subtitle = "",
+                checked = SpeedTestStage.URL_TEST in settings.homeTestDisplayStages,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings {
+                        withHomeTestStageVisible(SpeedTestStage.URL_TEST, enabled)
+                    }
+                }
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Memory,
+                title = "带宽",
+                subtitle = "",
+                checked = SpeedTestStage.BANDWIDTH in settings.homeTestDisplayStages,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings {
+                        withHomeTestStageVisible(SpeedTestStage.BANDWIDTH, enabled)
+                    }
+                }
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Route,
+                title = "链路类型",
+                subtitle = "",
+                checked = SpeedTestStage.LINK_TYPE in settings.homeTestDisplayStages,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings {
+                        withHomeTestStageVisible(SpeedTestStage.LINK_TYPE, enabled)
+                    }
+                }
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.VpnKey,
+                title = "解锁检测",
+                subtitle = "",
+                checked = SpeedTestStage.IP_QUALITY in settings.homeTestDisplayStages,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings {
+                        withHomeTestStageVisible(SpeedTestStage.IP_QUALITY, enabled)
+                    }
+                }
+            )
+
             SettingsListSectionHeader("节点卡片设置")
             SettingsListSwitchRow(
                 icon = Icons.Outlined.Dns,
@@ -628,3 +686,12 @@ fun SkinSettingsScreen(
         }
     }
 }
+
+private fun SkinSettings.withHomeTestStageVisible(
+    stage: SpeedTestStage,
+    visible: Boolean
+): SkinSettings = copy(
+    homeTestDisplayStages = SpeedTestStage.entries.filter { candidate ->
+        if (candidate == stage) visible else candidate in homeTestDisplayStages
+    }
+)

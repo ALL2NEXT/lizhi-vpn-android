@@ -118,7 +118,13 @@ data class SkinSettings(
     val showNodeTransport: Boolean = false,
     val showNodeCore: Boolean = false,
     val showNodeAddress: Boolean = false,
-    val showNodePort: Boolean = false
+    val showNodePort: Boolean = false,
+    /** 首页圆形测试面板展示的项目，与测速运行开关独立保存。 */
+    val homeTestDisplayStages: List<SpeedTestStage> = listOf(
+        SpeedTestStage.TCPING,
+        SpeedTestStage.URL_TEST,
+        SpeedTestStage.BANDWIDTH
+    )
 ) {
     val nodeDisplaySettings: NodeDisplaySettings
         get() = NodeDisplaySettings(

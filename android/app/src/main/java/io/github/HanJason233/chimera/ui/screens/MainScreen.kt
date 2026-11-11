@@ -69,7 +69,6 @@ fun MainScreen(
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
     val unlockTestState by viewModel.unlockTestState.collectAsStateWithLifecycle()
     val linkTypeTestResult by viewModel.linkTypeTestResult.collectAsStateWithLifecycle()
-    val homeSpeedTestSettings by viewModel.homeSpeedTestSettings.collectAsStateWithLifecycle()
     val ipAddressTestSettings by viewModel.ipAddressTestSettings.collectAsStateWithLifecycle()
     val homeModuleSettings by viewModel.homeModuleSettings.collectAsStateWithLifecycle()
     val ipAddressDetectionState by viewModel.ipAddressDetectionState.collectAsStateWithLifecycle()
@@ -272,13 +271,15 @@ fun MainScreen(
                         ) {
                             HomeTestsCard(
                                 node = homeTestNode,
-                                testSettings = homeSpeedTestSettings,
+                                displayStages = skinSettings.homeTestDisplayStages,
                                 isTesting = isTesting,
                                 isHysteriaBandwidthAdapting = isHysteriaBandwidthAdapting,
                                 progressFlow = viewModel.speedTestProgress,
                                 ipTestState = unlockTestState,
                                 linkTypeResult = linkTypeTestResult,
-                                onStartTests = viewModel::startCurrentNodeDataTest,
+                                onStartTests = {
+                                    viewModel.startCurrentNodeDataTest(skinSettings.homeTestDisplayStages)
+                                },
                                 onInterruptTests = viewModel::forceCancelAllTests,
                                 modifier = if (homeModuleSettings.showIpAddressTest) {
                                     Modifier.weight(1.12f).onSizeChanged { testsCardHeightPx = it.height }

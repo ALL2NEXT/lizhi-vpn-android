@@ -9,6 +9,7 @@ import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.LegacySkinScheme
 import io.github.HanJason233.chimera.data.model.SkinSettings
 import io.github.HanJason233.chimera.data.model.SkinThemeMode
+import io.github.HanJason233.chimera.data.model.SpeedTestStage
 
 internal object SkinSettingsCodec {
     internal fun normalizeSkinColor(argb: Long): Long {
@@ -113,7 +114,11 @@ internal object SkinSettingsCodec {
                     "showNodeAddress",
                     defaults.showNodeAddress
                 ),
-                showNodePort = storedSettings.optBoolean("showNodePort", defaults.showNodePort)
+                showNodePort = storedSettings.optBoolean("showNodePort", defaults.showNodePort),
+                homeTestDisplayStages = storedSettings.optJSONArray("homeTestDisplayStages")?.let { array ->
+                    val storedStages = (0 until array.length()).map { array.optString(it) }.toSet()
+                    SpeedTestStage.entries.filter { it.name in storedStages }
+                } ?: defaults.homeTestDisplayStages
             )
         }
 
@@ -186,6 +191,7 @@ internal object SkinSettingsCodec {
         put("showNodeCore", settings.showNodeCore)
         put("showNodeAddress", settings.showNodeAddress)
         put("showNodePort", settings.showNodePort)
+        put("homeTestDisplayStages", JSONArray(settings.homeTestDisplayStages.map { it.name }))
     }.toString()
 
     private fun decodeLegacySkinSchemes(preferences: Preferences): List<LegacySkinScheme> {
