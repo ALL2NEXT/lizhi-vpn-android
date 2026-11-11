@@ -1,10 +1,12 @@
 package io.github.HanJason233.chimera.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -24,11 +26,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -163,7 +167,9 @@ internal fun HomeSelectionCard(
     }
 }
 
-/** 链路数据、IP 检测和运行进度统一展示在首页顶部的测试卡片中。 */
+/**
+ * 首页顶部圆形测试面板：仅展示配置中启用的测试项，并将圆形等分成对应扇形。
+ */
 @Composable
 internal fun HomeTestsCard(
     node: Node?,
@@ -206,7 +212,8 @@ internal fun HomeTestsCard(
     val unlockSummary = if (ipTestState.items.isEmpty()) {
         "未测"
     } else {
-        "${ipTestState.items.count { it.state == UnlockTestState.UNLOCKED }}/${ipTestState.items.size}"
+        ipTestState.items.count { it.state == UnlockTestState.UNLOCKED }.toString() +
+            "/" + ipTestState.items.size
     }
     val linkTypeSummary = when (linkTypeResult.state) {
         LinkTypeTestState.IDLE -> "未测"
@@ -217,84 +224,138 @@ internal fun HomeTestsCard(
         LinkTypeTestState.NOT_CONNECTED -> "未连接"
         LinkTypeTestState.ERROR -> "失败"
     }
+    val metrics = enabledStages.map { stage ->
+        when (stage) {
+            SpeedTestStage.TCPING -> HomeTestSectorItem(
+                label = "TCPing",
+                value = tcping.homeLatency(),
+                color = tcping.latencyColor(),
+                isTesting = isTesting && progressStage == "TCPing"
+            )
+            SpeedTestStage.URL_TEST -> HomeTestSectorItem(
+                label = "204Test",
+                value = urlTest.homeLatency(),
+                color = urlTest.latencyColor(),
+                isTesting = isTesting && progressStage == "URL Test"
+            )
+            SpeedTestStage.BANDWIDTH -> HomeTestSectorItem(
+                label = "带宽",
+                value = (node?.downloadMbps ?: 0f).homeSpeedCompact(),
+                color = MaterialTheme.colorScheme.onSurface,
+                isTesting = isHysteriaBandwidthAdapting ||
+                    (isTesting && progressStage == "带宽测速")
+            )
+            SpeedTestStage.LINK_TYPE -> HomeTestSectorItem(
+                label = "链路",
+                value = linkTypeSummary,
+                color = linkTypeColor,
+                isTesting = isLinkTypeTesting,
+                onClick = { detailsDialog = HomeTestDetails.LINK_TYPE }
+            )
+            SpeedTestStage.IP_QUALITY -> HomeTestSectorItem(
+                label = "解锁",
+                value = unlockSummary,
+                color = MaterialTheme.colorScheme.primary,
+                isTesting = isUnlockTesting,
+                onClick = { detailsDialog = HomeTestDetails.UNLOCK }
+            )
+        }
+    }
+    val sectorColors = listOf(
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.09f),
+        MaterialTheme.colorScheme.secondary.copy(alpha = 0.09f),
+        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.09f)
+    )
+    val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
+
     Card(
-        modifier = modifier.widthIn(max = 520.dp).fillMaxWidth(),
-        shape = RoundedCornerShape(percent = 50),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        colors = CardDefaults.cardColors(
-            containerColor = MonetThemeOverlay.homePanelSurface
-        )
+        modifier = modifier.widthIn(max = 240.dp).fillMaxWidth().aspectRatio(1f),
+        shape = CircleShape,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
+        colors = CardDefaults.cardColors(containerColor = MonetThemeOverlay.homePanelSurface)
     ) {
-        // 仅显示已启用的测试项；右侧操作按钮常驻，并在启动和中断状态间切换。
-        Row(
-            Modifier.fillMaxWidth().height(64.dp).padding(start = 8.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                enabledStages.forEachIndexed { index, stage ->
-                    if (index > 0) HomeTestTableDivider()
-                    when (stage) {
-                        SpeedTestStage.TCPING -> HomeTestTableCell(
-                            label = "TCPing",
-                            value = tcping.homeLatency(),
-                            modifier = Modifier.weight(1f),
-                            color = tcping.latencyColor(),
-                            isTesting = isTesting && progress?.stage == "TCPing"
-                        )
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            Canvas(Modifier.fillMaxSize().padding(1.dp)) {
+                val count = metrics.size
+                if (count > 0) {
+                    val diameter = minOf(size.width, size.height)
+                    val radius = diameter / 2f
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val topLeft = Offset(center.x - radius, center.y - radius)
+                    val sectorSize = androidx.compose.ui.geometry.Size(diameter, diameter)
+                    val sweepAngle = 360f / count
 
-                        SpeedTestStage.URL_TEST -> HomeTestTableCell(
-                            label = "URLTest",
-                            value = urlTest.homeLatency(),
-                            modifier = Modifier.weight(1f),
-                            color = urlTest.latencyColor(),
-                            isTesting = isTesting && progress?.stage == "URL Test"
+                    metrics.forEachIndexed { index, _ ->
+                        drawArc(
+                            color = sectorColors[index % sectorColors.size],
+                            startAngle = -90f + index * sweepAngle,
+                            sweepAngle = sweepAngle,
+                            useCenter = true,
+                            topLeft = topLeft,
+                            size = sectorSize
                         )
+                    }
 
-                        SpeedTestStage.BANDWIDTH -> HomeTestTableCell(
-                            label = "下载",
-                            value = (node?.downloadMbps ?: 0f).homeSpeedCompact(),
-                            modifier = Modifier.weight(1f),
-                            isTesting = isHysteriaBandwidthAdapting ||
-                                (isTesting && progress?.stage == "带宽测速")
-                        )
-
-                        SpeedTestStage.LINK_TYPE -> HomeTestTableCell(
-                            label = "链路",
-                            value = linkTypeSummary,
-                            modifier = Modifier.weight(1f),
-                            color = linkTypeColor,
-                            isTesting = isLinkTypeTesting,
-                            onClick = { detailsDialog = HomeTestDetails.LINK_TYPE }
-                        )
-
-                        SpeedTestStage.IP_QUALITY -> HomeTestTableCell(
-                            label = "解锁",
-                            value = unlockSummary,
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.primary,
-                            isTesting = isUnlockTesting,
-                            onClick = { detailsDialog = HomeTestDetails.UNLOCK }
-                        )
+                    if (count > 1) {
+                        metrics.indices.forEach { index ->
+                            val radians = Math.toRadians((-90f + index * sweepAngle).toDouble()).toFloat()
+                            drawLine(
+                                color = dividerColor,
+                                start = center,
+                                end = Offset(
+                                    x = center.x + radius * kotlin.math.cos(radians),
+                                    y = center.y + radius * kotlin.math.sin(radians)
+                                ),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
                     }
                 }
             }
-            HomeTestTableDivider()
-            IconButton(
-                onClick = if (hasActiveTest) onInterruptTests else onStartTests,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = if (hasActiveTest) Icons.Outlined.StopCircle else Icons.Filled.PlayArrow,
-                    contentDescription = if (hasActiveTest) "强制中断测试" else "开始测速",
-                    tint = if (hasActiveTest) {
-                        MaterialTheme.colorScheme.error
+
+            if (metrics.isNotEmpty()) {
+                val sweepAngle = 360f / metrics.size
+                metrics.forEachIndexed { index, item ->
+                    val angle = if (metrics.size == 1) {
+                        -90f
                     } else {
-                        MaterialTheme.colorScheme.primary
+                        -90f + (index + 0.5f) * sweepAngle
                     }
-                )
+                    val radians = Math.toRadians(angle.toDouble()).toFloat()
+                    val radius = maxWidth * 0.28f
+                    HomeTestSectorMetric(
+                        item = item,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .offset(
+                                x = radius * kotlin.math.cos(radians),
+                                y = radius * kotlin.math.sin(radians)
+                            )
+                            .width(maxWidth * 0.31f)
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier.align(Alignment.Center).size(50.dp),
+                shape = CircleShape,
+                color = MonetThemeOverlay.homePanelSurface,
+                border = BorderStroke(1.dp, dividerColor)
+            ) {
+                IconButton(
+                    onClick = if (hasActiveTest) onInterruptTests else onStartTests,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = if (hasActiveTest) Icons.Outlined.StopCircle else Icons.Filled.PlayArrow,
+                        contentDescription = if (hasActiveTest) "强制中断测试" else "开始测速",
+                        tint = if (hasActiveTest) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    )
+                }
             }
         }
     }
@@ -341,6 +402,74 @@ internal fun HomeTestsCard(
     }
 }
 
+private data class HomeTestSectorItem(
+    val label: String,
+    val value: String,
+    val color: Color,
+    val isTesting: Boolean,
+    val onClick: (() -> Unit)? = null
+)
+
+@Composable
+private fun HomeTestSectorMetric(
+    item: HomeTestSectorItem,
+    modifier: Modifier
+) {
+    val clickableModifier = if (item.onClick != null) {
+        Modifier.clickable(role = Role.Button, onClick = { item.onClick.invoke() })
+    } else {
+        Modifier
+    }
+    Column(
+        modifier = modifier.then(clickableModifier).padding(horizontal = 2.dp, vertical = 3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = item.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (item.onClick != null) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = "查看详情",
+                    modifier = Modifier.padding(start = 2.dp).size(10.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        Spacer(Modifier.height(3.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            if (item.isTesting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(9.dp),
+                    strokeWidth = 1.5.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(2.dp))
+            }
+            Text(
+                text = item.value,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = item.color,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
 @Composable
 private fun HomeLinkTypeDetails(result: LinkTypeTestResult) {
     val color = when (result.state) {

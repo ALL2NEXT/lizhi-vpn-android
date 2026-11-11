@@ -180,6 +180,7 @@ fun MainScreen(
                         )
                     },
                     actions = {
+                        // 出口 IP 卡片与圆形测速面板并排，按较高卡片的高度预留空间。
                         Row(
                             modifier = Modifier.padding(end = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -245,8 +246,10 @@ fun MainScreen(
                     var ipTestCardHeightPx by remember { mutableIntStateOf(0) }
                     var selectionCardHeightPx by remember { mutableIntStateOf(0) }
                     val measuredCardsHeight = with(LocalDensity.current) {
-                        testsCardHeightPx.toDp() +
-                            (if (homeModuleSettings.showIpAddressTest) ipTestCardHeightPx else 0).toDp() +
+                        maxOf(
+                            testsCardHeightPx,
+                            if (homeModuleSettings.showIpAddressTest) ipTestCardHeightPx else 0
+                        ).toDp() +
                             (if (homeModuleSettings.showSelectedGroup || homeModuleSettings.showSelectedNode) {
                                 selectionCardHeightPx
                             } else {
@@ -262,28 +265,38 @@ fun MainScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        HomeTestsCard(
-                            node = homeTestNode,
-                            testSettings = homeSpeedTestSettings,
-                            isTesting = isTesting,
-                            isHysteriaBandwidthAdapting = isHysteriaBandwidthAdapting,
-                            progressFlow = viewModel.speedTestProgress,
-                            ipTestState = unlockTestState,
-                            linkTypeResult = linkTypeTestResult,
-                            onStartTests = viewModel::startCurrentNodeDataTest,
-                            onInterruptTests = viewModel::forceCancelAllTests,
-                            modifier = Modifier.onSizeChanged { testsCardHeightPx = it.height }
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            HomeTestsCard(
+                                node = homeTestNode,
+                                testSettings = homeSpeedTestSettings,
+                                isTesting = isTesting,
+                                isHysteriaBandwidthAdapting = isHysteriaBandwidthAdapting,
+                                progressFlow = viewModel.speedTestProgress,
+                                ipTestState = unlockTestState,
+                                linkTypeResult = linkTypeTestResult,
+                                onStartTests = viewModel::startCurrentNodeDataTest,
+                                onInterruptTests = viewModel::forceCancelAllTests,
+                                modifier = if (homeModuleSettings.showIpAddressTest) {
+                                    Modifier.weight(1.12f).onSizeChanged { testsCardHeightPx = it.height }
+                                } else {
+                                    Modifier.onSizeChanged { testsCardHeightPx = it.height }
+                                }
+                            )
 
-                        if (homeModuleSettings.showIpAddressTest) {
+                            if (homeModuleSettings.showIpAddressTest) {
                             HomeIpAddressTestCard(
                                 state = ipAddressDetectionState,
                                 settings = ipAddressTestSettings,
                                 onDetect = viewModel::detectCurrentIpAddresses,
                                 modifier = Modifier
-                                    .fillMaxWidth()
+                                    .weight(1f)
                                     .onSizeChanged { ipTestCardHeightPx = it.height }
                             )
+                            }
                         }
 
                         Spacer(modifier = Modifier.weight(1f))
