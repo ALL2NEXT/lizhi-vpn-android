@@ -1,5 +1,6 @@
-package io.github.HanJason233.chimera.viewmodel
+package io.github.HanJason233.chimera.feature.nodetest.data
 
+import io.github.HanJason233.chimera.feature.nodetest.model.UnlockTestUiState
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestResult
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCatalog
@@ -9,6 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** 将首页测试结果编码为本地数据库可保存的 JSON，并兼容后续检测项调整。 */
+/** 负责首页节点测试结果与 Room JSON 字段之间的编解码。 */
 internal object HomeTestResultCodec {
     fun encodeLinkType(result: LinkTypeTestResult): String = JSONObject().apply {
         put("state", result.state.name)

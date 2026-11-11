@@ -43,8 +43,8 @@ import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestResult
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkIpAddress
-import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
-import io.github.HanJason233.chimera.viewmodel.UnlockTestUiState
+import io.github.HanJason233.chimera.feature.nodetest.model.SpeedTestProgress
+import io.github.HanJason233.chimera.feature.nodetest.model.UnlockTestUiState
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
 

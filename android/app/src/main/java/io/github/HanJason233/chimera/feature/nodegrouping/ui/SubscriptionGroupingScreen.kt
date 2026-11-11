@@ -59,7 +59,7 @@ import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 import io.github.HanJason233.chimera.data.model.NodeSource
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
-import io.github.HanJason233.chimera.viewmodel.SpeedTestProgress
+import io.github.HanJason233.chimera.feature.nodetest.model.SpeedTestProgress
 
 @Composable
 internal fun SubscriptionGroupingScreen(

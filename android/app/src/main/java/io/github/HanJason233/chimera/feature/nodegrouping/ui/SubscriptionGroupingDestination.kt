@@ -15,7 +15,7 @@ import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeSource
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
-import io.github.HanJason233.chimera.viewmodel.HomeTestResultCodec
+import io.github.HanJason233.chimera.feature.nodetest.data.HomeTestResultCodec
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
 /** 仓库源详情页面的状态绑定入口。 */
