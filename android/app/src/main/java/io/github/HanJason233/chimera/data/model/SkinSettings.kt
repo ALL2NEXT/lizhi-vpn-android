@@ -58,11 +58,13 @@ internal data class LegacySkinScheme(
     val homeConnectingParticleEffectEnabled: Boolean = true,
     val homeDisconnectingParticleEffectEnabled: Boolean = true,
     val homeConnectedParticleEffectEnabled: Boolean = true,
-    /** 此主题下节点标签显示的协议、安全层、传输方式和核心。 */
+    /** 此主题下节点卡片显示的协议、安全层、传输方式和核心标签。 */
     val showNodeProtocol: Boolean = false,
     val showNodeSecurity: Boolean = false,
     val showNodeTransport: Boolean = false,
-    val showNodeCore: Boolean = false
+    val showNodeCore: Boolean = false,
+    val showNodeAddress: Boolean = true,
+    val showNodePort: Boolean = true
 ) {
     val isDefault: Boolean
         get() = id == DEFAULT_SCHEME_ID
@@ -114,10 +116,14 @@ data class SkinSettings(
     val showNodeProtocol: Boolean = false,
     val showNodeSecurity: Boolean = false,
     val showNodeTransport: Boolean = false,
-    val showNodeCore: Boolean = false
+    val showNodeCore: Boolean = false,
+    val showNodeAddress: Boolean = true,
+    val showNodePort: Boolean = true
 ) {
     val nodeDisplaySettings: NodeDisplaySettings
         get() = NodeDisplaySettings(
+            showAddress = showNodeAddress,
+            showPort = showNodePort,
             showProtocol = showNodeProtocol,
             showSecurity = showNodeSecurity,
             showTransport = showNodeTransport,

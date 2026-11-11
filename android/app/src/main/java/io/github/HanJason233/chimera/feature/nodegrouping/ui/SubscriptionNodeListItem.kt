@@ -66,6 +66,13 @@ internal fun NodeListItem(
     } else {
         node.server
     }
+    val serverEndpointLabel = when {
+        displaySettings.showAddress && displaySettings.showPort ->
+            "$serverAddress : ${node.port}"
+        displaySettings.showAddress -> serverAddress
+        displaySettings.showPort -> node.port.toString()
+        else -> null
+    }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -175,16 +182,18 @@ internal fun NodeListItem(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "$serverAddress : ${node.port}",
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(6.dp))
+                serverEndpointLabel?.let { endpointLabel ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = endpointLabel,
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

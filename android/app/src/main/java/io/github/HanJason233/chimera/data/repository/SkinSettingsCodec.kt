@@ -108,7 +108,12 @@ internal object SkinSettingsCodec {
                     "showNodeTransport",
                     defaults.showNodeTransport
                 ),
-                showNodeCore = storedSettings.optBoolean("showNodeCore", defaults.showNodeCore)
+                showNodeCore = storedSettings.optBoolean("showNodeCore", defaults.showNodeCore),
+                showNodeAddress = storedSettings.optBoolean(
+                    "showNodeAddress",
+                    defaults.showNodeAddress
+                ),
+                showNodePort = storedSettings.optBoolean("showNodePort", defaults.showNodePort)
             )
         }
 
@@ -148,7 +153,9 @@ internal object SkinSettingsCodec {
         showNodeProtocol = showNodeProtocol,
         showNodeSecurity = showNodeSecurity,
         showNodeTransport = showNodeTransport,
-        showNodeCore = showNodeCore
+        showNodeCore = showNodeCore,
+        showNodeAddress = showNodeAddress,
+        showNodePort = showNodePort
     )
 
     internal fun encodeSkinSettings(settings: SkinSettings): String = JSONObject().apply {
@@ -177,6 +184,8 @@ internal object SkinSettingsCodec {
         put("showNodeSecurity", settings.showNodeSecurity)
         put("showNodeTransport", settings.showNodeTransport)
         put("showNodeCore", settings.showNodeCore)
+        put("showNodeAddress", settings.showNodeAddress)
+        put("showNodePort", settings.showNodePort)
     }.toString()
 
     private fun decodeLegacySkinSchemes(preferences: Preferences): List<LegacySkinScheme> {
@@ -285,6 +294,8 @@ internal object SkinSettingsCodec {
                                     "showNodeCore",
                                     preferences[SettingsRepository.NODE_LABEL_SHOW_CORE] ?: false
                                 ),
+                                showNodeAddress = item.optBoolean("showNodeAddress", true),
+                                showNodePort = item.optBoolean("showNodePort", true),
                                 themeMode = SkinThemeMode.fromStorage(
                                     item.optString("themeMode").takeIf { it.isNotBlank() }
                                 ),

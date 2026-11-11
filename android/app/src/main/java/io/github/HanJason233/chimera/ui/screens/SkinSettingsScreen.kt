@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Numbers
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Route
@@ -430,7 +431,25 @@ fun SkinSettingsScreen(
                 }
             )
 
-            SettingsListSectionHeader("节点标签显示")
+            SettingsListSectionHeader("节点卡片设置")
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Dns,
+                title = "显示域名/IP",
+                subtitle = "",
+                checked = settings.showNodeAddress,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings { copy(showNodeAddress = enabled) }
+                }
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Numbers,
+                title = "显示端口",
+                subtitle = "",
+                checked = settings.showNodePort,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings { copy(showNodePort = enabled) }
+                }
+            )
             SettingsListSwitchRow(
                 icon = Icons.Outlined.Language,
                 title = "显示协议",
