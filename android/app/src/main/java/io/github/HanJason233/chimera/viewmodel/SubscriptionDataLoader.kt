@@ -281,14 +281,15 @@ internal class SubscriptionDataLoader(
                 }
                 successfulSourceIds += subscription.id
                 val refreshedAt = System.currentTimeMillis()
-                result.getOrThrow().forEach { node ->
+                result.getOrThrow().forEachIndexed { index, node ->
                     val scopedNodeId = "${subscription.id}:${node.id}"
                     val taggedNode = node.copy(
                         id = scopedNodeId,
                         source = NodeSource.SUBSCRIPTION,
                         subscriptionSourceId = subscription.id,
                         subscriptionSourceName = subscription.name,
-                        subscriptionUpdatedAt = refreshedAt
+                        subscriptionUpdatedAt = refreshedAt,
+                        sortOrder = index
                     )
                     val existing = mergedNodes[scopedNodeId]
                     mergedNodes[scopedNodeId] = existing?.copy(
@@ -355,7 +356,7 @@ internal class SubscriptionDataLoader(
             }
 
             val fetchedResult = result.getOrThrow()
-            val fetchedNodes = fetchedResult.nodes
+            val fetchedNodes = preserveNodeSortOrder(cachedNodes, fetchedResult.nodes)
             val refreshedSourceIds = sourcesToRefresh.mapTo(mutableSetOf()) { it.id }
             val retainedNodes = cachedNodes.filter { node ->
                 node.subscriptionSourceId !in refreshedSourceIds ||
@@ -401,6 +402,35 @@ internal class SubscriptionDataLoader(
         } finally {
             _fetchingSubscriptionSourceIds.value = emptySet()
             GlobalTestExecution.endFetching()
+        }
+    }
+
+    /** 刷新订阅时保留手动调整过的顺序，新导入节点追加到末尾。 */
+    private fun preserveNodeSortOrder(
+        cachedNodes: List<Node>,
+        fetchedNodes: List<Node>
+    ): List<Node> {
+        val cachedById = cachedNodes.associateBy(Node::id)
+        val nextSortOrderBySource = cachedNodes
+            .filter { it.source == NodeSource.SUBSCRIPTION }
+            .groupBy(Node::subscriptionSourceId)
+            .mapValues { (_, nodes) -> (nodes.maxOfOrNull(Node::sortOrder) ?: -1) + 1 }
+            .toMutableMap()
+
+        return fetchedNodes.map { node ->
+            val existing = cachedById[node.id]
+            if (existing != null) {
+                node.copy(sortOrder = existing.sortOrder)
+            } else {
+                val sourceId = node.subscriptionSourceId
+                val nextSortOrder = sourceId?.let(nextSortOrderBySource::get)
+                if (sourceId == null || nextSortOrder == null) {
+                    node
+                } else {
+                    nextSortOrderBySource[sourceId] = nextSortOrder + 1
+                    node.copy(sortOrder = nextSortOrder)
+                }
+            }
         }
     }
 

@@ -7,7 +7,6 @@ import io.github.HanJason233.chimera.feature.nodegrouping.data.SubscriptionNodeD
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,11 +27,9 @@ internal fun SubscriptionGroupingDestination(
     importTargetGroupId: String? = null
 ) {
     val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
-    val resultSortMode by viewModel.nodeTestResultSortMode.collectAsStateWithLifecycle()
+    val resultSortMode by viewModel.lastTestResultSortMode.collectAsStateWithLifecycle()
     val sourceNodes = nodesOverride ?: viewModelNodes
-    val nodes = remember(sourceNodes, resultSortMode) {
-        viewModel.sortNodesByTestResult(sourceNodes, resultSortMode)
-    }
+    val nodes = sourceNodes
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val speedTestProgress by viewModel.speedTestProgress.collectAsStateWithLifecycle()
@@ -132,6 +129,13 @@ internal fun SubscriptionGroupingDestination(
         },
         onRunManualNodeTest = { node, stage ->
             viewModel.runManualGroupTest(listOf(node), stage)
+        },
+        onSortByTestResults = {
+            viewModel.sortNodesByTestResults(
+                nodes = sourceNodes,
+                mode = resultSortMode,
+                groupId = importTargetGroupId
+            )
         },
         onClearTestResults = { groupNodes, onComplete ->
             viewModel.clearNodeTestResults(groupNodes, onComplete)

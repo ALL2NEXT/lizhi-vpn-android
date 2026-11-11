@@ -23,7 +23,7 @@ internal class NodeTestExecutor(
     private val hysteriaUpMbps: kotlinx.coroutines.flow.StateFlow<Int>,
     private val hysteriaDownMbps: kotlinx.coroutines.flow.StateFlow<Int>,
     private val protocolCoreSettings: kotlinx.coroutines.flow.StateFlow<ProtocolCoreSettings>,
-    private val _nodeTestResultSortMode: kotlinx.coroutines.flow.MutableStateFlow<NodeTestResultSortMode>,
+    private val _lastTestResultSortMode: kotlinx.coroutines.flow.MutableStateFlow<NodeTestResultSortMode>,
     private val _error: kotlinx.coroutines.flow.MutableStateFlow<String?>
 ) {
     internal suspend fun runUrlTestNodes(
@@ -67,7 +67,7 @@ internal class NodeTestExecutor(
     internal suspend fun applyUrlTestResults(
         results: List<LatencyTester.LatencyResult>,
         autoDeleteTimeoutNodes: Boolean,
-        updateSortMode: Boolean = true
+        rememberLastTestResultMode: Boolean = true
     ) {
 
         val updates = results.map { result ->
@@ -77,8 +77,8 @@ internal class NodeTestExecutor(
         if (updatedRows != updates.size) {
             Log.w("NodeTestExecutor", "Only $updatedRows/${updates.size} URL test results were applied")
         }
-        if (updateSortMode) {
-            _nodeTestResultSortMode.value = NodeTestResultSortMode.URL_TEST_LATENCY
+        if (rememberLastTestResultMode) {
+            _lastTestResultSortMode.value = NodeTestResultSortMode.URL_TEST_LATENCY
         }
         deleteTimedOutNodes(results, isTcping = false, enabled = autoDeleteTimeoutNodes)
     }
@@ -115,7 +115,7 @@ internal class NodeTestExecutor(
         concurrency: Int = tcpingConcurrency.value,
         timeoutMs: Long = tcpingTestTimeoutMs.value,
         autoDeleteTimeoutNodes: Boolean,
-        updateSortMode: Boolean = true,
+        rememberLastTestResultMode: Boolean = true,
         onProgress: ((completed: Int, total: Int) -> Unit)? = null
     ): List<LatencyTester.LatencyResult> {
         if (currentNodes.isEmpty()) return emptyList()
@@ -136,8 +136,8 @@ internal class NodeTestExecutor(
             NodeLatencyUpdate(result.nodeId, result.latency, result.isAvailable)
         }
         nodeDao().updateTcpingResults(updates, System.currentTimeMillis())
-        if (updateSortMode) {
-            _nodeTestResultSortMode.value = NodeTestResultSortMode.TCPING_LATENCY
+        if (rememberLastTestResultMode) {
+            _lastTestResultSortMode.value = NodeTestResultSortMode.TCPING_LATENCY
         }
         deleteTimedOutNodes(results, isTcping = true, enabled = autoDeleteTimeoutNodes)
         return results

@@ -43,7 +43,7 @@ internal class NodeTestCoordinator(
     private val _speedTestProgress: kotlinx.coroutines.flow.MutableStateFlow<SpeedTestProgress?>,
     private val _unlockTestState: kotlinx.coroutines.flow.MutableStateFlow<UnlockTestUiState>,
     private val _linkTypeTestResult: kotlinx.coroutines.flow.MutableStateFlow<LinkTypeTestResult>,
-    private val _nodeTestResultSortMode: kotlinx.coroutines.flow.MutableStateFlow<NodeTestResultSortMode>,
+    private val _lastTestResultSortMode: kotlinx.coroutines.flow.MutableStateFlow<NodeTestResultSortMode>,
     private val _error: kotlinx.coroutines.flow.MutableStateFlow<String?>
 ) {
     private val candidateTestRunner = HomeCandidateTestRunner(
@@ -138,7 +138,7 @@ internal class NodeTestCoordinator(
                                 concurrency = 1,
                                 timeoutMs = settings.tcpingTimeoutMs,
                                 autoDeleteTimeoutNodes = false,
-                                updateSortMode = false,
+                                rememberLastTestResultMode = false,
                                 onProgress = { completed, total ->
                                     updateSpeedTestProgress(
                                         progressTitle,
@@ -170,7 +170,7 @@ internal class NodeTestCoordinator(
                             executor.applyUrlTestResults(
                                 results,
                                 autoDeleteTimeoutNodes = false,
-                                updateSortMode = false
+                                rememberLastTestResultMode = false
                             )
                         }
 
@@ -406,7 +406,7 @@ internal class NodeTestCoordinator(
                             )
                             results
                         }
-                    _nodeTestResultSortMode.value =
+                    _lastTestResultSortMode.value =
                         NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
                     val deleteLowBandwidth = settings.bandwidthAutoDeleteLowSpeedNodes
                     val bandwidthThreshold = settings.bandwidthAutoDeleteThresholdMbps
@@ -707,7 +707,7 @@ internal class NodeTestCoordinator(
                                 reason = "带宽低于 ${threshold} Mbps"
                             )
                         }
-                        _nodeTestResultSortMode.value =
+                        _lastTestResultSortMode.value =
                             NodeTestResultSortMode.DOWNLOAD_BANDWIDTH
                     }
 

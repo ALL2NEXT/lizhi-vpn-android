@@ -26,13 +26,13 @@ data class NodeGroupWithNodeCount(
 
 @Dao
 interface NodeDao {
-    @Query("SELECT * FROM nodes ORDER BY sortOrder ASC, latency ASC")
+    @Query("SELECT * FROM nodes ORDER BY sortOrder ASC, id ASC")
     fun getAllNodes(): Flow<List<Node>>
 
-    @Query("SELECT * FROM nodes WHERE source = 'SUBSCRIPTION' ORDER BY sortOrder ASC, latency ASC")
+    @Query("SELECT * FROM nodes WHERE source = 'SUBSCRIPTION' ORDER BY sortOrder ASC, id ASC")
     fun getSubscriptionNodes(): Flow<List<Node>>
 
-    @Query("SELECT * FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId = :sourceId ORDER BY sortOrder ASC, latency ASC")
+    @Query("SELECT * FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId = :sourceId ORDER BY sortOrder ASC, id ASC")
     fun getSubscriptionNodesBySource(sourceId: String): Flow<List<Node>>
 
     @Query("SELECT subscriptionSourceId AS sourceId, COALESCE(MAX(subscriptionSourceName), subscriptionSourceId) AS name, COALESCE(MAX(subscriptionUpdatedAt), 0) AS updatedAt FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId IS NOT NULL GROUP BY subscriptionSourceId ORDER BY CAST(subscriptionSourceId AS INTEGER) ASC, name ASC")
@@ -54,10 +54,10 @@ interface NodeDao {
     )
     fun getUserSubscriptionGroupsWithCount(): Flow<List<NodeGroupWithNodeCount>>
 
-    @Query("SELECT n.* FROM nodes AS n INNER JOIN node_group_members AS m ON n.id = m.nodeId WHERE m.groupId = :groupId ORDER BY m.sortOrder ASC, n.sortOrder ASC, n.latency ASC")
+    @Query("SELECT n.* FROM nodes AS n INNER JOIN node_group_members AS m ON n.id = m.nodeId WHERE m.groupId = :groupId ORDER BY m.sortOrder ASC, n.sortOrder ASC, n.id ASC")
     fun getNodesByGroup(groupId: String): Flow<List<Node>>
 
-    @Query("SELECT DISTINCT n.* FROM nodes AS n INNER JOIN node_group_members AS m ON n.id = m.nodeId WHERE m.groupId IN (:groupIds) ORDER BY n.sortOrder ASC, n.latency ASC")
+    @Query("SELECT DISTINCT n.* FROM nodes AS n INNER JOIN node_group_members AS m ON n.id = m.nodeId WHERE m.groupId IN (:groupIds) ORDER BY n.sortOrder ASC, n.id ASC")
     fun getNodesByGroups(groupIds: List<String>): Flow<List<Node>>
     
     @Query("SELECT * FROM nodes WHERE id = :id")
@@ -256,6 +256,48 @@ interface NodeDao {
     suspend fun replaceNodeGroupMembers(groupId: String, members: List<NodeGroupMemberEntity>) {
         deleteNodeGroupMembers(groupId)
         insertNodeGroupMembers(members)
+    }
+
+    @Query("SELECT nodeId FROM node_group_members WHERE groupId = :groupId ORDER BY sortOrder ASC")
+    suspend fun getNodeGroupMemberIds(groupId: String): List<String>
+
+    @Query("UPDATE nodes SET sortOrder = :sortOrder WHERE id = :nodeId")
+    suspend fun updateNodeSortOrder(nodeId: String, sortOrder: Int): Int
+
+    @Query("UPDATE node_group_members SET sortOrder = :sortOrder WHERE groupId = :groupId AND nodeId = :nodeId")
+    suspend fun updateNodeGroupMemberSortOrder(
+        groupId: String,
+        nodeId: String,
+        sortOrder: Int
+    ): Int
+
+    /** 按测试结果执行一次排序并保存顺序，后续测试结果变化时不自动重排。 */
+    @Transaction
+    suspend fun reorderNodesByTestResults(
+        orderedNodeIds: List<String>,
+        groupId: String? = null
+    ): Boolean {
+        if (orderedNodeIds.isEmpty() || orderedNodeIds.size != orderedNodeIds.toSet().size) {
+            return false
+        }
+        if (groupId != null) {
+            val memberIds = getNodeGroupMemberIds(groupId)
+            if (memberIds.size != orderedNodeIds.size || memberIds.toSet() != orderedNodeIds.toSet()) {
+                return false
+            }
+        }
+
+        orderedNodeIds.forEachIndexed { index, nodeId ->
+            check(updateNodeSortOrder(nodeId, index) > 0) {
+                "Node disappeared while applying test-result order: $nodeId"
+            }
+            if (groupId != null) {
+                check(updateNodeGroupMemberSortOrder(groupId, nodeId, index) > 0) {
+                    "Group membership changed while applying test-result order: $nodeId"
+                }
+            }
+        }
+        return true
     }
     
     @Query("DELETE FROM nodes WHERE source = 'SUBSCRIPTION'")

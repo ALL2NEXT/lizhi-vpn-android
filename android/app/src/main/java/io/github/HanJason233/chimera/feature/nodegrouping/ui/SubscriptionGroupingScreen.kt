@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -75,6 +76,7 @@ internal fun SubscriptionGroupingScreen(
     protocolCoreSettings: ProtocolCoreSettings,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
     onRunManualNodeTest: (Node, ManualGroupTestStage) -> Unit,
+    onSortByTestResults: () -> Unit,
     onClearTestResults: (List<Node>, (String, Boolean) -> Unit) -> Unit,
     onNodeSelected: (Node) -> Unit,
     onBack: () -> Unit,
@@ -127,6 +129,15 @@ internal fun SubscriptionGroupingScreen(
         backEnabled = !isClosing,
         showBackNavigation = showBackNavigation,
         actions = {
+            IconButton(
+                onClick = onSortByTestResults,
+                enabled = !isTesting && nodes.isNotEmpty()
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Sort,
+                    contentDescription = "按测试结果排序"
+                )
+            }
             Box {
                 IconButton(
                     onClick = { manualTestMenuExpanded = true },

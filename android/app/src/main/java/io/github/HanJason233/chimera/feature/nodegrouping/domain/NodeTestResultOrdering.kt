@@ -2,14 +2,14 @@ package io.github.HanJason233.chimera.feature.nodegrouping.domain
 
 import io.github.HanJason233.chimera.data.model.Node
 
-/** 线路信息在最近一次测试后的排序依据。 */
+/** 最近一次测试的指标，供用户手动排序时选择依据。 */
 enum class NodeTestResultSortMode {
     TCPING_LATENCY,
     URL_TEST_LATENCY,
     DOWNLOAD_BANDWIDTH
 }
 
-/** 根据最后完成的测试阶段排列线路信息。 */
+/** 根据选定的测试结果指标排列节点，未测和失败的结果排在后面。 */
 internal object NodeTestResultOrdering {
     fun sort(nodes: List<Node>, mode: NodeTestResultSortMode): List<Node> =
         when (mode) {

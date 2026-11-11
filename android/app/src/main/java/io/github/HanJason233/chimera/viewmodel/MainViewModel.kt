@@ -124,11 +124,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _linkTypeTestResult = MutableStateFlow(LinkTypeTestResult())
     internal val linkTypeTestResult = _linkTypeTestResult.asStateFlow()
 
-    /** 线路信息按当前最近完成的测速阶段展示结果。 */
-    private val _nodeTestResultSortMode = MutableStateFlow(
+    /** 手动排序时使用的最近一次延迟或带宽测试指标。 */
+    private val _lastTestResultSortMode = MutableStateFlow(
         NodeTestResultSortMode.TCPING_LATENCY
     )
-    val nodeTestResultSortMode = _nodeTestResultSortMode.asStateFlow()
+    val lastTestResultSortMode = _lastTestResultSortMode.asStateFlow()
 
     /** 持久化节点列表当前测试项和本轮起始时间，进程重启后继续展示对应结果。 */
     internal val nodeTestResultDisplaySelection =
@@ -524,7 +524,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         hysteriaUpMbps = hysteriaUpMbps,
         hysteriaDownMbps = hysteriaDownMbps,
         protocolCoreSettings = protocolCoreSettings,
-        _nodeTestResultSortMode = _nodeTestResultSortMode,
+        _lastTestResultSortMode = _lastTestResultSortMode,
         _error = _error
     )
     private val nodeTestCoordinator = NodeTestCoordinator(
@@ -547,7 +547,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _speedTestProgress = _speedTestProgress,
         _unlockTestState = _unlockTestState,
         _linkTypeTestResult = _linkTypeTestResult,
-        _nodeTestResultSortMode = _nodeTestResultSortMode,
+        _lastTestResultSortMode = _lastTestResultSortMode,
         _error = _error
     )
 
@@ -920,9 +920,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ): List<Node> {
         return list.sortedWith(
             compareByDescending<Node> { it.id == pinnedNodeId }
-                .thenByDescending { it.isAvailable }
                 .thenBy { it.sortOrder }
-                .thenBy { if (it.latency >= 0) it.latency else Int.MAX_VALUE }
         )
     }
 
@@ -931,6 +929,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         list: List<Node>,
         mode: NodeTestResultSortMode
     ): List<Node> = NodeTestResultOrdering.sort(list, mode)
+
+    /** 仅在用户从节点列表手动触发时，按测试结果保存节点顺序。 */
+    fun sortNodesByTestResults(
+        nodes: List<Node>,
+        mode: NodeTestResultSortMode,
+        groupId: String? = null
+    ) {
+        viewModelScope.launch {
+            val dao = nodeDao()
+            val nodesToSort = if (groupId == null) {
+                nodes
+            } else {
+                dao.getNodesByGroup(groupId).first()
+            }
+            val orderedNodeIds = sortNodesByTestResult(nodesToSort, mode).map(Node::id)
+            if (orderedNodeIds.isEmpty()) return@launch
+            try {
+                val reordered = withContext(Dispatchers.IO) {
+                    dao.reorderNodesByTestResults(orderedNodeIds, groupId)
+                }
+                if (!reordered) {
+                    _error.value = "节点列表已更新，请重试排序"
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e("MainViewModel", "Failed to sort nodes by test results", error)
+                _error.value = "按测试结果排序失败：${error.message ?: "未知错误"}"
+            }
+        }
+    }
 
     /**
      * 内部测试逻辑 (Suspend)
