@@ -57,9 +57,10 @@ internal fun NodeListItem(
     val protocolLabel = remember(node.type, node.rawLink, displaySettings, coreSettings) {
         node.nodeListProtocolLabel(displaySettings, coreSettings)
     }
-    val latency = node.urlTestLatency.takeIf { it != -1 }
+    val measuredLatency = node.urlTestLatency.takeIf { it != -1 }
         ?: node.tcpingLatency.takeIf { it != -1 }
-        ?: node.latency
+        ?: node.latency.takeIf { it != -1 }
+    val latency = measuredLatency?.let { if (it < 0) -1 else it }
     val regionMarker = node.getRegionMarker().takeUnless { it == "🌐" }
     val serverAddress = if (node.server.contains(':') && !node.server.startsWith('[')) {
         "[${node.server}]"
@@ -209,20 +210,22 @@ internal fun NodeListItem(
                             overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                    } else {
+                    } else if (latency != null) {
                         Spacer(modifier = Modifier.weight(1f))
                     }
-                    Text(
-                        text = "$latency ms",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (latency < 0) {
-                            nodeListLatencyErrorColor
-                        } else {
-                            nodeListLatencyColor
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    latency?.let { displayedLatency ->
+                        Text(
+                            text = "$displayedLatency ms",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (displayedLatency < 0) {
+                                nodeListLatencyErrorColor
+                            } else {
+                                nodeListLatencyColor
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
