@@ -26,42 +26,13 @@ data class NodeGroupWithNodeCount(
 
 @Dao
 interface NodeDao {
-    @Query(
-        """
-        SELECT n.* FROM nodes AS n
-        WHERE n.source != 'SUBSCRIPTION' OR NOT EXISTS (
-            SELECT 1 FROM blocked_subscription_nodes AS b
-            WHERE b.sourceId = n.subscriptionSourceId AND b.nodeId = n.id
-        )
-        ORDER BY n.sortOrder ASC, n.latency ASC
-        """
-    )
+    @Query("SELECT * FROM nodes ORDER BY sortOrder ASC, latency ASC")
     fun getAllNodes(): Flow<List<Node>>
 
-    @Query(
-        """
-        SELECT n.* FROM nodes AS n
-        WHERE n.source = 'SUBSCRIPTION' AND NOT EXISTS (
-            SELECT 1 FROM blocked_subscription_nodes AS b
-            WHERE b.sourceId = n.subscriptionSourceId AND b.nodeId = n.id
-        )
-        ORDER BY n.sortOrder ASC, n.latency ASC
-        """
-    )
+    @Query("SELECT * FROM nodes WHERE source = 'SUBSCRIPTION' ORDER BY sortOrder ASC, latency ASC")
     fun getSubscriptionNodes(): Flow<List<Node>>
 
-    @Query(
-        """
-        SELECT n.* FROM nodes AS n
-        WHERE n.source = 'SUBSCRIPTION'
-            AND n.subscriptionSourceId = :sourceId
-            AND NOT EXISTS (
-                SELECT 1 FROM blocked_subscription_nodes AS b
-                WHERE b.sourceId = n.subscriptionSourceId AND b.nodeId = n.id
-            )
-        ORDER BY n.sortOrder ASC, n.latency ASC
-        """
-    )
+    @Query("SELECT * FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId = :sourceId ORDER BY sortOrder ASC, latency ASC")
     fun getSubscriptionNodesBySource(sourceId: String): Flow<List<Node>>
 
     @Query("SELECT subscriptionSourceId AS sourceId, COALESCE(MAX(subscriptionSourceName), subscriptionSourceId) AS name, COALESCE(MAX(subscriptionUpdatedAt), 0) AS updatedAt FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId IS NOT NULL GROUP BY subscriptionSourceId ORDER BY CAST(subscriptionSourceId AS INTEGER) ASC, name ASC")
@@ -83,32 +54,10 @@ interface NodeDao {
     )
     fun getUserSubscriptionGroupsWithCount(): Flow<List<NodeGroupWithNodeCount>>
 
-    @Query(
-        """
-        SELECT n.* FROM nodes AS n
-        INNER JOIN node_group_members AS m ON n.id = m.nodeId
-        WHERE m.groupId = :groupId
-            AND (n.source != 'SUBSCRIPTION' OR NOT EXISTS (
-                SELECT 1 FROM blocked_subscription_nodes AS b
-                WHERE b.sourceId = n.subscriptionSourceId AND b.nodeId = n.id
-            ))
-        ORDER BY m.sortOrder ASC, n.sortOrder ASC, n.latency ASC
-        """
-    )
+    @Query("SELECT n.* FROM nodes AS n INNER JOIN node_group_members AS m ON n.id = m.nodeId WHERE m.groupId = :groupId ORDER BY m.sortOrder ASC, n.sortOrder ASC, n.latency ASC")
     fun getNodesByGroup(groupId: String): Flow<List<Node>>
 
-    @Query(
-        """
-        SELECT DISTINCT n.* FROM nodes AS n
-        INNER JOIN node_group_members AS m ON n.id = m.nodeId
-        WHERE m.groupId IN (:groupIds)
-            AND (n.source != 'SUBSCRIPTION' OR NOT EXISTS (
-                SELECT 1 FROM blocked_subscription_nodes AS b
-                WHERE b.sourceId = n.subscriptionSourceId AND b.nodeId = n.id
-            ))
-        ORDER BY n.sortOrder ASC, n.latency ASC
-        """
-    )
+    @Query("SELECT DISTINCT n.* FROM nodes AS n INNER JOIN node_group_members AS m ON n.id = m.nodeId WHERE m.groupId IN (:groupIds) ORDER BY n.sortOrder ASC, n.latency ASC")
     fun getNodesByGroups(groupIds: List<String>): Flow<List<Node>>
     
     @Query("SELECT * FROM nodes WHERE id = :id")
@@ -315,22 +264,16 @@ interface NodeDao {
     @Query("DELETE FROM nodes WHERE source = 'SUBSCRIPTION' AND subscriptionSourceId = :sourceId")
     suspend fun deleteSubscriptionNodesBySource(sourceId: String)
 
-    @Query("SELECT COUNT(*) FROM nodes WHERE id = :nodeId AND source = 'SUBSCRIPTION' AND subscriptionSourceId = :sourceId")
-    suspend fun countSubscriptionNodeFromSource(sourceId: String, nodeId: String): Int
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertBlockedSubscriptionNode(node: BlockedSubscriptionNodeEntity)
-
     @Query("DELETE FROM home_node_test_results WHERE nodeId = :nodeId")
     suspend fun deleteHomeNodeTestResults(nodeId: String): Int
 
-    /** 屏蔽官方源节点并清理测试结果，避免刷新时自动恢复。 */
+    @Query("DELETE FROM nodes WHERE id = :nodeId AND source = 'SUBSCRIPTION' AND subscriptionSourceId = :sourceId")
+    suspend fun deleteSubscriptionNodeRow(sourceId: String, nodeId: String): Int
+
+    /** 直接删除本地节点记录和测试结果，订阅刷新仍可重新导入源中的节点。 */
     @Transaction
-    suspend fun blockSubscriptionNode(sourceId: String, nodeId: String): Boolean {
-        if (countSubscriptionNodeFromSource(sourceId, nodeId) == 0) return false
-        insertBlockedSubscriptionNode(
-            BlockedSubscriptionNodeEntity(sourceId = sourceId, nodeId = nodeId)
-        )
+    suspend fun deleteSubscriptionNodeFromSource(sourceId: String, nodeId: String): Boolean {
+        if (deleteSubscriptionNodeRow(sourceId, nodeId) == 0) return false
         deleteHomeNodeTestResults(nodeId)
         return true
     }

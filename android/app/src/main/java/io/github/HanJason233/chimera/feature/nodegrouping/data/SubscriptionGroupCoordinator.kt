@@ -446,7 +446,7 @@ internal class SubscriptionGroupCoordinator(
         }
     }
 
-    /** 浠庡畼鏂硅闃呮簮灞忚斀涓€涓妭鐐癸紝閬垮厤鍚庣画鍒锋柊閲嶆柊鍔犲叆銆?*/
+    /** 删除本地订阅列表中的节点；下次刷新时源仍包含该节点则会重新导入。 */
     fun deleteSubscriptionNode(
         node: Node,
         onResult: (SubscriptionNodeDeleteResult) -> Unit = {}
@@ -463,7 +463,7 @@ internal class SubscriptionGroupCoordinator(
             }
 
             val deleted = withContext(Dispatchers.IO) {
-                nodeDao().blockSubscriptionNode(sourceId, node.id)
+                nodeDao().deleteSubscriptionNodeFromSource(sourceId, node.id)
             }
             if (!deleted) {
                 onResult(SubscriptionNodeDeleteResult.NOT_FOUND)

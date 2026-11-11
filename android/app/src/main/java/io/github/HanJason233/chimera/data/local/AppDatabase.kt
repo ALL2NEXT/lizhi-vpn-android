@@ -21,10 +21,9 @@ import java.io.File
         Node::class,
         NodeGroupEntity::class,
         NodeGroupMemberEntity::class,
-        HomeNodeTestResultsEntity::class,
-        BlockedSubscriptionNodeEntity::class
+        HomeNodeTestResultsEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -46,6 +45,12 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `blocked_subscription_nodes`")
             }
         }
 
@@ -94,7 +99,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_14_15)
+                .addMigrations(MIGRATION_14_15, MIGRATION_15_16)
                 // 发布前开发版允许在表结构变化时重建本地数据库。
                 .fallbackToDestructiveMigration()
                 .build()

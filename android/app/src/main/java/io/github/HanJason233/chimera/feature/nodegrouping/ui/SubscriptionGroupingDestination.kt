@@ -101,7 +101,7 @@ internal fun SubscriptionGroupingDestination(
                 viewModel.deleteSubscriptionNode(node) { result ->
                     val (message, success) = when (result) {
                         SubscriptionNodeDeleteResult.DELETED ->
-                            "节点已从官方源移除" to true
+                            "节点已删除" to true
                         SubscriptionNodeDeleteResult.NOT_FOUND ->
                             "节点不存在或已更新" to false
                         SubscriptionNodeDeleteResult.IN_USE ->

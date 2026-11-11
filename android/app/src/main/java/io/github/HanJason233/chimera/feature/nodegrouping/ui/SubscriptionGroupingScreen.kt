@@ -56,7 +56,6 @@ import androidx.compose.ui.window.DialogProperties
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
-import io.github.HanJason233.chimera.data.model.NodeSource
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
 import io.github.HanJason233.chimera.feature.nodetest.model.SpeedTestProgress
@@ -88,7 +87,6 @@ internal fun SubscriptionGroupingScreen(
     var editingNode by remember { mutableStateOf<Node?>(null) }
     var editingNodeName by rememberSaveable { mutableStateOf("") }
     var editingNodeUri by rememberSaveable { mutableStateOf("") }
-    var deleteCandidate by remember { mutableStateOf<Node?>(null) }
     var isManagingNodes by rememberSaveable { mutableStateOf(false) }
     val canDeleteNodes = onDeleteNode != null
     var manualTestMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -240,7 +238,15 @@ internal fun SubscriptionGroupingScreen(
                     editingNodeName = node.name
                     editingNodeUri = node.rawLink
                 },
-                onDeleteNode = { node -> deleteCandidate = node }
+                onDeleteNode = { node ->
+                    if (!isManagingNodes) {
+                        isManagingNodes = true
+                        onDeleteNode?.invoke(node) { message, _ ->
+                            isManagingNodes = false
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
             )
         }
     }
@@ -457,54 +463,6 @@ internal fun SubscriptionGroupingScreen(
                             CircularProgressIndicator(modifier = Modifier.size(18.dp))
                         } else {
                             Text("保存")
-                        }
-                    }
-                }
-            )
-        }
-    }
-
-    deleteCandidate?.let { node ->
-        if (onDeleteNode != null) {
-            AppAlertDialog(
-                onDismissRequest = { if (!isManagingNodes) deleteCandidate = null },
-                title = { Text("删除节点？") },
-                text = {
-                    Text(
-                        when (node.source) {
-                            NodeSource.SUBSCRIPTION ->
-                                "确认从官方源“${node.subscriptionSourceName ?: screenTitle}”中移除“${node.getDisplayName()}”吗？后续刷新时也会继续忽略此节点。"
-                            NodeSource.LOCAL_GROUP ->
-                                "确认从当前私人源中删除“${node.getDisplayName()}”吗？"
-                        }
-                    )
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { deleteCandidate = null },
-                        enabled = !isManagingNodes
-                    ) {
-                        Text("取消")
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            isManagingNodes = true
-                            onDeleteNode(node) { message, success ->
-                                isManagingNodes = false
-                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                if (success) {
-                                    deleteCandidate = null
-                                }
-                            }
-                        },
-                        enabled = !isManagingNodes
-                    ) {
-                        if (isManagingNodes) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                        } else {
-                            Text("删除", color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
