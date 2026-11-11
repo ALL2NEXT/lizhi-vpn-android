@@ -13,9 +13,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeSource
-import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
-import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
-import io.github.HanJason233.chimera.feature.nodetest.data.HomeTestResultCodec
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 
 /** 仓库源详情页面的状态绑定入口。 */
@@ -32,54 +29,9 @@ internal fun SubscriptionGroupingDestination(
 ) {
     val viewModelNodes by viewModel.nodes.collectAsStateWithLifecycle()
     val resultSortMode by viewModel.nodeTestResultSortMode.collectAsStateWithLifecycle()
-    val storedNodeTestResults by viewModel.allNodeTestResults.collectAsStateWithLifecycle()
     val sourceNodes = nodesOverride ?: viewModelNodes
     val nodes = remember(sourceNodes, resultSortMode) {
         viewModel.sortNodesByTestResult(sourceNodes, resultSortMode)
-    }
-    val nodeTestResults = remember(storedNodeTestResults) {
-        storedNodeTestResults.mapValues { (_, stored) ->
-            val linkTypeResult = stored.linkTypeResultJson
-                .takeIf(String::isNotBlank)
-                ?.let(HomeTestResultCodec::decodeLinkType)
-            val linkTypeState = linkTypeResult?.state?.takeUnless {
-                it == LinkTypeTestState.IDLE || it == LinkTypeTestState.TESTING
-            }
-            val unlockItems = stored.unlockTestResultJson
-                .takeIf(String::isNotBlank)
-                ?.let(HomeTestResultCodec::decodeUnlockTests)
-                ?.items
-                .orEmpty()
-            val unlockedCount = unlockItems.count { it.state == UnlockTestState.UNLOCKED }
-            val unlockTone = when {
-                unlockItems.isEmpty() -> NodeTestResultTone.NEUTRAL
-                unlockItems.all { it.state == UnlockTestState.UNLOCKED } ->
-                    NodeTestResultTone.POSITIVE
-                unlockItems.any {
-                    it.state == UnlockTestState.UNLOCKED ||
-                        it.state == UnlockTestState.PARTIAL ||
-                        it.state == UnlockTestState.WARNING
-                } -> NodeTestResultTone.WARNING
-                else -> NodeTestResultTone.ERROR
-            }
-            NodeListTestResultSummary(
-                tcpingLatency = stored.tcpingLatency,
-                urlTestLatency = stored.urlTestLatency,
-                downloadMbps = stored.downloadMbps,
-                linkType = when (linkTypeState) {
-                    LinkTypeTestState.ERROR, LinkTypeTestState.NOT_CONNECTED -> "×"
-                    else -> linkTypeState?.title
-                },
-                linkTypeTone = when (linkTypeState) {
-                    LinkTypeTestState.ERROR, LinkTypeTestState.NOT_CONNECTED ->
-                        NodeTestResultTone.ERROR
-                    else -> NodeTestResultTone.NEUTRAL
-                },
-                unlockRatio = unlockItems.takeIf { it.isNotEmpty() }
-                    ?.let { "$unlockedCount/${it.size}" },
-                unlockTone = unlockTone
-            )
-        }
     }
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
@@ -168,7 +120,6 @@ internal fun SubscriptionGroupingDestination(
         testProgress = speedTestProgress,
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
-        nodeTestResults = nodeTestResults,
         onRunManualGroupTest = { stage ->
             viewModel.runManualGroupTest(sourceNodes, stage)
         },

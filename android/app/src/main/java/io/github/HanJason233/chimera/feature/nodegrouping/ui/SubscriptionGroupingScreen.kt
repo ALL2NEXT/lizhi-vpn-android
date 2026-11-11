@@ -69,7 +69,6 @@ internal fun SubscriptionGroupingScreen(
     testProgress: SpeedTestProgress?,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
-    nodeTestResults: Map<String, NodeListTestResultSummary>,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
     onClearTestResults: (List<Node>, (String, Boolean) -> Unit) -> Unit,
     onNodeSelected: (Node) -> Unit,
@@ -225,7 +224,6 @@ internal fun SubscriptionGroupingScreen(
                 isTesting = isTesting,
                 nodeDisplaySettings = nodeDisplaySettings,
                 protocolCoreSettings = protocolCoreSettings,
-                nodeTestResults = nodeTestResults,
                 onNodeSelected = handleNodeSelected,
                 interactionEnabled = !isClosing,
                 bottomContentPadding = bottomContentPadding,
@@ -519,7 +517,6 @@ private fun NodeListContent(
     isTesting: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
-    nodeTestResults: Map<String, NodeListTestResultSummary>,
     onNodeSelected: (Node) -> Unit,
     interactionEnabled: Boolean,
     bottomContentPadding: Dp,
@@ -621,8 +618,6 @@ private fun NodeListContent(
                                         enabled = interactionEnabled,
                                         displaySettings = nodeDisplaySettings,
                                         coreSettings = protocolCoreSettings,
-                                        testResults = nodeTestResults[node.id]
-                                            ?: NodeListTestResultSummary(),
                                         onClick = {
                                             onOpenSwipeNodeChange(null)
                                             onNodeSelected(node)
@@ -636,8 +631,6 @@ private fun NodeListContent(
                                     enabled = interactionEnabled,
                                     displaySettings = nodeDisplaySettings,
                                     coreSettings = protocolCoreSettings,
-                                    testResults = nodeTestResults[node.id]
-                                        ?: NodeListTestResultSummary(),
                                     onClick = { onNodeSelected(node) }
                                 )
                             }
