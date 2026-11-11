@@ -68,6 +68,8 @@ internal fun SubscriptionGroupingScreen(
     isTesting: Boolean,
     testProgress: SpeedTestProgress?,
     testResults: Map<String, HomeNodeTestResultsEntity>,
+    displayedTestStage: ManualGroupTestStage,
+    testRunStartedAt: Long,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onRunManualGroupTest: (ManualGroupTestStage) -> Unit,
@@ -90,19 +92,11 @@ internal fun SubscriptionGroupingScreen(
     var editingNodeName by rememberSaveable { mutableStateOf("") }
     var editingNodeUri by rememberSaveable { mutableStateOf("") }
     var isManagingNodes by rememberSaveable { mutableStateOf(false) }
-    var displayedTestStage by remember { mutableStateOf(ManualGroupTestStage.TCPING) }
-    var testRunStartedAt by remember { mutableStateOf(0L) }
     val canDeleteNodes = onDeleteNode != null
     var manualTestMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var manualTestDialogHidden by rememberSaveable { mutableStateOf(false) }
     var clearTestDataDialogVisible by rememberSaveable { mutableStateOf(false) }
     var isClearingTestData by rememberSaveable { mutableStateOf(false) }
-
-    val runManualTest: (ManualGroupTestStage) -> Unit = { stage ->
-        displayedTestStage = stage
-        testRunStartedAt = System.currentTimeMillis()
-        onRunManualGroupTest(stage)
-    }
 
     LaunchedEffect(testProgress?.isManualGroupTest) {
         if (testProgress?.isManualGroupTest == true) {
@@ -149,7 +143,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("TCPing") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            runManualTest(ManualGroupTestStage.TCPING)
+                            onRunManualGroupTest(ManualGroupTestStage.TCPING)
                         },
                         enabled = !isTesting
                     )
@@ -157,7 +151,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("URL Test") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            runManualTest(ManualGroupTestStage.URL_TEST)
+                            onRunManualGroupTest(ManualGroupTestStage.URL_TEST)
                         },
                         enabled = !isTesting
                     )
@@ -165,7 +159,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("带宽测速") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            runManualTest(ManualGroupTestStage.BANDWIDTH)
+                            onRunManualGroupTest(ManualGroupTestStage.BANDWIDTH)
                         },
                         enabled = !isTesting
                     )
@@ -173,7 +167,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("链路类型检测") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            runManualTest(ManualGroupTestStage.LINK_TYPE)
+                            onRunManualGroupTest(ManualGroupTestStage.LINK_TYPE)
                         },
                         enabled = !isTesting
                     )
@@ -181,7 +175,7 @@ internal fun SubscriptionGroupingScreen(
                         text = { Text("流媒体与 AI 解锁") },
                         onClick = {
                             manualTestMenuExpanded = false
-                            runManualTest(ManualGroupTestStage.IP_QUALITY)
+                            onRunManualGroupTest(ManualGroupTestStage.IP_QUALITY)
                         },
                         enabled = !isTesting
                     )

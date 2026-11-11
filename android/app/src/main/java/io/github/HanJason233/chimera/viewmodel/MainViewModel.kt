@@ -130,6 +130,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     val nodeTestResultSortMode = _nodeTestResultSortMode.asStateFlow()
 
+    /** 保留仓库源节点卡片当前展示的测试项，离开并重进页面时继续显示同一结果。 */
+    private val _nodeListTestDisplayStage = MutableStateFlow(ManualGroupTestStage.TCPING)
+    internal val nodeListTestDisplayStage = _nodeListTestDisplayStage.asStateFlow()
+    private val _nodeListTestRunStartedAt = MutableStateFlow(0L)
+    internal val nodeListTestRunStartedAt = _nodeListTestRunStartedAt.asStateFlow()
+
     private val _isHysteriaBandwidthAdapting = MutableStateFlow(false)
     val isHysteriaBandwidthAdapting = _isHysteriaBandwidthAdapting.asStateFlow()
 
@@ -723,8 +729,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         onComplete: (String, Boolean) -> Unit = { _, _ -> }
     ) = nodeTestCoordinator.clearNodeTestResults(groupNodes, onComplete)
 
-    fun runManualGroupTest(groupNodes: List<Node>, stage: ManualGroupTestStage) =
+    fun runManualGroupTest(groupNodes: List<Node>, stage: ManualGroupTestStage) {
+        _nodeListTestDisplayStage.value = stage
+        _nodeListTestRunStartedAt.value = System.currentTimeMillis()
         nodeTestCoordinator.runManualGroupTest(groupNodes, stage)
+    }
 
     /** Connect to the selected node, or to the first node in the active subscription. */
     fun startSelectedOrFirstConnection() {

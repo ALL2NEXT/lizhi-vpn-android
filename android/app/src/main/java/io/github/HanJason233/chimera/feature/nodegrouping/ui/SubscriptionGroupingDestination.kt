@@ -37,6 +37,8 @@ internal fun SubscriptionGroupingDestination(
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val speedTestProgress by viewModel.speedTestProgress.collectAsStateWithLifecycle()
     val testResults by viewModel.allNodeTestResults.collectAsStateWithLifecycle()
+    val displayedTestStage by viewModel.nodeListTestDisplayStage.collectAsStateWithLifecycle()
+    val testRunStartedAt by viewModel.nodeListTestRunStartedAt.collectAsStateWithLifecycle()
     val skinSettings by viewModel.skinSettings.collectAsStateWithLifecycle()
     val nodeDisplaySettings = skinSettings.nodeDisplaySettings
     val protocolCoreSettings by
@@ -120,6 +122,8 @@ internal fun SubscriptionGroupingDestination(
         isTesting = isTesting,
         testProgress = speedTestProgress,
         testResults = testResults,
+        displayedTestStage = displayedTestStage,
+        testRunStartedAt = testRunStartedAt,
         nodeDisplaySettings = nodeDisplaySettings,
         protocolCoreSettings = protocolCoreSettings,
         onRunManualGroupTest = { stage ->
