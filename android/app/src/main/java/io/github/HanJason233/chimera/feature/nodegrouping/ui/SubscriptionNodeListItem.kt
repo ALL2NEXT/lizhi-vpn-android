@@ -105,8 +105,15 @@ private fun nodeTestResultDisplay(
         }
 
         ManualGroupTestStage.BANDWIDTH -> {
-            val speed = stored?.downloadMbps
+            val storedSpeed = stored?.downloadMbps
+            val speed = storedSpeed?.takeIf { it > 0f }
                 ?: node.downloadMbps.takeIf { it > 0f }
+                // 测试结果实体默认带宽为 0；只有本轮带宽测试已写回后，0 才表示失败。
+                ?: storedSpeed?.takeIf {
+                    it <= 0f &&
+                        resultUpdatedAfter > 0L &&
+                        (stored?.updatedAt ?: 0L) >= resultUpdatedAfter
+                }
             speed?.let {
                 if (it <= 0f) {
                     NodeTestResultDisplay("失败", isError = true)
