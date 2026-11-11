@@ -240,6 +240,7 @@ internal fun SubscriptionGroupingScreen(
                 testedNodeIds = testedNodeIds,
                 selectedNodeId = selectedNodeId,
                 isTesting = isTesting,
+                isManualGroupTest = testProgress?.isManualGroupTest == true,
                 nodeDisplaySettings = nodeDisplaySettings,
                 protocolCoreSettings = protocolCoreSettings,
                 onNodeSelected = handleNodeSelected,
@@ -504,6 +505,7 @@ private fun NodeListContent(
     testedNodeIds: Set<String>,
     selectedNodeId: String?,
     isTesting: Boolean,
+    isManualGroupTest: Boolean,
     nodeDisplaySettings: NodeDisplaySettings,
     protocolCoreSettings: ProtocolCoreSettings,
     onNodeSelected: (Node) -> Unit,
@@ -584,8 +586,10 @@ private fun NodeListContent(
                                 coreSettings = protocolCoreSettings,
                                 testResult = testResults[node.id],
                                 testStage = testStage,
-                                testRunStartedAt = if (isTestTarget) testRunStartedAt else 0L,
-                                isTestRunning = isTesting && testRunStartedAt > 0L && isTestTarget,
+                                isTestRunning = isTesting &&
+                                    isManualGroupTest &&
+                                    testRunStartedAt > 0L &&
+                                    isTestTarget,
                                 canStartTest = canStartTest,
                                 onTest = { stage -> onRunManualNodeTest(node, stage) },
                                 onShare = { onShareNode(node) },

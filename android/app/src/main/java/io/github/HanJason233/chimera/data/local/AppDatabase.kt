@@ -23,7 +23,7 @@ import java.io.File
         NodeGroupMemberEntity::class,
         HomeNodeTestResultsEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 @TypeConverters(NodeTypeConverter::class)
@@ -51,6 +51,14 @@ abstract class AppDatabase : RoomDatabase() {
         private val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP TABLE IF EXISTS `blocked_subscription_nodes`")
+            }
+        }
+
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `home_node_test_results` ADD COLUMN `lastTestStage` TEXT DEFAULT NULL"
+                )
             }
         }
 
@@ -99,7 +107,7 @@ abstract class AppDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_14_15, MIGRATION_15_16)
+                .addMigrations(MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                 // 发布前开发版允许在表结构变化时重建本地数据库。
                 .fallbackToDestructiveMigration()
                 .build()

@@ -6,6 +6,7 @@ import io.github.HanJason233.chimera.data.model.Node
 import io.github.HanJason233.chimera.data.model.NodeGroupEntity
 import io.github.HanJason233.chimera.data.model.NodeGroupMemberEntity
 import io.github.HanJason233.chimera.data.model.SubscriptionGroup
+import io.github.HanJason233.chimera.data.model.ManualGroupTestStage
 
 data class NodeLatencyUpdate(
     val nodeId: String,
@@ -353,7 +354,11 @@ interface NodeDao {
             val stored = getHomeNodeTestResults(update.nodeId)
                 ?: HomeNodeTestResultsEntity(nodeId = update.nodeId)
             saveHomeNodeTestResults(
-                stored.copy(tcpingLatency = update.latency, updatedAt = testedAt)
+                stored.copy(
+                    tcpingLatency = update.latency,
+                    lastTestStage = ManualGroupTestStage.TCPING.name,
+                    updatedAt = testedAt
+                )
             )
             updatedRows
         }
@@ -374,7 +379,11 @@ interface NodeDao {
             val stored = getHomeNodeTestResults(update.nodeId)
                 ?: HomeNodeTestResultsEntity(nodeId = update.nodeId)
             saveHomeNodeTestResults(
-                stored.copy(urlTestLatency = update.latency, updatedAt = testedAt)
+                stored.copy(
+                    urlTestLatency = update.latency,
+                    lastTestStage = ManualGroupTestStage.URL_TEST.name,
+                    updatedAt = testedAt
+                )
             )
             updatedRows
         }
@@ -421,6 +430,13 @@ interface NodeDao {
     @Query("DELETE FROM home_node_test_results WHERE nodeId IN (:nodeIds)")
     suspend fun deleteStoredNodeTestResults(nodeIds: List<String>): Int
 
+    /** 将升级前缺少测试类型的记录按旧的全局展示项补齐。 */
+    @Query(
+        "UPDATE home_node_test_results SET lastTestStage = :stage " +
+            "WHERE lastTestStage IS NULL"
+    )
+    suspend fun initializeMissingLastTestStages(stage: String): Int
+
     /** 清除节点列表展示的测试结果，并兼容 SQLite 的 IN 参数数量限制。 */
     @Transaction
     suspend fun clearNodeTestResults(nodeIds: List<String>): Int {
@@ -443,6 +459,7 @@ interface NodeDao {
         saveHomeNodeTestResults(
             stored.copy(
                 linkTypeResultJson = resultJson,
+                lastTestStage = ManualGroupTestStage.LINK_TYPE.name,
                 updatedAt = System.currentTimeMillis()
             )
         )
@@ -454,6 +471,7 @@ interface NodeDao {
         saveHomeNodeTestResults(
             stored.copy(
                 unlockTestResultJson = resultJson,
+                lastTestStage = ManualGroupTestStage.IP_QUALITY.name,
                 updatedAt = System.currentTimeMillis()
             )
         )
@@ -469,6 +487,7 @@ interface NodeDao {
         saveHomeNodeTestResults(
             stored.copy(
                 downloadMbps = downloadMbps,
+                lastTestStage = ManualGroupTestStage.BANDWIDTH.name,
                 updatedAt = System.currentTimeMillis()
             )
         )

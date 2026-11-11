@@ -738,6 +738,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             testedNodeIds = groupNodes.mapTo(mutableSetOf(), Node::id)
         )
         viewModelScope.launch {
+            val previousSelection = settingsRepository.nodeTestResultDisplaySelection.first()
+            nodeDao().initializeMissingLastTestStages(previousSelection.stage.name)
             settingsRepository.setNodeTestResultDisplaySelection(selection)
             nodeTestCoordinator.runManualGroupTest(groupNodes, stage)
         }

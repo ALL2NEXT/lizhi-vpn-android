@@ -75,19 +75,18 @@ private fun nodeTestResultDisplay(
     node: Node,
     stored: HomeNodeTestResultsEntity?,
     stage: ManualGroupTestStage,
-    resultUpdatedAfter: Long,
     isTestRunning: Boolean
 ): NodeTestResultDisplay? {
-    if (resultUpdatedAfter > 0L && (stored?.updatedAt ?: 0L) < resultUpdatedAfter) {
+    if (isTestRunning) {
         if (stage == ManualGroupTestStage.IP_QUALITY) return null
-        return if (isTestRunning) {
-            NodeTestResultDisplay("检测中", isError = false)
-        } else {
-            null
-        }
+        return NodeTestResultDisplay("检测中", isError = false)
     }
 
-    return when (stage) {
+    val latestStage = stored?.lastTestStage
+        ?.let { runCatching { ManualGroupTestStage.valueOf(it) }.getOrNull() }
+        ?: stage
+
+    return when (latestStage) {
         ManualGroupTestStage.TCPING -> {
             val latency = stored?.tcpingLatency?.takeIf { it != -1 }
                 ?: if (stored == null) node.tcpingLatency.takeIf { it != -1 } else null
@@ -108,11 +107,9 @@ private fun nodeTestResultDisplay(
             val storedSpeed = stored?.downloadMbps
             val speed = storedSpeed?.takeIf { it > 0f }
                 ?: node.downloadMbps.takeIf { it > 0f }
-                // 测试结果实体默认带宽为 0；只有本轮带宽测试已写回后，0 才表示失败。
+                // 只有最近一次测试是带宽测速时，已保存的 0 才表示测速失败。
                 ?: storedSpeed?.takeIf {
-                    it <= 0f &&
-                        resultUpdatedAfter > 0L &&
-                        (stored?.updatedAt ?: 0L) >= resultUpdatedAfter
+                    it <= 0f && stored?.lastTestStage == ManualGroupTestStage.BANDWIDTH.name
                 }
             speed?.let {
                 if (it <= 0f) {
@@ -172,7 +169,6 @@ internal fun NodeListItem(
     coreSettings: ProtocolCoreSettings,
     testResult: HomeNodeTestResultsEntity?,
     testStage: ManualGroupTestStage,
-    testRunStartedAt: Long,
     isTestRunning: Boolean,
     canStartTest: Boolean,
     onTest: ((ManualGroupTestStage) -> Unit)? = null,
@@ -189,14 +185,12 @@ internal fun NodeListItem(
         node,
         testResult,
         testStage,
-        testRunStartedAt,
         isTestRunning
     ) {
         nodeTestResultDisplay(
             node = node,
             stored = testResult,
             stage = testStage,
-            resultUpdatedAfter = testRunStartedAt,
             isTestRunning = isTestRunning
         )
     }

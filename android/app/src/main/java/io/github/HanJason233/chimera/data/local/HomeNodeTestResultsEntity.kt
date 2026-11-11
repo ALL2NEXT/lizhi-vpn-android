@@ -2,6 +2,7 @@ package io.github.HanJason233.chimera.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 
 /**
  * 按节点保存首页测试结果，避免订阅刷新替换节点记录或应用进程回收时丢失。
@@ -15,5 +16,7 @@ data class HomeNodeTestResultsEntity(
     val downloadMbps: Float = 0f,
     val linkTypeResultJson: String = "",
     val unlockTestResultJson: String = "",
+    /** 记录该节点最近一次测试类型，供节点卡片独立选择展示结果。 */
+    @ColumnInfo(defaultValue = "NULL") val lastTestStage: String? = null,
     val updatedAt: Long = 0L
 )
