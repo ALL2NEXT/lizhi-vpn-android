@@ -24,10 +24,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +34,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +65,9 @@ import io.github.HanJason233.chimera.data.model.HomeNavigationStyle
 import io.github.HanJason233.chimera.data.model.HomeIconMotionEffect
 import io.github.HanJason233.chimera.data.model.VpnState
 import io.github.HanJason233.chimera.ui.components.AppScreenScaffold
+import io.github.HanJason233.chimera.ui.components.SettingsListChoiceRow
+import io.github.HanJason233.chimera.ui.components.SettingsListSectionHeader
+import io.github.HanJason233.chimera.ui.components.SettingsListSwitchRow
 import io.github.HanJason233.chimera.platform.LauncherIdentityPreset
 import io.github.HanJason233.chimera.platform.LauncherIdentityPresets
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
@@ -352,398 +358,215 @@ fun SkinSettingsScreen(
 
     AppScreenScaffold(
         title = "主题设置",
-        onBack = onBack
+        onBack = onBack,
+        contentPadding = PaddingValues(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "应用名称与图标",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "选择一个组合，预览布局与手机主页图标一致。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        LauncherIdentityPresets.all.forEach { preset ->
-                            val selected =
-                                LauncherIdentityPresets.find(settings.appIconPresetId).id == preset.id
-                            Surface(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(104.dp),
-                                onClick = { applyLauncherIdentity(preset) },
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(
-                                    width = if (selected) 1.5.dp else 1.dp,
-                                    color = if (selected) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.outlineVariant
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 6.dp, vertical = 8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    AndroidView(
-                                        factory = { viewContext ->
-                                            ImageView(viewContext).apply {
-                                                setImageResource(preset.previewIconResource)
-                                                scaleType = ImageView.ScaleType.FIT_CENTER
-                                                contentDescription = preset.displayName
-                                            }
-                                        },
-                                        modifier = Modifier.size(56.dp)
-                                    )
-                                    Text(
-                                        text = preset.displayName,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            val selectedIdentity = LauncherIdentityPresets.find(settings.appIconPresetId)
+            SettingsListSectionHeader("应用名称与图标")
+            SettingsListChoiceRow(
+                icon = Icons.Outlined.Palette,
+                title = "启动器图标",
+                subtitle = selectedIdentity.displayName,
+                options = LauncherIdentityPresets.all,
+                selected = selectedIdentity,
+                optionLabel = LauncherIdentityPreset::displayName,
+                onSelected = ::applyLauncherIdentity
+            )
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "全局外观设置",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "此处修改会立即应用到整个应用。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(18.dp))
-                    Text(
-                        text = "导航栏样式",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "经典、胶囊式或原生式；选择后立即全局生效。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        HomeNavigationStyle.entries.forEach { style ->
-                            val buttonModifier = Modifier.weight(1f)
-                            if (settings.navigationStyle == style) {
-                                Button(
-                                    onClick = {
-                                        updateGlobalSettings { copy(navigationStyle = style) }
-                                    },
-                                    modifier = buttonModifier
-                                ) {
-                                    Text(style.displayName, fontSize = 12.sp, maxLines = 1)
-                                }
-                            } else {
-                                OutlinedButton(
-                                    onClick = {
-                                        updateGlobalSettings { copy(navigationStyle = style) }
-                                    },
-                                    modifier = buttonModifier
-                                ) {
-                                    Text(style.displayName, fontSize = 12.sp, maxLines = 1)
-                                }
-                            }
-                        }
-                    }
+            SettingsListSectionHeader("全局外观")
+            SettingsListChoiceRow(
+                icon = Icons.Outlined.SwapHoriz,
+                title = "导航栏样式",
+                subtitle = settings.navigationStyle.displayName,
+                options = HomeNavigationStyle.entries,
+                selected = settings.navigationStyle,
+                optionLabel = { it.displayName },
+                onSelected = { style ->
+                    updateGlobalSettings { copy(navigationStyle = style) }
                 }
-            }
+            )
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "节点标签显示",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "这些选项全局生效。全部关闭后隐藏节点标签。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    NodeDisplaySettingsSwitchRow("显示协议", settings.showNodeProtocol) {
-                        updateGlobalSettings { copy(showNodeProtocol = it) }
-                    }
-                    NodeDisplaySettingsSwitchRow("显示安全层", settings.showNodeSecurity) {
-                        updateGlobalSettings { copy(showNodeSecurity = it) }
-                    }
-                    NodeDisplaySettingsSwitchRow("显示传输方式", settings.showNodeTransport) {
-                        updateGlobalSettings { copy(showNodeTransport = it) }
-                    }
-                    NodeDisplaySettingsSwitchRow("显示核心", settings.showNodeCore) {
-                        updateGlobalSettings { copy(showNodeCore = it) }
-                    }
+            SettingsListSectionHeader("节点标签显示")
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Language,
+                title = "显示协议",
+                subtitle = "",
+                checked = settings.showNodeProtocol,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings { copy(showNodeProtocol = enabled) }
                 }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "主页状态",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HomeStateSettingsHeader()
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HomeStateSettingsRow(
-                        title = "未连接",
-                        imagePath = settings.homeDisconnectedImagePath,
-                        state = VpnState.DISCONNECTED,
-                        selectedEffect = settings.homeDisconnectedIconEffect,
-                        selectedParticleEnabled = settings.homeDisconnectedParticleEffectEnabled,
-                        onChoose = { disconnectedImagePicker.launch(arrayOf("image/*")) },
-                        onReset = {
-                            val oldPath = settings.homeDisconnectedImagePath
-                            updateGlobalSettings { copy(homeDisconnectedImagePath = null) }
-                            scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
-                        },
-                        onEffectSelected = { effect -> updateGlobalSettings {
-                            copy(homeDisconnectedIconEffect = effect)
-                        } },
-                        onParticleEffectChanged = { enabled -> updateGlobalSettings {
-                            copy(
-                                homeDisconnectedParticleEffectEnabled = enabled,
-                                homeIconEffectEnabled = enabled ||
-                                    homeConnectingParticleEffectEnabled ||
-                                    homeDisconnectingParticleEffectEnabled ||
-                                    homeConnectedParticleEffectEnabled
-                            )
-                        } }
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    HomeStateSettingsRow(
-                        title = "连接中",
-                        imagePath = settings.homeConnectingImagePath,
-                        state = VpnState.CONNECTING,
-                        selectedEffect = settings.homeConnectingIconEffect,
-                        selectedParticleEnabled = settings.homeConnectingParticleEffectEnabled,
-                        onChoose = { connectingImagePicker.launch(arrayOf("image/*")) },
-                        onReset = {
-                            val oldPath = settings.homeConnectingImagePath
-                            updateGlobalSettings { copy(homeConnectingImagePath = null) }
-                            scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
-                        },
-                        onEffectSelected = { effect -> updateGlobalSettings {
-                            copy(homeConnectingIconEffect = effect)
-                        } },
-                        onParticleEffectChanged = { enabled -> updateGlobalSettings {
-                            copy(
-                                homeConnectingParticleEffectEnabled = enabled,
-                                homeIconEffectEnabled = enabled ||
-                                    homeDisconnectedParticleEffectEnabled ||
-                                    homeDisconnectingParticleEffectEnabled ||
-                                    homeConnectedParticleEffectEnabled
-                            )
-                        } }
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    HomeStateSettingsRow(
-                        title = "断开中",
-                        imagePath = settings.homeDisconnectingImagePath,
-                        state = VpnState.DISCONNECTING,
-                        selectedEffect = settings.homeDisconnectingIconEffect,
-                        selectedParticleEnabled = settings.homeDisconnectingParticleEffectEnabled,
-                        onChoose = { disconnectingImagePicker.launch(arrayOf("image/*")) },
-                        onReset = {
-                            val oldPath = settings.homeDisconnectingImagePath
-                            updateGlobalSettings { copy(homeDisconnectingImagePath = null) }
-                            scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
-                        },
-                        onEffectSelected = { effect -> updateGlobalSettings {
-                            copy(homeDisconnectingIconEffect = effect)
-                        } },
-                        onParticleEffectChanged = { enabled -> updateGlobalSettings {
-                            copy(
-                                homeDisconnectingParticleEffectEnabled = enabled,
-                                homeIconEffectEnabled = enabled ||
-                                    homeDisconnectedParticleEffectEnabled ||
-                                    homeConnectingParticleEffectEnabled ||
-                                    homeConnectedParticleEffectEnabled
-                            )
-                        } }
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    HomeStateSettingsRow(
-                        title = "已连接",
-                        imagePath = settings.homeConnectedImagePath,
-                        state = VpnState.CONNECTED,
-                        selectedEffect = settings.homeConnectedIconEffect,
-                        selectedParticleEnabled = settings.homeConnectedParticleEffectEnabled,
-                        onChoose = { connectedImagePicker.launch(arrayOf("image/*")) },
-                        onReset = {
-                            val oldPath = settings.homeConnectedImagePath
-                            updateGlobalSettings { copy(homeConnectedImagePath = null) }
-                            scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
-                        },
-                        onEffectSelected = { effect -> updateGlobalSettings {
-                            copy(homeConnectedIconEffect = effect)
-                        } },
-                        onParticleEffectChanged = { enabled -> updateGlobalSettings {
-                            copy(
-                                homeConnectedParticleEffectEnabled = enabled,
-                                homeIconEffectEnabled = enabled ||
-                                    homeDisconnectedParticleEffectEnabled ||
-                                    homeConnectingParticleEffectEnabled ||
-                                    homeDisconnectingParticleEffectEnabled
-                            )
-                        } }
-                    )
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.VpnKey,
+                title = "显示安全层",
+                subtitle = "",
+                checked = settings.showNodeSecurity,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings { copy(showNodeSecurity = enabled) }
                 }
-            }
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Route,
+                title = "显示传输方式",
+                subtitle = "",
+                checked = settings.showNodeTransport,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings { copy(showNodeTransport = enabled) }
+                }
+            )
+            SettingsListSwitchRow(
+                icon = Icons.Outlined.Memory,
+                title = "显示核心",
+                subtitle = "",
+                checked = settings.showNodeCore,
+                onCheckedChange = { enabled ->
+                    updateGlobalSettings { copy(showNodeCore = enabled) }
+                }
+            )
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+            SettingsListSectionHeader("主页状态图标")
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "配色",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "选择莫奈取色或黑白配色。黑白配色自动跟随系统明暗；莫奈取色需要 Android 12 及以上。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                    val isDarkTheme = isSystemInDarkTheme()
-                    val useMonetColors = settings.monetEnabled && monetSupported
-                    val monetSwatchColor = when {
-                        !monetSupported -> MaterialTheme.colorScheme.outline
-                        isDarkTheme -> dynamicDarkColorScheme(context).primary
-                        else -> dynamicLightColorScheme(context).primary
-                    }
-                    val monochromeSwatchColor = if (isDarkTheme) {
-                        Color(0xFFC0C0C0)
-                    } else {
-                        Color.Black
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        SkinColorOption(
-                            name = "莫奈取色",
-                            color = monetSwatchColor,
-                            selected = useMonetColors,
-                            enabled = monetSupported,
-                            onClick = {
-                                updateGlobalSettings { copy(monetEnabled = true) }
-                            }
+                HomeStateSettingsHeader()
+                HomeStateSettingsRow(
+                    title = "未连接",
+                    imagePath = settings.homeDisconnectedImagePath,
+                    state = VpnState.DISCONNECTED,
+                    selectedEffect = settings.homeDisconnectedIconEffect,
+                    selectedParticleEnabled = settings.homeDisconnectedParticleEffectEnabled,
+                    onChoose = { disconnectedImagePicker.launch(arrayOf("image/*")) },
+                    onReset = {
+                        val oldPath = settings.homeDisconnectedImagePath
+                        updateGlobalSettings { copy(homeDisconnectedImagePath = null) }
+                        scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
+                    },
+                    onEffectSelected = { effect -> updateGlobalSettings {
+                        copy(homeDisconnectedIconEffect = effect)
+                    } },
+                    onParticleEffectChanged = { enabled -> updateGlobalSettings {
+                        copy(
+                            homeDisconnectedParticleEffectEnabled = enabled,
+                            homeIconEffectEnabled = enabled ||
+                                homeConnectingParticleEffectEnabled ||
+                                homeDisconnectingParticleEffectEnabled ||
+                                homeConnectedParticleEffectEnabled
                         )
-                        SkinColorOption(
-                            name = "黑白配色",
-                            color = monochromeSwatchColor,
-                            selected = !useMonetColors,
-                            onClick = {
-                                updateGlobalSettings { copy(monetEnabled = false) }
-                            }
+                    } }
+                )
+                HomeStateSettingsRow(
+                    title = "连接中",
+                    imagePath = settings.homeConnectingImagePath,
+                    state = VpnState.CONNECTING,
+                    selectedEffect = settings.homeConnectingIconEffect,
+                    selectedParticleEnabled = settings.homeConnectingParticleEffectEnabled,
+                    onChoose = { connectingImagePicker.launch(arrayOf("image/*")) },
+                    onReset = {
+                        val oldPath = settings.homeConnectingImagePath
+                        updateGlobalSettings { copy(homeConnectingImagePath = null) }
+                        scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
+                    },
+                    onEffectSelected = { effect -> updateGlobalSettings {
+                        copy(homeConnectingIconEffect = effect)
+                    } },
+                    onParticleEffectChanged = { enabled -> updateGlobalSettings {
+                        copy(
+                            homeConnectingParticleEffectEnabled = enabled,
+                            homeIconEffectEnabled = enabled ||
+                                homeDisconnectedParticleEffectEnabled ||
+                                homeDisconnectingParticleEffectEnabled ||
+                                homeConnectedParticleEffectEnabled
                         )
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val previewColor = if (useMonetColors) monetSwatchColor
-                        else monochromeSwatchColor
-                        Surface(
-                            modifier = Modifier.size(32.dp),
-                            shape = CircleShape,
-                            color = previewColor,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                        ) {}
-                        Text(
-                            text = if (useMonetColors) "当前使用莫奈取色"
-                            else "当前使用黑白配色",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    } }
+                )
+                HomeStateSettingsRow(
+                    title = "断开中",
+                    imagePath = settings.homeDisconnectingImagePath,
+                    state = VpnState.DISCONNECTING,
+                    selectedEffect = settings.homeDisconnectingIconEffect,
+                    selectedParticleEnabled = settings.homeDisconnectingParticleEffectEnabled,
+                    onChoose = { disconnectingImagePicker.launch(arrayOf("image/*")) },
+                    onReset = {
+                        val oldPath = settings.homeDisconnectingImagePath
+                        updateGlobalSettings { copy(homeDisconnectingImagePath = null) }
+                        scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
+                    },
+                    onEffectSelected = { effect -> updateGlobalSettings {
+                        copy(homeDisconnectingIconEffect = effect)
+                    } },
+                    onParticleEffectChanged = { enabled -> updateGlobalSettings {
+                        copy(
+                            homeDisconnectingParticleEffectEnabled = enabled,
+                            homeIconEffectEnabled = enabled ||
+                                homeDisconnectedParticleEffectEnabled ||
+                                homeConnectingParticleEffectEnabled ||
+                                homeConnectedParticleEffectEnabled
                         )
-                    }
-                }
+                    } }
+                )
+                HomeStateSettingsRow(
+                    title = "已连接",
+                    imagePath = settings.homeConnectedImagePath,
+                    state = VpnState.CONNECTED,
+                    selectedEffect = settings.homeConnectedIconEffect,
+                    selectedParticleEnabled = settings.homeConnectedParticleEffectEnabled,
+                    onChoose = { connectedImagePicker.launch(arrayOf("image/*")) },
+                    onReset = {
+                        val oldPath = settings.homeConnectedImagePath
+                        updateGlobalSettings { copy(homeConnectedImagePath = null) }
+                        scope.launch(Dispatchers.IO) { oldPath?.let { File(it).delete() } }
+                    },
+                    onEffectSelected = { effect -> updateGlobalSettings {
+                        copy(homeConnectedIconEffect = effect)
+                    } },
+                    onParticleEffectChanged = { enabled -> updateGlobalSettings {
+                        copy(
+                            homeConnectedParticleEffectEnabled = enabled,
+                            homeIconEffectEnabled = enabled ||
+                                homeDisconnectedParticleEffectEnabled ||
+                                homeConnectingParticleEffectEnabled ||
+                                homeDisconnectingParticleEffectEnabled
+                        )
+                    } }
+                )
             }
 
+            SettingsListSectionHeader("配色")
+            val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            val isDarkTheme = isSystemInDarkTheme()
+            val useMonetColors = settings.monetEnabled && monetSupported
+            val monetSwatchColor = when {
+                !monetSupported -> MaterialTheme.colorScheme.outline
+                isDarkTheme -> dynamicDarkColorScheme(context).primary
+                else -> dynamicLightColorScheme(context).primary
+            }
+            val monochromeSwatchColor = if (isDarkTheme) Color(0xFFC0C0C0) else Color.Black
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                SkinColorOption(
+                    name = "莫奈取色",
+                    color = monetSwatchColor,
+                    selected = useMonetColors,
+                    enabled = monetSupported,
+                    onClick = { updateGlobalSettings { copy(monetEnabled = true) } }
+                )
+                SkinColorOption(
+                    name = "黑白配色",
+                    color = monochromeSwatchColor,
+                    selected = !useMonetColors,
+                    onClick = { updateGlobalSettings { copy(monetEnabled = false) } }
+                )
+            }
         }
-    }
-}
-
-@Composable
-private fun NodeDisplaySettingsSwitchRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
