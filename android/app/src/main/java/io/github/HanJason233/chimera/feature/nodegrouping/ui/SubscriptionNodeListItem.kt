@@ -2,6 +2,8 @@ package io.github.HanJason233.chimera.feature.nodegrouping.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Edit
@@ -28,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,8 +45,8 @@ import io.github.HanJason233.chimera.data.model.NodeDisplaySettings
 import io.github.HanJason233.chimera.data.model.ProtocolCoreSettings
 import io.github.HanJason233.chimera.feature.nodetest.data.HomeTestResultCodec
 import io.github.HanJason233.chimera.network.nodetest.linktype.LinkTypeTestState
-import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestCategory
 import io.github.HanJason233.chimera.network.nodetest.unlock.UnlockTestState
+import io.github.HanJason233.chimera.ui.components.unlockTestIconResource
 import io.github.HanJason233.chimera.util.nodeListProtocolLabel
 import java.util.Locale
 
@@ -49,8 +55,14 @@ private val nodeListResultColor = Color(0xFF009966)
 private val nodeListResultErrorColor = Color(0xFFFF0099)
 
 private data class NodeTestResultDisplay(
-    val text: String,
-    val isError: Boolean
+    val text: String? = null,
+    val isError: Boolean = false,
+    val passedUnlockIcons: List<PassedUnlockIcon> = emptyList()
+)
+
+private data class PassedUnlockIcon(
+    val id: String,
+    val name: String
 )
 
 private fun nodeTestResultDisplay(
@@ -61,6 +73,7 @@ private fun nodeTestResultDisplay(
     isTestRunning: Boolean
 ): NodeTestResultDisplay? {
     if (resultUpdatedAfter > 0L && (stored?.updatedAt ?: 0L) < resultUpdatedAfter) {
+        if (stage == ManualGroupTestStage.IP_QUALITY) return null
         return if (isTestRunning) {
             NodeTestResultDisplay("检测中", isError = false)
         } else {
@@ -127,26 +140,11 @@ private fun nodeTestResultDisplay(
             val json = stored?.unlockTestResultJson?.takeIf(String::isNotBlank)
                 ?: return null
             val results = HomeTestResultCodec.decodeUnlockTests(json)?.items.orEmpty()
-            if (results.isEmpty()) return null
-            val categoryLabels = mapOf(
-                UnlockTestCategory.STREAMING to "流媒",
-                UnlockTestCategory.AI to "AI",
-                UnlockTestCategory.NETWORK to "网络",
-                UnlockTestCategory.OTHER to "其他"
-            )
-            val summary = categoryLabels.mapNotNull { (category, label) ->
-                val items = results.filter { it.definition.category == category }
-                items.takeIf { it.isNotEmpty() }?.let { categoryItems ->
-                    val unlockedCount = categoryItems.count {
-                        it.state == UnlockTestState.UNLOCKED
-                    }
-                    "$label $unlockedCount/${categoryItems.size}"
-                }
-            }.joinToString(" · ")
-            if (summary.isBlank()) null else NodeTestResultDisplay(
-                text = summary,
-                isError = results.none { it.state == UnlockTestState.UNLOCKED }
-            )
+            val passedIcons = results
+                .filter { it.state == UnlockTestState.UNLOCKED }
+                .map { PassedUnlockIcon(it.definition.id, it.definition.name) }
+            passedIcons.takeIf { it.isNotEmpty() }
+                ?.let { NodeTestResultDisplay(passedUnlockIcons = it) }
         }
     }
 }
@@ -339,17 +337,38 @@ internal fun NodeListItem(
                         Spacer(modifier = Modifier.weight(1f))
                     }
                     displayedTestResult?.let { result ->
-                        Text(
-                            text = result.text,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (result.isError) {
-                                nodeListResultErrorColor
-                            } else {
-                                nodeListResultColor
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        if (result.passedUnlockIcons.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .widthIn(max = 132.dp)
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                result.passedUnlockIcons.forEach { icon ->
+                                    Image(
+                                        painter = painterResource(unlockTestIconResource(icon.id)),
+                                        contentDescription = icon.name,
+                                        modifier = Modifier.size(18.dp),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                }
+                            }
+                        } else {
+                            result.text?.let { text ->
+                                Text(
+                                    text = text,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (result.isError) {
+                                        nodeListResultErrorColor
+                                    } else {
+                                        nodeListResultColor
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 }
             }
