@@ -30,7 +30,10 @@ data class SecurityCheckOptions(
     val blacklist: Boolean = true,
     val adb: Boolean = true,
     val developerMode: Boolean = true,
-    val screenshot: Boolean = true
+    val screenshot: Boolean = true,
+    val root: Boolean = true,
+    val lspatch: Boolean = true,
+    val npatch: Boolean = true
 ) {
     companion object {
         fun current() = SecurityCheckOptions(
@@ -42,7 +45,10 @@ data class SecurityCheckOptions(
             blacklist = BuildConfig.SECURITY_DETECT_BLACKLIST,
             adb = BuildConfig.SECURITY_DETECT_ADB,
             developerMode = BuildConfig.SECURITY_DETECT_DEVELOPER_MODE,
-            screenshot = BuildConfig.SECURITY_DETECT_SCREENSHOT
+            screenshot = BuildConfig.SECURITY_DETECT_SCREENSHOT,
+            root = BuildConfig.SECURITY_DETECT_ROOT,
+            lspatch = BuildConfig.SECURITY_DETECT_LSPATCH,
+            npatch = BuildConfig.SECURITY_DETECT_NPATCH
         )
     }
 }
@@ -88,6 +94,7 @@ fun buildSecuritySelfCheckReport(
         signals: Map<String, String>,
         unavailable: Set<String> = emptySet(),
         critical: Set<String> = emptySet(),
+        unavailableMessages: Map<String, String> = emptyMap(),
         advice: String
     ) {
         knownCodes += signals.keys
@@ -110,7 +117,9 @@ fun buildSecuritySelfCheckReport(
         }
         items += SecurityCheckItem(
             id, title, status, summary,
-            matched.values.toList() + if (incomplete) listOf("部分检测信息无法读取。") else emptyList()
+            matched.values.toList() + unavailable.filter { it in codes }.map {
+                unavailableMessages[it] ?: "部分检测信息无法读取。"
+            }.distinct()
         )
     }
 
@@ -130,26 +139,91 @@ fun buildSecuritySelfCheckReport(
         advice = "发现系统代理配置；代理配置本身不能证明正在抓包。"
     )
     check(
-        "xposed", "Xposed 痕迹", options.xposed, "未发现已知 Xposed 痕迹。",
-        mapOf("xposed_artifact" to "发现已知的 Xposed 文件或进程映射痕迹。"),
+        "xposed", "Xposed 痕迹", options.xposed, "未发现已知 Xposed 类、加载器、缓存、堆栈或文件痕迹。",
+        mapOf(
+            "xposed_artifact" to "发现已知的 Xposed 文件或进程映射痕迹。",
+            "xposed_class" to "应用可访问 Xposed 框架核心类。",
+            "xposed_classloader" to "ClassLoader 链或 DEX 路径出现 Xposed 特征。",
+            "xposed_method_cache" to "XposedHelpers 方法缓存非空。",
+            "xposed_hook_callbacks" to "XposedBridge 存在已注册的 Hook 回调。",
+            "xposed_stack" to "当前线程调用栈出现 Xposed 或 Substrate 框架。"
+        ),
+        unavailable = setOf("xposed_classloader_unavailable", "xposed_maps_unavailable"),
+        critical = setOf("xposed_class", "xposed_classloader", "xposed_method_cache", "xposed_hook_callbacks", "xposed_stack"),
         advice = "发现框架痕迹，请核对设备上的模块和应用作用域。"
     )
     check(
-        "lsposed", "LSPosed 痕迹", options.lsposed, "未发现已知 LSPosed 痕迹。",
-        mapOf("lsposed_artifact" to "发现已知的 LSPosed 路径或进程映射痕迹。"),
+        "lsposed", "LSPosed 与 ART Hook", options.lsposed, "未发现已知 LSPosed 类、Hook 堆栈或 ART 方法标志异常。",
+        mapOf(
+            "lsposed_artifact" to "发现已知的 LSPosed 路径或进程映射痕迹。",
+            "lsposed_class" to "应用可访问 LSPosed 框架核心类。",
+            "lsposed_classloader" to "ClassLoader 链或 DEX 路径出现 LSPosed 特征。",
+            "lsposed_stack" to "当前线程调用栈出现 LSPosed/LSPlant。",
+            "art_method_native" to "已知 Java 方法被异常标记为 native；可能存在 ART Hook。"
+        ),
+        unavailable = setOf("lsposed_classloader_unavailable", "lsposed_maps_unavailable"),
+        critical = setOf("lsposed_class", "lsposed_classloader", "lsposed_stack", "art_method_native"),
         advice = "发现框架痕迹，请核对设备上的模块和应用作用域。"
     )
     check(
-        "frida", "Frida 与进程跟踪", options.frida, "未发现已知注入、跟踪或监听端口信号。",
+        "frida", "Frida 与 native 完整性", options.frida, "未发现已知映射、线程、管道、端口、跟踪或 native 代码修改信号。",
         mapOf(
             "frida_maps" to "进程映射中存在已知 Frida 特征。",
             "frida_thread" to "进程中存在已知 Frida 特征线程。",
+            "frida_named_pipe" to "进程文件描述符指向 Frida/linjector 特征管道或文件。",
+            "frida_server_artifact" to "发现已知 frida-server 文件。",
+            "frida_dbus" to "本机常见 Frida 端口返回了 D-Bus AUTH 协议响应。",
+            "native_code_modified" to "本应用 native 库或 libc 的可执行代码与磁盘文件不一致。",
+            "native_code_writable" to "本应用 native 库或 libc 出现可写的可执行映射。",
             "instrumentation_tracer" to "当前进程存在跟踪者。",
+            "instrumentation_thread_tracer" to "当前进程的工作线程存在跟踪者。",
             "frida_listener" to "本机常见调试端口开放；端口本身不能确认 Frida。"
         ),
-        unavailable = setOf("process_maps_unavailable", "frida_threads_unavailable", "tracer_status_unavailable"),
-        critical = setOf("frida_maps", "frida_thread", "instrumentation_tracer"),
+        unavailable = setOf("process_maps_unavailable", "frida_threads_unavailable", "frida_fds_unavailable", "tracer_status_unavailable", "frida_integrity_unavailable"),
+        critical = setOf("frida_maps", "frida_thread", "frida_named_pipe", "frida_server_artifact", "frida_dbus", "native_code_modified", "native_code_writable", "instrumentation_tracer", "instrumentation_thread_tracer"),
+        unavailableMessages = mapOf("frida_integrity_unavailable" to "当前系统限制代码段或 /proc/self/mem 读取，native 完整性校验未全部完成；其余 Frida 检查仍执行。"),
         advice = "发现调试或注入相关信号，请展开查看具体命中项。"
+    )
+    val rootSignals = mapOf(
+        "root_uid" to "应用进程以 Root 身份运行。",
+        "root_su_binary" to "发现可访问的 su 或 Magisk 可执行文件。",
+        "root_framework_artifact" to "发现 Magisk、KernelSU/APatch 或模块目录。",
+        "root_mount" to "进程挂载信息出现 Root 框架专属路径或名称。",
+        "root_selinux_context" to "进程 SELinux 上下文出现 Root 框架域。",
+        "root_capabilities" to "应用进程持有非零的有效 Linux capabilities。",
+        "root_magisk_service" to "系统属性显示 Magisk 服务正在运行。"
+    )
+    check(
+        "root", "Root 与系统提权", options.root, "未发现可见的 su、Root 框架、特征挂载或进程提权信号。",
+        rootSignals, unavailable = setOf("root_mounts_unavailable", "root_status_unavailable"),
+        critical = rootSignals.keys,
+        advice = "发现 Root 环境或提权痕迹；Root 管理器的安装记录仍仅在软件名单中上报。"
+    )
+    val lspatchSignals = mapOf(
+        "lspatch_component" to "ApplicationInfo 的组件工厂或 Application 类出现 LSPatch 注入特征。",
+        "lspatch_metadata" to "安装包 metadata 存在 LSPatch 标记。",
+        "lspatch_class" to "应用可访问 LSPatch 加载器或 Stub 类。",
+        "lspatch_apk_asset" to "APK assets 内存在 LSPatch 配置、加载器或原始 APK。",
+        "lspatch_private_files" to "应用私有目录中存在 LSPatch 缓存结构。",
+        "lspatch_native" to "进程加载了 LSPatch 原生库或特征文件。"
+    )
+    check(
+        "lspatch", "LSPatch 组件注入", options.lspatch, "未发现已知 LSPatch 组件、类、配置、缓存或原生库。",
+        lspatchSignals, unavailable = setOf("lspatch_detection_unavailable"), critical = lspatchSignals.keys,
+        advice = "发现 LSPatch 重打包或加载痕迹，请使用原始签名的安装包。"
+    )
+    val npatchSignals = mapOf(
+        "npatch_component" to "ApplicationInfo 的组件工厂或 Application 类出现 NPatch 注入特征。",
+        "npatch_metadata" to "安装包 metadata 存在 NPatch 标记。",
+        "npatch_class" to "应用可访问 NPatch 加载器或 Stub 类。",
+        "npatch_apk_asset" to "APK assets 内存在 NPatch 配置、加载器或原始 APK。",
+        "npatch_private_files" to "应用私有目录中存在 npatch/npatch_origin 缓存结构。",
+        "npatch_native" to "进程加载了 NPatch 原生库或特征文件。"
+    )
+    check(
+        "npatch", "NPatch 文件与原生库", options.npatch, "未发现已知 NPatch 组件、文件结构或原生库。",
+        npatchSignals, unavailable = setOf("npatch_detection_unavailable"), critical = npatchSignals.keys,
+        advice = "发现 NPatch 重打包或加载痕迹，请使用原始签名的安装包。"
     )
     val packages = codes.filter { it.startsWith("blacklisted_package:") }
         .map { it.removePrefix("blacklisted_package:") }.sorted()

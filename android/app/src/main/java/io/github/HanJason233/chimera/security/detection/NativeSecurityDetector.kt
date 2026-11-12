@@ -47,6 +47,8 @@ object NativeSecurityDetector {
         "http_proxy_configured", "http_proxy_pac_configured", "capture_detection_unavailable"
     )
     private val reportOnlyCodes = setOf("adb_enabled", "developer_options_enabled")
+    // Optional memory inspection can be restricted by the OS; it is not evidence of injection.
+    private val inspectionStatusCodes = setOf("frida_integrity_unavailable")
     private val proxyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Proxy.PROXY_CHANGE_ACTION) refreshCapturePolicy(context)
@@ -215,7 +217,8 @@ object NativeSecurityDetector {
     }
 
     private fun firstFatalFinding(codes: Set<String>): String? = codes.firstOrNull {
-        it !in reportOnlyCodes && !it.startsWith("blacklisted_package:") && it != "screenshot_capture"
+        it !in reportOnlyCodes && it !in inspectionStatusCodes &&
+            !it.startsWith("blacklisted_package:") && it != "screenshot_capture"
     }
 
     private fun rejectRuntime(code: String, message: String): Nothing {

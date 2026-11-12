@@ -16,6 +16,9 @@ option(CHIMERA_DETECT_CAPTURE "检测系统 HTTP 代理配置" ON)
 option(CHIMERA_DETECT_XPOSED "检测 Xposed 痕迹" ON)
 option(CHIMERA_DETECT_LSPOSED "检测 LSPosed 痕迹" ON)
 option(CHIMERA_DETECT_FRIDA "检测 Frida 和进程跟踪信号" ON)
+option(CHIMERA_DETECT_ROOT "检测 su、Root 框架和特征挂载" ON)
+option(CHIMERA_DETECT_LSPATCH "检测 LSPatch 重打包和组件注入" ON)
+option(CHIMERA_DETECT_NPATCH "检测 NPatch 文件、组件和原生库" ON)
 option(CHIMERA_DETECT_SCREENSHOT "检测 Android 截图回调" ON)
 option(CHIMERA_VERIFY_SIGNATURE "校验当前 APK 签名 SHA-256" ON)
 option(CHIMERA_DETECT_BLACKLIST "检测黑名单软件包" ON)
@@ -46,6 +49,9 @@ add_library( # Sets the name of the library.
              security/xposed_detector.cpp
              security/lsposed_detector.cpp
              security/frida_detector.cpp
+             security/root_detector.cpp
+             security/lspatch_detector.cpp
+             security/npatch_detector.cpp
              security/signature_detector.cpp
              security/blacklist_detector.cpp
              security/adb_detector.cpp
@@ -57,6 +63,9 @@ target_compile_definitions(native-lib PRIVATE
         CHIMERA_DETECT_XPOSED=$<BOOL:${CHIMERA_DETECT_XPOSED}>
         CHIMERA_DETECT_LSPOSED=$<BOOL:${CHIMERA_DETECT_LSPOSED}>
         CHIMERA_DETECT_FRIDA=$<BOOL:${CHIMERA_DETECT_FRIDA}>
+        CHIMERA_DETECT_ROOT=$<BOOL:${CHIMERA_DETECT_ROOT}>
+        CHIMERA_DETECT_LSPATCH=$<BOOL:${CHIMERA_DETECT_LSPATCH}>
+        CHIMERA_DETECT_NPATCH=$<BOOL:${CHIMERA_DETECT_NPATCH}>
         CHIMERA_DETECT_SCREENSHOT=$<BOOL:${CHIMERA_DETECT_SCREENSHOT}>
         CHIMERA_VERIFY_SIGNATURE=$<BOOL:${CHIMERA_VERIFY_SIGNATURE}>
         CHIMERA_DETECT_BLACKLIST=$<BOOL:${CHIMERA_DETECT_BLACKLIST}>
@@ -83,6 +92,7 @@ find_library( # Sets the name of the path variable.
 
               # Specifies the name of the NDK library that you want CMake to locate.
               log )
+find_library(dl-lib dl)
 
 # 16 KB page size alignment (required for Android 15+ / Google Play)
 target_link_options(native-lib PRIVATE
@@ -95,4 +105,4 @@ target_link_libraries( # Specifies the target library.
                        native-lib
 
                        # Links the target library to the log library included in the NDK.
-                       ${log-lib} )
+                       ${log-lib} ${dl-lib} )

@@ -23,7 +23,10 @@ class SecuritySelfCheckTest {
 
     @Test
     fun disabledDetectionDoesNotClaimEnvironmentIsSafe() {
-        val options = SecurityCheckOptions(false, false, false, false, false, false, false, false, false)
+        val options = SecurityCheckOptions(
+            false, false, false, false, false, false, false, false, false,
+            root = false, lspatch = false, npatch = false
+        )
         val report = report(emptySet(), options)
         assertEquals("环境检测未启用", report.title)
         assertEquals(0, report.completedCount)
@@ -67,7 +70,7 @@ class SecuritySelfCheckTest {
     fun screenshotMonitoringIsNotCountedAsAnEnvironmentPass() {
         val active = report(emptySet())
         assertEquals(SecurityCheckStatus.MONITORING, active.item("screenshot").status)
-        assertEquals(8, active.completedCount)
+        assertEquals(11, active.completedCount)
         val unsupported = buildSecuritySelfCheckReport(
             SecurityInspection(emptySet(), 123, 10),
             SecurityCheckOptions(),

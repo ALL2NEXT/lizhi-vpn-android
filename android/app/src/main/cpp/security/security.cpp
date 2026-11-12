@@ -121,13 +121,22 @@ std::vector<std::string> scan(JNIEnv* env, jobject context) {
     detectCapture(env, context, &findings);
 #endif
 #if CHIMERA_DETECT_XPOSED
-    detectXposed(&findings);
+    detectXposed(env, context, &findings);
 #endif
 #if CHIMERA_DETECT_LSPOSED
-    detectLsposed(&findings);
+    detectLsposed(env, context, &findings);
 #endif
 #if CHIMERA_DETECT_FRIDA
     detectFrida(&findings);
+#endif
+#if CHIMERA_DETECT_ROOT
+    detectRoot(&findings);
+#endif
+#if CHIMERA_DETECT_LSPATCH
+    detectLspatch(env, context, &findings);
+#endif
+#if CHIMERA_DETECT_NPATCH
+    detectNpatch(env, context, &findings);
 #endif
     return findings;
 }
