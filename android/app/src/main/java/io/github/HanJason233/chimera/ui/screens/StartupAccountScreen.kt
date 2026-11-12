@@ -65,8 +65,7 @@ fun StartupAccountScreen(
     onLogin: (email: String, password: String) -> Unit,
     onRegister: (email: String, password: String, registrationCode: String) -> Unit,
     onGuestLogin: () -> Unit,
-    onOfflineUse: () -> Unit,
-    onOpenSecuritySelfCheck: () -> Unit = {}
+    onOfflineUse: () -> Unit
 ) {
     var isRegistration by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
@@ -336,11 +335,6 @@ fun StartupAccountScreen(
                     enabled = !isBusy,
                     onClick = { isRegistration = !isRegistration }
                 )
-                TextButton(onClick = onOpenSecuritySelfCheck) {
-                    Icon(Icons.Outlined.VerifiedUser, contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp))
-                    Text("安全自检")
-                }
             }
         }
     }

@@ -6,7 +6,6 @@ import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Proxy
-import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.Keep
 import androidx.core.content.ContextCompat
@@ -114,17 +113,11 @@ object NativeSecurityDetector {
 
     suspend fun scanNow(context: Context) = withContext(Dispatchers.IO) {
         synchronized(nativeLock) {
-            collectInspection(context)
-            Unit
+            performScan(context)
         }
     }
 
-    suspend fun inspectEnvironment(context: Context): SecurityInspection = withContext(Dispatchers.IO) {
-        synchronized(nativeLock) { collectInspection(context) }
-    }
-
-    private fun collectInspection(context: Context): SecurityInspection {
-        val startedAt = SystemClock.elapsedRealtime()
+    private fun performScan(context: Context) {
         val codes = if (!nativeLibraryLoaded) {
             setOf("native_library_unavailable")
         } else {
@@ -135,11 +128,6 @@ object NativeSecurityDetector {
         replaceScanCodes(codes)
         firstScan.countDown()
         firstFatalFinding(codes)?.let(::terminateOnFinding)
-        return SecurityInspection(
-            codes = codes,
-            inspectedAtMillis = System.currentTimeMillis(),
-            durationMillis = SystemClock.elapsedRealtime() - startedAt
-        )
     }
 
     /** 仅在后台网络/服务线程调用，避免首次请求抢在安全扫描之前发送。 */
