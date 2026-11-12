@@ -1,4 +1,4 @@
-#include "security_detector.h"
+#include "security.h"
 
 #include "detection_utils.h"
 
@@ -184,13 +184,13 @@ bool currentSignerMatches(JNIEnv* env, jobject context, bool* available) {
 
 void detectSignature(JNIEnv* env, jobject context, std::vector<std::string>* findings) {
 #if CHIMERA_VERIFY_SIGNATURE
-    // 校验失败只上报结果，不终止进程。
+    // 签名不匹配或无法读取时立即执行终止策略。
     bool signatureAvailable = false;
     const bool signatureMatches = currentSignerMatches(env, context, &signatureAvailable);
     if (!signatureAvailable) {
-        findings->push_back("signature_unavailable");
+        fatalFinding(findings, "signature_unavailable");
     } else if (!signatureMatches) {
-        findings->push_back("signature_mismatch");
+        fatalFinding(findings, "signature_mismatch");
     }
 #else
     (void) env;

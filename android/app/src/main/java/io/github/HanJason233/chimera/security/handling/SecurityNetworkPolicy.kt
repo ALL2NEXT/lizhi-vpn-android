@@ -33,6 +33,12 @@ internal object SecurityNetworkPolicy {
             NativeSecurityDetector.reportNetworkFinding("tls_validation_failed")
         }
     }
+
+    fun reportHttpsDowngrade() {
+        if (BuildConfig.SECURITY_BLOCK_HTTP_PROXY) {
+            NativeSecurityDetector.reportNetworkFinding("https_downgrade_blocked")
+        }
+    }
 }
 
 /** 注入检查和事件接收器，便于通过真实 HTTP/TLS 连接验证策略。 */
@@ -70,7 +76,15 @@ internal class RequestSecurityPolicy(
         if (chain.request().url.isHttps && connection.handshake() == null) {
             throw SSLPeerUnverifiedException("HTTPS connection has no verified TLS session")
         }
-        return chain.proceed(chain.request())
+        val response = chain.proceed(chain.request())
+        val location = response.header("Location")
+        if (chain.request().url.isHttps && response.code in setOf(301, 302, 303, 307, 308) &&
+            location != null && chain.request().url.resolve(location)?.isHttps == false) {
+            response.close()
+            reportFinding("https_downgrade_blocked")
+            throw IOException("已阻止 HTTPS 降级到明文连接")
+        }
+        return response
     }
 
     private fun checkTarget(url: HttpUrl) {

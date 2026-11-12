@@ -85,8 +85,11 @@ internal object Socks5HttpProbe {
             }
             check(redirectCount < MAX_REDIRECTS) { "HTTP 重定向次数过多" }
             val nextUrl = URI(currentUrl).resolve(location).toString()
-            require(!URI(currentUrl).scheme.equals("https", true) ||
-                URI(nextUrl).scheme.equals("https", true)) { "已阻止 HTTPS 探测降级到明文连接" }
+            if (URI(currentUrl).scheme.equals("https", true) &&
+                !URI(nextUrl).scheme.equals("https", true)) {
+                SecurityNetworkPolicy.reportHttpsDowngrade()
+                error("已阻止 HTTPS 探测降级到明文连接")
+            }
             if (!sameOrigin(currentUrl, nextUrl)) {
                 currentHeaders = currentHeaders.filterKeys {
                     !it.equals("Authorization", ignoreCase = true) &&

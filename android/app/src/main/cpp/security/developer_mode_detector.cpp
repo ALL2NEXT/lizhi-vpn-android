@@ -1,4 +1,4 @@
-#include "security_detector.h"
+#include "security.h"
 
 #include "detection_utils.h"
 
@@ -11,12 +11,13 @@ namespace security {
 
 void detectDeveloperMode(JNIEnv* env, jobject context, std::vector<std::string>* findings) {
 #if CHIMERA_DETECT_DEVELOPER_MODE
-    // 读取系统开发者选项开关；检测结果仅作为提示信号。
+    // 读取系统开发者选项开关；检测到开启时仅上报，不限制使用。
     jint developerModeEnabled = 0;
     if (detection_utils::getGlobalSettingInt(
                 env, context, "development_settings_enabled", 0, &developerModeEnabled) &&
             developerModeEnabled != 0) {
-        findings->push_back("developer_options_enabled");
+        addFinding(findings, "developer_options_enabled");
+        reportFindings(env, context, {"developer_options_enabled"});
     }
 #else
     (void) env;

@@ -1,0 +1,136 @@
+#include "security.h"
+#include "detection_utils.h"
+
+#include <android/log.h>
+#include <algorithm>
+#include <cstdlib>
+#include <mutex>
+#include <set>
+
+#ifndef CHIMERA_CRASH_ON_FINDING
+#define CHIMERA_CRASH_ON_FINDING 1
+#endif
+#ifndef CHIMERA_REPORT_FINDINGS
+#define CHIMERA_REPORT_FINDINGS 1
+#endif
+
+namespace chimera {
+namespace security {
+namespace {
+bool isReportOnly(const std::string& code) {
+    return code.rfind("blacklisted_package:", 0) == 0 ||
+            code == "adb_enabled" || code == "developer_options_enabled";
+}
+}
+
+void addFinding(std::vector<std::string>* findings, const std::string& code) {
+    if (findings != nullptr) findings->push_back(code);
+    __android_log_print(ANDROID_LOG_WARN, "NativeSecurity", "Security detection: %s", code.c_str());
+}
+
+void terminateOnFinding(const char* code) {
+    __android_log_print(ANDROID_LOG_ERROR, "NativeSecurity", "Security termination: %s", code);
+#if CHIMERA_CRASH_ON_FINDING
+    std::abort();
+#endif
+}
+
+void fatalFinding(std::vector<std::string>* findings, const char* code) {
+    addFinding(findings, code);
+    terminateOnFinding(code);
+}
+
+void reportFindings(JNIEnv* env, jobject context, const std::vector<std::string>& findings) {
+#if CHIMERA_REPORT_FINDINGS
+    if (env == nullptr || context == nullptr || findings.empty()) return;
+    static std::mutex reportMutex;
+    static std::set<std::string> queuedCodes;
+    std::lock_guard<std::mutex> lock(reportMutex);
+    std::vector<std::string> pending;
+    for (const auto& code : findings) {
+        if (isReportOnly(code) && queuedCodes.count(code) == 0) pending.push_back(code);
+    }
+    if (pending.empty()) return;
+    if (env->PushLocalFrame(16) != JNI_OK) {
+        detection_utils::clearPendingException(env);
+        return;
+    }
+    jclass actions = env->FindClass(
+            "io/github/HanJason233/chimera/security/handling/NativeSecurityActions");
+    if (actions == nullptr) {
+        detection_utils::clearPendingException(env);
+        env->PopLocalFrame(nullptr);
+        return;
+    }
+    jmethodID report = env->GetStaticMethodID(
+            actions, "reportFindings", "(Landroid/content/Context;[Ljava/lang/String;)Z");
+    if (report == nullptr) {
+        detection_utils::clearPendingException(env);
+        env->PopLocalFrame(nullptr);
+        return;
+    }
+    jclass strings = env->FindClass("java/lang/String");
+    if (strings == nullptr || env->ExceptionCheck()) {
+        detection_utils::clearPendingException(env);
+        env->PopLocalFrame(nullptr);
+        return;
+    }
+    jobjectArray codes = env->NewObjectArray(static_cast<jsize>(pending.size()), strings, nullptr);
+    if (codes == nullptr) {
+        detection_utils::clearPendingException(env);
+        env->PopLocalFrame(nullptr);
+        return;
+    }
+    bool valid = true;
+    for (size_t i = 0; i < pending.size(); ++i) {
+        jstring code = env->NewStringUTF(pending[i].c_str());
+        if (code == nullptr) { valid = false; break; }
+        env->SetObjectArrayElement(codes, static_cast<jsize>(i), code);
+        env->DeleteLocalRef(code);
+        if (env->ExceptionCheck()) { valid = false; break; }
+    }
+    if (valid) {
+        const bool saved = env->CallStaticBooleanMethod(actions, report, context, codes) == JNI_TRUE;
+        if (!env->ExceptionCheck() && saved) queuedCodes.insert(pending.begin(), pending.end());
+    }
+    detection_utils::clearPendingException(env);
+    env->PopLocalFrame(nullptr);
+#else
+    (void) env;
+    (void) context;
+    (void) findings;
+#endif
+}
+
+std::vector<std::string> scan(JNIEnv* env, jobject context) {
+    std::vector<std::string> findings;
+    // 先持久化仅上报项，再执行可能立即结束进程的检查。
+#if CHIMERA_DETECT_ADB
+    detectAdb(env, context, &findings);
+#endif
+#if CHIMERA_DETECT_DEVELOPER_MODE
+    detectDeveloperMode(env, context, &findings);
+#endif
+#if CHIMERA_DETECT_BLACKLIST
+    detectBlacklist(env, context, &findings);
+#endif
+#if CHIMERA_VERIFY_SIGNATURE
+    detectSignature(env, context, &findings);
+#endif
+#if CHIMERA_DETECT_CAPTURE || CHIMERA_BLOCK_HTTP_PROXY
+    detectCapture(env, context, &findings);
+#endif
+#if CHIMERA_DETECT_XPOSED
+    detectXposed(&findings);
+#endif
+#if CHIMERA_DETECT_LSPOSED
+    detectLsposed(&findings);
+#endif
+#if CHIMERA_DETECT_FRIDA
+    detectFrida(&findings);
+#endif
+    return findings;
+}
+
+}  // namespace security
+}  // namespace chimera

@@ -10,6 +10,13 @@ namespace security {
 
 std::vector<std::string> scan(JNIEnv* env, jobject context);
 jstring reportScreenshotCapture(JNIEnv* env);
+void applyScreenshotProtection(JNIEnv* env, jobject activity);
+void applyCaptureProtection(JNIEnv* env);
+void reportNetworkFinding(JNIEnv* env, jstring finding);
+void addFinding(std::vector<std::string>* findings, const std::string& code);
+void fatalFinding(std::vector<std::string>* findings, const char* code);
+void terminateOnFinding(const char* code);
+void reportFindings(JNIEnv* env, jobject context, const std::vector<std::string>& findings);
 void detectCapture(JNIEnv* env, jobject context, std::vector<std::string>* findings);
 void detectXposed(std::vector<std::string>* findings);
 void detectLsposed(std::vector<std::string>* findings);

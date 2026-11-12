@@ -210,6 +210,7 @@ fun securityEventDescription(code: String): Pair<String, String>? = when (code) 
     "tls_validation_failed" -> "证书验证失败" to "本次运行曾拒绝无法验证的连接；不代表当前仍在被抓包。"
     "cleartext_traffic_blocked" -> "已阻止明文请求" to "本次运行曾阻止向外部地址发送未加密的业务请求。"
     "http_proxy_route_blocked" -> "已阻止外部代理请求" to "本次运行曾阻止通过不允许的代理路由发送业务请求。"
+    "https_downgrade_blocked" -> "已阻止加密连接降级" to "本次运行曾阻止 HTTPS 重定向到未加密的地址。"
     "screenshot_capture" -> "收到截图事件" to "本次运行曾收到系统截图回调。"
     else -> null
 }

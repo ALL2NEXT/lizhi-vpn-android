@@ -4,8 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "security/detection/security_detector.h"
-#include "security/handling/security_handler.h"
+#include "security/security.h"
 
 namespace {
 
@@ -44,34 +43,40 @@ jobjectArray toJavaFindings(JNIEnv* env, const std::vector<std::string>& finding
 
 jobjectArray nativeScan(JNIEnv* env, jclass, jobject context) {
     const std::vector<std::string> findings = chimera::security::scan(env, context);
-    chimera::security::handling::handleInitialFindings(env, context, findings);
     return toJavaFindings(env, findings);
 }
 
-jobjectArray nativeInspect(JNIEnv* env, jclass, jobject context) {
-    // 手动自检只读取环境，不触发上报或进程终止。
-    return toJavaFindings(env, chimera::security::scan(env, context));
+void nativeTerminate(JNIEnv* env, jclass, jstring finding) {
+    std::string code = "native_scan_error";
+    if (finding != nullptr) {
+        const char* text = env->GetStringUTFChars(finding, nullptr);
+        if (text != nullptr) {
+            code = text;
+            env->ReleaseStringUTFChars(finding, text);
+        }
+        clearPendingException(env);
+    }
+    chimera::security::terminateOnFinding(code.c_str());
+}
+
+void nativeReportNetworkFinding(JNIEnv* env, jclass, jstring finding) {
+    chimera::security::reportNetworkFinding(env, finding);
 }
 
 jstring nativeReportScreenshotCapture(JNIEnv* env, jclass /* 未使用的 JNI 类参数 */, jobject context) {
-    jstring finding = chimera::security::reportScreenshotCapture(env);
-    if (finding != nullptr) {
-        chimera::security::handling::handleScreenshotCapture(env, context);
-    }
-    return finding;
+    (void) context;
+    return chimera::security::reportScreenshotCapture(env);
 }
 
 }  // 匿名命名空间结束
 
 void nativeApplyActivitySecurity(JNIEnv* env, jclass, jobject activity) {
-    chimera::security::handling::applyScreenshotProtection(env, activity);
+    chimera::security::applyScreenshotProtection(env, activity);
 }
 
 jobjectArray nativeRefreshCapturePolicy(JNIEnv* env, jclass, jobject context) {
     std::vector<std::string> findings;
     chimera::security::detectCapture(env, context, &findings);
-    // 防护不依赖代理检测成功，也不因代理暂时消失而重新放开系统代理。
-    chimera::security::handling::setHttpProxyBlocking(env, true);
     return toJavaFindings(env, findings);
 }
 
@@ -88,8 +93,10 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     JNINativeMethod methods[] = {
             {"nativeScan", "(Landroid/content/Context;)[Ljava/lang/String;",
              reinterpret_cast<void*>(nativeScan)},
-            {"nativeInspect", "(Landroid/content/Context;)[Ljava/lang/String;",
-             reinterpret_cast<void*>(nativeInspect)},
+            {"nativeTerminate", "(Ljava/lang/String;)V",
+             reinterpret_cast<void*>(nativeTerminate)},
+            {"nativeReportNetworkFinding", "(Ljava/lang/String;)V",
+             reinterpret_cast<void*>(nativeReportNetworkFinding)},
             {"nativeReportScreenshotCapture", "(Landroid/content/Context;)Ljava/lang/String;",
              reinterpret_cast<void*>(nativeReportScreenshotCapture)},
             {"nativeApplyActivitySecurity", "(Landroid/app/Activity;)V",

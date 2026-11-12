@@ -1,4 +1,4 @@
-#include "security_detector.h"
+#include "security.h"
 
 #include "detection_utils.h"
 
@@ -17,7 +17,7 @@ void detectLsposed(std::vector<std::string>* findings) {
             detection_utils::fileExists("/data/adb/lspd") ||
             detection_utils::fileExists("/data/adb/modules/zygisk_lsposed") ||
             detection_utils::fileExists("/data/adb/modules/lsposed")) {
-        findings->push_back("lsposed_artifact");
+        fatalFinding(findings, "lsposed_artifact");
     }
 #else
     (void) findings;

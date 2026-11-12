@@ -126,10 +126,12 @@ class SecurityNetworkPolicyTest {
                 secure.enqueue(MockResponse().setResponseCode(302)
                     .addHeader("Location", cleartext.url("/stolen")))
                 secure.start(InetAddress.getByName("127.0.0.1"), 0)
-                val client = policy({}, mutableListOf()).configure(trustingBuilder(certificate)).build()
-                client.newCall(Request.Builder().url(secure.url("/account")).build()).execute().use {
-                    assertEquals(302, it.code)
+                val findings = mutableListOf<String>()
+                val client = policy({}, findings).configure(trustingBuilder(certificate)).build()
+                expectIoFailure {
+                    client.newCall(Request.Builder().url(secure.url("/account")).build()).execute().close()
                 }
+                assertEquals(listOf("https_downgrade_blocked"), findings)
                 assertFalse(client.followSslRedirects)
                 assertEquals(0, cleartext.requestCount)
                 close(client)

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.system.exitProcess
 
 data class SecurityFinding(val code: String)
 
@@ -45,12 +46,7 @@ object NativeSecurityDetector {
     private val captureCodes = setOf(
         "http_proxy_configured", "http_proxy_pac_configured", "capture_detection_unavailable"
     )
-    private val blockingCodes = setOf(
-        "native_library_unavailable", "native_scan_error", "capture_detection_unavailable",
-        "signature_unavailable", "signature_mismatch", "frida_maps", "frida_thread",
-        "instrumentation_tracer", "process_maps_unavailable", "frida_threads_unavailable",
-        "tracer_status_unavailable"
-    )
+    private val reportOnlyCodes = setOf("adb_enabled", "developer_options_enabled")
     private val proxyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Proxy.PROXY_CHANGE_ACTION) refreshCapturePolicy(context)
@@ -70,7 +66,10 @@ object NativeSecurityDetector {
     private external fun nativeScan(context: Context): Array<String>
 
     @JvmStatic
-    private external fun nativeInspect(context: Context): Array<String>
+    private external fun nativeTerminate(finding: String)
+
+    @JvmStatic
+    private external fun nativeReportNetworkFinding(finding: String)
 
     @JvmStatic
     private external fun nativeReportScreenshotCapture(context: Context): String?
@@ -86,6 +85,7 @@ object NativeSecurityDetector {
         if (appContext != null) return
         val application = context.applicationContext
         appContext = application
+        if (!nativeLibraryLoaded) terminateOnFinding("native_library_unavailable")
         if (BuildConfig.SECURITY_DETECT_CAPTURE || BuildConfig.SECURITY_BLOCK_HTTP_PROXY) {
             runCatching {
                 ContextCompat.registerReceiver(
@@ -112,28 +112,27 @@ object NativeSecurityDetector {
 
     suspend fun scanNow(context: Context) = withContext(Dispatchers.IO) {
         synchronized(nativeLock) {
-            collectInspection(context, applyPolicy = true)
+            collectInspection(context)
             Unit
         }
     }
 
     suspend fun inspectEnvironment(context: Context): SecurityInspection = withContext(Dispatchers.IO) {
-        synchronized(nativeLock) { collectInspection(context, applyPolicy = false) }
+        synchronized(nativeLock) { collectInspection(context) }
     }
 
-    private fun collectInspection(context: Context, applyPolicy: Boolean): SecurityInspection {
+    private fun collectInspection(context: Context): SecurityInspection {
         val startedAt = SystemClock.elapsedRealtime()
         val codes = if (!nativeLibraryLoaded) {
             setOf("native_library_unavailable")
         } else {
-            runCatching {
-                if (applyPolicy) nativeScan(context.applicationContext).toSet()
-                else nativeInspect(context.applicationContext).toSet()
-            }.onFailure { Log.e(TAG, "Native security scan failed", it) }
+            runCatching { nativeScan(context.applicationContext).toSet() }
+                .onFailure { Log.e(TAG, "Native security scan failed", it) }
                 .getOrElse { setOf("native_scan_error") }
         }
         replaceScanCodes(codes)
         firstScan.countDown()
+        firstFatalFinding(codes)?.let(::terminateOnFinding)
         return SecurityInspection(
             codes = codes,
             inspectedAtMillis = System.currentTimeMillis(),
@@ -144,18 +143,18 @@ object NativeSecurityDetector {
     /** 仅在后台网络/服务线程调用，避免首次请求抢在安全扫描之前发送。 */
     fun checkNetworkRequest() {
         if (!BuildConfig.SECURITY_BLOCK_HTTP_PROXY) return
-        val context = appContext ?: throw IOException("网络安全检测尚未初始化")
-        if (!nativeLibraryLoaded) throw IOException("原生安全组件不可用，已停止网络请求")
+        val context = appContext ?: rejectRuntime("native_scan_error", "网络安全检测尚未初始化")
+        if (!nativeLibraryLoaded) rejectRuntime("native_library_unavailable", "原生安全组件不可用")
         try {
-            if (!firstScan.await(10, TimeUnit.SECONDS)) throw IOException("网络安全检测超时，已停止网络请求")
+            if (!firstScan.await(10, TimeUnit.SECONDS)) rejectRuntime("native_scan_error", "网络安全检测超时")
         } catch (error: InterruptedException) {
             Thread.currentThread().interrupt()
             throw InterruptedIOException("网络安全检测已取消").apply { initCause(error) }
         }
         synchronized(nativeLock) {
             refreshCapturePolicyNow(context)
-            val blocked = scanCodes.firstOrNull { it in blockingCodes }
-            if (blocked != null) throw IOException("安全检测未通过，已停止网络请求: " + blocked)
+            val blocked = firstFatalFinding(scanCodes)
+            if (blocked != null) rejectRuntime(blocked, "安全检测未通过: " + blocked)
         }
     }
 
@@ -170,12 +169,17 @@ object NativeSecurityDetector {
 
     fun applyActivitySecurity(activity: Activity) {
         if (!nativeLibraryLoaded) {
-            if (BuildConfig.SECURITY_DETECT_SCREENSHOT) NativeSecurityActions.blockScreenshots(activity)
+            NativeSecurityActions.blockScreenshots(activity)
             publish(SecurityFinding("native_library_unavailable"))
+            terminateOnFinding("native_library_unavailable")
             return
         }
         runCatching { nativeApplyActivitySecurity(activity) }
-            .onFailure { error -> Log.e(TAG, "Could not apply native activity security", error) }
+            .onFailure { error ->
+                Log.e(TAG, "Could not apply native activity security", error)
+                NativeSecurityActions.blockScreenshots(activity)
+                terminateOnFinding("screenshot_protection_unavailable")
+            }
     }
 
     fun refreshCapturePolicy(context: Context) {
@@ -194,11 +198,38 @@ object NativeSecurityDetector {
                 .getOrElse { setOf("capture_detection_unavailable") }
         }
         replaceScanCodes((scanCodes - captureCodes) + codes)
+        firstFatalFinding(codes)?.let(::terminateOnFinding)
     }
 
     fun reportNetworkFinding(code: String) {
-        if (code !in setOf("tls_validation_failed", "cleartext_traffic_blocked", "http_proxy_route_blocked")) return
+        if (code !in setOf(
+                "tls_validation_failed", "cleartext_traffic_blocked",
+                "http_proxy_route_blocked", "https_downgrade_blocked"
+            )) return
         publish(SecurityFinding(code))
+        if (nativeLibraryLoaded) {
+            runCatching { nativeReportNetworkFinding(code) }
+                .onFailure { Log.e(TAG, "Native network protection failed", it) }
+        }
+        terminateOnFinding(code)
+    }
+
+    private fun firstFatalFinding(codes: Set<String>): String? = codes.firstOrNull {
+        it !in reportOnlyCodes && !it.startsWith("blacklisted_package:") && it != "screenshot_capture"
+    }
+
+    private fun rejectRuntime(code: String, message: String): Nothing {
+        terminateOnFinding(code)
+        throw IOException(message)
+    }
+
+    private fun terminateOnFinding(code: String) {
+        if (!BuildConfig.SECURITY_CRASH_ON_FINDING) return
+        Log.e(TAG, "Security termination: " + code)
+        if (nativeLibraryLoaded) runCatching { nativeTerminate(code) }
+        // 原生库加载失败或原生终止入口异常时同样结束进程。
+        android.os.Process.killProcess(android.os.Process.myPid())
+        exitProcess(1)
     }
 
     private fun replaceScanCodes(codes: Set<String>) {

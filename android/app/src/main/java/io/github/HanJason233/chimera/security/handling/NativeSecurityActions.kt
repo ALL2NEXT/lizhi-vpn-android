@@ -20,6 +20,7 @@ object NativeSecurityActions {
     private const val TAG = "NativeSecurity"
     private const val PREFERENCES_NAME = "native_security_reports"
     private const val PENDING_CODES_KEY = "pending_finding_codes"
+    private const val MAX_PENDING_CODES = 64
     private val reportScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val reportMutex = Mutex()
 
@@ -36,27 +37,33 @@ object NativeSecurityActions {
     }
 
     @JvmStatic
-    fun reportFindings(context: Context, codes: Array<String>) {
-        if (!BuildConfig.SECURITY_REPORT_FINDINGS) return
+    fun reportFindings(context: Context, codes: Array<String>): Boolean {
+        if (!BuildConfig.SECURITY_REPORT_FINDINGS) return false
         val findings = codes.asSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() }
-            .filter { it.startsWith("blacklisted_package:") }
+            .filter(::isReportOnly)
             .map { it.take(160) }
             .distinct()
-            .take(20)
+            .take(MAX_PENDING_CODES)
             .toList()
-        if (findings.isEmpty()) return
+        if (findings.isEmpty()) return false
 
         val appContext = context.applicationContext
-        synchronized(this) {
+        val saved = synchronized(this) {
             val preferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
             val pending = preferences.getStringSet(PENDING_CODES_KEY, emptySet()).orEmpty().toMutableSet()
             pending.addAll(findings)
-            preferences.edit().putStringSet(PENDING_CODES_KEY, pending.take(20).toSet()).apply()
+            // 同一轮还可能命中终止项，先同步落盘，避免 abort 丢失待上报信号。
+            preferences.edit().putStringSet(PENDING_CODES_KEY, pending.take(MAX_PENDING_CODES).toSet()).commit()
         }
-        flushPendingFindings(appContext)
+        if (saved) flushPendingFindings(appContext)
+        return saved
     }
+
+    private fun isReportOnly(code: String): Boolean =
+        code.startsWith("blacklisted_package:") ||
+            code == "adb_enabled" || code == "developer_options_enabled"
 
     @JvmStatic
     fun flushPendingFindings(context: Context) {
@@ -65,33 +72,32 @@ object NativeSecurityActions {
         reportScope.launch {
             reportMutex.withLock {
                 val preferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-                val storedCodes = preferences.getStringSet(PENDING_CODES_KEY, emptySet()).orEmpty()
-                val pending = storedCodes.filterTo(mutableSetOf()) {
-                    it.startsWith("blacklisted_package:")
-                }
-                if (pending.size != storedCodes.size) {
-                    val editor = preferences.edit()
-                    if (pending.isEmpty()) editor.remove(PENDING_CODES_KEY)
-                    else editor.putStringSet(PENDING_CODES_KEY, pending)
-                    editor.apply()
-                }
-                if (pending.isEmpty()) return@withLock
-
-                AccountManager(appContext).reportSecurityFindings(pending.toList())
-                    .onSuccess {
-                        synchronized(this@NativeSecurityActions) {
-                            val latest = preferences.getStringSet(PENDING_CODES_KEY, emptySet())
-                                .orEmpty().toMutableSet()
-                            latest.removeAll(pending)
-                            val editor = preferences.edit()
-                            if (latest.isEmpty()) editor.remove(PENDING_CODES_KEY)
-                            else editor.putStringSet(PENDING_CODES_KEY, latest)
-                            editor.apply()
+                while (true) {
+                    val pending = synchronized(this@NativeSecurityActions) {
+                        val stored = preferences.getStringSet(PENDING_CODES_KEY, emptySet()).orEmpty()
+                        val allowed = stored.filterTo(linkedSetOf(), ::isReportOnly)
+                        if (allowed != stored) {
+                            preferences.edit().putStringSet(PENDING_CODES_KEY, allowed).commit()
                         }
+                        allowed.take(20).toSet()
                     }
-                    .onFailure { error ->
-                        Log.w(TAG, "Could not upload security findings; will retry later", error)
+                    if (pending.isEmpty()) break
+                    val result = AccountManager(appContext).reportSecurityFindings(pending.toList())
+                    if (result.isFailure) {
+                        Log.w(TAG, "Could not upload security findings; will retry later", result.exceptionOrNull())
+                        break
                     }
+                    val removed = synchronized(this@NativeSecurityActions) {
+                        val latest = preferences.getStringSet(PENDING_CODES_KEY, emptySet())
+                            .orEmpty().toMutableSet()
+                        latest.removeAll(pending)
+                        val editor = preferences.edit()
+                        if (latest.isEmpty()) editor.remove(PENDING_CODES_KEY)
+                        else editor.putStringSet(PENDING_CODES_KEY, latest)
+                        editor.commit()
+                    }
+                    if (!removed) break
+                }
             }
         }
     }

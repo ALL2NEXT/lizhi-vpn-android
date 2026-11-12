@@ -1,4 +1,4 @@
-#include "security_detector.h"
+#include "security.h"
 
 #include "detection_utils.h"
 
@@ -15,7 +15,8 @@ void detectAdb(JNIEnv* env, jobject context, std::vector<std::string>* findings)
     jint adbEnabled = 0;
     if (detection_utils::getGlobalSettingInt(env, context, "adb_enabled", 0, &adbEnabled) &&
             adbEnabled != 0) {
-        findings->push_back("adb_enabled");
+        addFinding(findings, "adb_enabled");
+        reportFindings(env, context, {"adb_enabled"});
     }
 #else
     (void) env;

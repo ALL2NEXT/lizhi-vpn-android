@@ -1,4 +1,4 @@
-#include "security_detector.h"
+#include "security.h"
 
 #include "detection_utils.h"
 
@@ -17,7 +17,7 @@ void detectXposed(std::vector<std::string>* findings) {
             detection_utils::fileExists("/system/framework/XposedBridge.jar") ||
             detection_utils::fileExists("/system/lib/libxposed_art.so") ||
             detection_utils::fileExists("/system/lib64/libxposed_art.so")) {
-        findings->push_back("xposed_artifact");
+        fatalFinding(findings, "xposed_artifact");
     }
 #else
     (void) findings;

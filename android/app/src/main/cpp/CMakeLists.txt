@@ -7,10 +7,10 @@ cmake_minimum_required(VERSION 3.10.2)
 # Declares and names the project.
 project("chimera-vpn")
 
-option(CHIMERA_CRASH_ON_FINDING "终止应用进程" OFF)
-option(CHIMERA_BLOCK_SCREENSHOTS "阻止应用窗口截图" OFF)
+option(CHIMERA_CRASH_ON_FINDING "除仅上报项外命中后终止应用进程" ON)
+option(CHIMERA_BLOCK_SCREENSHOTS "阻止应用窗口截图" ON)
 option(CHIMERA_BLOCK_HTTP_PROXY "强制安全网络传输并绕过系统 HTTP/PAC 代理" ON)
-option(CHIMERA_REPORT_FINDINGS "上报风险结果供后台审核" OFF)
+option(CHIMERA_REPORT_FINDINGS "上报软件黑名单、USB 调试和开发者选项" ON)
 
 option(CHIMERA_DETECT_CAPTURE "检测系统 HTTP 代理配置" ON)
 option(CHIMERA_DETECT_XPOSED "检测 Xposed 痕迹" ON)
@@ -40,23 +40,17 @@ add_library( # Sets the name of the library.
 
              # Provides a relative path to your source file(s).
              native-lib.cpp
-             security/detection/security_detector.cpp
-             security/detection/detection_utils.cpp
-             security/detection/capture_proxy_detector.cpp
-             security/detection/xposed_detector.cpp
-             security/detection/lsposed_detector.cpp
-             security/detection/frida_detector.cpp
-             security/detection/signature_detector.cpp
-             security/detection/blacklist_detector.cpp
-             security/detection/adb_detector.cpp
-             security/detection/developer_mode_detector.cpp
-             security/detection/screenshot_capture_detector.cpp
-             security/handling/initial_findings_handler.cpp
-             security/handling/screenshot_capture_handler.cpp
-             security/handling/crash_handler.cpp
-             security/handling/screenshot_block_handler.cpp
-             security/handling/http_proxy_block_handler.cpp
-             security/handling/security_report_handler.cpp )
+             security/security.cpp
+             security/detection_utils.cpp
+             security/capture_proxy_detector.cpp
+             security/xposed_detector.cpp
+             security/lsposed_detector.cpp
+             security/frida_detector.cpp
+             security/signature_detector.cpp
+             security/blacklist_detector.cpp
+             security/adb_detector.cpp
+             security/developer_mode_detector.cpp
+             security/screenshot_capture_detector.cpp )
 
 target_compile_definitions(native-lib PRIVATE
         CHIMERA_DETECT_CAPTURE=$<BOOL:${CHIMERA_DETECT_CAPTURE}>

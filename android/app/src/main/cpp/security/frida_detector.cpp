@@ -1,4 +1,4 @@
-#include "security_detector.h"
+#include "security.h"
 
 #include "detection_utils.h"
 
@@ -76,7 +76,7 @@ bool loopbackPortOpen(int family, uint16_t port) {
 
 bool hasFridaListener() {
     // Android 10+ 不允许普通应用读取 /proc/net，改为有界的本机连接探测。
-    // 开放端口只作为弱信号，不单独触发终止或网络封锁。
+    // 开放端口不能确认 Frida，但按当前严格策略命中后立即终止。
     for (const auto port : {27042, 27043}) {
         if (loopbackPortOpen(AF_INET, port) || loopbackPortOpen(AF_INET6, port)) return true;
     }
@@ -108,17 +108,17 @@ void detectFrida(std::vector<std::string>* findings) {
     static const char* kMapMarkers[] = {"frida", "linjector", "libgadget"};
     std::string maps;
     if (!detection_utils::readTextFile("/proc/self/maps", &maps)) {
-        findings->push_back("process_maps_unavailable");
+        fatalFinding(findings, "process_maps_unavailable");
     } else if (detection_utils::containsAny(maps, kMapMarkers, sizeof(kMapMarkers) / sizeof(kMapMarkers[0]))) {
-        findings->push_back("frida_maps");
+        fatalFinding(findings, "frida_maps");
     }
     bool threadsAvailable = false;
-    if (hasFridaThread(&threadsAvailable)) findings->push_back("frida_thread");
-    if (!threadsAvailable) findings->push_back("frida_threads_unavailable");
-    if (hasFridaListener()) findings->push_back("frida_listener");
+    if (hasFridaThread(&threadsAvailable)) fatalFinding(findings, "frida_thread");
+    if (!threadsAvailable) fatalFinding(findings, "frida_threads_unavailable");
+    if (hasFridaListener()) fatalFinding(findings, "frida_listener");
     bool tracerAvailable = false;
-    if (hasTracerPid(&tracerAvailable)) findings->push_back("instrumentation_tracer");
-    if (!tracerAvailable) findings->push_back("tracer_status_unavailable");
+    if (hasTracerPid(&tracerAvailable)) fatalFinding(findings, "instrumentation_tracer");
+    if (!tracerAvailable) fatalFinding(findings, "tracer_status_unavailable");
 #else
     (void) findings;
 #endif

@@ -159,6 +159,13 @@ internal fun SecuritySelfCheckScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (BuildConfig.SECURITY_CRASH_ON_FINDING) {
+                            Text(
+                                "黑名单、USB 调试和开发者选项仅上报；其他环境风险及抓包相关命中会立即退出应用。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
