@@ -7,6 +7,8 @@ cmake_minimum_required(VERSION 3.10.2)
 # Declares and names the project.
 project("chimera-vpn")
 
+add_subdirectory(transport)
+
 option(CHIMERA_CRASH_ON_FINDING "除仅上报项外命中后终止应用进程" ON)
 option(CHIMERA_BLOCK_SCREENSHOTS "阻止应用窗口截图" ON)
 option(CHIMERA_BLOCK_HTTP_PROXY "强制安全网络传输并绕过系统 HTTP/PAC 代理" ON)
@@ -43,6 +45,7 @@ add_library( # Sets the name of the library.
 
              # Provides a relative path to your source file(s).
              native-lib.cpp
+             transport/transport_jni.cpp
              security/security.cpp
              security/detection_utils.cpp
              security/capture_proxy_detector.cpp
@@ -97,6 +100,7 @@ find_library(dl-lib dl)
 # 16 KB page size alignment (required for Android 15+ / Google Play)
 target_link_options(native-lib PRIVATE
         "-Wl,-z,max-page-size=16384"
+        "-Wl,--exclude-libs,ALL"
         "-Wl,--gc-sections")
 
 # Specifies libraries CMake should link to your target library. You can link multiple libraries, such as libraries you define in this build script, prebuilt third-party libraries, or system libraries.
@@ -105,4 +109,4 @@ target_link_libraries( # Specifies the target library.
                        native-lib
 
                        # Links the target library to the log library included in the NDK.
-                       ${log-lib} ${dl-lib} )
+                       ${log-lib} ${dl-lib} chimera-transport )

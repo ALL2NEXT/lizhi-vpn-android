@@ -41,6 +41,7 @@ import {
 } from "./domain/analytics.ts";
 import { beijingTimestamp, normalizeReportTimestamp, usagePeriodKeys } from "./domain/time.ts";
 import { corsHeaders, isAdmin, json } from "./http/responses.ts";
+import { handleClientTransport } from "./http/client-transport.ts";
 import { cleanText } from "./lib/values.ts";
 import { normalizeClientIp } from "./domain/ip.ts";
 import { createAccountRoutes } from "./routes/account.ts";
@@ -320,6 +321,14 @@ export interface BackendExecutionContext {
 }
 
 export async function fetchBackend(
+  request: Request,
+  env: Env,
+  ctx?: BackendExecutionContext,
+) {
+  return handleClientTransport(request, env, (inner) => fetchObservedBackend(inner, env, ctx));
+}
+
+async function fetchObservedBackend(
   request: Request,
   env: Env,
   ctx?: BackendExecutionContext,

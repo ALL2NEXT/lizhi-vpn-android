@@ -32,6 +32,7 @@ const env: Env = {
   ADMIN_PATH: adminPath,
   ADMIN_TOKEN: adminToken,
   SERVICE_NAME: "chimera-linux",
+  CLIENT_TRANSPORT_PRIVATE_KEY: process.env.CLIENT_TRANSPORT_PRIVATE_KEY,
 };
 
 await initializeUserSchema(env);

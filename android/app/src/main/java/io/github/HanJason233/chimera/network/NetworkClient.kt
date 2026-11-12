@@ -8,12 +8,17 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.security.handling.SecurityNetworkPolicy
+import io.github.HanJason233.chimera.network.transport.BackendTransportInterceptor
+import io.github.HanJason233.chimera.network.transport.TransportDestinationGuard
 import java.lang.reflect.Type
 import java.util.concurrent.TimeUnit
 
 object NetworkClient {
 
-    fun withUserAgent(builder: OkHttpClient.Builder): OkHttpClient.Builder {
+    fun withUserAgent(
+        builder: OkHttpClient.Builder,
+        backendUrl: () -> String = { AppConfig.BACKEND_URL }
+    ): OkHttpClient.Builder {
         val configuredBuilder = SecurityNetworkPolicy.configure(builder)
         return configuredBuilder.addInterceptor { chain ->
             val originalRequest = chain.request()
@@ -25,14 +30,9 @@ object NetworkClient {
                 originalRequest
             }
             chain.proceed(request)
-        }
+        }.addInterceptor(BackendTransportInterceptor(backendUrl))
+            .addNetworkInterceptor(TransportDestinationGuard(backendUrl))
     }
-    
-    private val okHttpClient = withUserAgent(OkHttpClient.Builder())
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .build()
     
     private val gson = GsonBuilder()
         .setLenient()
@@ -65,9 +65,15 @@ object NetworkClient {
     }
 
     private fun createApiService(baseUrl: String): ApiService {
+        // Keep the origin bound to this service while older requests finish during a backend switch.
+        val client = withUserAgent(OkHttpClient.Builder(), { baseUrl })
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
         val retrofit = Retrofit.Builder()
             .baseUrl("${baseUrl.trimEnd('/')}/")
-            .client(okHttpClient)
+            .client(client)
             .addConverterFactory(stringConverterFactory)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()

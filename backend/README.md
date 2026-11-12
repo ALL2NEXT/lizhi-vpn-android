@@ -2,6 +2,8 @@
 
 这是 Chimera 的后端，服务端业务实现使用 TypeScript 严格模式，可部署到 Cloudflare Workers 或独立 Linux/Node.js。Worker 部署入口保持为 `serverless.js`。迁移范围和选择依据见 [TypeScript 迁移分析](docs/typescript-migration.md)。
 
+Android 的业务接口使用 native AES-256-GCM 双向加密。部署新版应用前，需要运行 `node scripts/generate-transport-key.mjs` 并配置 `CLIENT_TRANSPORT_PRIVATE_KEY` Secret / 环境变量；具体步骤和协议见 [加密通信说明](../android/docs/encrypted-transport.md)。
+
 ## 目录结构
 
 - `serverless.js`、`src/worker/entry.ts`：Cloudflare Worker 稳定入口和绑定适配器。
@@ -27,13 +29,13 @@
 GET /api/app/proxy-packages
 ```
 
-Worker 固定从上游获取 Android 代理应用包名列表，并以 `text/plain` 返回；上游不可用或名单格式异常时返回 `502`。客户端只需访问当前配置的后台域名。
+Worker 固定从上游获取 Android 代理应用包名列表，业务正文为 `text/plain`；上游不可用或名单格式异常时返回 `502`。配置传输密钥后，此接口通过加密入口调用，客户端解密后读取原业务正文。
 
 ## Cloudflare 绑定
 
 - KV 命名空间绑定：`CONFIG`
 - D1 数据库绑定：`USERS_DB`
-- Worker Secret：`ADMIN_PATH`、`ADMIN_TOKEN`。
+- Worker Secret：`ADMIN_PATH`、`ADMIN_TOKEN`、`CLIENT_TRANSPORT_PRIVATE_KEY`。
 
 管理后台地址：
 
@@ -141,7 +143,7 @@ npx.cmd wrangler secret put ADMIN_TOKEN --name chimera
 npx.cmd wrangler deploy
 ```
 
-新版本以 Chimera 的 KV 键保存后台数据，并兼容读取、同步旧 Firefly 键；加密订阅响应同时返回新旧客户端 IP 响应头，便于客户端逐步迁移。
+新版本以 Chimera 的 KV 键保存后台数据，并兼容读取、同步旧 Firefly 键。客户端接口的双向加密由统一传输入口处理。
 
 ## 独立配置 Worker
 

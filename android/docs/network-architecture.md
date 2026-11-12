@@ -6,6 +6,7 @@
 network/
 ├── NetworkClient.kt
 ├── ApiService.kt
+├── transport/               # native AES-GCM 通信拦截、密钥引导和响应恢复
 ├── account/                 # 账号注册、登录、绑定和流量上报
 ├── location/                # 节点地址与地理位置查询
 ├── subscription/
@@ -32,6 +33,8 @@ feature/nodegrouping/data/icon/
 ```
 
 ## 订阅导入流程
+
+Android 与自有后端的接口经统一拦截器封装为 native AES-256-GCM 通信，服务端也需配置密钥；协议和部署步骤见 [加密通信说明](encrypted-transport.md)。
 
 1. 输入框接收手动输入、剪贴板、二维码或文件内容。
 2. `SubscriptionInputDetector` 使用 `SubscriptionTextNormalizer` 递归解码并拆成明文片段，区分配置之外的远程订阅地址与本地配置。

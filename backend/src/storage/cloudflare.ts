@@ -87,6 +87,7 @@ export interface WorkerBindings extends Partial<CloudflareBindings> {
   ADMIN_PATH?: string;
   ADMIN_TOKEN?: string;
   SERVICE_NAME?: string;
+  CLIENT_TRANSPORT_PRIVATE_KEY?: string;
 }
 
 export function createWorkerEnv(bindings: WorkerBindings) {
@@ -99,5 +100,6 @@ export function createWorkerEnv(bindings: WorkerBindings) {
     ADMIN_PATH: bindings.ADMIN_PATH,
     ADMIN_TOKEN: bindings.ADMIN_TOKEN,
     SERVICE_NAME: bindings.SERVICE_NAME,
+    CLIENT_TRANSPORT_PRIVATE_KEY: bindings.CLIENT_TRANSPORT_PRIVATE_KEY,
   };
 }

@@ -20,6 +20,9 @@ backend/node_modules/
 backend/dist/
 backend/data/linux/
 backend/worker-startup.cpuprofile
+backend/.secrets/
+backend/.dev.vars
+backend/.dev.vars.*
 
 # Gradle files
 .gradle/

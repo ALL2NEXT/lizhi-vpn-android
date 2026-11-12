@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "security/security.h"
+#include "transport/transport_jni.h"
 
 namespace {
 
@@ -108,5 +109,6 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
         return JNI_ERR;
     }
     env->DeleteLocalRef(detectorClass);
+    if (!chimera::transport::registerNatives(env)) return JNI_ERR;
     return JNI_VERSION_1_6;
 }
