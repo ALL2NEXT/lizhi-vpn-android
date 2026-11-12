@@ -38,6 +38,8 @@ import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -273,55 +275,35 @@ private fun RowScope.NativeNavigationItem(
     onClick: () -> Unit,
     useGmailContactsIcon: Boolean = false
 ) {
-    val iconColor = if (selected) MonetThemeOverlay.onSelectedControl else MaterialTheme.colorScheme.onSurfaceVariant
-    val labelColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val indicatorColor = if (selected) MonetThemeOverlay.selectedControl else Color.Transparent
-
-    Column(
-        modifier = Modifier
-            .weight(1f)
-            .fillMaxHeight()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                role = Role.Tab,
-                onClick = onClick
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(width = 64.dp, height = 32.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(indicatorColor),
-            contentAlignment = Alignment.Center
-        ) {
+    // 使用 Material 3 标准项按内容测量高度，避免 fillMaxHeight 将底栏撑满屏幕。
+    NavigationBarItem(
+        selected = selected,
+        onClick = onClick,
+        icon = {
             if (useGmailContactsIcon) {
                 Icon(
                     painter = painterResource(R.drawable.gmail_drawer_contacts),
-                    contentDescription = label,
-                    tint = iconColor,
+                    contentDescription = null,
                     modifier = Modifier.size(24.dp)
                 )
             } else {
                 Icon(
                     imageVector = if (selected) selectedIcon else unselectedIcon,
-                    contentDescription = label,
-                    tint = iconColor,
+                    contentDescription = null,
                     modifier = Modifier.size(24.dp)
                 )
             }
-        }
-        Text(
-            text = label,
-            color = labelColor,
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-            maxLines = 1,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+        },
+        label = { Text(text = label, maxLines = 1) },
+        alwaysShowLabel = true,
+        colors = NavigationBarItemDefaults.colors(
+            selectedIconColor = MonetThemeOverlay.onSelectedControl,
+            selectedTextColor = MaterialTheme.colorScheme.primary,
+            indicatorColor = MonetThemeOverlay.selectedControl,
+            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
-    }
+    )
 }
 
 @Composable
