@@ -18,6 +18,12 @@
 #ifndef CHIMERA_DETECT_BLACKLIST
 #define CHIMERA_DETECT_BLACKLIST 1
 #endif
+#ifndef CHIMERA_DETECT_ADB
+#define CHIMERA_DETECT_ADB 1
+#endif
+#ifndef CHIMERA_DETECT_DEVELOPER_MODE
+#define CHIMERA_DETECT_DEVELOPER_MODE 1
+#endif
 
 namespace chimera {
 namespace security {
@@ -42,6 +48,12 @@ std::vector<std::string> scan(JNIEnv* env, jobject context) {
 #endif
 #if CHIMERA_DETECT_BLACKLIST
     detectBlacklist(env, context, &findings);
+#endif
+#if CHIMERA_DETECT_ADB
+    detectAdb(env, context, &findings);
+#endif
+#if CHIMERA_DETECT_DEVELOPER_MODE
+    detectDeveloperMode(env, context, &findings);
 #endif
 
     return findings;

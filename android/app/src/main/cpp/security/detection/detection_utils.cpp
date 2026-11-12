@@ -111,6 +111,55 @@ bool mapsContain(const char* const* markers, size_t count) {
     return readTextFile("/proc/self/maps", &maps) && containsAny(maps, markers, count);
 }
 
+bool getGlobalSettingInt(JNIEnv* env, jobject context, const char* settingName, jint defaultValue, jint* value) {
+    jclass contextClass = env->GetObjectClass(context);
+    if (contextClass == nullptr) {
+        clearPendingException(env);
+        return false;
+    }
+    jmethodID getContentResolver = env->GetMethodID(
+            contextClass,
+            "getContentResolver",
+            "()Landroid/content/ContentResolver;");
+    if (getContentResolver == nullptr) {
+        clearPendingException(env);
+        env->DeleteLocalRef(contextClass);
+        return false;
+    }
+    jobject resolver = env->CallObjectMethod(context, getContentResolver);
+    if (env->ExceptionCheck() || resolver == nullptr) {
+        clearPendingException(env);
+        env->DeleteLocalRef(contextClass);
+        return false;
+    }
+
+    jclass globalSettingsClass = env->FindClass("android/provider/Settings$Global");
+    jmethodID getInt = globalSettingsClass == nullptr ? nullptr : env->GetStaticMethodID(
+            globalSettingsClass,
+            "getInt",
+            "(Landroid/content/ContentResolver;Ljava/lang/String;I)I");
+    if (getInt == nullptr) {
+        clearPendingException(env);
+        if (globalSettingsClass != nullptr) env->DeleteLocalRef(globalSettingsClass);
+        env->DeleteLocalRef(resolver);
+        env->DeleteLocalRef(contextClass);
+        return false;
+    }
+
+    jstring name = env->NewStringUTF(settingName);
+    const jint settingValue = env->CallStaticIntMethod(
+            globalSettingsClass, getInt, resolver, name, defaultValue);
+    const bool succeeded = !env->ExceptionCheck();
+    clearPendingException(env);
+    if (succeeded) *value = settingValue;
+
+    if (name != nullptr) env->DeleteLocalRef(name);
+    env->DeleteLocalRef(globalSettingsClass);
+    env->DeleteLocalRef(resolver);
+    env->DeleteLocalRef(contextClass);
+    return succeeded;
+}
+
 }  // detection_utils 命名空间结束
 }  // security 命名空间结束
 }  // chimera 命名空间结束

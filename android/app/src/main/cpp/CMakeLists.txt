@@ -14,6 +14,8 @@ option(CHIMERA_DETECT_FRIDA "检测 Frida 和进程跟踪信号" ON)
 option(CHIMERA_DETECT_SCREENSHOT "检测 Android 截图回调" ON)
 option(CHIMERA_VERIFY_SIGNATURE "校验当前 APK 签名 SHA-256" ON)
 option(CHIMERA_DETECT_BLACKLIST "检测黑名单软件包" ON)
+option(CHIMERA_DETECT_ADB "检测 ADB 调试开关" ON)
+option(CHIMERA_DETECT_DEVELOPER_MODE "检测开发者选项开关" ON)
 set(CHIMERA_EXPECTED_CERT_SHA256 "0C2E2593E6D882994D2E8F19F60B5CE84FEA2BE609E07803978752A423EBD39F"
         CACHE STRING "预期的应用签名证书 SHA-256")
 
@@ -41,6 +43,8 @@ add_library( # Sets the name of the library.
              security/detection/frida_detector.cpp
              security/detection/signature_detector.cpp
              security/detection/blacklist_detector.cpp
+             security/detection/adb_detector.cpp
+             security/detection/developer_mode_detector.cpp
              security/detection/screenshot_capture_detector.cpp
              security/handling/toast_notifier.cpp
              security/handling/initial_findings_handler.cpp
@@ -54,6 +58,8 @@ target_compile_definitions(native-lib PRIVATE
         CHIMERA_DETECT_SCREENSHOT=$<BOOL:${CHIMERA_DETECT_SCREENSHOT}>
         CHIMERA_VERIFY_SIGNATURE=$<BOOL:${CHIMERA_VERIFY_SIGNATURE}>
         CHIMERA_DETECT_BLACKLIST=$<BOOL:${CHIMERA_DETECT_BLACKLIST}>
+        CHIMERA_DETECT_ADB=$<BOOL:${CHIMERA_DETECT_ADB}>
+        CHIMERA_DETECT_DEVELOPER_MODE=$<BOOL:${CHIMERA_DETECT_DEVELOPER_MODE}>
         CHIMERA_EXPECTED_CERT_SHA256=\"${CHIMERA_EXPECTED_CERT_SHA256}\")
 
 target_compile_options(native-lib PRIVATE

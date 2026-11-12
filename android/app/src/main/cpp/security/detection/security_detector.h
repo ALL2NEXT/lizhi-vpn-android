@@ -16,6 +16,8 @@ void detectLsposed(std::vector<std::string>* findings);
 void detectFrida(std::vector<std::string>* findings);
 void detectSignature(JNIEnv* env, jobject context, std::vector<std::string>* findings);
 void detectBlacklist(JNIEnv* env, jobject context, std::vector<std::string>* findings);
+void detectAdb(JNIEnv* env, jobject context, std::vector<std::string>* findings);
+void detectDeveloperMode(JNIEnv* env, jobject context, std::vector<std::string>* findings);
 
 }  // security 命名空间结束
 }  // chimera 命名空间结束

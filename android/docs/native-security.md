@@ -8,6 +8,8 @@
 - `frida_detector.cpp`：Frida、进程跟踪和监听端口检测
 - `signature_detector.cpp`：APK 签名校验
 - `blacklist_detector.cpp`：软件包黑名单检测
+- `adb_detector.cpp`：ADB 调试开关检测
+- `developer_mode_detector.cpp`：开发者选项开关检测
 - `screenshot_capture_detector.cpp`：截图回调事件
 
 `security_detector.cpp` 负责调度编译时开启的检测，`detection_utils.cpp` 提供共用方法。Kotlin JNI 入口和 Android 截图回调监听位于
@@ -32,6 +34,8 @@ Kotlin 只负责注册 Android 截图回调并调用 JNI。检测结果会写入
 | `chimera.security.detectScreenshot` | Android 截图回调（API 34+） |
 | `chimera.security.verifySignature` | 当前 APK 签名证书 SHA-256 |
 | `chimera.security.detectBlacklist` | 已知抓包、Hook 和 Root 软件包名 |
+| `chimera.security.detectAdb` | 系统 ADB 调试开关 |
+| `chimera.security.detectDeveloperMode` | 系统开发者选项开关 |
 
 PowerShell 中可这样关闭所有检测并构建 Debug 包：
 
@@ -43,7 +47,9 @@ PowerShell 中可这样关闭所有检测并构建 Debug 包：
   '-Pchimera.security.detectFrida=false' `
   '-Pchimera.security.detectScreenshot=false' `
   '-Pchimera.security.verifySignature=false' `
-  '-Pchimera.security.detectBlacklist=false'
+  '-Pchimera.security.detectBlacklist=false' `
+  '-Pchimera.security.detectAdb=false' `
+  '-Pchimera.security.detectDeveloperMode=false'
 ```
 
 只需给要开启的检测设置 `true`；未指定的属性默认是 `true`。签名校验默认使用当前项目签名证书的 SHA-256。更换签名密钥时，可通过 `-Pchimera.security.expectedCertSha256=<64位十六进制SHA256>` 指定预期值。

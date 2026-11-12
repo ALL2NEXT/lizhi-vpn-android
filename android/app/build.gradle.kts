@@ -56,7 +56,9 @@ val securityBuildFlags = linkedMapOf(
     "SECURITY_DETECT_FRIDA" to readSecurityFlag("chimera.security.detectFrida"),
     "SECURITY_DETECT_SCREENSHOT" to readSecurityFlag("chimera.security.detectScreenshot"),
     "SECURITY_VERIFY_SIGNATURE" to readSecurityFlag("chimera.security.verifySignature"),
-    "SECURITY_DETECT_BLACKLIST" to readSecurityFlag("chimera.security.detectBlacklist")
+    "SECURITY_DETECT_BLACKLIST" to readSecurityFlag("chimera.security.detectBlacklist"),
+    "SECURITY_DETECT_ADB" to readSecurityFlag("chimera.security.detectAdb"),
+    "SECURITY_DETECT_DEVELOPER_MODE" to readSecurityFlag("chimera.security.detectDeveloperMode")
 )
 val expectedSecurityCertSha256 = providers.gradleProperty("chimera.security.expectedCertSha256")
     .orElse("0C2E2593E6D882994D2E8F19F60B5CE84FEA2BE609E07803978752A423EBD39F")
