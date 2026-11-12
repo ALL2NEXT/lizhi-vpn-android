@@ -19,9 +19,13 @@
 
 - `initial_findings_handler.cpp`：启动检测结果汇总提示
 - `screenshot_capture_handler.cpp`：截图事件提示
+- `crash_handler.cpp`：可配置的原生进程终止
+- `screenshot_block_handler.cpp`：调用 Android 安全窗口标记阻止截图
+- `http_proxy_block_handler.cpp`：检测到系统 HTTP 代理后绕过该代理
+- `security_report_handler.cpp`：调用 Kotlin 网络桥上报风险代码
 - `toast_notifier.cpp`：通过 JNI 调用 Android Toast
 
-Kotlin 只负责注册 Android 截图回调并调用 JNI。检测结果会写入 `NativeSecurity` 日志，也会通过 `NativeSecurityDetector.findings` 暴露给上层。处理方式目前只提示，不会拦截操作或终止应用。
+安全策略由 native 编译开关选择；Kotlin 仅桥接 `FLAG_SECURE` 和后台 HTTP 请求等 Android 平台能力。默认仍是提示，不会终止应用或拦截请求。
 
 每个检测项默认开启，可通过 Gradle 属性单独控制：
 
@@ -36,6 +40,25 @@ Kotlin 只负责注册 Android 截图回调并调用 JNI。检测结果会写入
 | `chimera.security.detectBlacklist` | 已知抓包、Hook 和 Root 软件包名 |
 | `chimera.security.detectAdb` | 系统 ADB 调试开关 |
 | `chimera.security.detectDeveloperMode` | 系统开发者选项开关 |
+
+处理方式也可分别在构建时开启，默认关闭：
+
+| Gradle 属性 | 行为 |
+| --- | --- |
+| `chimera.security.crashOnFinding` | 有风险信号时通过原生 `abort()` 结束进程；和上报开关不能同时开启 |
+| `chimera.security.blockScreenshots` | 截图检测开启时，给主窗口预先设置 `FLAG_SECURE`，阻止系统截图和普通录屏 |
+| `chimera.security.blockHttpProxy` | 检测到系统 HTTP 代理后，让应用的 OkHttp 请求绕过该代理；Android VPN/TUN 路由保持可用 |
+| `chimera.security.reportFindings` | 仅把软件黑名单命中（`blacklisted_package:<包名>`）上报至后台“安全风控”页，等待管理员审核；后台可选择拉黑设备或忽略 |
+
+例如，启用截图阻断和软件黑名单待审核上报：
+
+```powershell
+.\gradlew.bat :app:assembleDebug `
+  '-Pchimera.security.blockScreenshots=true' `
+  '-Pchimera.security.reportFindings=true'
+```
+
+`blockScreenshots` 会在截图检测启用时于 Activity 创建阶段提前设置安全窗口标志，因为 Android 截图回调发生在截图操作之后。`reportFindings` 只上报 `blacklisted_package:<包名>` 命中；Xposed、Frida、代理、ADB、签名和开发者模式等其他检测不会上报。上报事件按设备和风险代码归并，后台审核后才会写入设备黑名单。
 
 PowerShell 中可这样关闭所有检测并构建 Debug 包：
 

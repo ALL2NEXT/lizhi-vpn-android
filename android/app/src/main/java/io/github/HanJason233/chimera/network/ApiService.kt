@@ -17,6 +17,7 @@ import io.github.HanJason233.chimera.data.model.AccountVipActivationRequest
 import io.github.HanJason233.chimera.data.model.AccountProfileUpdateRequest
 import io.github.HanJason233.chimera.data.model.AccountRegisterRequest
 import io.github.HanJason233.chimera.data.model.AccountRegisterResponse
+import io.github.HanJason233.chimera.data.model.SecurityFindingReportRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportResponse
 import io.github.HanJason233.chimera.data.model.ClientNotificationFeed
@@ -74,6 +75,12 @@ interface ApiService {
         @Url url: String,
         @Body request: TrafficReportRequest
     ): TrafficReportResponse
+
+    @POST
+    suspend fun reportSecurityFindings(
+        @Url url: String,
+        @Body request: SecurityFindingReportRequest
+    ): AccountActionResponse
 
     @GET
     suspend fun getClientNotifications(

@@ -25,6 +25,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import io.github.HanJason233.chimera.security.handling.SecurityProxySelector
 import okhttp3.Request
 import io.github.HanJason233.chimera.AppConfig
 import io.github.HanJason233.chimera.R
@@ -277,6 +278,7 @@ class PerAppInboundViewModel(application: Application) : AndroidViewModel(applic
         const val TAG = "PerAppInbound"
         const val PROXY_APP_LIST_PATH = "/api/app/proxy-packages"
         val httpClient = OkHttpClient.Builder()
+            .proxySelector(SecurityProxySelector)
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
             .callTimeout(10, TimeUnit.SECONDS)

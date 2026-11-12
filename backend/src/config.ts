@@ -147,7 +147,22 @@ const NOTIFICATION_SCHEMA_STATEMENTS = [
     ON notification_reads_mb(user_id, notification_id)`,
 ];
 
-export const USER_SCHEMA_VERSION = 24;
+const CLIENT_SECURITY_REPORTS_SCHEMA = `CREATE TABLE IF NOT EXISTS client_security_reports_mb (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  device_id TEXT NOT NULL,
+  finding_code TEXT NOT NULL CHECK (length(finding_code) BETWEEN 1 AND 200),
+  first_reported_at TEXT NOT NULL,
+  last_reported_at TEXT NOT NULL,
+  report_count INTEGER NOT NULL DEFAULT 1 CHECK (report_count > 0),
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'dismissed', 'banned')),
+  reviewed_at TEXT,
+  UNIQUE (device_id, finding_code)
+)`;
+const CLIENT_SECURITY_REPORTS_INDEX = `CREATE INDEX IF NOT EXISTS idx_client_security_reports_pending_mb
+  ON client_security_reports_mb(status, last_reported_at DESC, id DESC)`;
+
+export const USER_SCHEMA_VERSION = 25;
 export const USER_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS app_schema_mb (
     component TEXT PRIMARY KEY,
@@ -325,6 +340,8 @@ export const USER_SCHEMA_STATEMENTS = [
   ...SECURITY_RISK_RULE_HITS_SCHEMA_STATEMENTS,
   ...NOTIFICATION_SCHEMA_STATEMENTS,
   ...USER_IP_LINKS_SCHEMA_STATEMENTS,
+  CLIENT_SECURITY_REPORTS_SCHEMA,
+  CLIENT_SECURITY_REPORTS_INDEX,
   `INSERT OR IGNORE INTO app_schema_mb (component, version, applied_at)
     VALUES ('users', ${USER_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
 ];
@@ -552,6 +569,7 @@ export const USER_SCHEMA_MIGRATIONS: Record<number, string[]> = {
   ],
   23: NOTIFICATION_SCHEMA_STATEMENTS,
   24: [SYSTEM_LOG_IP_INDEX, ...SECURITY_RISK_RULE_HITS_SCHEMA_STATEMENTS],
+  25: [CLIENT_SECURITY_REPORTS_SCHEMA, CLIENT_SECURITY_REPORTS_INDEX],
 };
 export function resolveAdminBasePath(value: unknown): string | null {
   const route = String(value || "").trim().replace(/^\/+|\/+$/g, "");

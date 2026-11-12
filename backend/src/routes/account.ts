@@ -3,6 +3,23 @@ import type { Env } from "../types/env.ts";
 import type { RouteDependencies } from "../types/routes.ts";
 
 import { observeRequestUser, readJsonObject } from "../http/request.ts";
+
+const SECURITY_FINDING_CODES = new Set([
+  "http_proxy_configured",
+  "xposed_artifact",
+  "lsposed_artifact",
+  "frida_maps",
+  "frida_thread",
+  "frida_listener",
+  "instrumentation_tracer",
+  "signature_unavailable",
+  "signature_mismatch",
+  "adb_enabled",
+  "developer_options_enabled",
+  "screenshot_capture",
+  "native_library_unavailable",
+  "native_scan_error",
+]);
 /*
  * Account routes.
  *
@@ -332,6 +349,50 @@ export function createAccountRoutes(deps: Pick<
         ok: true,
         account: publicAccount(await readUserWithTraffic(env, identity.userId)),
       });
+    }
+
+    if (path === "/api/account/security-report" && request.method === "POST") {
+      const body = await readJsonObject(request);
+      const deviceId = normalizeAccountId(body && body.deviceId);
+      const rawCodes = body && body.codes;
+      if (!deviceId || !Array.isArray(rawCodes) || rawCodes.length < 1 || rawCodes.length > 20) {
+        return json({ ok: false, error: "invalid_security_report" }, 400);
+      }
+
+      const codes = Array.from(new Set(rawCodes.map((value) => cleanText(value).slice(0, 200))));
+      const invalidCode = codes.find((code) => {
+        if (SECURITY_FINDING_CODES.has(code)) return false;
+        if (!code.startsWith("blacklisted_package:")) return true;
+        const packageName = code.slice("blacklisted_package:".length);
+        return !/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(packageName);
+      });
+      if (codes.length === 0 || invalidCode) {
+        return json({ ok: false, error: "invalid_security_finding_code" }, 400);
+      }
+
+      const identity = await resolveDeviceIdentity(env, deviceId);
+      if (!identity) return json({ ok: false, error: "device_not_registered" }, 404);
+
+      const reportedAt = beijingTimestamp();
+      const db = usersDb(env);
+      await db.batch(codes.map((code) => db.prepare(
+        `INSERT INTO client_security_reports_mb (
+           device_id, finding_code, first_reported_at, last_reported_at, report_count, status
+         ) VALUES (?, ?, ?, ?, 1, 'pending')
+         ON CONFLICT(device_id, finding_code) DO UPDATE SET
+           last_reported_at = excluded.last_reported_at,
+           report_count = MIN(client_security_reports_mb.report_count + 1, 1000000000),
+           status = CASE
+             WHEN client_security_reports_mb.status = 'banned' THEN 'banned'
+             ELSE 'pending'
+           END,
+           reviewed_at = CASE
+             WHEN client_security_reports_mb.status = 'banned'
+               THEN client_security_reports_mb.reviewed_at
+             ELSE NULL
+           END`,
+      ).bind(deviceId, code, reportedAt, reportedAt)));
+      return json({ ok: true, acceptedCount: codes.length });
     }
 
     if (path === "/api/account/report" && request.method === "POST") {

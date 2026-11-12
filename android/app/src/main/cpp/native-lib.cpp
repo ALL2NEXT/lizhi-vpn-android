@@ -1,5 +1,6 @@
 #include <jni.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -50,6 +51,26 @@ jstring nativeReportScreenshotCapture(JNIEnv* env, jclass /* 未使用的 JNI �
 
 }  // 匿名命名空间结束
 
+void nativeApplyActivitySecurity(JNIEnv* env, jclass, jobject activity) {
+    chimera::security::handling::applyScreenshotProtection(env, activity);
+}
+
+void nativeRefreshCapturePolicy(JNIEnv* env, jclass, jobject context) {
+#ifndef CHIMERA_BLOCK_HTTP_PROXY
+#define CHIMERA_BLOCK_HTTP_PROXY 0
+#endif
+#if CHIMERA_BLOCK_HTTP_PROXY
+    std::vector<std::string> findings;
+    chimera::security::detectCapture(env, context, &findings);
+    const bool proxyDetected = std::find(
+            findings.begin(), findings.end(), "http_proxy_configured") != findings.end();
+    chimera::security::handling::setHttpProxyBlocking(env, proxyDetected);
+#else
+    (void) env;
+    (void) context;
+#endif
+}
+
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     JNIEnv* env = nullptr;
     if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK || env == nullptr) {
@@ -64,7 +85,11 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
             {"nativeScan", "(Landroid/content/Context;)[Ljava/lang/String;",
              reinterpret_cast<void*>(nativeScan)},
             {"nativeReportScreenshotCapture", "(Landroid/content/Context;)Ljava/lang/String;",
-             reinterpret_cast<void*>(nativeReportScreenshotCapture)}};
+             reinterpret_cast<void*>(nativeReportScreenshotCapture)},
+            {"nativeApplyActivitySecurity", "(Landroid/app/Activity;)V",
+             reinterpret_cast<void*>(nativeApplyActivitySecurity)},
+            {"nativeRefreshCapturePolicy", "(Landroid/content/Context;)V",
+             reinterpret_cast<void*>(nativeRefreshCapturePolicy)}};
     if (env->RegisterNatives(detectorClass, methods, sizeof(methods) / sizeof(methods[0])) != JNI_OK) {
         env->DeleteLocalRef(detectorClass);
         return JNI_ERR;

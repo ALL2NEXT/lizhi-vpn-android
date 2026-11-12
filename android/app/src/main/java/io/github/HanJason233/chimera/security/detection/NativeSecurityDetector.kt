@@ -1,7 +1,9 @@
 package io.github.HanJason233.chimera.security.detection
 
 import android.content.Context
+import android.app.Activity
 import android.util.Log
+import androidx.annotation.Keep
 import io.github.HanJason233.chimera.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -10,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 data class SecurityFinding(val code: String)
 
 /** 原生检测的 Kotlin 入口，负责调用 JNI 并保存只读检测结果。 */
+@Keep
 object NativeSecurityDetector {
     private const val TAG = "NativeSecurity"
 
@@ -27,6 +30,12 @@ object NativeSecurityDetector {
 
     @JvmStatic
     private external fun nativeReportScreenshotCapture(context: Context): String?
+
+    @JvmStatic
+    private external fun nativeApplyActivitySecurity(activity: Activity)
+
+    @JvmStatic
+    private external fun nativeRefreshCapturePolicy(context: Context)
 
     fun scan(context: Context) {
         if (!nativeLibraryLoaded) {
@@ -48,6 +57,18 @@ object NativeSecurityDetector {
             .getOrNull()
             ?: return null
         return SecurityFinding(code).also(::publish)
+    }
+
+    fun applyActivitySecurity(activity: Activity) {
+        if (!nativeLibraryLoaded) return
+        runCatching { nativeApplyActivitySecurity(activity) }
+            .onFailure { error -> Log.e(TAG, "Could not apply native activity security", error) }
+    }
+
+    fun refreshCapturePolicy(context: Context) {
+        if (!BuildConfig.SECURITY_BLOCK_HTTP_PROXY || !nativeLibraryLoaded) return
+        runCatching { nativeRefreshCapturePolicy(context.applicationContext) }
+            .onFailure { error -> Log.w(TAG, "Could not refresh HTTP proxy blocking", error) }
     }
 
     private fun publish(finding: SecurityFinding) {

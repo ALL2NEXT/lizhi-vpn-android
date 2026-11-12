@@ -5,12 +5,15 @@
 #ifndef CHIMERA_DETECT_CAPTURE
 #define CHIMERA_DETECT_CAPTURE 1
 #endif
+#ifndef CHIMERA_BLOCK_HTTP_PROXY
+#define CHIMERA_BLOCK_HTTP_PROXY 0
+#endif
 
 namespace chimera {
 namespace security {
 
 void detectCapture(JNIEnv* env, jobject context, std::vector<std::string>* findings) {
-#if CHIMERA_DETECT_CAPTURE
+#if CHIMERA_DETECT_CAPTURE || CHIMERA_BLOCK_HTTP_PROXY
     // 只检查系统 HTTP 代理配置，不读取 VPN 或 TUN 接口状态。
     using namespace detection_utils;
 

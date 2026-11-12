@@ -23,6 +23,8 @@ import io.github.HanJason233.chimera.data.model.AccountProfileUpdateRequest
 import io.github.HanJason233.chimera.data.model.AccountRegisterRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportRequest
 import io.github.HanJason233.chimera.data.model.TrafficReportResponse
+import io.github.HanJason233.chimera.data.model.SecurityFindingReportRequest
+import io.github.HanJason233.chimera.security.handling.NativeSecurityActions
 import java.security.MessageDigest
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -272,6 +274,31 @@ class AccountManager(private val context: Context) {
         }
     }
 
+    suspend fun reportSecurityFindings(
+        codes: List<String>,
+        timeoutMs: Long = 10000L
+    ): Result<Unit> {
+        if (isOfflineMode()) {
+            return Result.failure(IllegalStateException("offline_mode_enabled"))
+        }
+        val findings = codes.map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(20)
+        if (findings.isEmpty()) {
+            return Result.failure(IllegalArgumentException("security_findings_empty"))
+        }
+        return runCatching {
+            val response = withTimeout(timeoutMs.coerceIn(3000L, 30000L)) {
+                NetworkClient.apiService.reportSecurityFindings(
+                    accountEndpoint("/api/account/security-report"),
+                    SecurityFindingReportRequest(
+                        deviceId = accountId(),
+                        codes = findings
+                    )
+                )
+            }
+            if (!response.ok) throw IllegalStateException(response.error ?: "security_report_failed")
+        }
+    }
+
     suspend fun reportTraffic(
         sessionId: String,
         subscriptionGroupName: String,
@@ -407,6 +434,7 @@ class AccountManager(private val context: Context) {
             .putString(TRAFFIC_LAST_REPORT_AT_KEY, traffic.lastReportAt.orEmpty())
             .putBoolean(OFFLINE_MODE_KEY, false)
             .apply()
+        NativeSecurityActions.flushPendingFindings(context)
     }
 
     private fun isVipExpiryActive(value: String): Boolean = runCatching {

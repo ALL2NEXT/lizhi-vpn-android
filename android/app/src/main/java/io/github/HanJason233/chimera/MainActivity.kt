@@ -71,6 +71,8 @@ import io.github.HanJason233.chimera.platform.LauncherIdentityManager
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import io.github.HanJason233.chimera.viewmodel.RoutingAssetsViewModel
 import io.github.HanJason233.chimera.security.detection.ScreenshotCaptureDetector
+import io.github.HanJason233.chimera.security.detection.NativeSecurityDetector
+import io.github.HanJason233.chimera.security.handling.NativeSecurityActions
 
 class MainActivity : ComponentActivity() {
 
@@ -93,6 +95,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        NativeSecurityDetector.applyActivitySecurity(this)
         AppConfig.initialize(this)
         configureEdgeToEdge()
 
@@ -573,6 +576,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        NativeSecurityDetector.refreshCapturePolicy(this)
+        NativeSecurityActions.flushPendingFindings(this)
         ScreenshotCaptureDetector.start(this)
     }
 

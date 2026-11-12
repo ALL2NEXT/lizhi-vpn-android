@@ -19,6 +19,7 @@ interface SecurityDevice {
 import type { Env } from "../../types/env.ts";
 import type { RouteDependencies } from "../../types/routes.ts";
 import { readUserIpLinks } from "../../services/user-ip-links.ts";
+import { readJsonObject } from "../../http/request.ts";
 
 /*
  * Device inventory and account security read routes.
@@ -49,6 +50,148 @@ export function createAdminSecurityRoutes(deps: Pick<
   } = deps;
 
   return async function handleAdminSecurity(path: string, request: Request, env: Env) {
+    if (path === "/api/security/client-reports" && request.method === "GET") {
+      const db = await ensureUserSchema(env);
+      const query = await db.prepare(
+        `SELECT
+           r.id,
+           r.device_id,
+           r.finding_code,
+           r.first_reported_at,
+           r.last_reported_at,
+           r.report_count,
+           d.brand,
+           d.model,
+           d.android_version,
+           d.android_sdk,
+           d.app_version,
+           u.uid,
+           u.nickname,
+           EXISTS (
+             SELECT 1 FROM device_bans_mb b
+             WHERE b.device_row_id = d.id AND b.lifted_at IS NULL
+           ) AS blocked,
+           r.status
+         FROM client_security_reports_mb r
+         LEFT JOIN user_devices_mb d ON d.device_id = r.device_id
+         LEFT JOIN users_mb u ON u.id = d.user_id
+         WHERE r.status IN ('pending', 'banned')
+         ORDER BY r.last_reported_at DESC, r.id DESC
+         LIMIT 500`,
+      ).all<{
+        id: number;
+        device_id: string;
+        finding_code: string;
+        first_reported_at: string;
+        last_reported_at: string;
+        report_count: number;
+        brand: string | null;
+        model: string | null;
+        android_version: string | null;
+        android_sdk: number | null;
+        app_version: string | null;
+        uid: string | null;
+        nickname: string | null;
+        blocked: number;
+        status: string;
+      }>();
+      return json({
+        ok: true,
+        reports: (query.results || []).map((row) => ({
+          id: Number(row.id),
+          deviceId: normalizeAccountId(row.device_id),
+          findingCode: cleanText(row.finding_code),
+          firstReportedAt: cleanText(row.first_reported_at),
+          lastReportedAt: cleanText(row.last_reported_at),
+          reportCount: Number(row.report_count) || 0,
+          brand: cleanText(row.brand),
+          model: cleanText(row.model),
+          androidVersion: cleanText(row.android_version),
+          androidSdk: normalizeAndroidSdk(row.android_sdk),
+          appVersion: cleanText(row.app_version),
+          uid: normalizeStoredUid(row.uid) || null,
+          nickname: cleanText(row.nickname),
+          blocked: Number(row.blocked) === 1,
+          status: cleanText(row.status),
+        })),
+        generatedAt: beijingTimestamp(),
+      });
+    }
+
+    const reportReviewMatch = path.match(/^\/api\/security\/client-reports\/(\d+)\/review$/);
+    if (reportReviewMatch && request.method === "POST") {
+      const reportId = Number(reportReviewMatch[1]);
+      if (!Number.isSafeInteger(reportId) || reportId < 1) {
+        return json({ ok: false, error: "invalid_security_report_id" }, 400);
+      }
+      const body = await readJsonObject(request);
+      const action = cleanText(body && body.action);
+      if (action !== "ban" && action !== "dismiss" && action !== "unban") {
+        return json({ ok: false, error: "invalid_security_report_action" }, 400);
+      }
+
+      const db = await ensureUserSchema(env);
+      const report = await db.prepare(
+        "SELECT device_id, status FROM client_security_reports_mb WHERE id = ?",
+      ).bind(reportId).first<{ device_id: string; status: string }>();
+      if (!report) return json({ ok: false, error: "security_report_not_found" }, 404);
+      const reportStatus = cleanText(report.status);
+      if (action === "unban") {
+        if (reportStatus !== "banned") {
+          return json({ ok: false, error: "security_report_not_banned" }, 409);
+        }
+        const device = await db.prepare(
+          "SELECT id FROM user_devices_mb WHERE device_id = ?",
+        ).bind(report.device_id).first<{ id: number }>();
+        if (!device) return json({ ok: false, error: "reported_device_not_found" }, 409);
+        const reviewedAt = beijingTimestamp();
+        await db.batch([
+          db.prepare(
+            "UPDATE device_bans_mb SET lifted_at = ? " +
+              "WHERE device_row_id = ? AND source_uid = 'native_security_review' " +
+              "AND reason = 'client_security_report' AND lifted_at IS NULL",
+          ).bind(reviewedAt, device.id),
+          db.prepare(
+            "UPDATE client_security_reports_mb SET status = 'dismissed', reviewed_at = ? " +
+              "WHERE device_id = ? AND status = 'banned'",
+          ).bind(reviewedAt, report.device_id),
+        ]);
+        return json({ ok: true, status: "unbanned" });
+      }
+      if (reportStatus !== "pending") {
+        return json({ ok: false, error: "security_report_already_reviewed" }, 409);
+      }
+
+      const reviewedAt = beijingTimestamp();
+      if (action === "dismiss") {
+        await db.prepare(
+          "UPDATE client_security_reports_mb SET status = 'dismissed', reviewed_at = ? " +
+            "WHERE id = ? AND status = 'pending'",
+        ).bind(reviewedAt, reportId).run();
+        return json({ ok: true, status: "dismissed" });
+      }
+
+      const device = await db.prepare(
+        "SELECT id FROM user_devices_mb WHERE device_id = ?",
+      ).bind(report.device_id).first<{ id: number }>();
+      if (!device) return json({ ok: false, error: "reported_device_not_found" }, 409);
+
+      await db.batch([
+        db.prepare(
+          `INSERT INTO device_bans_mb (device_row_id, source_uid, reason, banned_at, lifted_at)
+           VALUES (?, 'native_security_review', 'client_security_report', ?, NULL)
+           ON CONFLICT(device_row_id, source_uid, reason) DO UPDATE SET
+             banned_at = excluded.banned_at,
+             lifted_at = NULL`,
+        ).bind(device.id, reviewedAt),
+        db.prepare(
+          "UPDATE client_security_reports_mb SET status = 'banned', reviewed_at = ? " +
+            "WHERE id = ? AND status = 'pending'",
+        ).bind(reviewedAt, reportId),
+      ]);
+      return json({ ok: true, status: "banned" });
+    }
+
     if (path === "/api/ip-relations" && request.method === "GET") {
       const url = new URL(request.url);
       try {

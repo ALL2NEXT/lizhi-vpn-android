@@ -356,6 +356,17 @@
           </div>
         </div>
 
+        <section class="security-risk-section" aria-labelledby="clientSecurityReportsTitle">
+          <div class="security-risk-section-heading">
+            <h3 id="clientSecurityReportsTitle">客户端安全上报</h3>
+            <button class="secondary" type="button" onclick="loadClientSecurityReports(true)">刷新</button>
+          </div>
+          <p id="clientSecurityReportsSummary" role="status" aria-live="polite">尚未读取客户端上报</p>
+          <div id="clientSecurityReports" class="traffic-detail-wrap">
+            <div class="loading-state">打开安全风控页后读取待审核上报</div>
+          </div>
+        </section>
+
         <section class="security-risk-section" aria-labelledby="securityRuleHitsTitle">
           <div class="security-risk-section-heading"><h3 id="securityRuleHitsTitle">后台规则命中</h3><span id="securityRuleHitCount">读取中</span></div>
           <div id="securityRuleHitResults" class="security-risk-rule-results" aria-live="polite"><div class="loading-state">正在读取后台规则命中…</div></div>

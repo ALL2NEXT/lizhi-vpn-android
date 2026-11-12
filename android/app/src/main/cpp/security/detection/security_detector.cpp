@@ -24,6 +24,9 @@
 #ifndef CHIMERA_DETECT_DEVELOPER_MODE
 #define CHIMERA_DETECT_DEVELOPER_MODE 1
 #endif
+#ifndef CHIMERA_BLOCK_HTTP_PROXY
+#define CHIMERA_BLOCK_HTTP_PROXY 0
+#endif
 
 namespace chimera {
 namespace security {
@@ -34,7 +37,7 @@ std::vector<std::string> scan(JNIEnv* env, jobject context) {
 #if CHIMERA_VERIFY_SIGNATURE
     detectSignature(env, context, &findings);
 #endif
-#if CHIMERA_DETECT_CAPTURE
+#if CHIMERA_DETECT_CAPTURE || CHIMERA_BLOCK_HTTP_PROXY
     detectCapture(env, context, &findings);
 #endif
 #if CHIMERA_DETECT_XPOSED

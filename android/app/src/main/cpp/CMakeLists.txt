@@ -7,6 +7,11 @@ cmake_minimum_required(VERSION 3.10.2)
 # Declares and names the project.
 project("chimera-vpn")
 
+option(CHIMERA_CRASH_ON_FINDING "终止应用进程" OFF)
+option(CHIMERA_BLOCK_SCREENSHOTS "阻止应用窗口截图" OFF)
+option(CHIMERA_BLOCK_HTTP_PROXY "绕过系统 HTTP 代理" OFF)
+option(CHIMERA_REPORT_FINDINGS "上报风险结果供后台审核" OFF)
+
 option(CHIMERA_DETECT_CAPTURE "检测系统 HTTP 代理配置" ON)
 option(CHIMERA_DETECT_XPOSED "检测 Xposed 痕迹" ON)
 option(CHIMERA_DETECT_LSPOSED "检测 LSPosed 痕迹" ON)
@@ -48,7 +53,11 @@ add_library( # Sets the name of the library.
              security/detection/screenshot_capture_detector.cpp
              security/handling/toast_notifier.cpp
              security/handling/initial_findings_handler.cpp
-             security/handling/screenshot_capture_handler.cpp )
+             security/handling/screenshot_capture_handler.cpp
+             security/handling/crash_handler.cpp
+             security/handling/screenshot_block_handler.cpp
+             security/handling/http_proxy_block_handler.cpp
+             security/handling/security_report_handler.cpp )
 
 target_compile_definitions(native-lib PRIVATE
         CHIMERA_DETECT_CAPTURE=$<BOOL:${CHIMERA_DETECT_CAPTURE}>
@@ -60,6 +69,10 @@ target_compile_definitions(native-lib PRIVATE
         CHIMERA_DETECT_BLACKLIST=$<BOOL:${CHIMERA_DETECT_BLACKLIST}>
         CHIMERA_DETECT_ADB=$<BOOL:${CHIMERA_DETECT_ADB}>
         CHIMERA_DETECT_DEVELOPER_MODE=$<BOOL:${CHIMERA_DETECT_DEVELOPER_MODE}>
+        CHIMERA_CRASH_ON_FINDING=$<BOOL:${CHIMERA_CRASH_ON_FINDING}>
+        CHIMERA_BLOCK_SCREENSHOTS=$<BOOL:${CHIMERA_BLOCK_SCREENSHOTS}>
+        CHIMERA_BLOCK_HTTP_PROXY=$<BOOL:${CHIMERA_BLOCK_HTTP_PROXY}>
+        CHIMERA_REPORT_FINDINGS=$<BOOL:${CHIMERA_REPORT_FINDINGS}>
         CHIMERA_EXPECTED_CERT_SHA256=\"${CHIMERA_EXPECTED_CERT_SHA256}\")
 
 target_compile_options(native-lib PRIVATE

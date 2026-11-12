@@ -276,6 +276,14 @@ data class TrafficReportResponse(
     val error: String? = null
 )
 
+data class SecurityFindingReportRequest(
+    @SerializedName("deviceId")
+    val deviceId: String,
+
+    @SerializedName("codes")
+    val codes: List<String>
+)
+
 /**
  * VPN连接状态
  */

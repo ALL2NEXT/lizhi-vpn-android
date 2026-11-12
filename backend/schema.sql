@@ -143,6 +143,22 @@ CREATE INDEX idx_device_bans_mb_active
 ON device_bans_mb(device_row_id)
 WHERE lifted_at IS NULL;
 
+CREATE TABLE client_security_reports_mb (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  device_id TEXT NOT NULL,
+  finding_code TEXT NOT NULL CHECK (length(finding_code) BETWEEN 1 AND 200),
+  first_reported_at TEXT NOT NULL,
+  last_reported_at TEXT NOT NULL,
+  report_count INTEGER NOT NULL DEFAULT 1 CHECK (report_count > 0),
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'dismissed', 'banned')),
+  reviewed_at TEXT,
+  UNIQUE (device_id, finding_code)
+);
+
+CREATE INDEX idx_client_security_reports_pending_mb
+ON client_security_reports_mb(status, last_reported_at DESC, id DESC);
+
 CREATE TRIGGER trg_users_ban_devices_mb
 AFTER UPDATE OF status ON users_mb
 WHEN NEW.status = 'banned'
@@ -276,4 +292,4 @@ CREATE INDEX idx_user_ip_links_mb_seen
 ON user_ip_links_mb(last_seen_at DESC, user_uid, ip);
 
 INSERT INTO app_schema_mb (component, version, applied_at)
-VALUES ('users', 20, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('users', 25, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
