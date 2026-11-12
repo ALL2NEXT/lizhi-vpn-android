@@ -70,6 +70,7 @@ import io.github.HanJason233.chimera.ui.theme.MonetThemeOverlay
 import io.github.HanJason233.chimera.platform.LauncherIdentityManager
 import io.github.HanJason233.chimera.viewmodel.MainViewModel
 import io.github.HanJason233.chimera.viewmodel.RoutingAssetsViewModel
+import io.github.HanJason233.chimera.security.detection.ScreenshotCaptureDetector
 
 class MainActivity : ComponentActivity() {
 
@@ -396,7 +397,7 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     HomeDestination.NAVIGATION -> {
-                                        // Old saved destination IDs are redirected to Home.
+                                        // 将旧版保存的目标页面 ID 重定向到首页。
                                         selectedDestination = HomeDestination.HOME
                                     }
 
@@ -568,6 +569,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ScreenshotCaptureDetector.start(this)
+    }
+
+    override fun onStop() {
+        ScreenshotCaptureDetector.stop(this)
+        super.onStop()
     }
 
     private fun requestVpnPermission(action: () -> Unit) {

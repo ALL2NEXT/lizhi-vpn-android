@@ -9,7 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import io.github.HanJason233.chimera.data.repository.RoutingAssetsRepository
 import io.github.HanJason233.chimera.util.RuleManager
-import io.github.HanJason233.chimera.util.SignatureVerifier
+import io.github.HanJason233.chimera.security.detection.NativeSecurityDetector
 
 class VpnApplication : Application() {
     
@@ -20,8 +20,8 @@ class VpnApplication : Application() {
 
         AppConfig.initialize(this)
         
-        // 签名校验 - 如果 APK 被篡改，APP 会立即 Crash
-        SignatureVerifier.verifySignature(this)
+        // 启动时执行原生安全检测；发现结果只记录并提示，不终止应用。
+        NativeSecurityDetector.scan(this)
 
         // 首次启动从 APK assets 初始化 Xray Geo 数据库，已存在的文件保留原样。
         applicationScope.launch(Dispatchers.IO) {
@@ -36,8 +36,7 @@ class VpnApplication : Application() {
         
         // 自动更新受资源文件页面中的 sing-box 规则集开关控制。
         applicationScope.launch(Dispatchers.IO) {
-            // Give homepage database/network preloading priority. Bundled
-            // rules remain available if VPN starts before maintenance runs.
+            // 优先加载首页所需的数据库和网络数据；VPN 先启动时仍可使用 APK 内置规则。
             delay(15_000)
             try {
                 val result = RuleManager.updateRuleSets(this@VpnApplication)

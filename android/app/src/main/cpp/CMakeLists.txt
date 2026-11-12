@@ -7,6 +7,16 @@ cmake_minimum_required(VERSION 3.10.2)
 # Declares and names the project.
 project("chimera-vpn")
 
+option(CHIMERA_DETECT_CAPTURE "检测系统 HTTP 代理配置" ON)
+option(CHIMERA_DETECT_XPOSED "检测 Xposed 痕迹" ON)
+option(CHIMERA_DETECT_LSPOSED "检测 LSPosed 痕迹" ON)
+option(CHIMERA_DETECT_FRIDA "检测 Frida 和进程跟踪信号" ON)
+option(CHIMERA_DETECT_SCREENSHOT "检测 Android 截图回调" ON)
+option(CHIMERA_VERIFY_SIGNATURE "校验当前 APK 签名 SHA-256" ON)
+option(CHIMERA_DETECT_BLACKLIST "检测黑名单软件包" ON)
+set(CHIMERA_EXPECTED_CERT_SHA256 "0C2E2593E6D882994D2E8F19F60B5CE84FEA2BE609E07803978752A423EBD39F"
+        CACHE STRING "预期的应用签名证书 SHA-256")
+
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN YES)
@@ -22,7 +32,29 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-             native-lib.cpp )
+             native-lib.cpp
+             security/detection/security_detector.cpp
+             security/detection/detection_utils.cpp
+             security/detection/capture_proxy_detector.cpp
+             security/detection/xposed_detector.cpp
+             security/detection/lsposed_detector.cpp
+             security/detection/frida_detector.cpp
+             security/detection/signature_detector.cpp
+             security/detection/blacklist_detector.cpp
+             security/detection/screenshot_capture_detector.cpp
+             security/handling/toast_notifier.cpp
+             security/handling/initial_findings_handler.cpp
+             security/handling/screenshot_capture_handler.cpp )
+
+target_compile_definitions(native-lib PRIVATE
+        CHIMERA_DETECT_CAPTURE=$<BOOL:${CHIMERA_DETECT_CAPTURE}>
+        CHIMERA_DETECT_XPOSED=$<BOOL:${CHIMERA_DETECT_XPOSED}>
+        CHIMERA_DETECT_LSPOSED=$<BOOL:${CHIMERA_DETECT_LSPOSED}>
+        CHIMERA_DETECT_FRIDA=$<BOOL:${CHIMERA_DETECT_FRIDA}>
+        CHIMERA_DETECT_SCREENSHOT=$<BOOL:${CHIMERA_DETECT_SCREENSHOT}>
+        CHIMERA_VERIFY_SIGNATURE=$<BOOL:${CHIMERA_VERIFY_SIGNATURE}>
+        CHIMERA_DETECT_BLACKLIST=$<BOOL:${CHIMERA_DETECT_BLACKLIST}>
+        CHIMERA_EXPECTED_CERT_SHA256=\"${CHIMERA_EXPECTED_CERT_SHA256}\")
 
 target_compile_options(native-lib PRIVATE
         -fvisibility=hidden

@@ -1,7 +1,7 @@
 # Add project specific ProGuard rules here.
 
 # JNI_OnLoad resolves these classes by their original names in Release builds.
--keep class io.github.HanJason233.chimera.util.SignatureVerifier { *; }
+-keep class io.github.HanJason233.chimera.security.detection.NativeSecurityDetector { *; }
 
 # HEV is the runtime-selected Android TUN adapter used by all proxy cores.
 -keep class io.github.HanJason233.chimera.core.hev.** { *; }

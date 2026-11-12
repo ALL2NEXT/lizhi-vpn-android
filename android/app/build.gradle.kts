@@ -43,6 +43,32 @@ val hevRunnerDir = rootProject.file("native/hev-runner")
 val generatedHevJniDir = layout.buildDirectory.dir("generated/hev/jniLibs")
 val hevTunnelVersion = "2.16.0"
 
+fun readSecurityFlag(propertyName: String): Boolean {
+    val rawValue = providers.gradleProperty(propertyName).orElse("true").get()
+    return rawValue.toBooleanStrictOrNull()
+        ?: error("$propertyName must be either true or false")
+}
+
+val securityBuildFlags = linkedMapOf(
+    "SECURITY_DETECT_CAPTURE" to readSecurityFlag("chimera.security.detectCapture"),
+    "SECURITY_DETECT_XPOSED" to readSecurityFlag("chimera.security.detectXposed"),
+    "SECURITY_DETECT_LSPOSED" to readSecurityFlag("chimera.security.detectLsposed"),
+    "SECURITY_DETECT_FRIDA" to readSecurityFlag("chimera.security.detectFrida"),
+    "SECURITY_DETECT_SCREENSHOT" to readSecurityFlag("chimera.security.detectScreenshot"),
+    "SECURITY_VERIFY_SIGNATURE" to readSecurityFlag("chimera.security.verifySignature"),
+    "SECURITY_DETECT_BLACKLIST" to readSecurityFlag("chimera.security.detectBlacklist")
+)
+val expectedSecurityCertSha256 = providers.gradleProperty("chimera.security.expectedCertSha256")
+    .orElse("0C2E2593E6D882994D2E8F19F60B5CE84FEA2BE609E07803978752A423EBD39F")
+    .get()
+    .uppercase()
+check(expectedSecurityCertSha256.matches(Regex("[0-9A-F]{64}"))) {
+    "chimera.security.expectedCertSha256 must contain 64 hexadecimal characters"
+}
+val securityCmakeOptions = securityBuildFlags.map { (name, enabled) ->
+    "-DCHIMERA_${name.removePrefix("SECURITY_")}=${if (enabled) "ON" else "OFF"}"
+} + "-DCHIMERA_EXPECTED_CERT_SHA256=$expectedSecurityCertSha256"
+
 // sing-box is compiled as a standalone Android PIE process and packaged into
 // nativeLibraryDir. HEV owns TUN; LAN sharing can add a separate SOCKS inbound.
 val buildSingBoxCore = tasks.register<NativeBinaryBuildTask>("buildSingBoxCore") {
@@ -324,6 +350,9 @@ android {
         versionName = "1.0.0"
         buildConfigField("String", "SING_BOX_CORE_VERSION", "\"$singBoxCoreVersion\"")
         buildConfigField("String", "XRAY_CORE_VERSION", "\"$xrayCoreVersion\"")
+        securityBuildFlags.forEach { (name, enabled) ->
+            buildConfigField("boolean", name, enabled.toString())
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -333,6 +362,7 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags("")
+                arguments(*securityCmakeOptions.toTypedArray())
                 // 限制只打包 ARM 架构的 .so 文件
                 abiFilters(*targetAbis.toTypedArray())
             }

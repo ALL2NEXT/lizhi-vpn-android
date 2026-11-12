@@ -1,5 +1,7 @@
 # Chimera Android
 
+Native security checks and their Gradle build switches are documented in [docs/native-security.md](docs/native-security.md).
+
 Android 客户端的独立 Gradle 工程。
 
 测速方案编辑页按执行顺序直接展示五个测试项目，每项的开关和参数都在各自项目卡片中。前三项为连接前测试：
