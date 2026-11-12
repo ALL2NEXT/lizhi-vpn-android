@@ -4,6 +4,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Call
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
+import io.github.HanJason233.chimera.security.handling.SecurityNetworkPolicy
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -84,6 +85,8 @@ internal object Socks5HttpProbe {
             }
             check(redirectCount < MAX_REDIRECTS) { "HTTP 重定向次数过多" }
             val nextUrl = URI(currentUrl).resolve(location).toString()
+            require(!URI(currentUrl).scheme.equals("https", true) ||
+                URI(nextUrl).scheme.equals("https", true)) { "已阻止 HTTPS 探测降级到明文连接" }
             if (!sameOrigin(currentUrl, nextUrl)) {
                 currentHeaders = currentHeaders.filterKeys {
                     !it.equals("Authorization", ignoreCase = true) &&
@@ -129,7 +132,9 @@ internal object Socks5HttpProbe {
         val effectiveWarmupTimeoutMs = warmupTimeoutMs.coerceIn(1L, 60_000L)
         val effectiveMeasurementTimeoutMs = measurementTimeoutMs.coerceIn(1L, 60_000L)
         val clientTimeoutMs = maxOf(effectiveWarmupTimeoutMs, effectiveMeasurementTimeoutMs)
-        val client = OkHttpClient.Builder()
+        val client = SecurityNetworkPolicy.configure(
+            OkHttpClient.Builder(), allowCleartextProbe = true, checkRuntime = false
+        )
             .proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress(endpoint.address, endpoint.port)))
             .connectTimeout(clientTimeoutMs, TimeUnit.MILLISECONDS)
             .readTimeout(clientTimeoutMs, TimeUnit.MILLISECONDS)
@@ -222,6 +227,9 @@ internal object Socks5HttpProbe {
                     .coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
                 return Result(statusCode, delayMs)
             }
+        } catch (error: Exception) {
+            SecurityNetworkPolicy.reportTlsFailure(error)
+            throw error
         } finally {
             runCatching { socket.close() }
         }
@@ -285,6 +293,9 @@ internal object Socks5HttpProbe {
                     setCookieHeaders = responseHeaders.setCookies
                 )
             }
+        } catch (error: Exception) {
+            SecurityNetworkPolicy.reportTlsFailure(error)
+            throw error
         } finally {
             activeSockets.remove(socket)
             runCatching { socket.close() }

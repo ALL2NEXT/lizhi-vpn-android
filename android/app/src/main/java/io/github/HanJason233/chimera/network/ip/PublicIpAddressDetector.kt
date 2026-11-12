@@ -11,6 +11,7 @@ import io.github.HanJason233.chimera.data.model.IpAddressTestSettings
 import io.github.HanJason233.chimera.core.LocalSocksEndpoint
 import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
 import okhttp3.OkHttpClient
+import io.github.HanJason233.chimera.network.NetworkClient
 import okhttp3.Request
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -34,7 +35,7 @@ internal object PublicIpAddressDetector {
         val normalized: String
     )
 
-    private val baseClient = OkHttpClient()
+    private val baseClient = NetworkClient.withUserAgent(OkHttpClient.Builder()).build()
 
     /** VPN 在线时经当前会话的 SOCKS 入站探测，否则使用手机当前网络直连。 */
     suspend fun detect(

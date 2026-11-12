@@ -9,7 +9,7 @@ project("chimera-vpn")
 
 option(CHIMERA_CRASH_ON_FINDING "终止应用进程" OFF)
 option(CHIMERA_BLOCK_SCREENSHOTS "阻止应用窗口截图" OFF)
-option(CHIMERA_BLOCK_HTTP_PROXY "绕过系统 HTTP 代理" OFF)
+option(CHIMERA_BLOCK_HTTP_PROXY "强制安全网络传输并绕过系统 HTTP/PAC 代理" ON)
 option(CHIMERA_REPORT_FINDINGS "上报风险结果供后台审核" OFF)
 
 option(CHIMERA_DETECT_CAPTURE "检测系统 HTTP 代理配置" ON)

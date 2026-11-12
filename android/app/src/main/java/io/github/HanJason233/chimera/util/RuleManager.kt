@@ -7,8 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
+import java.util.concurrent.TimeUnit
+import io.github.HanJason233.chimera.network.NetworkClient
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 internal data class SingBoxRuleSetUpdateResult(
     val updated: List<String>,
@@ -31,6 +33,12 @@ object RuleManager {
     private const val UPDATE_INTERVAL_MS = 24L * 60L * 60L * 1000L
     private const val INSTALLED_RULE_SET_TAGS = "installed_rule_set_tags"
     private const val SELECTED_PROVIDER = "selected_rule_set_provider"
+    private val downloadClient by lazy {
+        NetworkClient.withUserAgent(OkHttpClient.Builder())
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
 
     // .srs 规则集下载地址 (jsDelivr CDN 加速)
     private const val GEOIP_CN_URL = "https://testingcf.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs"
@@ -236,44 +244,36 @@ object RuleManager {
      */
     private fun downloadToFile(urlStr: String, targetFile: File): Boolean {
         val tempFile = File(targetFile.parent, "${targetFile.name}.tmp")
-        var conn: HttpURLConnection? = null
         try {
-            val url = URL(urlStr)
-            conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 15000
-            conn.readTimeout = 30000
-            conn.requestMethod = "GET"
-            conn.connect()
-
-            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                conn.inputStream.use { input ->
-                    FileOutputStream(tempFile).use { output ->
-                        input.copyTo(output, bufferSize = 8192)
+            downloadClient.newCall(Request.Builder().url(urlStr).build()).execute().use { response ->
+                if (response.isSuccessful) {
+                    checkNotNull(response.body).byteStream().use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            input.copyTo(output, bufferSize = 8192)
+                        }
                     }
-                }
 
-                // 校验下载文件大小
-                if (tempFile.length() < 64) {
-                    Log.e(TAG, "Downloaded file too small: ${tempFile.length()} bytes")
+                    // 校验下载文件大小
+                    if (tempFile.length() < 64) {
+                        Log.e(TAG, "Downloaded file too small: ${tempFile.length()} bytes")
+                        tempFile.delete()
+                        return false
+                    }
+
+                    // 原子替换
+                    android.system.Os.rename(tempFile.absolutePath, targetFile.absolutePath)
+                    Log.i(TAG, "Downloaded ${targetFile.name} successfully (${targetFile.length()} bytes)")
+                    return true
+                } else {
+                    Log.e(TAG, "Download failed: HTTP " + response.code)
                     tempFile.delete()
                     return false
                 }
-
-                // 原子替换
-                android.system.Os.rename(tempFile.absolutePath, targetFile.absolutePath)
-                Log.i(TAG, "Downloaded ${targetFile.name} successfully (${targetFile.length()} bytes)")
-                return true
-            } else {
-                Log.e(TAG, "Download failed: HTTP ${conn.responseCode}")
-                tempFile.delete()
-                return false
             }
         } catch (e: Exception) {
             Log.e(TAG, "Download error for $urlStr", e)
             tempFile.delete()
             return false
-        } finally {
-            conn?.disconnect()
         }
     }
 }

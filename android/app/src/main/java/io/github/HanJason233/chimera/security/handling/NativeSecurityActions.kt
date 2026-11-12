@@ -2,8 +2,11 @@ package io.github.HanJason233.chimera.security.handling
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.annotation.Keep
 import io.github.HanJason233.chimera.BuildConfig
 import io.github.HanJason233.chimera.network.account.AccountManager
@@ -22,6 +25,13 @@ object NativeSecurityActions {
     private const val PENDING_CODES_KEY = "pending_finding_codes"
     private val reportScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val reportMutex = Mutex()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @JvmStatic
+    fun showSecurityToast(context: Context, message: String) {
+        val appContext = context.applicationContext
+        mainHandler.post { Toast.makeText(appContext, message, Toast.LENGTH_LONG).show() }
+    }
 
     @JvmStatic
     fun blockScreenshots(activity: Activity) {

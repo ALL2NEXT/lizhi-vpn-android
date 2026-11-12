@@ -20,8 +20,8 @@ class VpnApplication : Application() {
 
         AppConfig.initialize(this)
         
-        // 启动时执行原生安全检测；发现结果只记录并提示，不终止应用。
-        NativeSecurityDetector.scan(this)
+        // 后台扫描，并在前台或 VPN 运行期间定期复检。
+        NativeSecurityDetector.start(this)
 
         // 首次启动从 APK assets 初始化 Xray Geo 数据库，已存在的文件保留原样。
         applicationScope.launch(Dispatchers.IO) {

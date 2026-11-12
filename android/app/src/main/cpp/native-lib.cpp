@@ -13,12 +13,9 @@ void clearPendingException(JNIEnv* env) {
     if (env->ExceptionCheck()) env->ExceptionClear();
 }
 
-jobjectArray nativeScan(JNIEnv* env, jclass /* 未使用的 JNI 类参数 */, jobject context) {
-    const std::vector<std::string> findings = chimera::security::scan(env, context);
-    chimera::security::handling::handleInitialFindings(env, context, findings);
+jobjectArray toJavaFindings(JNIEnv* env, const std::vector<std::string>& findings) {
     jclass stringClass = env->FindClass("java/lang/String");
     if (stringClass == nullptr) {
-        clearPendingException(env);
         return nullptr;
     }
     jobjectArray result = env->NewObjectArray(static_cast<jsize>(findings.size()), stringClass, nullptr);
@@ -28,17 +25,27 @@ jobjectArray nativeScan(JNIEnv* env, jclass /* 未使用的 JNI 类参数 */, jo
     }
     for (size_t i = 0; i < findings.size(); ++i) {
         jstring value = env->NewStringUTF(findings[i].c_str());
-        if (value != nullptr) {
-            env->SetObjectArrayElement(result, static_cast<jsize>(i), value);
-            env->DeleteLocalRef(value);
+        if (value == nullptr) {
+            env->DeleteLocalRef(result);
+            env->DeleteLocalRef(stringClass);
+            return nullptr;
         }
+        env->SetObjectArrayElement(result, static_cast<jsize>(i), value);
+        env->DeleteLocalRef(value);
         if (env->ExceptionCheck()) {
-            clearPendingException(env);
-            break;
+            env->DeleteLocalRef(result);
+            env->DeleteLocalRef(stringClass);
+            return nullptr;
         }
     }
     env->DeleteLocalRef(stringClass);
     return result;
+}
+
+jobjectArray nativeScan(JNIEnv* env, jclass, jobject context) {
+    const std::vector<std::string> findings = chimera::security::scan(env, context);
+    chimera::security::handling::handleInitialFindings(env, context, findings);
+    return toJavaFindings(env, findings);
 }
 
 jstring nativeReportScreenshotCapture(JNIEnv* env, jclass /* 未使用的 JNI 类参数 */, jobject context) {
@@ -55,20 +62,12 @@ void nativeApplyActivitySecurity(JNIEnv* env, jclass, jobject activity) {
     chimera::security::handling::applyScreenshotProtection(env, activity);
 }
 
-void nativeRefreshCapturePolicy(JNIEnv* env, jclass, jobject context) {
-#ifndef CHIMERA_BLOCK_HTTP_PROXY
-#define CHIMERA_BLOCK_HTTP_PROXY 0
-#endif
-#if CHIMERA_BLOCK_HTTP_PROXY
+jobjectArray nativeRefreshCapturePolicy(JNIEnv* env, jclass, jobject context) {
     std::vector<std::string> findings;
     chimera::security::detectCapture(env, context, &findings);
-    const bool proxyDetected = std::find(
-            findings.begin(), findings.end(), "http_proxy_configured") != findings.end();
-    chimera::security::handling::setHttpProxyBlocking(env, proxyDetected);
-#else
-    (void) env;
-    (void) context;
-#endif
+    // 防护不依赖代理检测成功，也不因代理暂时消失而重新放开系统代理。
+    chimera::security::handling::setHttpProxyBlocking(env, true);
+    return toJavaFindings(env, findings);
 }
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
@@ -88,7 +87,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
              reinterpret_cast<void*>(nativeReportScreenshotCapture)},
             {"nativeApplyActivitySecurity", "(Landroid/app/Activity;)V",
              reinterpret_cast<void*>(nativeApplyActivitySecurity)},
-            {"nativeRefreshCapturePolicy", "(Landroid/content/Context;)V",
+            {"nativeRefreshCapturePolicy", "(Landroid/content/Context;)[Ljava/lang/String;",
              reinterpret_cast<void*>(nativeRefreshCapturePolicy)}};
     if (env->RegisterNatives(detectorClass, methods, sizeof(methods) / sizeof(methods[0])) != JNI_OK) {
         env->DeleteLocalRef(detectorClass);

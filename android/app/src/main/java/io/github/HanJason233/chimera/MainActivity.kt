@@ -576,12 +576,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        NativeSecurityDetector.refreshCapturePolicy(this)
+        NativeSecurityDetector.setForeground(this, true)
         NativeSecurityActions.flushPendingFindings(this)
         ScreenshotCaptureDetector.start(this)
     }
 
     override fun onStop() {
+        NativeSecurityDetector.setForeground(this, false)
         ScreenshotCaptureDetector.stop(this)
         super.onStop()
     }

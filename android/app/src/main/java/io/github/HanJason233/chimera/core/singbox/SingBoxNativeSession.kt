@@ -9,6 +9,7 @@ import io.github.HanJason233.chimera.core.NativeCoreSession
 import io.github.HanJason233.chimera.data.model.ProxyCore
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.Proxy
 
 /** sing-box runtime hosted by the standalone Android PIE runner. */
 internal class SingBoxNativeSession(
@@ -31,7 +32,8 @@ internal class SingBoxNativeSession(
     override fun lanTraffic() = delegate.lanTraffic()
 
     override fun selectedOutboundTag(): String? = runCatching {
-        val connection = URL("http://127.0.0.1:9090/proxies/proxy").openConnection() as HttpURLConnection
+        val connection = URL("http://127.0.0.1:9090/proxies/proxy")
+            .openConnection(Proxy.NO_PROXY) as HttpURLConnection
         try {
             connection.requestMethod = "GET"
             connection.connectTimeout = 750
@@ -47,7 +49,7 @@ internal class SingBoxNativeSession(
 
     override fun selectOutboundTag(tag: String): Boolean = runCatching {
         val connection = URL("http://127.0.0.1:9090/proxies/proxy")
-            .openConnection() as HttpURLConnection
+            .openConnection(Proxy.NO_PROXY) as HttpURLConnection
         try {
             connection.requestMethod = "PUT"
             connection.doOutput = true

@@ -7,19 +7,14 @@ import retrofit2.Converter
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import io.github.HanJason233.chimera.AppConfig
-import io.github.HanJason233.chimera.BuildConfig
-import io.github.HanJason233.chimera.security.handling.SecurityProxySelector
+import io.github.HanJason233.chimera.security.handling.SecurityNetworkPolicy
 import java.lang.reflect.Type
 import java.util.concurrent.TimeUnit
 
 object NetworkClient {
 
     fun withUserAgent(builder: OkHttpClient.Builder): OkHttpClient.Builder {
-        val configuredBuilder = if (BuildConfig.SECURITY_BLOCK_HTTP_PROXY) {
-            builder.proxySelector(SecurityProxySelector)
-        } else {
-            builder
-        }
+        val configuredBuilder = SecurityNetworkPolicy.configure(builder)
         return configuredBuilder.addInterceptor { chain ->
             val originalRequest = chain.request()
             val request = if (originalRequest.header("User-Agent").isNullOrBlank()) {

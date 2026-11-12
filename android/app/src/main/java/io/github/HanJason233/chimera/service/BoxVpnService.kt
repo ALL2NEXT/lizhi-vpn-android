@@ -22,6 +22,7 @@ import io.github.HanJason233.chimera.feature.nodegrouping.domain.WarehouseGroupi
 import io.github.HanJason233.chimera.network.nodetest.common.Socks5HttpProbe
 import io.github.HanJason233.chimera.platform.AndroidVpnHost
 import io.github.HanJason233.chimera.core.xray.XrayVpnConfig
+import io.github.HanJason233.chimera.security.detection.NativeSecurityDetector
 import java.util.concurrent.atomic.AtomicInteger
 
 /** Android foreground host; native details live behind CoreBackend. */
@@ -139,6 +140,8 @@ class BoxVpnService : VpnService() {
                 withContext(NonCancellable) { cleanup() }
                 try {
                     ensureActive()
+                    NativeSecurityDetector.scanNow(applicationContext)
+                    NativeSecurityDetector.checkNetworkRequest()
                     val settingsRepo = SettingsRepository(applicationContext)
                     if (mode != null) settingsRepo.setProxyMode(mode)
                     val settings = settingsRepo.getVpnRuntimeSettings()

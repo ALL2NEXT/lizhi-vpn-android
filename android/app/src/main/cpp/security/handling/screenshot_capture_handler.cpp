@@ -8,7 +8,6 @@ namespace handling {
 
 void handleScreenshotCapture(JNIEnv* env, jobject context) {
     showToast(env, context, "检测到截图操作");
-    crashOnFinding();
 }
 
 }  // handling 命名空间结束

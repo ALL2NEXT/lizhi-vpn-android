@@ -47,13 +47,9 @@
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 
-# Remove all Log calls in Release build
+# Remove verbose/debug/info logs; retain warnings and errors for security diagnostics.
 -assumenosideeffects class android.util.Log {
     public static int d(...);
     public static int v(...);
     public static int i(...);
-    # 日后需要保留 Warn 和 Error用于崩溃分析，可以删除下面三行
-    public static int w(...);
-    public static int e(...);
-    public static int wtf(...);
 }

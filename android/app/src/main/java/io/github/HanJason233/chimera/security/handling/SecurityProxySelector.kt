@@ -5,16 +5,17 @@ import java.net.Proxy
 import java.net.ProxySelector
 import java.net.SocketAddress
 import java.net.URI
+import io.github.HanJason233.chimera.BuildConfig
 
-/** 只在发现系统 HTTP 代理时让应用网络请求绕过该代理；VPN 路由不受影响。 */
+/** 防护开启时始终绕过系统 HTTP/PAC 代理，首次扫描前和检测失败时也不会放开。 */
 internal object SecurityProxySelector : ProxySelector() {
     private val systemSelector = ProxySelector.getDefault()
 
     @Volatile
-    private var captureProxyBlocked = false
+    private var captureProxyBlocked = BuildConfig.SECURITY_BLOCK_HTTP_PROXY
 
     fun setCaptureProxyBlocked(enabled: Boolean) {
-        captureProxyBlocked = enabled
+        captureProxyBlocked = BuildConfig.SECURITY_BLOCK_HTTP_PROXY || enabled
     }
 
     override fun select(uri: URI): MutableList<Proxy> {

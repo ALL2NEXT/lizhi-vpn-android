@@ -5,9 +5,11 @@ import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.UUID
+import java.util.concurrent.TimeUnit
+import io.github.HanJason233.chimera.network.NetworkClient
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 internal data class RoutingAssetRecord(
     val id: String,
@@ -37,6 +39,12 @@ internal data class RoutingAssetInitializationResult(
 
 /** 管理 Xray 使用的 geo 数据库，与 v2rayNG 的 assets 目录及配置格式保持一致。 */
 internal class RoutingAssetsRepository(context: Context) {
+    private val downloadClient by lazy {
+        NetworkClient.withUserAgent(OkHttpClient.Builder())
+            .connectTimeout(CONNECT_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+            .readTimeout(DOWNLOAD_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+            .build()
+    }
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
     private val legacyDirectory = appContext.getDir(ASSET_DIRECTORY, Context.MODE_PRIVATE)
@@ -208,23 +216,18 @@ internal class RoutingAssetsRepository(context: Context) {
             add(asset.url)
         }.distinct()
         for (url in urls) {
-            var connection: HttpURLConnection? = null
             try {
-                connection = URL(url).openConnection() as HttpURLConnection
-                connection.connectTimeout = CONNECT_TIMEOUT_MS
-                connection.readTimeout = DOWNLOAD_TIMEOUT_MS
-                connection.instanceFollowRedirects = true
-                connection.connect()
-                check(connection.responseCode in 200..299) { "HTTP ${connection.responseCode}" }
-                connection.inputStream.use { input -> temporary.outputStream().use(input::copyTo) }
+                downloadClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                    check(response.isSuccessful) { "HTTP " + response.code }
+                    val body = checkNotNull(response.body) { "下载响应为空" }
+                    body.byteStream().use { input -> temporary.outputStream().use(input::copyTo) }
+                }
                 check(temporary.length() > 0L) { "下载文件为空" }
                 if (target.exists() && !target.delete()) error("无法替换旧资源")
                 check(temporary.renameTo(target)) { "无法保存下载文件" }
                 return true
             } catch (_: Exception) {
                 temporary.delete()
-            } finally {
-                connection?.disconnect()
             }
         }
         return false

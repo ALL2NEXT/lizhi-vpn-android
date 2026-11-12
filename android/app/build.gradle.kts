@@ -61,7 +61,7 @@ val securityBuildFlags = linkedMapOf(
     "SECURITY_DETECT_DEVELOPER_MODE" to readSecurityFlag("chimera.security.detectDeveloperMode"),
     "SECURITY_CRASH_ON_FINDING" to readSecurityFlag("chimera.security.crashOnFinding", false),
     "SECURITY_BLOCK_SCREENSHOTS" to readSecurityFlag("chimera.security.blockScreenshots", false),
-    "SECURITY_BLOCK_HTTP_PROXY" to readSecurityFlag("chimera.security.blockHttpProxy", false),
+    "SECURITY_BLOCK_HTTP_PROXY" to readSecurityFlag("chimera.security.blockHttpProxy"),
     "SECURITY_REPORT_FINDINGS" to readSecurityFlag("chimera.security.reportFindings", false)
 )
 check(!(securityBuildFlags.getValue("SECURITY_CRASH_ON_FINDING") &&
@@ -526,6 +526,8 @@ dependencies {
     
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
     testImplementation("org.robolectric:robolectric:4.16.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
