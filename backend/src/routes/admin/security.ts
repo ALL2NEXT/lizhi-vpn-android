@@ -132,10 +132,12 @@ export function createAdminSecurityRoutes(deps: Pick<
 
       const db = await ensureUserSchema(env);
       const report = await db.prepare(
-        "SELECT device_id, status FROM client_security_reports_mb WHERE id = ?",
-      ).bind(reportId).first<{ device_id: string; status: string }>();
+        "SELECT device_id, status, finding_code FROM client_security_reports_mb WHERE id = ?",
+      ).bind(reportId).first<{ device_id: string; status: string; finding_code: string }>();
       if (!report) return json({ ok: false, error: "security_report_not_found" }, 404);
       const reportStatus = cleanText(report.status);
+      const isBlacklistedPackage = cleanText(report.finding_code)
+        .startsWith("blacklisted_package:");
       if (action === "unban") {
         if (reportStatus !== "banned") {
           return json({ ok: false, error: "security_report_not_banned" }, 409);
@@ -164,10 +166,17 @@ export function createAdminSecurityRoutes(deps: Pick<
 
       const reviewedAt = beijingTimestamp();
       if (action === "dismiss") {
-        await db.prepare(
-          "UPDATE client_security_reports_mb SET status = 'dismissed', reviewed_at = ? " +
-            "WHERE id = ? AND status = 'pending'",
-        ).bind(reviewedAt, reportId).run();
+        const dismissReport = isBlacklistedPackage
+          ? db.prepare(
+            "UPDATE client_security_reports_mb SET status = 'dismissed', reviewed_at = ? " +
+              "WHERE device_id = ? AND status = 'pending' " +
+              "AND substr(finding_code, 1, length('blacklisted_package:')) = 'blacklisted_package:'",
+          ).bind(reviewedAt, report.device_id)
+          : db.prepare(
+            "UPDATE client_security_reports_mb SET status = 'dismissed', reviewed_at = ? " +
+              "WHERE id = ? AND status = 'pending'",
+          ).bind(reviewedAt, reportId);
+        await dismissReport.run();
         return json({ ok: true, status: "dismissed" });
       }
 
@@ -176,6 +185,16 @@ export function createAdminSecurityRoutes(deps: Pick<
       ).bind(report.device_id).first<{ id: number }>();
       if (!device) return json({ ok: false, error: "reported_device_not_found" }, 409);
 
+      const markReportReviewed = isBlacklistedPackage
+        ? db.prepare(
+          "UPDATE client_security_reports_mb SET status = 'banned', reviewed_at = ? " +
+            "WHERE device_id = ? AND status = 'pending' " +
+            "AND substr(finding_code, 1, length('blacklisted_package:')) = 'blacklisted_package:'",
+        ).bind(reviewedAt, report.device_id)
+        : db.prepare(
+          "UPDATE client_security_reports_mb SET status = 'banned', reviewed_at = ? " +
+            "WHERE id = ? AND status = 'pending'",
+        ).bind(reviewedAt, reportId);
       await db.batch([
         db.prepare(
           `INSERT INTO device_bans_mb (device_row_id, source_uid, reason, banned_at, lifted_at)
@@ -184,10 +203,7 @@ export function createAdminSecurityRoutes(deps: Pick<
              banned_at = excluded.banned_at,
              lifted_at = NULL`,
         ).bind(device.id, reviewedAt),
-        db.prepare(
-          "UPDATE client_security_reports_mb SET status = 'banned', reviewed_at = ? " +
-            "WHERE id = ? AND status = 'pending'",
-        ).bind(reviewedAt, reportId),
+        markReportReviewed,
       ]);
       return json({ ok: true, status: "banned" });
     }

@@ -20,10 +20,63 @@ function clientSecurityFindingLabel(code) {
     native_scan_error: 'Native 检测失败'
   };
   if (labels[code]) return labels[code];
+  if (code === 'blacklisted_packages') return '软件黑名单命中';
   if (String(code || '').indexOf('blacklisted_package:') === 0) {
     return '命中软件黑名单：' + String(code).slice('blacklisted_package:'.length);
   }
   return code;
+}
+
+function groupClientSecurityReports(reports) {
+  const groupsByDevice = new Map();
+  const groupedReports = [];
+  reports.forEach(function(report) {
+    const code = String(report.findingCode || '');
+    const prefix = 'blacklisted_package:';
+    if (code.indexOf(prefix) !== 0) {
+      groupedReports.push(report);
+      return;
+    }
+
+    const deviceKey = String(report.deviceId || ('report:' + report.id));
+    let group = groupsByDevice.get(deviceKey);
+    if (!group) {
+      group = Object.assign({}, report, {
+        findingCode: 'blacklisted_packages',
+        blacklistedPackages: [],
+        firstReportedAt: report.firstReportedAt || '',
+        reportCount: 0
+      });
+      groupsByDevice.set(deviceKey, group);
+      groupedReports.push(group);
+    }
+
+    const packageName = code.slice(prefix.length);
+    if (group.blacklistedPackages.indexOf(packageName) < 0) {
+      group.blacklistedPackages.push(packageName);
+    }
+    group.reportCount += Number(report.reportCount) || 0;
+    if (report.firstReportedAt &&
+        (!group.firstReportedAt || report.firstReportedAt < group.firstReportedAt)) {
+      group.firstReportedAt = report.firstReportedAt;
+    }
+    if (report.lastReportedAt &&
+        (!group.lastReportedAt || report.lastReportedAt > group.lastReportedAt)) {
+      group.lastReportedAt = report.lastReportedAt;
+    }
+    if (report.status === 'pending') {
+      if (group.status !== 'pending') group.id = report.id;
+      group.status = 'pending';
+    } else if (group.status !== 'pending') {
+      group.status = report.status;
+    }
+    group.blocked = Boolean(group.blocked || report.blocked);
+  });
+
+  return groupedReports.sort(function(left, right) {
+    const byTime = String(right.lastReportedAt || '').localeCompare(String(left.lastReportedAt || ''));
+    return byTime || (Number(right.id) - Number(left.id));
+  });
 }
 
 function renderClientSecurityReports() {
@@ -35,8 +88,8 @@ function renderClientSecurityReports() {
     summary.textContent = '尚未读取客户端上报';
     return;
   }
-  const reports = Array.isArray(clientSecurityReportData.reports)
-    ? clientSecurityReportData.reports : [];
+  const reports = groupClientSecurityReports(Array.isArray(clientSecurityReportData.reports)
+    ? clientSecurityReportData.reports : []);
   const pendingCount = reports.filter(function(report) { return report.status === 'pending'; }).length;
   const bannedCount = reports.filter(function(report) { return report.status === 'banned'; }).length;
   summary.textContent = '待审核 ' + pendingCount + ' 项 · 已拉黑 ' + bannedCount + ' 项' +
@@ -49,17 +102,25 @@ function renderClientSecurityReports() {
     const deviceName = [report.brand, report.model].filter(Boolean).join(' ') || '未知设备';
     const platform = [report.androidVersion ? 'Android ' + report.androidVersion : '',
       report.appVersion ? 'App ' + report.appVersion : ''].filter(Boolean).join(' · ') || '版本未知';
+    const isBlacklistGroup = Array.isArray(report.blacklistedPackages) &&
+      report.blacklistedPackages.length > 0;
+    const findingLabel = isBlacklistGroup
+      ? '命中软件黑名单（' + report.blacklistedPackages.length + ' 个）'
+      : clientSecurityFindingLabel(report.findingCode);
+    const findingDetails = isBlacklistGroup
+      ? '<br><small class="table-secondary-line">包名：' +
+        report.blacklistedPackages.map(esc).join('、') + '</small>'
+      : '<br><small class="table-secondary-line">' + esc(report.findingCode) + '</small>';
     const actions = report.status === 'banned'
       ? '<span class="security-badge banned">已拉黑</span> ' +
         '<button class="secondary" type="button" data-client-report-action="unban" data-client-report-id="' +
-        esc(report.id) + '">解除拉黑</button>'
+        esc(report.id) + '" data-client-report-blacklist-group="' + isBlacklistGroup + '">解除拉黑</button>'
       : '<button class="danger" type="button" data-client-report-action="ban" data-client-report-id="' +
-        esc(report.id) + '">拉黑设备</button> ' +
+        esc(report.id) + '" data-client-report-blacklist-group="' + isBlacklistGroup + '">拉黑设备</button> ' +
         '<button class="secondary" type="button" data-client-report-action="dismiss" data-client-report-id="' +
-        esc(report.id) + '">忽略</button>';
+        esc(report.id) + '" data-client-report-blacklist-group="' + isBlacklistGroup + '">忽略</button>';
     return '<tr>' +
-      '<td><strong>' + esc(clientSecurityFindingLabel(report.findingCode)) + '</strong>' +
-        '<small class="table-secondary-line">' + esc(report.findingCode) + '</small></td>' +
+      '<td><strong>' + esc(findingLabel) + '</strong>' + findingDetails + '</td>' +
       '<td>' + esc(deviceName) + '<small class="table-secondary-line">' + esc(platform) + '</small></td>' +
       '<td><code>' + esc(report.deviceId) + '</code>' +
         (report.uid ? '<small class="table-secondary-line">UID ' + esc(report.uid) + '</small>' : '') + '</td>' +
@@ -75,7 +136,8 @@ function renderClientSecurityReports() {
     button.onclick = function() {
       reviewClientSecurityReport(
         Number(button.dataset.clientReportId),
-        button.dataset.clientReportAction
+        button.dataset.clientReportAction,
+        button.dataset.clientReportBlacklistGroup === 'true'
       );
     };
   });
@@ -106,12 +168,13 @@ async function loadClientSecurityReports(force) {
   }
 }
 
-async function reviewClientSecurityReport(reportId, action) {
+async function reviewClientSecurityReport(reportId, action, isBlacklistGroup) {
   if (!Number.isSafeInteger(reportId) || reportId < 1 || !['ban', 'dismiss', 'unban'].includes(action)) return;
   const prompt = action === 'ban'
     ? '确认拉黑这台设备吗？'
     : action === 'unban' ? '确认解除这台设备的客户端风险拉黑吗？'
-      : '确认忽略这条客户端风险上报吗？';
+      : isBlacklistGroup ? '确认忽略这台设备命中的全部软件黑名单吗？'
+        : '确认忽略这条客户端风险上报吗？';
   if (!confirm(prompt)) return;
   try {
     const response = await fetch(
