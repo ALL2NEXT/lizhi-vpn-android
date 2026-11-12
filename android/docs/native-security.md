@@ -17,17 +17,20 @@
 
 处理代码也在独立目录 `app/src/main/cpp/security/handling/`：
 
-- `initial_findings_handler.cpp`：启动检测结果汇总提示
-- `screenshot_capture_handler.cpp`：截图事件提示
+- `initial_findings_handler.cpp`：新增风险日志、黑名单上报及终止策略
+- `screenshot_capture_handler.cpp`：截图事件日志
 - `crash_handler.cpp`：可配置的原生进程终止
 - `screenshot_block_handler.cpp`：调用 Android 安全窗口标记阻止截图
 - `http_proxy_block_handler.cpp`：检测到系统 HTTP 代理后绕过该代理
 - `security_report_handler.cpp`：调用 Kotlin 网络桥上报风险代码
-- `toast_notifier.cpp`：通过 JNI 调用 Android Toast
 
 检测和终止策略由 native 编译开关选择；Kotlin 桥接 Android 能力并在网络发送路径执行防护。默认开启所有检测和网络防护，关闭强制终止、防截图和黑名单上报。
 
-启动扫描在 IO 线程执行；Activity 回到前台、VPN 连接前会完整复检，Activity 可见或 VPN 运行期间每 30 秒复检。重复存在的信号不重复弹 Toast。扫描结果按当前快照更新，截图和 TLS 错误作为独立事件保存。
+启动扫描在 IO 线程执行；Activity 回到前台、VPN 连接前会完整复检，Activity 可见或 VPN 运行期间每 30 秒复检。安全检测不再自动弹出 Toast，结果集中在左侧菜单“安全自检”中查看。扫描结果按当前快照更新，截图和 TLS 错误作为独立事件保存。
+
+“安全自检”进入页面后执行一次本机检查，也支持手动重新检测。页面展示检查时间、耗时、每项状态及可展开的命中详情，并区分异常、需关注、检测不可用、未启用和系统不支持。截图监听状态及本次运行的历史事件单独展示，不把未发生截图或旧的 TLS 错误当作当前环境通过/异常的依据。登录页也提供自检入口。
+
+手动自检使用独立的只读 `nativeInspect` JNI 入口，本次操作不调用上报或终止 handler，也不会发送外部网络测试请求。后台检测、请求阻断及配置的黑名单上报继续按原策略运行。检测组件不可用或关键信息无法读取时，自检显示无法检测，不显示为通过。
 
 每个检测项默认开启，可通过 Gradle 属性单独控制：
 
@@ -92,7 +95,7 @@ PowerShell 中可这样关闭所有检测并构建 Debug 包：
 
 `capture_detection_unavailable`、`process_maps_unavailable`、`frida_threads_unavailable`、`tracer_status_unavailable` 用于区分检查失败与未命中。Frida 端口探测不再读取 Android 10+ 禁止访问的 `/proc/net`；改为非阻塞连接本机 IPv4/IPv6 的 27042/27043 端口，每次最多等待 40 ms。开放端口仅为弱信号；普通 GLib 线程名 `gmain/gdbus` 已移出 Frida 特征。
 
-Release 保留 Warn/Error 日志，native 也记录新增检测码。后台扫描产生的 Toast 统一切回主线程显示。
+Release 保留 Warn/Error 日志，native 也记录新增检测码。应用内的安全检测及截图事件 Toast 已移除，Android 自身的系统提示仍由系统控制。
 
 客户端无法识别所有被动抓包：对方仍可看到加密报文、目标 IP 和流量时间。当前没有绑定后端 SPKI 公钥；系统根证书库遭特权修改或进程遭 Hook 时，不能保证业务明文始终不可获取。不要使用实时连接中自动学习证书的方式建立固定信任。
 

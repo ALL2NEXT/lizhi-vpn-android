@@ -51,7 +51,6 @@ add_library( # Sets the name of the library.
              security/detection/adb_detector.cpp
              security/detection/developer_mode_detector.cpp
              security/detection/screenshot_capture_detector.cpp
-             security/handling/toast_notifier.cpp
              security/handling/initial_findings_handler.cpp
              security/handling/screenshot_capture_handler.cpp
              security/handling/crash_handler.cpp

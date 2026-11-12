@@ -1,7 +1,5 @@
 #include "security_handler.h"
 
-#include "toast_notifier.h"
-
 #include <algorithm>
 #include <android/log.h>
 #include <mutex>
@@ -28,10 +26,6 @@ void handleInitialFindings(JNIEnv* env, jobject context, const std::vector<std::
     for (const auto& finding : newFindings) {
         __android_log_print(ANDROID_LOG_WARN, "NativeSecurity", "Security detection: %s", finding.c_str());
     }
-    const std::string message = "安全检测发现 " + std::to_string(newFindings.size()) +
-            " 项新的风险信号，详情见 NativeSecurity 日志。";
-    showToast(env, context, message.c_str());
-
     std::vector<std::string> blacklistedPackages;
     for (const std::string& finding : newFindings) {
         if (finding.rfind("blacklisted_package:", 0) == 0) {

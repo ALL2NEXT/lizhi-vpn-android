@@ -48,6 +48,11 @@ jobjectArray nativeScan(JNIEnv* env, jclass, jobject context) {
     return toJavaFindings(env, findings);
 }
 
+jobjectArray nativeInspect(JNIEnv* env, jclass, jobject context) {
+    // 手动自检只读取环境，不触发上报或进程终止。
+    return toJavaFindings(env, chimera::security::scan(env, context));
+}
+
 jstring nativeReportScreenshotCapture(JNIEnv* env, jclass /* 未使用的 JNI 类参数 */, jobject context) {
     jstring finding = chimera::security::reportScreenshotCapture(env);
     if (finding != nullptr) {
@@ -83,6 +88,8 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     JNINativeMethod methods[] = {
             {"nativeScan", "(Landroid/content/Context;)[Ljava/lang/String;",
              reinterpret_cast<void*>(nativeScan)},
+            {"nativeInspect", "(Landroid/content/Context;)[Ljava/lang/String;",
+             reinterpret_cast<void*>(nativeInspect)},
             {"nativeReportScreenshotCapture", "(Landroid/content/Context;)Ljava/lang/String;",
              reinterpret_cast<void*>(nativeReportScreenshotCapture)},
             {"nativeApplyActivitySecurity", "(Landroid/app/Activity;)V",

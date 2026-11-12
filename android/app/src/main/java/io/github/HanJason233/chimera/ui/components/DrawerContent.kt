@@ -22,6 +22,7 @@ import io.github.HanJason233.chimera.R
 @Composable
 fun DrawerContent(
     onOpenOtherConfig: () -> Unit,
+    onOpenSecuritySelfCheck: () -> Unit = {},
     onOpenDnsSettings: () -> Unit = {},
     onOpenProtocolCoreSettings: () -> Unit = {},
     onOpenRoutingAssets: () -> Unit = {},
@@ -67,6 +68,12 @@ fun DrawerContent(
                 onClick = {
                     onOpenOtherConfig()
                 }
+            )
+
+            DrawerMenuItem(
+                icon = Icons.Outlined.VerifiedUser,
+                title = "安全自检",
+                onClick = onOpenSecuritySelfCheck
             )
 
             DrawerMenuItem(

@@ -29,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -54,6 +56,7 @@ import io.github.HanJason233.chimera.ui.screens.AccountSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.AccountSettingsPage
 import io.github.HanJason233.chimera.ui.screens.MainScreen
 import io.github.HanJason233.chimera.ui.screens.OtherConfigScreen
+import io.github.HanJason233.chimera.ui.screens.SecuritySelfCheckScreen
 import io.github.HanJason233.chimera.ui.screens.DnsSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.ProtocolCoreSettingsScreen
 import io.github.HanJason233.chimera.ui.screens.RegionLookupSettingsScreen
@@ -123,6 +126,7 @@ class MainActivity : ComponentActivity() {
                     var scannedSubscriptionText by rememberSaveable { mutableStateOf<String?>(null) }
                     var scannedRoutingAssetUrl by rememberSaveable { mutableStateOf<String?>(null) }
                     var routingAssetQrScanTarget by rememberSaveable { mutableStateOf(false) }
+                    var showStartupSecuritySelfCheck by rememberSaveable { mutableStateOf(false) }
                     val navigateTo: (String) -> Unit = { route ->
                             navController.navigate(route) {
                                 launchSingleTop = true
@@ -284,6 +288,9 @@ class MainActivity : ComponentActivity() {
                                         },
                                         onOpenOtherConfig = {
                                             navigateTo(AppRoute.OTHER_CONFIG)
+                                        },
+                                        onOpenSecuritySelfCheck = {
+                                            navigateTo(AppRoute.SECURITY_SELF_CHECK)
                                         },
                                         onOpenDnsSettings = {
                                             navigateTo(AppRoute.DNS_SETTINGS)
@@ -461,6 +468,10 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            composable(AppRoute.SECURITY_SELF_CHECK) {
+                                SecuritySelfCheckScreen(onBack = { navController.popBackStack() })
+                            }
+
                             composable(AppRoute.PROTOCOL_CORE_SETTINGS) {
                                 ProtocolCoreSettingsScreen(
                                     viewModel = viewModel,
@@ -566,8 +577,20 @@ class MainActivity : ComponentActivity() {
                                 onLogin = viewModel::loginAtStartup,
                                 onRegister = viewModel::registerAtStartup,
                                 onGuestLogin = viewModel::continueAsGuestAtStartup,
-                                onOfflineUse = viewModel::continueOfflineAtStartup
+                                onOfflineUse = viewModel::continueOfflineAtStartup,
+                                onOpenSecuritySelfCheck = { showStartupSecuritySelfCheck = true }
                             )
+                            if (showStartupSecuritySelfCheck) {
+                                Dialog(
+                                    onDismissRequest = { showStartupSecuritySelfCheck = false },
+                                    properties = DialogProperties(
+                                        usePlatformDefaultWidth = false,
+                                        decorFitsSystemWindows = false
+                                    )
+                                ) {
+                                    SecuritySelfCheckScreen(onBack = { showStartupSecuritySelfCheck = false })
+                                }
+                            }
                         }
                 }
             }

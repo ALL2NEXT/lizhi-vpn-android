@@ -3,6 +3,7 @@ package io.github.HanJason233.chimera.ui.navigation
 object AppRoute {
     const val MAIN = "main"
     const val OTHER_CONFIG = "other_config"
+    const val SECURITY_SELF_CHECK = "security_self_check"
     const val DNS_SETTINGS = "dns_settings"
     const val PROTOCOL_CORE_SETTINGS = "protocol_core_settings"
     const val REGION_LOOKUP_SETTINGS = "region_lookup_settings"

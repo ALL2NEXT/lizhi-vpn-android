@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Proxy
+import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.Keep
 import androidx.core.content.ContextCompat
@@ -69,6 +70,9 @@ object NativeSecurityDetector {
     private external fun nativeScan(context: Context): Array<String>
 
     @JvmStatic
+    private external fun nativeInspect(context: Context): Array<String>
+
+    @JvmStatic
     private external fun nativeReportScreenshotCapture(context: Context): String?
 
     @JvmStatic
@@ -108,16 +112,33 @@ object NativeSecurityDetector {
 
     suspend fun scanNow(context: Context) = withContext(Dispatchers.IO) {
         synchronized(nativeLock) {
-            val codes = if (!nativeLibraryLoaded) {
-                arrayOf("native_library_unavailable")
-            } else {
-                runCatching { nativeScan(context.applicationContext) }
-                    .onFailure { Log.e(TAG, "Native security scan failed", it) }
-                    .getOrElse { arrayOf("native_scan_error") }
-            }
-            replaceScanCodes(codes.toSet())
-            firstScan.countDown()
+            collectInspection(context, applyPolicy = true)
+            Unit
         }
+    }
+
+    suspend fun inspectEnvironment(context: Context): SecurityInspection = withContext(Dispatchers.IO) {
+        synchronized(nativeLock) { collectInspection(context, applyPolicy = false) }
+    }
+
+    private fun collectInspection(context: Context, applyPolicy: Boolean): SecurityInspection {
+        val startedAt = SystemClock.elapsedRealtime()
+        val codes = if (!nativeLibraryLoaded) {
+            setOf("native_library_unavailable")
+        } else {
+            runCatching {
+                if (applyPolicy) nativeScan(context.applicationContext).toSet()
+                else nativeInspect(context.applicationContext).toSet()
+            }.onFailure { Log.e(TAG, "Native security scan failed", it) }
+                .getOrElse { setOf("native_scan_error") }
+        }
+        replaceScanCodes(codes)
+        firstScan.countDown()
+        return SecurityInspection(
+            codes = codes,
+            inspectedAtMillis = System.currentTimeMillis(),
+            durationMillis = SystemClock.elapsedRealtime() - startedAt
+        )
     }
 
     /** 仅在后台网络/服务线程调用，避免首次请求抢在安全扫描之前发送。 */
