@@ -32,7 +32,9 @@ abstract class AppDatabase : RoomDatabase() {
     
     companion object {
         private const val TAG = "AppDatabase"
-        private const val DB_NAME = "firefly_vpn.db"
+        private const val DB_NAME = "vpn.db"
+        private const val LEGACY_DB_NAME = "firefly_vpn.db"
+        private val DB_SIDECAR_SUFFIXES = listOf("-wal", "-shm", "-journal")
 
         private val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -72,6 +74,7 @@ abstract class AppDatabase : RoomDatabase() {
             return INSTANCE ?: synchronized(this) {
                 val appContext = context.applicationContext
                 ensureSqlCipherLoaded()
+                migrateLegacyDatabaseName(appContext)
                 val instance = buildEncryptedDatabase(appContext)
                 try {
                     // Force open once to validate passphrase/file format, but do not close it here.
@@ -129,12 +132,65 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         private fun deleteDatabaseFiles(context: Context) {
-            val dbFile = context.getDatabasePath(DB_NAME)
-            context.deleteDatabase(DB_NAME)
+            deleteDatabaseFiles(context, DB_NAME)
+            deleteDatabaseFiles(context, LEGACY_DB_NAME)
+        }
+
+        private fun deleteDatabaseFiles(context: Context, databaseName: String) {
+            val dbFile = context.getDatabasePath(databaseName)
+            context.deleteDatabase(databaseName)
             val parent = dbFile.parentFile ?: return
-            deleteIfExists(File(parent, "$DB_NAME-wal"))
-            deleteIfExists(File(parent, "$DB_NAME-shm"))
-            deleteIfExists(File(parent, "$DB_NAME-journal"))
+            DB_SIDECAR_SUFFIXES.forEach { suffix ->
+                deleteIfExists(File(parent, "$databaseName$suffix"))
+            }
+        }
+
+        private fun migrateLegacyDatabaseName(context: Context) {
+            val legacyFile = context.getDatabasePath(LEGACY_DB_NAME)
+            val databaseFile = context.getDatabasePath(DB_NAME)
+            if (databaseFile.exists() || !legacyFile.exists()) return
+
+            val movedSidecars = mutableListOf<Pair<File, File>>()
+            DB_SIDECAR_SUFFIXES.forEach { suffix ->
+                val legacySidecar = File("${legacyFile.path}$suffix")
+                val databaseSidecar = File("${databaseFile.path}$suffix")
+                if (databaseSidecar.exists()) {
+                    if (legacySidecar.exists()) {
+                        rollbackMovedSidecars(movedSidecars)
+                        throw IllegalStateException(
+                            "Both legacy and new database sidecars exist for $suffix."
+                        )
+                    }
+                    // A previous launch may have stopped after moving this sidecar.
+                    return@forEach
+                }
+                if (!legacySidecar.exists()) return@forEach
+                if (!legacySidecar.renameTo(databaseSidecar)) {
+                    rollbackMovedSidecars(movedSidecars)
+                    throw IllegalStateException(
+                        "Unable to migrate legacy database sidecar: ${legacySidecar.name}"
+                    )
+                }
+                movedSidecars.add(legacySidecar to databaseSidecar)
+            }
+
+            if (!legacyFile.renameTo(databaseFile)) {
+                rollbackMovedSidecars(movedSidecars)
+                throw IllegalStateException(
+                    "Unable to rename legacy database file to $DB_NAME."
+                )
+            }
+            Log.i(TAG, "Renamed legacy database file to $DB_NAME")
+        }
+
+        private fun rollbackMovedSidecars(movedSidecars: List<Pair<File, File>>) {
+            movedSidecars.asReversed().forEach { (legacySidecar, databaseSidecar) ->
+                if (databaseSidecar.exists() && !legacySidecar.exists() &&
+                    !databaseSidecar.renameTo(legacySidecar)
+                ) {
+                    Log.w(TAG, "Failed to restore database sidecar: ${legacySidecar.name}")
+                }
+            }
         }
     }
 }

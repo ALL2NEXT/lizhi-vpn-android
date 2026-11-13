@@ -43,29 +43,37 @@ val hevRunnerDir = rootProject.file("native/hev-runner")
 val generatedHevJniDir = layout.buildDirectory.dir("generated/hev/jniLibs")
 val hevTunnelVersion = "2.16.0"
 
-fun readSecurityFlag(propertyName: String, defaultValue: Boolean = true): Boolean {
+fun readSecurityFlag(propertyName: String, defaultValue: Boolean): Boolean {
     val rawValue = providers.gradleProperty(propertyName).orElse(defaultValue.toString()).get()
     return rawValue.toBooleanStrictOrNull()
         ?: error("$propertyName must be either true or false")
 }
 
-val securityBuildFlags = linkedMapOf(
-    "SECURITY_DETECT_CAPTURE" to readSecurityFlag("chimera.security.detectCapture"),
-    "SECURITY_DETECT_XPOSED" to readSecurityFlag("chimera.security.detectXposed"),
-    "SECURITY_DETECT_LSPOSED" to readSecurityFlag("chimera.security.detectLsposed"),
-    "SECURITY_DETECT_FRIDA" to readSecurityFlag("chimera.security.detectFrida"),
-    "SECURITY_DETECT_ROOT" to readSecurityFlag("chimera.security.detectRoot"),
-    "SECURITY_DETECT_LSPATCH" to readSecurityFlag("chimera.security.detectLspatch"),
-    "SECURITY_DETECT_NPATCH" to readSecurityFlag("chimera.security.detectNpatch"),
-    "SECURITY_VERIFY_SIGNATURE" to readSecurityFlag("chimera.security.verifySignature"),
-    "SECURITY_DETECT_BLACKLIST" to readSecurityFlag("chimera.security.detectBlacklist"),
-    "SECURITY_DETECT_ADB" to readSecurityFlag("chimera.security.detectAdb"),
-    "SECURITY_DETECT_DEVELOPER_MODE" to readSecurityFlag("chimera.security.detectDeveloperMode"),
-    "SECURITY_CRASH_ON_FINDING" to readSecurityFlag("chimera.security.crashOnFinding"),
-    "SECURITY_BLOCK_SCREENSHOTS" to readSecurityFlag("chimera.security.blockScreenshots"),
-    "SECURITY_BLOCK_HTTP_PROXY" to readSecurityFlag("chimera.security.blockHttpProxy"),
-    "SECURITY_REPORT_FINDINGS" to readSecurityFlag("chimera.security.reportFindings")
+val securityFlagProperties = linkedMapOf(
+    "SECURITY_DETECT_CAPTURE" to "chimera.security.detectCapture",
+    "SECURITY_DETECT_XPOSED" to "chimera.security.detectXposed",
+    "SECURITY_DETECT_LSPOSED" to "chimera.security.detectLsposed",
+    "SECURITY_DETECT_FRIDA" to "chimera.security.detectFrida",
+    "SECURITY_DETECT_ROOT" to "chimera.security.detectRoot",
+    "SECURITY_DETECT_LSPATCH" to "chimera.security.detectLspatch",
+    "SECURITY_DETECT_NPATCH" to "chimera.security.detectNpatch",
+    "SECURITY_VERIFY_SIGNATURE" to "chimera.security.verifySignature",
+    "SECURITY_DETECT_BLACKLIST" to "chimera.security.detectBlacklist",
+    "SECURITY_DETECT_ADB" to "chimera.security.detectAdb",
+    "SECURITY_DETECT_DEVELOPER_MODE" to "chimera.security.detectDeveloperMode",
+    "SECURITY_CRASH_ON_FINDING" to "chimera.security.crashOnFinding",
+    "SECURITY_BLOCK_SCREENSHOTS" to "chimera.security.blockScreenshots",
+    "SECURITY_BLOCK_HTTP_PROXY" to "chimera.security.blockHttpProxy",
+    "SECURITY_REPORT_FINDINGS" to "chimera.security.reportFindings"
 )
+
+fun readSecurityFlags(defaultEnabled: Boolean): LinkedHashMap<String, Boolean> =
+    securityFlagProperties.entries.associateTo(linkedMapOf<String, Boolean>()) { (name, propertyName) ->
+        name to readSecurityFlag(propertyName, defaultEnabled)
+    }
+
+val debugSecurityBuildFlags = readSecurityFlags(defaultEnabled = false)
+val releaseSecurityBuildFlags = readSecurityFlags(defaultEnabled = true)
 val expectedSecurityCertSha256 = providers.gradleProperty("chimera.security.expectedCertSha256")
     .orElse("0C2E2593E6D882994D2E8F19F60B5CE84FEA2BE609E07803978752A423EBD39F")
     .get()
@@ -73,7 +81,7 @@ val expectedSecurityCertSha256 = providers.gradleProperty("chimera.security.expe
 check(expectedSecurityCertSha256.matches(Regex("[0-9A-F]{64}"))) {
     "chimera.security.expectedCertSha256 must contain 64 hexadecimal characters"
 }
-val securityCmakeOptions = securityBuildFlags.map { (name, enabled) ->
+fun securityCmakeOptions(flags: Map<String, Boolean>): List<String> = flags.map { (name, enabled) ->
     "-DCHIMERA_${name.removePrefix("SECURITY_")}=${if (enabled) "ON" else "OFF"}"
 } + "-DCHIMERA_EXPECTED_CERT_SHA256=$expectedSecurityCertSha256"
 
@@ -358,10 +366,6 @@ android {
         versionName = "1.0.0"
         buildConfigField("String", "SING_BOX_CORE_VERSION", "\"$singBoxCoreVersion\"")
         buildConfigField("String", "XRAY_CORE_VERSION", "\"$xrayCoreVersion\"")
-        securityBuildFlags.forEach { (name, enabled) ->
-            buildConfigField("boolean", name, enabled.toString())
-        }
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -370,7 +374,6 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags("")
-                arguments(*securityCmakeOptions.toTypedArray())
                 // 限制只打包 ARM 架构的 .so 文件
                 abiFilters(*targetAbis.toTypedArray())
             }
@@ -416,10 +419,26 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+            releaseSecurityBuildFlags.forEach { (name, enabled) ->
+                buildConfigField("boolean", name, enabled.toString())
+            }
+            externalNativeBuild {
+                cmake {
+                    arguments(*securityCmakeOptions(releaseSecurityBuildFlags).toTypedArray())
+                }
+            }
         }
         debug {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
+            debugSecurityBuildFlags.forEach { (name, enabled) ->
+                buildConfigField("boolean", name, enabled.toString())
+            }
+            externalNativeBuild {
+                cmake {
+                    arguments(*securityCmakeOptions(debugSecurityBuildFlags).toTypedArray())
+                }
+            }
         }
     }
 

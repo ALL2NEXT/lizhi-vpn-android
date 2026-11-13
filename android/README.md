@@ -2,6 +2,10 @@
 
 Native security checks and their Gradle build switches are documented in [docs/native-security.md](docs/native-security.md).
 
+## 安全防护构建配置
+
+`Debug` 构建默认关闭安全检测、上报、检测后退出、截图拦截和代理拦截，方便开发与调试；`Release` 构建默认开启这些防护。可使用 `chimera.security.*` Gradle 项目属性按需覆盖单项开关，具体开关见上方安全检测文档。
+
 Android 客户端的独立 Gradle 工程。
 
 测速方案编辑页按执行顺序直接展示五个测试项目，每项的开关和参数都在各自项目卡片中。前三项为连接前测试：

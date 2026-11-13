@@ -592,7 +592,11 @@ private fun NodeListContent(
                                     isTestTarget,
                                 canStartTest = canStartTest,
                                 onTest = { stage -> onRunManualNodeTest(node, stage) },
-                                onShare = { onShareNode(node) },
+                                onShare = if (node.subscriptionSourceId.isNullOrBlank()) {
+                                    { onShareNode(node) }
+                                } else {
+                                    null
+                                },
                                 onEdit = if (canManageNodes) {
                                     { onEditNode(node) }
                                 } else {
